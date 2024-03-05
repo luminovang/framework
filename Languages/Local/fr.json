@@ -1,0 +1,6 @@
+{
+    "1001": "Données d'entrée non valides.",
+    "1002": "Impossible de se connecter à la base de données.",
+    "404": "Erreur fichier non trouvé.",
+    "500": "Erreur interne du serveur."
+}
