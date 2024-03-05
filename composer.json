@@ -61,8 +61,7 @@
         "analyze-app": "Run static analysis",
         "analyze-code": "Analyze coding style",
         "build-app": "Build project for production",
-        "archive-app": "Export project files as zip",
-        "test": "Run unit tests"
+        "archive-app": "Export project files as zip"
     },
     "minimum-stability": "stable",
     "prefer-stable": true
