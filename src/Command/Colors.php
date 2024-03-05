@@ -9,7 +9,7 @@
  */
 namespace Luminova\Command;
 
-use Luminova\Command\TextUtils;
+use \Luminova\Command\TextUtils;
 
 class Colors 
 {
