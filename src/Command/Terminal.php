@@ -472,7 +472,7 @@ class Terminal
      *
      * @param string|null $prefix You may specify a string with which to prompt the user.
     */
-    public static function input(?string $prefix = null): string
+    protected static function input(?string $prefix = null): string
     {
         if (static::$isReadline && ENVIRONMENT !== 'testing') {
             return @readline($prefix);
@@ -579,7 +579,7 @@ class Terminal
      *
      * @return void
     */
-    protected static function print(string $text, ?string $foreground = null, ?string $background = null): void
+    public static function print(string $text, ?string $foreground = null, ?string $background = null): void
     {
         if ($foreground || $background) {
             $text = static::color($text, $foreground, $background);
@@ -1000,7 +1000,6 @@ class Terminal
     */
     public static function hasCommand(string $command, array $options): bool
     {
-        //echo "Searching: $command";
         if(Commands::has($command)){
             $terminal = new static();
             $terminal->registerCommands($options);
