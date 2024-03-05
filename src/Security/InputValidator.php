@@ -80,7 +80,7 @@ class InputValidator implements ValidatorInterface
                         break;
                         case 'in_array':
                             if (!empty($ruleParam)) {
-                                $matches = self::listToArray($ruleParam);
+                                $matches = list_to_array($ruleParam);
                                 if (!in_array($fieldValue, $matches)) {
                                     $this->addError($field, $ruleName);
                                 }
@@ -88,12 +88,12 @@ class InputValidator implements ValidatorInterface
                         break;
                         case 'keys_exist':
                             if (!empty($ruleParam)) {
-                                $matches = self::listToArray($ruleParam);
+                                $matches = list_to_array($ruleParam);
                                 if (is_array($fieldValue)) {
                                     $intersection = array_intersect($matches, $fieldValue);
                                     $exist = count($intersection) === count($fieldValue);
                                 } else {
-                                    $exist = self::listInArray($fieldValue, $matches);
+                                    $exist = list_in_array($fieldValue, $matches);
                                 }
                                 if (!$exist) {
                                     $this->addError($field, $ruleName);
@@ -164,55 +164,6 @@ class InputValidator implements ValidatorInterface
             'scheme' => strpos($value, rtrim($param, '://')) === 0,
             default => true,
         };
-    }
-
-    /**
-     * Convert string list to array 
-     * 
-     * @example listToArray('a,b,c') => ['a', 'b', 'c']
-     * @example listToArray('"a","b","c"') => ['a', 'b', 'c']
-     * 
-     * @param string $list string list
-     * @return array $matches
-    */
-    public static function listToArray(string $list): array 
-    {
-        $matches = [];
-    
-        preg_match_all("/'([^']+)'/", $list, $matches);
-    
-        if (!empty($matches[1])) {
-            return $matches[1];
-        }
-    
-        preg_match_all('/(\w+)/', $list, $matches);
-    
-        if (!empty($matches[1])) {
-            return $matches[1];
-        }
-        return [];
-    }
-
-    /**
-     * Check if string list exist in array 
-     * If any of the list doesn't exist in array it will return false
-     * First it will have to convert the list to array using
-     * listToArray()
-     * 
-     * @param string $list string list
-     * @param array $map Array to map list to
-     * 
-     * @return bool exist or not
-    */
-    public static function listInArray(string $list, array $map): bool 
-    {
-        $array = self::listToArray($list);
-        foreach ($array as $item) {
-            if (!in_array($item, $map)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /**
