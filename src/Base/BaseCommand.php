@@ -9,11 +9,10 @@
  */
 namespace Luminova\Base;
 
-use Luminova\Command\Terminal;
+use \Luminova\Command\Terminal;
 
 abstract class BaseCommand extends Terminal 
 {
-
     /**
      * @var string $group command group
     */
