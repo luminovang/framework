@@ -67,7 +67,7 @@ class Terminal {
 
     public function __construct()
     {
-        if (self::isCommandLine()) {
+        if (static::isCommandLine()) {
             static::$isReadline = extension_loaded('readline');
             static::$commandsOptions  = [];
             static::$isColored = static::resourceSupportColor(STDOUT);
@@ -116,7 +116,7 @@ class Terminal {
 
         if ($countdown) {
             for ($time = $seconds; $time > 0; $time--) {
-                static::fwrite(STDOUT, "Waiting... ($time seconds) "  . PHP_EOL);
+                static::fwrite("Waiting... ($time seconds) "  . PHP_EOL);
                 static::clearAndUpdateOutput();
                 sleep(1);
             }
@@ -167,7 +167,7 @@ class Terminal {
         $progressText = sprintf(' %3d%% Complete', $percent);
 
         // Write the progress bar and text
-        static::fwrite(STDOUT, "\033[32m" . $progressBar . "\033[0m" . $progressText . PHP_EOL);
+        static::fwrite("\033[32m" . $progressBar . "\033[0m" . $progressText . PHP_EOL);
 
         if ($progressLine <= $progressCount) {
             static::clearAndUpdateOutput();
@@ -281,9 +281,9 @@ class Terminal {
         do {
             if(!$silent){
                 if (isset($input)) {
-                    static::fwrite(STDOUT, "Input validation failed. ");
+                    static::fwrite("Input validation failed. ");
                 }
-                static::fwrite(STDOUT, $message . ' ' . $placeholder . ': ');
+                static::fwrite($message . ' ' . $placeholder . ': ');
             }
             $input = trim(static::input()) ?: $default;
         } while ($validationRules !== false && !static::validate($input, ['input' => $validationRules]));
@@ -341,7 +341,7 @@ class Terminal {
 
         do {
             if (isset($input)) {
-                static::fwrite(STDOUT, "Please select correct options from list.");
+                static::fwrite("Please select correct options from list.");
                 static::newLine();
             }
             $input = trim(static::input());
@@ -406,7 +406,7 @@ class Terminal {
         if (empty($string)) {
             return '';
         }
-        $max = min($max, self::getWidth());
+        $max = min($max, static::getWidth());
         $max -= $leftPadding;
 
         $lines = wordwrap($string, $max, PHP_EOL);
@@ -533,7 +533,7 @@ class Terminal {
             $text = static::color($text, $foreground, $background);
         }
 
-        static::fwrite(STDERR, $text . PHP_EOL);
+        static::fwrite($text . PHP_EOL, STDERR);
         static::$isColored = $stdout;
     }
 
@@ -557,7 +557,7 @@ class Terminal {
             static::$isNewline = true;
         }
 
-        static::fwrite(STDOUT, $text . PHP_EOL);
+        static::fwrite($text . PHP_EOL);
     }
 
     /**
@@ -577,20 +577,38 @@ class Terminal {
         }
 
         static::$isNewline = false;
-        static::fwrite(STDOUT, $text);
+        static::fwrite($text);
+    }
+
+     /**
+     * Echo / output text if
+     *
+     * @param string $text string to output
+     * @param string|null $foreground Optional foreground color name
+     * @param string|null $background Optional background color name
+     *
+     * @return void
+    */
+    protected static function print(string $text, ?string $foreground = null, ?string $background = null): void
+    {
+        if ($foreground || $background) {
+            $text = static::color($text, $foreground, $background);
+        }
+
+        echo $text;
     }
 
     /**
      * Write text to resource handler or output text if not in cli mode
      *
-     * @param resource $handle resource handler
      * @param string $text string to output or write
+     * @param resource $handle resource handler
      *
      * @return void
     */
-    protected static function fwrite($handle, string $text): void
+    protected static function fwrite(string $text, $handle = STDOUT): void
     {
-        if (!self::isCommandLine()) {
+        if (!static::isCommandLine()) {
             echo $text;
             return;
         }
@@ -605,9 +623,9 @@ class Terminal {
     */
     public static function clear(): void
     {
-        self::isWindows() && !static::streamSupports('sapi_windows_vt100_support', STDOUT)
+        static::isWindows() && !static::streamSupports('sapi_windows_vt100_support', STDOUT)
             ? static::newLine(40)
-            : static::fwrite(STDOUT, "\033[H\033[2J");
+            : static::fwrite("\033[H\033[2J");
     }
 
     /**
@@ -617,7 +635,7 @@ class Terminal {
     */
     public static function clearAndUpdateOutput(): void
     {
-        static::fwrite(STDOUT, "\033[1A");
+        static::fwrite("\033[1A");
     }
 
     /**
@@ -663,19 +681,19 @@ class Terminal {
     */
     public static function resourceSupportColor($resource): bool
     {
-        if (self::isColorDisabled()) {
+        if (static::isColorDisabled()) {
             return false;
         }
 
-        if (self::isMacOS()) {
-            return self::isMacTerminal();
+        if (static::isMacOS()) {
+            return static::isMacTerminal();
         }
 
-        if (self::isWindows()) {
-            return self::isWindowsTerminal($resource);
+        if (static::isWindows()) {
+            return static::isWindowsTerminal($resource);
         }
 
-        return self::streamSupports('stream_isatty', $resource);
+        return static::streamSupports('stream_isatty', $resource);
     }
 
     /**
@@ -865,7 +883,7 @@ class Terminal {
      */
     public static function getOption(string $name): mixed
     {
-        $options = self::getOptions();
+        $options = static::getOptions();
         if (array_key_exists($name, $options)) {
             return $options[$name] ?? null;
         }
@@ -956,7 +974,7 @@ class Terminal {
     */
     public static function isWindowsTerminal($resource): bool
     {
-        return self::streamSupports('sapi_windows_vt100_support', $resource) ||
+        return static::streamSupports('sapi_windows_vt100_support', $resource) ||
             isset($_SERVER['ANSICON']) || getenv('ANSICON') !== false ||
             getenv('ConEmuANSI') === 'ON' ||
             getenv('TERM') === 'xterm';
@@ -994,7 +1012,7 @@ class Terminal {
     {
         //echo "Searching: $command";
         if(Commands::has($command)){
-            $terminal = new self();
+            $terminal = new static();
             $terminal->registerCommands($options);
             Commands::run($terminal, $options);
             return true;
