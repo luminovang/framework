@@ -339,7 +339,7 @@ class Terminal
             }
         } while (!static::validate($input, ['input' => $validationRules]));
 
-        $inputArray = InputValidator::listToArray($input);
+        $inputArray = list_to_array($input);
         $input = static::getInputValues($inputArray, $optionValues);
         return $input;
     }
