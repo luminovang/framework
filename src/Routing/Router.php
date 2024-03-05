@@ -81,6 +81,11 @@ final class Router
     private const ALL_METHODS = 'GET|POST|PUT|DELETE|OPTIONS|PATCH|HEAD';
 
     /**
+     * @var Terminal $terminal 
+    */
+    private static ?Terminal $terminal = null;
+
+    /**
      * Before middleware route, executes the callback function before other routing will be executed
      *
      * @param string  $methods  Allowed methods, can be serrated with | pipe symbol
@@ -226,7 +231,7 @@ final class Router
     */
     public function any(string $pattern, callable|string $callback): void
     {
-        $this->capture(self::ALL_METHODS, $pattern, $callback);
+        $this->capture(static::ALL_METHODS, $pattern, $callback);
     }
 
     /**
@@ -340,7 +345,7 @@ final class Router
     */
     public function bootstraps(BaseApplication $application, Bootstrap ...$callbacks): void 
     {
-        $methods = explode('|', self::ALL_METHODS);
+        $methods = explode('|', static::ALL_METHODS);
         $methods[] = 'CLI'; //Fake a request method for cli
         $method = Header::getRoutingMethod();
 
@@ -363,22 +368,7 @@ final class Router
                             */
                             defined('CLI_ENVIRONMENT') || define('CLI_ENVIRONMENT', env('cli.environment.mood', 'testing'));
 
-                            /**
-                             * @var string STDOUT if it's not already defined
-                            */
-                            defined('STDOUT') || define('STDOUT', 'php://output');
-
-                            /**
-                             * @var string STDIN if it's not already defined
-                            */
-                            defined('STDIN') || define('STDIN', 'php://stdin');
-
-                            /**
-                             * @var string STDERR if it's not already defined
-                            */
-                            defined('STDERR') || define('STDERR', 'php://stderr');
-
-                            if(!Terminal::isCommandLine()) {
+                            if(!static::cli()->isCommandLine()) {
                                 return;
                             }
                         }elseif($withError){
@@ -391,7 +381,7 @@ final class Router
                     
                         static::discover($name, $this, $application);
                         break;
-                    }elseif (!in_array($firstSegment, $routeInstances) && self::isWebInstance($name, $firstSegment)) {
+                    }elseif (!in_array($firstSegment, $routeInstances) && static::isWebInstance($name, $firstSegment)) {
                         if($withError){
                             $this->setErrorHandler($errorHandler);
                         }
@@ -482,7 +472,7 @@ final class Router
             foreach ($this->controllers['errors'] as $route_pattern => $route_callable) {
                 $isMatch = static::capturePattern($route_pattern, $this->getView(), $matches);
                 if ($isMatch) {
-                    //$params = self::extractFoundMatches($matches);
+                    //$params = static::extractFoundMatches($matches);
                     static::execute($route_callable);
                     $status = true;
                 }
@@ -546,7 +536,7 @@ final class Router
             return '/' . trim($uri, '/');
         } 
 
-        if (Terminal::isCommandLine()) {
+        if (static::cli()->isCommandLine()) {
             return '/cli';
         }
 
@@ -670,6 +660,14 @@ final class Router
     }
 
     /**
+     * Get terminal instance 
+    */
+    private static function cli(): Terminal
+    {
+        return static::$terminal ??= new Terminal();
+    }
+
+    /**
      * Run the CLI router and application: 
      * Loop all defined CLI routes
      *
@@ -692,7 +690,7 @@ final class Router
         }
 
         if (!$result) {
-            Terminal::error('Unknown command ' . Terminal::color("'{$this->commandName}'", 'red') . ' not found', null);
+            static::cli()->error('Unknown command ' . static::cli()->color("'{$this->commandName}'", 'red') . ' not found', null);
         }
 
         return $result;
@@ -780,7 +778,7 @@ final class Router
             $isMatch = static::capturePattern($route['pattern'], $uri, $matches);
 
             if ($isMatch) {
-                $error = static::execute($route['callback'], self::extractFoundMatches($matches));
+                $error = static::execute($route['callback'], static::extractFoundMatches($matches));
 
                 if (!$route['middleware'] || (!$error && $route['middleware'])) {
                     break;
@@ -802,17 +800,17 @@ final class Router
     private function handleCommand(array $routes): bool
     {
         $error = false;
-        $commands = Terminal::parseCommands($_SERVER['argv'] ?? []);
+        $commands = static::cli()->parseCommands($_SERVER['argv'] ?? []);
 
         foreach ($routes as $route) {
             if ($route['controller']) {
-                $queries = Terminal::getRequestCommands();
+                $queries = static::cli()->getRequestCommands();
                 $controllerView = trim($queries['view'], '/');
                 $isMatch = static::capturePattern($route['pattern'], $queries['view'], $matches);
 
                 if ($isMatch || $controllerView === $route['pattern']) {
 
-                    $parameter = $isMatch ? self::extractFoundMatches($matches) : [$commands];
+                    $parameter = $isMatch ? static::extractFoundMatches($matches) : [$commands];
                     $error = static::execute($route['callback'], $parameter);
 
                     if (!$route['middleware'] || (!$error && $route['middleware'])) {
@@ -826,7 +824,7 @@ final class Router
                     break;
                 }
             }else {
-                if(Terminal::hasCommand($this->commandName, $commands)){
+                if(static::cli()->hasCommand($this->commandName, $commands)){
                    $error = true;
                    break;
                 }
@@ -913,7 +911,7 @@ final class Router
             $result = static::reflectionClassLoader($controller, $method, $arguments);
         }
       
-        return self::toStatusBool($result);
+        return static::toStatusBool($result);
     }
 
     /**
@@ -929,7 +927,7 @@ final class Router
     private static function reflectionClassLoader(string $controller, string $method, array $arguments = []): bool 
     {
         $throw = true;
-        $isCommand = isset($arguments[0]['command']) && Terminal::isCommandLine();
+        $isCommand = isset($arguments[0]['command']) && static::cli()->isCommandLine();
         $method = ($isCommand ? 'run' : $method); // Only call run method for CLI
 
         foreach (static::$namespace as $namespace) {
@@ -962,7 +960,7 @@ final class Router
                     
                     unset($newClass);
                     
-                    return self::toStatusBool($result);
+                    return static::toStatusBool($result);
                 }
             } catch (ReflectionException $e) {
                 continue;
@@ -1015,7 +1013,7 @@ final class Router
             if($code === STATUS_OK) {
                 if (array_key_exists('help', $commands['options'])) {
                     $result = true;
-                    Terminal::printHelp($commands[$commandId]);
+                    static::cli()->printHelp($commands[$commandId]);
                 }else{
                     $result = $method->invokeArgs($newClass, $arguments);
                 }
