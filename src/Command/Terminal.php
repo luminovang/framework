@@ -8,13 +8,15 @@
  * @license See LICENSE file
  */
 namespace Luminova\Command;
-use Luminova\Security\InputValidator;
-use \InvalidArgumentException;
-use Luminova\Command\Colors;
-use Luminova\Command\Commands;
-use Luminova\Command\TextUtils;
 
-class Terminal {
+use \Luminova\Security\InputValidator;
+use \InvalidArgumentException;
+use \Luminova\Command\Colors;
+use \Luminova\Command\Commands;
+use \Luminova\Command\TextUtils;
+
+class Terminal 
+{
     /**
      * Height of terminal visible window
      *
@@ -67,26 +69,13 @@ class Terminal {
 
     public function __construct()
     {
-        if (static::isCommandLine()) {
-            static::$isReadline = extension_loaded('readline');
-            static::$commandsOptions  = [];
-            static::$isColored = static::resourceSupportColor(STDOUT);
-        }else{
-            /**
-             * @var string STDOUT if it's not already defined
-            */
-            defined('STDOUT') || define('STDOUT', 'php://output');
-
-            /**
-             * @var string STDIN if it's not already defined
-            */
-            defined('STDIN') || define('STDIN', 'php://stdin');
-
-            /**
-             * @var string STDERR if it's not already defined
-            */
-            defined('STDERR') || define('STDERR', 'php://stderr');
-        }
+        defined('STDOUT') || define('STDOUT', 'php://output');
+        defined('STDIN') || define('STDIN', 'php://stdin');
+        defined('STDERR') || define('STDERR', 'php://stderr');
+        
+        static::$isReadline = extension_loaded('readline');
+        static::$commandsOptions  = [];
+        static::$isColored = static::isColorSupported(STDOUT);
     }
 
     /**
@@ -117,10 +106,10 @@ class Terminal {
         if ($countdown) {
             for ($time = $seconds; $time > 0; $time--) {
                 static::fwrite("Waiting... ($time seconds) "  . PHP_EOL);
-                static::clearAndUpdateOutput();
+                static::wipeout();
                 sleep(1);
             }
-            static::clearAndUpdateOutput();
+            static::wipeout();
             static::writeln("Waiting... (0 seconds)"  . PHP_EOL);
         } else {
             sleep($seconds);
@@ -170,7 +159,7 @@ class Terminal {
         static::fwrite("\033[32m" . $progressBar . "\033[0m" . $progressText . PHP_EOL);
 
         if ($progressLine <= $progressCount) {
-            static::clearAndUpdateOutput();
+            static::wipeout();
         }
 
         return $percent;
@@ -299,8 +288,8 @@ class Terminal {
      * 
      * Examples
      *
-     * @example $array = $this->promptChooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML']); Prompt multiple chooser, using PHP as default if user didn't select anything before hit return.
-     * @example $array = $this->promptChooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML'], true); Prompt multiple chooser, persisting that user must choose an option
+     * @example $array = $this->chooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML']); Prompt multiple chooser, using PHP as default if user didn't select anything before hit return.
+     * @example $array = $this->chooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML'], true); Prompt multiple chooser, persisting that user must choose an option
      *
      *
      * @param string $text  Display text description for your multiple options
@@ -310,7 +299,7 @@ class Terminal {
      * @return array<string|int, mixed> $options The selected array keys and values
      */
   
-    public static function promptChooser(string $text, array $options, bool $required = false): array
+    public static function chooser(string $text, array $options, bool $required = false): array
     {
         if ($options == []) {
             throw new InvalidArgumentException('No options to select from were provided');
@@ -336,7 +325,7 @@ class Terminal {
         $lastIndex = (string) $lastIndex;
 
         static::writeln($text);
-        static::writeArrayValues($optionValues, strlen($lastIndex));
+        static::writeOptions($optionValues, strlen($lastIndex));
         static::writeln($placeholder);
 
         do {
@@ -351,20 +340,21 @@ class Terminal {
         } while (!static::validate($input, ['input' => $validationRules]));
 
         $inputArray = InputValidator::listToArray($input);
-        $input = static::getInputArrayValues($inputArray, $optionValues);
+        $input = static::getInputValues($inputArray, $optionValues);
         return $input;
     }
 
 
     /**
      * Return user selected options
+     * Get Input Array Values
      * 
      * @param array $input user input as array
      * @param array $options options 
      * 
      * @return array<string|int, mixed> $options The selected array keys and values
     */
-    private static function getInputArrayValues(array $input, array $options): array
+    private static function getInputValues(array $input, array $options): array
     {
         $result = [];
         foreach ($input as $value) {
@@ -379,11 +369,11 @@ class Terminal {
     /**
      * Display select options with key index as an identifier
      * 
-     * @param array $options options 
+     * @param array<string, array<string, mixed>> $options options 
      * 
      * @return void 
     */
-    private static function writeArrayValues(array $options, int $max): void
+    private static function writeOptions(array $options, int $max): void
     {
         foreach ($options as $key => $value) {
             $name = str_pad('  [' . $key . ']  ', $max, ' ');
@@ -527,7 +517,7 @@ class Terminal {
     public static function error(string $text, string|null $foreground = 'red', ?string $background = null): void
     {
         $stdout = static::$isColored;
-        static::$isColored = static::resourceSupportColor(STDERR);
+        static::$isColored = static::isColorSupported(STDERR);
 
         if ($foreground || $background) {
             $text = static::color($text, $foreground, $background);
@@ -633,7 +623,7 @@ class Terminal {
      *
      * @return void
     */
-    public static function clearAndUpdateOutput(): void
+    public static function wipeout(): void
     {
         static::fwrite("\033[1A");
     }
@@ -671,29 +661,6 @@ class Terminal {
         for ($i = 0; $i < $count; $i++) {
             static::writeln();
         }
-    }
-
-    /**
-     * Check if the stream resource supports colors.
-     *
-     * @param resource $resource STDIN/STDOUT
-     * @return bool 
-    */
-    public static function resourceSupportColor($resource): bool
-    {
-        if (static::isColorDisabled()) {
-            return false;
-        }
-
-        if (static::isMacOS()) {
-            return static::isMacTerminal();
-        }
-
-        if (static::isWindows()) {
-            return static::isWindowsTerminal($resource);
-        }
-
-        return static::streamSupports('stream_isatty', $resource);
     }
 
     /**
@@ -941,6 +908,29 @@ class Terminal {
             php_sapi_name() === 'cli' ||
             array_key_exists('SHELL', $_ENV) ||
             !array_key_exists('REQUEST_METHOD', $_SERVER);
+    }
+
+    /**
+     * Check if the stream resource supports colors.
+     *
+     * @param resource $resource STDIN/STDOUT
+     * @return bool 
+    */
+    public static function isColorSupported($resource): bool
+    {
+        if (static::isColorDisabled()) {
+            return false;
+        }
+
+        if (static::isMacOS()) {
+            return static::isMacTerminal();
+        }
+
+        if (static::isWindows()) {
+            return static::isWindowsTerminal($resource);
+        }
+
+        return static::streamSupports('stream_isatty', $resource);
     }
 
     /**
