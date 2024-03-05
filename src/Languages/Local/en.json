@@ -1,0 +1,6 @@
+{
+    "1001": "Invalid input data.",
+    "1002": "Failed to connect to the database.",
+    "404": "Error file not found.",
+    "500": "Internal server error."
+}
