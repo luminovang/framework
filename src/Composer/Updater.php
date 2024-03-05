@@ -68,7 +68,6 @@ class Updater
         }
     }
 
-
     /**
      * Move project backward if installed in project name 
      * 
@@ -122,7 +121,6 @@ class Updater
         return false;
     }
 
-
     /**
      * If source file exist copy it to destination
      * 
@@ -135,7 +133,6 @@ class Updater
     {
         if (!file_exists($destination)) {
             copy($source, $destination);
-            echo "Copied: $source to $destination\n";
         }
     }
 
@@ -229,7 +226,6 @@ class Updater
     {
         if (!is_dir($path)) {
             mkdir($path, 0755, true);
-            echo "Created directory: " . dirname($path) . "\n";
         }
     }
 
@@ -291,11 +287,11 @@ class Updater
             static::removeRecursive(dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . $source, 'framework');
             exec('LM_DEBUG_MODE=1 composer dumpautoload', $output, $returnCode);
             foreach ($output as $line) {
-                static::cli()->writeln('Dumping:   ' . $line);
+                static::cli()?->writeln('Dumping:   ' . $line);
             }
 
             if ($returnCode === 0) {
-                static::cli()->writeln('Update was completed version [' . BaseConfig::$version . ']', 'green');
+                static::cli()?->writeln('Update was completed version [' . BaseConfig::$version??'1.5.0' . ']', 'green');
             }
         }
     }
