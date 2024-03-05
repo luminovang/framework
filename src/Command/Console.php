@@ -8,9 +8,10 @@
  * @license See LICENSE file
  */
 namespace Luminova\Command;
-use Luminova\Base\BaseConfig;
-use Luminova\Command\Terminal;
-use Luminova\Command\Commands;
+
+use \Luminova\Base\BaseConfig;
+use \Luminova\Command\Terminal;
+use \Luminova\Command\Commands;
 
 class Console 
 {
