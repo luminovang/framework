@@ -3,7 +3,7 @@
     "description": "Luminova PHP framework design for speed",
     "keywords": ["Framework","PHP","MVC","PHP Framework", "Luminova", "PHP Luminova Framework", "Luminova Ng", "PHP Luminova"],
     "license": "MIT",
-    "type": "project",
+    "type": "library",
     "homepage": "https://github.com/luminovang/framework",
     "support": {
         "source": "https://github.com/luminovang/framework/"
