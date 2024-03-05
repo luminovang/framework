@@ -13,6 +13,7 @@ use \Luminova\Command\Terminal;
 
 abstract class BaseCommand extends Terminal 
 {
+
     /**
      * @var string $group command group
     */
@@ -37,6 +38,14 @@ abstract class BaseCommand extends Terminal
      * @var string $description command description
     */
     protected string $description = '';
+
+    /**
+     * Initialize terminal instance
+    */
+    public function __construct()
+    {
+        parent::__construct();
+    }
 
     /**
      * Run a command.
