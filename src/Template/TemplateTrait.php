@@ -9,17 +9,17 @@
  */
 namespace Luminova\Template;
 
-use Luminova\Exceptions\ViewNotFoundException; 
-use Luminova\Exceptions\RuntimeException; 
-use Luminova\Exceptions\ClassException;
-use Luminova\Exceptions\InvalidObjectException; 
-use Luminova\Exceptions\InvalidException; 
-use Luminova\Cache\Compress;
-use Luminova\Cache\Optimizer;
-use Luminova\Template\Smarty;
-use Luminova\Base\BaseConfig;
-use App\Controllers\Config\Template as TemplateConfig;
-use Luminova\Exceptions\AppException; 
+use \Luminova\Exceptions\ViewNotFoundException; 
+use \Luminova\Exceptions\RuntimeException; 
+use \Luminova\Exceptions\ClassException;
+use \Luminova\Exceptions\InvalidObjectException; 
+use \Luminova\Exceptions\InvalidException; 
+use \Luminova\Cache\Compress;
+use \Luminova\Cache\Optimizer;
+use \Luminova\Template\Smarty;
+use \Luminova\Base\BaseConfig;
+use \App\Controllers\Config\Template as TemplateConfig;
+use \Luminova\Exceptions\AppException; 
 
 trait TemplateTrait
 { 
@@ -143,13 +143,6 @@ trait TemplateTrait
     private string $currentRequestBase = '/';
 
     /**
-     * Holds directory separator
-     * 
-     * @var string $ds 
-    */
-    private static $ds = DIRECTORY_SEPARATOR;
-
-     /**
      * Response cache key
      * 
      * @var string|null $responseCacheKey 
@@ -579,7 +572,7 @@ trait TemplateTrait
     */
     private function getBaseViewFolder(): string 
     {
-        return "{$this->getRootDir()}" . self::$ds . "{$this->templateFolder}" . self::$ds;
+        return "{$this->getRootDir()}" . DIRECTORY_SEPARATOR . "{$this->templateFolder}" . DIRECTORY_SEPARATOR;
     }
 
     /** 
@@ -591,7 +584,7 @@ trait TemplateTrait
     */
     private function getBaseErrorViewFolder(string $filename): string 
     {
-        return $this->getBaseViewFolder() . "system_errors" . self::$ds . "{$filename}.php";
+        return $this->getBaseViewFolder() . "system_errors" . DIRECTORY_SEPARATOR . "{$filename}.php";
     }
 
     /** 
@@ -601,7 +594,7 @@ trait TemplateTrait
     */
     private function getBaseOptimizerFolder(): string
     {
-        return "{$this->getRootDir()}" . self::$ds . "{$this->optimizerFolder}" . self::$ds;
+        return "{$this->getRootDir()}" . DIRECTORY_SEPARATOR . "{$this->optimizerFolder}" . DIRECTORY_SEPARATOR;
     }
 
     /** 
@@ -893,7 +886,7 @@ trait TemplateTrait
         $this->templateDir = $this->getBaseViewFolder();
         $this->optimizerFile = $this->getBaseOptimizerFolder();
         if($this->subViewFolder !== ''){
-            $this->templateDir .= $this->subViewFolder . self::$ds;
+            $this->templateDir .= $this->subViewFolder . DIRECTORY_SEPARATOR;
         }
 
         $this->templateFile = "{$this->templateDir}{$viewName}{$this->getTemplateEngin()}";
@@ -913,7 +906,7 @@ trait TemplateTrait
     * Calls after view() to display your template view and
     * Include any accessible global variable within the template file.
     *
-    * @param array $options additional parameters to pass in the template file $this->_myOption
+    * @param array<string, mixed> $options additional parameters to pass in the template file $this->_myOption
     * @param int $level Optional directory relative level to fix your file location
     * 
     * @return void
@@ -923,7 +916,7 @@ trait TemplateTrait
     {
         $level =  (int) ( $level > 0 ? $level : $this->relativeLevel);
         $relative = static::calculateLevel($level);
-        $path = (BaseConfig::isProduction() ? self::$ds : $relative);
+        $path = (BaseConfig::isProduction() ? DIRECTORY_SEPARATOR : $relative);
         $base = rtrim($path . $this->appPublicFolder, "/") . "/";
 
 
@@ -1098,7 +1091,7 @@ trait TemplateTrait
         $view = ucwords($view);
         $view = str_replace(',', '', $view);
         
-        return ($suffix ? self::addTitleSuffix($view) : trim($view));
+        return ($suffix ? static::addTitleSuffix($view) : trim($view));
     }
 
     /** 

@@ -14,11 +14,6 @@ use \RuntimeException;
 class Importer
 {
     /**
-     * @var string $path Path to external libraries 
-    */
-    private static string $path = __DIR__ . '/../../libraries/libs/';
-
-    /**
      * Import a custom library into your project 
      * You must place your external libraries in libraries/libs/ directory
      * 
@@ -39,7 +34,7 @@ class Importer
             $file .= '.php';
         }
 
-        $filePath = self::$path . $file;
+        $filePath = path('library') . $file;
 
         if (file_exists($filePath)) {
             require_once $filePath;

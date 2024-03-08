@@ -9,11 +9,11 @@
  */
 namespace Luminova\Logger;
 
-use Psr\Log\LoggerInterface;
-use Psr\Log\LoggerAwareInterface;
-use Psr\Log\LoggerAwareTrait;
-use Psr\Log\LogLevel;
-use Luminova\Logger\NovaLogger;
+use \Psr\Log\LoggerInterface;
+use \Psr\Log\LoggerAwareInterface;
+use \Psr\Log\LoggerAwareTrait;
+use \Psr\Log\LogLevel;
+use \Luminova\Logger\NovaLogger;
 
 class LoggerAware implements LoggerInterface, LoggerAwareInterface
 {

@@ -83,11 +83,9 @@ class IPAddress
          $ip = static::get();
       }
 
-      $path = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . "writeable" . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "ip" . DIRECTORY_SEPARATOR;
+      $path = path('caches') . "ip" . DIRECTORY_SEPARATOR;
 
-      if (!file_exists($path)) {
-         mkdir($path, 0755, true);
-      } 
+      path()->createDirectory($path);
 
       $cacheFile = $path . "ip_info_$ip.json";
 

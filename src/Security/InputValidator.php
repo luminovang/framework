@@ -10,7 +10,7 @@
 
 namespace Luminova\Security;
 
-use Luminova\Security\ValidatorInterface;
+use \Luminova\Security\ValidatorInterface;
 
 class InputValidator implements ValidatorInterface
 {
@@ -306,6 +306,7 @@ class InputValidator implements ValidatorInterface
         if($messages !== []){
             $this->errorMessages = $messages;
         }
+
         return $this;
     }
 
@@ -321,6 +322,7 @@ class InputValidator implements ValidatorInterface
         if(!empty($message)){
             $this->errorMessages[$field] = $messages;
         }
+
         return $this;
     }
 
@@ -332,6 +334,7 @@ class InputValidator implements ValidatorInterface
     public function setMessages(array $messages): self
     {
         $this->errorMessages = $messages;
+
         return $this;
     }
 
@@ -344,6 +347,7 @@ class InputValidator implements ValidatorInterface
     public function addMessage(string $field, array $messages): self
     {
         $this->errorMessages[$field] = $messages;
+
         return $this;
     }
 }

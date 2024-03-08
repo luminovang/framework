@@ -332,7 +332,8 @@ final class Router
             return;
         }
         
-        ErrorException::throwException('Invalid argument $callback: requires callable function, ' . gettype($callback) . ', is given instead.');
+        ErrorException::throwException("Invalid argument \$callback: expected a callable function, " . gettype($callback) . " given.");
+
     }
 
     /**
@@ -410,7 +411,38 @@ final class Router
             return;
         }
 
+        $namespace = '\\' . ltrim($namespace, '\\') . '\\';
+
+        if (strpos($namespace, '\App\Controllers\\') !== 0) {
+            ErrorException::throwException('Invalid namespace. Only namespaces starting with "\App\Controllers\" are allowed.');
+
+            return;
+        }
+
         static::$namespace[] = $namespace;
+    }
+
+    /**
+     * If the controller already contains a namespace, use it directly
+     * If not, loop through registered namespaces to find the correct class
+     * 
+     * @param string $controller Controller class name
+     * 
+     * @return string $className
+    */
+    private static function getControllerClass(string $controller): string
+    {
+        if (class_exists($controller)) {
+            return $controller;
+        }
+
+        foreach (static::$namespace as $namespace) {
+            if (class_exists($namespace . $controller)) {
+                return $namespace . $controller;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -907,8 +939,7 @@ final class Router
         if(is_callable($callback)) {
             $result = call_user_func_array($callback, $arguments);
         } elseif (stripos($callback, '::') !== false) {
-            [$controller, $method] = explode('::', $callback);
-            $result = static::reflectionClassLoader($controller, $method, $arguments);
+            $result = static::callReflection($callback, $arguments);
         }
       
         return static::toStatusBool($result);
@@ -917,67 +948,70 @@ final class Router
     /**
      * Execute class using reflection method
      *
-     * @param string $controller Controller class name
-     * @param string $method class method to execute
+     * @param string $callback Controller callback class
      * @param array $arguments Optional arguments to pass to the method
      *
      * @return bool If method was called successfully
      * @throws ErrorException if method is not callable or doesn't exist
     */
-    private static function reflectionClassLoader(string $controller, string $method, array $arguments = []): bool 
+    private static function callReflection(string $callback, array $arguments = []): bool 
     {
         $throw = true;
-        $isCommand = isset($arguments[0]['command']) && static::cli()->isCommandLine();
+        $isCommand = isset($arguments[0]['command']) && Terminal::isCommandLine();
+
+        [$controller, $method] = explode('::', $callback);
         $method = ($isCommand ? 'run' : $method); // Only call run method for CLI
 
-        foreach (static::$namespace as $namespace) {
-            $className = $namespace . '\\' . $controller;
+        $className = static::getControllerClass($controller);
 
-            try {
-                $checkClass = new ReflectionClass($className);
-              
-                if (!$checkClass->isInstantiable() || 
-                    !($checkClass->isSubclassOf(BaseCommand::class) || 
-                        $checkClass->isSubclassOf(ViewController::class) ||
-                        $checkClass->isSubclassOf(BaseApplication::class))) {
-                    continue;
+        if($className === ''){
+            ErrorException::throwException("Class '$controller' does not exist in the App\Controllers namespace.", -1);
+            return false;
+        }
+    
+        try {
+            $checkClass = new ReflectionClass($className);
+        
+            if (!$checkClass->isInstantiable() || 
+                !($checkClass->isSubclassOf(BaseCommand::class) || 
+                    $checkClass->isSubclassOf(ViewController::class) ||
+                    $checkClass->isSubclassOf(BaseApplication::class))) {
+                    ErrorException::throwException("Invalid class '$className'. Only subclasses of BaseCommand, BaseController, BaseViewController, or BaseApplication are allowed.");
+
+            }
+            
+            $caller = new ReflectionMethod($className, $method);
+            if ($caller->isPublic() && !$caller->isAbstract() && !$caller->isStatic()) {
+  
+                $newClass = new $className();
+
+                if($isCommand && $newClass !== null) {
+                    [$throw, $result] = static::invokeCommandArgs($newClass, $arguments, $className, $caller);
+                }else{
+                    $result = $caller->invokeArgs($newClass, $arguments);
                 }
                 
-                $checkMethod = new ReflectionMethod($className, $method);
-                if ($checkMethod->isPublic() && !$checkMethod->isAbstract()) {
-                    if($checkMethod->isStatic()) {
-                        ErrorException::throwException("Static method is not allowed in controller, please make '$method' none static.");
-                        return false;
-                    }
-
-                    $newClass = new $className();
-
-                    if($isCommand && $newClass !== null) {
-                        [$throw, $result] = static::invokeCommandArgs($newClass, $arguments, $className, $checkMethod);
-                    }else{
-                        $result = $checkMethod->invokeArgs($newClass, $arguments);
-                    }
-                    
-                    unset($newClass);
-                    
-                    return static::toStatusBool($result);
-                }
-            } catch (ReflectionException $e) {
-                continue;
+                unset($newClass);
+                
+                return static::toStatusBool($result);
+            }else{
+                ErrorException::throwException("Invalid method '$method' in controller. Only public non-static methods are allowed.");
+                return false;
             }
+        } catch (ReflectionException $e) {
+            if ($throw) {
+                ErrorException::throwException($e->getMessage(), $e->getCode());
+            }
+            return false;
         }
-    
-        if ($throw) {
-            ErrorException::throwException("The method '$method' is not callable in registered namespaces.");
-        }
-    
+
         return false;
     }
 
     /**
      * Invoke class using reflection method
      *
-     * @param object $newClass Class instance
+     * @param object|BaseCommand $newClass Class instance
      * @param array $arguments Pass arguments to reflection method
      * @param string $className Invoking class name
      * @param ReflectionMethod $method Controller class method
@@ -1121,6 +1155,5 @@ final class Router
         $this->controllers['cli_routes'] = [];
         $this->controllers['cli_middleware'] = [];
         $this->controllers['errors'] = [];
-        
     }
 }

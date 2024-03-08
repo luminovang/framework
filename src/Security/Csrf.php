@@ -238,6 +238,7 @@ class Csrf
         if (method_exists(static::class, $name)) {
             return call_user_func_array([static::class, $name], $arguments);
         }
+        
         throw new BadMethodCallException("Call to undefined method " . static::class . "::" . $name . "()");
     }
 }

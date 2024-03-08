@@ -74,10 +74,7 @@ class Translator
             $path .= "Local" . DIRECTORY_SEPARATOR;
             $path .= "{$filename}.en.php";
         }else{
-            $path = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR;
-            $path .= "app" . DIRECTORY_SEPARATOR;
-            $path .= "Controllers" . DIRECTORY_SEPARATOR;
-            $path .= "Languages" . DIRECTORY_SEPARATOR;
+            $path = path('languages');
             $path .= "{$filename}.{$this->locale}.php";
         }
 

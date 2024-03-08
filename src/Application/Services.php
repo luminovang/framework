@@ -16,6 +16,8 @@ use \Luminova\Functions\Functions;
 use \Luminova\Sessions\Session;
 use \Luminova\Library\Importer;
 use \Luminova\Languages\Translator;
+use \Luminova\Application\Paths;
+use \Luminova\Logger\NovaLogger;
 use \RuntimeException;
 use \Throwable;
 
@@ -28,6 +30,8 @@ use \Throwable;
  * @method static Task                task(...$params, bool $shared = true)       @return Task
  * @method static Importer            import(...$params, bool $shared = true)     @return Importer
  * @method static Translator          language($locale, bool $shared = true)      @return Translator
+ * @method static NovaLogger          logger(string $extension = '.log', $shared = true)      @return NovaLogger
+ * @method static Paths               paths($shared = true)      @return string|Paths
  */
 
 
@@ -66,7 +70,9 @@ class Services
             'functions' => Functions::class,
             'import' => Importer::class,
             'language' => Translator::class,
-            default => self::$services[$context] ?? null
+            'logger' => NovaLogger::class,
+            'paths' => Paths::class,
+            default => static::$services[$context] ?? null
         };
     }
 
@@ -88,7 +94,7 @@ class Services
     {
         $shared = true; 
 
-        if (self::get($context) === null) {
+        if (static::get($context) === null) {
             throw new RuntimeException("Service '$context' not found.");
         }
 
@@ -97,7 +103,7 @@ class Services
             $shared = array_pop($arguments);
         }
 
-        return self::create($context, $shared, ...$arguments);
+        return static::create($context, $shared, ...$arguments);
     }
 
     /**
@@ -112,22 +118,22 @@ class Services
      */
     public static function create(string $context, bool $shared = true, ...$params): ?object
     {
-        $className = self::get($context);
+        $className = static::get($context);
         $instance = null;
 
         if ($className === null) {
             return null;
         }
 
-        if ($shared && isset(self::$instances[$className])) {
-            return self::$instances[$className];
+        if ($shared && isset(static::$instances[$className])) {
+            return static::$instances[$className];
         }
   
         try {
             $instance = new $className(...$params);
 
             if ($shared) {
-                self::$instances[$className] = $instance;
+                static::$instances[$className] = $instance;
             }
         } catch (Throwable $e) {
             throw new RuntimeException("Failed to instantiate service '$context'. Error: " . $e->getMessage());
@@ -145,7 +151,7 @@ class Services
      */
     private static function has(string $context): bool
     {
-        $context = self::get($context);
+        $context = static::get($context);
 
         return $context !== null;
     }
@@ -161,12 +167,12 @@ class Services
     {
         $service = strtolower($service);
 
-        if (isset(self::$services[$service])) {
-            unset(self::$services[$service]);
+        if (isset(static::$services[$service])) {
+            unset(static::$services[$service]);
         }
 
-        if (isset(self::$instances[$service])) {
-            unset(self::$instances[$service]);
+        if (isset(static::$instances[$service])) {
+            unset(static::$instances[$service]);
         }
     }
 
@@ -189,11 +195,11 @@ class Services
 
         $name = strtolower($name);
 
-        if (self::has($name)) {
+        if (static::has($name)) {
             throw new RuntimeException("Failed to add service, service with '$name'. already exist");
         }
 
-        self::$services[$name] = $className;
+        static::$services[$name] = $className;
     }
 
     /**
@@ -203,6 +209,6 @@ class Services
      */
     public static function rest(): void
     {
-        self::$instances = [];
+        static::$instances = [];
     }
 }

@@ -67,16 +67,11 @@ class TorDetector
     */
     private static function getPth(): string 
     {
-        $path = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR;
-        $path .= 'writeable' . DIRECTORY_SEPARATOR;
-        $path .= 'caches' . DIRECTORY_SEPARATOR;
+        $path = path('caches');
         $path .= 'tor' . DIRECTORY_SEPARATOR;
 
-        if (!file_exists($path)) {
-            mkdir($path, 0755, true);
-        }        
-    
-
+        path()->createDirectory($path);
+        
         $file = $path . 'torbulkexitlist.txt';
 
         return $file;

@@ -8,26 +8,49 @@
  * @license See LICENSE file
  */
 namespace Luminova\Security\Encryption;
-use Luminova\Security\Encryption\EncryptionInterface;
-use Luminova\Exceptions\ErrorException;
-use Luminova\Exceptions\InvalidException;
+
+use \Luminova\Security\Encryption\EncryptionInterface;
+use \Luminova\Exceptions\ErrorException;
+use \Luminova\Exceptions\InvalidException;
 
 /**
  * AES encryption class.
  */
 class AES implements EncryptionInterface
 {
+    /**
+     * @var int $key
+    */
     protected string $key;
+
+    /**
+     * @var int $data
+    */
     protected string $data;
+
+    /**
+     * @var int $method
+    */
     protected string $method;
+
+    /**
+     * @var int $iv
+    */
     protected ?string $iv = null;
+
+    /**
+     * @var int $ivLength
+    */
     protected int $ivLength = 16;
+
+    /**
+     * @var int $options
+    */
     protected int $options = 0;
 
     /**
      * Constructor.
      *
-     * @param string|null $data
      * @param string|null $key
      * @param int|null $blockSize
      * @param string $mode
@@ -70,6 +93,8 @@ class AES implements EncryptionInterface
 
     /**
      * Set IV length based on the encryption method.
+     * 
+     * @return void 
      */
     public function setIvLength(): void
     {
@@ -79,6 +104,8 @@ class AES implements EncryptionInterface
     /**
      * @param int|null $blockSize
      * @param string $mode
+     * 
+     * @return void 
      * @throws ErrorException
      */
     public function setMethod(?int $blockSize = null, string $mode = 'CBC'): void
@@ -116,6 +143,7 @@ class AES implements EncryptionInterface
      * Get IV from a string.
      *
      * @param string $string
+     * 
      * @return string
      */
     public function getInitializationVectorFrom(string $string): string

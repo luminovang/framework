@@ -10,9 +10,9 @@
 
 namespace Luminova\Application;
 
-use Luminova\Routing\Router;
-use Luminova\Config\DotEnv;
-use Luminova\Template\TemplateTrait;
+use \Luminova\Routing\Router;
+use \Luminova\Config\DotEnv;
+use \Luminova\Template\TemplateTrait;
 
 class Application 
 {

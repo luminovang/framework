@@ -9,10 +9,9 @@
  */
 namespace Luminova\Logger;
 
-use Psr\Log\LogLevel;
-use Psr\Log\AbstractLogger;
-use \Luminova\Base\BaseConfig;
-use \DateTime;
+use \Psr\Log\LogLevel;
+use \Psr\Log\AbstractLogger;
+use \Luminova\Time\Time;
 
 class NovaLogger extends AbstractLogger
 {
@@ -47,15 +46,11 @@ class NovaLogger extends AbstractLogger
     /**
      * Initialize NovaLogger
      * 
-     * @param string $path log file path
      * @param string $extension log file dot file extension
     */
-    public function __construct(string $path = '', string $extension = '.log')
+    public function __construct(string $extension = '.log')
     {
-        $ds = DIRECTORY_SEPARATOR;
-        $suffix =  $ds .  'writeable' . $ds . 'log' .  $ds;
-
-        $this->path = $path  === '' ? BaseConfig::root(__DIR__, $suffix) : $path;
+        $this->path = path('logs');
         $this->extension = $extension;
     }
 
@@ -96,12 +91,9 @@ class NovaLogger extends AbstractLogger
         
         $filepath = $this->path . "{$level}{$this->extension}";
 
-        if (!is_dir($this->path)) {
-            mkdir($this->path, 0755, true);
-        }
+        path()->createDirectory($this->path);
         
-        $dateTime = new DateTime('NOW');
-        $time = $dateTime->format('Y-m-d\TH:i:sP');
+        $time = Time::now()->format('Y-m-d\TH:i:sP');
 
         $log = "[{$level}] [{$time}]: {$message}";
         if ($context !== []) {

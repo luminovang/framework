@@ -8,9 +8,9 @@
  * @license See LICENSE file
  */
 namespace Luminova\Security\Encryption;
+
 interface EncryptionInterface
 {
-
     /**
      * Set data to encrypt/decrypt.
      *

@@ -9,7 +9,6 @@
  */
 namespace Luminova\Cache;
 
-use \Luminova\Cache\FileCacheItem;
 use \Luminova\Exceptions\ErrorException;
 use \Generator;
 use \DateTimeInterface;
@@ -127,7 +126,8 @@ class FileCache
      */
     public function __construct(string $storage = '', string $folder = '')
     {
-        $path = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'writeable' . DIRECTORY_SEPARATOR . 'caches' . DIRECTORY_SEPARATOR . $folder;
+
+        $path = path('caches') . $folder;
         $this->setExtension(self::JSON);
         $this->setPath($path);
 

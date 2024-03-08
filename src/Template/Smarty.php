@@ -16,7 +16,6 @@ use \Luminova\Exceptions\AppException;
 
 class Smarty 
 {
-
     /**
      * @var SmartyTemplate $smarty
     */

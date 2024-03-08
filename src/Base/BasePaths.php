@@ -1,4 +1,4 @@
-<?php 
+<?php
 /**
  * Luminova Framework
  *
@@ -7,8 +7,11 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Functions;
+namespace Luminova\Base;
 
-trait MathTrait
+use \Luminova\Application\Paths;
+
+abstract class BasePaths extends Paths
 {
+  
 }
