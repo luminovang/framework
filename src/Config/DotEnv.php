@@ -9,9 +9,8 @@
  */
 namespace Luminova\Config;
 
-use Luminova\Config\Configuration;
-use Luminova\Exceptions\FileException;
-use SplFileObject;
+use \Luminova\Exceptions\FileException;
+use \SplFileObject;
 
 class DotEnv
 {
@@ -26,7 +25,7 @@ class DotEnv
     public static function register(string $path): void
     {
         if (!file_exists($path)) {
-            throw new FileException("DotEnv file not found: $path");
+            throw new FileException("DotEnv file not found on: $path, make sure you add .env file to your project root");
         }
 
         $file = new SplFileObject($path, 'r');
@@ -41,7 +40,7 @@ class DotEnv
                 [$name, $value] = $parts;
                 $name = trim($name);
                 $value = trim($value);
-                Configuration::set($name, $value);
+                setenv($name, $value);
             }
         }
     }

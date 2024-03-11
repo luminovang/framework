@@ -35,15 +35,16 @@ abstract class Configuration
     /**
      * Magic method to retrieve session properties.
      *
-     * @param string $propertyName The name of the property to retrieve.
+     * @param string $key The name of the property to retrieve.
+     * 
      * @return mixed
      */
-    public function __get(string $propertyName): mixed 
+    public function __get(string $key): mixed 
     {
-        $data = env($propertyName);
+        $data = env($key);
 
         if ($data === null) {
-            $data = env(self::variableToNotation($propertyName, ".")) ?? env(self::variableToNotation($propertyName, "_")) ?? "";
+            $data = env(static::variableToNotation($key, ".")) ?? env(static::variableToNotation($key, "_")) ?? "";
         }
 
         return $data;
@@ -56,7 +57,7 @@ abstract class Configuration
      */
     public static function appName(): string 
     {
-        return self::getString("app.name");
+        return static::getString("app.name");
     }
 
     /**
@@ -66,7 +67,7 @@ abstract class Configuration
      */
     public static function hostName(): string 
     {
-        return self::getString("app.hostname");
+        return static::getString("app.hostname");
     }
 
     /**
@@ -76,7 +77,7 @@ abstract class Configuration
      */
     public static function baseUrl(): string 
     {
-        return self::getString("app.base.url");
+        return static::getString("app.base.url");
     }
 
     /**
@@ -86,7 +87,7 @@ abstract class Configuration
      */
     public static function baseWwwUrl(): string 
     {
-        return self::getString("app.base.www.url");
+        return static::getString("app.base.www.url");
     }
 
     /**
@@ -96,7 +97,7 @@ abstract class Configuration
      */
     public static function appVersion(): string 
     {
-        return self::getString("app.version");
+        return static::getString("app.version");
     }
 
     /**
@@ -106,7 +107,7 @@ abstract class Configuration
      */
     public static function fileVersion(): string 
     {
-        return self::getString("app.file.version");
+        return static::getString("app.file.version");
     }
 
     /**
@@ -116,7 +117,7 @@ abstract class Configuration
      */
     public static function shouldMinify(): int 
     {
-        return self::getInt("build.minify");
+        return static::getInt("build.minify");
     }
 
     /**
@@ -135,7 +136,7 @@ abstract class Configuration
      * @return string
      */
     public static function getFullUrl(): string {
-        return self::urlProtocol() . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+        return static::urlProtocol() . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
     }
 
     /**
@@ -144,7 +145,7 @@ abstract class Configuration
      * @return string
      */
     public static function getRequestHost(): string {
-        return self::urlProtocol() . $_SERVER['HTTP_HOST'];
+        return static::urlProtocol() . $_SERVER['HTTP_HOST'];
     }
 
     /**
@@ -154,7 +155,7 @@ abstract class Configuration
     */
     public static function getEnvironment(): string
     {
-        return self::getString("app.environment.mood");
+        return static::getString("app.environment.mood");
     }
 
     /**
@@ -164,7 +165,7 @@ abstract class Configuration
     */
     public static function isMaintenance(): bool
     {
-        return self::getBoolean("app.maintenance.mood", false);
+        return static::getBoolean("app.maintenance.mood", false);
     }
 
     /**
@@ -174,7 +175,7 @@ abstract class Configuration
      */
     public static function isProduction(): bool
     {
-        return (self::getEnvironment() === "production");
+        return (static::getEnvironment() === "production");
     }
 
    /**
@@ -183,12 +184,11 @@ abstract class Configuration
      * @return bool
      */
     public static function isLocal(): bool
-    {
-        $isCliServer = isset($_SERVER['LOCAL_SERVER_INSTANCE']);
+    {;
         $host = $_SERVER['SERVER_NAME'] ?? '';
         $isLocal = strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false;
 
-        return $isCliServer || $isLocal;
+        return static::isLocalServer() || $isLocal;
     }
 
     /**
@@ -210,7 +210,7 @@ abstract class Configuration
     */
     public static function usePublic(): bool
     {
-        return !self::isLocalServer() && !self::isProduction();
+        return !static::isLocalServer() && !static::isProduction();
     }
 
     /**
@@ -235,9 +235,8 @@ abstract class Configuration
      */
     public static function getRootDirectory(string $directory): ?string
     {
-        return self::root($directory);
+        return static::root($directory);
     }
-
 
     /**
      * Filter the path to match to allowed in error directories preview.
@@ -250,7 +249,7 @@ abstract class Configuration
     {
         $matching = '';
 
-        foreach (self::$allowPreviews as $directory) {
+        foreach (static::$allowPreviews as $directory) {
             $separator = $directory . DIRECTORY_SEPARATOR; 
             if (strpos($path, $separator) !== false) {
                 $matching = $separator;
@@ -419,7 +418,7 @@ abstract class Configuration
      */
     public static function copyright(): string
     {
-        return 'PHP Luminova (' . self::$version . ')';
+        return 'PHP Luminova (' . static::$version . ')';
     }
 
     /**
@@ -429,6 +428,6 @@ abstract class Configuration
      */
     public static function version(): string
     {
-        return self::$version;
+        return static::$version;
     }
 }
