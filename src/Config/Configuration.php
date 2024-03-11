@@ -11,16 +11,15 @@ namespace Luminova\Config;
 
 abstract class Configuration 
 {
-    public const DS = DIRECTORY_SEPARATOR; 
     /**
     * @var string $version version name
     */
-    public static $version = '1.3.0';
+    public static $version = '1.9.0';
 
     /**
     * @var int $versionCode version code
     */
-    public static $versionCode = 130;
+    public static $versionCode = 190;
 
     /**
      * Minimum required php version
@@ -29,7 +28,7 @@ abstract class Configuration
     public const MIN_PHP_VERSION = '8.0';
 
     /**
-    * @var array allowPreviews allow previews
+    * @var array $allowPreviews allow previews
     */
     private static array $allowPreviews = ['system', 'app', 'resources', 'writable', 'libraries'];
 
@@ -49,7 +48,6 @@ abstract class Configuration
 
         return $data;
     }
-
 
     /**
      * Get the application name.
