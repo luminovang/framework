@@ -66,6 +66,13 @@ trait TemplateTrait
     private string $optimizerFolder = "writeable/caches/optimize";
 
     /** 
+     * Holds template assets folder
+     * 
+     * @var string $assetsFolder 
+    */
+    private string $assetsFolder = 'assets';
+
+    /** 
      * Holds the view template optimize full file directory path
      * 
      * @var string $optimizerFile 
@@ -78,13 +85,6 @@ trait TemplateTrait
      * @var string $subViewFolder 
     */
     private string $subViewFolder = '';
-
-    /** 
-     * Holds template assets folder
-     * 
-     * @var string $assetsFolder 
-    */
-    private string $assetsFolder = 'assets';
 
     /** 
      * Holds the router active page name
@@ -202,18 +202,16 @@ trait TemplateTrait
     public function initialize(?string $config, string $dir =__DIR__): void
     {
         $this->templateConfig = $config ?? TemplateConfig::class;
+
         $this->baseTemplateDir = BaseConfig::root($dir);
         $this->templateEngin = $this->templateConfig::ENGINE;
-        $this->templateFolder = $this->templateConfig::$templateFolder;
         $this->optimizerFolder = $this->templateConfig::$optimizerFolder;
-        $this->assetsFolder = $this->templateConfig::$assetsFolder;
         $this->optionsAsVariable = $this->templateConfig::$optionsAsVariable;
         if (BaseConfig::usePublic()) {
             // If the document root is not changed to "public", manually enable the app to use "public" as the default
             $this->setDocumentRoot("public");
         }
     }
-    
 
     /** 
     * Get property from static::$registeredAttributes or static::$registeredClasses
