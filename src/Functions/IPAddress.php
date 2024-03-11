@@ -18,6 +18,7 @@ use \Luminova\Http\Exceptions\RequestException;
 use \Luminova\Http\Exceptions\ConnectException;
 use \Luminova\Http\Exceptions\ClientException;
 use \Luminova\Http\Exceptions\ServerException;
+use \Luminova\Application\Paths;
 use \Exception;
 
 class IPAddress
@@ -85,7 +86,7 @@ class IPAddress
 
       $path = path('caches') . "ip" . DIRECTORY_SEPARATOR;
 
-      path()->createDirectory($path);
+      Paths::createDirectory($path);
 
       $cacheFile = $path . "ip_info_$ip.json";
 

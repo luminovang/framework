@@ -9,7 +9,6 @@
 */
 namespace Luminova\Command\Novakit;
 
-
 class AvailableCommands 
 {
     /**

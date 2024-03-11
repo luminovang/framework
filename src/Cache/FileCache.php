@@ -14,6 +14,7 @@ use \Generator;
 use \DateTimeInterface;
 use \DateInterval;
 use \Luminova\Time\Time;
+use \Luminova\Application\Paths;
 
 class FileCache 
 {
@@ -751,9 +752,7 @@ class FileCache
      private function commit(): bool 
      {
 
-        if (!file_exists($this->storagePath)) {
-            mkdir($this->storagePath, 0755, true);
-        }        
+        Paths::createDirectory($this->storagePath);     
     
         $cache = $this->cacheInstance;
         $cache["hash-sum"] = md5(serialize($cache));

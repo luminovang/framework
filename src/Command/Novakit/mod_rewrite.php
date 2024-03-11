@@ -12,7 +12,7 @@ if (PHP_SAPI === 'cli') {
     return;
 }
 
-$uri = parse_url('https://nanoblocktech.com' . $_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
+$uri = parse_url('https://luminova.ng' . $_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
 $uri = urldecode($uri);
 
 $_SERVER['SCRIPT_NAME'] = '/index.php';

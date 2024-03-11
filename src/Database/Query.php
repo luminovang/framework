@@ -219,7 +219,7 @@ class Query extends Connection
      * 
      * @return self $this Class instance.
      */
-    public function join(string $table, string $type = 'INNER', string $alias = ''): self
+    public function join(string $table, string $type = "INNER", string $alias = ''): self
     {
         $this->databaseJoinType = $type;
         $this->databaseJoinTable = $table;
@@ -257,6 +257,7 @@ class Query extends Connection
 
         return $this;
     }
+
 
     /**
      * Sets join table left

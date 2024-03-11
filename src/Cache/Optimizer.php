@@ -9,7 +9,8 @@
  */
 namespace Luminova\Cache;
 
-use Luminova\Http\Header;
+use \Luminova\Http\Header;
+use \Luminova\Application\Paths;
 
 class Optimizer
 {
@@ -138,19 +139,16 @@ class Optimizer
     public function saveCache(string $content, ?string $info = null, array $cacheData = []): bool
     {
         $location = $this->getCacheFilepath();
-        if (!file_exists($location)) {
-            @mkdir($location, 0755, true);
-        }
-
+        Paths::createDirectory($location);     
         if($info !== null){
             $now = date('D jS M Y H:i:s', time());
             $content .= '<!--[File was cached on - '. $now . ', Using: ' . $info . ']-->';
         }
     
         if($cacheData !== []){
-            file_put_contents($this->getCacheLocation('json'), json_encode($cacheData));
+            write_content($this->getCacheLocation('json'), json_encode($cacheData));
         }
-        $bytesWritten = @file_put_contents($this->getCacheLocation(), $content);
+        $bytesWritten = write_content($this->getCacheLocation(), $content);
         return $bytesWritten !== false;
     }
 

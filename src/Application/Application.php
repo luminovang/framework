@@ -43,6 +43,7 @@ class Application
      * @param string $dir The project root directory
      */
     public function __construct(string $dir = __DIR__) {
+
         // Register dotenv variables
         DotEnv::register(root($dir, '.env'));
 
@@ -62,6 +63,8 @@ class Application
 
         // Set the project base path
         $this->setBasePath($this->router->getBase());
+
+
     }
 
     /**

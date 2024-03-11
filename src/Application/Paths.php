@@ -9,6 +9,8 @@
  */
 namespace Luminova\Application;
 
+use \App\Controllers\Config\Files;
+
 class Paths 
 {
     /**
@@ -99,10 +101,10 @@ class Paths
      * 
      * @return bool true if files existed or was created else false
     */
-    public static function createDirectory(string $path, int $permissions = 0755): bool 
+    public static function createDirectory(string $path, ?int $permissions = null): bool 
     {
         if (!file_exists($path)) {
-            return mkdir($path, $permissions, true);
+            return mkdir($path, $permissions ?? Files::$filePermissions, true);
         }
 
         return true;

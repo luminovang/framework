@@ -9,8 +9,7 @@
  */
 namespace Luminova\Errors;
 
-use Luminova\Base\BaseConfig;
-use Luminova\Logger\Logger;
+use \Luminova\Base\BaseConfig;
 
 class Error
 {
@@ -55,15 +54,13 @@ class Error
     */
     public static function display(string $message, int $code = E_ERROR): void 
     {
-        $ds = DIRECTORY_SEPARATOR;
-        $path = BaseConfig::root(__DIR__, "{$ds}resources{$ds}views{$ds}system_errors{$ds}");
-        $path .= 'errors.php';
+        $path = path('views') . 'system_errors' . DIRECTORY_SEPARATOR . 'errors.php';
         $errors = [
             'message' => $message,
             'name' => self::getName($code)
         ];
         extract($errors);
-        include_once $path;
+        include $path;
         exit(0);
     }
 
@@ -83,12 +80,8 @@ class Error
         $errFile = BaseConfig::filterPath($errFile);
         $message = "Error [$errno]: $message in $errFile on line $errLine";
 
-        if (!BaseConfig::isProduction()) {
-            if (self::isFatal($errno)) {
-                self::display($message, $errno);
-            }else{
-                echo $message;
-            }
+        if (!BaseConfig::isProduction() && self::isFatal($errno)) {
+            self::display($message, $errno);
         }
 
         self::log('php_errors', $message);
@@ -131,6 +124,6 @@ class Error
      */
     public static function log(string $level, string $message, array $context = []): void
     {
-        (new Logger())->log($level, $message, $context);
+        logger($level, $message, $context);
     }
 }

@@ -9,8 +9,8 @@
 */
 namespace Luminova\Command\Novakit;
 
-use Luminova\Command\Terminal;
-use Luminova\Base\BaseCommand;
+use \Luminova\Command\Terminal;
+use \Luminova\Base\BaseCommand;
 
 class Server extends BaseCommand 
 {

@@ -9,11 +9,9 @@
  */
 namespace Luminova\Functions;
 
-use Exception;
 use \Laminas\Escaper\Escaper as LaminasEscaper;
-use \Luminova\Exceptions\BadMethodCallException;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\InvalidArgumentException;
+use \Exception;
+use \RuntimeException;
 
 class Escaper
 {
@@ -76,32 +74,21 @@ class Escaper
      * Constructor.
      * 
      * @param string $encoding The character encoding to use. Defaults to 'utf-8'.
-     * 
-     * @throws InvalidArgumentException
      */
     public function __construct(?string $encoding = 'utf-8')
     {
-        $encoding === null ? 'utf-8' : $encoding;
+        if($encoding !== null){
+            $encoding = strtolower($encoding);
+            if (!in_array($encoding, $this->supportedEncodings)) {
+                $encoding = 'utf-8';
+            }
 
-        if ($encoding === '') {
-            throw new InvalidArgumentException('Contractor $encoding parameter cannot be blank');
+            $this->encoding = $encoding;
         }
-
-        $encoding = strtolower($encoding);
-
-        if (!in_array($encoding, $this->supportedEncodings)) {
-            throw new InvalidArgumentException('Provided encoding \'' . $encoding . '\' is not supported use an encoding supported by htmlspecialchars()');
-        }
-
-        $this->encoding = $encoding;
         $this->encodingFlags = ENT_QUOTES | ENT_SUBSTITUTE;
 
         if (class_exists('\Laminas\Escaper\Escaper')) {
-            try{
-                $this->escaper = new LaminasEscaper($encoding);
-            }catch(Exception $e){
-                throw new InvalidArgumentException($e->getMessage(), $e->getCode(), $e->getPrevious());
-            }
+            $this->escaper = new LaminasEscaper($encoding);
         }
     }
 
@@ -112,16 +99,16 @@ class Escaper
      * @param array $arguments The arguments passed to the method.
      * 
      * @return mixed The result of the method call.
-     * @throws BadMethodCallException When the called method does not exist.
+     * @throws Exception When the called method does not exist.
      */
     public function __call(string $name, array $arguments): mixed
     {
         if ($this->escaper === null) {
             if (method_exists($this, $name)) {
                 return $this->{$name}(...$arguments);
-            } 
-            
-            throw new BadMethodCallException('Method ' . $name . ' does not exist, to use ' . $name . ', you need to install a third-party library first. Run "composer require laminas/laminas-escaper"');
+            } else {
+                throw new Exception('Method ' . $name . ' does not exist, to use ' . $name . ', you need to install a third-party library first. Run "composer require laminas/laminas-escaper"');
+            }
         }
 
         return $this->escaper->{$name}(...$arguments);
@@ -195,6 +182,7 @@ class Escaper
      */
     protected function toUtf8(string $string): string
     {
+
         $result = $this->encoding === 'utf-8' ? $string : $this->convertEncoding($string, 'UTF-8', $this->encoding);
 
         if (!$this->isUtf8($result)) {

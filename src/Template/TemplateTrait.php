@@ -202,7 +202,6 @@ trait TemplateTrait
     public function initialize(?string $config, string $dir =__DIR__): void
     {
         $this->templateConfig = $config ?? TemplateConfig::class;
-
         $this->baseTemplateDir = BaseConfig::root($dir);
         $this->templateEngin = $this->templateConfig::ENGINE;
         $this->templateFolder = $this->templateConfig::$templateFolder;
@@ -261,14 +260,6 @@ trait TemplateTrait
     */
     public static function hasClass(string $class): bool 
     {
-       /* if (isset(static::$registeredClasses[$class]) && is_object(static::$registeredClasses[$class])) {
-            return true;
-        } 
-
-        if (isset($this->{$class}) && is_object($this->{$class})) {
-            return true;
-        } */
-
         return isset(static::$registeredClasses[$class]);
     }
 
@@ -674,7 +665,6 @@ trait TemplateTrait
     {
         try {
             if($this->iniRenderSetup()){
-
                 if ($this->templateEngin === 'smarty') {
                     $this->renderWithSmarty($options);
                 } else {
@@ -684,7 +674,7 @@ trait TemplateTrait
         } catch (AppException $e) {
             $this->handleException($e, $options);
         }
-        
+
         exit(0);
     }
 
@@ -693,10 +683,13 @@ trait TemplateTrait
      * 
      * @return bool 
      * @throws ViewNotFoundException
+     * @throws RuntimeException
     */
     private function iniRenderSetup(): bool
     {
         defined('ALLOW_ACCESS') || define('ALLOW_ACCESS', true);
+
+        static::isReadWritePermission(path('writeable'));
 
         if (!file_exists($this->templateFile)) {
             throw new ViewNotFoundException($this->activeView, 404);
@@ -1004,7 +997,6 @@ trait TemplateTrait
         return str_repeat(($level >= 2 ? '../' : ($level == 1 ? '../' : './')), $level);
     }
 
-
     /** 
     * Get template base view segments
     *
@@ -1034,7 +1026,7 @@ trait TemplateTrait
     *
     * @return void 
     */
-    private function handleException(AppException $exception, array $options): void 
+    private function handleException(AppException $exception, array $options = []): void 
     {
         /*if ($exception instanceof ViewNotFoundException) {
             // Handle file not found exception
@@ -1075,7 +1067,6 @@ trait TemplateTrait
 
         $exception->logException();
     }
-    
 
     /** 
     * Convert view name to title
@@ -1115,5 +1106,24 @@ trait TemplateTrait
 
         return trim($title);
     }
+
+    /**
+     * Check if read and write permission is grandted for writeable folder
+     * 
+     * @param string $folder
+     * 
+     * @return void
+    */
+    private static function isReadWritePermission(string $folder): void
+    {
+        // Check if folder is readable
+        if (!is_readable($folder)) { 
+            throw new RuntimeException("Folder '{$folder}' is not readable, please grant read permission.");
+        }
     
+        // Check if folder is writable
+        if (!is_writable($folder)) {
+            throw new RuntimeException("Folder '{$folder}' is not writable, please grant read permission.");
+        }
+    }
 }

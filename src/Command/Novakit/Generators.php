@@ -9,10 +9,8 @@
 */
 namespace Luminova\Command\Novakit;
 
-use Luminova\Command\Terminal;
-use Luminova\Base\BaseCommand;
-use Luminova\Base\BaseConfig;
-use Luminova\Command\Novakit\AvailableCommands;
+use \Luminova\Command\Terminal;
+use \Luminova\Base\BaseCommand;
 use \Closure;
 use \Exception;
 
@@ -99,7 +97,6 @@ class Generators extends BaseCommand
         }
     }
 
-
     private function createView(string $name): void 
     {
 
@@ -118,7 +115,6 @@ class Generators extends BaseCommand
 
     private function createClass(string $name, ?string $extend = null, ?string $implement = null): void 
     {
-
         $use = $extend ? "use \\$extend;\n" : '';
         $use .= $implement ? "use \\$implement;" : '';
 
@@ -140,11 +136,10 @@ class Generators extends BaseCommand
 
     private function saveFile(string $content, string $path): bool 
     {
-        $filepath = BaseConfig::root(__DIR__) . $path;
+        $filepath = root(__DIR__, $path);
         try {
-            file_put_contents($filepath, $content);
-            return true;
-        } catch (Exception $e) {
+            return write_content($filepath, $content);
+        } catch(Exception $e) {
             Terminal::writeln($e->getMessage(), 'red');
             return false;
         }

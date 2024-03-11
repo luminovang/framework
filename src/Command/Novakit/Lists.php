@@ -9,10 +9,10 @@
 */
 namespace Luminova\Command\Novakit;
 
-use Luminova\Command\Terminal;
-use Luminova\Base\BaseCommand;
-use Luminova\Command\TextUtils;
-use Luminova\Command\Novakit\AvailableCommands;
+use \Luminova\Command\Terminal;
+use \Luminova\Base\BaseCommand;
+use \Luminova\Command\TextUtils;
+use \Luminova\Command\Novakit\AvailableCommands;
 
 class Lists extends BaseCommand 
 {

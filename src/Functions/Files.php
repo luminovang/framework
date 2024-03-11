@@ -9,6 +9,8 @@
  */
 namespace Luminova\Functions;
 
+use \Luminova\Application\Paths;
+
 class Files
 {
     /**
@@ -21,9 +23,7 @@ class Files
 	 */
 	public static function copy(string $origin, string $dest): bool
 	{
-		if (!file_exists($dest)) {
-			mkdir($dest, 0777, true);
-		}
+		Paths::createDirectory($dest);
 
 		$dir = opendir($origin);
 

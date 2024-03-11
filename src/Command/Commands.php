@@ -8,16 +8,18 @@
  * @license See LICENSE file
  */
 namespace Luminova\Command;
-use Luminova\Command\Terminal;
-use Luminova\Command\Novakit\Server;
-use Luminova\Command\Novakit\Help;
-use Luminova\Command\Novakit\Lists;
-use Luminova\Command\Novakit\Database;
-use Luminova\Command\Novakit\Generators;
-use Luminova\Command\Novakit\AvailableCommands;
+
+use \Luminova\Command\Terminal;
+use \Luminova\Command\Novakit\Server;
+use \Luminova\Command\Novakit\Help;
+use \Luminova\Command\Novakit\Lists;
+use \Luminova\Command\Novakit\Database;
+use \Luminova\Command\Novakit\Generators;
+use \Luminova\Command\Novakit\AvailableCommands;
 use \Closure;
 
-class Commands{
+class Commands
+{
 
     /**
      * Run console command
