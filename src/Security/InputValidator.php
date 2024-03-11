@@ -34,7 +34,7 @@ class InputValidator implements ValidatorInterface
      * @param array $input array input to validate it fields
      * @param array $rules Optional passed rules as array
      * 
-     * @return self Use $validate->isPased() method to check the validity of
+     * @return self Use $validate->isPassed() method to check the validity of
     */
     public function validate(array $input, array $rules = []): self
     {
@@ -99,6 +99,11 @@ class InputValidator implements ValidatorInterface
                                 if (!in_array($fieldValue, $matches)) {
                                     $this->addError($field, $ruleName, $fieldValue);
                                 }
+                            }
+                        break;
+                        case 'is_list':
+                            if (!is_list($fieldValue, true)) {
+                                $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
                         case 'keys_exist':

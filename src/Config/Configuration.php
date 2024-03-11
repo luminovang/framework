@@ -14,12 +14,12 @@ abstract class Configuration
     /**
     * @var string $version version name
     */
-    public static $version = '1.9.0';
+    public static $version = '2.0.0';
 
     /**
     * @var int $versionCode version code
     */
-    public static $versionCode = 190;
+    public static $versionCode = 200;
 
     /**
      * Minimum required php version
