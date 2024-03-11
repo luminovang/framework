@@ -456,9 +456,11 @@ final class Router
     */
     public function run(?callable $callback = null): void
     {
+     
         $this->method = Header::getRoutingMethod();
+       
         $status = ($this->method === 'CLI' ? $this->runAsCli() : $this->runAsHttp());
-
+       
         if ($status && $callback && is_callable($callback)) {
             $callback();
         }
@@ -473,40 +475,39 @@ final class Router
     /**
      * Set the error handling function.
      *
-     * @param callable $match_callback Matching callback function to be executed
+     * @param callable $match Matching callback function to be executed
      * @param callable $callback The function to be executed
      * 
      * @return void
     */
-    public function setErrorHandler(mixed $match_callback, mixed $callback = null): void
+    public function setErrorHandler(mixed $match, mixed $callback = null): void
     {
         if ($callback === null) {
-            $this->controllers['errors']['/'] = $match_callback;
+            $this->controllers['errors']['/'] = $match;
         } else {
-            $this->controllers['errors'][$match_callback] = $callback;
+            $this->controllers['errors'][$match] = $callback;
         }
     }
-    
+
     /**
      * Triggers error response
      *
-     * @param string $match A route pattern or template view name
-     * @param string $status Status code
+     * @param int $status Status code
      * 
      * @return void
     */
-    public function triggerError(?array $match = null, int $status = 404): void
+    public function triggerError(int $status = 404): void
     {
         $status = false;
 
         if (count($this->controllers['errors']) > 0)
         {
-            foreach ($this->controllers['errors'] as $route_pattern => $route_callable) {
-                $isMatch = static::capturePattern($route_pattern, $this->getView(), $matches);
+            foreach ($this->controllers['errors'] as $pattern => $callable) {
+                $isMatch = static::capturePattern($pattern, $this->getView(), $matches);
                 if ($isMatch) {
                     //$params = static::extractFoundMatches($matches);
-                    static::execute($route_callable);
-                    $status = true;
+                    $status = static::execute($callable);
+                    break;
                 }
             }
         }
@@ -514,9 +515,9 @@ final class Router
         if(!$status){
             if(isset($this->controllers['errors']['/'])){
                 static::execute($this->controllers['errors']['/']);
-            }elseif(isset($_SERVER['SERVER_PROTOCOL'])) {
-                header($_SERVER['SERVER_PROTOCOL'] . ' Error file not found', true, $status);
-                //header($_SERVER['SERVER_PROTOCOL'] . ' ' . lang('Router.notFound'));
+            }else{
+                $protocol = isset($_SERVER['SERVER_PROTOCOL']) ? $_SERVER['SERVER_PROTOCOL'] : '';
+                header($protocol . ' Error file not found', true, $status);
             }
         }
     }
@@ -700,6 +701,32 @@ final class Router
     }
 
     /**
+     * Register a middleware
+     *
+     * @param string  $to group name
+     * @param string  $methods  Allowed methods, can be serrated with | pipe symbol
+     * @param string  $pattern A route pattern or template view name
+     * @param callable|string $callback Callback function to execute
+     * @param bool $exit is before middleware
+     * 
+     * @return void
+    */
+    private function addMiddleWare(string $to, string $methods, string $pattern, callable|string $callback, bool $exit = false): void
+    {
+        $pattern = $this->routeBase . '/' . trim($pattern, '/');
+        $pattern = $this->routeBase ? rtrim($pattern, '/') : $pattern;
+        $pipes = explode('|', $methods);
+
+        foreach ($pipes as $method) {
+            $this->controllers[$to][$method][] = [
+                'pattern' => $pattern,
+                'callback' => $callback,
+                'middleware' => $exit
+            ];
+        }
+    }
+
+     /**
      * Run the CLI router and application: 
      * Loop all defined CLI routes
      *
@@ -728,32 +755,6 @@ final class Router
         return $result;
     }
 
-     /**
-     * Register a middleware
-     *
-     * @param string  $to group name
-     * @param string  $methods  Allowed methods, can be serrated with | pipe symbol
-     * @param string  $pattern A route pattern or template view name
-     * @param callable|string $callback Callback function to execute
-     * @param bool $exit is before middleware
-     * 
-     * @return void
-    */
-    private function addMiddleWare(string $to, string $methods, string $pattern, callable|string $callback, bool $exit = false): void
-    {
-        $pattern = $this->routeBase . '/' . trim($pattern, '/');
-        $pattern = $this->routeBase ? rtrim($pattern, '/') : $pattern;
-        $pipes = explode('|', $methods);
-
-        foreach ($pipes as $method) {
-            $this->controllers[$to][$method][] = [
-                'pattern' => $pattern,
-                'callback' => $callback,
-                'middleware' => $exit
-            ];
-        }
-    }
-
     /**
      * Run the HTTP router and application: 
      * Loop all defined HTTP request method and view routes
@@ -763,26 +764,27 @@ final class Router
     private function runAsHttp(): bool
     {
         $result = true;
-
+       
         if (isset($this->controllers['routes_middleware'][$this->method])) {
             $result = $this->handleWebsite($this->controllers['routes_middleware'][$this->method]);
         }
 
         if($result){
+            
             $result = false;
             $routes = $this->controllers['routes'][$this->method] ?? null;
-            
-            if ($routes === null) {
-                $this->triggerError();
-            }else {
+
+            if ($routes !== null) {
                 $result = $this->handleWebsite($routes);
                 if($result){
                     if (isset($this->controllers['routes_after'][$this->method])) {
                         $this->handleWebsite($this->controllers['routes_after'][$this->method]);
                     }
-                }else{
-                    $this->triggerError($routes);
                 }
+            }
+
+            if(!$result){
+                $this->triggerError();
             }
         }
         
@@ -906,9 +908,9 @@ final class Router
         }
 
         return $params;
-    }*/
+    }
 
-    /*private static function extractFoundMatchesX(array $array): array
+    private static function extractFoundMatchesXX(array $array): array
     {
         $array = array_slice($array, 1);
         $params = array_map(function ($match, $index) use ($array) {
