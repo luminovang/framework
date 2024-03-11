@@ -10,7 +10,7 @@
 
 namespace Luminova\Languages;
 
-use \Exception;
+use \Luminova\Exceptions\NotFoundException;
 
 class Translator
 {
@@ -93,7 +93,7 @@ class Translator
      * @param array $placeholders placeholders
      * 
      * @return string The translation text or the fallback value if any.
-     * @throws Exception When translation file cannot be loaded.
+     * @throws NotFoundException When translation file cannot be loaded.
      */
     public function get(string $lang, string $default = '', array $placeholders = []): string
     {
@@ -104,7 +104,7 @@ class Translator
 
         if ($translations === []) {
             if($default === ''){
-                throw new Exception("No translations found for file: {$filename}");
+                throw new NotFoundException("No translations found for file: {$filename}");
             }
 
             return $default;
@@ -141,5 +141,4 @@ class Translator
 
         return strtr($message, $array);
     }
-    
 }

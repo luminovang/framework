@@ -513,12 +513,16 @@ class Query extends Connection
      */
     public function insert(array $values, bool $bind = true): int 
     {
-        if ($values === [] || !is_associative($values)) {
+        if ($values === []) {
             return 0;
         }
 
         if (!is_nested($values)) {
             $values = [$values];
+        }
+        
+        if (!is_associative($values[0])) {
+            return 0;
         }
     
         $columns = array_keys($values[0]);
@@ -1341,11 +1345,6 @@ class Query extends Connection
         foreach ($columns as $column => $value) {
             $updateColumns[] = "$column = :$column";
         }
-        /*
-            $updateColumns = array_map(function ($column) {
-                return "$column = :$column";
-            }, array_keys($columns));
-        */
 
         if($implode){
             return implode(', ', $updateColumns);

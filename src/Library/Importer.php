@@ -9,7 +9,7 @@
  */
 namespace Luminova\Library;
 
-use \RuntimeException;
+use \Luminova\Exceptions\RuntimeException;
 
 class Importer
 {

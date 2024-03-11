@@ -17,7 +17,7 @@ class InputValidator implements ValidatorInterface
     /**
      * @var array $errors validated errors messages
     */
-    protected array $errors = [];
+    private array $errors = [];
 
      /**
      * @var array $validationRules validation rules
@@ -33,15 +33,30 @@ class InputValidator implements ValidatorInterface
      * Validate entries
      * @param array $input array input to validate it fields
      * @param array $rules Optional passed rules as array
+     * 
+     * @return self Use $validate->isPased() method to check the validity of
+    */
+    public function validate(array $input, array $rules = []): self
+    {
+        $this->validateEntries($input, $rules);
+    
+        return $this;
+    }
+
+    /**
+     * Validate entries
+     * @param array $input array input to validate it fields
+     * @param array $rules Optional passed rules as array
+     * 
      * @return boolean true if the rule passed else false
     */
     public function validateEntries(array $input, array $rules = []): bool
     {
-        if (empty($rules)) {
+        if ($rules === []) {
             $rules = $this->validationRules;
         }
     
-        if (empty( $rules ) || (empty($rules) && empty($input))) {
+        if ($rules === [] || ($rules === [] && $input === [])) {
             return true;
         }
 
@@ -60,29 +75,29 @@ class InputValidator implements ValidatorInterface
                             return true;
                         case 'required':
                             if (is_empty($fieldValue)) {
-                                $this->addError($field, $ruleName);
+                                $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
                         case 'callback':
                             if (is_callable($ruleParam) && !$ruleParam($fieldValue, $field)) {
-                                $this->addError($field, $ruleName);
+                                $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
                         case 'match':
                             if (!preg_match('/' . $ruleParam . '/', $fieldValue)) {
-                                $this->addError($field, $ruleName);
+                                $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
                         case 'equals':
                             if ($fieldValue !== $input[$ruleParam]) {
-                                $this->addError($field, $ruleName);
+                                $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
                         case 'in_array':
                             if (!empty($ruleParam)) {
                                 $matches = list_to_array($ruleParam);
                                 if (!in_array($fieldValue, $matches)) {
-                                    $this->addError($field, $ruleName);
+                                    $this->addError($field, $ruleName, $fieldValue);
                                 }
                             }
                         break;
@@ -96,7 +111,7 @@ class InputValidator implements ValidatorInterface
                                     $exist = list_in_array($fieldValue, $matches);
                                 }
                                 if (!$exist) {
-                                    $this->addError($field, $ruleName);
+                                    $this->addError($field, $ruleName, $fieldValue);
                                 }
                             }
                         break;
@@ -111,13 +126,13 @@ class InputValidator implements ValidatorInterface
                         break;
                         default:
                             if (!$this->validateField($ruleName, $fieldValue, $rulePart, $ruleParam)) {
-                                $this->addError($field, $ruleName);
+                                $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
                     }
                 }
             }else{
-                $this->addError($field, '*', 'Form input field [' . $field . '] is missing');
+                $this->addError($field, '*', 'Form input field [' . $field . '] is missing', null);
             }
         }
 
@@ -137,12 +152,12 @@ class InputValidator implements ValidatorInterface
     public function validateField(string $ruleName, mixed $value, string $rule, mixed $param = null): bool
     {
         return match ($ruleName) {
-            'max_length' => strlen($value) <= (int) $param,
-            'min_length' => strlen($value) >= (int) $param,
-            'exact_length' => strlen($value) == (int) $param,
+            'max_length', 'max' => strlen($value) <= (int) $param,
+            'min_length', 'min' => strlen($value) >= (int) $param,
+            'exact_length', 'length' => strlen($value) == (int) $param,
             'integer' => match ($param) {
-                'positive' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int)$value > 0,
-                'negative' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int)$value < 0,
+                'positive' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value > 0,
+                'negative' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value < 0,
                 default => filter_var($value, FILTER_VALIDATE_INT) !== false,
             },
             'email' => filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
@@ -283,14 +298,23 @@ class InputValidator implements ValidatorInterface
      * 
      * @param string $field input field name
      * @param string $ruleName Rule name
-     * @param string $message Error message
+     * @param mixed $value Filed valu
      * 
      * @return void 
     */
-    public function addError(string $field, string $ruleName, string $message = 'Validation failed for %s.'): void
+    public function addError(string $field, string $ruleName, mixed $value = null): void
     {
-        $message = sprintf($message, $field);
-        $this->errors[$field][] = $this->errorMessages[$field][$ruleName] ?? $message;
+        $message = $this->errorMessages[$field][$ruleName] ?? null;
+
+        if($message === null){
+            $message = 'Validation failed for "' . $field . '" while validating [' . $ruleName . '].';
+        }else{
+            $message = static::replaceMessage($message, [
+                $field, $ruleName, $value
+            ]);
+        }
+
+        $this->errors[$field][] = $message;
         $this->errors[$field]['field'] = $field;
     }
 
@@ -338,7 +362,7 @@ class InputValidator implements ValidatorInterface
         return $this;
     }
 
-     /**
+    /**
      * Set a single validation rule messages
      * @param string $field messages input field name
      * @param array $messages messages to set
@@ -349,5 +373,34 @@ class InputValidator implements ValidatorInterface
         $this->errorMessages[$field] = $messages;
 
         return $this;
+    }
+
+    /**
+     * Check if validation passed
+     * 
+     * @return boolean true if the rule passed else false
+    */
+    public function isPassed(): bool
+    {
+        return $this->errors === [];
+    }
+
+     /**
+     * Translate placeholders
+     * 
+     * @param string $message message to be translated
+     * @param array $placeholders array 
+     * 
+     * @return string 
+    */
+    private static function replaceMessage(string $message, array $placeholders = []): string 
+    {
+        if($placeholders === []){
+            return $message;
+        }
+
+        $replaced = str_replace(['[field]', '[rule]', '[value]'], $placeholders, $message);
+
+        return $replaced;
     }
 }

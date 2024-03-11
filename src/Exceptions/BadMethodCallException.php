@@ -7,10 +7,13 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
+namespace Luminova\Exceptions;
 
-namespace Luminova\Application;
+use \Luminova\Exceptions\AppException;
 
-class Services 
+class BadMethodCallException extends AppException
 {
-   
+    /**
+     * BadMethodCallException: 
+     */
 }

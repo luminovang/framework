@@ -9,7 +9,7 @@
  */
 namespace Luminova\Seo;  
 
-use \DateTime;
+use \Luminova\Time\Time;
 
 class Meta
 {
@@ -170,7 +170,8 @@ class Meta
      */
     private function toDate(string $date): string
     {
-        $dateTime = (new DateTime($date))->format('Y-m-d\TH:i:sP');
+        
+        $dateTime = Time::parse($date)->format('Y-m-d\TH:i:sP');
 
         return $dateTime;
     }

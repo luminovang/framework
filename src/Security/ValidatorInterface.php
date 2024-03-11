@@ -16,6 +16,15 @@ interface ValidatorInterface
    * Validate entries
    * @param array $input array input to validate it fields
    * @param array $rules Optional passed rules as array
+   * 
+   * @return self Use $validate->isPased() method to check the validity of
+  */
+  public function validate(array $input, array $rules = []): self;
+
+  /**
+   * Validate entries
+   * @param array $input array input to validate it fields
+   * @param array $rules Optional passed rules as array
    * @return boolean true if the rule passed else false
   */
   public function validateEntries(array $input, array $rules = []): bool;
@@ -93,4 +102,11 @@ interface ValidatorInterface
    * @return string Error message
   */
   public function getErrorLine(int $indexField = 0, int $indexErrors = 0): string;
+
+  /**
+   * Check if validation passed
+   * 
+   * @return boolean true if the rule passed else false
+  */
+  public function isPassed(): bool;
 }

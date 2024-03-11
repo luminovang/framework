@@ -9,7 +9,7 @@
  */
 namespace Luminova\Sessions;
 
-use Luminova\Sessions\SessionInterface;
+use \Luminova\Sessions\SessionInterface;
 use \App\Controllers\Config\Session as CookieConfig;
 
 class CookieManager implements SessionInterface 

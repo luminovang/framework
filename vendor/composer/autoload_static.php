@@ -23,6 +23,7 @@ class ComposerStaticInit9bbe5f33f53702290b6f40e5fff6e1ff
     public static $classMap = array (
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
         'Luminova\\Application\\Application' => __DIR__ . '/../..' . '/src/Application/Application.php',
+        'Luminova\\Application\\Factory' => __DIR__ . '/../..' . '/src/Application/Factory.php',
         'Luminova\\Application\\Paths' => __DIR__ . '/../..' . '/src/Application/Paths.php',
         'Luminova\\Application\\Services' => __DIR__ . '/../..' . '/src/Application/Services.php',
         'Luminova\\Arrays\\ArrayCountable' => __DIR__ . '/../..' . '/src/Arrays/ArrayCountable.php',
@@ -82,6 +83,7 @@ class ComposerStaticInit9bbe5f33f53702290b6f40e5fff6e1ff
         'Luminova\\Errors\\Codes' => __DIR__ . '/../..' . '/src/Errors/Codes.php',
         'Luminova\\Errors\\Error' => __DIR__ . '/../..' . '/src/Errors/Error.php',
         'Luminova\\Exceptions\\AppException' => __DIR__ . '/../..' . '/src/Exceptions/AppException.php',
+        'Luminova\\Exceptions\\BadMethodCallException' => __DIR__ . '/../..' . '/src/Exceptions/BadMethodCallException.php',
         'Luminova\\Exceptions\\ClassException' => __DIR__ . '/../..' . '/src/Exceptions/ClassException.php',
         'Luminova\\Exceptions\\DatabaseException' => __DIR__ . '/../..' . '/src/Exceptions/DatabaseException.php',
         'Luminova\\Exceptions\\ErrorException' => __DIR__ . '/../..' . '/src/Exceptions/ErrorException.php',

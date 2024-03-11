@@ -9,7 +9,7 @@
  */
 namespace Luminova\Sessions;
 
-use Luminova\Sessions\SessionInterface;
+use \Luminova\Sessions\SessionInterface;
 
 class SessionManager implements SessionInterface 
 {

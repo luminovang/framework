@@ -8,6 +8,7 @@ $baseDir = dirname($vendorDir);
 return array(
     'Composer\\InstalledVersions' => $vendorDir . '/composer/InstalledVersions.php',
     'Luminova\\Application\\Application' => $baseDir . '/src/Application/Application.php',
+    'Luminova\\Application\\Factory' => $baseDir . '/src/Application/Factory.php',
     'Luminova\\Application\\Paths' => $baseDir . '/src/Application/Paths.php',
     'Luminova\\Application\\Services' => $baseDir . '/src/Application/Services.php',
     'Luminova\\Arrays\\ArrayCountable' => $baseDir . '/src/Arrays/ArrayCountable.php',
@@ -67,6 +68,7 @@ return array(
     'Luminova\\Errors\\Codes' => $baseDir . '/src/Errors/Codes.php',
     'Luminova\\Errors\\Error' => $baseDir . '/src/Errors/Error.php',
     'Luminova\\Exceptions\\AppException' => $baseDir . '/src/Exceptions/AppException.php',
+    'Luminova\\Exceptions\\BadMethodCallException' => $baseDir . '/src/Exceptions/BadMethodCallException.php',
     'Luminova\\Exceptions\\ClassException' => $baseDir . '/src/Exceptions/ClassException.php',
     'Luminova\\Exceptions\\DatabaseException' => $baseDir . '/src/Exceptions/DatabaseException.php',
     'Luminova\\Exceptions\\ErrorException' => $baseDir . '/src/Exceptions/ErrorException.php',

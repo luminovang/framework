@@ -11,7 +11,6 @@ namespace Luminova\Storage;
 
 class Helper
 {
-
     private static array $unites = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 
     public static function byteToUnit(int $bytes, bool $add_name = false): string

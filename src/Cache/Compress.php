@@ -410,24 +410,30 @@ class Compress
     public static function minifyIgnoreCodeblock(string $content, bool $allowCopy = false): string 
     {
         $ignores = [];
-        $pattern = '/<pre><code[^>]*>[\s\S]*?<\/code><\/pre>/i';
+        //$pattern = '/<pre[^>]*><code[^>]*>[\s\S]*?<\/code><\/pre>/i';
+        $pattern = '/<pre[^>]*>\s*<code[^>]*>[\s\S]*?<\/code>\s*<\/pre>/i';
         $ignorePatten = '###IGNORED_CODE_BLOCK###';
+
         $content = preg_replace_callback($pattern, function ($matches) use (&$ignores, $ignorePatten) {
             $ignores[] = $matches[0];
+            
             return $ignorePatten;
         }, $content);
-
-
+        
         $content = self::minify($content);
 
         // Restore the code blocks back to its original state
         $content = preg_replace_callback('/' . $ignorePatten . '/', function () use (&$ignores, $allowCopy) {
-            $copy = '';
-            if($allowCopy){
-                $copy = '<button type="button" class="copy-snippet">copy</button>';
-            }
             $codeBlock =  array_shift($ignores);
-            return str_replace('<pre>', '<pre class="pre-codeblock">' . $copy , $codeBlock);
+            $copyButton = $allowCopy ? '<button type="button" class="copy-snippet">copy</button>' : '';
+        
+            $modifiedCodeBlock = preg_replace(
+                '/<pre([^>]*)class="([^"]*)"([^>]*)>/i', 
+                '<pre$1class="$2 pre-codeblock"$3>' . $copyButton,
+                $codeBlock
+            );
+
+            return $modifiedCodeBlock;
         }, $content);
 
         return $content;
