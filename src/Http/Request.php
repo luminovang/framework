@@ -145,9 +145,23 @@ class Request
      *
      * @param string $key
      * @param mixed $default
+     * 
+     * @deprecated This method will be changed later to replace find(), use getGet() instead 
      * @return mixed
      */
     public function get(string $key, mixed $default = null): mixed
+    {
+        return $this->get[$key] ?? $default;
+    }
+
+    /**
+     * Get a value from the GET request.
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getGet(string $key, mixed $default = null): mixed
     {
         return $this->get[$key] ?? $default;
     }
@@ -157,6 +171,7 @@ class Request
      *
      * @param string $key
      * @param mixed $default
+     * 
      * @return mixed
      */
     public function getPost(string $key, mixed $default = null): mixed
@@ -441,10 +456,43 @@ class Request
      * Get the request method 
      *
      * @return string The Request method
-     */
+    */
     public function getMethod(): string
     {
         return strtolower($_SERVER['REQUEST_METHOD']??'');
+    }
+
+    /**
+     * Check if the request method is get
+     *
+     * @return bool
+    */
+    public function isGet(): bool
+    {
+        return $this->getMethod() === 'get';
+    }
+
+    /**
+     * Check if the request method is post
+     *
+     * @return bool
+    */
+    public function isPost(): bool
+    {
+        return $this->getMethod() === 'post';
+    }
+
+    /**
+     * Check if the request method is
+     * @param string $method 
+     * 
+     * @return bool
+    */
+    public function isMethod(string $method): bool
+    {
+        $method = strtolower($method);
+
+        return $this->getMethod() === $method;
     }
 
      /**

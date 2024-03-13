@@ -11,7 +11,6 @@
 namespace Luminova\Application;
 
 use \Luminova\Routing\Router;
-use \Luminova\Config\DotEnv;
 use \Luminova\Template\TemplateTrait;
 
 class Application 
@@ -43,14 +42,6 @@ class Application
      * @param string $dir The project root directory
      */
     public function __construct(string $dir = __DIR__) {
-
-        // Register dotenv variables
-        DotEnv::register(root($dir, '.env'));
-
-        /*
-        * Register The Application Timezone
-        */
-        date_default_timezone_set(env("app.timezone", 'UTC'));
        
         // Initialize the router instance
         $this->router ??= new Router();
@@ -63,8 +54,6 @@ class Application
 
         // Set the project base path
         $this->setBasePath($this->router->getBase());
-
-
     }
 
     /**

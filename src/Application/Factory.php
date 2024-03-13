@@ -17,10 +17,14 @@ use \Luminova\Sessions\Session;
 use \Luminova\Library\Importer;
 use \Luminova\Languages\Translator;
 use \Luminova\Application\Paths;
+use \App\Controllers\Config\Services;
 use \Luminova\Logger\NovaLogger;
 use \Luminova\Security\InputValidator;
 use \Luminova\Exceptions\RuntimeException;
 use \Throwable;
+use \ReflectionClass;
+use \ReflectionException;
+use \ReflectionMethod;
 
 /**
  * Factory methods classes.
@@ -34,6 +38,7 @@ use \Throwable;
  * @method static NovaLogger          logger(string $extension = '.log', $shared = true)    @return NovaLogger
  * @method static Paths               paths($shared = true)                                 @return Paths
  * @method static InputValidator      validate($shared = true)                              @return InputValidator
+ * @method static Services            services($shared = true)                              @return Services
  */
 
 class Factory 
@@ -98,8 +103,7 @@ class Factory
         if (static::get($context) === null) {
             throw new RuntimeException("Factory with method name '$context' not found.");
         }
-
-        // If the last argument is provided and it's a boolean, use it as the shared flag
+        
         if (isset($arguments[count($arguments) - 1]) && is_bool($arguments[count($arguments) - 1])) {
             $shared = array_pop($arguments);
         }
@@ -119,25 +123,29 @@ class Factory
      */
     public static function create(string $context, bool $shared = true, ...$params): ?object
     {
-        $className = static::get($context);
+        $name = static::get($context);
         $instance = null;
 
-        if ($className === null) {
+        if ($name === null) {
             return null;
         }
 
-        if ($shared && isset(static::$instances[$className])) {
-            return static::$instances[$className];
+        if ($shared && isset(static::$instances[$name])) {
+            return static::$instances[$name];
         }
   
         try {
-            $instance = new $className(...$params);
+            //$instance = new $className(...$params);
+            $reflection = new ReflectionClass($name);
+            $instance = $reflection->newInstance(...$params);
 
             if ($shared) {
-                static::$instances[$className] = $instance;
+                static::$instances[$name] = $instance;
             }
         } catch (Throwable $e) {
             throw new RuntimeException("Failed to instantiate factory method '$context'. Error: " . $e->getMessage());
+        }catch(ReflectionException $e){
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e->getPrevious());
         }
 
         return $instance;
@@ -219,5 +227,110 @@ class Factory
         static::$instances = [];
 
         return static::$instances === [];
+    }
+
+    /**
+     * Get all classes that extends a base class 
+     * 
+     * @param string $baseClass The base class to check 
+     * 
+     * @return array 
+    */
+    public static function extenders(string $baseClass): array 
+    {
+        $subClasses = [];
+        $allClasses = get_declared_classes();
+        foreach ($allClasses as $className) {
+            if (is_subclass_of($className, $baseClass)) {
+                $subClasses[] = $className;
+            }
+        }
+
+        return $subClasses;
+    }
+
+     /**
+     * Get services instance
+     * 
+     * @return Services 
+    */
+    public static function services(bool $shared = true): Services 
+    {
+        if($shared && isset(static::$instances['services'])){
+            return static::$instances['services'];
+        }
+
+        $instance = new Services();
+
+        if ($shared) {
+            static::$instances['services'] = $instance;
+        }
+
+        return $instance;
+    }
+
+     /**
+     * initialize and Register queued services 
+     * 
+     * @return void 
+    */
+    public static function initializeServices(): void 
+    {
+        $newService = static::services();
+
+        $newService->bootstrap();
+        $queues = $newService->getServices();
+     
+        foreach($queues as $name => $service){
+            try{
+                $added = $newService->addInstance($service['service'], true, ...$service['arguments']);
+                if($added === false){
+                    logger('critical', 'Unable to register service "' . $name . '"');
+                }
+            }catch(RuntimeException $e){
+                logger('critical', 'Error occurred while registering service "' . $name . '". Exception: ' . $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * Call all public methods within a class 
+     * 
+     * @param string|object $classInstance
+     * @param bool $return return method output
+     * 
+     * @return array|int 
+    */
+    public static function callAll(string|object $classInstance, bool $return = false): array|int
+    {
+        try{
+            $reflectionClass = new ReflectionClass($classInstance);
+            $methods = $reflectionClass->getMethods(ReflectionMethod::IS_PUBLIC);
+        
+            $calls = [];
+            $count = 0;
+
+            foreach ($methods as $method) {
+                if ($method->class === get_class($classInstance)) {
+                    $name = $method->name;
+                    if($return){
+                        $calls[$name] = $classInstance->$name();
+                    }else{
+                        $classInstance->$name();
+                        $count++;
+                    }
+                }
+            }
+
+            if($return){
+                return $calls;
+            }
+
+            return $count;
+        }catch(RuntimeException $e){
+            throw new RuntimeException($e->getMessage());
+        }
+
+        return 0;
     }
 }

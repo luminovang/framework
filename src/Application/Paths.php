@@ -10,6 +10,7 @@
 namespace Luminova\Application;
 
 use \App\Controllers\Config\Files;
+use \Luminova\Exceptions\RuntimeException;
 
 class Paths 
 {
@@ -27,6 +28,11 @@ class Paths
      * @var string $systemPlugins
     */
     protected string $library = 'libraries/libs/';
+
+    /**
+     * @var string $systemPlugins
+    */
+    protected string $services = 'writeable/services/';
 
     /**
      * @var string $controllers
@@ -104,7 +110,17 @@ class Paths
     public static function createDirectory(string $path, ?int $permissions = null): bool 
     {
         if (!file_exists($path)) {
-            return mkdir($path, $permissions ?? Files::$filePermissions, true);
+            if(mkdir($path, $permissions ?? Files::$filePermissions, true)){
+                return true;
+            }
+            
+            if (!is_readable($path)) { 
+                throw new RuntimeException("Folder '{$path}' is not readable, please grant read permission.");
+            }
+            
+            if (!is_writable($path)) {
+                throw new RuntimeException("Folder '{$path}' is not writable, please grant read permission.");
+            }  
         }
 
         return true;

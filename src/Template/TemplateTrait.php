@@ -1106,7 +1106,7 @@ trait TemplateTrait
     }
 
     /**
-     * Check if read and write permission is grandted for writeable folder
+     * Check if read and write permission is granted for writeable folder
      * 
      * @param string $folder
      * 
