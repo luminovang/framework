@@ -80,7 +80,7 @@ class Updater
     */
     private static function backwardProjectDirectory(): void 
     {
-        $composerJsonPath = APP_ROOT . DIRECTORY_SEPARATOR . 'composer.json';
+        $composerJsonPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'composer.json';
 
         if (file_exists($composerJsonPath)) {
             $composerData = json_decode(file_get_contents($composerJsonPath), true);
@@ -294,7 +294,7 @@ class Updater
 
 
             if($complete){
-                $base = APP_ROOT . DIRECTORY_SEPARATOR;
+                $base = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR;
                 $toDos = $base . $source . 'TODO.md';
                 $currentTodo = $base . 'TODO.md';
                 $hasTodo = false;

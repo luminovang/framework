@@ -11,7 +11,6 @@ use \Luminova\Application\Factory;
 use \Luminova\Http\Request;
 use \Luminova\Cookies\Cookie;
 use \Luminova\Functions\Functions;
-use \Countable;
 
 if (!function_exists('func')) {
     /**
