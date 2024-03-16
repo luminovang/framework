@@ -8,6 +8,7 @@
  * @license See LICENSE file
  */
 namespace Luminova\Errors;
+
 final class Codes 
 {
     public const ERROR_404 = 404;

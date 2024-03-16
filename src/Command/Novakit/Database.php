@@ -73,6 +73,6 @@ class Database extends BaseCommand
             }
         };
     
-        return STATUS_OK;
+        return STATUS_SUCCESS;
     }
 }

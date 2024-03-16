@@ -12,7 +12,7 @@ namespace Luminova\Database\Drivers;
 use \Luminova\Database\Drivers\DriversInterface;
 use \Luminova\Config\Database;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Exceptions\InvalidException;
+use \Luminova\Exceptions\InvalidArgumentException;
 use \PDO;
 use \PDOStatement;
 use \PDOException;
@@ -38,6 +38,11 @@ class PdoDriver implements DriversInterface
     private bool $onDebug = false;
 
     /**
+    * @var bool $connected 
+    */
+    private bool $connected = false;
+
+    /**
     * @var Database $config Database configuration
     */
     private Database $config; 
@@ -45,37 +50,46 @@ class PdoDriver implements DriversInterface
     /**
     * @var int PARAM_INT Integer Parameter
     */
-    public const PARAM_INT = PDO::PARAM_INT; 
+    public const PARAM_INT = 1; 
     
     /**
-    * @var bool PARAM_BOOL Boolean Parameter
+    * @var int PARAM_BOOL Boolean Parameter
     */
-    public const PARAM_BOOL = PDO::PARAM_BOOL;
+    public const PARAM_BOOL = 5;
 
     /**
-    * @var null PARAM_NULL Null Parameter
+    * @var int PARAM_NULL Null Parameter
     */
-    public const PARAM_NULL = PDO::PARAM_NULL;
+    public const PARAM_NULL = 0;
 
     /**
-    * @var string PARAM_STRING String Parameter
+    * @var int PARAM_STRING String Parameter
     */
-    public const PARAM_STRING = PDO::PARAM_STR;
+    public const PARAM_STRING = 2;
 
     /**
      * Constructor.
      *
      * @param Database $config database configuration. array
-     * @throws InvalidException If a required configuration key is missing.
+     * @throws InvalidArgumentException If a required configuration key is missing.
+     * @throws PDOException
+     * @throws DatabaseException
      */
     public function __construct(Database $config) 
     {
         if (!$config instanceof Database) {
-            throw new InvalidException("Invalid database configuration, required type: Database, but " . gettype($config) . " is given instead.");
+            throw new InvalidArgumentException("Invalid database configuration, required type: Database, but " . gettype($config) . " is given instead.");
         }
       
         $this->config = $config;
-        $this->initializeDatabase();
+
+        try{
+            $this->newConnection();
+            $this->connected = true;
+        }catch(PDOException|DatabaseException $e){
+            $this->connected = false;
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e->getPrevious());
+        }
     }
 
     /**
@@ -108,79 +122,68 @@ class PdoDriver implements DriversInterface
      * 
      * @return void 
      * @throws DatabaseException If no driver is specified
-     */
-    private function initializeDatabase(): void 
+     * @throws PDOException
+    */
+    private function newConnection(): void
     {
         if ($this->connection !== null) {
             return;
         }
 
-  
-        // Define options for the PDO connection.
         $options = [
-            PDO::ATTR_EMULATE_PREPARES   => false,
-            PDO::ATTR_PERSISTENT => $this->config->persistent, 
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION ,
-            //PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, //make the default fetch be an associative array
+            PDO::ATTR_EMULATE_PREPARES => false,
+            PDO::ATTR_PERSISTENT => $this->config->persistent,
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ
         ];
 
+        $driver = strtolower($this->config->pdo_driver);
+        $dns = $this->getConnectionDriver($driver);
 
-        if ($this->config->version === "mysql") {
-            $this->createMySqlConnection($options);
-        } elseif ($this->config->version === "pgsql") {
-            $this->createPostgreSQLConnection($options);
-        } elseif ($this->config->version === "sqlite" && !empty($this->config->sqlite_path)) {
-            $this->createSQLiteConnection($options);
-        } else {
-            DatabaseException::throwException("No database driver found for version '{$this->config->version}'"); 
+        if ($dns === '' || ($driver === "sqlite" && empty($this->config->sqlite_path))) {
+            throw new DatabaseException("No PDO database driver found for: '{$driver}'");
         }
+
+        $username = $password = null;
+
+        if (!in_array($driver, ['pgsql', 'sqlite'], true)) {
+            $username = $this->config->username;
+            $password = $this->config->password;
+        }
+
+        $this->connection = new PDO($dns, $username, $password, $options);
     }
 
     /**
-     * Create a MySQL database connection.
+     * Get driver dns connection
      *
-     * @param array $options An array of PDO options.
-     * @return void
-     */
-    private function createMySqlConnection(array $options): void {
-        $connectionDsn = "mysql:host={$this->config->host};port={$this->config->port};dbname={$this->config->database}";
-        try {
-            $this->connection = new PDO($connectionDsn, $this->config->username, $this->config->password, $options);
-        } catch (PDOException $e) {
-            DatabaseException::throwException($e->getMessage());
-        }
+     * @param string $name Driver name 
+     * 
+     * @return string
+    */
+    private function getConnectionDriver(string $name): string
+    {
+        $drivers = [
+            'cubrid' => "cubrid:dbname={$this->config->database};host={$this->config->host};port={$this->config->port}",
+            'dblib' => "dblib:host={$this->config->host};dbname={$this->config->database};port={$this->config->port}",
+            'oci' => "oci:dbname={$this->config->database}",
+            'pgsql' => "pgsql:host={$this->config->host} port={$this->config->port} dbname={$this->config->database} user={$this->config->username} password={$this->config->password}",
+            'sqlite' => "sqlite:/{$this->config->sqlite_path}",
+            'mysql' => "mysql:host={$this->config->host};port={$this->config->port};dbname={$this->config->database}"
+        ];
+
+        return $drivers[$name] ?? '';
     }
 
     /**
-     * Create a PostgreSQL database connection.
-     *
-     * @param array $options An array of PDO options.
-     * @return void
-     */
-    private function createPostgreSQLConnection(array $options): void {
-        $dns = "pgsql:host={$this->config->host} port={$this->config->port} dbname={$this->config->database}";
-        $dns .= " user={$this->config->username} password={$this->config->password}";
-        try {
-            $this->connection = new PDO($dns, null, null, $options);
-        } catch (PDOException $e) {
-            DatabaseException::throwException($e->getMessage());
-        }
+     * Check if database is connected
+     * 
+     * @return bool 
+    */
+    public function isConnected(): bool 
+    {
+        return $this->connected;
     }
-
-    /**
-     * Create an SQLite database connection.
-     *
-     * @param array $options An array of PDO options.
-     * @return void
-     */
-    private function createSQLiteConnection(array $options): void {
-        try {
-            $this->connection = new PDO("sqlite:/" . $this->config->sqlite_path, null, null, $options);
-        } catch (PDOException $e) {
-            DatabaseException::throwException($e->getMessage());
-        }
-    }
-
 
     /**
      * Returns the error information for the last statement execution.
@@ -218,10 +221,8 @@ class PdoDriver implements DriversInterface
      */
     public function info(): array 
     {
-        // Get driver-specific information
         $driverInfo = $this->connection?->getAttribute(PDO::ATTR_CONNECTION_STATUS);
 
-        // Parse the information into an associative array
         preg_match_all('/(\S[^:]+): (\S+)/', $driverInfo, $matches);
         $info = array_combine($matches[1], $matches[2]);
 
@@ -298,7 +299,8 @@ class PdoDriver implements DriversInterface
      *
      * @return void 
      */
-    public function commit(): void {
+    public function commit(): void 
+    {
         $this->connection->commit();
         
     }
@@ -308,7 +310,8 @@ class PdoDriver implements DriversInterface
      *
      * @return void
      */
-    public function rollback(): void {
+    public function rollback(): void 
+    {
         $this->connection->rollBack();
     }
 

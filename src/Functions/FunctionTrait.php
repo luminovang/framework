@@ -14,7 +14,7 @@ use \Luminova\Functions\IPAddress;
 use \Luminova\Functions\Document;
 use \Luminova\Functions\Files;
 use \Luminova\Functions\TorDetector;
-use \InvalidArgumentException;
+use Luminova\Exceptions\InvalidArgumentException;
 
 trait FunctionTrait
 {
@@ -31,7 +31,7 @@ trait FunctionTrait
      */
     public static function ip(): IPAddress
     {
-        return self::$instances['ip'] ??= new IPAddress();
+        return static::$instances['ip'] ??= new IPAddress();
     }
 
     /**
@@ -42,7 +42,7 @@ trait FunctionTrait
      */
     public static function document(): Document
     {
-        return self::$instances['document'] ??= new Document();
+        return static::$instances['document'] ??= new Document();
     }
 
     /**
@@ -53,7 +53,7 @@ trait FunctionTrait
      */
     public static function files(): Files
     {
-        return self::$instances['files'] ??= new Files();
+        return static::$instances['files'] ??= new Files();
     }
 
     /**
@@ -64,7 +64,7 @@ trait FunctionTrait
      */
     public static function tor(): TorDetector
     {
-        return self::$instances['tor'] ??= new TorDetector();
+        return static::$instances['tor'] ??= new TorDetector();
     }
 
     /**
@@ -82,7 +82,7 @@ trait FunctionTrait
     {
         if (is_array($input)) {
             array_walk_recursive($data, function (&$value) use ($context, $encoding) {
-                $value = self::escape($value, $context, $encoding);
+                $value = static::escape($value, $context, $encoding);
             });
         } elseif (is_string($input)) {
             $context = strtolower($context);

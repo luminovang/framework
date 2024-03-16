@@ -14,12 +14,12 @@ abstract class Configuration
     /**
     * @var string $version version name
     */
-    public static $version = '2.3.0';
+    public static $version = '2.4.0';
 
     /**
     * @var int $versionCode version code
     */
-    public static $versionCode = 230;
+    public static $versionCode = 240;
 
     /**
      * Minimum required php version
@@ -52,12 +52,12 @@ abstract class Configuration
 
     /**
      * Get the application name.
-     *
+     * @deprecated This method is deprecated and will be removed in future use global constant APP_NAME instead
      * @return string
      */
     public static function appName(): string 
     {
-        return static::getString("app.name");
+        return APP_NAME;
     }
 
     /**
@@ -92,12 +92,12 @@ abstract class Configuration
 
     /**
      * Get the application version.
-     *
+     * @deprecated This method is deprecated and will be removed in future use global constant APP_VERSION instead
      * @return string
      */
     public static function appVersion(): string 
     {
-        return static::getString("app.version");
+        return APP_VERSION;
     }
 
     /**
@@ -150,32 +150,32 @@ abstract class Configuration
 
     /**
      * Get development environment
-     *
+     * @deprecated This method is deprecated and will be removed in future use global constant ENVIRONMENT instead
      * @return string
     */
     public static function getEnvironment(): string
     {
-        return static::getString("app.environment.mood");
+        return ENVIRONMENT;
     }
 
     /**
      * Check if app is on maintenance
-     *
+     * @deprecated This method is deprecated and will be removed in future use global constant MAINTENANCE instead
      * @return bool
     */
     public static function isMaintenance(): bool
     {
-        return static::getBoolean("app.maintenance.mood", false);
+        return MAINTENANCE;
     }
 
     /**
      * Check if the application is in production mode.
-     *
+     * @deprecated This method is deprecated and will be removed in future use global constant PRODUCTION instead
      * @return bool
      */
     public static function isProduction(): bool
     {
-        return (static::getEnvironment() === "production");
+        return PRODUCTION;
     }
 
    /**
@@ -188,12 +188,12 @@ abstract class Configuration
         $host = $_SERVER['SERVER_NAME'] ?? '';
         $isLocal = strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false;
 
-        return static::isLocalServer() || $isLocal;
+        return NOVAKIT_ENV !== null || $isLocal;
     }
 
     /**
      * Check if the application is running on local server.
-     *
+     * @deprecated This method is deprecated and will be removed in future use global constant NOVAKIT_ENV instead
      * @return bool
     */
     public static function isLocalServer(): bool
@@ -205,19 +205,19 @@ abstract class Configuration
      * Check if the application should use custom public as path 
      * If the local server is not running and not on production server
      * If the document root is not changed to "public", manually enable the app to use "public" as the default
-     *
+     * @deprecated This method is deprecated and will be removed in future 
      * @return bool
     */
     public static function usePublic(): bool
     {
-        return !static::isLocalServer() && !static::isProduction();
+        return NOVAKIT_ENV === null && !PRODUCTION;
     }
 
     /**
      * Get the root directory.
      *
      * @param string $directory The directory to start searching for composer.json or system directory.
-     * 
+     * @deprecated This method is deprecated and will be removed in future use global function root() instead
      * @return string
      */
     public static function root(string $directory = __DIR__, string $suffix = ''): string
@@ -235,7 +235,7 @@ abstract class Configuration
      */
     public static function getRootDirectory(string $directory): ?string
     {
-        return static::root($directory);
+        return root($directory);
     }
 
     /**
@@ -335,6 +335,7 @@ abstract class Configuration
     public static function getInt(string $key, int $default = 0): int
     {
         $value = env($key, $default);
+
         return (int) $value;
     }
 
@@ -357,8 +358,7 @@ abstract class Configuration
             return (bool) $value;
         }
 
-        $value = strtolower($value);
-        return $value === 'true' || $value === '1';
+        return $value === '1';
     }
 
     /**
@@ -376,7 +376,6 @@ abstract class Configuration
             return null;
         }
 
-        //return ($value != 0 && empty($value) ? null : $value);
         return $value;
     }
 

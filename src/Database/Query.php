@@ -14,8 +14,6 @@ use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Cache\FileCache;
 use \Luminova\Database\Results\Statements;
 
-//use \Luminova\Arrays\ArrayCountable;
-
 class Query extends Connection 
 {  
     /**
@@ -32,21 +30,21 @@ class Query extends Connection
 
     /**
     * Table name to join query
-    * @var string $databaseJoinTable 
+    * @var string $joinTable 
     */
-    private string $databaseJoinTable = '';
+    private string $joinTable = '';
 
     /**
     * Table join query type
-    * @var string $databaseJoinType 
+    * @var string $joinType 
     */
-    private string $databaseJoinType = '';
+    private string $joinType = '';
 
     /**
     * Table join bind parameters
-    * @var array $databaseJoinSelectors 
+    * @var array $joinConditions 
     */
-    private array $databaseJoinSelectors = [];
+    private array $joinConditions = [];
 
     /**
     * Table query order limit offset and count query 
@@ -74,15 +72,15 @@ class Query extends Connection
 
     /**
     * Table query where column value
-    * @var string $queryWhereValue 
+    * @var string $whereValue 
     */
-    private string $queryWhereValue = '';
+    private string $whereValue = '';
 
     /**
     * Table query and query column
-    * @var array $queryWhereConditions 
+    * @var array $whereConditions 
     */
-    private array $queryWhereConditions = [];
+    private array $whereConditions = [];
 
     /**
     * able query update set values
@@ -95,7 +93,6 @@ class Query extends Connection
     * @var bool $hasCache 
     */
     private bool $hasCache = false;
-
 
     /**
     * Cache class instance
@@ -139,28 +136,13 @@ class Query extends Connection
     * @var array $queryOperators 
     */
     private static array $queryOperators = ['=', '!=', '<', '<=','>','>='];
-    
 
     /**
-     * Class Constructor
-     * @throws DatabaseException|InvalidException If fails
-    */
-	public function __construct()
-    {
-		parent::__construct();
-	}
-
-    /*
-        Class cloning
+     * Reset query properties before cloning
     */
     private function __clone() {
         $this->reset();
     }
-    
-    /*
-        Prevent unserialization of the singleton instance
-    */
-    public function __wakeup() { }
 
     /**
      * Get database connection
@@ -211,34 +193,46 @@ class Query extends Connection
         return $this;
     }
 
-     /**
-     * Sets join table name and method
-     * @param string $table The table name
-     * @param string $type The join type
-     * @param string $alias join table alias
+    /**
+     * Specifies a join operation in the query.
+     *
+     * @param string $table The name of the table to join.
+     * @param string $type The type of join (default: "INNER").
+     * @param string $alias The alias for the joined table (optional).
      * 
-     * @return self $this Class instance.
+     * @return self Returns the instance of the class.
      */
-    public function join(string $table, string $type = "INNER", string $alias = ''): self
+    public function join(string $table, string $type = 'INNER', string $alias = ''): self
     {
-        $this->databaseJoinType = $type;
-        $this->databaseJoinTable = $table;
+        $this->joinType = $type;
+        $this->joinTable = $table;
+        
         if($alias !== ''){
             $this->jointTableAlias = $alias;
         }
+        
         return $this;
     }
 
     /**
-     * Sets join table on clause
+     * Specifies join conditions for the query.
+     *
+     * @param string|array<string> $conditions Join conditions.
+     * @param string|null $operator Join operator (default: '=').
+     * @param mixed $value Value to bind to the condition or another table column.
      * 
-     * @param array<string> $selectors Join selectors ['key = table_key', 'u.key = u2.key']
+     * @example array $tbl->on(['column = key', 'a.column = b.column'])
+     * @example string $tbl->on('a.column', '=', 'b.column);
      * 
-     * @return self $this Class instance.
+     * @return self Returns the instance of the class.
      */
-    public function on(array $selectors): self
+    public function on(string|array $conditions, ?string $operator = '=', mixed $value = null): self
     {
-        $this->databaseJoinSelectors = $selectors;
+        if (is_array($conditions)) {
+            $this->joinConditions = $conditions;
+        }
+
+        $this->joinConditions[] = "{$conditions} {$operator} {$value}";
 
         return $this;
     }
@@ -253,11 +247,8 @@ class Query extends Connection
      */
     public function innerJoin(string $table, string $alias = ''): self
     {
-        $this->join($table, "INNER", $alias);
-
-        return $this;
+        return $this->join($table, 'INNER', $alias);
     }
-
 
     /**
      * Sets join table left
@@ -269,9 +260,33 @@ class Query extends Connection
      */
     public function leftJoin(string $table, string $alias = ''): self
     {
-        $this->join($table, "LEFT", $alias);
+        return $this->join($table, 'LEFT', $alias);
+    }
 
-        return $this;
+    /**
+     * Sets join table right
+     * 
+     * @param string $table The table name
+     * @param string $alias join table alias
+     * 
+     * @return self $this Class instance.
+     */
+    public function rightJoin(string $table, string $alias = ''): self
+    {
+        return $this->join($table, 'RIGHT', $alias);
+    }
+
+    /**
+     * Sets join table cross
+     * 
+     * @param string $table The table name
+     * @param string $alias join table alias
+     * 
+     * @return self $this Class instance.
+     */
+    public function crossJoin(string $table, string $alias = ''): self
+    {
+        return $this->join($table, 'CROSS', $alias);
     }
 
     /**
@@ -331,7 +346,7 @@ class Query extends Connection
     {
         [$key, $operator] = static::fixLegacyOperators($key, $operator);
 
-        $this->queryWhereValue = $key;
+        $this->whereValue = $key;
         $this->queryWhere = " WHERE {$column} {$operator} :where_column";
 
         return $this;
@@ -342,18 +357,18 @@ class Query extends Connection
      * 
      * @param string $column column name
      * @param mixed $operator Comparison operator
-     * @param mixed $key column key value
+     * @param mixed $value column key value
      * 
      * @return self class instance.
      */
-    public function and(string $column, mixed $operator, mixed $key = null): self
+    public function and(string $column, mixed $operator, mixed $value = null): self
     {
-        [$key, $operator] = static::fixLegacyOperators($key, $operator);
+        [$value, $operator] = static::fixLegacyOperators($value, $operator);
 
-        $this->queryWhereConditions[] = [
+        $this->whereConditions[] = [
             'type' => 'AND', 
             'column' => $column, 
-            'key' => $key,
+            'value' => $value,
             'operator' => $operator
         ];
 
@@ -380,18 +395,18 @@ class Query extends Connection
      * 
      * @param string $column column name
      * @param mixed $operator Comparison operator
-     * @param mixed $key column key value
+     * @param mixed $value column key value
      * 
      * @return self class instance.
      */
-    public function or(string $column, mixed $operator, mixed $key = null): self
+    public function or(string $column, mixed $operator, mixed $value = null): self
     {
-        [$key, $operator] = static::fixLegacyOperators($key, $operator);
+        [$value, $operator] = static::fixLegacyOperators($value, $operator);
 
-        $this->queryWhereConditions[] = [
+        $this->whereConditions[] = [
             'type' => 'OR', 
             'column' => $column, 
-            'key' => $key,
+            'value' => $value,
             'operator' => $operator
         ];
         return $this;
@@ -401,25 +416,25 @@ class Query extends Connection
      * Set query AND (? OR ?)
      * @param string $column column name
      * @param mixed $operator Comparison operator
-     * @param mixed $key column key value
+     * @param mixed $value column key value
      * @param string $orColumn column name
      * @param mixed $orOperator Comparison operator
-     * @param mixed $orKey column key value
+     * @param mixed $orValue column or key value
      * 
      * @return self class instance.
      */
-    public function andOr(string $column, mixed $operator, mixed $key, string $orColumn, mixed $orOperator, mixed $orKey): self
+    public function andOr(string $column, mixed $operator, mixed $value, string $orColumn, mixed $orOperator, mixed $orValue): self
     {
-        [$key, $operator] = static::fixLegacyOperators($key, $operator);
-        [$orKey, $orOperator] = static::fixLegacyOperators($orKey, $orOperator);
+        [$value, $operator] = static::fixLegacyOperators($value, $operator);
+        [$orValue, $orOperator] = static::fixLegacyOperators($orValue, $orOperator);
 
-        $this->queryWhereConditions[] = [
+        $this->whereConditions[] = [
             'type' => 'AND_OR', 
             'column' => $column, 
-            'key' => $key,
+            'value' => $value,
             'operator' => $operator,
             'orColumn' => $orColumn, 
-            'orKey' => $orKey,
+            'orValue' => $orValue,
             'orOperator' => $orOperator,
         ];
 
@@ -441,7 +456,7 @@ class Query extends Connection
 
         $values = static::quotedValues($lists);
 
-        $this->queryWhereConditions[] = [
+        $this->whereConditions[] = [
             'type' => 'IN', 
             'column' => $column, 
             'values' => $values
@@ -466,7 +481,7 @@ class Query extends Connection
         }
 
         $values = implode(',', $list);
-        $this->queryWhereConditions[] = [
+        $this->whereConditions[] = [
             'type' => 'IN_SET', 
             'list' => $values, 
             'search' => $search, 
@@ -558,13 +573,13 @@ class Query extends Connection
 
         $columns = implode(", ", $columns);
         $selectQuery = "SELECT {$columns} FROM {$this->databaseTable} {$this->tableAlias}";
-        if ($this->databaseJoinTable !== '') {
-            $selectQuery .= " {$this->databaseJoinType} JOIN {$this->databaseJoinTable} {$this->jointTableAlias}";
-            if ($this->databaseJoinSelectors !== []) {
-                $selectQuery .= " ON {$this->databaseJoinSelectors[0]}";
-                if(count($this->databaseJoinSelectors) > 1){
-                    for ($i = 1; $i < count($this->databaseJoinSelectors); $i++) {
-                        $selectQuery .= " AND {$this->databaseJoinSelectors[$i]}";
+        if ($this->joinTable !== '') {
+            $selectQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
+            if ($this->joinConditions !== []) {
+                $selectQuery .= " ON {$this->joinConditions[0]}";
+                if(count($this->joinConditions) > 1){
+                    for ($i = 1; $i < count($this->joinConditions); $i++) {
+                        $selectQuery .= " AND {$this->joinConditions[$i]}";
                     }
                 }
             } 
@@ -608,22 +623,17 @@ class Query extends Connection
  
         if($isBided){
             $this->db->prepare($selectQuery);
-            $this->db->bind(':where_column', $this->queryWhereValue);
-            if ($this->queryWhereConditions !== []) {
-                foreach ($this->queryWhereConditions as $bindings) {
-                    if (in_array($bindings['type'], ['AND', 'OR'], true)) {
-                        $this->db->bind(static::trimPlaceholder($bindings['column']), $bindings['key']);
-                    } elseif ($bindings['type'] === 'AND_OR') {
-                        $this->db->bind(static::trimPlaceholder($bindings['column']), $bindings['key']);
-                        $this->db->bind(static::trimPlaceholder($bindings['orColumn']), $bindings['orKey']);
-                    }
-                }
-            }
+            $this->db->bind(':where_column', $this->whereValue);
+            $this->bindConditions();
             $this->db->execute();
         }else{
             $this->db->query($selectQuery);
         }
+
+        //var_dump($this->db->dumpDebug());
+
         $return = $this->db->getAll();
+
         $this->reset();
 
         return $return;
@@ -739,10 +749,13 @@ class Query extends Connection
                 if(!is_string($key) || $key === '?'){
                     throw new DatabaseException("Invalid bind placeholder {$key}, placeholder key must be same with your table mapped column key, example :foo");
                 }
+
                 $this->db->bind(static::trimPlaceholder($key), $value);
             }
+
             $this->db->execute();
         }
+
         if($result === 'stmt'){
             $clone = clone $this->db;
             $response = new Statements($clone);
@@ -787,14 +800,14 @@ class Query extends Connection
 
         $columns = implode(", ", $columns);
         $findQuery = "SELECT {$columns} FROM {$this->databaseTable} {$this->tableAlias}";
-        if ($this->databaseJoinTable !== '') {
-            $findQuery .= " {$this->databaseJoinType} JOIN {$this->databaseJoinTable} {$this->jointTableAlias}";
-            if ($this->databaseJoinSelectors !== []) {
-                $findQuery .= " ON {$this->databaseJoinSelectors[0]}";
-                //$countable = new ArrayCountable($this->databaseJoinSelectors);
-                if(count($this->databaseJoinSelectors) > 1){
-                    for ($i = 1; $i < count($this->databaseJoinSelectors); $i++) {
-                        $findQuery .= " AND {$this->databaseJoinSelectors[$i]}";
+        if ($this->joinTable !== '') {
+            $findQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
+            if ($this->joinConditions !== []) {
+                $findQuery .= " ON {$this->joinConditions[0]}";
+                //$countable = new ArrayCountable($this->joinConditions);
+                if(count($this->joinConditions) > 1){
+                    for ($i = 1; $i < count($this->joinConditions); $i++) {
+                        $findQuery .= " AND {$this->joinConditions[$i]}";
                     }
                 }
             } 
@@ -829,20 +842,13 @@ class Query extends Connection
         $findQuery .= ' LIMIT 1';
  
         $this->db->prepare($findQuery);
-        $this->db->bind(':where_column', $this->queryWhereValue);
-        if ($this->queryWhereConditions !== []) {
-            foreach ($this->queryWhereConditions as $bindings) {
-                if (in_array($bindings['type'], ['AND', 'OR'], true)) {
-                    $this->db->bind(static::trimPlaceholder($bindings['column']), $bindings['key']);
-                } elseif ($bindings['type'] === 'AND_OR') {
-                    $this->db->bind(static::trimPlaceholder($bindings['column']), $bindings['key']);
-                    $this->db->bind(static::trimPlaceholder($bindings['orColumn']), $bindings['orKey']);
-                }
-            }
-        }
+        $this->db->bind(':where_column', $this->whereValue);
+        $this->bindConditions();
         $this->db->execute();
+
         $return = $this->db->getOne();
         $this->reset();
+
         return $return;
     }
 
@@ -867,13 +873,13 @@ class Query extends Connection
            
         $totalQuery = "SELECT COUNT({$column}) FROM {$this->databaseTable} {$this->tableAlias}";
         
-        if ($this->databaseJoinTable !== '') {
-            $totalQuery .= " {$this->databaseJoinType} JOIN {$this->databaseJoinTable} {$this->jointTableAlias}";
-            if ($this->databaseJoinSelectors !== []) {
-                $totalQuery .= " ON {$this->databaseJoinSelectors[0]}";
-                if(count($this->databaseJoinSelectors) > 1){
-                    for ($i = 1; $i < count($this->databaseJoinSelectors); $i++) {
-                        $totalQuery .= " AND {$this->databaseJoinSelectors[$i]}";
+        if ($this->joinTable !== '') {
+            $totalQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
+            if ($this->joinConditions !== []) {
+                $totalQuery .= " ON {$this->joinConditions[0]}";
+                if(count($this->joinConditions) > 1){
+                    for ($i = 1; $i < count($this->joinConditions); $i++) {
+                        $totalQuery .= " AND {$this->joinConditions[$i]}";
                     }
                 }
             } 
@@ -909,21 +915,15 @@ class Query extends Connection
             $totalQuery .= $this->queryWhere;
             $this->buildWhereConditions($totalQuery);
             $this->db->prepare($totalQuery);
-            $this->db->bind(':where_column', $this->queryWhereValue);
-            if ($this->queryWhereConditions !== []) {
-                foreach ($this->queryWhereConditions as $bindings) {
-                    if (in_array($bindings['type'], ['AND', 'OR'], true)) {
-                        $this->db->bind(static::trimPlaceholder($bindings['column']), $bindings['key']);
-                    } elseif ($bindings['type'] === 'AND_OR') {
-                        $this->db->bind(static::trimPlaceholder($bindings['column']), $bindings['key']);
-                        $this->db->bind(static::trimPlaceholder($bindings['orColumn']), $bindings['orKey']);
-                    }
-                }
-            }
+            $this->db->bind(':where_column', $this->whereValue);
+            $this->bindConditions();
             $this->db->execute();
         }
+
         $total = $this->db->getInt();
+
         $this->reset();
+
         return $total;
     }
 
@@ -961,25 +961,19 @@ class Query extends Connection
             foreach ($columns as $key => $value) {
                 $this->db->bind(static::trimPlaceholder($key), $value);
             }
-            $this->db->bind(':where_column', $this->queryWhereValue);
-            if ($this->queryWhereConditions !== []) {
-                foreach ($this->queryWhereConditions as $bindings) {
-                    if (in_array($bindings['type'], ['AND', 'OR'], true)) {
-                        $this->db->bind(static::trimPlaceholder($bindings['column']), $bindings['key']);
-                    } elseif ($bindings['type'] === 'AND_OR') {
-                        $this->db->bind(static::trimPlaceholder($bindings['column']), $bindings['key']);
-                        $this->db->bind(static::trimPlaceholder($bindings['orColumn']), $bindings['orKey']);
-                    }
-                }
-            }
-            
+            $this->db->bind(':where_column', $this->whereValue);
+            $this->bindConditions();
             $this->db->execute();
+
             $return = $this->db->rowCount();
+
             $this->reset();
+
             return $return;
         } catch (DatabaseException $e) {
             $e->handle();
         }
+
         return 0;
     }
 
@@ -991,38 +985,35 @@ class Query extends Connection
      */
     public function delete(int $limit = 0): int
     {
-         if ($this->queryWhere === '') {
+        if ($this->queryWhere === '') {
             static::error('Delete operation without a WHERE condition is not allowed.');
-         }else{
-            $deleteQuery = "DELETE FROM {$this->databaseTable}";
-            $deleteQuery .= $this->queryWhere;
-            $this->buildWhereConditions($deleteQuery);
 
-            if($limit > 0){
-                $deleteQuery .= " LIMIT {$limit}";
-            }
-
-            try {
-                $this->db->prepare($deleteQuery);
-                $this->db->bind(':where_column', $this->queryWhereValue);
-                if ($this->queryWhereConditions !== []) {
-                    foreach ($this->queryWhereConditions as $bindings) {
-                        if (in_array($bindings['type'], ['AND', 'OR'], true)) {
-                            $this->db->bind(static::trimPlaceholder($bindings['column']), $bindings['key']);
-                        } elseif ($bindings['type'] === 'AND_OR') {
-                            $this->db->bind(static::trimPlaceholder($bindings['column']), $bindings['key']);
-                            $this->db->bind(static::trimPlaceholder($bindings['orColumn']), $bindings['orKey']);
-                        }
-                    }
-                }
-                $this->db->execute();
-                $rowCount = $this->db->rowCount();
-                $this->reset();
-                return $rowCount;
-            } catch (DatabaseException $e) {
-                $e->handle();
-            }
+            return 0;
         }
+
+        $deleteQuery = "DELETE FROM {$this->databaseTable}";
+        $deleteQuery .= $this->queryWhere;
+        $this->buildWhereConditions($deleteQuery);
+
+        if($limit > 0){
+            $deleteQuery .= " LIMIT {$limit}";
+        }
+
+        try {
+            $this->db->prepare($deleteQuery);
+            $this->db->bind(':where_column', $this->whereValue);
+            $this->bindConditions();
+            $this->db->execute();
+
+            $rowCount = $this->db->rowCount();
+
+            $this->reset();
+
+            return $rowCount;
+        } catch (DatabaseException $e) {
+            $e->handle();
+        }
+        
         return 0;
     }
 
@@ -1091,16 +1082,19 @@ class Query extends Connection
                 if ($deleteSuccess && $resetSuccess) {
                     $this->db->commit();
                     return true;
-                } else {
-                    $this->db->rollback();
-                    return false;
                 }
-            } else {
-                return $deleteSuccess && $resetSuccess;
+
+                $this->db->rollback();
+                return false;
             }
+
+            return $deleteSuccess && $resetSuccess;
+
         } catch (DatabaseException $e) {
             $e->handle();
         }
+
+        return false;
     }
 
     /**
@@ -1118,6 +1112,7 @@ class Query extends Connection
         } catch (DatabaseException $e) {
             $e->handle();
         }
+
         return 0;
     }
 
@@ -1138,6 +1133,7 @@ class Query extends Connection
         } catch (DatabaseException $e) {
             $e->handle();
         }
+
         return 0;
     }
 
@@ -1152,13 +1148,16 @@ class Query extends Connection
     {
         try {
             $query = $column->generate();
+
             if(empty($query)){
                 return 0;
             }
+
             return $this->db->exec($query);
         } catch (DatabaseException $e) {
             $e->handle();
         }
+
         return 0;
     }
 
@@ -1194,6 +1193,7 @@ class Query extends Connection
         $this->db->query($insertQuery);
         $return = $this->db->rowCount();
         $this->reset();
+
         return $return;
     }
 
@@ -1221,8 +1221,35 @@ class Query extends Connection
         }
         $return = $this->db->rowCount();
         $this->reset();
+
         return $return;
     } 
+
+    /**
+     * Bind query where conditions
+     * 
+     * @return ?object
+    */
+    private function bindConditions(?object $db = null): ?object 
+    {
+        if ($this->whereConditions === []) {
+            return $db;
+        }
+
+        foreach ($this->whereConditions as $bindings) {
+            if (in_array($bindings['type'], ['AND', 'OR', 'AND_OR'], true)) {
+                $column = static::trimPlaceholder($bindings['column']);
+                $this->db->bind($column, $bindings['value']);
+            }
+            
+            if ($bindings['type'] === 'AND_OR') {
+                $orColumn = static::trimPlaceholder($bindings['orColumn']);
+                $this->db->bind($orColumn, $bindings['orValue']);
+            }
+        }
+
+        return $db;
+    }
 
     /**
      * Build query conditions.
@@ -1231,8 +1258,8 @@ class Query extends Connection
     */
     private function buildWhereConditions(string &$query): void
     {
-        if ($this->queryWhereConditions !== []) {
-            foreach ($this->queryWhereConditions as $condition) {
+        if ($this->whereConditions !== []) {
+            foreach ($this->whereConditions as $condition) {
                 $column = $condition['column'];
                 $operator = $condition['operator'] ?? '=';
                 $orOperator = $condition['orOperator'] ?? '=';
@@ -1260,10 +1287,10 @@ class Query extends Connection
     */
     private function buildSearchConditions(string &$query): void
     {
-        if ($this->queryWhereConditions !== []) {
+        if ($this->whereConditions !== []) {
             $query .= ' WHERE';
             $firstCondition = true;
-            foreach ($this->queryWhereConditions as $condition) {
+            foreach ($this->whereConditions as $condition) {
                 $operator = $condition['operator'] ?? '=';
 
                 if (!$firstCondition) {
@@ -1298,26 +1325,26 @@ class Query extends Connection
     /**
      * Mart the fixed for older version that doesn't support passing operators in query selector method
      * 
-     * @param mixed $key lookup key
+     * @param mixed $value lookup key
      * @param mixed $operator operator for now we use mixed in future it will be string
      * 
      * @return array 
     */
-    private static function fixLegacyOperators(mixed $key, mixed $operator): array 
+    private static function fixLegacyOperators(mixed $value, mixed $operator): array 
     {
-        if($key === null && !in_array($operator, static::$queryOperators)){
-            $key = $operator;
+        if($value === null && !in_array($operator, static::$queryOperators, true)){
+            $value = $operator;
             $operator = '=';
         }
 
         return [
-            $key,
+            $value,
             $operator
         ];
     }
 
     /**
-     * Trim placeholder
+     * Trim placeholder and remove`()` if present
      *
      * @param string $input 
      * 
@@ -1327,6 +1354,7 @@ class Query extends Connection
     {
         $dotPosition = strpos($input, '.');
         $placeholder = ($dotPosition !== false) ? substr($input, $dotPosition + 1) : $input;
+        $placeholder = trim($placeholder, '()');
 
         return ":$placeholder";
     }
@@ -1368,10 +1396,6 @@ class Query extends Connection
             $quoted[] = is_string($item) ? addslashes($item) : $item;
         }
 
-        /*$quoted = array_map(function($item) {
-            return is_string($item) ? "'$item'" : $item;
-        }, $columns);*/
-
         if($implode){
             return implode(', ', $quoted);
         }
@@ -1389,15 +1413,15 @@ class Query extends Connection
         $this->databaseTable = ''; 
         $this->jointTableAlias = '';
         $this->tableAlias = '';
-        $this->databaseJoinTable = '';
-        $this->databaseJoinType = '';
-        $this->databaseJoinSelectors = [];
+        $this->joinTable = '';
+        $this->joinType = '';
+        $this->joinConditions = [];
         $this->queryLimit = '';
         $this->queryOrder = '';
         $this->queryGroup = '';
         $this->queryWhere = '';
-        $this->queryWhereValue = '';
-        $this->queryWhereConditions = [];
+        $this->whereValue = '';
+        $this->whereConditions = [];
         $this->querySetValues = [];
         $this->hasCache = false;
         $this->cache = null;

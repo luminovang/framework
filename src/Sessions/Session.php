@@ -307,18 +307,18 @@ class Session
     */
     public function synchronize(string $ip = ''): self
     {
-        $this->manager->set("_online", "YES");
+        $this->manager->set('_online', 'YES');
         if($this->config::$strictSessionIp){
             $ip = func()->ip()->get();
             if($ip){
-                $this->manager->set("_online_session_id", $ip);
+                $this->manager->set('_online_session_id', $ip);
             }
         }
  
         return $this;
     }
 
-      /**
+    /**
      * Check if user ip address match with session login ip
      * If not logout
      *
@@ -330,6 +330,7 @@ class Session
     {
         if($this->config::$strictSessionIp){
             $default = $this->getStorage();
+
             if($storage !== '' && $storage !== $default){
                 $this->setStorage($storage);
             }

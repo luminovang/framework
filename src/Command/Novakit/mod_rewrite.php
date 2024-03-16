@@ -12,11 +12,11 @@ if (PHP_SAPI === 'cli') {
     return;
 }
 
-$uri = parse_url('https://luminova.ng' . $_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
-$uri = urldecode($uri);
+$uri = urldecode(parse_url('https://luminova.ng' . $_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '');
 
 $_SERVER['SCRIPT_NAME'] = '/index.php';
 $_SERVER['LOCAL_SERVER_INSTANCE'] = 'local.server';
+$_SERVER['NOVAKIT_EXECUTION_ENV'] = APP_ROOT . DIRECTORY_SEPARATOR . 'novakit';
 $path = $_SERVER['DOCUMENT_ROOT'] . DIRECTORY_SEPARATOR . ltrim($uri, '/');
 
 // If $path is an existing file or folder within the public folder handle request

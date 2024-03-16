@@ -69,7 +69,7 @@ class Console
         if('--version' === $command){
             $cli::writeln('Novakit Command Line Tool');
             $cli::writeln('version: ' . BaseConfig::$version, 'green');
-            exit(STATUS_OK);
+            exit(STATUS_SUCCESS);
         }
 
         $params  = array_merge($cli::getArguments(), $cli::getQueries());

@@ -233,7 +233,6 @@ class Compress
             $this->headers['Content-Encoding'] = 'gzip';
             // Compress the content and store it in a variable
             $compressedContent = gzencode($this->minifiedContent, $this->compressionLevel);
-            //$compressedContent = gzencode($this->minifiedContent, $this->compressionLevel, 9, FORCE_GZIP);
             $this->info['Content-Encoding'] = 'gzip';
         } else {
             // Store the uncompressed content in a property

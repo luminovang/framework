@@ -7,8 +7,8 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
+namespace Luminova\Http;
 
- namespace Luminova\Http;
 class NetworkRequest
 {
     /**

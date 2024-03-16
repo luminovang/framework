@@ -158,7 +158,7 @@ class CookieManager implements SessionInterface
     {
         $data = $this->getContents($storage);
 
-        if((isset($data["_online"]) && $data["_online"] == "YES")){
+        if((isset($data["_online"]) && $data["_online"] === 'YES')){
             return true;
         }
 
@@ -234,6 +234,7 @@ class CookieManager implements SessionInterface
         if (isset($_COOKIE)) {
             return (array) $_COOKIE;
         }
+
         return [];
     }
 
@@ -246,19 +247,7 @@ class CookieManager implements SessionInterface
     */
     public function toArray(string $index = ''): array
     {
-        $data = $this->getContents();
-        if($index === ''){
-            if($data !== []){
-                return (array) $data;
-            }
-            if(isset($_COOKIE)){
-                return (array) $_COOKIE;
-            }
-        }elseif (isset($data[$index])) {
-            return (object) $data[$index];
-        }
-
-        return [];
+        return $this->toAs('array', $index);
     }
 
     /** 
@@ -270,19 +259,37 @@ class CookieManager implements SessionInterface
     */
     public function toObject(string $index = ''): object
     {
+        return $this->toAs('object', $index);
+    }
+
+    /** 
+     * Get data as object or array from current session storage
+     * 
+     * @param string $type return type of object or array
+     * @param string $index optional key to get
+     * 
+     * @return object|array
+    */
+    public function toAs(string $type = 'array', string $index = ''): object|array
+    {
         $data = $this->getContents();
+        $result = [];
         if($index === ''){
             if($data !== []){
-                return (object) $data;
+                $result = $data;
             }
             if(isset($_COOKIE)){
-                return (object) $_COOKIE;
+                $result = $_COOKIE;
             }
         }elseif (isset($data[$index])) {
-            return (object) $data[$index];
+            $result = $data[$index];
         }
 
-        return (object)[];
+        if($type === 'array'){
+            return (array) $result;
+        }
+
+        return (object) $result;
     }
 
     /** 

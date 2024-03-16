@@ -25,7 +25,7 @@ class Application
     /**
      * Base Application instance
      *
-     * @var Application|null $instance
+     * @var ?Application $instance
     */
     private static ?Application $instance = null;
 
@@ -41,7 +41,7 @@ class Application
      *
      * @param string $dir The project root directory
      */
-    public function __construct(string $dir = __DIR__) {
+    public function __construct() {
        
         // Initialize the router instance
         $this->router ??= new Router();
@@ -50,10 +50,10 @@ class Application
         $this->router->addNamespace('\App\Controllers');
 
         // Initialize the template engine
-        $this->initialize(null, $dir);
+        $this->initialize(__DIR__);
 
         // Set the project base path
-        $this->setBasePath($this->router->getBase());
+        $this->setProjectBase($this->router->getBase());
     }
 
     /**

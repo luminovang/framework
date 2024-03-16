@@ -10,8 +10,8 @@
 namespace Luminova\Functions;
 
 use \Laminas\Escaper\Escaper as LaminasEscaper;
-use \Exception;
-use \RuntimeException;
+use \Luminova\Exceptions\BadMethodCallException;
+use \Luminova\Exceptions\RuntimeException;
 
 class Escaper
 {
@@ -99,7 +99,7 @@ class Escaper
      * @param array $arguments The arguments passed to the method.
      * 
      * @return mixed The result of the method call.
-     * @throws Exception When the called method does not exist.
+     * @throws BadMethodCallException When the called method does not exist.
      */
     public function __call(string $name, array $arguments): mixed
     {
@@ -107,7 +107,7 @@ class Escaper
             if (method_exists($this, $name)) {
                 return $this->{$name}(...$arguments);
             } else {
-                throw new Exception('Method ' . $name . ' does not exist, to use ' . $name . ', you need to install a third-party library first. Run "composer require laminas/laminas-escaper"');
+                throw new BadMethodCallException('Method ' . $name . ' does not exist, to use ' . $name . ', you need to install a third-party library first. Run "composer require laminas/laminas-escaper"');
             }
         }
 

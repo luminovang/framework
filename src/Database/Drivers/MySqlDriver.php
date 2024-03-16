@@ -13,7 +13,7 @@ namespace Luminova\Database\Drivers;
 use \Luminova\Database\Drivers\DriversInterface;
 use \Luminova\Config\Database;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Exceptions\InvalidException;
+use \Luminova\Exceptions\InvalidArgumentException;
 use \mysqli;
 use \mysqli_stmt;
 use \mysqli_result;
@@ -65,21 +65,34 @@ class MySqlDriver implements DriversInterface
     */
     private bool $isSelect = false;
 
+    /**
+    * @var bool $connected 
+    */
+    private bool $connected = false;
 
     /**
      * Constructor.
      *
      * @param Database $config database configuration. array
-     * @throws InvalidException If a required configuration key is missing.
+     * @throws InvalidArgumentException If a required configuration key is missing.
+     * @throws Exception
+     * @throws DatabaseException
      */
     public function __construct(Database $config) 
     {
         if (!$config instanceof Database) {
-            throw new InvalidException("Invalid database configuration, required type: Database, but " . gettype($config) . " is given instead.");
+            throw new InvalidArgumentException("Invalid database configuration, required type: Database, but " . gettype($config) . " is given instead.");
         }
       
         $this->config = $config;
-        $this->initializeDatabase();
+
+        try{
+            $this->newConnection();
+            $this->connected = true;
+        }catch(Exception|DatabaseException $e){
+            $this->connected = true;
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e->getPrevious());
+        }
     }
 
     /**
@@ -107,16 +120,17 @@ class MySqlDriver implements DriversInterface
     /**
      * Initializes the database connection.
      * This method is called internally and should not be called directly.
+     * 
      * @throws DatabaseException If no driver is specified
      */
-    private function initializeDatabase(): void 
+    private function newConnection(): void 
     {
         if ($this->connection !== null) {
             return;
         }
         //mysqli_report(MYSQLI_REPORT_ALL);
         mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-        try {
+        try{
             $this->connection = new mysqli(
                 $this->config->host,
                 $this->config->username,
@@ -124,15 +138,25 @@ class MySqlDriver implements DriversInterface
                 $this->config->database,
                 $this->config->port
             );
-     
+        
             if ($this->connection->connect_error) {
-                DatabaseException::throwException($this->connection->connect_error, null, $this->connection->connect_errno);
+                throw new DatabaseException($this->connection->connect_error, $this->connection->connect_errno);
             } else {
                 $this->connection->set_charset($this->config->charset);
             }
-        } catch (DatabaseException $e) {
-            $e->handle();
+        }catch(Exception|mysqli_sql_exception $e){
+            throw $e;
         }
+    }
+
+    /**
+     * Check if database is connected
+     * 
+     * @return bool 
+    */
+    public function isConnected(): bool 
+    {
+        return $this->connected;
     }
 
     /**

@@ -89,7 +89,7 @@ trait StringTrait
 	*/
   	public static function isNameBanned(mixed $nameToCheck, array $bannedNames): bool 
 	{
-      	return self::matchIn($nameToCheck, $bannedNames);
+      	return static::matchIn($nameToCheck, $bannedNames);
   	}
 
 	/**
@@ -153,7 +153,7 @@ trait StringTrait
 	 * Generate a random value.
 	 *
 	 * @param int $length The length of the random value.
-	 * @param string $type The type of random value (e.g., self::INT, self::CHAR, self::STR).
+	 * @param string $type The type of random value (e.g., static::INT, static::CHAR, static::STR).
 	 * @param bool $upper Whether to make the value uppercase if it's a string.
 	 * 
 	 * @return string The generated random value.
@@ -208,7 +208,7 @@ trait StringTrait
 	*/
 	public static function EAN(int $country = 615, int $length = 13): string 
 	{
-		return self::UPC($country, $length);
+		return static::UPC($country, $length);
 	}
 
 	/**
@@ -222,7 +222,7 @@ trait StringTrait
 	public static function UPC(int $prefix = 0, int $length = 12): string 
 	{
 		$length -= strlen((string)$prefix) + 1;
-		$randomPart = self::random($length);
+		$randomPart = static::random($length);
 		
 		$code = $prefix . str_pad($randomPart, $length, '0', STR_PAD_LEFT);
 		
@@ -389,7 +389,7 @@ trait StringTrait
 	 */
 	public static function is_email_or_phone(string $input): bool
 	{
-		if (self::is_email($input) || self::is_phone($input)) {
+		if (static::is_email($input) || static::is_phone($input)) {
 			return true;
 		}
 		
@@ -406,7 +406,7 @@ trait StringTrait
 	*/
 	public static function isPhoneNumber(mixed $phone): bool 
 	{
-		return self::is_phone($phone);
+		return static::is_phone($phone);
 	}
 
 	/** 
@@ -572,7 +572,7 @@ trait StringTrait
 				$host = explode('.', $host, 2)[1];
 			}
 		} elseif ($count > 2) {
-			$host = self::removeSubdomain(explode('.', $host, 2)[1]);
+			$host = static::removeSubdomain(explode('.', $host, 2)[1]);
 		}
 
 		return $host;
@@ -669,7 +669,7 @@ trait StringTrait
 	 * @return string The cleaned text.
 	 */
 	public static function stripText(string $string, array $rules = [], bool $textarea = true): string {
-		$dict = (empty($rules) ? self::DEFAULT_RULES : $rules);
+		$dict = (empty($rules) ? static::DEFAULT_RULES : $rules);
 		$string = htmlspecialchars_decode($string);
 		$string = str_replace(array_keys($dict), array_values($dict), $string);
 		

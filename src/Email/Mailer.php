@@ -72,18 +72,18 @@ class Mailer
      */
     private function __construct(MailClientInterface|string|null $client = null)
     {
-        $development = !BaseConfig::isProduction();
+        $development = !PRODUCTION;
         try{
             if ($client === null) {
-                self::$client = new NovaMailer($development);
+                static::$client = new NovaMailer($development);
             } elseif ($client instanceof MailClientInterface) {
-                self::$client = $client;
-            } elseif (is_string($client) && in_array($client, self::$clients, true)) {
-                self::$client = new $client($development);
+                static::$client = $client;
+            } elseif (is_string($client) && in_array($client, static::$clients, true)) {
+                static::$client = new $client($development);
             } else {
                 throw MailerException::throwWith('invalid_client', $client);
             }
-            self::initialize();
+            static::initialize();
         }catch(Exception|MailerException $e) {
             if($development){
                 throw $e;
@@ -94,11 +94,11 @@ class Mailer
     /**
      * Get the Mailer client instance.
      * 
-     * @return self::$client The Mailer client instance.
+     * @return static::$client The Mailer client instance.
      */
     public static function getClient(): object
     {
-        return self::$client;
+        return static::$client;
     }
 
     /**
@@ -127,7 +127,7 @@ class Mailer
      */
     public function addAddress(string $address, string $name = ''): bool
     {
-        return self::$client->addAddress($address, $name);
+        return static::$client->addAddress($address, $name);
     }
 
     /**
@@ -140,7 +140,7 @@ class Mailer
      */
     public function addReplyTo($address, $name = ''): bool
     {
-        return self::$client->addReplyTo($address, $name);
+        return static::$client->addReplyTo($address, $name);
     }
 
      /**
@@ -153,7 +153,7 @@ class Mailer
      */
     public function addCc(string $address, string $name = ''): bool
     {
-        return self::$client->addCC($address, $name);
+        return static::$client->addCC($address, $name);
     }
 
      /**
@@ -166,7 +166,7 @@ class Mailer
      */
     public function addBcc(string $address, string $name = ''): bool
     {
-        return self::$client->addBCC($address, $name);
+        return static::$client->addBCC($address, $name);
     }
 
     /**
@@ -180,7 +180,7 @@ class Mailer
      */
     public function setFrom(string $address, string $name = '', bool $auto = true): bool
     {
-        return self::$client->setFrom($address, $name, $auto);
+        return static::$client->setFrom($address, $name, $auto);
     }
 
    /**
@@ -190,7 +190,7 @@ class Mailer
      */
     public function setBody(string $message): void 
     {
-        self::$client->Body = $message;
+        static::$client->Body = $message;
     }
 
     /**
@@ -200,7 +200,7 @@ class Mailer
      */
     public function setAltBody(string $message): void 
     {
-        self::$client->AltBody = $message;
+        static::$client->AltBody = $message;
     }
 
     /**
@@ -210,7 +210,7 @@ class Mailer
      */
     public function setSubject(string $subject): void 
     {
-        self::$client->Subject = $subject;
+        static::$client->Subject = $subject;
     }
 
     /**
@@ -237,7 +237,7 @@ class Mailer
         string $type = '', 
         string $disposition = 'attachment'
     ) {
-        return self::$client->addAttachment($path, $name, $encoding, $type, $disposition);
+        return static::$client->addAttachment($path, $name, $encoding, $type, $disposition);
     }
 
     /**
@@ -248,7 +248,7 @@ class Mailer
     public function send(): bool
     {
         try{
-            return self::$client->send();
+            return static::$client->send();
         }catch(Exception $e){
             throw new MailerException($e->getMessage(), $e->getCode());
         }
@@ -259,28 +259,28 @@ class Mailer
      */
     private static function initialize(): void
     {
-        self::$client->SMTPDebug = self::shouldDebug() ? 3 : 0;
-        self::$client->CharSet = self::getCharset(BaseConfig::get("smtp.charset"));
-        self::$client->XMailer = BaseConfig::copyright();
-        if (BaseConfig::get("smtp.use.credentials") == 1) {
-            self::$client->isSMTP();
-            self::$client->Host = BaseConfig::get("smtp.host");
-            self::$client->Port = BaseConfig::get("smtp.port");
+        static::$client->SMTPDebug = static::shouldDebug() ? 3 : 0;
+        static::$client->CharSet = static::getCharset(env("smtp.charset"));
+        static::$client->XMailer = BaseConfig::copyright();
+        if ((bool) env("smtp.use.credentials")) {
+            static::$client->isSMTP();
+            static::$client->Host = env("smtp.host");
+            static::$client->Port = env("smtp.port");
 
-            if (BaseConfig::get("smtp.use.password") == 1) {
-                self::$client->SMTPAuth = true;
-                self::$client->Username = BaseConfig::get("smtp.username");
-                self::$client->Password = BaseConfig::get("smtp.password");
+            if ((bool) env("smtp.use.password")) {
+                static::$client->SMTPAuth = true;
+                static::$client->Username = env("smtp.username");
+                static::$client->Password = env("smtp.password");
             }
 
-            self::$client->SMTPSecure = self::getEncryptionType(BaseConfig::get("smtp.encryption"));
+            static::$client->SMTPSecure = static::getEncryptionType(env("smtp.encryption"));
         } else {
-            self::$client->isMail();
+            static::$client->isMail();
         }
 
-        self::$client->setFrom(BaseConfig::get("smtp.email.sender"), BaseConfig::get("app.name"));
-        self::$client->isHTML(true);
-        self::$client->initialize();
+        static::$client->setFrom(env("smtp.email.sender"), APP_NAME);
+        static::$client->isHTML(true);
+        static::$client->initialize();
     }
 
     /**
@@ -290,7 +290,7 @@ class Mailer
      */
     private static function shouldDebug(): bool
     {
-        return !BaseConfig::isProduction() && BaseConfig::get("smtp.debug");
+        return !PRODUCTION && (bool) env("smtp.debug");
     }
 
     /**

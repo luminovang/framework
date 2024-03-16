@@ -13,6 +13,37 @@ use \Luminova\Base\BaseConfig;
 
 class Error
 {
+    /**
+     * Initializes error display
+     * 
+     * @return void 
+    */
+    public static function initialize(string $context = 'web'): void 
+    {
+        if($context !== 'web'){
+            return;
+        }
+
+        if (PRODUCTION) {
+            ini_set('display_errors', '0');
+            error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_STRICT & ~E_USER_NOTICE & ~E_USER_DEPRECATED);
+        } else {
+            error_reporting(E_ALL);
+            ini_set('display_errors', '1');
+        }
+
+        /**
+         * Set the custom error handler for non-fatal errors
+         * @method Error handler
+        */
+        set_error_handler([static::class, 'handle']);
+
+        /**
+         * Register shutdown function to catch fatal errors
+         * @method Error shutdown
+        */
+        register_shutdown_function([static::class, 'shutdown']);
+    }
 
     /**
      * Get error type
@@ -57,7 +88,7 @@ class Error
         $path = path('views') . 'system_errors' . DIRECTORY_SEPARATOR . 'errors.php';
         $errors = [
             'message' => $message,
-            'name' => self::getName($code)
+            'name' => static::getName($code)
         ];
         extract($errors);
         include $path;
@@ -80,11 +111,11 @@ class Error
         $errFile = BaseConfig::filterPath($errFile);
         $message = "Error [$errno]: $message in $errFile on line $errLine";
 
-        if (!BaseConfig::isProduction() && self::isFatal($errno)) {
-            self::display($message, $errno);
+        if (!PRODUCTION && static::isFatal($errno)) {
+            static::display($message, $errno);
         }
 
-        self::log('php_errors', $message);
+        logger('php_errors', $message);
     }
 
     /**
@@ -96,8 +127,8 @@ class Error
     {
         $error = error_get_last();
 
-        if ($error !== null && self::isFatal($error['type'])) {
-            self::handle($error['type'], $error['message'], $error['file'], $error['line'], true);
+        if ($error !== null && static::isFatal($error['type'])) {
+            static::handle($error['type'], $error['message'], $error['file'], $error['line'], true);
         }
     }
 

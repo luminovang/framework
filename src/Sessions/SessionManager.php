@@ -53,8 +53,10 @@ class SessionManager implements SessionInterface
      * 
      * @return self
     */
-    public function setStorage(string $storage): self {
+    public function setStorage(string $storage): self 
+    {
         $this->storage = $storage;
+
         return $this;
     }
 
@@ -63,7 +65,8 @@ class SessionManager implements SessionInterface
      * 
      * @return string
     */
-    public function getStorage(): string {
+    public function getStorage(): string 
+    {
         return $this->storage;
     }
   
@@ -78,6 +81,7 @@ class SessionManager implements SessionInterface
     public function add(string $key, mixed $value): self
     {
         $_SESSION[$this->storage][$key] = $value;
+
         return $this;
     }
 
@@ -92,6 +96,7 @@ class SessionManager implements SessionInterface
     public function set(string $key, mixed $value): self
     {
         $_SESSION[$this->storage][$key] = $value;
+
         return $this;
     }
 
@@ -134,6 +139,7 @@ class SessionManager implements SessionInterface
     public function setTo(string $index, mixed $data, string $storage): self
     {
         $_SESSION[$storage][$index] = $data;
+
         return $this;
     }
 
@@ -147,7 +153,8 @@ class SessionManager implements SessionInterface
     public function online($storage = ''): bool
     {
         $data = $this->getContents($storage);
-        return (isset($data["_online"]) && $data["_online"] == "YES");
+
+        return (isset($data["_online"]) && $data["_online"] === 'YES');
     }
 
     /** 
@@ -161,6 +168,7 @@ class SessionManager implements SessionInterface
     {
         $storageKey = $storage === '' ? $this->storage : $storage;
         unset($_SESSION[$storageKey]);
+
         return $this;
     }
 
@@ -174,6 +182,7 @@ class SessionManager implements SessionInterface
     public function remove(string $index): self
     {
         unset($_SESSION[$this->storage][$index]);
+
         return $this;
     }
 
@@ -208,10 +217,7 @@ class SessionManager implements SessionInterface
     */
     public function getResult(): array
     {
-        if (isset($_SESSION)) {
-            return (array) $_SESSION;
-        }
-        return [];
+        return (array) $_SESSION ?? [];
     }
 
     /** 
@@ -223,18 +229,7 @@ class SessionManager implements SessionInterface
     */
     public function toArray(string $index = ''): array
     {
-        if( $index === ''){
-            if(isset($_SESSION[$this->storage])){
-                return (array) $_SESSION[$this->storage];
-            }
-
-            if(isset($_SESSION)){
-                return (array) $_SESSION;
-            }
-        }elseif(isset($_SESSION[$this->storage][$index])){
-            return (array) $_SESSION[$this->storage][$index];
-        }
-        return [];
+        return $this->toAs('array', $index);
     }
 
     /** 
@@ -246,18 +241,38 @@ class SessionManager implements SessionInterface
     */
     public function toObject(string $index = ''): object
     {
+        return $this->toAs('object', $index);
+    }
+
+    /** 
+     * Get data as object or array from current session storage
+     * 
+     * @param string $type return type of object or array
+     * @param string $index optional key to get
+     * 
+     * @return object|array
+    */
+    public function toAs(string $type = 'array', string $index = ''): object|array
+    {
+        $result = [];
+
         if( $index === ''){
             if(isset($_SESSION[$this->storage])){
-                return (object) $_SESSION[$this->storage];
+                $result = $_SESSION[$this->storage];
             }
 
             if(isset($_SESSION)){
-                return (object) $_SESSION;
+                $result = $_SESSION;
             }
         }elseif(isset($_SESSION[$this->storage][$index])){
-            return (object) $_SESSION[$this->storage][$index];
+            $result = $_SESSION[$this->storage][$index];
         }
-        return (object)[];
+
+        if($type === 'array'){
+            return (array) $result;
+        }
+
+        return (object) $result;
     }
 
     /** 

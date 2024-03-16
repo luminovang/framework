@@ -8,7 +8,8 @@
  * @license See LICENSE file
  */
 namespace Luminova\Database;
-class Columns {
+class Columns 
+{
     public const INT = "INT";
     public const VARCHAR = "VARCHAR";
     public const DEFAULT_NONE = "NONE";
@@ -24,13 +25,15 @@ class Columns {
     private $columns = [];
     private $tableName;
 
-    public function __construct(string $tableName){
+    public function __construct(string $tableName)
+    {
         $this->tableName = $tableName;
 	}
 
     public function setName(string $name): Columns
     {
         $this->columns[$name] = [];
+        
         return $this;
     }
 
@@ -38,6 +41,7 @@ class Columns {
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['type'] = $type . ($length > 0 ? "($length)" : '');
+
         return $this;
     }
 
@@ -45,6 +49,7 @@ class Columns {
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['collation'] = $collation;
+
         return $this;
     }
 
@@ -52,6 +57,7 @@ class Columns {
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['attributes'] = $attributes;
+
         return $this;
     }
 
@@ -59,6 +65,7 @@ class Columns {
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['auto_increment'] = $autoIncrement;
+
         return $this;
     }
 
@@ -66,6 +73,7 @@ class Columns {
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['default'] = $default;
+
         return $this;
     }
 
@@ -73,6 +81,7 @@ class Columns {
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['index'] = $indexType;
+
         return $this;
     }
 

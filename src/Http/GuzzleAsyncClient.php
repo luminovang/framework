@@ -1,10 +1,19 @@
 <?php 
+/**
+ * Luminova Framework
+ *
+ * @package Luminova
+ * @author Ujah Chigozie Peter
+ * @copyright (c) Nanoblock Technology Ltd
+ * @license See LICENSE file
+*/
 namespace Luminova\Http;
-use Luminova\Http\AsyncClientInterface;
+
+use \Luminova\Http\AsyncClientInterface;
 use \GuzzleHttp\Client as GuzzleClient;
 use \GuzzleHttp\Promise\PromiseInterface;
 use \GuzzleHttp\Psr7\Request as GuzzleRequest;
-use \Psr\Http\Message\ResponseInterface;
+
 class GuzzleAsyncClient implements AsyncClientInterface
 {
     private $client;

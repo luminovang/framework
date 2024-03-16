@@ -97,8 +97,11 @@ class IPAddress
          return $result;
       }
 
+      static $network = null;
+
       $network = new Network(new Curl());
       $headers = [];
+
       if (IPConfig::$apiProvider === 'ipapi') {
          $url = IPConfig::$apiKey === '' ? "https://ipapi.co/$ip/json/" : "https://ipapi.co/$ip/json/?key=" . IPConfig::$apiKey;
       } elseif (IPConfig::$apiProvider === 'iphub') {
@@ -176,7 +179,7 @@ class IPAddress
   public static function isValid(?string $address = null, int $version = 0): bool 
   {
       if($address === null){
-         $address = self::get();
+         $address = static::get();
       }
 
       return match ($version) {
@@ -196,14 +199,14 @@ class IPAddress
   public static function toNumeric(?string $address = null): int|string
   {
       if($address === null){
-         $address = self::get();
+         $address = static::get();
       }
 
       $ip = false;
 
-      if (self::isValid($address, 4)) {
+      if (static::isValid($address, 4)) {
          $ip = ip2long($address);
-      }elseif (self::isValid($address, 6)) {
+      }elseif (static::isValid($address, 6)) {
          $ip = inet_pton($address);
       }
 
@@ -225,7 +228,7 @@ class IPAddress
    {
          $ip = ''; 
          if($numeric === null){
-            $numeric = self::toNumeric();
+            $numeric = static::toNumeric();
          }
 
          // Check if it's binary (IPv6) or numeric (IPv4).
@@ -250,7 +253,7 @@ class IPAddress
    public static function isTor(string|null $ip = null): bool 
    {
       if($ip === null){
-         $ip = self::get();
+         $ip = static::get();
       }
 
       return TorDetector::isTorExitNode($ip);

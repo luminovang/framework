@@ -31,14 +31,14 @@ class TorDetector
     private static function fetchTorExitNodeList(): string|bool
     {
         $currentTime = time();
-        if (file_exists(self::getPth()) && ($currentTime - filemtime(self::getPth()) < self::$cacheExpiry)) {
-            return file_get_contents(self::getPth());
+        if (file_exists(static::getPth()) && ($currentTime - filemtime(static::getPth()) < static::$cacheExpiry)) {
+            return file_get_contents(static::getPth());
         }
 
-        $result = file_get_contents(self::$torExitNodeListUrl);
+        $result = file_get_contents(static::$torExitNodeListUrl);
 
         if($result !== false){
-            write_content(self::getPth(), $result);
+            write_content(static::getPth(), $result);
         }
 
         return $result;
@@ -53,7 +53,7 @@ class TorDetector
     */
     public static function isTorExitNode(string $ip): bool 
     {
-        $result = self::fetchTorExitNodeList();
+        $result = static::fetchTorExitNodeList();
         
         if( $result === false){
             return false;

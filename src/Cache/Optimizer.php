@@ -15,14 +15,18 @@ use \Luminova\Application\Paths;
 class Optimizer
 {
     /**
-     * @var string $cacheDir The directory where cached files will be stored.
+     * The directory where cached files will be stored.
+     * 
+     * @var string $cacheDir 
      */
     private string $cacheDir;
 
     /**
-     * @var int $cacheExpiration The expiration time for cached 
+     * The expiration time for cached 
+     * 
+     * @var int $expiration 
      */
-    private int $cacheExpiration;
+    private int $expiration;
 
     /**
      * @var string $optimizerKey Cache key
@@ -32,13 +36,39 @@ class Optimizer
     /**
      * Class constructor.
      *
-     * @param int $cacheExpiration The expiration time for cached files in seconds (default: 24 hours).
+     * @param int $expiration The expiration time for cached files in seconds (default: 24 hours).
      * @param string $cacheDir The directory where cached files will be stored (default: 'cache').
      */
-    public function __construct(int $cacheExpiration = 24 * 60 * 60, string $cacheDir = 'cache')
+    public function __construct(int $expiration = 24 * 60 * 60, string $cacheDir = 'cache')
     {
         $this->cacheDir = $cacheDir;
-        $this->cacheExpiration = $cacheExpiration;
+        $this->expiration = $expiration;
+    }
+
+    /**
+     * Set Optimizer expiry ttl 
+     * @param int $expiration The expiration time for cached files in seconds (default: 24 hours).
+     * 
+     * @return self 
+    */
+    public function setExpiry(int $expiration): self
+    {
+        $this->expiration = $expiration;
+
+        return $this;
+    }
+
+    /**
+     * Set Optimizer directory
+     * @param string $cacheDir The directory where cached files will be stored (default: 'cache').
+     * 
+     * @return self 
+    */
+    public function setDirectory(string $cacheDir): self
+    {
+        $this->cacheDir = $cacheDir;
+
+        return $this;
     }
 
     /**
@@ -71,7 +101,7 @@ class Optimizer
     public function hasCache(): bool
     {
         $location = $this->getCacheLocation();
-        return file_exists($location) && time() - filectime($location) < $this->cacheExpiration;
+        return file_exists($location) && time() - filectime($location) < $this->expiration;
     }
 
     /**
@@ -99,13 +129,13 @@ class Optimizer
         // Calculate the cache expiration time based on file creation time
         $fileCreationTime = filectime($location);
         if($fileCreationTime !== false){
-            $cacheExpirationTime = $fileCreationTime + $this->cacheExpiration;
+            $expirationTime = $fileCreationTime + $this->expiration;
         }else{
-            $cacheExpirationTime = $this->cacheExpiration;
+            $expirationTime = $this->expiration;
         }
 
         // Set the "Expires" header based on the calculated expiration time
-        $headers['Expires'] = gmdate("D, d M Y H:i:s", $cacheExpirationTime) . ' GMT';
+        $headers['Expires'] = gmdate("D, d M Y H:i:s", $expirationTime) . ' GMT';
 
         if (file_exists($infoLocation)) {
             $info = json_decode(file_get_contents($infoLocation), true);

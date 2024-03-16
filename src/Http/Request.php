@@ -10,8 +10,8 @@
 
 namespace Luminova\Http;
 
-use Luminova\Http\Header;
-use \InvalidArgumentException;
+use \Luminova\Http\Header;
+use \Luminova\Exceptions\InvalidArgumentException;
 
 class Request
 {

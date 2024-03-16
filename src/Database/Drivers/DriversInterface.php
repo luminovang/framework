@@ -13,6 +13,13 @@ use \stdClass;
 interface DriversInterface  
 {
     /**
+     * Check if database is connected
+     * 
+     * @return bool 
+    */
+    public function isConnected(): bool;
+
+    /**
      * Get driver name
      * 
      * @return string Database driver name

@@ -93,6 +93,6 @@ class Server extends BaseCommand
             $this->run($params);
         }
 
-        return STATUS_OK;
+        return STATUS_SUCCESS;
     }
 }

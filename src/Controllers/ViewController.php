@@ -80,7 +80,7 @@
     protected function app(): Application
     {
         if(self::$_app === null){
-            self::$_app = new Application(__DIR__);
+            self::$_app = new Application();
         }
         
         return self::$_app;
@@ -113,7 +113,7 @@
     {
         $this->app()->view($view)->render($options);
 
-        return STATUS_OK;
+        return STATUS_SUCCESS;
     }
 
     /**

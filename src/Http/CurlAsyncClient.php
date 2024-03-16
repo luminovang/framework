@@ -1,10 +1,19 @@
 <?php 
+/**
+ * Luminova Framework
+ *
+ * @package Luminova
+ * @author Ujah Chigozie Peter
+ * @copyright (c) Nanoblock Technology Ltd
+ * @license See LICENSE file
+*/
 namespace Luminova\Http;
-use Luminova\Http\AsyncClientInterface;
-use GuzzleHttp\Client as GuzzleClient;
-use GuzzleHttp\Promise\PromiseInterface;
-use GuzzleHttp\Psr7\Request as GuzzleRequest;
-use Psr\Http\Message\ResponseInterface;
+
+use \Luminova\Http\AsyncClientInterface;
+use \GuzzleHttp\Promise\PromiseInterface;
+use \GuzzleHttp\Promise\Utils;
+use \GuzzleHttp\Psr7\Request as GuzzleRequest;
+use \GuzzleHttp\Psr7\Response;
 
 class CurlAsyncClient implements AsyncClientInterface
 {
@@ -20,9 +29,9 @@ class CurlAsyncClient implements AsyncClientInterface
 
         // You may need to set other options based on the request (e.g., headers, method)
 
-        return \GuzzleHttp\Promise\Utils::promiseFor(curl_exec($ch))
+        return Utils::promiseFor(curl_exec($ch))
             ->then(function ($response) {
-                return new \GuzzleHttp\Psr7\Response(200, [], $response);
+                return new Response(200, [], $response);
             });
     }
 

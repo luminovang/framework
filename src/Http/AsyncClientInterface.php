@@ -1,8 +1,17 @@
 <?php 
+/**
+ * Luminova Framework
+ *
+ * @package Luminova
+ * @author Ujah Chigozie Peter
+ * @copyright (c) Nanoblock Technology Ltd
+ * @license See LICENSE file
+*/
 namespace Luminova\Http;
 
-use GuzzleHttp\Promise\PromiseInterface;
-use GuzzleHttp\Psr7\Request as GuzzleRequest;
+use \GuzzleHttp\Promise\PromiseInterface;
+use \GuzzleHttp\Psr7\Request as GuzzleRequest;
+
 interface AsyncClientInterface
 {
     public function sendAsync(GuzzleRequest $request): PromiseInterface;

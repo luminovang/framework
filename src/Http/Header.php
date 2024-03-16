@@ -9,7 +9,7 @@
  */
 namespace Luminova\Http;
 
-use Luminova\Base\BaseConfig;
+use \Luminova\Base\BaseConfig;
 
 class Header
 {

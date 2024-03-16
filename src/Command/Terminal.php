@@ -447,7 +447,7 @@ class Terminal
             return;
         }
 
-        if (static::isWindows() && (getenv('TERM') || getenv('SHELL'))) {
+        if (is_platform('windows') && (getenv('TERM') || getenv('SHELL'))) {
             static::$height = (int) exec('tput lines');
             static::$width  = (int) exec('tput cols');
         } else {
@@ -613,7 +613,7 @@ class Terminal
     */
     public static function clear(): void
     {
-        static::isWindows() && !static::streamSupports('sapi_windows_vt100_support', STDOUT)
+        is_platform('windows') && !static::streamSupports('sapi_windows_vt100_support', STDOUT)
             ? static::newLine(40)
             : static::fwrite("\033[H\033[2J");
     }
@@ -922,11 +922,11 @@ class Terminal
             return false;
         }
 
-        if (static::isMacOS()) {
+        if (is_platform('mac')) {
             return static::isMacTerminal();
         }
 
-        if (static::isWindows()) {
+        if (is_platform('windows')) {
             return static::isWindowsTerminal($resource);
         }
 
@@ -968,26 +968,6 @@ class Terminal
             isset($_SERVER['ANSICON']) || getenv('ANSICON') !== false ||
             getenv('ConEmuANSI') === 'ON' ||
             getenv('TERM') === 'xterm';
-    }
-
-    /**
-     * Checks whether the current OS is windows
-     *
-     * @return bool
-    */
-    public static function isWindows(): bool 
-    {
-        return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
-    }
-
-    /**
-     * Checks whether the current OS is mac
-     *
-     * @return bool
-    */
-    public static function isMacOS(): bool
-    {
-        return strpos(PHP_OS, 'Darwin') !== false;
     }
 
     /**
@@ -1057,7 +1037,8 @@ class Terminal
         if ($result === false || (is_int($result) && $result == STATUS_ERROR)) {
             return STATUS_ERROR;
         }
-        return STATUS_OK;
+
+        return STATUS_SUCCESS;
     }
 
     /**

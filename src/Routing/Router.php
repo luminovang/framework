@@ -16,7 +16,6 @@ use \ReflectionMethod;
 use \ReflectionException;
 use \ReflectionClass;
 use \Luminova\Command\Terminal;
-use \Luminova\Base\BaseCommand;
 use \Luminova\Controllers\ViewController;
 use \Luminova\Base\BaseApplication;
 
@@ -340,7 +339,7 @@ final class Router
      * Bootstrap a group 
      *
      * @param BaseApplication $application application instance
-     * @param Bootstrap $callbacks callable arguments
+     * @param Bootstrap ...$callbacks callable arguments
      * 
      * @return void
     */
@@ -380,14 +379,14 @@ final class Router
                             $this->routeBase .= '/' . $name;
                         }
                     
-                        static::discover($name, $this, $application);
+                        static::boot($name, $this, $application);
                         break;
-                    }elseif (!in_array($firstSegment, $routeInstances) && static::isWebInstance($name, $firstSegment)) {
+                    }elseif (!in_array($firstSegment, $routeInstances) && static::isWeContext($name, $firstSegment)) {
                         if($withError){
                             $this->setErrorHandler($errorHandler);
                         }
 
-                        static::discover($name, $this, $application);
+                        static::boot($name, $this, $application);
                         break;
                     }
                 }
@@ -456,7 +455,6 @@ final class Router
     */
     public function run(?callable $callback = null): void
     {
-     
         $this->method = Header::getRoutingMethod();
        
         $status = ($this->method === 'CLI' ? $this->runAsCli() : $this->runAsHttp());
@@ -469,7 +467,7 @@ final class Router
             ob_end_clean();
         }
 
-        exit($status === true ? STATUS_OK : STATUS_ERROR);
+        exit($status === true ? STATUS_SUCCESS : STATUS_ERROR);
     }
 
     /**
@@ -516,10 +514,31 @@ final class Router
             if(isset($this->controllers['errors']['/'])){
                 static::execute($this->controllers['errors']['/']);
             }else{
-                $protocol = isset($_SERVER['SERVER_PROTOCOL']) ? $_SERVER['SERVER_PROTOCOL'] : '';
-                header($protocol . ' Error file not found', true, $status);
+                static::printError('Error file not found', null, $status);
             }
         }
+    }
+
+    /**
+     * Show error message with proper header and status code 
+     * 
+     * @param string $header Header Title of error message
+     * @param string|null Optional message body to display 
+     * @param int $status Status code
+     * 
+     * @return void
+     * 
+    */
+    private static function printError(string $header, ?string $message = null, int $status = 404): void 
+    {
+        $protocol = isset($_SERVER['SERVER_PROTOCOL']) ? $_SERVER['SERVER_PROTOCOL'] : 'HTTP/1.1';
+        header($protocol . $header, true, $status);
+
+        if($message){
+            echo $message;
+        }
+
+        exit(STATUS_ERROR);
     }
 
     /**
@@ -662,21 +681,22 @@ final class Router
     }
 
     /**
-     * Discover route
+     * Boot route context
      *
-     * @param string $name bootstrap route name
-     * @param Router $router
-     * @param BaseApplication $app
+     * @param string $context bootstrap route context name
+     * @param Router $router  Make router instance available in route
+     * @param BaseApplication $app Make application instance available in route
      * 
-     * @return bool
+     * @return void
     */
-    private static function discover(string $name, Router $router, BaseApplication $app): void 
+    private static function boot(string $context, Router $router, BaseApplication $app): void 
     {
-        /**
-         * @var Router $router Make router instance available in route
-         * @var BaseApplication $app Make application instance available in route
-        */
-        require_once dirname(__DIR__, 2) . "/routes/{$name}.php";
+        if (is_file(APP_ROOT . "/routes/{$context}.php")) {
+            require_once APP_ROOT . "/routes/{$context}.php";
+        } else {
+            $body = 'The application environment is not configured correctly. The route context "' . $context . '" may be missing or incorrect.';
+            static::printError('503 Service Unavailable', $body, 503);
+        }
     }
 
     /**
@@ -687,7 +707,7 @@ final class Router
      * 
      * @return bool
     */
-    private static function isWebInstance(string $result, ?string $first = null): bool 
+    private static function isWeContext(string $result, ?string $first = null): bool 
     {
         return ($first === null || $first === '' || Bootstrap::WEB) && $result !== Bootstrap::CLI && $result !== Bootstrap::API;
     }
@@ -975,7 +995,7 @@ final class Router
             $checkClass = new ReflectionClass($className);
         
             if (!$checkClass->isInstantiable() || 
-                !($checkClass->isSubclassOf(BaseCommand::class) || 
+                !($checkClass->isSubclassOf(Terminal::class) || 
                     $checkClass->isSubclassOf(ViewController::class) ||
                     $checkClass->isSubclassOf(BaseApplication::class))) {
                     ErrorException::throwException("Invalid class '$className'. Only subclasses of BaseCommand, BaseController, BaseViewController, or BaseApplication are allowed.");
@@ -1013,7 +1033,7 @@ final class Router
     /**
      * Invoke class using reflection method
      *
-     * @param object|BaseCommand $newClass Class instance
+     * @param object $newClass Class instance
      * @param array $arguments Pass arguments to reflection method
      * @param string $className Invoking class name
      * @param ReflectionMethod $method Controller class method
@@ -1046,7 +1066,7 @@ final class Router
             }
            
             $code = $newClass->registerCommands($commands);
-            if($code === STATUS_OK) {
+            if($code === STATUS_SUCCESS) {
                 if (array_key_exists('help', $commands['options'])) {
                     $result = true;
                     static::cli()->printHelp($commands[$commandId]);

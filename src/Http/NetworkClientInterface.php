@@ -10,8 +10,10 @@
 
 namespace Luminova\Http;
 
-use Luminova\Http\NetworkResponse;
-interface NetworkClientInterface {
+use \Luminova\Http\NetworkResponse;
+
+interface NetworkClientInterface 
+{
     /**
      * Send an HTTP request.
      *

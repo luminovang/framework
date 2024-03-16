@@ -37,7 +37,7 @@ class Files
 				$destFile = $dest . DIRECTORY_SEPARATOR . $file;
 
 				if (is_dir($srcFile)) {
-					self::copy($srcFile, $destFile);
+					static::copy($srcFile, $destFile);
 				} else {
 					copy($srcFile, $destFile);
 				}
@@ -107,7 +107,7 @@ class Files
 
 		foreach ($files as $file) {
 			if (is_dir($file)) {
-				self::remove($file, true);
+				static::remove($file, true);
 			} else {
 				unlink($file);
 			}
