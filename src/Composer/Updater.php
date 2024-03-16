@@ -9,6 +9,9 @@
  */
 namespace Luminova\Composer;
 
+include_once __DIR__ . '/../../libraries/sys/constants.php';
+include_once __DIR__ . '/../../libraries/sys/functions.php';
+
 use \Luminova\Command\Terminal;
 use \Luminova\Base\BaseConfig;
 
@@ -80,7 +83,7 @@ class Updater
     */
     private static function backwardProjectDirectory(): void 
     {
-        $composerJsonPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'composer.json';
+        $composerJsonPath = APP_ROOT . DIRECTORY_SEPARATOR . 'composer.json';
 
         if (file_exists($composerJsonPath)) {
             $composerData = json_decode(file_get_contents($composerJsonPath), true);
@@ -294,7 +297,7 @@ class Updater
 
 
             if($complete){
-                $base = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR;
+                $base = APP_ROOT . DIRECTORY_SEPARATOR;
                 $toDos = $base . $source . 'TODO.md';
                 $currentTodo = $base . 'TODO.md';
                 $hasTodo = false;
@@ -313,7 +316,7 @@ class Updater
                 }
 
                 if ($returnCode === 0) {
-                    static::cli()?->writeln('Update was completed version [' . BaseConfig::$version??'1.5.0' . ']', 'green');
+                    static::cli()?->writeln('Update was completed version [' . (BaseConfig::$version??'1.5.0') . ']', 'green');
                     if($hasTodo){
                         static::cli()?->writeln('TODO ATTENTION!', 'red');
                         static::cli()?->writeln('Please see /TODO.md to few manual associated with the current version update');
