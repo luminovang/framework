@@ -24,8 +24,7 @@ class Helper
             return false;
         }
         $readable = is_file($path);
-        
-        if (strpos($path, '\\\\') !== 0) {
+        if (!str_starts_with($path, '\\\\')) {
             $readable = $readable && is_readable($path);
         }
         return  $readable;

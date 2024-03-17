@@ -15,6 +15,14 @@ use \Luminova\Functions\StringTrait;
 
 abstract class BaseFunction
 {
+    public const INT = "int";
+	public const CHAR = "char";
+	public const STR = "str";
+	public const SALT = "salt";
+	public const SID = "sid";
+	public const UUI = "uui";
+	public const PASS = "pass";
+    
     /**
      * @class FunctionTrait
      */

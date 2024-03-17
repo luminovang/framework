@@ -25,9 +25,9 @@ class Application
     /**
      * Base Application instance
      *
-     * @var ?Application $instance
+     * @var ?static $instance
     */
-    private static ?Application $instance = null;
+    private static $instance = null;
 
     /**
      * Router class instance
@@ -81,10 +81,10 @@ class Application
      *
      * @param string $dir The project root directory
      * 
-     * @return Application
+     * @return static
      */
-    public static function getInstance(string $dir = __DIR__): static 
+    public static function getInstance(): static 
     {
-        return static::$instance ??= new static($dir);
+        return static::$instance ??= new static();
     }
 }

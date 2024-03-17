@@ -32,11 +32,7 @@ class MailerException extends AppException
     public static function throwWith(string $type, mixed $name = null): self
     {
         $message = self::$types[$type] ?? 'Unknown error occurred while creating email';
-        if ($name === null) {
-            $finalMessage = $message;
-        }else{
-            $finalMessage = sprintf($message, $name);
-        }
+        $finalMessage = $name === null ? $message : sprintf($message, $name);
 
         return new static($finalMessage);
     }

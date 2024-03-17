@@ -72,23 +72,16 @@ class Mailer
      */
     private function __construct(MailClientInterface|string|null $client = null)
     {
-        $development = !PRODUCTION;
-        try{
-            if ($client === null) {
-                static::$client = new NovaMailer($development);
-            } elseif ($client instanceof MailClientInterface) {
-                static::$client = $client;
-            } elseif (is_string($client) && in_array($client, static::$clients, true)) {
-                static::$client = new $client($development);
-            } else {
-                throw MailerException::throwWith('invalid_client', $client);
-            }
-            static::initialize();
-        }catch(Exception|MailerException $e) {
-            if($development){
-                throw $e;
-            }
+        if ($client === null) {
+            static::$client = new NovaMailer(!PRODUCTION);
+        } elseif ($client instanceof MailClientInterface) {
+            static::$client = $client;
+        } elseif (is_string($client) && in_array($client, static::$clients, true)) {
+            static::$client = new $client(!PRODUCTION);
+        } else {
+            throw MailerException::throwWith('invalid_client', $client);
         }
+        static::initialize();
     }
 
     /**

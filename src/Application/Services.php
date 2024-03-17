@@ -225,7 +225,7 @@ class Services
     /**
      * Add service instance.
      *
-     * @param string|object $class Class name or instance of a class 
+     * @param string|object $service Class name or instance of a class 
      * @example \Namespace\Utils\MyClass, MyClass::class or new MyClass()
      * @param arguments ...$arguments Arguments to initialize class with
      * The last param argument should be boolean value to indicate whether shared cached or not
@@ -244,7 +244,7 @@ class Services
     /**
      * Reinstate instance with new contractor arguments
      *
-     * @param string $class Service name or class namespace
+     * @param string $service Service name or class namespace
      * @example \Namespace\Utils\MyClass, MyClass or MyClass::class
      * @param arguments ...$arguments Arguments to initialize class with
      * The last param argument should be boolean value to indicate whether shared cached or not
@@ -288,7 +288,7 @@ class Services
     /**
      * Update service instance
      *
-     * @param string|object $class Class name or instance of a class 
+     * @param string|object $service Class name or instance of a class 
      * @example \Namespace\Utils\MyClass, MyClass::class or new MyClass()
      * @param bool $initializing Don't throw exception if service already exist
      * @param arguments ...$arguments Arguments to initialize class with

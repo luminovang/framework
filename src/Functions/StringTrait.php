@@ -13,15 +13,7 @@ use \Luminova\Time\Time;
 
 trait StringTrait
 {
-	public const INT = "int";
-	public const CHAR = "char";
-	public const STR = "str";
-	public const SALT = "salt";
-	public const SID = "sid";
-	public const UUI = "uui";
-	public const PASS = "pass";
-	
-	private const DEFAULT_RULES = [
+	private static $defaultRules = [
 		"[br/]" =>  "&#13;&#10;",
 		"\r\n"      => "\n",
 		"\n\r"      => "\n",
@@ -87,9 +79,9 @@ trait StringTrait
 	 * @deprecated this method is deprecated and will be removed in future use matchIn() method instead
 	 * @return bool true or false
 	*/
-  	public static function isNameBanned(mixed $nameToCheck, array $bannedNames): bool 
+  	public static function isNameBanned(mixed $needle, array $haystack): bool 
 	{
-      	return static::matchIn($nameToCheck, $bannedNames);
+      	return static::matchIn($needle, $haystack);
   	}
 
 	/**
@@ -669,7 +661,7 @@ trait StringTrait
 	 * @return string The cleaned text.
 	 */
 	public static function stripText(string $string, array $rules = [], bool $textarea = true): string {
-		$dict = (empty($rules) ? static::DEFAULT_RULES : $rules);
+		$dict = (empty($rules) ? static::$defaultRules : $rules);
 		$string = htmlspecialchars_decode($string);
 		$string = str_replace(array_keys($dict), array_values($dict), $string);
 		

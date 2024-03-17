@@ -38,10 +38,6 @@ abstract class BaseController  extends ViewController
     /**
      * Initialize controller instance
      * Make request and validate available global
-     * 
-     * @var InputValidator $validate $this->validate
-     * @var Request $request $this->request
-     * @var Request $app  $this->app
     */
     public function __construct()
     {

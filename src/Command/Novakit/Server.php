@@ -37,7 +37,7 @@ class Server extends BaseCommand
     /**
      * Options
      *
-     * @var array<string, string>
+     * @var array<string, string> $options
     */
     protected array $options = [
         '--php'  => 'The PHP Binary [default: "PHP_BINARY"]',
@@ -47,7 +47,7 @@ class Server extends BaseCommand
 
 
     /**
-     * @param array $options terminal options
+     * @param array $params terminal options
      * 
      * @return int 
     */

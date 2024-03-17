@@ -34,13 +34,11 @@ class Error
 
         /**
          * Set the custom error handler for non-fatal errors
-         * @method Error handler
         */
         set_error_handler([static::class, 'handle']);
 
         /**
          * Register shutdown function to catch fatal errors
-         * @method Error shutdown
         */
         register_shutdown_function([static::class, 'shutdown']);
     }
@@ -72,7 +70,7 @@ class Error
             E_USER_DEPRECATED   => 'E_USER_DEPRECATED',
         ];
     
-        return isset($errors[$errno]) ? $errors[$errno] : 'Unknown Error';
+        return $errors[$errno] ?? 'Unknown Error';
     }
 
     /**
