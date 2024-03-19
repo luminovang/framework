@@ -34,14 +34,20 @@ class Meta
     private static array $extendedConfig = [];
 
     /**
-     * @var string $appName application name
-    */
-    private static string $appName = '';
-
-     /**
      * @var static $instance class static singleton instance
     */
     private static ?Meta $instance = null;
+
+     /**
+     * Initialize constructor
+     * 
+     */
+    public function __construct()
+    {
+        static::$manifest ??= static::loadMeta();
+        static::$link = APP_URL;
+        static::loadDefaultConfig();
+    }
 
     /**
      * Singleton class
@@ -58,22 +64,6 @@ class Meta
     }
 
     /**
-     * Create object
-     *
-     * @param string $appName The name of the application.
-     * @param string $baseUrl The base URL of the application.
-     * 
-     * @return void 
-     */
-    public function create(string $appName, string $baseUrl): void
-    {
-        static::$manifest ??= static::loadMeta();
-        static::$appName = $appName;
-        static::$link = $baseUrl;
-        static::loadDefaultConfig();
-    }
-
-     /**
      * Sets the link URL for the web page.
      *
      * @param string $link The link URL.
@@ -145,8 +135,8 @@ class Meta
      */
     public function setPageTitle(string $title): void
     {
-        if (strpos($title, "| " . static::$appName) === false) {
-            static::$defaultConfig["title"] = "{$title} | " . static::$appName;
+        if (strpos($title, "| " . APP_NAME) === false) {
+            static::$defaultConfig["title"] = "{$title} | " . APP_NAME;
         } else {
             static::$defaultConfig["title"] = $title;
         }

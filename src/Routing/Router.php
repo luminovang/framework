@@ -368,7 +368,7 @@ final class Router
                             */
                             defined('CLI_ENVIRONMENT') || define('CLI_ENVIRONMENT', env('cli.environment.mood', 'testing'));
 
-                            if(!static::cli()->isCommandLine()) {
+                            if(!is_command()) {
                                 return;
                             }
                         }elseif($withError){
@@ -531,8 +531,7 @@ final class Router
     */
     private static function printError(string $header, ?string $message = null, int $status = 404): void 
     {
-        $protocol = isset($_SERVER['SERVER_PROTOCOL']) ? $_SERVER['SERVER_PROTOCOL'] : 'HTTP/1.1';
-        header($protocol . $header, true, $status);
+        header(SERVER_PROTOCOL . $header, true, $status);
 
         if($message){
             echo $message;
@@ -588,7 +587,7 @@ final class Router
             return '/' . trim($uri, '/');
         } 
 
-        if (static::cli()->isCommandLine()) {
+        if (is_command()) {
             return '/cli';
         }
 
@@ -979,7 +978,7 @@ final class Router
     private static function callReflection(string $callback, array $arguments = []): bool 
     {
         $throw = true;
-        $isCommand = isset($arguments[0]['command']) && Terminal::isCommandLine();
+        $isCommand = isset($arguments[0]['command']) && is_command();
 
         [$controller, $method] = explode('::', $callback);
         $method = ($isCommand ? 'run' : $method); // Only call run method for CLI

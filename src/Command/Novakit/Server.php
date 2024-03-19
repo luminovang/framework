@@ -58,24 +58,14 @@ class Server extends BaseCommand
         $php  = escapeshellarg($options['php'] ?? PHP_BINARY);
         $host = $options['host'] ?? 'localhost';
         $port = (int) ($options['port'] ?? 8080) + $this->portOffset;
+        $version = self::$version;
          // Set the Front Controller path as Document Root.
         $docRoot = escapeshellarg(PUBLIC_PATH);
-
-        Terminal::writeln('=================================== LUMINOVA SERVER ======================================');
-        Terminal::writeln('
-        L       U     U   M       M   IIII   N     N   OOOO   V           V   AAAAA
-        L       U     U   MM     MM    II    NN    N  O    O   V         V   A     A
-        L       U     U   M M   M M    II    N N   N  O    O    V       V    A     A
-        L       U     U   M  M M  M    II    N  N  N  O    O     V     V     AAAAAAA
-        L       U     U   M   M   M    II    N   N N  O    O      V   V      A     A
-        L       U     U   M       M    II    N    NN  O    O       V V       A     A
-        LLLLLL   UUUUU    M       M   IIIII  N     N   OOOO         V        A     A
-        ');
-        Terminal::writeln('=================================== PHP FRAMEWORK ======================================');
+        Terminal::writeln('NovaKit/' . $version. ' (Luminova) PHP/' . PHP_VERSION. ' (Development Server)');
         Terminal::newLine();
-        Terminal::writeln('Starting PHP Luminova development server');
         Terminal::writeln('Listening on http://' . $host . ':' . $port, 'green');
         Terminal::writeln('Document root is ' . $docRoot, 'green');
+        Terminal::newLine();
         Terminal::writeln('Press Ctrl-C to stop.');
         Terminal::newLine();
 

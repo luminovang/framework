@@ -9,14 +9,24 @@
  */
 namespace Luminova\Command;
 
-use \Luminova\Security\InputValidator;
-use \InvalidArgumentException;
 use \Luminova\Command\Colors;
 use \Luminova\Command\Commands;
 use \Luminova\Command\TextUtils;
+use \Luminova\Security\InputValidator;
+use \Luminova\Exceptions\InvalidArgumentException;
 
 class Terminal 
 {
+    /**
+     * @var string $version command line tool version
+    */
+    public static string $version = '2.4.0';
+
+    /**
+     * @var int $version command line tool version code
+    */
+    public static int $versionCode = 240;
+
     /**
      * Height of terminal visible window
      *
@@ -297,6 +307,7 @@ class Terminal
      * @param bool $required Require user to choose any option else the first array will be return as default
      *
      * @return array<string|int, mixed> $options The selected array keys and values
+     * @throws InvalidArgumentException
      */
   
     public static function chooser(string $text, array $options, bool $required = false): array
@@ -598,7 +609,7 @@ class Terminal
     */
     protected static function fwrite(string $text, $handle = STDOUT): void
     {
-        if (!static::isCommandLine()) {
+        if (!is_command()) {
             echo $text;
             return;
         }
@@ -774,7 +785,7 @@ class Terminal
             'options' => [],
         ];
        
-        if (static::isCommandLine() && isset($_SERVER['argv'][1])) {
+        if (is_command() && isset($_SERVER['argv'][1])) {
             $viewArgs = array_slice($_SERVER['argv'], 1);
             $view = '/';
             $options = [];
@@ -892,22 +903,6 @@ class Terminal
     public static function getQueries(): array
     {
         return static::$commandsOptions;
-    }
-
-    /**
-     * Is CLI?
-     *
-     * Test to see if a request was made from the command line.
-     *
-     * @return bool
-    */
-    public static function isCommandLine(): bool
-    {
-        return defined('STDIN') ||
-            (empty($_SERVER['REMOTE_ADDR']) && !isset($_SERVER['HTTP_USER_AGENT']) && count($_SERVER['argv']) > 0) ||
-            php_sapi_name() === 'cli' ||
-            array_key_exists('SHELL', $_ENV) ||
-            !array_key_exists('REQUEST_METHOD', $_SERVER);
     }
 
     /**

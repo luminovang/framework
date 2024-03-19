@@ -17,7 +17,7 @@ interface ValidatorInterface
    * @param array $input array input to validate it fields
    * @param array $rules Optional passed rules as array
    * 
-   * @return self Use $validate->isPased() method to check the validity of
+   * @return self Use $validate->isPassed() method to check the validity of
   */
   public function validate(array $input, array $rules = []): self;
 

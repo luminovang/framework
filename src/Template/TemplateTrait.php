@@ -213,7 +213,7 @@ trait TemplateTrait
     }
 
     /** 
-    * Get property from static::$publicOptions or static::$publicClasses
+    * Get protected property or static::$publicOptions or static::$publicClasses
     *
     * @param string $key property name 
     *
@@ -221,15 +221,33 @@ trait TemplateTrait
     */
     public function __get(string $key): mixed 
     {
+        $value = static::attrGetter($key) ?? null;
+
+        if($value === '__nothing__'){
+            return $this->{$key} ?? null;
+        }
+
+        return $value;
+    }
+
+    /** 
+    * Get property from static::$publicOptions or static::$publicClasses
+    *
+    * @param string $key property name 
+    *
+    * @return mixed 
+    */
+    public static function attrGetter(string $key): mixed 
+    {
         if (array_key_exists($key, static::$publicOptions)) {
             return static::$publicOptions[$key];
         }
 
-        if (isset(static::$publicClasses[$key])) {
+        if (array_key_exists($key, static::$publicClasses)) {
             return static::$publicClasses[$key];
         } 
 
-        return $this->{$key} ?? null;
+        return '__nothing__';
     }
 
     /** 
@@ -241,11 +259,7 @@ trait TemplateTrait
     */
     public static function getClass(string $key): ?object 
     {
-        if (isset(static::$publicClasses[$key])) {
-            return static::$publicClasses[$key];
-        } 
-
-        return null;
+       return static::$publicClasses[$key] ?? null;
     }
 
     /** 
@@ -338,8 +352,9 @@ trait TemplateTrait
     public function root(): string
     {
         if($this->baseTemplateDir === ''){
-            $this->baseTemplateDir = dirname(__DIR__, 2);
+            $this->baseTemplateDir = APP_ROOT; //dirname(__DIR__, 2);
         }
+
         return $this->baseTemplateDir;
     }
     
@@ -425,7 +440,7 @@ trait TemplateTrait
     */
     public function redirect(string $viewName = '', int $status = 0): void 
     {
-        $to = BaseConfig::baseUrl();
+        $to = APP_URL;
 
         if ($viewName !== '' && $viewName !== '/') {
             $to .= '/' . $viewName;
@@ -649,7 +664,7 @@ trait TemplateTrait
             throw new ViewNotFoundException($this->activeView, 404);
         }
 
-        ob_start(BaseConfig::getMixedNull('script.ob.handler', null));
+        ob_start(BaseConfig::getEnv('script.ob.handler', null, 'nullable'));
 
         if (MAINTENANCE) {
             include $this->getErrorFolder('maintenance');
@@ -699,7 +714,7 @@ trait TemplateTrait
         $viewHeaderInfo = [];
 
         // Set output handler
-        ob_start(BaseConfig::getMixedNull('script.ob.handler', null));
+        ob_start(BaseConfig::getEnv('script.ob.handler', null, 'nullable'));
 
         if ($this->cacheKey !== null) {
             $folder = $this->getCacheFolder();;

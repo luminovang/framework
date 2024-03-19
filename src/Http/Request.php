@@ -571,11 +571,7 @@ class Request
     */
     public function isCommandLine(): bool
     {
-        return defined('STDIN') ||
-            (empty($_SERVER['REMOTE_ADDR']) && !isset($_SERVER['HTTP_USER_AGENT']) && count($_SERVER['argv']) > 0) ||
-            php_sapi_name() === 'cli' ||
-            array_key_exists('SHELL', $_ENV) ||
-            !array_key_exists('REQUEST_METHOD', $_SERVER);
+        return is_command();
     }
 
     /**
@@ -617,16 +613,7 @@ class Request
     */
     public function getBrowser(): array
     {
-        if (ini_get('browscap')) {
-            $browser = get_browser(null, true);
-            
-            if ($browser !== false) {
-                return $browser;
-            }
-        }
-
-        // If get_browser() fails, fallback to parsing the user agent string
-        return self::parseUserAgent();
+        return browser(null, true);
     }
 
     /**
@@ -744,5 +731,4 @@ class Request
 
         return ''; 
     }
-
 }

@@ -10,9 +10,87 @@
 
 namespace Luminova\Base;
 
-use Luminova\Application\Application;
+use \Luminova\Routing\Router;
+use \Luminova\Template\TemplateTrait;
 
-abstract class BaseApplication extends Application {
+abstract class BaseApplication
+{
+     /**
+     * Include TemplateTrait for template method
+     * 
+     * @method TemplateTrait
+    */
+    use TemplateTrait;
+
+    /**
+     * Base Application instance
+     *
+     * @var ?BaseApplication $instance
+    */
+    private static ?BaseApplication $instance = null;
+
+    /**
+     * Router class instance
+     *
+     * @var Router $router
+     */
+    public ?Router $router = null;
+
+    /**
+     * Initialize the base application constructor
+     *
+     * @param string $dir The project root directory
+     */
+    public function __construct() 
+    {
+        // Initialize onCreate method
+         $this->onCreate();
+
+        // Initialize the router instance
+        $this->router ??= new Router();
+
+        // Set application controller class namespace
+        $this->router->addNamespace('\App\Controllers');
+
+        // Initialize the template engine
+        $this->initialize(__DIR__);
+
+        // Set the project base path
+        $this->setProjectBase($this->router->getBase());
+
+    }
+
+    /**
+     * Get the base application instance as a singleton.
+     *
+     * @param string $dir The project root directory
+     * 
+     * @return static
+     */
+    public static function getInstance(): static 
+    {
+        return static::$instance ??= new static();
+    }
+
+    /**
+     * Get the current view paths, segments uri
+     *
+     * @return string
+     */
+    public function getView(): string 
+    {
+        return $this->router->getView();
+    }
+
+    /**
+     * Get application base path from router.
+     *
+     * @return string
+     */
+    public function getBase(): string 
+    {
+        return $this->router->getBase();
+    }
     
     /**
      * Magic method getter
@@ -24,12 +102,20 @@ abstract class BaseApplication extends Application {
     */
     public function __get(string $key): mixed
     {
-        $attr = parent::__get($key);
-        if($attr === null) {
+        $value = self::attrGetter($key);
+
+        if($value === '__nothing__') {
             return $this->{$key} ?? null;
         }
 
-        return $attr;
+        return $value;
     }
 
+    /**
+     * On create method 
+     * @overrideable
+     * 
+     * @return void 
+    */
+    protected function onCreate(): void {}
 }

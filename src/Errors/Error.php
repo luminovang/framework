@@ -9,8 +9,6 @@
  */
 namespace Luminova\Errors;
 
-use \Luminova\Base\BaseConfig;
-
 class Error
 {
     /**
@@ -106,7 +104,7 @@ class Error
     */
     public static function handle(int $errno, string $message, string $errFile, int $errLine, bool $shutdown = false): void 
     {
-        $errFile = BaseConfig::filterPath($errFile);
+        $errFile = filter_paths($errFile);
         $message = "Error [$errno]: $message in $errFile on line $errLine";
 
         if (!PRODUCTION && static::isFatal($errno)) {

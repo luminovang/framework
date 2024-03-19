@@ -9,7 +9,6 @@
  */
 namespace Luminova\Command;
 
-use \Luminova\Base\BaseConfig;
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Commands;
 
@@ -63,12 +62,12 @@ class Console
         $cli::registerCommands($commands, false);
         $command = $cli::getCommand();
         if (!$this->noHeader) {
-            $cli::header(BaseConfig::$version);
+            $cli::header(Terminal::$version);
         }
 
         if('--version' === $command){
             $cli::writeln('Novakit Command Line Tool');
-            $cli::writeln('version: ' . BaseConfig::$version, 'green');
+            $cli::writeln('version: ' . Terminal::$version, 'green');
             exit(STATUS_SUCCESS);
         }
 

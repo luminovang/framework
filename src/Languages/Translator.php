@@ -71,12 +71,12 @@ class Translator
         $translation = [];
         if($system){
             $path = __DIR__ . DIRECTORY_SEPARATOR;
-            $path .= "Local" . DIRECTORY_SEPARATOR;
-            $path .= "{$filename}.en.php";
+            $path .= 'Locals' . DIRECTORY_SEPARATOR;
         }else{
             $path = path('languages');
-            $path .= "{$filename}.{$this->locale}.php";
         }
+
+        $path .= "{$filename}.{$this->locale}.php";
 
         if (file_exists($path)) {
             $translation = include_once $path;

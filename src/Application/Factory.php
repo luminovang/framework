@@ -10,7 +10,6 @@
 
 namespace Luminova\Application;
 
-use \Luminova\Config\Configuration;
 use \Luminova\Time\Task;
 use \Luminova\Functions\Functions;
 use \Luminova\Sessions\Session;
@@ -30,7 +29,6 @@ use \ReflectionMethod;
  * Factory methods classes.
  *
  * @method static Functions           functions(bool $shared = true)                        @return Functions
- * @method static Configuration       config(...$params, bool $shared = true)               @return Configuration
  * @method static Session             session(...$params, bool $shared = true)              @return Session
  * @method static Task                task(...$params, bool $shared = true)                 @return Task
  * @method static Importer            import(...$params, bool $shared = true)               @return Importer
@@ -70,7 +68,6 @@ class Factory
 
         return match($context) {
             'task' => Task::class,
-            'config' => Configuration::class,
             'session' => Session::class,
             'functions' => Functions::class,
             'import' => Importer::class,

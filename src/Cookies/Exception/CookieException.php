@@ -37,7 +37,7 @@ class CookieException extends AppException
      */
     public static function throwWith(string $type, mixed $name = null): self
     {
-        $message = self::$types[$type] ?? 'Unknown error occurred while creating cookie';
+        $message = static::$types[$type] ?? 'Unknown error occurred while creating cookie';
         if ($name === null) {
             $finalMessage = $message;
         }else{

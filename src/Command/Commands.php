@@ -20,9 +20,9 @@ use \Closure;
 
 class Commands
 {
-
     /**
      * Run console command
+     * 
      * @param Terminal $cli novakit cli instance
      * @param array $options Command options
      * 
@@ -52,19 +52,42 @@ class Commands
         return (int) $runCommand;
     }
 
+    /**
+     * Get command information
+     * 
+     * @param string $command command name 
+     * 
+     * @return array
+    */
     public static function getCommand(string $command): array
     {
         return AvailableCommands::get($command);
     }
 
+    /**
+     * Check if command exist
+     * 
+     * @param string $command command name 
+     * 
+     * @return bool
+    */
     public static function has(string $command): bool
     {
         return AvailableCommands::has($command) || $command === '-help';
     }
 
-    public static function get(string $command, string $key): array
+    /**
+     * Get command info if exist
+     * 
+     * @param string $command command name 
+     * @param string $key command key to retrieve 
+     * 
+     * @return mixed
+    */
+    public static function get(string $command, string $key): mixed
     {
         $isCommand = self::getCommand($command);
+
         return isset($isCommand[$key]) ? $isCommand[$key] : null;
     }
 }

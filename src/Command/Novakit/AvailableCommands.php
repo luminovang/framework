@@ -14,11 +14,8 @@ class AvailableCommands
     /**
      * The found commands.
      *
-     * @var array
+     * @var array $commands
     */
-   //php index.php foo -help
-   //php index.php foo help
-
     protected static $commands = [
         'help' => [
             'name' => 'help',
@@ -187,6 +184,11 @@ class AvailableCommands
         ],
     ];
 
+    /**
+     * Get all available commands
+     * 
+     * @return array
+    */
     public static function getCommands(): array 
     {
         asort(self::$commands);
@@ -194,13 +196,27 @@ class AvailableCommands
         return self::$commands;
     }
 
+    /**
+     * Get command information
+     * 
+     * @param string $key command name 
+     * 
+     * @return array
+    */
     public static function get(string $key): array 
     {
         return self::$commands[$key] ?? [];
     }
 
-    public static function has(string $command): bool
+    /**
+     * Check if command exists
+     * 
+     * @param string $key command name 
+     * 
+     * @return bool
+    */
+    public static function has(string $key): bool
     {
-        return self::get($command) !== [];
+        return self::get($key) !== [];
     }
 }
