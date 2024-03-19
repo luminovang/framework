@@ -209,7 +209,7 @@ defined('MAINTENANCE') || define('MAINTENANCE', (bool) env('app.maintenance.mood
 /**
  * @var string URL_PROTOCOL get request url protocol http or https 
 */
-defined('URL_PROTOCOL') || define('URL_PROTOCOL', isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https://" : "http://");
+defined('URL_PROTOCOL') || define('URL_PROTOCOL', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://'));
 
 /**
  * @var string SERVER_PROTOCOL get request server protocol HTTP/1.1
