@@ -239,7 +239,7 @@ defined('APP_WWW_URL') || define('APP_WWW_URL', URL_PROTOCOL . APP_WWW_HOSTNAME)
 /**
  * @var string REQUEST_HOSTNAME get application current request hostname https://www.example.com
 */
-defined('REQUEST_HOSTNAME') || define('REQUEST_HOSTNAME', URL_PROTOCOL . $_SERVER['HTTP_HOST']);
+defined('REQUEST_HOSTNAME') || define('REQUEST_HOSTNAME', URL_PROTOCOL . ($_SERVER['HTTP_HOST'] ?? APP_HOSTNAME));
 
 /**
  * @var string REQUEST_URL get application current request url https://www.example.com/path/?query=
