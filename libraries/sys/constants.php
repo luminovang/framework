@@ -239,12 +239,12 @@ defined('APP_WWW_URL') || define('APP_WWW_URL', URL_PROTOCOL . APP_WWW_HOSTNAME)
 /**
  * @var string REQUEST_HOSTNAME get application current request hostname https://www.example.com
 */
-defined('REQUEST_HOSTNAME') || define('REQUEST_HOSTNAME', URL_PROTOCOL . ($_SERVER['HTTP_HOST'] ?? APP_HOSTNAME));
+defined('REQUEST_HOSTNAME') || define('REQUEST_HOSTNAME', URL_PROTOCOL . isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : APP_HOSTNAME);
 
 /**
  * @var string REQUEST_URL get application current request url https://www.example.com/path/?query=
 */
-defined('REQUEST_URL') || define('REQUEST_URL', REQUEST_HOSTNAME . ($_SERVER['REQUEST_URI']??''));
+defined('REQUEST_URL') || define('REQUEST_URL', REQUEST_HOSTNAME . (isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : ''));
 
 /**
  * @var bool SHOW_DEBUG_BACKTRACE show debug tracer
