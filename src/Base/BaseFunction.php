@@ -15,21 +15,48 @@ use \Luminova\Functions\StringTrait;
 
 abstract class BaseFunction
 {
-    public const INT = "int";
-	public const CHAR = "char";
-	public const STR = "str";
-	public const SALT = "salt";
-	public const SID = "sid";
-	public const UUI = "uui";
-	public const PASS = "pass";
+    /**
+     * @var string RANDOM_INT
+    */
+    public const RANDOM_INT = "int";
+
+    /**
+     * @var string RANDOM_CHAR
+    */
+	public const RANDOM_CHAR = "char";
+
+    /**
+     * @var string RANDOM_STR
+    */
+	public const RANDOM_STR = "str";
+
+    /**
+     * @var string RANDOM_SALT
+    */
+	public const RANDOM_SALT = "salt";
+
+    /**
+     * @var string RANDOM_SID
+    */
+	public const RANDOM_SID = "sid";
+
+    /**
+     * @var string RANDOM_UUID
+    */
+	public const RANDOM_UUID = "uui";
+
+    /**
+     * @var string RANDOM_PASS
+    */
+	public const RANDOM_PASS = "pass";
     
     /**
-     * @class FunctionTrait
+     * @method FunctionTrait
      */
     use FunctionTrait;
 
     /**
-     * @class StringTrait
+     * @method StringTrait
      */
     use StringTrait;
 

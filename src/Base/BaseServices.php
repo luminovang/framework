@@ -57,7 +57,7 @@ abstract class BaseServices extends Services implements ServicesInterface
     /**
      * Get queued services 
      * 
-     * @return array 
+     * @return array<string, array>
     */
     public static function getServices(): array 
     {

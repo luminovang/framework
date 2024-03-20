@@ -10,30 +10,37 @@
 
 namespace Luminova\Base;
 
-use Luminova\Controllers\ViewController;
+use \Luminova\Base\BaseViewController;
 use \Luminova\Http\Request;
 use \Luminova\Security\InputValidator;
+use \Luminova\Library\Importer;
 use \App\Controllers\Application;
 
-abstract class BaseController  extends ViewController
+abstract class BaseController extends BaseViewController
 {
     /**
-     * HTTP request object 
-     * @var Request $request 
+      * HTTP request object 
+      * @var Request $request 
     */
     protected ?Request $request = null;
-
+ 
     /**
-     * Input validation object 
-     * @var InputValidator $validate
+      * Input validation object 
+      * @var InputValidator $validate
     */
     protected ?InputValidator $validate = null;
-
-     /**
+ 
+    /**
       * Application instance
       * @var Application $app 
-     */
+    */
     protected ?Application $app = null;
+ 
+    /**
+      * Importer instance
+      * @var Importer $library 
+    */
+    protected ?Importer $library = null;
  
     /**
      * Initialize controller instance
@@ -41,21 +48,13 @@ abstract class BaseController  extends ViewController
     */
     public function __construct()
     {
+        parent::__construct();
         $this->validate = $this->validate();
         $this->request = $this->request();
-        $this->app = $this->app();
-        $this->onCreate();
     }
 
     /**
-     * Uninitialized controller instance
-    */
-    public function __destruct() {
-        $this->onDestroy();
-    }
-
-    /**
-     * Magic method getter
+     * Property getter
      *
      * @param string $key property key
      * 
@@ -67,7 +66,6 @@ abstract class BaseController  extends ViewController
     }
     
      /**
-     * Magic method isset
      * Check if property is set
      *
      * @param string $key property key

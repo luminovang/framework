@@ -18,7 +18,7 @@ class Template
     public function __construct(string $dir = __DIR__) {
 
         // Initialize the template engine
-        $this->initialize(null, $dir);
+        $this->initialize($dir);
 
         // Set the project base path
         //$this->setBasePath($this->getBasePath());

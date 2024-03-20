@@ -14,7 +14,6 @@ use Luminova\Models\Model;
 
 abstract class BaseModel  extends Model
 {
-    
     /**
      * Magic method getter
      *

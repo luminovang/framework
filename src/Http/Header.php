@@ -54,7 +54,7 @@ class Header
      *
      * @return mixed|array|string|null $_SERVER
     */
-    public function getServerVariable(?string $name = null): mixed
+    public function getServer(?string $name = null): mixed
     {
         if ($name === null || $name === '') {
             return $_SERVER;
@@ -114,12 +114,9 @@ class Header
             default => 'text/html',
         };
 
-        if ($charset !== '') {
-            $contentType .= '; charset=' . $charset;
-        }
-
-        return $contentType;
+        return $contentType . ($charset !== '' ? '; charset=' . $charset : '');
     }
+
 
     /**
      * Get the request method for routing, considering overrides.
@@ -128,20 +125,26 @@ class Header
     */
     public static function getRoutingMethod(): string
     {
-        $method = self::getMethod();
+        $method = static::getMethod();
+
         if($method === '' && php_sapi_name() === 'cli'){
-            $method = 'CLI';
-        }else{
-            if($method === 'HEAD'){
-                ob_start();
-                $method = 'GET';
-            }elseif($method === 'POST'){
-                $headers = self::getHeaders();
-                if (isset($headers['X-HTTP-Method-Override']) && in_array($headers['X-HTTP-Method-Override'], ['PUT', 'DELETE', 'PATCH'])) {
-                    $method = $headers['X-HTTP-Method-Override'];
-                }
+            return 'CLI';
+        }
+  
+        if($method === 'HEAD'){
+            ob_start();
+
+            return 'GET';
+        }
+
+        if($method === 'POST'){
+            $headers = static::getHeaders();
+            if (isset($headers['X-HTTP-Method-Override']) && in_array($headers['X-HTTP-Method-Override'], ['PUT', 'DELETE', 'PATCH'])) {
+                $method = $headers['X-HTTP-Method-Override'];
             }
         }
+        
+        
         return $method;
     }
 
@@ -168,6 +171,7 @@ class Header
 				$headers = trim($rHeaders['Authorization']);
 			}
 		}
+        
 		return $headers;
 	}
 }

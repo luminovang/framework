@@ -56,7 +56,7 @@ abstract class BaseCommand extends Terminal
     abstract public function run(?array $params = []): int;
 
     /**
-     * Magic method getter
+     * Property getter
      *
      * @param string $key property key
      * 
@@ -68,7 +68,6 @@ abstract class BaseCommand extends Terminal
     }
     
      /**
-     * Magic method isset
      * Check if property is set
      *
      * @param string $key property key

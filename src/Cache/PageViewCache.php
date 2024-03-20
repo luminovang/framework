@@ -12,7 +12,7 @@ namespace Luminova\Cache;
 use \Luminova\Http\Header;
 use \Luminova\Application\Paths;
 
-class Optimizer
+class PageViewCache
 {
     /**
      * The directory where cached files will be stored.
@@ -29,9 +29,9 @@ class Optimizer
     private int $expiration;
 
     /**
-     * @var string $optimizerKey Cache key
+     * @var string $pageKey Cache key
      */
-    private string $optimizerKey;
+    private string $pageKey;
 
     /**
      * Class constructor.
@@ -46,7 +46,7 @@ class Optimizer
     }
 
     /**
-     * Set Optimizer expiry ttl 
+     * Set cache expiry ttl 
      * @param int $expiration The expiration time for cached files in seconds (default: 24 hours).
      * 
      * @return self 
@@ -59,7 +59,7 @@ class Optimizer
     }
 
     /**
-     * Set Optimizer directory
+     * Set cache directory
      * @param string $cacheDir The directory where cached files will be stored (default: 'cache').
      * 
      * @return self 
@@ -101,6 +101,7 @@ class Optimizer
     public function hasCache(): bool
     {
         $location = $this->getCacheLocation();
+
         return file_exists($location) && time() - filectime($location) < $this->expiration;
     }
 
@@ -112,6 +113,7 @@ class Optimizer
     public function getFileTime(): string
     {
         $timestamp = filectime($this->getCacheLocation());
+
         return date('D jS M Y H:i:s', $timestamp);
     }
 
@@ -157,27 +159,29 @@ class Optimizer
         return $bytesRead !== false;
     }
 
-
     /**
      * Save the content to the cache file.
      *
      * @param string $content The content to be saved to the cache file.
      * @param string $info Framework copyright information
+     * @param array|null $cacheMetadata Cache information
      *
      * @return bool True if saving was successful; false otherwise.
      */
-    public function saveCache(string $content, ?string $info = null, array $cacheData = []): bool
+    public function saveCache(string $content, ?string $info = null, ?array $cacheMetadata = null): bool
     {
         $location = $this->getCacheFilepath();
         Paths::createDirectory($location);     
+
         if($info !== null){
             $now = date('D jS M Y H:i:s', time());
             $content .= '<!--[File was cached on - '. $now . ', Using: ' . $info . ']-->';
         }
     
-        if($cacheData !== []){
-            write_content($this->getCacheLocation('json'), json_encode($cacheData));
+        if($cacheMetadata !== null && $cacheMetadata !== []){
+            write_content($this->getCacheLocation('json'), json_encode($cacheMetadata));
         }
+
         $bytesWritten = write_content($this->getCacheLocation(), $content);
         return $bytesWritten !== false;
     }
@@ -189,7 +193,7 @@ class Optimizer
      */
     public function getKey(): string
     {
-        return $this->optimizerKey;
+        return $this->pageKey;
     }
 
     /**
@@ -201,6 +205,6 @@ class Optimizer
      */
     public function setKey(string $key): void
     {
-        $this->optimizerKey = md5($key);
+        $this->pageKey = md5($key);
     }
 }

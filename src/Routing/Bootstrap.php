@@ -67,7 +67,8 @@ final class Bootstrap
      * @param string  $name  Bootstrap route name
      * @param ?callable $onError Bootstrap Callback function to execute
      */
-    public function __construct(string $name, ?callable $onError = null) {
+    public function __construct(string $name, ?callable $onError = null) 
+    {
         $this->name = $name;
         $this->onError = $onError;
 
@@ -99,7 +100,7 @@ final class Bootstrap
     /**
      * Get bootstrap registered custom instance
      * 
-     * @return array static::$instances 
+     * @return array<T, string> static::$instances 
     */
     public static function getInstances(): array 
     {

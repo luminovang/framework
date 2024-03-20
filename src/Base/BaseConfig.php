@@ -15,12 +15,12 @@ abstract class BaseConfig
     /**
     * @var string $version version name
     */
-    public static $version = '2.9.0';
+    public static $version = '2.9.1';
 
     /**
     * @var int $versionCode version code
     */
-    public static $versionCode = 290;
+    public static $versionCode = 291;
 
     /**
      * Minimum required php version
@@ -30,22 +30,23 @@ abstract class BaseConfig
 
     /**
      * Get the file version.
-     *
+     * 
+     * @deprecated Use global constant APP_FILE_VERSION instead
      * @return string
-     */
+    */
     public static function fileVersion(): string 
     {
-        return static::getString("app.file.version");
+        return APP_FILE_VERSION;
     }
 
     /**
      * Check if minification is enabled.
      *
      * @return int
-     */
+    */
     public static function shouldMinify(): int 
     {
-        return static::getInt("build.minify");
+        return static::getEnv('build.minify', 0, 'int');
     }
 
     /**
@@ -57,7 +58,7 @@ abstract class BaseConfig
      *      - [bool, int, float, double, nullable, string]
      * 
      * @return mixed
-     */
+    */
     public static function getEnv(string $key, mixed $default = null, ?string $return = null): mixed 
     {
         $value = env($key, $default);
@@ -78,20 +79,6 @@ abstract class BaseConfig
             default:
                 return $value;
         }
-    }
-
-    /**
-     * Get environment variable as integer value
-     *
-     * @param string $key variable name
-     * @param int $default fallback to default
-     * @return bool
-    */
-    public static function getInt(string $key, int $default = 0): int
-    {
-        $value = env($key, $default);
-
-        return (int) $value;
     }
 
     /**

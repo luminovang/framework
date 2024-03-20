@@ -37,7 +37,7 @@ abstract class BaseServers
     /**
      * Get the value of the protected property $databaseServers
      *
-     * @return array
+     * @return array<T, array>
      */
     public static function gerDatabaseServers(): array
     {

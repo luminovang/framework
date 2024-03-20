@@ -10,7 +10,7 @@
 namespace Luminova\Template;
 
 use \Luminova\Cache\Compress;
-use \Luminova\Cache\Optimizer;
+use \Luminova\Cache\PageViewCache;
 use \Luminova\Template\Smarty;
 use \Luminova\Base\BaseConfig;
 use \App\Controllers\Config\Template as TemplateConfig;
@@ -718,7 +718,7 @@ trait TemplateTrait
 
         if ($this->cacheKey !== null) {
             $folder = $this->getCacheFolder();;
-            $optimizer ??= new Optimizer();
+            $optimizer ??= new PageViewCache();
             $optimizer->setExpiry($this->cacheExpiry);
             $optimizer->setDirectory($folder);
             $optimizer->setKey($this->cacheKey);
@@ -761,7 +761,7 @@ trait TemplateTrait
         $finish = false;
 
         if ($shouldCache) {
-            $optimizer ??= new Optimizer();
+            $optimizer ??= new PageViewCache();
             $optimizer->setExpiry($this->cacheExpiry);
             $optimizer->setDirectory($this->optimizerFile);
             $optimizer->setKey(static::getViewUri());
@@ -826,7 +826,7 @@ trait TemplateTrait
         $self = (object) static::$publicClasses;
 
         if ($shouldCache) {
-            $optimizer ??= new Optimizer(env('page.cache.expiry'), $cacheFile);
+            $optimizer ??= new PageViewCache(env('page.cache.expiry'), $cacheFile);
             $optimizer->setKey(static::getViewUri());
 
             if ($optimizer->hasCache() && $optimizer->getCache()) {
@@ -882,7 +882,7 @@ trait TemplateTrait
         $compress->setCacheControl(env('cache.control', 'no-store'));
 
         // Set response compression level
-        $compressionLevel = BaseConfig::getInt('compression.level', 6);
+        $compressionLevel = BaseConfig::getEnv('compression.level', 6, 'int');
         $compress->setCompressionLevel($compressionLevel);
         $compress->setIgnoreCodeblock($ignore);
         $compress->allowCopyCodeblock($copy);
@@ -899,7 +899,6 @@ trait TemplateTrait
 
         return $compress;
     }
-
 
     /** 
     * Get output headers

@@ -15,7 +15,7 @@ use \Luminova\Template\TemplateTrait;
 
 abstract class BaseApplication
 {
-     /**
+    /**
      * Include TemplateTrait for template method
      * 
      * @method TemplateTrait
@@ -38,14 +38,9 @@ abstract class BaseApplication
 
     /**
      * Initialize the base application constructor
-     *
-     * @param string $dir The project root directory
      */
     public function __construct() 
     {
-        // Initialize onCreate method
-         $this->onCreate();
-
         // Initialize the router instance
         $this->router ??= new Router();
 
@@ -58,12 +53,12 @@ abstract class BaseApplication
         // Set the project base path
         $this->setProjectBase($this->router->getBase());
 
+        // Initialize onCreate method
+        $this->onCreate();
     }
 
     /**
      * Get the base application instance as a singleton.
-     *
-     * @param string $dir The project root directory
      * 
      * @return static
      */
@@ -113,7 +108,8 @@ abstract class BaseApplication
 
     /**
      * On create method 
-     * @overrideable
+     * 
+     * @overridable #[\Override]
      * 
      * @return void 
     */

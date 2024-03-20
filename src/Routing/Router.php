@@ -10,14 +10,14 @@
 namespace Luminova\Routing;
 
 use \Luminova\Http\Header;
-use \Luminova\Exceptions\ErrorException;
 use \Luminova\Routing\Bootstrap;
 use \ReflectionMethod;
 use \ReflectionException;
 use \ReflectionClass;
 use \Luminova\Command\Terminal;
-use \Luminova\Controllers\ViewController;
+use \Luminova\Base\BaseViewController;
 use \Luminova\Base\BaseApplication;
+use \Luminova\Exceptions\ErrorException;
 
 final class Router 
 {
@@ -995,7 +995,7 @@ final class Router
         
             if (!$checkClass->isInstantiable() || 
                 !($checkClass->isSubclassOf(Terminal::class) || 
-                    $checkClass->isSubclassOf(ViewController::class) ||
+                    $checkClass->isSubclassOf(BaseViewController::class) ||
                     $checkClass->isSubclassOf(BaseApplication::class))) {
                     ErrorException::throwException("Invalid class '$className'. Only subclasses of BaseCommand, BaseController, BaseViewController, or BaseApplication are allowed.");
 
