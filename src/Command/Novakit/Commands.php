@@ -9,12 +9,12 @@
 */
 namespace Luminova\Command\Novakit;
 
-class AvailableCommands 
+class Commands 
 {
     /**
-     * The found commands.
+     * List of available commands
      *
-     * @var array $commands
+     * @var array<string, mixed> $commands
     */
     protected static $commands = [
         'help' => [
@@ -40,6 +40,25 @@ class AvailableCommands
                 'create:class myClass -extend otherClass' => 'Create class specifying class other class to extend.',
                 'create:class myClass -extend otherClass -directory myPath' => 'Create class specifying class other class to extend and directory to class.',
                 'myControllerClass segment -name Peter -id 1' => 'Query your controller class, pass method as segment and parameter key followed by value.',
+            ]
+        ],
+        'build:project' => [
+            'name' => 'build:project',
+            'group' => 'System',
+            'usage' => 'php novakit build:project',
+            'description' => "Generates application build files for production",
+            'options' => [
+                '--type zip',
+                '--type build'
+            ]
+        ],
+        'generate:key' => [
+            'name' => 'generate:key',
+            'group' => 'System',
+            'usage' => 'php novakit generate:key',
+            'description' => "Generates application key",
+            'options' => [
+
             ]
         ],
         'create:controller' => [

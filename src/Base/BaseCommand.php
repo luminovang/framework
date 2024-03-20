@@ -47,13 +47,21 @@ abstract class BaseCommand extends Terminal
     }
 
     /**
-     * Run a command.
+     * Allow access to protected static methods
      *
-     * @param array<string, mixed> $params
+     * @param string $method method name to call
+     * @param array $arguments arguments to pass to method
      * 
-     * @return int status code 1 or 0
+     * @return mixed
     */
-    abstract public function run(?array $params = []): int;
+    public static function __callStatic(string $method, array $arguments): mixed
+    {
+        if (method_exists(static::class, $method)) {
+            return forward_static_call_array([static::class, $method], $arguments);
+        }
+
+        return null;
+    }
 
     /**
      * Property getter
@@ -78,4 +86,13 @@ abstract class BaseCommand extends Terminal
     {
         return isset($this->{$key});
     }
+
+    /**
+     * Run a command.
+     *
+     * @param array<string, mixed> $params
+     * 
+     * @return int status code 1 or 0
+    */
+    abstract public function run(?array $params = []): int;
 }

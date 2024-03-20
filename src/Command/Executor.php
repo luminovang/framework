@@ -15,41 +15,44 @@ use \Luminova\Command\Novakit\Help;
 use \Luminova\Command\Novakit\Lists;
 use \Luminova\Command\Novakit\Database;
 use \Luminova\Command\Novakit\Generators;
-use \Luminova\Command\Novakit\AvailableCommands;
-use \Closure;
+use \Luminova\Command\Novakit\System;
+use \Luminova\Command\Novakit\Builder;
+use \Luminova\Command\Novakit\Commands;
 
-class Commands
+class Executor
 {
     /**
      * Run console command
      * 
-     * @param Terminal $cli novakit cli instance
+     * @param Terminal $terminal novakit cli instance
      * @param array $options Command options
      * 
      * @return int
     */
-    public static function run(Terminal $cli, array $options): int
+    public static function call(Terminal $terminal, array $options): int
     {
-        $command = trim($cli->getCommand());
-        // Define a command mapping
-        $runCommand = match($command){
-            'help', '-help', '--help' => (new Help)->run($options),
-            'create:controller','create:view','create:class' => (new Generators)->run($options),
-            'list' => (new Lists)->run($options),
-            'db:create','db:update','db:insert','db:delete','db:drop','db:truncate','db:select' => (new Database)->run($options),
-            'server', 'serve' => (new Server)->run($options),
-            default => function() use($command): int {
-                Terminal::error('Unknown command ' . Terminal::color("'$command'", 'red') . ' not found', null);
-
-                return STATUS_ERROR;
-            }
+        $command = trim($terminal->getCommand());
+   
+        $findGroup = match($command){
+            'help', '-help', '--help' => Help::class,
+            'create:controller','create:view','create:class' => Generators::class,
+            'list' => Lists::class,
+            'db:create','db:update','db:insert','db:delete','db:drop','db:truncate','db:select' => Database::class,
+            'server', 'serve' => Server::class,
+            'generate:key' => System::class,
+            'build:project' => Builder::class,
+            default => null
         };
 
-        if ($runCommand instanceof Closure) {
-            return (int) $runCommand();
+        if ($findGroup === null) {
+            $terminal::error('Unknown command ' . $terminal::color("'$command'", 'red') . ' not found', null);
+
+            return STATUS_ERROR;
         } 
-            
-        return (int) $runCommand;
+        
+        $execute = new $findGroup();
+        
+        return (int) $execute->run($options);
     }
 
     /**
@@ -61,7 +64,7 @@ class Commands
     */
     public static function getCommand(string $command): array
     {
-        return AvailableCommands::get($command);
+        return Commands::get($command);
     }
 
     /**
@@ -73,7 +76,7 @@ class Commands
     */
     public static function has(string $command): bool
     {
-        return AvailableCommands::has($command) || $command === '-help';
+        return Commands::has($command) || $command === '-help';
     }
 
     /**

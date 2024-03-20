@@ -233,6 +233,56 @@ trait StringTrait
 	}
 
 	/**
+     * Generate a random string, private key, or public key.
+     *
+     * @param string $type The type of key to generate: 'random', 'private', or 'public'.
+     * @param array $options Additional options for key generation.
+     *      - For 'random' type: 'length' specifies the length of the random string.
+     *      - For 'private' type: 'private_key_bits' specifies the number of bits in the private key,
+     *        and 'private_key_type' specifies the type of the private key (e.g., OPENSSL_KEYTYPE_RSA).
+     *      - For 'public' type: 'private_key' is the private key string from which to derive the public key.
+     * 
+     * @return string|array|false The generated key(s), or false on failure.
+    */
+    public static function generate_key(string $type = 'random', array $options = []): array|string|false
+    {
+        if ($type === 'random') {
+            $length = $options['length'] ?? 50;
+            return bin2hex(random_bytes($length / 2));
+        }
+
+        if ($type === 'private') {
+            $config = [
+                'private_key_bits' => $options['private_key_bits'] ?? 2048,
+                'private_key_type' => $options['private_key_type'] ?? OPENSSL_KEYTYPE_RSA,
+            ];
+            
+            $private = openssl_pkey_new($config);
+            openssl_pkey_export($private, $privateKey);
+
+            return $privateKey;
+        }
+
+        if ($type === 'public') {
+            $privateKey = $options['private_key'] ?? static::generate_key('private', $options);
+            
+            $private = openssl_pkey_get_private($privateKey);
+            $public = openssl_pkey_get_details($private)['key'];
+
+            if ($public === false) {
+                return false; 
+            }
+
+            return [
+                'private_key' => $privateKey,
+                'public_key' => $public
+            ];
+        }
+
+        return false;
+    }
+
+	/**
 	 * Converts a PHP timestamp to a social media-style time format (e.g., "2 hours ago").
 	 *
 	 * @param string|int $time The timestamp to convert.

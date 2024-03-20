@@ -457,7 +457,7 @@ final class Router
     {
         $this->method = Header::getRoutingMethod();
        
-        $status = ($this->method === 'CLI' ? $this->runAsCli() : $this->runAsHttp());
+        $status = ($this->method === 'CLI' ? $this->runAsCommand() : $this->runAsHttp());
        
         if ($status && $callback && is_callable($callback)) {
             $callback();
@@ -714,7 +714,7 @@ final class Router
     /**
      * Get terminal instance 
     */
-    private static function cli(): Terminal
+    private static function terminal(): Terminal
     {
         return static::$terminal ??= new Terminal();
     }
@@ -751,7 +751,7 @@ final class Router
      *
      * @return bool
     */
-    private function runAsCli(): bool
+    private function runAsCommand(): bool
     {
         if (isset($this->controllers['cli_middleware'][$this->method])) {
             if(!$this->handleCommand($this->controllers['cli_middleware'][$this->method])){
@@ -768,7 +768,7 @@ final class Router
         }
 
         if (!$result) {
-            static::cli()->error('Unknown command ' . static::cli()->color("'{$this->commandName}'", 'red') . ' not found', null);
+            static::terminal()->error('Unknown command ' . static::terminal()->color("'{$this->commandName}'", 'red') . ' not found', null);
         }
 
         return $result;
@@ -853,11 +853,11 @@ final class Router
     private function handleCommand(array $routes): bool
     {
         $error = false;
-        $commands = static::cli()->parseCommands($_SERVER['argv'] ?? []);
+        $commands = static::terminal()->parseCommands($_SERVER['argv'] ?? []);
 
         foreach ($routes as $route) {
             if ($route['controller']) {
-                $queries = static::cli()->getRequestCommands();
+                $queries = static::terminal()->getRequestCommands();
                 $controllerView = trim($queries['view'], '/');
                 $isMatch = static::capturePattern($route['pattern'], $queries['view'], $matches);
 
@@ -877,7 +877,7 @@ final class Router
                     break;
                 }
             }else {
-                if(static::cli()->hasCommand($this->commandName, $commands)){
+                if(static::terminal()->hasCommand($this->commandName, $commands)){
                    $error = true;
                    break;
                 }
@@ -1068,7 +1068,7 @@ final class Router
             if($code === STATUS_SUCCESS) {
                 if (array_key_exists('help', $commands['options'])) {
                     $result = true;
-                    static::cli()->printHelp($commands[$commandId]);
+                    static::terminal()->printHelp($commands[$commandId]);
                 }else{
                     $result = $method->invokeArgs($newClass, $arguments);
                 }

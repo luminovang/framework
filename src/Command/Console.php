@@ -10,18 +10,20 @@
 namespace Luminova\Command;
 
 use \Luminova\Command\Terminal;
-use \Luminova\Command\Commands;
+use \Luminova\Command\Executor;
 
 class Console 
 {
     /**
      * Static terminal instance
+     * 
      * @var Terminal $instance 
     */
-    private static $instance = null;
+    private static ?Terminal $instance = null;
 
     /**
      * Is header suppressed?
+     * 
      * @var bool $noHeader 
     */
     private bool $noHeader = false;
@@ -43,10 +45,10 @@ class Console
     */
     public static function getTerminal(): Terminal
     {
-        if(self::$instance === null){
-            self::$instance = new Terminal();
+        if(static::$instance === null){
+            static::$instance = new Terminal();
         }
-        return self::$instance;
+        return static::$instance;
     }
 
     /**
@@ -57,23 +59,27 @@ class Console
     */
     public function run(array $commands): void
     {
-        $cli = static::getTerminal();
-        $commands = $cli::parseCommands($commands);
-        $cli::registerCommands($commands, false);
-        $command = $cli::getCommand();
+        $terminal = static::getTerminal();
+
+        $commands = $terminal::parseCommands($commands);
+        $terminal::explain($commands);
+
+        $command = $terminal::getCommand();
+     
         if (!$this->noHeader) {
-            $cli::header(Terminal::$version);
+            $terminal::header($terminal::$version);
         }
 
         if('--version' === $command){
-            $cli::writeln('Novakit Command Line Tool');
-            $cli::writeln('version: ' . Terminal::$version, 'green');
+            $terminal::writeln('Novakit Command Line Tool');
+            $terminal::writeln('version: ' . $terminal::$version, 'green');
+
             exit(STATUS_SUCCESS);
         }
 
-        $params  = array_merge($cli::getArguments(), $cli::getQueries());
+        $params  = array_merge($terminal::getArguments(), $terminal::getQueries());
         
-        $result = Commands::run($cli, $params);
+        $result = Executor::call($terminal, $params);
 
         exit($result);
     }

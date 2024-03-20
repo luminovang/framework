@@ -9,7 +9,6 @@
 */
 namespace Luminova\Command\Novakit;
 
-use \Luminova\Command\Terminal;
 use \Luminova\Base\BaseCommand;
 
 class Server extends BaseCommand 
@@ -61,13 +60,13 @@ class Server extends BaseCommand
         $version = self::$version;
          // Set the Front Controller path as Document Root.
         $docRoot = escapeshellarg(PUBLIC_PATH);
-        Terminal::writeln('NovaKit/' . $version. ' (Luminova) PHP/' . PHP_VERSION. ' (Development Server)');
-        Terminal::newLine();
-        Terminal::writeln('Listening on http://' . $host . ':' . $port, 'green');
-        Terminal::writeln('Document root is ' . $docRoot, 'green');
-        Terminal::newLine();
-        Terminal::writeln('Press Ctrl-C to stop.');
-        Terminal::newLine();
+        $this->writeln('NovaKit/' . $version. ' (Luminova) PHP/' . PHP_VERSION. ' (Development Server)');
+        $this->newLine();
+        $this->writeln('Listening on http://' . $host . ':' . $port, 'green');
+        $this->writeln('Document root is ' . $docRoot, 'green');
+        $this->newLine();
+        $this->writeln('Press Ctrl-C to stop.');
+        $this->newLine();
 
         // Mimic Apache's mod_rewrite functionality with user settings.
         $rewrite = escapeshellarg(__DIR__ . '/mod_rewrite.php');

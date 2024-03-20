@@ -10,7 +10,7 @@
 namespace Luminova\Command;
 
 use \Luminova\Command\Colors;
-use \Luminova\Command\Commands;
+use \Luminova\Command\Executor;
 use \Luminova\Command\TextUtils;
 use \Luminova\Security\InputValidator;
 use \Luminova\Exceptions\InvalidArgumentException;
@@ -20,12 +20,12 @@ class Terminal
     /**
      * @var string $version command line tool version
     */
-    public static string $version = '2.4.0';
+    public static string $version = '2.5.0';
 
     /**
      * @var int $version command line tool version code
     */
-    public static int $versionCode = 240;
+    public static int $versionCode = 250;
 
     /**
      * Height of terminal visible window
@@ -103,7 +103,7 @@ class Terminal
      *
      * @return void
      */
-    public static function waiting(int $seconds, bool $countdown = false): void
+    protected static function waiting(int $seconds, bool $countdown = false): void
     {
         if ($seconds <= 0) {
             if (!$countdown) {
@@ -142,7 +142,7 @@ class Terminal
      *
      * @return float|int
     */
-    public static function progress(int|bool $progressLine = 1, ?int $progressCount = 10, bool $beep = true): int|float
+    protected static function progress(int|bool $progressLine = 1, ?int $progressCount = 10, bool $beep = true): int|float
     {
         if ($progressLine === false || $progressCount === null) {
             if($beep){
@@ -175,7 +175,7 @@ class Terminal
         return $percent;
     }
 
-     /**
+    /**
      * Displays a progress bar on the CLI with a callback functions
      * Progress shouldn't be called in a loop
      * You can pass your function to execute in $stepCallback callback function
@@ -193,7 +193,7 @@ class Terminal
      *
      * @return void
     */
-    public static function progressWatch(int $progressCount, ?callable $onFinish = null, ?callable $onProgress = null, bool $beep = true): void 
+    protected static function progressWatch(int $progressCount, ?callable $onFinish = null, ?callable $onProgress = null, bool $beep = true): void 
     {
         $progress = 0;
     
@@ -221,15 +221,14 @@ class Terminal
     /**
      * Beeps a certain number of times.
      *
-     * Examples
-     * 
+     * Usages
      * @example $this->beeps(1) Beep once 
      * 
      * @param int $num The number of times to beep
      *
      * @return void
     */
-    public static function beeps(int $num = 1): void
+    protected static function beeps(int $num = 1): void
     {
         echo str_repeat("\x07", $num);
     }
@@ -252,7 +251,7 @@ class Terminal
      *
      * @return string The user input
     */
-    public static function prompt(string $message, array $options = [], string $validations = null, bool $silent = false): string
+    protected static function prompt(string $message, array $options = [], string $validations = null, bool $silent = false): string
     {
         $default = '';
         $placeholder = '';
@@ -308,9 +307,8 @@ class Terminal
      *
      * @return array<string|int, mixed> $options The selected array keys and values
      * @throws InvalidArgumentException
-     */
-  
-    public static function chooser(string $text, array $options, bool $required = false): array
+    */
+    protected static function chooser(string $text, array $options, bool $required = false): array
     {
         if ($options == []) {
             throw new InvalidArgumentException('No options to select from were provided');
@@ -354,7 +352,6 @@ class Terminal
         $input = static::getInputValues($inputArray, $optionValues);
         return $input;
     }
-
 
     /**
      * Return user selected options
@@ -424,7 +421,7 @@ class Terminal
      * 
      * @return int static::$width or fallback to default
     */
-    public static function getWidth(int $default = 80): int
+    protected static function getWidth(int $default = 80): int
     {
         if (static::$width === null) {
             static::getVisibleWindow();
@@ -438,7 +435,7 @@ class Terminal
      * 
      * @return int static::$height or fallback to default
     */
-    public static function getHeight(int $default = 24): int
+    protected static function getHeight(int $default = 24): int
     {
         if (static::$height === null) {
             static::getVisibleWindow();
@@ -452,7 +449,7 @@ class Terminal
      *
      * @return void
     */
-    public static function getVisibleWindow(): void
+    protected static function getVisibleWindow(): void
     {
         if (static::$height !== null && static::$width !== null) {
             return;
@@ -659,7 +656,6 @@ class Terminal
         return Colors::apply($text, $format, $foreground, $background);
     }
 
-
     /**
      * Create a new line 
      *
@@ -703,16 +699,33 @@ class Terminal
     */
     public static function registerCommands(array $values, bool $run = true): int
     {
-        static::$commandsOptions = $values;
+        static::explain($values);
+
         if($run){
             $argument = static::getArgument(1);
             if($argument === 'help'){
-                return 1;
-            }elseif($argument === 'list'){
-                return 1;
+                return STATUS_ERROR;
+            }
+            
+            if($argument === 'list'){
+                return STATUS_ERROR;
             }
         }
-        return 0;
+
+        return STATUS_SUCCESS;
+    }
+
+    /**
+     * Register command line queries to static::$options 
+     * To make available using getOptions() etc
+     * 
+     * @param array $values arguments 
+     * 
+     * @return void
+    */
+    public static function explain(array $values): void
+    {
+        static::$commandsOptions = $values;
     }
 
     /**
@@ -818,6 +831,7 @@ class Terminal
         if(isset(static::$commandsOptions['arguments'][$index - 1])){
             return static::$commandsOptions['arguments'][$index - 1];
         }
+
         return null;
     }
 
@@ -854,19 +868,21 @@ class Terminal
 
     /**
      * Get options value 
+     * If option flag is passed with an empty value true will be return else false
      * 
      * @param string $name
      * 
-     * @return null|string|int
+     * @return null|string|int|bool
      */
     public static function getOption(string $name): mixed
     {
         $options = static::getOptions();
+
         if (array_key_exists($name, $options)) {
-            return $options[$name] ?? null;
+            return $options[$name] ?? true;
         }
     
-        return null;
+        return false;
     }
 
     /**
@@ -975,10 +991,13 @@ class Terminal
     */
     public static function hasCommand(string $command, array $options): bool
     {
-        if(Commands::has($command)){
-            $terminal = new static();
+        static $terminal = null;
+        if(Executor::has($command)){
+            $terminal ??= new static();
+            
             $terminal->registerCommands($options);
-            Commands::run($terminal, $options);
+            Executor::call($terminal, $options);
+
             return true;
         }
 

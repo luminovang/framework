@@ -20,3 +20,5 @@ parameters:
 
 services:
 	- Luminova\Debugger\PHPStanRules
+	tags:
+		- phpstan.deprecations.deprecatedScopeResolver

@@ -9,10 +9,9 @@
 */
 namespace Luminova\Command\Novakit;
 
-use \Luminova\Command\Terminal;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Command\TextUtils;
-use \Luminova\Command\Novakit\AvailableCommands;
+use \Luminova\Command\Novakit\Commands;
 
 class Lists extends BaseCommand 
 {
@@ -42,25 +41,26 @@ class Lists extends BaseCommand
     */
     public function run(?array $params = []): int
     {
-        self::listCommands();
+        static::listCommands();
 
         return STATUS_SUCCESS;
     }
 
     public static function listCommands(): void 
     {
-        $commands = AvailableCommands::getCommands();
+        $commands = Commands::getCommands();
         $groupedCommands = [];
+        
         foreach ($commands as $line) {
             $groupedCommands[$line['group']][] = $line;
         }
 
         foreach ($groupedCommands as $group => $list) {
-            Terminal::writeln($group);
+            self::writeln($group);
             foreach ($list as $command) {
-                Terminal::writeln('   ' . Terminal::color(TextUtils::rightPad($command['name'], 25), 'green') . $command['description']);
+                self::writeln('   ' . self::color(TextUtils::rightPad($command['name'], 25), 'green') . $command['description']);
             }
-            Terminal::newLine();
+            self::newLine();
         }
     }
 }

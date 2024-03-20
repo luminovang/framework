@@ -9,9 +9,7 @@
 */
 namespace Luminova\Command\Novakit;
 
-use \Luminova\Command\Terminal;
 use \Luminova\Base\BaseCommand;
-use \Closure;
 use \Exception;
 
 class Generators extends BaseCommand 
@@ -52,28 +50,24 @@ class Generators extends BaseCommand
     */
     public function run(?array $options = []): int
     {
-        Terminal::registerCommands($options, false);
+        $this->explain($options);
 
-        $command = trim(Terminal::getCommand());
-        $name = Terminal::getArgument(1);
-        $extend = Terminal::getOption('extend');
-        $implement = Terminal::getOption('implement');
-
-        //if('-help' === $name || '--help' === $name){}
+        $command = trim($this->getCommand());
+        $name = $this->getArgument(1);
+        $extend = $this->getOption('extend');
+        $implement = $this->getOption('implement');
 
         $runCommand = match($command){
             'create:controller' => $this->createController($name),
             'create:view' => $this->createView($name),
             'create:class' => $this->createClass($name, $extend, $implement),
-            default => function(): int {
-                echo "Handle Unknown command\n";
-
-                return STATUS_ERROR;
-            }
+            default => 'unknown'
         };
 
-        if ($runCommand instanceof Closure) {
-            return (int) $runCommand();
+        if ($runCommand === 'unknown') {
+            $this->error('Unknown command ' . $this->color("'$command'", 'red') . ' not found', null);
+
+            return STATUS_ERROR;
         } 
             
         return (int) $runCommand;
@@ -91,9 +85,9 @@ class Generators extends BaseCommand
         $path = "/app/Controllers/{$name}.php";
         
         if($this->saveFile($classContent, $path)){
-            Terminal::writeln("Class created: {$path}", 'green');
+            $this->writeln("Class created: {$path}", 'green');
         }else{
-            Terminal::writeln("Unable to create class {$name}", 'red');
+            $this->writeln("Unable to create class {$name}", 'red');
         }
     }
 
@@ -107,13 +101,13 @@ class Generators extends BaseCommand
         $path = "/resources/views/{$name}.php";
         
         if($this->saveFile($classContent, $path)){
-            Terminal::writeln("View created: {$path}", 'green');
+            $this->writeln("View created: {$path}", 'green');
         }else{
-            Terminal::writeln("Unable to create view {$name}", 'red');
+            $this->writeln("Unable to create view {$name}", 'red');
         }
     }
 
-    private function createClass(string $name, ?string $extend = null, ?string $implement = null): void 
+    private function createClass(string $name, bool|null|string $extend = null, bool|null|string $implement = null): void 
     {
         $use = $extend ? "use \\$extend;\n" : '';
         $use .= $implement ? "use \\$implement;" : '';
@@ -128,9 +122,9 @@ class Generators extends BaseCommand
         $path = "/app/Controllers/Utils/{$name}.php";
         
         if($this->saveFile($classContent, $path)){
-            Terminal::writeln("Class created: {$path}", 'green');
+            $this->writeln("Class created: {$path}", 'green');
         }else{
-            Terminal::writeln("Unable to create class {$name}", 'red');
+            $this->writeln("Unable to create class {$name}", 'red');
         }
     }
 
@@ -140,7 +134,7 @@ class Generators extends BaseCommand
         try {
             return write_content($filepath, $content);
         } catch(Exception $e) {
-            Terminal::writeln($e->getMessage(), 'red');
+            $this->writeln($e->getMessage(), 'red');
             return false;
         }
     }

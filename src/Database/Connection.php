@@ -10,7 +10,7 @@
 
 namespace Luminova\Database;
 
-use \Luminova\Database\Drivers\MySqlDriver;
+use \Luminova\Database\Drivers\MySqliDriver;
 use \Luminova\Database\Drivers\PdoDriver;
 use \Luminova\Config\Database;
 use \App\Controllers\Config\Servers;
@@ -22,9 +22,9 @@ class Connection
 {
   /** 
     * Database connection instance 
-    * @var MySqlDriver|PdoDriver|null $db
+    * @var MySqliDriver|PdoDriver|null $db
   */
-  protected MySqlDriver|PdoDriver|null $db = null;
+  protected MySqliDriver|PdoDriver|null $db = null;
 
   /** 
    * @var ?Connection $instance
@@ -70,7 +70,7 @@ class Connection
     * Check if the total number of connections in the pool has reached the maximum limit
     * Else reuse an existing connection from the pool
     *
-    * @return object Database driver instance (either MySqlDriver or PdoDriver).
+    * @return object Database driver instance (either MySqliDriver or PdoDriver).
     * @throws DatabaseException
     * @throws DatabaseLimitException
     * @throws InvalidArgumentException
@@ -122,11 +122,11 @@ class Connection
     static $connection = null;
     
     if ($connection === null) {
-        $driver = env("database.driver", 'PDO');
+        $driver = strtolower(env('database.connection', 'PDO'));
         $config ??= static::getDatabaseConfig();
 
         $connection = match ($driver) {
-            'MYSQLI' => new MySqlDriver($config),
+            'mysqli' => new MySqliDriver($config),
             default => new PdoDriver($config)
         };
 

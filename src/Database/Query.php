@@ -147,7 +147,7 @@ class Query extends Connection
     /**
      * Get database connection
      * 
-     * @return MySqlDriver|PdoDriver|null 
+     * @return MySqliDriver|PdoDriver|null 
     */
     public function getConn(): ?object
     {

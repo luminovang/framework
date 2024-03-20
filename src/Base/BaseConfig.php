@@ -15,12 +15,12 @@ abstract class BaseConfig
     /**
     * @var string $version version name
     */
-    public static $version = '2.9.2';
+    public static $version = '2.9.3';
 
     /**
     * @var int $versionCode version code
     */
-    public static $versionCode = 292;
+    public static $versionCode = 293;
 
     /**
      * Minimum required php version

@@ -9,7 +9,6 @@
 */
 namespace Luminova\Command\Novakit;
 
-use \Luminova\Command\Terminal;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Command\Novakit\AvailableCommands;
 
@@ -28,23 +27,19 @@ class Help extends BaseCommand
     /**
      * Options
      *
-     * @var array<string, string>
+     * @var array<string, string> $options
     */
-    protected array $options = [
-        '--php'  => 'The PHP Binary [default: "PHP_BINARY"]',
-        '--host' => 'The HTTP Host [default: "localhost"]',
-        '--port' => 'The HTTP Host Port [default: "8080"]',
-    ];
+    protected array $options = [];
 
     /**
-     * @param array $params terminal options
+     * @param array $options command options
      * 
      * @return int 
     */
-    public function run(?array $params = []): int
+    public function run(?array $options = []): int
     {
 
-        Terminal::printHelp(AvailableCommands::get('help'));
+        $this->printHelp(AvailableCommands::get('help'));
     
         return STATUS_SUCCESS;
     }

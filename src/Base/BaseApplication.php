@@ -18,7 +18,7 @@ abstract class BaseApplication
     /**
      * Include TemplateTrait for template method
      * 
-     * @method TemplateTrait
+     * @uses TemplateTrait
     */
     use TemplateTrait;
 

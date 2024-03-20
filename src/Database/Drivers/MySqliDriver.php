@@ -22,7 +22,7 @@ use \mysqli_sql_exception;
 use \TypeError;
 use \Exception;
 
-class MySqlDriver implements DriversInterface 
+class MySqliDriver implements DriversInterface 
 {
     /**
      * Mysqli Database connection instance
@@ -109,7 +109,7 @@ class MySqlDriver implements DriversInterface
      * Sets the debug mode.
      *
      * @param bool $debug The debug mode.
-     * @return self The current instance of the MySqlDriver class.
+     * @return self The current instance of the MySqliDriver class.
      */
     public function setDebug(bool $debug): self 
     {
@@ -230,7 +230,7 @@ class MySqlDriver implements DriversInterface
      *
      * @param string $query The SQL query.
      *
-     * @return self The current instance of the MySqlDriver class.
+     * @return self The current instance of the MySqliDriver class.
      */
     public function prepare(string $query): self 
     {
@@ -247,7 +247,7 @@ class MySqlDriver implements DriversInterface
      *
      * @param string $query The SQL query.
      *
-     * @return self The current instance of the MySqlDriver class.
+     * @return self The current instance of the MySqliDriver class.
     */
     public function query(string $query): self 
     {
@@ -335,7 +335,7 @@ class MySqlDriver implements DriversInterface
      * @param mixed       $value The parameter value.
      * @param int|null    $type  The parameter type.
      *
-     * @return self The current instance of the MySqlDriver class.
+     * @return self The current instance of the MySqliDriver class.
      */
     public function bind(string $param, mixed $value, mixed $type = null): self 
     {
@@ -351,7 +351,7 @@ class MySqlDriver implements DriversInterface
      * @param mixed       $value The parameter value.
      * @param int|null    $type  The parameter type.
      *
-     * @return self The current instance of the MySqlDriver class.
+     * @return self The current instance of the MySqliDriver class.
      */
     public function param(string $param, mixed $value, mixed $type = null): self 
     {
@@ -365,7 +365,7 @@ class MySqlDriver implements DriversInterface
      *
      * @param array $values An associative array of parameter names and their corresponding values.
      * 
-     * @return self The current instance of the MySqlDriver class.
+     * @return self The current instance of the MySqliDriver class.
      */
     public function bindValues(array $values): self 
     {
