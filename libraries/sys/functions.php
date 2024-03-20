@@ -145,15 +145,15 @@ if(!function_exists('ip_address')){
     */
     function ip_address(bool $ip_info = false, array $options = []): string|object|null
     {
-        $ip = Functions::ip()->get();
+        $ip = Functions::ip();
 
         if($ip_info){
-            $info = Functions::ip()->getInfo($ip, $options);
+            $info = $ip->getInfo(null, $options);
 
             return $info;
         }
 
-       return $ip;
+       return $ip->get();
     }
 }
 
