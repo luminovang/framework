@@ -59,9 +59,9 @@ trait TemplateTrait
     /** 
      * Holds the view template optimize file directory path
      * 
-     * @var string $optimizerFolder 
+     * @var string $pageCacheFolder 
     */
-    private string $optimizerFolder = "writeable/caches/optimize";
+    private string $pageCacheFolder = "writeable/caches/optimize";
 
     /** 
      * Holds template assets folder
@@ -200,8 +200,8 @@ trait TemplateTrait
     public function initialize(string $dir =__DIR__): void
     {
         $this->baseTemplateDir = root($dir);
-        $this->templateEngine = TemplateConfig::ENGINE;
-        $this->optimizerFolder = TemplateConfig::$optimizerFolder;
+        $this->templateEngine = TemplateConfig::$templateEngine;
+        $this->pageCacheFolder = TemplateConfig::$pageCacheFolder;
         $this->viewIsolation = TemplateConfig::$viewIsolation;
         $this->cacheExpiry = env('page.cache.expiry');
         static::$minifyContent = env('enable.page.minification', false);
@@ -543,7 +543,7 @@ trait TemplateTrait
         }
         $count = 0;
         foreach ($attributes as $name => $value) {
-            $key = TemplateConfig::$variablePrefix ? "_{$name}" : $name;
+            $key = TemplateConfig::$useVariablePrefix ? "_{$name}" : $name;
 
             if (!is_string($key) && $key === '_' || $key === '') {
                 throw new RuntimeException("Invalid option key: '{$name}'. View option key must be non-empty strings.");
@@ -599,7 +599,7 @@ trait TemplateTrait
     */
     private function getCacheFolder(): string
     {
-        return $this->root() . DIRECTORY_SEPARATOR . "{$this->optimizerFolder}" . DIRECTORY_SEPARATOR;
+        return $this->root() . DIRECTORY_SEPARATOR . "{$this->pageCacheFolder}" . DIRECTORY_SEPARATOR;
     }
 
     /** 
