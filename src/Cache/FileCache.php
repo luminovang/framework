@@ -118,8 +118,7 @@ class FileCache
      */
     private static $instance = null;
 
-
-     /**
+    /**
      * Constructor.
      * 
      * @param string $filename cache storage filename to hash
@@ -511,9 +510,8 @@ class FileCache
 
         return false;
     }
-    
 
-     /**
+    /**
      * Deletes data associated array of keys
      * 
      * @param iterable $array cache keys
@@ -691,7 +689,6 @@ class FileCache
 
         return substr($str, $position + 1);
     }
-
 
     /**
      * Wipes clean the entire cache's.

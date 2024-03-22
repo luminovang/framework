@@ -103,6 +103,60 @@ final class Router
     }
 
     /**
+     * Middleware route, executes the callback function before other routing will be executed
+     * For web or cli 
+     *  
+     * @param string  $methods  Allowed methods, can be serrated with | pipe symbol
+     * @param string  $pattern A route pattern or template view name
+     * @param callable|string $callback Callback function to execute
+     * 
+     * @return void
+    */
+    public function middleware(string $methods, string $pattern, callable|string $callback): void
+    {
+        if(is_command()){
+            $this->authenticate($pattern, $callback);
+            return;
+        }
+
+        if ($methods === '') {
+            return;
+        }
+
+        $this->addMiddleWare('routes_middleware', $methods, $pattern, $callback, true);
+    }
+
+    /**
+     * Capture front controller command middleware security and execute callback
+     *
+     * @param callable|string $pattern Allowed command pattern, script name or callback function
+     * @param callable|string $callback Callback function to execute
+     * @param array $options Optional options
+     * 
+     * @return void
+    */
+    public function authenticate(callable|string $pattern, callable|string $callback = null, array $options = []): void
+    {
+        if(is_callable($pattern)){
+            $callback = $pattern;
+            $parsedPattern = 'before';
+            $isController = false;
+        }else{
+            $build_pattern = static::parsePatternValue($pattern);
+            $isController = ($build_pattern !== false);
+            $parsedPattern = $isController ? $build_pattern : trim($pattern, '/');
+        }
+    
+        $this->controllers['cli_middleware']["CLI"][] = [
+            'callback' => $callback,
+            'pattern' => $parsedPattern,
+            'options' => $options,
+            'controller' => $isController,
+            'middleware' => true
+        ];
+    }
+
+    /**
      * After middleware route, executes the callback function after request was executed successfully.
      *
      * @param string  $methods  Allowed methods, can be serrated with | pipe symbol
@@ -164,36 +218,6 @@ final class Router
                 'middleware' => false
             ];
         }
-    }
-
-    /**
-     * Capture front controller command middleware security and execute callback
-     *
-     * @param callable|string $pattern Allowed command pattern, script name or callback function
-     * @param callable|string $callback Callback function to execute
-     * @param array $options Optional options
-     * 
-     * @return void
-    */
-    public function authenticate(callable|string $pattern, callable|string $callback = null, array $options = []): void
-    {
-        if(is_callable($pattern)){
-            $callback = $pattern;
-            $parsedPattern = 'before';
-            $isController = false;
-        }else{
-            $build_pattern = static::parsePatternValue($pattern);
-            $isController = ($build_pattern !== false);
-            $parsedPattern = $isController ? $build_pattern : trim($pattern, '/');
-        }
-    
-        $this->controllers['cli_middleware']["CLI"][] = [
-            'callback' => $callback,
-            'pattern' => $parsedPattern,
-            'options' => $options,
-            'controller' => $isController,
-            'middleware' => true
-        ];
     }
 
     /**
@@ -524,17 +548,18 @@ final class Router
      * 
      * @param string $header Header Title of error message
      * @param string|null Optional message body to display 
-     * @param int $status Status code
+     * @param int $status http status code
      * 
      * @return void
      * 
     */
     private static function printError(string $header, ?string $message = null, int $status = 404): void 
     {
-        header(SERVER_PROTOCOL . $header, true, $status);
+        http_response_code($status);
+        header(SERVER_PROTOCOL . $header);
 
         if($message){
-            echo $message;
+            echo "<html><body><h1>{$header}</h1><p>{$message}</p></body></html>";
         }
 
         exit(STATUS_ERROR);
@@ -658,6 +683,7 @@ final class Router
     public function getSecondToLastView(): string 
     {
         $segments = $this->getViews();
+
         if (count($segments) > 1) {
             $secondToLastSegment = $segments[count($segments) - 2];
 
@@ -692,10 +718,12 @@ final class Router
     {
         if (is_file(APP_ROOT . "/routes/{$context}.php")) {
             require_once APP_ROOT . "/routes/{$context}.php";
-        } else {
-            $body = 'The application environment is not configured correctly. The route context "' . $context . '" may be missing or incorrect.';
-            static::printError('503 Service Unavailable', $body, 503);
-        }
+            return;
+        } 
+
+        $body = 'The application environment is not configured correctly. The route context "' . $context . '" may be missing or incorrect.';
+        static::printError('500 Internal Server Error', $body, 500);
+        logger('critical', 'The view context "' . $context . '" is missing create view context to register your application routes /routes/{$context}.php');
     }
 
     /**
@@ -745,7 +773,7 @@ final class Router
         }
     }
 
-     /**
+    /**
      * Run the CLI router and application: 
      * Loop all defined CLI routes
      *

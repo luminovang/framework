@@ -103,7 +103,7 @@ class Services
         }
 
         $shared = true; 
-        if (is_bool(end($arguments))) {
+        if (isset($arguments[count($arguments) - 1]) && is_bool($arguments[count($arguments) - 1])) {
             $shared = array_pop($arguments);
         }
 
@@ -124,7 +124,7 @@ class Services
         }
 
         $serialize = false; 
-        if (is_bool(end($arguments))) {
+        if (isset($arguments[count($arguments) - 1]) && is_bool($arguments[count($arguments) - 1])) {
             $serialize = array_pop($arguments);
         }
 

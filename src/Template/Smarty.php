@@ -181,7 +181,7 @@ class Smarty
     private function makeDir(array $dirs): void 
     {
         $notFounds = array_filter($dirs, function ($dir) {
-            return !file_exists($this->root . $dir);
+            return !file_exists($this->root . $dir); 
         });
 
         foreach ($notFounds as $dir) {

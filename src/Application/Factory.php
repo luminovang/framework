@@ -17,6 +17,7 @@ use \Luminova\Library\Importer;
 use \Luminova\Languages\Translator;
 use \Luminova\Application\Paths;
 use \App\Controllers\Config\Services;
+use \Luminova\Template\ViewResponse;
 use \Luminova\Logger\NovaLogger;
 use \Luminova\Security\InputValidator;
 use \Luminova\Exceptions\RuntimeException;
@@ -37,6 +38,7 @@ use \ReflectionMethod;
  * @method static Paths               paths($shared = true)                                 @return Paths
  * @method static InputValidator      validate($shared = true)                              @return InputValidator
  * @method static Services            services($shared = true)                              @return Services
+ * @method static ViewResponse        response(int $status, $shared = true)                 @return ViewResponse
  */
 
 class Factory 
@@ -58,15 +60,13 @@ class Factory
     /**
      * Get the fully qualified class name of the factory based on the provided context.
      *
-     * @param string $context The context or name of the factory.
+     * @param string $aliasis The class name aliasis
      * 
-     * @return string|null The fully qualified class name of the factory, or null if not found.
-     */
-    private static function get(string $context): ?string
+     * @return string|null The fully qualified class name
+    */
+    private static function get(string $aliasis): ?string
     {
-        $context = strtolower($context);
-
-        return match($context) {
+        $classes = [
             'task' => Task::class,
             'session' => Session::class,
             'functions' => Functions::class,
@@ -75,14 +75,22 @@ class Factory
             'logger' => NovaLogger::class,
             'paths' => Paths::class,
             'validate' => InputValidator::class,
-            default => static::$factories[$context] ?? null
-        };
+            'response' => ViewResponse::class,
+        ];
+
+        $aliasis = strtolower($aliasis);
+
+        if (isset($classes[$aliasis])) {
+            return $classes[$aliasis];
+        }
+
+        return static::$factories[$aliasis] ?? null;
     }
 
     /**
      * Dynamically create an instance of the specified factory method class.
      *
-     * @param string $context The context or name of the factory.
+     * @param string $aliasis The class contect aliasis
      * @param array $arguments Parameters to pass to the factory constructor.
      * @param bool $shared The Last parameter to pass to the factory constructor 
      * indicate if it should return a shared instance
@@ -93,54 +101,51 @@ class Factory
      * @return object|null An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
      */
-    public static function __callStatic(string $context, $arguments): ?object
+    public static function __callStatic(string $aliasis, $arguments): ?object
     {
         $shared = true; 
+        $class = static::get($aliasis);
 
-        if (static::get($context) === null) {
-            throw new RuntimeException("Factory with method name '$context' not found.");
+        if ($class === null) {
+            throw new RuntimeException("Factory with method name '$aliasis' does not exist.");
         }
-        
+
         if (isset($arguments[count($arguments) - 1]) && is_bool($arguments[count($arguments) - 1])) {
             $shared = array_pop($arguments);
         }
 
-        return static::create($context, $shared, ...$arguments);
+        return static::call($class, $shared, ...$arguments);
     }
 
     /**
      * Create an instance of the specified factory class.
      *
-     * @param string $context The context or name of the factory.
+     * @param string $class The class class
      * @param bool $shared Whether the instance should be shared (cached) or not.
-     * @param mixed ...$params Parameters to pass to the factory constructor.
+     * @param mixed ...$arguments Parameters to pass to the factory constructor.
      * 
      * @return object|null An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
      */
-    public static function create(string $context, bool $shared = true, ...$params): ?object
+    private static function call(string $class, bool $shared = true, ...$arguments): ?object
     {
-        $name = static::get($context);
-        $instance = null;
+        $aliasis = strtolower($class);
 
-        if ($name === null) {
-            return null;
-        }
-
-        if ($shared && isset(static::$instances[$name])) {
-            return static::$instances[$name];
+        if ($shared && isset(static::$instances[$aliasis])) {
+            return static::$instances[$aliasis];
         }
   
+        $instance = null;
+
         try {
-            //$instance = new $className(...$params);
-            $reflection = new ReflectionClass($name);
-            $instance = $reflection->newInstance(...$params);
+            $reflection = new ReflectionClass($class);
+            $instance = $reflection->newInstance(...$arguments);
 
             if ($shared) {
-                static::$instances[$name] = $instance;
+                static::$instances[$aliasis] = $instance;
             }
         } catch (Throwable $e) {
-            throw new RuntimeException("Failed to instantiate factory method '$context'. Error: " . $e->getMessage());
+            throw new RuntimeException("Failed to instantiate factory method '$class'. Error: " . $e->getMessage());
         }catch(ReflectionException $e){
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e->getPrevious());
         }
@@ -151,15 +156,15 @@ class Factory
     /**
      * Check if class is available in factories
      *
-     * @param string $context The context or name of the factory.
+     * @param string $aliasis The context or name of the factory.
      * 
      * @return bool 
      */
-    private static function has(string $context): bool
+    public static function has(string $aliasis): bool
     {
-        $context = static::get($context);
+        $aliasis = get_class_name($aliasis);
 
-        return $context !== null;
+        return static::get($aliasis) !== null;
     }
 
     /**
@@ -171,8 +176,9 @@ class Factory
      */
     public static function delete(string $factory): bool
     {
-        $factory = strtolower($factory);
+        $factory = strtolower(get_class_name($factory));
         $count = 0;
+
         if (isset(static::$factories[$factory])) {
             unset(static::$factories[$factory]);
             $count++;
@@ -184,34 +190,6 @@ class Factory
         }
 
         return $count > 0;
-    }
-
-    /**
-     * Clear cached instances of factory classes.
-     *
-     * @param string $className Class name to add to factory
-     * @param string $name Public identifier name to load the factory
-     *          If name is null or empty we use the class name as identifier
-     *          Name will be converted to lowercase 
-     * 
-     * @return bool
-     * @throws RuntimeException
-     */
-    public static function add(string $className, ?string $name = null): bool
-    {
-        if ($name === null || $name === '') {
-            $name = substr($className, strrpos($className, '\\') + 1);
-        }
-
-        $name = strtolower($name);
-
-        if (static::has($name)) {
-            throw new RuntimeException("Failed to add method to factory, a factory method with '$name'. already exist");
-        }
-
-        static::$factories[$name] = $className;
-
-        return isset(static::$factories[$name]);
     }
 
     /**
@@ -237,9 +215,10 @@ class Factory
     {
         $subClasses = [];
         $allClasses = get_declared_classes();
-        foreach ($allClasses as $className) {
-            if (is_subclass_of($className, $baseClass)) {
-                $subClasses[] = $className;
+
+        foreach ($allClasses as $name) {
+            if (is_subclass_of($name, $baseClass)) {
+                $subClasses[] = $name;
             }
         }
 

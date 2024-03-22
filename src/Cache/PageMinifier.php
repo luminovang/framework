@@ -11,7 +11,7 @@ namespace Luminova\Cache;
 
 use Luminova\Http\Header;
 
-class Compress 
+class PageMinifier 
 {
     /**
 	* holds json content type
@@ -51,9 +51,9 @@ class Compress
 
     /** 
      * Ignore html code block tag <code></code>
-     * @var bool $ignoreCodeblock
+     * @var bool $minifyCodeTags
      */
-    private bool $ignoreCodeblock = false;
+    private bool $minifyCodeTags = false;
 
     /** 
 	*  Compressed content
@@ -111,12 +111,12 @@ class Compress
         ]
     ];
     
- 
     /**
      * Class constructor.
      * Initializes default settings for the response headers and cache control.
      */
-    public function __construct() {
+    public function __construct() 
+    {
         $this->headers = Header::getSystemHeaders();
         $this->gzip = true;
     }
@@ -125,10 +125,12 @@ class Compress
      * Enable or disable Gzip compression.
      *
      * @param bool $gzip Enable Gzip compression (true) or disable it (false).
-     * @return Compress Returns the class instance for method chaining.
+     * @return self Returns the class instance for method chaining.
      */
-    public function useGzip(bool $gzip): self {
+    public function useGzip(bool $gzip): self 
+    {
         $this->gzip = $gzip;
+
         return $this;
     }
 
@@ -136,10 +138,12 @@ class Compress
      * Set the expiration offset for the Cache-Control header.
      *
      * @param int $offset Cache expiration offset in seconds.
-     * @return Compress Returns the class instance for method chaining.
+     * @return self Returns the class instance for method chaining.
      */
-    public function setExpires(int $offset): self {
+    public function setExpires(int $offset): self 
+    {
         $this->headers['Expires'] = gmdate("D, d M Y H:i:s", time() + $offset) . ' GMT';
+
         return $this;
     }
 
@@ -147,11 +151,12 @@ class Compress
      * Set the Cache-Control header.
      *
      * @param string $cacheControl Cache-Control header value.
-     * @return Compress Returns the class instance for method chaining.
+     * @return self Returns the class instance for method chaining.
      */
     public function setCacheControl(string $cacheControl): self 
     {
         $this->headers['Cache-Control'] = $cacheControl;
+
         return $this;
     }
 
@@ -159,7 +164,7 @@ class Compress
      * sets compression level
      *
      * @param int $level Level
-     * @return Compress $this
+     * @return self $this
      */
 	public function setCompressionLevel(int $level): self 
     {
@@ -169,14 +174,14 @@ class Compress
 	}
     
     /**
-     * sets ignore user code block
+     * sets ignore minifying code block
      *
      * @param bool $ignore
-     * @return Compress Returns the class instance for method chaining.
+     * @return self Returns the class instance for method chaining.
      */
-	public function setIgnoreCodeblock(bool $ignore): self 
+	public function minifyCodeblock(bool $ignore): self 
     {
-		$this->ignoreCodeblock = $ignore;
+		$this->minifyCodeTags = $ignore;
 
 		return $this;
 	}
@@ -185,6 +190,7 @@ class Compress
      * sets allow copy code block
      *
      * @param bool $allow
+     * 
      * @return self Returns the class instance for method chaining.
      */
 	public function allowCopyCodeblock(bool $allow): self 
@@ -196,6 +202,7 @@ class Compress
 
     /**
      * Get compressed content
+     * 
      * @return mixed compressed content $this->compressedContent
      */
     public function getCompressed(): mixed 
@@ -205,6 +212,7 @@ class Compress
 
     /**
      * Get minified content
+     * 
      * @return string minified content $this->minifiedContent
      */
     public function getMinified(): string 
@@ -217,40 +225,38 @@ class Compress
      *
      * @param string|array|object $data The content to compress (can be an array or object for JSON response).
      * @param string $contentType The expected content type for the response.
-     * @return string The compressed content for output.
+     * 
+     * @return string $compressed The compressed content for output.
      */
-    public function compress(mixed $data, string $contentType): string {
-        $content = ($contentType === self::JSON) ? $this->toJsonEncodedString($data) : $data;
-        $this->minifiedContent = $this->ignoreCodeblock ? self::minifyIgnoreCodeblock($content, $this->enableCopy) : self::minify($content);
-        $compressedContent = '';
+    public function compress(string|array|object $data, string $contentType): string 
+    {
+        $content = (!is_string($data) ? static::toJsonString($data) : $data);
 
-        $shouldCompress = false;
-        if ($this->gzip && function_exists('gzencode') && !empty($_SERVER['HTTP_ACCEPT_ENCODING']) && strpos($_SERVER['HTTP_ACCEPT_ENCODING'], 'gzip') !== false) {
-            $shouldCompress = true;
-        }
-    
-        if ($shouldCompress) {
+        $this->minifiedContent = $this->minifyCodeTags ? 
+            static::minify($content) : 
+                static::minifyIgnore($content, $this->enableCopy);
+        $compressed = $this->minifiedContent;
+
+
+        if ($this->gzip && function_exists('gzencode') && isset($_SERVER['HTTP_ACCEPT_ENCODING']) && strpos($_SERVER['HTTP_ACCEPT_ENCODING'], 'gzip') !== false) {
             $this->headers['Content-Encoding'] = 'gzip';
-            // Compress the content and store it in a variable
-            $compressedContent = gzencode($this->minifiedContent, $this->compressionLevel);
             $this->info['Content-Encoding'] = 'gzip';
-        } else {
-            // Store the uncompressed content in a property
-            $compressedContent = $this->minifiedContent;
-        }
-        $contentLength = strlen($compressedContent);
 
-        $this->info['Content-Length'] = $contentLength;
+            $compressed = gzencode($this->minifiedContent, $this->compressionLevel);
+        }
+
+
+        $this->info['Content-Length'] = strlen($compressed);
         $this->info['Content-Type'] = $contentType;
 
-        $this->headers['Content-Length'] = $contentLength;
+        $this->headers['Content-Length'] = $this->info['Content-Length'];
         $this->headers['Content-Type'] = $contentType;
-        // ?? $this->headers['Content-Type']; 
-        //Header::getContentType($contentType);
+  
         foreach ($this->headers as $header => $value) {
             header("$header: $value");
         }
-        return $compressedContent;
+
+        return $compressed;
     }
 
     /**
@@ -265,22 +271,28 @@ class Compress
 
     /**
      * Convert content to json string
-     * @param mixed $data
+     * 
+     * @param array|object $data
      * 
      * @return string
     */
-    private function toJsonEncodedString(mixed $data): string
+    private static function toJsonString(array|object $data): string
     {
-        $decodedData = json_decode($data);
+        if(is_object($data)){
+            $data = (array) $data;
+        }
+
+        /*$encoded = json_decode($data);
     
-        if ($decodedData !== null || json_last_error() === JSON_ERROR_NONE) {
+        if ($encoded !== null || json_last_error() === JSON_ERROR_NONE) {
             return $data;
-        } else {
-            $encodedData = json_encode($data);
-    
-            if ($encodedData !== false) {
-                return $encodedData;
-            }
+        }
+        */
+
+        $encoded = json_encode($data);
+
+        if ($encoded !== false) {
+            return $encoded;
         }
         
         return '';
@@ -290,20 +302,13 @@ class Compress
      * Sends the response with the specified content type and status code.
      *
      * @param string|array|object $body The content body to be sent in the response.
-     * @param int $statusCode The HTTP status code to be sent in the response.
-     * @param string $contentType The expected content type for the response.
+     * @param string $type The expected content type for the response.
+     * 
     */
-    private function withViewContent(mixed $body, int $statusCode, string $contentType): void {
-
-        // Compress the content and store it in a variable
-        //$this->compressedContent = $this->compress($body, $contentType);
-    
-        if ($statusCode) {
-            http_response_code($statusCode);
-        }
-        // ob_end_clean();
+    private function respond(mixed $body, string $type): void 
+    {
         // Echo the stored compressed content
-        echo $this->compress($body, $contentType);
+        echo $this->compress($body, $type);
     
         // If there is any content in the output buffer, end and flush it
         if (ob_get_length() > 0) {
@@ -314,31 +319,31 @@ class Compress
     /**
      * Send the output in HTML format.
      *
-     * @param string|array|object $body The content body to be sent in the response.
+     * @param string $body The content body to be sent in the response.
      */
-    public function html(mixed $body): void 
+    public function html(string $body): void 
     {
-        $this->withViewContent($body, 200, self::HTML);
+        $this->respond($body, self::HTML);
     }
 
     /**
      * Send the output in text format.
      *
-     * @param string|array|object $body The content body to be sent in the response.
+     * @param string $body The content body to be sent in the response.
      */
-    public function text(mixed $body): void 
+    public function text(string $body): void 
     {
-        $this->withViewContent($body, 200, self::TEXT);
+        $this->respond($body, self::TEXT);
     }
 
     /**
      * Send the output in XML format.
      *
-     * @param string|array|object $body The content body to be sent in the response.
+     * @param string $body The content body to be sent in the response.
      */
-    public function xml(mixed $body): void 
+    public function xml(string $body): void 
     {
-        $this->withViewContent($body, 200, self::XML);
+        $this->respond($body, self::XML);
     }
 
      /**
@@ -346,42 +351,38 @@ class Compress
      *
      * @param string|array|object $body The content body to be sent in the response.
      */
-    public function json(mixed $body): void 
+    public function json(string|array|object $body): void 
     {
-        $this->withViewContent($body, 200, self::JSON);
+        $this->respond($body, self::JSON);
     }
 
     /**
      * Send the output based on the specified content type.
      *
      * @param string|array|object $body The content body to be sent in the response.
-     * @param string $contentType The expected content type for the response.
+     * @param string $type The expected content type for the response.
      */
-    public function run(mixed $body, string $contentType = self::HTML): void 
+    public function run(mixed $body, string $type = self::HTML): void 
     {
-        $this->withViewContent($body, 200, $contentType);
+        $this->respond($body, $type);
     }
 
     /**
      * End output buffering and send the response.
      *
-     * @param string $contentType The expected content type for the response.
+     * @param string $type The expected content type for the response.
      */
-    public function end(string $contentType = self::HTML): void 
+    public function end(string $type = self::HTML): void 
     {
-        $this->withViewContent(ob_get_contents(), 200, $contentType);
+        $this->respond(ob_get_contents(), $type);
     }
 
-    /**
+    /** 
      * Start output buffering and minify the content by removing unwanted tags and whitespace.
     */
     public function startMinify(): void 
     {
-        if($this->ignoreCodeblock){
-            ob_start(['self', 'minifyIgnoreCodeblock']);
-        }else{
-            ob_start(['self', 'minify']);
-        }
+        ob_start(['self', $this->minifyCodeTags ? 'minifyIgnore' : 'minify']);
     }
     
     /**
@@ -390,13 +391,11 @@ class Compress
      * @param string $content The content to minify.
      * @return string minified content.
      */
-    public static function minify(string $content): string {
-        //$patterns = self::PATTERNS;
-        //$patterns["find"][] = '/\s+/'; 
-        //$patterns["replace"][] = ' ';
-
+    public static function minify(string $content): string 
+    {
         $content = str_replace(self::PATTERNS["line"], '', $content);
         $content = preg_replace(self::PATTERNS["find"], self::PATTERNS["replace"], $content);
+
         return trim($content);
     }
 
@@ -406,7 +405,7 @@ class Compress
      * @param string $content The content to minify.
      * @return string minified content.
     */
-    public static function minifyIgnoreCodeblock(string $content, bool $allowCopy = false): string 
+    public static function minifyIgnore(string $content, bool $allowCopy = false): string 
     {
         $ignores = [];
         //$pattern = '/<pre[^>]*><code[^>]*>[\s\S]*?<\/code><\/pre>/i';
@@ -419,7 +418,7 @@ class Compress
             return $ignorePatten;
         }, $content);
         
-        $content = self::minify($content);
+        $content = static::minify($content);
 
         // Restore the code blocks back to its original state
         $content = preg_replace_callback('/' . $ignorePatten . '/', function () use (&$ignores, $allowCopy) {

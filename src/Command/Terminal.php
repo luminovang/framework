@@ -776,6 +776,10 @@ class Terminal
                 $arg = ltrim($arg, '-');
                 $value = null;
 
+                if(strpos($arg, '=') !== false){
+                    [$arg, $value] = explode('=', $arg);
+                }
+
                 if (isset($arguments[$i + 1]) && $arguments[$i + 1][0] !== '-') {
                     $value = $arguments[$i + 1];
                     $optionValue = true;
@@ -789,6 +793,7 @@ class Terminal
 
     /**
      * Get the current command controller views
+     * 
      * @return array $views
     */
     public static function getRequestCommands(): array
@@ -870,19 +875,20 @@ class Terminal
      * Get options value 
      * If option flag is passed with an empty value true will be return else false
      * 
-     * @param string $name
+     * @param string $key Option key name 
+     * @param string $default default is false
      * 
      * @return null|string|int|bool
      */
-    public static function getOption(string $name): mixed
+    public static function getOption(string $key, mixed $default = false): mixed
     {
         $options = static::getOptions();
 
-        if (array_key_exists($name, $options)) {
-            return $options[$name] ?? true;
+        if (array_key_exists($key, $options)) {
+            return $options[$key] ?? true;
         }
     
-        return false;
+        return $default;
     }
 
     /**
@@ -908,6 +914,7 @@ class Terminal
         if(isset(static::$commandsOptions[$name])){
             return static::$commandsOptions[$name];
         }
+
         return null;
     }
 

@@ -58,27 +58,29 @@ class Files
 	 */
 	public static function download(string $file, ?string $name = null, bool $delete = false): bool
 	{
-		if (file_exists($file)) {
+		if (file_exists($file) && is_readable($file)) {
 			$filename = $name ?? basename($file);
-			header('Content-Type: ' . (mime_content_type($file) ?? 'application/octet-stream'));
+			$mime = mime_content_type($file) ?? 'application/octet-stream';
+
+			// Prevent caching
+			header('Content-Type: ' . $mime);
 			header('Content-Disposition: attachment; filename="' . $filename . '"');
 			header('Content-Transfer-Encoding: binary');
+			header('Expires: 0');
+			header('Cache-Control: must-revalidate');
+			header('Pragma: public');
 			header('Content-Length: ' . filesize($file));
-			header('Cache-Control: no-store, no-cache, must-revalidate');
-			header('Cache-Control: post-check=0, pre-check=0', false);
-			header('Pragma: no-cache');
+
 			$read = readfile($file);
 
-            if($read !== false){
-                if ($delete) {
-                    unlink($file);
-                }
+			if ($delete && $read !== false) {
+				unlink($file);
+			}
 
-                return true;
-            }
+			return $read !== false;
 		}
 
-        return false;
+		return false;
 	}
 
     /**

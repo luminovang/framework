@@ -10,9 +10,9 @@
 
 namespace Luminova\Cache;
 
-use Luminova\Cache\FileCache;
-use Luminova\Cache\MemoryCache;
-use Luminova\Exceptions\ClassException;
+use \Luminova\Cache\FileCache;
+use \Luminova\Cache\MemoryCache;
+use \Luminova\Exceptions\ClassException;
 
 class Cache
 {
@@ -36,9 +36,10 @@ class Cache
 
     /**
     * Engin static instance
-    * @var object $instance
+    *
+    * @var Cache $instance
     */
-    private static $instance = null;
+    private static ?Cache $instance = null;
 
     /**
     * Cache constructor.
@@ -47,7 +48,7 @@ class Cache
     */
     public function __construct(string $engine = self::FILE)
     {
-        $this->engine = self::createCacheInstance($engine);
+        $this->engine = static::newInstance($engine);
     }
 
     /**
@@ -58,10 +59,11 @@ class Cache
      */
     public static function getInstance(string $engine = self::FILE): self
     {
-        if (self::$instance === null) {
-            self::$instance = new self($engine);
+        if (static::$instance === null) {
+            static::$instance = new static($engine);
         }
-        return self::$instance;
+
+        return static::$instance;
     }
 
 
@@ -73,7 +75,7 @@ class Cache
      * @return FileCache|MemoryCache|object The cache engine instance.
      * @throws ClassException When the Memcached class is not available for the MemoryCache.
      */
-    private static function createCacheInstance(string $engine): object
+    private static function newInstance(string $engine): object
     {
         switch ($engine) {
             case self::MEM:

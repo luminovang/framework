@@ -119,6 +119,7 @@ class PageViewCache
 
     /**
      * Load the content from the cache file and exit the script.
+     * @param string $info Cache info
      * 
      * @return bool True if loading was successful; false otherwise.
      */
@@ -141,6 +142,7 @@ class PageViewCache
 
         if (file_exists($infoLocation)) {
             $info = json_decode(file_get_contents($infoLocation), true);
+
             $headers['Content-Type'] = $info['Content-Type'];
             //$headers['Content-Length'] = $info['Content-Length'];
             $headers['Content-Encoding'] = $info['Content-Encoding'];
@@ -183,6 +185,7 @@ class PageViewCache
         }
 
         $bytesWritten = write_content($this->getCacheLocation(), $content);
+
         return $bytesWritten !== false;
     }
 
