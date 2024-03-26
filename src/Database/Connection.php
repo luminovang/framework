@@ -12,6 +12,7 @@ namespace Luminova\Database;
 
 use \Luminova\Database\Drivers\MySqliDriver;
 use \Luminova\Database\Drivers\PdoDriver;
+use \Luminova\Database\Drivers\DriversInterface;
 use \Luminova\Config\Database;
 use \App\Controllers\Config\Servers;
 use \Luminova\Exceptions\DatabaseException;
@@ -21,10 +22,11 @@ use \Exception;
 class Connection
 {
   /** 
-    * Database connection instance 
-    * @var MySqliDriver|PdoDriver|null $db
+   * Database connection instance 
+   * 
+   * @var DriversInterface|null $db
   */
-  protected MySqliDriver|PdoDriver|null $db = null;
+  protected ?DriversInterface $db = null;
 
   /** 
    * @var ?Connection $instance
@@ -56,11 +58,11 @@ class Connection
   */
   final public function __construct()
   {
-    $this->maxConnections = (int) env("database.max.connections", 0);
-    $this->db ??= $this->reuseInstance();
+    $this->maxConnections = (int) env('database.max.connections', 0);
+    $this->db ??= $this->reuse();
 
     if((bool) env('database.connection.pool', false) && $this->maxConnections > 0){
-      $this->releaseConnection($this->db);
+      $this->release($this->db);
     }
   }
 
@@ -76,18 +78,20 @@ class Connection
     * @throws InvalidArgumentException
     * @throws Exception
   */
-  private function reuseInstance(): object
+  private function reuse(): object
   {
     if ($this->maxConnections === 0 || empty($this->pool)) {
       return static::newInstance();
     }
 
     if (count($this->pool) >= $this->maxConnections) {
-      $servers = Servers::gerDatabaseServers();
+      $servers = Servers::getDatabaseServers();
+
       if($servers === []){
         throw new DatabaseLimitException("Database connection limit has reached it limit per user.");
       }
-      return $this->retryConnection($servers);
+
+      return $this->retry($servers);
     }
 
     return array_pop($this->pool);
@@ -112,18 +116,18 @@ class Connection
    * 
    * @param Database $config 
    *
-   * @return object Database driver instance
+   * @return DriversInterface Database driver instance
    * @throws DatabaseException
    * @throws InvalidArgumentException
    * @throws Exception
   */
-  public static function newInstance(Database $config = null): object 
+  public static function newInstance(Database $config = null): DriversInterface 
   {
     static $connection = null;
     
     if ($connection === null) {
         $driver = strtolower(env('database.connection', 'PDO'));
-        $config ??= static::getDatabaseConfig();
+        $config ??= static::getConfig();
 
         $connection = match ($driver) {
             'mysqli' => new MySqliDriver($config),
@@ -140,17 +144,17 @@ class Connection
   /**
    * Release connection back to pool 
    * 
-   * @param object $connection
+   * @param DriversInterface $connection
    * 
    * @return void
   */
-  public function releaseConnection(object $connection): void
+  public function release(DriversInterface $connection): void
   {
-      if (count($this->pool) < $this->maxConnections) {
-        $this->pool[] = $connection;
-      } else {
-        $connection = null;
-      }
+    if (count($this->pool) < $this->maxConnections) {
+      $this->pool[] = $connection;
+    } else {
+      $connection = null;
+    }
   }
 
   /**
@@ -158,7 +162,7 @@ class Connection
    * 
    * @return void 
   */
-  public function closeAllConnections(): void
+  public function closeAll(): void
   {
     foreach ($this->pool as $connection) {
       $connection = null;
@@ -172,16 +176,17 @@ class Connection
     *
     * @return Database Database configuration object.
   */
-  private static function getDatabaseConfig(): Database
+  private static function getConfig(): Database
   {
     $var = PRODUCTION ? 'database' : 'database.development';
     return new Database([
-      'port' => env("database.port"),
-      'host' => env("database.hostname"),
-      'pdo_driver' => env("database.pdo.driver"),
-      'charset' => env("database.charset"),
-      'persistent' => (bool) env("database.persistent.connection", true),
-      'sqlite_path' => env("database.sqlite.path"),
+      'port' => env('database.port'),
+      'host' => env('database.hostname'),
+      'pdo_driver' => env('database.pdo.driver'),
+      'charset' => env('database.charset', ''),
+      'persistent' => (bool) env('database.persistent.connection', true),
+      'emulate_preparse' => (bool) env('database.emulate.preparse', false),
+      'sqlite_path' => env('database.sqlite.path'),
       'production' => PRODUCTION,
       'username' => env("{$var}.username"),
       'password' => env("{$var}.password"),
@@ -191,6 +196,7 @@ class Connection
 
   /**
    * Prevent un-serialization of the singleton instance
+   * @ignore
   */
   public function __serialize(): array
   {
@@ -199,13 +205,14 @@ class Connection
 
   /**
    * Restore connection after un-serialization
-   *  @param array $data un-serialized data
+   * @param array $data un-serialized data
    * 
    * @return void 
+   * @ignore
   */
   public function __unserialize(array $data): void
   {
-    $this->db ??= $this->reuseInstance();
+    $this->db ??= $this->reuse();
   }
 
   /**
@@ -213,9 +220,9 @@ class Connection
    * 
    * @param array $service array of service to try to connect
    * 
-   * @return object|bool 
+   * @return DriversInterface|bool 
   */
-  public function retryConnection(array $servers): object|bool
+  public function retry(array $servers): DriversInterface|bool
   {
     $maxAttempts = count($servers);
     $attemptCount = 0;

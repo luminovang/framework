@@ -1,13 +1,17 @@
 .DS_Store
 /test
+/docs
 /tests
 /log
 /dump
 /.git
 composer.lock
 command.phar
+phpdoc.xml
+phpDocumentor.phar
 git.ssh
 cli.help
+.phpdoc
 .fleet
 .idea
 .vscode

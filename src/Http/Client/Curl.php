@@ -10,38 +10,25 @@
 
 namespace Luminova\Http\Client;
 
-use \Luminova\Http\NetworkResponse;
-use \Luminova\Http\NetworkClientInterface;
+use \Luminova\Http\Message\Response;
+use \Luminova\Http\Client\ClientInterface;
 use \Luminova\Http\Exceptions\RequestException;
 use \Luminova\Http\Exceptions\ConnectException;
 use \Luminova\Http\Exceptions\ClientException;
 use \Luminova\Http\Exceptions\ServerException;
  
-class Curl implements NetworkClientInterface
+class Curl implements ClientInterface
 {
     /**
-     * Curl client constructor.
-     * @param array $config client configuration
+     * {@inheritdoc}
      * 
     */
     public function __construct(array $config = []){ }
     
     /**
-      * Perform an HTTP request using cURL.
-      *
-      * @param string $method
-      * @param string $url
-      * @param array $data
-      * @param array $headers
-      *
-      * @return NetworkResponse
-      *
-      * @throws RequestException
-      * @throws ConnectException
-      * @throws ClientException
-      * @throws ServerException
+      * {@inheritdoc}
     */
-    public function request(string $method, string $url, array $data = [], array $headers = []): NetworkResponse
+    public function request(string $method, string $url, array $data = [], array $headers = []): Response
     {
         $method = strtoupper($method);
         if (!in_array($method, ['GET', 'POST'], true)) {
@@ -113,7 +100,7 @@ class Curl implements NetworkClientInterface
         $responseHeaders = $this->headerToArray($responseHeaders, $statusCode);
         curl_close($ch);
 
-        return new NetworkResponse($statusCode, $responseHeaders, $response, $contents);
+        return new Response($statusCode, $responseHeaders, $response, $contents);
     }
  
     /**

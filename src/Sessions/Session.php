@@ -19,27 +19,31 @@ class Session
 {
     /**
      * session interface
+     * 
      * @var SessionInterface $manager
     */
     protected ?SessionInterface $manager = null;
 
     /**
      * logger interface
+     * 
      * @var LoggerInterface $logger
     */
     protected ?LoggerInterface $logger = null;
 
     /**
      * static class instance
-     * @var static $instance 
+     * 
+     * @var Session $instance 
     */
-    protected static ?self $instance = null;
+    protected static ?Session $instance = null;
 
     /**
      * session config instance
-     * @var string $config 
+     * 
+     * @var null|string $config 
     */
-    protected string $config;
+    protected static ?string $config = null;
 
     /**
      * Initializes session constructor
@@ -48,7 +52,7 @@ class Session
     */
     public function __construct(SessionInterface $manager = null)
     {
-        $this->config = SessionConfig::class;
+        static::$config = SessionConfig::class;
         $this->manager = $manager ?? new SessionManager();
         $this->ipAuthSession();
     } 
@@ -65,6 +69,7 @@ class Session
         if (static::$instance === null) {
             static::$instance = new static($manager);
         }
+
         return static::$instance;
     }
 
@@ -80,7 +85,9 @@ class Session
 
     /** 
      * Get data as array from current session storage 
+     * 
      * @param string $index optional key to get
+     * 
      * @return array
     */
     public function toArray(string $index = ''): array
@@ -103,7 +110,7 @@ class Session
     /** 
      * Get all storage data as array 
      * 
-     * @return object
+     * @return array
     */
     public function toExport(): array
     {
@@ -138,6 +145,7 @@ class Session
     public function setStorage(string $storage): self
     {
         $this->manager->setStorage($storage);
+
         return $this;
     }
 
@@ -189,6 +197,7 @@ class Session
     public function setTo(string $index, mixed $data, string $storage): self
     {
         $this->manager->setTo($index, $data, $storage);
+
         return $this;
     }
 
@@ -212,9 +221,10 @@ class Session
      * 
      * @return self
      */
-    public function set(string $key, $value): self
+    public function set(string $key, mixed $value): self
     {
         $this->manager->set($key, $value);
+
         return $this;
     }
 
@@ -226,9 +236,10 @@ class Session
      * 
      * @return self
      */
-    public function add(string $key, $value): self
+    public function add(string $key, mixed $value): self
     {
         $this->manager->add($key, $value);
+
         return $this;
     }
 
@@ -242,6 +253,7 @@ class Session
     public function remove(string $key): self
     {
         $this->manager->remove($key);
+
         return $this;
     }
 
@@ -255,6 +267,7 @@ class Session
     public function clear(string $storage = ''): self
     {
         $this->manager->clear($storage);
+        
         return $this;
     }
 
@@ -308,7 +321,8 @@ class Session
     public function synchronize(string $ip = ''): self
     {
         $this->manager->set('_online', 'YES');
-        if($this->config::$strictSessionIp){
+
+        if(static::$config::$strictSessionIp){
             $ip = func()->ip()->get();
             if($ip){
                 $this->manager->set('_online_session_id', $ip);
@@ -328,7 +342,7 @@ class Session
      */
     public function ipAuthSession(string $storage = ''): void
     {
-        if($this->config::$strictSessionIp){
+        if(static::$config::$strictSessionIp){
             $default = $this->getStorage();
 
             if($storage !== '' && $storage !== $default){
@@ -381,21 +395,6 @@ class Session
     }
 
     /**
-     * @deprecated Use synchronize() method instead.
-     *
-     * Start an online session with an optional IP address.
-     *
-     * @param string $ip The IP address.
-     * 
-     * @return self
-     */
-    public function goOnline(string $ip = ''): self
-    {
-        trigger_error('The goOnline() method is deprecated. Use synchronize() method instead.', E_USER_DEPRECATED);
-        return  $this->synchronize($ip);
-    }
-
-    /**
     * Configure session settings.
     *
     * @return void
@@ -403,29 +402,29 @@ class Session
     private function sessionConfigure(): void
     {
         $cookieParams = [
-            'lifetime' => time() + $this->config::$expiration,
-            'path'     => $this->config::$sessionPath,
-            'domain'   => $this->config::$sessionDomain,
+            'lifetime' => time() + static::$config::$expiration,
+            'path'     => static::$config::$sessionPath,
+            'domain'   => static::$config::$sessionDomain,
             'secure'   => true,
             'httponly' => true,
-            'samesite' => $this->config::$sameSite,
+            'samesite' => static::$config::$sameSite,
         ];
-        ini_set('session.name', $this->config::$cookieName);
-        ini_set('session.cookie_samesite', $this->config::$sameSite);
+        ini_set('session.name', static::$config::$cookieName);
+        ini_set('session.cookie_samesite', static::$config::$sameSite);
         session_set_cookie_params($cookieParams);
 
-        if ($this->config::$expiration > 0) {
+        if (static::$config::$expiration > 0) {
             ini_set('session.gc_maxlifetime', (string) $cookieParams['lifetime']);
         }
 
-        if ($this->config::$savePath !== '') {
-            ini_set('session.save_path', $this->config::$savePath);
+        if (static::$config::$savePath !== '') {
+            ini_set('session.save_path', static::$config::$savePath);
         }
 
         ini_set('session.use_trans_sid', '0');
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_cookies', '1');
         ini_set('session.use_only_cookies', '1');
-        $this->manager->setConfig($this->config);
+        $this->manager->setConfig(static::$config);
     }
 }

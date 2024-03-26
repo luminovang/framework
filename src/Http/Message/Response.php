@@ -7,9 +7,9 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
 */
-namespace Luminova\Http;
+namespace Luminova\Http\Message;
 
-class NetworkResponse
+class Response
 {
     /**
      * @var int $statusCode

@@ -102,7 +102,7 @@ class Error
      * 
      * @return void
     */
-    public static function handle(int $errno, string $message, string $errFile, int $errLine, bool $shutdown = false): void 
+    public static function handle(int $errno, string $message, string $errFile, int $errLine): void 
     {
         $errFile = filter_paths($errFile);
         $message = "Error [$errno]: $message in $errFile on line $errLine";
@@ -123,8 +123,8 @@ class Error
     {
         $error = error_get_last();
 
-        if ($error !== null && static::isFatal($error['type'])) {
-            static::handle($error['type'], $error['message'], $error['file'], $error['line'], true);
+        if ($error !== null && isset($error['type']) && static::isFatal($error['type'])) {
+            static::handle($error['type'], $error['message'], $error['file'], $error['line']);
         }
     }
 

@@ -50,9 +50,7 @@ class Executor
             return STATUS_ERROR;
         } 
         
-        $execute = new $findGroup();
-        
-        return (int) $execute->run($options);
+        return (int) (new $findGroup())->run($options);
     }
 
     /**

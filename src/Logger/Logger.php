@@ -15,6 +15,9 @@ use \Luminova\Logger\NovaLogger;
 
 class Logger implements LoggerInterface
 {
+    /**
+     * @var LoggerInterface $logger
+    */
     private ?LoggerInterface $logger = null;
 
     /**

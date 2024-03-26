@@ -67,7 +67,7 @@ class Console
         $command = $terminal::getCommand();
      
         if (!$this->noHeader) {
-            $terminal::header($terminal::$version);
+            $terminal::header();
         }
 
         if('--version' === $command){
@@ -77,7 +77,7 @@ class Console
             exit(STATUS_SUCCESS);
         }
 
-        $params  = array_merge($terminal::getArguments(), $terminal::getQueries());
+        $params = array_merge($terminal::getArguments(), $terminal::getQueries());
         
         $result = Executor::call($terminal, $params);
 

@@ -10,114 +10,87 @@
 
 namespace Luminova\Http;
 
-use \Luminova\Http\NetworkClientInterface;
-use \Luminova\Http\NetworkResponse;
+use \Luminova\Http\Client\ClientInterface;
+use \Luminova\Http\Message\Response;
+use \GuzzleHttp\Promise\PromiseInterface;
+use \GuzzleHttp\Client;
+use \Luminova\Http\Client\Curl;
+use \GuzzleHttp\Psr7\Request;
 
-class Network
+class Network implements NetworkInterface
 {
     /**
-     * @var NetworkClientInterface
+     * @var ClientInterface $client
      */
-    private NetworkClientInterface $client;
+    private ClientInterface $client;
 
     /**
-     * Network constructor with http client instance 
-     *
-     * @param NetworkClientInterface $client 
-     */
-    public function __construct(NetworkClientInterface $client)
+     * {@inheritdoc}
+    */
+    public function __construct(?ClientInterface $client = null)
     {
-        $this->client = $client;
+        if($client === null){
+            $this->client = new Curl();
+        }else{
+            $this->client = $client;
+        }
     }
 
     /**
-     * Send a request.
-     *
-     * @param string $method
-     * @param string $url
-     * @param array $data
-     * @param array $headers
-     *
-     * @return NetworkResponse
-     * @throws RequestException
-     * @throws ConnectException
-     * @throws ClientException
-     * @throws ServerException
-     */
-    public function send(string $method, string $url, array $data = [], array $headers = []): NetworkResponse
+     * {@inheritdoc}
+    */
+    public function getClient(): ClientInterface
+    {
+        return $this->client;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function send(string $method, string $url, array $data = [], array $headers = []): Response
     {
         return $this->client->request($method, $url, $data, $headers);
     }
 
     /**
-     * Perform a GET request.
-     *
-     * @param string $url
-     * @param array $data
-     * @param array $headers
-     *
-     * @return NetworkResponse
-     * @throws RequestException
-     * @throws ConnectException
-     * @throws ClientException
-     * @throws ServerException
-     */
-    public function get(string $url, array $data = [], array $headers = []): NetworkResponse
+     * {@inheritdoc}
+    */
+    public function get(string $url, array $data = [], array $headers = []): Response
     {
         return $this->client->request("GET", $url, $data, $headers);
     }
-
+    
     /**
-     * Fetch data using a GET request.
-     *
-     * @param string $url
-     * @param array $headers
-     *
-     * @return NetworkResponse
-     * @throws RequestException
-     * @throws ConnectException
-     * @throws ClientException
-     * @throws ServerException
-     */
-    public function fetch(string $url, array $headers = []): NetworkResponse
+     * {@inheritdoc}
+    */
+    public function fetch(string $url, array $headers = []): Response
     {
         return $this->client->request("GET", $url, [], $headers);
     }
 
     /**
-     * Perform a POST request.
-     *
-     * @param string $url
-     * @param array $data
-     * @param array $headers
-     *
-     * @return NetworkResponse
-     * @throws RequestException
-     * @throws ConnectException
-     * @throws ClientException
-     * @throws ServerException
-     */
-    public function post(string $url, array $data = [], array $headers = []): NetworkResponse
+     * {@inheritdoc}
+    */
+    public function post(string $url, array $data = [], array $headers = []): Response
     {
         return $this->client->request("POST", $url, $data, $headers);
     }
 
-     /**
-     * Perform a request.
-     *
-     * @param string $method
-     * @param string $url
-     * @param array $data
-     * @param array $headers
-     *
-     * @return NetworkResponse
-     * @throws RequestException
-     * @throws ConnectException
-     * @throws ClientException
-     * @throws ServerException
-     */
-    public function request(string $method, string $url, array $data = [], array $headers = []): NetworkResponse
+    /**
+     * {@inheritdoc}
+    */
+    public function request(string $method, string $url, array $data = [], array $headers = []): Response
     {
         return $this->client->request($method, $url, $data, $headers);
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function sendAsync(Request $request): PromiseInterface
+    {
+        if($this->client instanceof Client){
+            return $this->client->sendAsync($request);
+        }
     }
 }

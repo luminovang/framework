@@ -15,7 +15,7 @@ use \Luminova\Interface\ServicesInterface;
 abstract class BaseServices extends Services implements ServicesInterface
 {
     /**
-     * @var array $serviceQueue;
+     * @var array<string, mixed> $serviceQueue;
     */
     private static array $serviceQueue = [];
 
@@ -57,11 +57,10 @@ abstract class BaseServices extends Services implements ServicesInterface
     /**
      * Get queued services 
      * 
-     * @return array<string, array>
+     * @return array<string, mixed>
     */
     public static function getServices(): array 
     {
         return static::$serviceQueue;
     }
-    
 }

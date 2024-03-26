@@ -15,19 +15,17 @@ use \App\Controllers\Config\Session as CookieConfig;
 class CookieManager implements SessionInterface 
 { 
     /**
-     * @var string $storage
+     * @var string $storage Session storage name 
     */
-    protected string $storage = '';
+    protected string $storage;
 
     /**
-     * @var string $config CookieConfig
+     * @var ?string $config Session cookie configuration
     */
-    private ?string $config = null;
+    private static ?string $config = null;
 
     /**
-     * Session constructor.
-     *
-     * @param string $storage The session storage key.
+     * {@inheritdoc}
     */
     public function __construct(string $storage = 'global') 
     {
@@ -35,23 +33,15 @@ class CookieManager implements SessionInterface
     }
 
     /** 
-     * Set cookie options 
-     * 
-     * @param string $config CookieConfig class name
-     * 
-     * @return void
+     * {@inheritdoc}
     */
     public function setConfig(string $config): void 
     {
-        $this->config = $config;
+        static::$config = $config;
     }
 
     /**
-     * Set storage key
-     *
-     * @param string $storage The session storage key.
-     * 
-     * @return self
+     * {@inheritdoc}
     */
     public function setStorage(string $storage): self 
     {
@@ -60,9 +50,7 @@ class CookieManager implements SessionInterface
     }
 
     /**
-     * Get storage key
-     * 
-     * @return string
+     * {@inheritdoc}
     */
     public function getStorage(): string 
     {
@@ -70,12 +58,7 @@ class CookieManager implements SessionInterface
     }
   
     /**
-     * Add a key-value pair to the session data.
-     *
-     * @param string $key The key.
-     * @param mixed $value The value.
-     * 
-     * @return self
+     * {@inheritdoc}
      */
     public function add(string $key, mixed $value): self
     {
@@ -85,12 +68,7 @@ class CookieManager implements SessionInterface
     }
 
     /** 
-     * Set key and value to session
-     * 
-     * @param string $key key to set
-     * @param mixed $value value to set
-     * 
-     * @return self
+     * {@inheritdoc}
     */
     public function set(string $key, mixed $value): self
     {
@@ -100,12 +78,7 @@ class CookieManager implements SessionInterface
     }
 
     /** 
-     * get data from session
-     * 
-     * @param string $index key to get
-     * @param mixed $default default value 
-     * 
-     * @return mixed
+     * {@inheritdoc}
     */
     public function get(string $index, mixed $default = null): mixed
     {
@@ -115,12 +88,7 @@ class CookieManager implements SessionInterface
     }
 
     /** 
-     * Get data from specified storage instance
-     * 
-     * @param string $index value key to get
-     * @param string $storage Storage key name
-     * 
-     * @return mixed
+     * {@inheritdoc}
     */
     public function getFrom(string $index, string $storage): mixed
     {
@@ -130,13 +98,7 @@ class CookieManager implements SessionInterface
     }
 
     /** 
-     * Get data from specified storage instance
-     * 
-     * @param string $index value key to get
-     * @param mixed $value data to set
-     * @param string $storage Storage key name
-     * 
-     * @return self
+     * {@inheritdoc}
     */
     public function setTo(string $index, mixed $value, string $storage): self
     {
@@ -148,11 +110,7 @@ class CookieManager implements SessionInterface
     }
 
     /** 
-     * Check if session user is online from any storage instance
-     * 
-     * @param string $storage Optional storage key 
-     * 
-     * @return bool
+     * {@inheritdoc}
     */
     public function online($storage = ''): bool
     {
@@ -166,27 +124,19 @@ class CookieManager implements SessionInterface
     }
 
     /**
-     * Clear all data from a specific session storage by passing the storage key.
-     *
-     * @param string $storage Storage key to unset.
-     * 
-     * @return self
+     * {@inheritdoc}
     */
     public function clear(string $storage = ''): self
     {
         $context = $storage === '' ? $this->storage : $storage;
-        $this->saveContent('',  $context, time() - $this->config::$expiration);
+        $this->saveContent('',  $context, time() - static::$config::$expiration);
         $_COOKIE[$context] = '';
 
         return $this;
     }
 
    /**
-     * Remove key from the current session storage by passing the key.
-     *
-     * @param string $index Key index to unset.
-     * 
-     * @return self
+     * {@inheritdoc}
     */
     public function remove(string $index): self
     {
@@ -195,15 +145,12 @@ class CookieManager implements SessionInterface
             unset($data[$index]);
             $this->updateContents($data);
         }
+        
         return $this;
     }
 
     /** 
-     * Check if key exists in session
-     * 
-     * @param string $key
-     * 
-     * @return bool
+     * {@inheritdoc}
     */
     public function has(string $key): bool
     {
@@ -213,11 +160,7 @@ class CookieManager implements SessionInterface
     }
 
      /** 
-     * Check if storage key exists in session
-     * 
-     * @param string $storage
-     * 
-     * @return bool
+     * {@inheritdoc}
     */
     public function hasStorage(string $storage): bool
     {
@@ -225,9 +168,7 @@ class CookieManager implements SessionInterface
     }
 
     /** 
-     * Get all stored session as array
-     * 
-     * @return array
+     * {@inheritdoc}
     */
     public function getResult(): array
     {
@@ -239,11 +180,7 @@ class CookieManager implements SessionInterface
     }
 
     /** 
-     * Get data as array from current session storage 
-     * 
-     * @param string $index optional key to get
-     * 
-     * @return array
+     * {@inheritdoc}
     */
     public function toArray(string $index = ''): array
     {
@@ -251,11 +188,7 @@ class CookieManager implements SessionInterface
     }
 
     /** 
-     * Get data as object from current session storage
-     * 
-     * @param string $index optional key to get
-     * 
-     * @return object
+     * {@inheritdoc}
     */
     public function toObject(string $index = ''): object
     {
@@ -263,12 +196,7 @@ class CookieManager implements SessionInterface
     }
 
     /** 
-     * Get data as object or array from current session storage
-     * 
-     * @param string $type return type of object or array
-     * @param string $index optional key to get
-     * 
-     * @return object|array
+     * {@inheritdoc}
     */
     public function toAs(string $type = 'array', string $index = ''): object|array
     {
@@ -293,11 +221,7 @@ class CookieManager implements SessionInterface
     }
 
     /** 
-     * Get data as array from storage 
-     * 
-     * @param string $storage optional storage key 
-     * 
-     * @return array
+     * {@inheritdoc}
     */
     public function getContents(string $storage = ''): array
     {
@@ -357,17 +281,16 @@ class CookieManager implements SessionInterface
     private function saveContent(string $value, string $storage, ?int $expiry = null): void
     {
 
-        $this->config ??= CookieConfig::class;
-        $expiration = $expiry === null ? time() + $this->config::$expiration : $expiry;
+        static::$config ??= CookieConfig::class;
+        $expiration = $expiry === null ? time() + static::$config::$expiration : $expiry;
 
         setcookie($storage, $value, [
             'expires' => $expiration,
-            'path' => $this->config::$sessionPath,
-            'domain' => $this->config::$sessionDomain,
+            'path' => static::$config::$sessionPath,
+            'domain' => static::$config::$sessionDomain,
             'secure' => true,
             'httponly' => true,
-            'samesite' => $this->config::$sameSite 
+            'samesite' => static::$config::$sameSite 
         ]);
     }
-
 }

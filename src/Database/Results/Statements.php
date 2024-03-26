@@ -11,23 +11,24 @@
 namespace Luminova\Database\Results;
 
 use \stdClass;
-use \Luminova\Database\Results\Queries;
+use \Luminova\Database\Drivers\DriversInterface;
 use \ReflectionClass;
 use \ReflectionException;
 
 class Statements
 {
     /**
-     * @var object $statement
+     * @var DriversInterface|null $statement
     */
-    private object $statement;
+    private ?DriversInterface $statement = null;
 
     /**
      * Initialize with executed statement
      * 
-     * @param object $statement
+     * @param DriversInterface $statement
     */
-    public function __construct(object $statement){
+    public function __construct(DriversInterface $statement)
+    {
         $this->statement = $statement;
     }
 
@@ -118,13 +119,13 @@ class Statements
     /**
      * Get result 
      * 
-     * @param string $type [all, one, total, object, array, lastId, count or className]
+     * @param string $mapping [all, one, total, object, array, lastId, count or className]
      * 
-     * @return mixed|Queries
+     * @return mixed
     */
-    public function get(string $type = 'all'): mixed 
+    public function get(string $mapping = 'all'): mixed 
     {
-        return match ($type) {
+        return match ($mapping) {
             'all' => $this->statement->getAll(),
             'one' => $this->statement->getOne(),
             'total' => $this->statement->getInt(),
@@ -132,15 +133,14 @@ class Statements
             'array' => $this->statement->getArray(),
             'lastId' => $this->statement->getLastInsertId(),
             'count' => $this->statement->rowCount(),
-            default => $this->getClass($this->statement->getObject(), $type)
+            default => $this->getClass($this->statement->getObject(), $mapping)
         };
     }
 
     /**
      * Get result mapped to class
      * 
-     * @example MyClass class
-     * class MyClass {
+     * @example class MyClass {
      *  public $property1;
      *  public $property2;
      *  public function __construct(object $data) {
@@ -162,7 +162,10 @@ class Statements
                     $object = $class->newInstanceArgs([$object]);
                 }
             } catch (ReflectionException $e) {
-                
+                logger('debug', $e->getMessage(), [
+                    'content' => self::class,
+                    'className' => $className
+                ]);
             }
         }
         

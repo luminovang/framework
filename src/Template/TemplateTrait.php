@@ -18,7 +18,6 @@ use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\AppException; 
 use \Luminova\Exceptions\ViewNotFoundException; 
 use \Luminova\Exceptions\RuntimeException;
-use stdClass;
 
 trait TemplateTrait
 { 
@@ -65,7 +64,7 @@ trait TemplateTrait
     private static string $templateFolder = 'resources/views';
 
     /** 
-     * Holds the view template optimize file directory path
+     * Holds the view template cache file directory path
      * 
      * @var string $pageCacheFolder 
     */
@@ -77,13 +76,6 @@ trait TemplateTrait
      * @var string $assetsFolder 
     */
     private string $assetsFolder = 'assets';
-
-    /** 
-     * Holds the view template optimize full file directory path
-     * 
-     * @var string $optimizerFile 
-    */
-    private string $optimizerFile = '';
 
     /** 
      * Holds the sub view template directory path
@@ -128,13 +120,6 @@ trait TemplateTrait
     private string $rootDirectory = '';
 
     /**
-     * Holds template html content
-     * 
-     * @var string $templateContents 
-    */
-    private string $templateContents = '';
-
-    /**
      * Holds relative file position depth 
      * 
      * @var int $relativeLevel 
@@ -174,7 +159,7 @@ trait TemplateTrait
      * 
      * @var bool $cacheView
     */
-    private bool $cacheView = true;
+    private static bool $cacheView = false;
 
     /**
      * Should minify codeblock tags
@@ -206,34 +191,35 @@ trait TemplateTrait
     private static ?PageViewCache $viewCache  = null;
 
     /** 
-    * Initialize template
-    *
-    * @param string $dir template base directory
-    *
-    * @return void
+     * Initialize template
+     *
+     * @param string $dir template base directory
+     *
+     * @return void
     */
     public function initialize(string $dir =__DIR__): void
     {
         static::$baseTemplateDir = root($dir);
-        static::$minifyContent = env('enable.page.minification', false);
-        static::$pageCacheFolder = TemplateConfig::$pageCacheFolder;
+        static::$minifyContent = env('page.minification', false);
+        static::$cacheView = (bool) env('page.caching', false);
+        //static::$pageCacheFolder = TemplateConfig::$pageCacheFolder;
         $this->templateEngine = TemplateConfig::$templateEngine;
-        $this->viewIsolation = TemplateConfig::$viewIsolation;
+        //$this->viewIsolation = TemplateConfig::$viewIsolation;
         $this->cacheExpiry = (int) env('page.cache.expiry', 0);
 
         if (NOVAKIT_ENV === null && !PRODUCTION) {
             // If the document root is not changed to "public", or not on novakit development server.
             //Manually enable the app to use "public" as the default
-            $this->setPublic("public");
+            $this->rootDirectory = 'public';
         }
     }
 
     /** 
-    * Get protected property or static::$publicOptions or static::$publicClasses
-    *
-    * @param string $key property name 
-    *
-    * @return mixed 
+     * Get protected property or static::$publicOptions or static::$publicClasses
+     *
+     * @param string $key property name 
+     *
+     * @return mixed 
     */
     public function __get(string $key): mixed 
     {
@@ -247,11 +233,11 @@ trait TemplateTrait
     }
 
     /** 
-    * Get property from static::$publicOptions or static::$publicClasses
-    *
-    * @param string $key property name 
-    *
-    * @return mixed 
+     * Get property from static::$publicOptions or static::$publicClasses
+     *
+     * @param string $key property name 
+     *
+     * @return mixed 
     */
     public static function attrGetter(string $key): mixed 
     {
@@ -267,11 +253,11 @@ trait TemplateTrait
     }
 
     /** 
-    * Get registered class object static::$publicClasses
-    *
-    * @param string $key object class name 
-    *
-    * @return object|null 
+     * Get registered class object static::$publicClasses
+     *
+     * @param string $key object class name 
+     *
+     * @return object|null 
     */
     public static function getClass(string $key): ?object 
     {
@@ -283,11 +269,11 @@ trait TemplateTrait
     }
 
     /** 
-    * Check if class registered 
-    *
-    * @param string $class object class name 
-    *
-    * @return bool If class is registered
+     * Check if class registered 
+     *
+     * @param string $class object class name 
+     *
+     * @return bool If class is registered
     */
     public static function hasClass(string $class): bool 
     {
@@ -295,11 +281,11 @@ trait TemplateTrait
     }
 
     /** 
-    * Set view level 
-    *
-    * @param int $level level
-    *
-    * @return self $this
+     * Set view level 
+     *
+     * @param int $level level
+     *
+     * @return self $this
     */
     public function setLevel(int $level): self
     {
@@ -309,25 +295,11 @@ trait TemplateTrait
     }
 
     /** 
-    * Set if base template should be optimized
-    *
-    * @param bool $allow true or false
-    *
-    * @return self $this
-    */
-    public function enableViewCache(bool $enable): self 
-    {
-        $this->cacheView = $enable;
-
-        return $this;
-    }
-
-    /** 
-    * Set if compress should ignore code block minification
-    *
-    * @param bool $ignore true or false
-    *
-    * @return self $this
+     * Set if compress should ignore code block minification
+     *
+     * @param bool $ignore true or false
+     *
+     * @return self $this
     */
     public function minifyCodeblock(bool $ignore): self 
     {
@@ -336,12 +308,12 @@ trait TemplateTrait
         return $this;
     }
 
-     /** 
-    * Set if codeblock should have a copy button
-    *
-    * @param bool $allow true or false
-    *
-    * @return self $this
+    /** 
+     * Set if codeblock should have a copy button
+     *
+     * @param bool $allow true or false
+     *
+     * @return self $this
     */
     public function copyCodeblock(bool $allow): self 
     {
@@ -351,11 +323,11 @@ trait TemplateTrait
     }
 
     /** 
-    * Set project base folder
-    *
-    * @param string $base the base directory
-    *
-    * @return self $this
+     * Set project base folder
+     *
+     * @param string $base the base directory
+     *
+     * @return self $this
     */
     public function setProjectBase(string $base): self
     {
@@ -365,9 +337,9 @@ trait TemplateTrait
     }
    
     /** 
-    * Get view root folder
-    *
-    * @return string root
+     * Get view root folder
+     *
+     * @return string root
     */
     private static function viewRoot(): string
     {
@@ -379,11 +351,11 @@ trait TemplateTrait
     }
 
     /** 
-    * Set template engine to use for rendering
-    *
-    * @param string $engine template engine name
-    *
-    * @return self $this
+     * Set template engine to use for rendering
+     *
+     * @param string $engine template engine name
+     *
+     * @return self $this
     */
     public function useTemplateEngine(string $engine): self
     {
@@ -393,9 +365,9 @@ trait TemplateTrait
     }
 
     /** 
-    * Get template engine 
-    *
-    * @return string $$engin template extension
+     * Get template engine 
+     *
+     * @return string $$engin template extension
     */
     private function typeOfEngine(): string
     {
@@ -403,25 +375,25 @@ trait TemplateTrait
     }
 
     /** 
-    * Set sub view folder
-    *
-    * @param string $path folder name
-    *
-    * @return self $this
+     * Set sub view folder
+     *
+     * @param string $path folder name
+     *
+     * @return self $this
     */
     public function setFolder(string $path): self
     {
-        $this->subViewFolder =  trim($path, '/');
+        $this->subViewFolder = trim($path, '/');
 
         return $this;
     }
 
     /** 
-    * Set optimizer ignore view
-    *
-    * @param array|string $viewName view name
-    *
-    * @return self $this
+     * Add a view to page cache ignore list.
+     *
+     * @param string|array<int, string> $viewName view name or array of view names.
+     *
+     * @return self $this
     */
     public function addCacheIgnore(array|string $viewName): self
     {
@@ -435,12 +407,11 @@ trait TemplateTrait
     }
 
     /** 
-    * Set project application document root
-    * public_html default
-    *
-    * @param string $root base directory
-    *
-    * @return self $this
+     * Set project application document root (default: public) on development server.
+     *
+     * @param string $root public base directory
+     *
+     * @return self $this
     */
     public function setPublic(string $root): self 
     {
@@ -498,6 +469,7 @@ trait TemplateTrait
         if (!is_array($attributes)) {
             throw new RuntimeException("Invalid attributes: '{$attributes}'. Expected an array.");
         }
+
         $count = 0;
         foreach ($attributes as $name => $value) {
             $key = TemplateConfig::$useVariablePrefix ? "_{$name}" : $name;
@@ -518,71 +490,152 @@ trait TemplateTrait
     }
 
     /** 
-     * Get view contents 
-     * 
-     * @return mixed
+     * Get base view file directory
+     *
+     * @param string path
+     *
+     * @return string path
     */
-    public function getContents(): mixed
+    private static function withViewFolder(string $path): string 
     {
-        return $this->templateContents;
+        return static::viewRoot() . DIRECTORY_SEPARATOR . $path . DIRECTORY_SEPARATOR;
     }
 
     /** 
-    * Get base view file directory
-    *
-    * @return string path
-    */
-    private static function getViewFolder(): string 
-    {
-        return static::viewRoot() . DIRECTORY_SEPARATOR . static::$templateFolder . DIRECTORY_SEPARATOR;
-    }
-
-    /** 
-    * Get error file from directory
-    *
-    * @param string $filename file name
-    *
-    * @return string path
+     * Get error file from directory
+     *
+     * @param string $filename file name
+     *
+     * @return string path
     */
     private static function getErrorFolder(string $filename): string 
     {
-        return static::getViewFolder() . 'system_errors' . DIRECTORY_SEPARATOR . "{$filename}.php";
+        return static::withViewFolder(static::$templateFolder) . 'system_errors' . DIRECTORY_SEPARATOR . $filename . '.php';
     }
 
     /** 
-    * Get optimizer file directory
-    *
-    * @return string path
-    */
-    private static function getCacheFolder(): string
-    {
-        return static::viewRoot() . DIRECTORY_SEPARATOR . static::$pageCacheFolder . DIRECTORY_SEPARATOR;
-    }
-
-    /** 
-     * Cache response use before cache()->respond() method
+     * Cache and store response to reuse on next request to same content.
      * 
-     * @param string $cacheKey Cache key
-     * @param int $expire Cache expiration default is 60 minutes
+     * @example $this-app->cache('key', 60)->respond('contents');
+     * 
+     * @param string $key Cache content key
+     * @param int $expire Cache expiration default, set to null to use default expiration from .env file.
      * 
      * @return self $this
     */
-    public function cache(string $cacheKey, int $expiry = 60): self 
+    public function cache(string $key, ?int $expiry = null): self 
     {
-        $this->cacheKey = $cacheKey;
-        $this->cacheExpiry = $expiry;
+        $this->cacheKey = $key;
+
+        if($expiry !== null){
+            $this->cacheExpiry = $expiry;
+        }
 
         return $this;
     }
 
+    /**
+     * Check if page cache has expired 
+     * 
+     * @return bool Returns true if chache doesn't exist or expired.
+    */
+    public function expired(): bool
+    {
+        if($this->cacheKey === ''){
+            return false;
+        }
+
+        return !PageViewCache::expired($this->cacheKey, static::withViewFolder(TemplateConfig::$pageCacheFolder));
+    }
+
+    /**
+     * Render cached content if cache exist.
+     * 
+     * @return bool Returns true if cache exsit and rendered else return false. 
+    */
+    public function renderCache(): bool
+    {
+        if ($this->cacheKey === '') {
+            return false;
+        }
+
+        $cache = static::getCacheInstance(
+            $this->cacheKey, 
+            $this->cacheExpiry
+        );
+
+        if ($cache->readContent()) {
+            return true;
+        }
+    }
+
     /** 
-    * Creates and Render template by including the accessible global variable within the template file.
-    *
-    * @param array $options additional parameters to pass in the template file
-    * @param int $status HTTP status code (default: 200 OK)
-    *
-    * @return void
-    * @throws ViewNotFoundException
+     * Return a response to render in view, api or cli.
+     * If cache is enable and it retured cached content instead.
+     * 
+     * @param mixed $content Content to ender.
+     * @param string $type Type of content passed [json, html, xml, text]
+     * @param int $status HTTP status code (default: 200 OK)
+     * 
+     * @return void
+    */
+    public function respond(mixed $content, string $type = 'json', int $status = 200): void 
+    {
+        $cacheInstance = null;
+        $viewHeaderInfo = [];
+
+        http_response_code($status);
+        ob_start(BaseConfig::getEnv('script.ob.handler', null, 'nullable'));
+
+        if(static::$minifyContent){
+            $minifierInstance = static::newCompressed($content, $type, $this->minifyCodeTags, $this->canCopyCodeblock);
+            $content = $minifierInstance->getMinified();
+            $viewHeaderInfo = $minifierInstance->getHeaderInfo();
+        }
+
+        if (static::$cacheView && $this->cacheKey !== null && $this->cacheExpiry > 0 && $content != null) {
+            $cacheInstance = static::getCacheInstance(
+                $this->cacheKey, 
+                $this->cacheExpiry
+            );
+            $cacheInstance->setType($type);
+            $cacheInstance->saveCache($content, null, $viewHeaderInfo);
+        }
+
+        $this->cacheKey = null;
+        //$this->cacheExpiry = 0;
+
+        exit(static::$minifyContent ? STATUS_SUCCESS : $content);
+    }
+
+    /** 
+     * Redirect to view url
+     *
+     * @param string $view view name
+     * @param int $response_code response status code
+     *
+     * @return void
+    */
+    public function redirect(string $view, int $response_code = 0): void 
+    {
+        $to = APP_URL;
+
+        if ($view !== '' && $view !== '/') {
+            $to .= '/' . $view;
+        }
+
+        header("Location: $to", true, $response_code);
+        exit();
+    }
+
+    /** 
+     * Creates and Render template by including the accessible global variable within the template file.
+     *
+     * @param array $options additional parameters to pass in the template file
+     * @param int $status HTTP status code (default: 200 OK)
+     *
+     * @return void
+     * @throws ViewNotFoundException
     */
     private function renderViewContent(array $options = [], int $status = 200): void 
     {
@@ -592,8 +645,8 @@ trait TemplateTrait
                 if ($this->templateEngine === 'smarty') {
                     $this->renderSmarty($options, $shouldCache);
                 } else {
-                    if($this->viewIsolation ){
-                        static::renderIsolation($this->templateFile, $shouldCache, $this->optimizerFile, $options, $this->minifyCodeTags, $this->canCopyCodeblock);
+                    if(TemplateConfig::$viewIsolation){
+                        static::renderIsolation($this->templateFile, $shouldCache, $this->cacheExpiry, $options, $this->minifyCodeTags, $this->canCopyCodeblock);
                     }else{
                         $this->renderDefault($options, $shouldCache);
                     }
@@ -663,74 +716,6 @@ trait TemplateTrait
         $smarty->display($this->activeView . $this->typeOfEngine());
     }
 
-    /** 
-     * Cache response
-     * 
-     * @param mixed $content Cache key
-     * @param string $type Cache type [json, html, xml, text]
-     * @param int $status HTTP status code (default: 200 OK)
-     * 
-     * @return void
-    */
-    public function respond(mixed $content, string $type = 'json', int $status = 200): void 
-    {
-        $shouldCache = $this->cacheKey !== null;
-        $optimizer = null;
-        $result = false;
-        $viewHeaderInfo = [];
-
-        http_response_code($status);
-        ob_start(BaseConfig::getEnv('script.ob.handler', null, 'nullable'));
-
-        if ($this->cacheKey !== null && $this->cacheExpiry > 0) {
-            $folder = static::getCacheFolder();
-            $optimizer = static::getCacheInstance($this->cacheKey, $folder, $this->cacheExpiry);
-            if ($optimizer->hasCache() && $optimizer->getCache()) {
-                $this->cacheKey = null;
-                $this->cacheExpiry = 0;
-                $shouldCache = false;
-
-                exit(STATUS_SUCCESS);
-            }
-        }
-
-        if(static::$minifyContent){
-            $compress = static::newCompressed($content, $type, $this->minifyCodeTags, $this->canCopyCodeblock);
-            $result = true;
-            $content = $compress->getMinified();
-            $viewHeaderInfo = $compress->getInfo();
-        }
-
-        if ($shouldCache && $optimizer !== null && $content != null) {
-            $optimizer->saveCache($content, null, $viewHeaderInfo);
-        }
-
-        $this->cacheKey = null;
-        $this->cacheExpiry = 0;
-
-        exit($result ? STATUS_SUCCESS : $content);
-    }
-
-    /** 
-    * Redirect to view url
-    *
-    * @param string $view view name
-    * @param int $response_code response status code
-    *
-    * @return void
-    */
-    public function redirect(string $view, int $response_code = 0): void 
-    {
-        $to = APP_URL;
-
-        if ($view !== '' && $view !== '/') {
-            $to .= '/' . $view;
-        }
-
-        header("Location: $to", true, $response_code);
-        exit();
-    }
-
     /**
      * Render without smarty using default .php template engine.
      * 
@@ -741,13 +726,15 @@ trait TemplateTrait
     */
     private function renderDefault(array $options, bool $shouldCache): void
     {
-        $optimizer = null;
-        $viewHeaderInfo = null;
-        $finish = false;
+        $cacheInstance = null;
 
-        if ($shouldCache && $this->cacheExpiry > 0) {
-            $optimizer = static::getCacheInstance(static::getViewUri(), $this->optimizerFile, $this->cacheExpiry);
-            if ($optimizer->hasCache() && $optimizer->getCache()) {
+        if ($shouldCache) {
+         
+            $cacheInstance = static::getCacheInstance(static::generateKey(), $this->cacheExpiry);
+            $cacheInstance->setType($options["viewType"]);
+
+            if ($cacheInstance->hasCache() && $cacheInstance->readContent()) {
+                exit("YES" . $cacheInstance->hasCache() );
                 exit(STATUS_SUCCESS);
             }
         }
@@ -760,22 +747,24 @@ trait TemplateTrait
 
         include $this->templateFile;
         $viewContents = ob_get_clean();
+        $viewHeaderInfo = null;
         
         if (static::$minifyContent) {
-            $finish = true;
-            $compress = static::newCompressed($viewContents, $options["viewType"], $this->minifyCodeTags, $this->canCopyCodeblock);
-            $viewContents = $compress->getMinified();
-            $viewHeaderInfo = $compress->getInfo();
+            $minifierInstance = static::newCompressed($viewContents, $options["viewType"], $this->minifyCodeTags, $this->canCopyCodeblock);
+            $viewContents = $minifierInstance->getMinified();
+            $viewHeaderInfo = $minifierInstance->getHeaderInfo();
         }
 
-        $viewHeaderInfo ??= static::requestInfo();
+        if ($shouldCache && $cacheInstance !== null) {
+            $viewHeaderInfo ??= static::requestInfo();
+            $cacheInstance->saveCache($viewContents, BaseConfig::copyright(), $viewHeaderInfo);
 
-        if ($shouldCache && $optimizer !== null) {
-            $optimizer->saveCache($viewContents, BaseConfig::copyright(), $viewHeaderInfo);
-            if($finish){
+            if(static::$minifyContent){
                 exit(STATUS_SUCCESS);
             }
         }
+
+        unset($cacheInstance, $viewHeaderInfo, $options);
 
         exit($viewContents);
     }
@@ -785,7 +774,7 @@ trait TemplateTrait
      * 
      * @param string $templateFile View template file 
      * @param bool $shouldCache Should cache page contents
-     * @param string $cacheFile Cache storage file path
+     * @param int $cacheExpiry Cache expiry
      * @param array $options View options
      * @param bool $ignore Ignore html codeblock during minimizing
      * @param bool $copy Allow copy on html code tag or not
@@ -795,22 +784,21 @@ trait TemplateTrait
     private static function renderIsolation(
         string $templateFile, 
         bool $shouldCache, 
-        string $cacheFile, 
+        int $cacheExpiry,
         array $options, 
         bool $ignore = true, 
         bool $copy = false
     ): void
     {
-        $optimizer = null;
-        $finish = false;
-        $viewHeaderInfo = null;
-        $cacheExpiry = (int) env('page.cache.expiry', 0);
+        $cacheInstance = null;
+        //$cacheExpiry = (int) env('page.cache.expiry', 0);
         $self = (object) static::$publicClasses;
 
-        if ($cacheExpiry > 0 && $shouldCache) {
-            $optimizer = static::getCacheInstance(static::getViewUri(), $cacheFile, $cacheExpiry);
+        if ($shouldCache) {
+            $cacheInstance = static::getCacheInstance(static::generateKey(), $cacheExpiry);
+            $cacheInstance->setType($options['viewType']);
 
-            if ($optimizer->hasCache() && $optimizer->getCache()) {
+            if ($cacheInstance->hasCache() && $cacheInstance->readContent()) {
                 exit(STATUS_SUCCESS);
             }
         }
@@ -823,19 +811,19 @@ trait TemplateTrait
 
         include $templateFile;
         $viewContents = ob_get_clean();
+        $viewHeaderInfo = null;
 
         if (static::$minifyContent) {
-            $compress = static::newCompressed($viewContents, $viewType, $ignore, $copy);
-            $viewContents = $compress->getMinified();
-            $viewHeaderInfo = $compress->getInfo();
-            $finish = true;
+            $minifierInstance = static::newCompressed($viewContents, $viewType, $ignore, $copy);
+            $viewContents = $minifierInstance->getMinified();
+            $viewHeaderInfo = $minifierInstance->getHeaderInfo();
         }
 
-        $viewHeaderInfo ??= static::requestInfo();
+        if ($shouldCache && $cacheInstance !== null) {
+            $viewHeaderInfo ??= static::requestInfo();
+            $cacheInstance->saveCache($viewContents, BaseConfig::copyright(), $viewHeaderInfo);
 
-        if ($shouldCache && $optimizer !== null) {
-            $optimizer->saveCache($viewContents, BaseConfig::copyright(), $viewHeaderInfo);
-            if($finish){
+            if(static::$minifyContent){
                 exit(STATUS_SUCCESS);
             }
         }
@@ -844,27 +832,21 @@ trait TemplateTrait
     }
 
     /** 
-    * Render minification
-    *
-    * @param mixed $contents view contents output buffer
-    * @param string $type content type
-    * @param bool $ignore
-    * @param bool $copy 
-    *
-    * @return PageMinifier $compress
+     * Render minification
+     *
+     * @param mixed $contents view contents output buffer
+     * @param string $type content type
+     * @param bool $ignore
+     * @param bool $copy 
+     *
+     * @return PageMinifier $compress
     */
     private static function newCompressed(mixed $contents, string $type = 'html', bool $ignore = true, bool $copy = false): PageMinifier 
     {
         static $minifier = null;
         
         $minifier ??= new PageMinifier();
-
-        // Set cache control for application cache
-        $minifier->setCacheControl(env('cache.control', 'no-store'));
-
-        // Set response compression level
-        $compressionLevel = (int) env('compression.level', 6);
-        $minifier->setCompressionLevel($compressionLevel);
+        $minifier->setCompressionLevel((int) env('compression.level', 6));
         $minifier->minifyCodeblock($ignore);
         $minifier->allowCopyCodeblock($copy);
 
@@ -882,66 +864,12 @@ trait TemplateTrait
     }
 
     /** 
-    * Get page view cache instance
-    *
-    * @param string $key
-    * @param string $file 
-    * @param int $expiry 
-    *
-    * @return PageViewCache
-    */
-    private static function getCacheInstance(string $key, string $file, int $expiry = 0): PageViewCache
-    {
-        if(static::$viewCache === null){
-            static::$viewCache = new PageViewCache();
-        }
-
-        static::$viewCache->setExpiry($expiry);
-        static::$viewCache->setDirectory($file);
-        static::$viewCache->setKey($key);
-
-        return static::$viewCache;
-    }
-
-    /** 
-    * Get output headers
-    * 
-    * @return array<string, mixed> $info
-    */
-    private static function requestInfo(): array
-    {
-        $responseHeaders = headers_list();
-        $info = [];
-
-        foreach ($responseHeaders as $header) {
-            [$name, $value] = explode(':', $header, 2);
-
-            $name = trim($name);
-            $value = trim($value);
-
-            switch ($name) {
-                case 'Content-Type':
-                    $info['Content-Type'] = $value;
-                    break;
-                case 'Content-Length':
-                    $info['Content-Length'] = (int) $value;
-                    break;
-                case 'Content-Encoding':
-                    $info['Content-Encoding'] = $value;
-                    break;
-            }
-        }
-
-        return $info;
-    }
-
-    /** 
-    * render render template view
-    *
-    * @param string $viewName view name
-    * @param string $viewType Type of content not same as Content-Type
-    *
-    * @return self $this
+     * render render template view
+     *
+     * @param string $viewName view name
+     * @param string $viewType Type of content not same as Content-Type
+     *
+     * @return self $this
     */
     public function view(string $viewName, string $viewType = 'html'): self 
     {
@@ -951,8 +879,7 @@ trait TemplateTrait
             throw new InvalidArgumentException('Invalid argument, ' . $viewType. ' required (html, json, text or xml).');
         }
 
-        $this->templateDir = static::getViewFolder();
-        $this->optimizerFile = static::getCacheFolder();
+        $this->templateDir = static::withViewFolder(static::$templateFolder);
 
         if($this->subViewFolder !== ''){
             $this->templateDir .= $this->subViewFolder . DIRECTORY_SEPARATOR;
@@ -973,15 +900,15 @@ trait TemplateTrait
 
     /** 
      * Pass additional options to view before rendering
-    * Calls after view() to display your template view and
-    * Include any accessible global variable within the template file.
-    *
-    * @param array<string, mixed> $options additional parameters to pass in the template file $this->_myOption
-    * @param int $status HTTP status code (default: 200 OK)
-    * @param int $level Optional directory relative level to fix your file location
-    * 
-    * @return void
-    * @throws InvalidArgumentException
+     * Calls after view() to display your template view and
+     * Include any accessible global variable within the template file.
+     *
+     * @param array<string, mixed> $options additional parameters to pass in the template file $this->_myOption
+     * @param int $status HTTP status code (default: 200 OK)
+     * @param int $level Optional directory relative level to fix your file location
+     * 
+     * @return void
+     * @throws InvalidArgumentException
     */
     public function render(array $options = [], int $status = 200, int $level = 0): void 
     {
@@ -1016,17 +943,13 @@ trait TemplateTrait
     }
 
     /** 
-    * Check if view should be optimized page caching or not
-    *
-    * @return bool 
+     * Check if view should be optimized page caching or not
+     *
+     * @return bool 
     */
     private function shouldCache(): bool 
     {
-        if (!$this->cacheView) {
-            return false;
-        }
-
-        if (!(bool) env('enable.page.caching', false)) {
+        if (!static::$cacheView || $this->cacheExpiry < 1) {
             return false;
         }
 
@@ -1034,62 +957,124 @@ trait TemplateTrait
     }
 
     /** 
-    * Fixes the broken css,image & links when added additional slash(/) at the router link
-    * The function will add the appropriate relative base based on how many invalid link detected.
-    *
-    * @param int $level the directory level from base directory controller/foo(1) controller/foo/bar(2)
-    *
-    * @return string relative path 
+     * Fixes the broken css,image & links when added additional slash(/) at the router link
+     * The function will add the appropriate relative base based on how many invalid link detected.
+     *
+     * @param int $level the directory level from base directory controller/foo(1) controller/foo/bar(2)
+     *
+     * @return string relative path 
     */
     private static function calculateLevel(int $level = 0): string 
     {
-        if($level === 0){
+        if ($level === 0) {
             $uri = static::getViewUri();
-           
 
-            if (!PRODUCTION && strpos($uri, '/public') !== false) {
-                [, $uri] = explode('/public', $uri, 2);
+            if (($pos = strpos($uri, '/public')) !== false) {
+                $uri = substr($uri, $pos + 7);
             }
 
             $level = substr_count($uri, '/');
-
-            if ($level == 1 && PRODUCTION) {
-                $level = 0;
-            }
         }
 
-        return str_repeat(($level >= 2 ? '../' : ($level == 1 ? '../' : './')), $level);
+        return str_repeat(($level >= 1 ? '../' : './'), $level);
     }
 
     /** 
-    * Get template base view segments
-    *
-    * @return string template view segments
+     * Get template base view segments
+     *
+     * @return string template view segments
     */
     private static function getViewUri(): string
     {
-        $url = '';
         if(isset($_SERVER['REQUEST_URI'])){
-            $base = '';
-            if (isset($_SERVER['SCRIPT_NAME'])) {
-                $base = implode('/', array_slice(explode('/', $_SERVER['SCRIPT_NAME']), 0, -1)) . '/';
+            $basePath = isset($_SERVER['SCRIPT_NAME']) ? dirname($_SERVER['SCRIPT_NAME']) : '';
+
+            $url = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen($basePath));
+
+            if (($pos = strpos($url, '?')) !== false) {
+                $url = substr($url, 0, $pos);
             }
-            $url = substr(rawurldecode($_SERVER['REQUEST_URI']), mb_strlen($base));
-            if (strstr($url, '?')) {
-                $url = substr($url, 0, strpos($url, '?'));
-            }
+
+            return '/' . trim($url, '/');
         }
 
-        return '/' . trim($url, '/');
+        return '/';
+    }
+
+    /**
+     * Generate cache file key
+    */
+    private static function generateKey(?string $url = null): string 
+    {
+        $url ??= ($_SERVER['REQUEST_URI']??'index');
+        $key = str_replace(['/', '?', '&', '=', '#'], ['-', '-', '-', '-', '-'], $url);
+        $key = preg_replace('/-+/', '-', $key);
+        $key = trim($key, '-');
+
+        return $key;
     }
 
     /** 
-    * Handle exceptions
+    * Get page view cache instance
     *
-    * @param AppException $exception
-    * @param array $options view options
+    * @param string $key
+    * @param string $file 
+    * @param int $expiry 
     *
-    * @return void 
+    * @return PageViewCache
+    */
+    private static function getCacheInstance(string $key, int $expiry = 0): PageViewCache
+    {
+        if(static::$viewCache === null){
+            static::$viewCache = new PageViewCache();
+        }
+
+        static::$viewCache->setExpiry($expiry);
+        static::$viewCache->setDirectory(static::withViewFolder(TemplateConfig::$pageCacheFolder));
+        static::$viewCache->setKey($key);
+
+        return static::$viewCache;
+    }
+
+    /** 
+     * Get output headers
+     * 
+     * @return array<string, mixed> $info
+    */
+    private static function requestInfo(): array
+    {
+        $responseHeaders = headers_list();
+        $info = [];
+
+        foreach ($responseHeaders as $header) {
+            [$name, $value] = explode(':', $header, 2);
+
+            $name = trim($name);
+            $value = trim($value);
+
+            switch ($name) {
+                case 'Content-Type':
+                    $info['Content-Type'] = $value;
+                    break;
+                case 'Content-Length':
+                    $info['Content-Length'] = (int) $value;
+                    break;
+                case 'Content-Encoding':
+                    $info['Content-Encoding'] = $value;
+                    break;
+            }
+        }
+
+        return $info;
+    }
+
+    /** 
+     * Handle exceptions
+     *
+     * @param AppException $exception
+     * @param array $options view options
+     *
+     * @return void 
     */
     private static function handleException(AppException $exception, array $options = []): void 
     {

@@ -19,38 +19,34 @@ use \App\Controllers\Application;
 abstract class BaseController extends BaseViewController
 {
     /**
-      * HTTP request object 
-      * @var Request $request 
+      * {@inheritdoc}
     */
     protected ?Request $request = null;
  
     /**
-      * Input validation object 
-      * @var InputValidator $validate
+      * {@inheritdoc}
     */
     protected ?InputValidator $validate = null;
  
     /**
-      * Application instance
-      * @var Application $app 
+      * {@inheritdoc}
     */
     protected ?Application $app = null;
  
     /**
-      * Importer instance
-      * @var Importer $library 
+      * {@inheritdoc}
     */
     protected ?Importer $library = null;
  
     /**
-     * Initialize controller instance
+     * {@inheritdoc}
      * Make request and validate available global
     */
     public function __construct()
     {
-        parent::__construct();
-        $this->validate = $this->validate();
-        $this->request = $this->request();
+      parent::__construct();
+      $this->validate = $this->validate();
+      $this->request = $this->request();
     }
 
     /**
@@ -59,10 +55,11 @@ abstract class BaseController extends BaseViewController
      * @param string $key property key
      * 
      * @return ?mixed return property else null
+     * @ignore
     */
     public function __get(string $key): mixed
     {
-        return $this->{$key} ?? null;
+      return $this->{$key} ?? null;
     }
     
      /**
@@ -71,9 +68,10 @@ abstract class BaseController extends BaseViewController
      * @param string $key property key
      * 
      * @return bool 
+     * @ignore
     */
     public function __isset(string $key): bool
     {
-        return isset($this->{$key});
+      return isset($this->{$key});
     }
 }

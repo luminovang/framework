@@ -39,7 +39,7 @@ abstract class BaseCommand extends Terminal
     protected string $description = '';
 
     /**
-     * Initialize terminal instance
+     * {@inheritdoc}
     */
     public function __construct()
     {
@@ -53,6 +53,7 @@ abstract class BaseCommand extends Terminal
      * @param array $arguments arguments to pass to method
      * 
      * @return mixed
+     * @ignore 
     */
     public static function __callStatic(string $method, array $arguments): mixed
     {
@@ -69,6 +70,7 @@ abstract class BaseCommand extends Terminal
      * @param string $key property key
      * 
      * @return mixed return property else null
+     * @ignore
     */
     public function __get(string $key): mixed
     {
@@ -81,6 +83,7 @@ abstract class BaseCommand extends Terminal
      * @param string $key property key
      * 
      * @return bool 
+     * @ignore
     */
     public function __isset(string $key): bool
     {
@@ -88,11 +91,11 @@ abstract class BaseCommand extends Terminal
     }
 
     /**
-     * Run a command.
+     * Handle execution of command in command controller class.
      *
-     * @param array<string, mixed> $params
+     * @param array<string, mixed> $params Command arguments and parameters
      * 
-     * @return int status code 1 or 0
+     * @return int status code STATUS_SUCCESS on success else STATUS_ERROR
     */
     abstract public function run(?array $params = []): int;
 }

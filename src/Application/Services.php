@@ -11,7 +11,6 @@
 namespace Luminova\Application;
 
 use \Luminova\Functions\Files;
-use \Luminova\Application\Paths;
 use \RuntimeException;
 use \Throwable;
 use \ReflectionClass;
@@ -47,6 +46,7 @@ class Services
      * 
      * @return object|null An instance of the service class, or null if not found.
      * @throws RuntimeException If failed to instantiate the service.
+     * @ignore 
     */
     public static function __callStatic(string $service, $arguments): ?object
     {
@@ -72,6 +72,28 @@ class Services
         $newInstance = static::newInstance($service, ...$cloneArgument);
 
         return $newInstance;;
+    }
+
+    /**
+     * Finds an entry of the container by its identifier and returns it.
+     *
+     * @param string $id Identifier of the entry to look for.
+     *
+     * @throws NotFoundExceptionInterface  No entry was found for **this** identifier.
+     * @throws ContainerExceptionInterface Error while retrieving the entry.
+     *
+     * @return mixed Entry.
+     */
+    public static function get(string $id): mixed 
+    {
+        $name = get_class_name($id);
+        $instance = static::getInstance($name);
+        
+        if($instance === null){
+            throw new RuntimeException("Failed to instantiate service '$id'. Service not found ");
+        }
+
+        return $instance;
     }
 
     /**
@@ -382,7 +404,7 @@ class Services
         $path = path('services');
 
         try {
-            Paths::createDirectory($path);
+            make_dir($path);
             $saved = write_content($path . $name . static::$suffix, $stringInstance);
            
             if ($saved === false) {

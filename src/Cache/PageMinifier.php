@@ -38,12 +38,6 @@ class PageMinifier
 	public const XML = 'application/xml';
 
     /** 
-	* Array to hold response headers
-	* @var array $headers
-	*/
-    private array $headers;
-
-    /** 
 	*  Gzip compression status
 	* @var bool $gzip
 	*/
@@ -117,7 +111,6 @@ class PageMinifier
      */
     public function __construct() 
     {
-        $this->headers = Header::getSystemHeaders();
         $this->gzip = true;
     }
    
@@ -130,32 +123,6 @@ class PageMinifier
     public function useGzip(bool $gzip): self 
     {
         $this->gzip = $gzip;
-
-        return $this;
-    }
-
-    /**
-     * Set the expiration offset for the Cache-Control header.
-     *
-     * @param int $offset Cache expiration offset in seconds.
-     * @return self Returns the class instance for method chaining.
-     */
-    public function setExpires(int $offset): self 
-    {
-        $this->headers['Expires'] = gmdate("D, d M Y H:i:s", time() + $offset) . ' GMT';
-
-        return $this;
-    }
-
-    /**
-     * Set the Cache-Control header.
-     *
-     * @param string $cacheControl Cache-Control header value.
-     * @return self Returns the class instance for method chaining.
-     */
-    public function setCacheControl(string $cacheControl): self 
-    {
-        $this->headers['Cache-Control'] = $cacheControl;
 
         return $this;
     }
@@ -236,23 +203,26 @@ class PageMinifier
             static::minify($content) : 
                 static::minifyIgnore($content, $this->enableCopy);
         $compressed = $this->minifiedContent;
-
+        $headers = Header::getSystemHeaders();
 
         if ($this->gzip && function_exists('gzencode') && isset($_SERVER['HTTP_ACCEPT_ENCODING']) && strpos($_SERVER['HTTP_ACCEPT_ENCODING'], 'gzip') !== false) {
-            $this->headers['Content-Encoding'] = 'gzip';
-            $this->info['Content-Encoding'] = 'gzip';
-
             $compressed = gzencode($this->minifiedContent, $this->compressionLevel);
-        }
 
+            if($compressed === false){
+                $compressed = $this->minifiedContent;
+            }else{
+                $headers['Content-Encoding'] = 'gzip';
+                $this->info['Content-Encoding'] = 'gzip';
+            }
+        }
 
         $this->info['Content-Length'] = strlen($compressed);
         $this->info['Content-Type'] = $contentType;
 
-        $this->headers['Content-Length'] = $this->info['Content-Length'];
-        $this->headers['Content-Type'] = $contentType;
+        $headers['Content-Length'] = $this->info['Content-Length'];
+        $headers['Content-Type'] = $contentType;
   
-        foreach ($this->headers as $header => $value) {
+        foreach ($headers as $header => $value) {
             header("$header: $value");
         }
 
@@ -264,7 +234,7 @@ class PageMinifier
      * 
      * @return array
     */
-    public function getInfo(): array
+    public function getHeaderInfo(): array
     {
         return $this->info;
     }
@@ -281,13 +251,6 @@ class PageMinifier
         if(is_object($data)){
             $data = (array) $data;
         }
-
-        /*$encoded = json_decode($data);
-    
-        if ($encoded !== null || json_last_error() === JSON_ERROR_NONE) {
-            return $data;
-        }
-        */
 
         $encoded = json_encode($data);
 

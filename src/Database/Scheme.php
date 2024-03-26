@@ -8,7 +8,8 @@
  * @license See LICENSE file
  */
 namespace Luminova\Database;
-class Columns 
+
+class Scheme 
 {
     public const INT = "INT";
     public const VARCHAR = "VARCHAR";
@@ -30,14 +31,14 @@ class Columns
         $this->tableName = $tableName;
 	}
 
-    public function setName(string $name): Columns
+    public function setName(string $name): self
     {
         $this->columns[$name] = [];
         
         return $this;
     }
 
-    public function setType(string $type, int $length = 0): Columns 
+    public function setType(string $type, int $length = 0): self
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['type'] = $type . ($length > 0 ? "($length)" : '');
@@ -45,7 +46,7 @@ class Columns
         return $this;
     }
 
-    public function setCollation(string $collation): Columns
+    public function setCollation(string $collation): self
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['collation'] = $collation;
@@ -53,7 +54,7 @@ class Columns
         return $this;
     }
 
-    public function setAttributes(array $attributes): Columns 
+    public function setAttributes(array $attributes): self
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['attributes'] = $attributes;
@@ -61,7 +62,7 @@ class Columns
         return $this;
     }
 
-    public function setAutoIncrement(bool $autoIncrement): Columns 
+    public function setAutoIncrement(bool $autoIncrement): self
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['auto_increment'] = $autoIncrement;
@@ -69,7 +70,7 @@ class Columns
         return $this;
     }
 
-    public function setDefault(string $default): Columns 
+    public function setDefault(string $default): self
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['default'] = $default;
@@ -77,7 +78,7 @@ class Columns
         return $this;
     }
 
-    public function setIndex(string $indexType): Columns 
+    public function setIndex(string $indexType): self
     {
         $lastColumn = array_key_last($this->columns);
         $this->columns[$lastColumn]['index'] = $indexType;
@@ -110,9 +111,9 @@ class Columns
             }
 
             if (isset($column['default'])) {
-                if ($column['default'] === Columns::DEFAULT_NULL) {
+                if ($column['default'] === self::DEFAULT_NULL) {
                     $query .= " DEFAULT NULL";
-                } elseif ($column['default'] === Columns::DEFAULT_TIMESTAMP) {
+                } elseif ($column['default'] === self::DEFAULT_TIMESTAMP) {
                     $query .= " DEFAULT CURRENT_TIMESTAMP";
                 } else {
                     $query .= " DEFAULT '{$column['default']}'";
@@ -120,15 +121,15 @@ class Columns
             }
 
             if (isset($column['index'])) {
-                if ($column['index'] === Columns::INDEX_PRIMARY) {
+                if ($column['index'] === self::INDEX_PRIMARY) {
                     $query .= " PRIMARY KEY";
-                } elseif ($column['index'] === Columns::INDEX_UNIQUE) {
+                } elseif ($column['index'] === self::INDEX_UNIQUE) {
                     $query .= " UNIQUE";
-                } elseif ($column['index'] === Columns::INDEX_INDEX) {
+                } elseif ($column['index'] === self::INDEX_INDEX) {
                     $query .= " INDEX";
-                } elseif ($column['index'] === Columns::INDEX_FULLTEXT) {
+                } elseif ($column['index'] === self::INDEX_FULLTEXT) {
                     $query .= " FULLTEXT";
-                } elseif ($column['index'] === Columns::INDEX_SPATIAL) {
+                } elseif ($column['index'] === self::INDEX_SPATIAL) {
                     $query .= " SPATIAL";
                 }
             }

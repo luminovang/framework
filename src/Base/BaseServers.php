@@ -30,16 +30,16 @@ abstract class BaseServers
      *      ...
      * ]
      * 
-     * @var array $databaseServers
+     * @var array<int, mixed> $databaseServers
     */
     protected static array $databaseServers = [];
 
     /**
      * Get the value of the protected property $databaseServers
      *
-     * @return array<T, array>
+     * @return array<int, mixed>
      */
-    public static function gerDatabaseServers(): array
+    public static function getDatabaseServers(): array
     {
         return static::$databaseServers;
     }

@@ -15,11 +15,6 @@ use \Luminova\Template\TemplateTrait;
 
 abstract class BaseApplication
 {
-    /**
-     * Include TemplateTrait for template method
-     * 
-     * @uses TemplateTrait
-    */
     use TemplateTrait;
 
     /**
@@ -30,10 +25,8 @@ abstract class BaseApplication
     private static ?BaseApplication $instance = null;
 
     /**
-     * Router class instance
-     *
-     * @var Router $router
-     */
+     * @var Router $router Router class instance
+    */
     public ?Router $router = null;
 
     /**
@@ -58,7 +51,7 @@ abstract class BaseApplication
     }
 
     /**
-     * Get the base application instance as a singleton.
+     * Get the base application instance shared singleton class instance.
      * 
      * @return static
      */
@@ -68,13 +61,13 @@ abstract class BaseApplication
     }
 
     /**
-     * Get the current view paths, segments uri
+     * Get the current segments relative uri
      *
-     * @return string
+     * @return string URI of the current request 
      */
     public function getView(): string 
     {
-        return $this->router->getView();
+        return $this->router->getSegmentUri();
     }
 
     /**
@@ -94,6 +87,7 @@ abstract class BaseApplication
      * @param string $key property or attribute key
      * 
      * @return ?mixed return property else null
+     * @ignore
     */
     public function __get(string $key): mixed
     {
@@ -107,7 +101,7 @@ abstract class BaseApplication
     }
 
     /**
-     * On create method 
+     * Application on create method, an alternative method to __construct()
      * 
      * @overridable #[\Override]
      * 

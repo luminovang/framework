@@ -64,7 +64,7 @@ class Factory
      * 
      * @return string|null The fully qualified class name
     */
-    private static function get(string $aliasis): ?string
+    private static function locator(string $aliasis): ?string
     {
         $classes = [
             'task' => Task::class,
@@ -100,11 +100,13 @@ class Factory
      * 
      * @return object|null An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
+     * 
+     * @ignore 
      */
     public static function __callStatic(string $aliasis, $arguments): ?object
     {
         $shared = true; 
-        $class = static::get($aliasis);
+        $class = static::locator($aliasis);
 
         if ($class === null) {
             throw new RuntimeException("Factory with method name '$aliasis' does not exist.");
@@ -115,6 +117,28 @@ class Factory
         }
 
         return static::call($class, $shared, ...$arguments);
+    }
+
+     /**
+     * Finds an entry of the container by its identifier and returns it.
+     *
+     * @param string $id Identifier of the entry to look for.
+     *
+     * @throws NotFoundExceptionInterface  No entry was found for **this** identifier.
+     * @throws ContainerExceptionInterface Error while retrieving the entry.
+     *
+     * @return mixed Entry.
+     */
+    public static function get(string $id): mixed 
+    {
+        $aliasis = get_class_name($id);
+        $class = static::locator($aliasis);
+
+        if ($class === null) {
+            throw new RuntimeException("Factory with method name '$id' does not exist.");
+        }
+
+        return static::call($class);
     }
 
     /**
@@ -164,7 +188,7 @@ class Factory
     {
         $aliasis = get_class_name($aliasis);
 
-        return static::get($aliasis) !== null;
+        return static::locator($aliasis) !== null;
     }
 
     /**
@@ -226,9 +250,9 @@ class Factory
     }
 
      /**
-     * Get services instance
+     * Get services class shared instance or new instance if not shared. 
      * 
-     * @return Services 
+     * @return Services Service class instance.
     */
     public static function services(bool $shared = true): Services 
     {
@@ -245,12 +269,13 @@ class Factory
         return $instance;
     }
 
-     /**
-     * initialize and Register queued services 
+    /**
+     * Initialize and Register queued services.
      * 
      * @return void 
+     * @ignore
     */
-    public static function initializeServices(): void 
+    public static function registerServices(): void 
     {
         $newService = static::services();
 
@@ -270,14 +295,15 @@ class Factory
     }
 
     /**
-     * Call all public methods within a class 
+     * Call all public methods within a given class.
      * 
-     * @param string|object $classInstance
-     * @param bool $return return method output
+     * @param string|object $classInstance class name or instance of a class.
+     * @param bool $return return type.
      * 
-     * @return array|int 
+     * @return int|array<string, mixed> 
+     * @throws RuntimeException If failed to instantiate class.
     */
-    public static function callAll(string|object $classInstance, bool $return = false): array|int
+    public static function callAll(string|object $classInstance, bool $return = false): int|array
     {
         try{
             $reflectionClass = new ReflectionClass($classInstance);

@@ -14,7 +14,6 @@ use \Generator;
 use \DateTimeInterface;
 use \DateInterval;
 use \Luminova\Time\Time;
-use \Luminova\Application\Paths;
 
 class FileCache 
 {
@@ -215,6 +214,7 @@ class FileCache
      * Sets the expiration time of the cache item.
      *
      * @param DateTimeInterface|null $expiration The expiration time of the cache item.
+     * 
      * @return static The current instance.
      */
     public function setExpire(DateTimeInterface|int|null $expiration): static
@@ -233,6 +233,7 @@ class FileCache
      * Sets the expiration time of the cache item relative to the current time.
      *
      * @param int|DateInterval|null $time The expiration time in seconds or as a DateInterval.
+     * 
      * @return static The current instance.
      */
     public function expiresAfter(int|DateInterval|null $time): static
@@ -419,13 +420,12 @@ class FileCache
         return $data;
     }
 
-
     /**
      * Creates, Reloads and retrieve cache once class is created
      * 
      * @return self $this
      * @throws ErrorException if there is a problem loading the cache
-     */
+    */
     public function create(): self 
     {
         $this->cacheInstance = $this->fetch();
@@ -439,17 +439,17 @@ class FileCache
      * @param string $key cache key
      * 
      * @return bool true or false
-     */
+    */
     public function hasItem(string $key): bool 
     {
         return isset($this->cacheInstance[$key]);
     }
 
-     /**
+    /**
      * Remove expired cache by key
      * 
      * @return int number of deleted keys
-     */
+    */
     public function deleteIfExpired(): int 
     {
         $counter = 0;
@@ -466,7 +466,7 @@ class FileCache
         return $counter;
     }
 
-     /**
+    /**
      * Deletes data associated with $key
      * 
      * @param string $key cache key
@@ -491,7 +491,7 @@ class FileCache
      * @param iterable $keys array cache keys
      * 
      * @return bool 
-     */
+    */
     public function deleteItems(iterable $keys): bool 
     {
         $counter = 0;
@@ -518,7 +518,7 @@ class FileCache
      * 
      * @return Generator
      * @throws ErrorException if the file cannot be saved
-     */
+    */
     public function removeList(iterable $array): Generator 
     {
         foreach($array as $key){
@@ -532,7 +532,7 @@ class FileCache
      * @param string $key cache key
      * 
      * @return bool true or false
-     */
+    */
     public function hasExpired(string $key): bool 
     {
         if ($this->hasItem($key)) {
@@ -568,7 +568,7 @@ class FileCache
      * 
      * @return bool
      * @throws ErrorException if the file cannot be saved
-     */
+    */
     public function setItem(string $key, mixed $data, int|DateTimeInterface|null $expiration = 0, int|DateInterval|null $expireAfter = null, bool $lock = false): bool 
     {
         $serialize = serialize($data);
@@ -591,13 +591,13 @@ class FileCache
         return $this->commit();
     }
 
-     /**
+    /**
      * Convert DateInterval to seconds.
      * 
      * @param DateInterval|DateTimeInterface $ttl Time 
      * 
      * @return int seconds.
-     */
+    */
     public static function ttlToSeconds(DateInterval|DateTimeInterface|int|null $ttl): int
     {
         if($ttl === null){
@@ -631,7 +631,7 @@ class FileCache
      * 
      * @return mixed cached data
      * @throws ErrorException if cannot load cache, unable to unserialize, hash sum not found or invalid key
-     */
+    */
     private function fetch(): mixed 
     {
     
@@ -749,7 +749,7 @@ class FileCache
      private function commit(): bool 
      {
 
-        Paths::createDirectory($this->storagePath);     
+        make_dir($this->storagePath);     
     
         $cache = $this->cacheInstance;
         $cache["hash-sum"] = md5(serialize($cache));

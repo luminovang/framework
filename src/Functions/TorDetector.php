@@ -9,8 +9,6 @@
  */
 namespace Luminova\Functions;
 
-use \Luminova\Application\Paths;
-
 class TorDetector 
 {
     /**
@@ -72,7 +70,7 @@ class TorDetector
         $path = path('caches');
         $path .= 'tor' . DIRECTORY_SEPARATOR;
 
-        Paths::createDirectory($path);
+        make_dir($path);
         
         $file = $path . 'torbulkexitlist.txt';
 

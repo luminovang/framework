@@ -9,8 +9,6 @@
  */
 namespace Luminova\Storage;
 
-use \Luminova\Application\Paths;
-
 final class Uploader
 {
     /**
@@ -30,7 +28,7 @@ final class Uploader
             ];
         }
 
-        Paths::createDirectory($path);
+        make_dir($path);
 
         $filename = basename($file['name']);
         $destination = rtrim($path, '/') . '/' . $filename;
@@ -74,7 +72,7 @@ final class Uploader
             ];
         }
 
-        Paths::createDirectory($path);
+        make_dir($path);
 
         $filename = basename($file['name']);
         $destination = rtrim($path, '/') . '/' . $filename;

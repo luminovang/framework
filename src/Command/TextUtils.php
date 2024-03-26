@@ -11,10 +11,29 @@ namespace Luminova\Command;
 
 class TextUtils 
 {
+    /**
+     * @var int ANSI_RESET ansi character reset flag
+    */
     public const ANSI_RESET = 0;
+
+    /**
+     * @var int ANSI_BOLD ansi character bold flag
+    */
     public const ANSI_BOLD = 1;
+
+    /**
+     * @var int ANSI_ITALIC ansi character italic flag
+    */
     public const ANSI_ITALIC = 3;
+
+    /**
+     * @var int ANSI_UNDERLINE ansi character underline flag
+    */
     public const ANSI_UNDERLINE = 4;
+
+    /**
+     * @var int ANSI_STRIKETHROUGH ansi character strikethrough flag
+    */
     public const ANSI_STRIKETHROUGH = 9;
 
     /**
@@ -110,6 +129,7 @@ class TextUtils
         if($formatted){
             return "\033[{$formatCode};m{$text}\033[0m";
         }
+
         return $formatCode;
     }
 
@@ -123,7 +143,7 @@ class TextUtils
     public static function hasAnsiMethod(string $text): bool
     {
         $pattern = '/\033\[[0-9;]*m/u';
+
         return preg_match($pattern, $text) === 1;
     }
-
 }

@@ -12,7 +12,7 @@ namespace Luminova\Template;
 use \Smarty as SmartyTemplate;
 use \Exception;
 use \SmartyException;
-use \Luminova\Exceptions\AppException; 
+use \Luminova\Exceptions\RuntimeException;
 
 class Smarty 
 {
@@ -36,7 +36,7 @@ class Smarty
      * 
      * @param string $root framework root directory
      * 
-     * @throws AppException
+     * @throws RuntimeException
     */
     public function __construct(string $root)
     {
@@ -48,7 +48,7 @@ class Smarty
      * Get Smarty singleton instance
      * 
      * @return SmartyTemplate static::$instance static instance 
-     * @throws AppException
+     * @throws RuntimeException
     */
     public static function getInstance(): SmartyTemplate
     {
@@ -63,7 +63,7 @@ class Smarty
      * Get smarty instance 
      * 
      * @return SmartyTemplate new instance 
-     * @throws AppException
+     * @throws RuntimeException
     */
     public static function getSmarty(): SmartyTemplate
     {
@@ -71,7 +71,7 @@ class Smarty
             return new SmartyTemplate();
         }
        
-        throw new AppException('Smarty is not available, run composer command "composer install smarty/smarty" if you want to use smarty template', 404);
+        throw new RuntimeException('Smarty is not available, run composer command "composer install smarty/smarty" if you want to use smarty template', 404);
     }
 
     /**
@@ -160,14 +160,14 @@ class Smarty
      * @param object $parent     next higher level of Smarty variables
      *
      * @return void 
-     * @throws AppException
+     * @throws RuntimeException
      */
     public function display(?string $template = null, mixed $cache_id = null, mixed $compile_id = null, ?object $parent = null): void
     {
         try{
             $this->smarty->display($template, $cache_id, $compile_id, $parent);
         }catch(Exception | SmartyException $e){
-            throw new AppException($e->getMessage(), $e->getCode());
+            throw new RuntimeException($e->getMessage(), $e->getCode());
         }
     }
 
@@ -185,7 +185,7 @@ class Smarty
         });
 
         foreach ($notFounds as $dir) {
-            mkdir($this->root . $dir, 0755, true);
+            make_dir($this->root . $dir);
         }
     }
 

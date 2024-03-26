@@ -29,17 +29,6 @@ abstract class BaseConfig
     public const MIN_PHP_VERSION = '8.0';
 
     /**
-     * Get the file version.
-     * 
-     * @deprecated Use global constant APP_FILE_VERSION instead
-     * @return string
-    */
-    public static function fileVersion(): string 
-    {
-        return APP_FILE_VERSION;
-    }
-
-    /**
      * Check if minification is enabled.
      *
      * @return int
@@ -85,6 +74,7 @@ abstract class BaseConfig
      * Get the framework copyright information
      *
      * @return string
+     * @ignore
     */
     public static function copyright(): string
     {
@@ -92,12 +82,14 @@ abstract class BaseConfig
     }
 
     /**
-     * Get the framework version number
-     *
-     * @return string
+     * Get the framework version name or code.
+     * 
+     * @param bool $integer Return version code or version name (default: name).
+     * 
+     * @return string|int
     */
-    public static function version(): string
+    public static function version(bool $integer = false): string|int
     {
-        return static::$version;
+        return $integer ? static::$versionCode : static::$version;
     }
 }

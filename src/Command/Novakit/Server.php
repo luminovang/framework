@@ -14,9 +14,9 @@ use \Luminova\Base\BaseCommand;
 class Server extends BaseCommand 
 {
     /**
-     * @var int $portOffset port offset
+     * @var int $offset port offset
     */
-    private int $portOffset = 0;
+    private int $offset = 0;
 
     /**
      * @var int $tries number of tries
@@ -52,32 +52,32 @@ class Server extends BaseCommand
     */
     public function run(?array $params = []): int
     {
-        // Collect any user-supplied options and apply them.
-        $options = $params['options']??[];
-        $php  = escapeshellarg($options['php'] ?? PHP_BINARY);
-        $host = $options['host'] ?? 'localhost';
-        $port = (int) ($options['port'] ?? 8080) + $this->portOffset;
-        $version = self::$version;
-         // Set the Front Controller path as Document Root.
-        $docRoot = escapeshellarg(PUBLIC_PATH);
-        $this->writeln('NovaKit/' . $version. ' (Luminova) PHP/' . PHP_VERSION. ' (Development Server)');
+        $this->explain($params);
+   
+        $php = escapeshellarg($this->getOption('php', PHP_BINARY));
+        $host = $this->getOption('host', 'localhost');
+        $port = (int) $this->getOption('port', 8080) + $this->offset;
+        $root = escapeshellarg(PUBLIC_PATH);
+
+        $this->writeln('NovaKit/' . parent::$version . ' (Luminova) PHP/' . PHP_VERSION. ' (Development Server)');
         $this->newLine();
         $this->writeln('Listening on http://' . $host . ':' . $port, 'green');
-        $this->writeln('Document root is ' . $docRoot, 'green');
+        $this->writeln('Document root is ' . $root, 'green');
         $this->newLine();
         $this->writeln('Press Ctrl-C to stop.');
         $this->newLine();
 
         // Mimic Apache's mod_rewrite functionality with user settings.
+        $version = parent::$version;
         $rewrite = escapeshellarg(__DIR__ . '/mod_rewrite.php');
 
         // Call PHP's built-in webserver, making sure to set our
         // base path to the public folder, and to use the mod_rewrite file
         // to ensure our environment is set and it simulates basic mod_rewrite.
-        passthru($php . ' -S ' . $host . ':' . $port . ' -t ' . $docRoot . ' ' . $rewrite, $status);
+        passthru($php . ' -S ' . $host . ':' . $port . ' -t ' . $root . ' ' . $rewrite, $status);
 
-        if ($status && $this->portOffset < $this->tries) {
-            $this->portOffset++;
+        if ($status && $this->offset < $this->tries) {
+            $this->offset++;
 
             $this->run($params);
         }

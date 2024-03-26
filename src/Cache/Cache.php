@@ -18,18 +18,21 @@ class Cache
 {
     /**
     * Engin type for file cache
+    *
     * @var string FILE
     */
-    public const FILE = "FileCache";
+    public const FILE = 'FileCache';
 
     /**
     * Engin type for Memcached
+    *
     * @var string MEM
     */
-    public const MEM = "MemoryCache";
+    public const MEM = 'MemoryCache';
 
     /**
     * Engin instance
+    *
     * @var object $engine
     */
     public $engine;
@@ -65,7 +68,6 @@ class Cache
 
         return static::$instance;
     }
-
 
     /**
      * Create an instance of the cache engine based on the provided engine type.

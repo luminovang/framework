@@ -13,12 +13,10 @@ use \Luminova\Functions\TorDetector;
 use \App\Controllers\Config\IPConfig;
 use \Luminova\Time\Time;
 use \Luminova\Http\Network;
-use \Luminova\Http\Client\Curl;
 use \Luminova\Http\Exceptions\RequestException;
 use \Luminova\Http\Exceptions\ConnectException;
 use \Luminova\Http\Exceptions\ClientException;
 use \Luminova\Http\Exceptions\ServerException;
-use \Luminova\Application\Paths;
 use \Exception;
 
 class IPAddress
@@ -86,7 +84,7 @@ class IPAddress
 
       $path = path('caches') . "ip" . DIRECTORY_SEPARATOR;
 
-      Paths::createDirectory($path);
+      make_dir($path);
 
       $cacheFile = $path . "ip_info_$ip.json";
 
@@ -99,7 +97,7 @@ class IPAddress
 
       static $network = null;
 
-      $network = new Network(new Curl());
+      $network = new Network();
       $headers = [];
 
       if (IPConfig::$apiProvider === 'ipapi') {
@@ -112,7 +110,7 @@ class IPAddress
       }
 
       try {
-         $response = $network->request('GET', $url, [], $headers);
+         $response = $network->get($url, [], $headers);
          $statusCode = $response->getStatusCode();
          $content = $response->getContents();
 

@@ -10,7 +10,7 @@
 
 namespace Luminova\Base;
 
-use Luminova\Models\Model;
+use \Luminova\Models\Model;
 
 abstract class BaseModel  extends Model
 {
@@ -20,6 +20,7 @@ abstract class BaseModel  extends Model
      * @param string $key property key
      * 
      * @return ?mixed return property else null
+     * @ignore
     */
     public function __get(string $key): mixed
     {
@@ -33,6 +34,7 @@ abstract class BaseModel  extends Model
      * @param string $key property key
      * 
      * @return bool 
+     * @ignore
     */
     public function __isset(string $key): bool
     {

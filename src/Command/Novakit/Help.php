@@ -10,7 +10,7 @@
 namespace Luminova\Command\Novakit;
 
 use \Luminova\Base\BaseCommand;
-use \Luminova\Command\Novakit\AvailableCommands;
+use \Luminova\Command\Novakit\Commands;
 
 class Help extends BaseCommand 
 {
@@ -39,7 +39,7 @@ class Help extends BaseCommand
     public function run(?array $options = []): int
     {
 
-        $this->printHelp(AvailableCommands::get('help'));
+        $this->printHelp(Commands::get('help'));
     
         return STATUS_SUCCESS;
     }

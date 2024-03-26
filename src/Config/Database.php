@@ -86,6 +86,12 @@ class Database
     */
     public bool $persistent = true;
 
+    /**
+     * emulate preparse statment
+     * 
+     * @var bool $emulate_preparse 
+    */
+    public bool $emulate_preparse = false;
 
     /**
      * Initialize database config 
@@ -108,5 +114,6 @@ class Database
         $this->password = $config['password'] ?? '';
         $this->database = $config['database'] ?? '';
         $this->persistent = $config['persistent'] ?? true;
+        $this->emulate_preparse = $config['emulate_preparse'] ?? false;
     }
 }

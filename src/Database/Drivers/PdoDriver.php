@@ -9,10 +9,9 @@
  */
 namespace Luminova\Database\Drivers;
 
-use \Luminova\Database\Drivers\DriversInterface;
 use \Luminova\Config\Database;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Database\Drivers\DriversInterface;
 use \PDO;
 use \PDOStatement;
 use \PDOException;
@@ -22,65 +21,38 @@ class PdoDriver implements DriversInterface
 {
     /**
      * PDO Database connection instance
-    * @var PDO $connection 
+     * 
+     * @var PDO $connection 
     */
     private ?PDO $connection = null; 
 
     /**
      * Pdo statement object
-    * @var PDOStatement $stmt
+     * 
+     * @var PDOStatement $stmt
     */
     private ?PDOStatement $stmt = null;
 
     /**
-    * @var bool $onDebug debug mode flag
+     * @var bool $onDebug debug mode flag
     */
     private bool $onDebug = false;
 
     /**
-    * @var bool $connected 
+     * @var bool $connected connection status flag
     */
     private bool $connected = false;
 
     /**
-    * @var Database $config Database configuration
+     * @var null|Database $config Database configuration
     */
-    private Database $config; 
+    private ?Database $config = null; 
 
     /**
-    * @var int PARAM_INT Integer Parameter
+     * {@inheritdoc}
     */
-    public const PARAM_INT = 1; 
-    
-    /**
-    * @var int PARAM_BOOL Boolean Parameter
-    */
-    public const PARAM_BOOL = 5;
-
-    /**
-    * @var int PARAM_NULL Null Parameter
-    */
-    public const PARAM_NULL = 0;
-
-    /**
-    * @var int PARAM_STRING String Parameter
-    */
-    public const PARAM_STRING = 2;
-
-    /**
-     * Constructor.
-     *
-     * @param Database $config database configuration. array
-     * @throws InvalidArgumentException If a required configuration key is missing.
-     * @throws PDOException
-     * @throws DatabaseException
-     */
     public function __construct(Database $config) 
     {
-        if (!$config instanceof Database) {
-            throw new InvalidArgumentException("Invalid database configuration, required type: Database, but " . gettype($config) . " is given instead.");
-        }
-      
         $this->config = $config;
 
         try{
@@ -93,22 +65,16 @@ class PdoDriver implements DriversInterface
     }
 
     /**
-     * Get driver name
-     * 
-     * @return string Database driver name
+     * {@inheritdoc}
     */
-    public function getDriver(): string
+    public static function getDriver(): string
     {
         return 'pdo';
     }
 
     /**
-     * Sets the debug mode.
-     *
-     * @param bool $debug The debug mode.
-     * 
-     * @return self The current class instance.
-     */
+     * {@inheritdoc}
+    */
     public function setDebug(bool $debug): self 
     {
         $this->onDebug = $debug;
@@ -130,15 +96,8 @@ class PdoDriver implements DriversInterface
             return;
         }
 
-        $options = [
-            PDO::ATTR_EMULATE_PREPARES => false,
-            PDO::ATTR_PERSISTENT => $this->config->persistent,
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ
-        ];
-
         $driver = strtolower($this->config->pdo_driver);
-        $dns = $this->getConnectionDriver($driver);
+        $dns = $this->dnsConnection($driver);
 
         if ($dns === '' || ($driver === "sqlite" && empty($this->config->sqlite_path))) {
             throw new DatabaseException("No PDO database driver found for: '{$driver}'");
@@ -151,17 +110,28 @@ class PdoDriver implements DriversInterface
             $password = $this->config->password;
         }
 
+        $options = [
+            PDO::ATTR_EMULATE_PREPARES => $this->config->emulate_preparse,
+            PDO::ATTR_PERSISTENT => $this->config->persistent,
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ
+        ];
+
+        if($this->config->charset !== ''){
+            $options[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES {$this->config->charset}";
+        }
+    
         $this->connection = new PDO($dns, $username, $password, $options);
     }
 
     /**
      * Get driver dns connection
      *
-     * @param string $name Driver name 
+     * @param string $context Connection driver context name 
      * 
      * @return string
     */
-    private function getConnectionDriver(string $name): string
+    private function dnsConnection(string $context): string
     {
         $drivers = [
             'cubrid' => "cubrid:dbname={$this->config->database};host={$this->config->host};port={$this->config->port}",
@@ -172,13 +142,11 @@ class PdoDriver implements DriversInterface
             'mysql' => "mysql:host={$this->config->host};port={$this->config->port};dbname={$this->config->database}"
         ];
 
-        return $drivers[$name] ?? '';
+        return $drivers[$context] ?? '';
     }
 
     /**
-     * Check if database is connected
-     * 
-     * @return bool 
+     * {@inheritdoc}
     */
     public function isConnected(): bool 
     {
@@ -186,20 +154,16 @@ class PdoDriver implements DriversInterface
     }
 
     /**
-     * Returns the error information for the last statement execution.
-     *
-     * @return string The error information.
-     */
+     * {@inheritdoc}
+    */
     public function error(): string 
     {
         return $this->stmt?->errorInfo()[2] ?? $this->connection?->errorInfo()[2];
     }
 
     /**
-     * Returns the error information.
-     *
-     * @return array The error information.
-     */
+     * {@inheritdoc}
+    */
     public function errors(): array 
     {
         return [
@@ -215,10 +179,8 @@ class PdoDriver implements DriversInterface
     }
 
     /**
-     * Returns the error information for the last statement execution.
-     *
-     * @return array $info The error information array.
-     */
+     * {@inheritdoc}
+    */
     public function info(): array 
     {
         $driverInfo = $this->connection?->getAttribute(PDO::ATTR_CONNECTION_STATUS);
@@ -229,24 +191,17 @@ class PdoDriver implements DriversInterface
         return $info;
     }
 
-
     /**
-     * Dumps the debug information for the last statement execution.
-     *
-     * @return string|null The debug information or null if debug mode is off.
-     */
+     * {@inheritdoc}
+    */
     public function dumpDebug(): mixed 
     {
         return $this->onDebug ? $this->stmt->debugDumpParams() : null;
     }
 
     /**
-     * Prepares a statement for execution.
-     *
-     * @param string $query The SQL query.
-     * 
-     * @return self The current class instance.
-     */
+     * {@inheritdoc}
+    */
     public function prepare(string $query): self 
     {
         $this->stmt = $this->connection->prepare($query);
@@ -255,12 +210,8 @@ class PdoDriver implements DriversInterface
     }
 
     /**
-     * Executes a query.
-     *
-     * @param string $query The SQL query.
-     * 
-     * @return self The current class instance.
-     */
+     * {@inheritdoc}
+    */
     public function query(string $query): self
     {
         $this->stmt = $this->connection->query($query);
@@ -269,11 +220,8 @@ class PdoDriver implements DriversInterface
     }
 
     /**
-     * Executes a query.
-     *
-     * @param string $query The SQL query.
-     * @return int The affected row counts
-     */
+     * {@inheritdoc}
+    */
     public function exec(string $query): int 
     {
         $result = $this->connection->exec($query);
@@ -286,19 +234,16 @@ class PdoDriver implements DriversInterface
     }
 
     /**
-     * Begin transaction
-     *
-     * @return void 
-     */
-    public function beginTransaction(): void{
+     * {@inheritdoc}
+    */
+    public function beginTransaction(): void
+    {
         $this->connection->beginTransaction();
     }
 
     /**
-     * Commits transaction
-     *
-     * @return void 
-     */
+     * {@inheritdoc}
+    */
     public function commit(): void 
     {
         $this->connection->commit();
@@ -306,9 +251,7 @@ class PdoDriver implements DriversInterface
     }
 
     /**
-     * Rollback transaction if fails
-     *
-     * @return void
+     * {@inheritdoc}
      */
     public function rollback(): void 
     {
@@ -316,62 +259,39 @@ class PdoDriver implements DriversInterface
     }
 
     /**
-     * Returns the appropriate parameter type based on the value and type.
-     *
-     * @param mixed       $value The parameter value.
-     * @param null|int    $type  The parameter type.
-     *
-     * @return int The parameter type.
+     * {@inheritdoc}
     */
-    public function getType(mixed $value, ?int $type = null): mixed 
+    public function getType(mixed $value): string|int 
     {
-        $type ??= match (true) {
-            is_int($value) => self::PARAM_INT,
-            is_bool($value) => self::PARAM_BOOL,
-            is_null($value) => self::PARAM_NULL,
-            default => self::PARAM_STRING,
+        return match (true) {
+            is_int($value) => 1,
+            is_bool($value) => 5,
+            is_null($value) => 0,
+            default => 2,
         };
-
-        return $type;
     }
 
-
     /**
-     * Binds a value to a parameter.
-     *
-     * @param string       $param The parameter identifier.
-     * @param mixed       $value The parameter value.
-     * @param null|int    $type  The parameter type.
-     *
-     * @return self The current class instance.
+     * {@inheritdoc}
      */
-    public function bind(string $param, mixed $value, mixed $type = null): self 
+    public function bind(string $param, mixed $value, int $type = null): self 
     {
         $this->stmt->bindValue($param, $value, $this->getType($value, $type));
+
         return $this;
     }
 
     /**
-     * Binds a variable to a parameter.
-     *
-     * @param string       $param The parameter identifier.
-     * @param mixed       $value The parameter value.
-     * @param null|int    $type  The parameter type.
-     *
-     * @return self The current class instance.
+     * {@inheritdoc}
      */
-    public function param(string $param, mixed $value, mixed $type = null): self 
+    public function param(string $param, mixed $value, int $type = null): self 
     {
         $this->stmt->bindParam($param, $value, $this->getType($value, $type));
         return $this;
     }
 
     /**
-     * Executes the prepared statement.
-     * @param array $values execute statement with values
-     * @throws DatabaseException 
-     * 
-     * @return void
+     * {@inheritdoc}
     */
     public function execute(?array $values = null): void 
     {
@@ -383,78 +303,113 @@ class PdoDriver implements DriversInterface
     }
 
     /**
-     * Returns the number of rows affected by the last statement execution.
-     *
-     * @return int The number of rows.
-     */
+     * {@inheritdoc}
+    */
     public function rowCount(): int 
     {
         return $this->stmt->rowCount();
     }
 
     /**
-     * Fetches a single row as an object.
-     *
-     * @return mixed The result object or false if no row is found.
-     */
+     * {@inheritdoc}
+    */
     public function getOne(): mixed 
     {
         return $this->stmt->fetch(PDO::FETCH_OBJ);
     }
 
     /**
-     * Fetches all rows as an array of objects.
-     *
-     * @return mixed The array of result objects.
-     */
+     * {@inheritdoc}
+    */
     public function getAll(): mixed 
     {
         return $this->stmt->fetchAll(PDO::FETCH_OBJ);
     }
 
     /**
-     * Fetches all rows as a 2D array of integers.
-     *
-     * @return array The 2D array of integers.
-     */
-    public function getInt(): int 
+     * {@inheritdoc}
+    */
+    public function getColumns(): mixed 
     {
-        $response = $this->stmt->fetchAll(PDO::FETCH_NUM);
-        if (isset($response[0][0])) {
-            return (int) $response[0][0];
-        }
-        return $response??0;
+        return $this->stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
      /**
-     * Fetches all rows as an array or stdClass object.
-     *
-     * @param string $type The type of result to fetch ('object' or 'array').
-     * 
-     * @return array|stdClass The result containing the rows.
+     * {@inheritdoc}
     */
-    public function getResult(string $type = 'object'): array|stdClass
+    public function getStatment(): PDOStatement|\mysqli_stmt|\mysqli_result|bool|null
     {
-        $result = ($type === 'object') ? new stdClass : [];
-
-        $count = 0;
-
-        while ($row = $this->stmt->fetchObject()) {
-            $count++;
-            if($type === 'object'){
-                $result->$count = (object) $row;
-            }else{
-                $result[$count] = (array) $row;
-            }
-        }
-
-        return $result;
+        return $this->stmt;
     }
 
     /**
-     * Fetches all rows as a stdClass object.
-     *
-     * @return stdClass The stdClass object containing the result rows.
+     * {@inheritdoc}
+    */
+    public function getInt(): int 
+    {
+        $response = $this->stmt->fetchAll(PDO::FETCH_NUM);
+
+        if (isset($response[0][0])) {
+            return (int) $response[0][0];
+        }
+
+        return $response ?? 0;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getResult(string $type = 'object'): array|stdClass
+    {
+        $response = $this->fetch('all', ($type === 'object') ? FETCH_NUM_OBJ : FETCH_ASSOC);
+
+        if ($response === null) {
+            return ($type === 'object') ? new stdClass : [];
+        }
+
+        return $response;
+    }
+
+    /**
+     * {@inheritdoc}
+    */ 
+    public function fetch(string $type = 'all', int $mode = FETCH_OBJ): mixed  
+    {
+        if(!$this->stmt){
+            return null;
+        }
+
+        $modes = [
+            FETCH_ASSOC => PDO::FETCH_ASSOC,
+            FETCH_BOTH => PDO::FETCH_BOTH,
+            FETCH_OBJ => PDO::FETCH_OBJ, 
+            FETCH_COLUMN => PDO::FETCH_COLUMN,
+            FETCH_COLUMN_ASSOC => PDO::FETCH_ASSOC,
+            FETCH_NUM => PDO::FETCH_NUM,
+            FETCH_ALL => PDO::FETCH_ASSOC
+        ];
+
+        $pdoMode = $modes[$mode] ?? PDO::FETCH_OBJ;
+        $method = $type === 'all' ? 'fetchAll' : 'fetch';
+
+        $response = $this->stmt->$method($pdoMode);
+
+        if($mode === FETCH_NUM_OBJ){
+            $count = 0;
+            $nums = new stdClass();
+            foreach ($response as $row) {
+                $count++;
+                $nums->{$count} = (object) $row;
+            }
+
+            return $nums;
+        }
+
+        return $response;
+    }
+
+    /**
+     * {@inheritdoc}
     */ 
     public function getObject(): stdClass 
     {
@@ -462,30 +417,23 @@ class PdoDriver implements DriversInterface
     }
 
     /**
-     * Fetches all rows as a array.
-     *
-     * @return array The array containing the result rows.
+     * {@inheritdoc}
     */
     public function getArray(): array 
     {
         return $this->getResult('array');;
     }
 
-
     /**
-     * Returns the ID of the last inserted row or sequence value.
-     *
-     * @return string The last insert ID.
-     */
+     * {@inheritdoc}
+    */
     public function getLastInsertId(): string 
     {
         return (string) $this->connection->lastInsertId();
     }
 
     /**
-     * Frees up the statement cursor and sets the statement object to null.
-     * 
-     * @return void
+     * {@inheritdoc}
     */
     public function free(): void 
     {
@@ -496,13 +444,12 @@ class PdoDriver implements DriversInterface
     }
 
     /**
-     * Frees up the statement cursor and close database connection
-     * 
-     * @return void
+     * {@inheritdoc}
     */
     public function close(): void 
     {
         $this->free();
         $this->connection = null;
+        $this->connected = false;
     }
 }

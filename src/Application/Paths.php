@@ -9,9 +9,6 @@
  */
 namespace Luminova\Application;
 
-use \App\Controllers\Config\Files;
-use \Luminova\Exceptions\RuntimeException;
-
 class Paths 
 {
     /**
@@ -105,24 +102,11 @@ class Paths
      * @param string $path
      * @param int $permissions 
      * 
+     * @deprecated This method is deprecated and will be removed in a future release use make_dir instead
      * @return bool true if files existed or was created else false
     */
     public static function createDirectory(string $path, ?int $permissions = null): bool 
     {
-        if (!file_exists($path)) {
-            if(mkdir($path, $permissions ?? Files::$filePermissions, true)){
-                return true;
-            }
-            
-            if (!is_readable($path)) { 
-                throw new RuntimeException("Folder '{$path}' is not readable, please grant read permission.");
-            }
-            
-            if (!is_writable($path)) {
-                throw new RuntimeException("Folder '{$path}' is not writable, please grant read permission.");
-            }  
-        }
-
-        return true;
+        return make_dir($path, $permissions);
     }
 }

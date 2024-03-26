@@ -16,7 +16,7 @@ class Colors
     /**
      * Text Foreground color list
      *
-     * @var array<string, string>
+     * @var array<string, string> $foregroundColors
      */
     protected static $foregroundColors = [
         'black'        => '0;30',
@@ -41,7 +41,7 @@ class Colors
     /**
      * Text Background color list
      *
-     * @var array<string, string>
+     * @var array<string, string> $backgroundColors
      */
     protected static $backgroundColors = [
         'black'      => '40',
@@ -63,7 +63,6 @@ class Colors
      * @param int|null $format Optionally apply text formatting.
      * @param string $foreground Foreground color name
      * @param string|null $background Optional background color name
-     * 
      *
      * @return string A colored text if color is supported
     */

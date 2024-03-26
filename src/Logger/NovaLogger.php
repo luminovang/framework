@@ -12,7 +12,6 @@ namespace Luminova\Logger;
 use \Psr\Log\LogLevel;
 use \Psr\Log\AbstractLogger;
 use \Luminova\Time\Time;
-use \Luminova\Application\Paths;
 
 class NovaLogger extends AbstractLogger
 {
@@ -92,7 +91,7 @@ class NovaLogger extends AbstractLogger
         
         $filepath = $this->path . "{$level}{$this->extension}";
 
-        Paths::createDirectory($this->path);
+        make_dir($this->path);
         
         $time = Time::now()->format('Y-m-d\TH:i:sP');
 

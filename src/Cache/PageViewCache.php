@@ -10,16 +10,15 @@
 namespace Luminova\Cache;
 
 use \Luminova\Http\Header;
-use \Luminova\Application\Paths;
 
 class PageViewCache
 {
     /**
      * The directory where cached files will be stored.
      * 
-     * @var string $cacheDir 
+     * @var string $directory 
      */
-    private string $cacheDir;
+    private string $directory;
 
     /**
      * The expiration time for cached 
@@ -29,58 +28,97 @@ class PageViewCache
     private int $expiration;
 
     /**
-     * @var string $pageKey Cache key
+     * @var string $key Cache key
      */
-    private string $pageKey;
+    private string $key;
+
+    /**
+     * @var string $type Cache type
+     */
+    private string $type = 'html';
 
     /**
      * Class constructor.
      *
      * @param int $expiration The expiration time for cached files in seconds (default: 24 hours).
-     * @param string $cacheDir The directory where cached files will be stored (default: 'cache').
+     * @param string $directory The directory where cached files will be stored (default: 'cache').
      */
-    public function __construct(int $expiration = 24 * 60 * 60, string $cacheDir = 'cache')
+    public function __construct(int $expiration = 24 * 60 * 60, string $directory = 'cache')
     {
-        $this->cacheDir = $cacheDir;
+        $this->directory = $directory;
         $this->expiration = $expiration;
     }
 
     /**
-     * Set cache expiry ttl 
-     * @param int $expiration The expiration time for cached files in seconds (default: 24 hours).
+     * Set cache expiration in seconds.
+     *  
+     * @param int $seconds Expiry (default: 24 hours).
      * 
      * @return self 
     */
-    public function setExpiry(int $expiration): self
+    public function setExpiry(int $seconds): self
     {
-        $this->expiration = $expiration;
+        $this->expiration = $seconds;
 
         return $this;
     }
 
     /**
      * Set cache directory
-     * @param string $cacheDir The directory where cached files will be stored (default: 'cache').
+     * @param string $directory The directory where cached files will be stored (default: 'cache').
      * 
      * @return self 
     */
-    public function setDirectory(string $cacheDir): self
+    public function setDirectory(string $directory): self
     {
-        $this->cacheDir = $cacheDir;
+        $this->directory = $directory;
 
         return $this;
     }
 
     /**
-     * Get the file path for the cache based on the current request URI.
+     * Set cache directory
+     * @param string $directory The directory where cached files will be stored (default: 'cache').
+     * 
+     * @return self 
+    */
+    public function setType(string $type): self
+    {
+        $this->type = $type;
+
+        return $this;
+    }
+
+    /**
+     * Set the cache key.
      *
-     * @param string $extension file extension
+     * @param string $key The key to set.
+     *
+     * @return void
+     */
+    public function setKey(string $key): void
+    {
+        $this->key = md5($key);
+    }
+
+    /**
+     * Get the cache key.
+     *
+     * @return string The cache key.
+     */
+    public function getKey(): string
+    {
+        return $this->key;
+    }
+
+    /**
+     * Get the file path for the cache based on the current request URI.
      * 
      * @return string The file path for the cache.
     */
-    public function getCacheLocation(string $extension = 'html'): string
+    public function getFilename(): string
     {
-        return $this->getCacheFilepath() . $this->getKey() . '.' . $extension;
+        return $this->getLocation() . $this->key . '.' . $this->type;
     }
 
     /**
@@ -88,9 +126,9 @@ class PageViewCache
      *
      * @return string The cache directory path.
      */
-    public function getCacheFilepath(): string
+    public function getLocation(): string
     {
-        return rtrim($this->cacheDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return rtrim($this->directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
     }
 
     /**
@@ -100,53 +138,69 @@ class PageViewCache
      */
     public function hasCache(): bool
     {
-        $location = $this->getCacheLocation();
+        $location = $this->getFilename();
 
-        return file_exists($location) && time() - filectime($location) < $this->expiration;
+        return file_exists($location) && !$this->expired($this->key, $this->directory);
     }
 
     /**
-     * Get the formatted file modification time.
-     *
-     * @return string Formatted file modification time.
-     */
-    public function getFileTime(): string
+     * Check if the cached has expired.
+     * 
+     * @param string $key Cache key
+     * 
+     * @return bool True if the cache is still valid; false otherwise.
+    */
+    public static function expired(string $key, string $directory): bool
     {
-        $timestamp = filectime($this->getCacheLocation());
+        $metaLocation = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'pagecache.lock';
 
-        return date('D jS M Y H:i:s', $timestamp);
+        if(file_exists($metaLocation)){
+            $info = json_decode(file_get_contents($metaLocation), true);
+            if(isset($info[$key])){
+                return time() >= (int) ($info[$key]['Expiry'] ?? 0);
+            }
+        }
+
+        return true;
+    }
+
+    public function delete(){
+        
+    }
+
+    public function clear(){
+        
     }
 
     /**
      * Load the content from the cache file and exit the script.
-     * @param string $info Cache info
      * 
      * @return bool True if loading was successful; false otherwise.
-     */
-    public function getCache(string $info = null): bool
+    */
+    public function readContent(): bool
     {
-        $headers = Header::getSystemHeaders();
-        $location = $this->getCacheLocation();
-        $infoLocation = $this->getCacheLocation('json');
-        
-        // Calculate the cache expiration time based on file creation time
-        $fileCreationTime = filectime($location);
-        if($fileCreationTime !== false){
-            $expirationTime = $fileCreationTime + $this->expiration;
+        $headers = [];
+        $metadta = $this->getLocation() . 'pagecache.lock';
+
+        if (file_exists($metadta)) {
+            $items = json_decode(file_get_contents($metadta), true);
+
+            if(isset($items[$this->key])){
+                $headers = Header::getSystemHeaders();
+                $item = $items[$this->key];
+                $headers['Content-Type'] = $item['Content-Type'];
+                $headers['Content-Encoding'] = $item['Content-Encoding'];
+                $headers['Expires'] = gmdate("D, d M Y H:i:s",  $item['Expiry']) . ' GMT';
+                $headers['Cache-Control'] = 'max-age=' . $item['MaxAge'] . ', public';
+                $headers['ETag'] =  '"' . $item['ETag'] . '"';
+            }else{
+                return false;
+            }
         }else{
-            $expirationTime = $this->expiration;
+            return false;
         }
 
-        // Set the "Expires" header based on the calculated expiration time
-        $headers['Expires'] = gmdate("D, d M Y H:i:s", $expirationTime) . ' GMT';
-
-        if (file_exists($infoLocation)) {
-            $info = json_decode(file_get_contents($infoLocation), true);
-
-            $headers['Content-Type'] = $info['Content-Type'];
-            //$headers['Content-Length'] = $info['Content-Length'];
-            $headers['Content-Encoding'] = $info['Content-Encoding'];
-        }
+        $location = $this->getFilename();
         
         foreach ($headers as $header => $value) {
             header("$header: $value");
@@ -166,48 +220,47 @@ class PageViewCache
      *
      * @param string $content The content to be saved to the cache file.
      * @param string $info Framework copyright information
-     * @param array|null $cacheMetadata Cache information
+     * @param array|null $metadata Cache information
      *
      * @return bool True if saving was successful; false otherwise.
      */
-    public function saveCache(string $content, ?string $info = null, ?array $cacheMetadata = null): bool
+    public function saveCache(string $content, ?string $info = null, ?array $metadata = null): bool
     {
-        $location = $this->getCacheFilepath();
-        Paths::createDirectory($location);     
+        $location = $this->getLocation();
+        $filename = $this->getFilename();
+
+        make_dir($location);     
 
         if($info !== null){
-            $now = date('D jS M Y H:i:s', time());
-            $content .= '<!--[File was cached on - '. $now . ', Using: ' . $info . ']-->';
+            $content .= '<!--[File was cached on - '. date('D jS M Y H:i:s') . ', Using: ' . $info . ']-->';
         }
+  
+        if(write_content($filename, $content)){
+            $metadata = ($metadata === null) ? [] : $metadata;
+
+            $metaLocation = $location . 'pagecache.lock';
+            $jsonData = file_get_contents($metaLocation);
     
-        if($cacheMetadata !== null && $cacheMetadata !== []){
-            write_content($this->getCacheLocation('json'), json_encode($cacheMetadata));
+            $madatadaInfo = ($jsonData === false) ? [] : json_decode($jsonData, true);
+    
+            $metadata['MaxAge'] = $this->expiration;
+            $metadata['Expiry'] = time() + $this->expiration;
+            $metadata['Date'] = date("D, d M Y H:i:s");
+            $metadata['ETag'] = md5_file($filename);
+
+            $madatadaInfo[$this->key] = $metadata;
+    
+            $updateInfo = json_encode($madatadaInfo, JSON_PRETTY_PRINT);
+    
+            if(!write_content($metaLocation, $updateInfo)){
+                unlink($filename);
+
+                return false;
+            }
+
+            return true;
         }
 
-        $bytesWritten = write_content($this->getCacheLocation(), $content);
-
-        return $bytesWritten !== false;
-    }
-
-    /**
-     * Get the cache key.
-     *
-     * @return string The cache key.
-     */
-    public function getKey(): string
-    {
-        return $this->pageKey;
-    }
-
-    /**
-     * Set the cache key.
-     *
-     * @param string $key The key to set.
-     *
-     * @return void
-     */
-    public function setKey(string $key): void
-    {
-        $this->pageKey = md5($key);
+        return false;
     }
 }

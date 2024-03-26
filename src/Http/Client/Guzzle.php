@@ -9,48 +9,34 @@
  */
 namespace Luminova\Http\Client;
 
-use \GuzzleHttp\Client as GuzzleHttpClient;
-use \Luminova\Http\NetworkClientInterface;
-use \Luminova\Http\NetworkResponse;
+use \GuzzleHttp\Client;
+use \Luminova\Http\Client\ClientInterface;
+use \Luminova\Http\Message\Response;
 use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
 use \GuzzleHttp\Exception\GuzzleException;
 use \Luminova\Http\Exceptions\RequestException;
 use \Luminova\Http\Exceptions\ConnectException;
-use \Luminova\Http\Exceptions\ClientException;
-use \Luminova\Http\Exceptions\ServerException;
 
-class Guzzle implements NetworkClientInterface
+class Guzzle implements ClientInterface
 {
     /**
-     * @var GuzzleHttpClient
+     * @var Client $client guzzle client
     */
-    private $client;
+    private Client $client;
 
     /**
-     * Guzzle client constructor.
-     * @param array $config client configuration
+     * {@inheritdoc}
      * 
     */
     public function __construct(array $config = [])
     {
-        $this->client = new GuzzleHttpClient($config);
+        $this->client = new Client($config);
     }
 
     /**
-     * Perform an HTTP request using Guzzle.
-     *
-     * @param string $method
-     * @param string $url
-     * @param array $data
-     * @param array $headers
-     *
-     * @return NetworkResponse
-     * @throws RequestException
-     * @throws ConnectException
-     * @throws ClientException
-     * @throws ServerException
+     * {@inheritdoc}
      */
-    public function request(string $method, string $url, array $data = [], array $headers = []): NetworkResponse
+    public function request(string $method, string $url, array $data = [], array $headers = []): Response
     {
         $options = ['headers' => $headers];
 
@@ -62,7 +48,7 @@ class Guzzle implements NetworkClientInterface
             $response = $this->client->request($method, $url, $options);
             $body = $response->getBody();
 
-            return new NetworkResponse(
+            return new Response(
                 $response->getStatusCode(),
                 $response->getHeaders(),
                 $body,
@@ -72,7 +58,7 @@ class Guzzle implements NetworkClientInterface
             $response = $e->getResponse();
             if ($response !== null) {
                 $body = $response->getBody();
-                return new NetworkResponse(
+                return new Response(
                     $response->getStatusCode(),
                     $response->getHeaders(),
                     $body,

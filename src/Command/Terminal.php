@@ -77,6 +77,9 @@ class Terminal
     */
     protected static $commandsOptions = [];
 
+    /**
+     * Initialize command line instance before running any commands.
+    */
     public function __construct()
     {
         defined('STDOUT') || define('STDOUT', 'php://output');
@@ -129,7 +132,7 @@ class Terminal
     /**
      * Displays a progress bar on the CLI.
      * Progress should be called in a loop
-     * Or use progressWatch()
+     * Or use watcher()
      * 
      * Examples 
      * 
@@ -184,7 +187,7 @@ class Terminal
      *
      * Examples 
      * 
-     * @example $this->progressWatch(100, $onFinish, $onProgress, true) Show 100 lines of progress bar with a callbacks and beep on finish
+     * @example $this->watcher(100, Closure, Closure, true) Show 100 lines of progress bar with a callbacks and beep on finish
      * 
      * @param int $progressCount Total count of progress bar to show
      * @param ?callable $onFinish Execute callback when progress finished
@@ -193,7 +196,7 @@ class Terminal
      *
      * @return void
     */
-    protected static function progressWatch(int $progressCount, ?callable $onFinish = null, ?callable $onProgress = null, bool $beep = true): void 
+    protected static function watcher(int $progressCount, ?callable $onFinish = null, ?callable $onProgress = null, bool $beep = true): void 
     {
         $progress = 0;
     
@@ -350,6 +353,7 @@ class Terminal
 
         $inputArray = list_to_array($input);
         $input = static::getInputValues($inputArray, $optionValues);
+
         return $input;
     }
 
@@ -372,7 +376,6 @@ class Terminal
         }
         return $result;
     }
-
 
     /**
      * Display select options with key index as an identifier
@@ -578,7 +581,7 @@ class Terminal
         static::fwrite($text);
     }
 
-     /**
+    /**
      * Echo / output text if
      *
      * @param string $text string to output
@@ -703,6 +706,7 @@ class Terminal
 
         if($run){
             $argument = static::getArgument(1);
+
             if($argument === 'help'){
                 return STATUS_ERROR;
             }
@@ -788,12 +792,12 @@ class Terminal
                 $result['options'][$arg] = $value;
             }
         }
-       return $result;
+
+        return $result;
     }
 
     /**
      * Get the current command controller views
-     * 
      * @return array $views
     */
     public static function getRequestCommands(): array
@@ -827,7 +831,7 @@ class Terminal
     /**
      * Get command argument by index number
      * 
-     * @param int $index
+     * @param int $index Index postion
      * 
      * @return string|null|int
     */
@@ -875,8 +879,8 @@ class Terminal
      * Get options value 
      * If option flag is passed with an empty value true will be return else false
      * 
-     * @param string $key Option key name 
-     * @param string $default default is false
+     * @param string $key Option key to retrieve
+     * @param string $default Default value to return (default: false)
      * 
      * @return null|string|int|bool
      */
@@ -914,7 +918,7 @@ class Terminal
         if(isset(static::$commandsOptions[$name])){
             return static::$commandsOptions[$name];
         }
-
+        
         return null;
     }
 
@@ -1063,15 +1067,15 @@ class Terminal
     }
 
     /**
-     * Print Command line header information
-     * @param string $version framework cli version number
+     * Print NovaKit Command line header information
+     * 
      * @return void
     */
-    public static function header(string $version = '1.5.6'): void
+    public static function header(): void
     {
         static::write(sprintf(
             'PHP Luminova v%s NovaKit Command Line Tool - Server Time: %s UTC%s',
-            $version,
+            static::$version,
             date('Y-m-d H:i:s'),
             date('P')
         ), 'green');

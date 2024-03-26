@@ -1,4 +1,4 @@
-<?php 
+<?php
 /**
  * Luminova Framework
  *
@@ -6,10 +6,11 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
-*/
-namespace Luminova\Template;
+ */
+namespace Luminova\Database\Drivers;
 
 
-class ViewModel 
+interface StmtInterface extends \PDOStatement, \mysqli_stmt, \mysqli_result 
 {
+
 }

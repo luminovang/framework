@@ -9,166 +9,176 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Database\Connection;
-use \Luminova\Exceptions\DatabaseException;
+use \Luminova\Database\Scheme;
 use \Luminova\Cache\FileCache;
+use \Luminova\Database\Connection;
 use \Luminova\Database\Results\Statements;
+use \Luminova\Database\DatabseManager;
+use \Luminova\Database\Drivers\DriversInterface;
+use \Luminova\Exceptions\DatabaseException;
 
 class Query extends Connection 
 {  
     /**
-    * Class instance
-    * @var Query|null $instance 
+     * Class instance
+     * 
+     * @var Query|null $instance 
     */
     private static ?Query $instance = null;
 
     /**
-    * Table name to query
-    * @var string $databaseTable 
+     * Table name to query
+     * 
+     * @var string $databaseTable 
     */
     private string $databaseTable = '';
 
     /**
-    * Table name to join query
-    * @var string $joinTable 
+     * Table name to join query
+     * 
+     * @var string $joinTable 
     */
     private string $joinTable = '';
 
     /**
-    * Table join query type
-    * @var string $joinType 
+     * Table join query type
+     * 
+     * @var string $joinType 
     */
     private string $joinType = '';
 
     /**
-    * Table join bind parameters
-    * @var array $joinConditions 
+     * Table join bind parameters
+     * 
+     * @var array $joinConditions 
     */
     private array $joinConditions = [];
 
     /**
-    * Table query order limit offset and count query 
-    * @var string $queryLimit 
+     * Table query order limit offset and count query 
+     * 
+     * @var string $queryLimit 
     */
     private string $queryLimit = '';
 
     /**
-    * Table query order rows 
-    * @var string $queryOrder 
+     * Table query order rows 
+     * 
+     * @var string $queryOrder 
     */
     private string $queryOrder = '';
 
     /**
-    * Table query group column by
-    * @var string $queryGroup 
+     * Table query group column by
+     * 
+     * @var string $queryGroup 
     */
     private string $queryGroup = '';
 
     /**
-    * Table query where column
-    * @var string $queryWhere 
+     * Table query where column
+     * 
+     * @var string $queryWhere 
     */
     private string $queryWhere = '';
 
     /**
-    * Table query where column value
-    * @var string $whereValue 
+     * Table query where column value
+     * 
+     * @var string $whereValue 
     */
     private string $whereValue = '';
 
     /**
-    * Table query and query column
-    * @var array $whereConditions 
+     * Table query and query column
+     * 
+     * @var array $whereConditions 
     */
     private array $whereConditions = [];
 
     /**
-    * able query update set values
-    * @var array $querySetValues 
+     * able query update set values
+     * 
+     * @var array $querySetValues 
     */
     private array $querySetValues = [];
 
     /**
-    * Has Cache flag
-    * @var bool $hasCache 
+     * Has Cache flag
+     * 
+     * @var bool $hasCache 
     */
     private bool $hasCache = false;
 
     /**
-    * Cache class instance
-    * @var FileCache $cache 
+     * Cache class instance
+     * 
+     * @var FileCache $cache 
     */
     private ?FileCache $cache = null;
 
     /**
-    * Cache key
-    * @var string $cacheKey 
+     * Cache key
+     * @var string $cacheKey 
     */
     private string $cacheKey = "default";
 
     /**
-    * Table alias
-    * @var string $tableAlias 
+     * Table alias
+     * @var string $tableAlias 
     */
     private string $tableAlias = '';
 
     /**
-    * Join table alias
-    * @var string $jointTableAlias 
+     * Join table alias
+     * @var string $jointTableAlias 
     */
     private string $jointTableAlias = '';
 
     /**
-    * Bind values 
-    * @var array $bindValues 
+     * Bind values 
+     * @var array $bindValues 
     */
     private array $bindValues = [];
 
     /**
-    * Query builder 
-    * @var string $buildQuery 
+     * Query builder 
+     * @var string $buildQuery 
     */
     private string $buildQuery = '';
 
     /**
-    * Query operators 
-    * 
-    * @var array $queryOperators 
+     * Query operators 
+     * 
+     * @var array $queryOperators 
     */
     private static array $queryOperators = ['=', '!=', '<', '<=','>','>='];
 
     /**
      * Reset query properties before cloning
+     * 
+     * @ignore
     */
-    private function __clone() {
+    private function __clone() 
+    {
         $this->reset();
     }
 
     /**
      * Get database connection
      * 
-     * @return MySqliDriver|PdoDriver|null 
+     * @return DriversInterface|null 
     */
-    public function getConn(): ?object
+    public function getConn(): ?DriversInterface
     {
         return $this->db;
     }
 
     /**
-     * Close database connection
-     * 
-     * @return void 
-    */
-    public function closeConn(): void 
-    {
-       $this->db->close();
-    }
-
-    /**
-    * Class Singleton
-    *
-    * @return static object $instance
-    * @throws DatabaseException|InvalidException If fails
+     * Class shared singleton class instance
+     *
+     * @return static object $instance
+     * @throws DatabaseException|InvalidException If fails
     */
     public static function getInstance(): static 
     {
@@ -182,7 +192,7 @@ class Query extends Connection
      * @param string $alias table alias
      * 
      * @return self $this Class instance.
-     */
+    */
     public function table(string $table, string $alias = ''): self
     {
         $this->databaseTable = $table;
@@ -201,7 +211,7 @@ class Query extends Connection
      * @param string $alias The alias for the joined table (optional).
      * 
      * @return self Returns the instance of the class.
-     */
+    */
     public function join(string $table, string $type = 'INNER', string $alias = ''): self
     {
         $this->joinType = $type;
@@ -225,7 +235,7 @@ class Query extends Connection
      * @example string $tbl->on('a.column', '=', 'b.column);
      * 
      * @return self Returns the instance of the class.
-     */
+    */
     public function on(string|array $conditions, ?string $operator = '=', mixed $value = null): self
     {
         if (is_array($conditions)) {
@@ -244,7 +254,7 @@ class Query extends Connection
      * @param string $alias join table alias
      * 
      * @return self $this Class instance.
-     */
+    */
     public function innerJoin(string $table, string $alias = ''): self
     {
         return $this->join($table, 'INNER', $alias);
@@ -257,7 +267,7 @@ class Query extends Connection
      * @param string $alias join table alias
      * 
      * @return self $this Class instance.
-     */
+    */
     public function leftJoin(string $table, string $alias = ''): self
     {
         return $this->join($table, 'LEFT', $alias);
@@ -270,7 +280,7 @@ class Query extends Connection
      * @param string $alias join table alias
      * 
      * @return self $this Class instance.
-     */
+    */
     public function rightJoin(string $table, string $alias = ''): self
     {
         return $this->join($table, 'RIGHT', $alias);
@@ -283,7 +293,7 @@ class Query extends Connection
      * @param string $alias join table alias
      * 
      * @return self $this Class instance.
-     */
+    */
     public function crossJoin(string $table, string $alias = ''): self
     {
         return $this->join($table, 'CROSS', $alias);
@@ -296,7 +306,7 @@ class Query extends Connection
      * @param int $offset start offset query limit
      * 
      * @return self class instance.
-     */
+    */
     public function limit(int $limit = 0, int $offset = 0): self
     {
         if($limit > 0){
@@ -311,7 +321,7 @@ class Query extends Connection
      * @param string $order uid ASC, name DESC
      * 
      * @return self class instance.
-     */
+    */
     public function order(string $order): self 
     {
         $this->queryOrder = " ORDER BY {$order}";
@@ -325,7 +335,7 @@ class Query extends Connection
      * @param string $group group by column name
      * 
      * @return self class instance.
-     */
+    */
     public function group(string $group): self 
     {
         $this->queryGroup = " GROUP BY {$group}";
@@ -341,7 +351,7 @@ class Query extends Connection
      * @param mixed $key column key value
      * 
      * @return self class instance.
-     */
+    */
     public function where(string $column, mixed $operator, mixed $key = null): self
     {
         [$key, $operator] = static::fixLegacyOperators($key, $operator);
@@ -360,7 +370,7 @@ class Query extends Connection
      * @param mixed $value column key value
      * 
      * @return self class instance.
-     */
+    */
     public function and(string $column, mixed $operator, mixed $value = null): self
     {
         [$value, $operator] = static::fixLegacyOperators($value, $operator);
@@ -382,7 +392,7 @@ class Query extends Connection
      * @param string|int $value column key value
      * 
      * @return self class instance.
-     */
+    */
     public function set(string $column, mixed $value): self
     {
         $this->querySetValues[$column] = $value;
@@ -398,7 +408,7 @@ class Query extends Connection
      * @param mixed $value column key value
      * 
      * @return self class instance.
-     */
+    */
     public function or(string $column, mixed $operator, mixed $value = null): self
     {
         [$value, $operator] = static::fixLegacyOperators($value, $operator);
@@ -414,6 +424,7 @@ class Query extends Connection
     
      /**
      * Set query AND (? OR ?)
+     * 
      * @param string $column column name
      * @param mixed $operator Comparison operator
      * @param mixed $value column key value
@@ -422,8 +433,15 @@ class Query extends Connection
      * @param mixed $orValue column or key value
      * 
      * @return self class instance.
-     */
-    public function andOr(string $column, mixed $operator, mixed $value, string $orColumn, mixed $orOperator, mixed $orValue): self
+    */
+    public function andOr(
+        string $column, 
+        mixed $operator, 
+        mixed $value, 
+        string $orColumn, 
+        mixed $orOperator, 
+        mixed $orValue
+    ): self
     {
         [$value, $operator] = static::fixLegacyOperators($value, $operator);
         [$orValue, $orOperator] = static::fixLegacyOperators($orValue, $orOperator);
@@ -443,11 +461,12 @@ class Query extends Connection
 
     /**
      * Set query where IN () expression
+     * 
      * @param string $column column name
      * @param array $lists of values
      * 
      * @return self class instance.
-     */
+    */
     public function in(string $column, array $lists = []): self
     {
         if ($lists === []) {
@@ -465,15 +484,15 @@ class Query extends Connection
         return $this;
     }
 
-
-     /**
-     * Set query where FIND_IN_SET () expression
+    /**
+     * Set query where FIND_IN_SET() expression
+     * 
      * @param string $search search value
      * @param string $operator allow specifying the operator for matching (e.g., > or =)
      * @param array $list of values
      * 
      * @return self class instance.
-     */
+    */
     public function inset(string $search, string $operator = '=', array $list = []): self
     {
         if($list === []){
@@ -499,7 +518,7 @@ class Query extends Connection
      * @param int $expiry The cache expiry time in seconds (default: 7 days).
      * 
      * @return self $this class instance.
-     */
+    */
     public function cache(string $key, string $storage = null, int $expiry = 7 * 24 * 60 * 60): self
     {
         $storage ??=  'database_' . ($this->databaseTable ?? 'capture');
@@ -520,13 +539,14 @@ class Query extends Connection
     }
 
     /**
-     * Insert into table
-     * @param array $values array of values to insert into table
-     * @param bool $bind Use bind values and prepare statement instead of query
+     * Insert records into table
+     * 
+     * @param array<string, mixed> $values array of values to insert into table
+     * @param bool $prepare Use bind values and prepare statement instead of query
      * 
      * @return int returns affected row counts.
-     */
-    public function insert(array $values, bool $bind = true): int 
+    */
+    public function insert(array $values, bool $prepare = true): int 
     {
         if ($values === []) {
             return 0;
@@ -542,7 +562,7 @@ class Query extends Connection
     
         $columns = array_keys($values[0]);
         try {
-            if($bind){
+            if($prepare){
                 return $this->executeInsertPrepared($columns, $values);
             }
             return $this->executeInsertQuery($columns, $values);
@@ -557,9 +577,9 @@ class Query extends Connection
      * 
      * @param array $columns select columns
      * 
-     * @return object|null|array returns selected rows.
-     */
-    public function select(array $columns = ["*"]): mixed 
+     * @return object|null|array|int|bool returns selected rows.
+    */
+    public function select(array $columns = ['*']): mixed 
     {
         if($this->cache !== null && $this->hasCache){
             $response = $this->cache->getItem($this->cacheKey);
@@ -571,7 +591,7 @@ class Query extends Connection
             }
         }
 
-        $columns = implode(", ", $columns);
+        $columns = ($columns === ['*'])  ? '*' : implode(", ", $columns);
         $selectQuery = "SELECT {$columns} FROM {$this->databaseTable} {$this->tableAlias}";
         if ($this->joinTable !== '') {
             $selectQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
@@ -630,8 +650,6 @@ class Query extends Connection
             $this->db->query($selectQuery);
         }
 
-        //var_dump($this->db->dumpDebug());
-
         $return = $this->db->getAll();
 
         $this->reset();
@@ -659,7 +677,7 @@ class Query extends Connection
      * 
      * @return self $this 
      * @throws DatabaseException when query is empty
-     */
+    */
     public function query(string $query): self 
     {
         if (empty($query)) {
@@ -729,7 +747,6 @@ class Query extends Connection
         return null;
     }
 
-
     /**
      * Return custom builder result from table
      * 
@@ -739,7 +756,7 @@ class Query extends Connection
      * @return mixed|Statements false to return Statements
      * @throws DatabaseException
     */
-    private function returnQuery(string $buildQuery, string $result): mixed 
+    private function returnQuery(string $buildQuery, string $result): mixed
     {
         if($this->bindValues === []){
             $this->db->query($buildQuery);
@@ -777,12 +794,13 @@ class Query extends Connection
     }
 
     /**
-     * Select on record from table,
-     * @param array $columns select columns
+     * Select a single record from table,
      * 
-     * @return object|null returns selected row.
-     */
-    public function find(array $columns = ["*"]): mixed 
+     * @param array $columns select columns to return
+     * 
+     * @return object|null|array|int|bool returns selected row.
+    */
+    public function find(array $columns = ['*']): mixed 
     {
         if ($this->queryWhere === '') {
             throw new DatabaseException("Find operation without a WHERE condition is not allowed.");
@@ -798,7 +816,7 @@ class Query extends Connection
             }
         }
 
-        $columns = implode(", ", $columns);
+        $columns = ($columns === ['*'])  ? '*' : implode(", ", $columns);
         $findQuery = "SELECT {$columns} FROM {$this->databaseTable} {$this->tableAlias}";
         if ($this->joinTable !== '') {
             $findQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
@@ -831,7 +849,7 @@ class Query extends Connection
     /**
      * Return single result from table
      * 
-     * @param string $findQuery query
+     * @param string $findQuery query pass by reference 
      * 
      * @return mixed
     */
@@ -852,14 +870,14 @@ class Query extends Connection
         return $return;
     }
 
-
     /**
-     * Select on record from table,
-     * @param array $columns select columns
+     * Select total counts of records from table,
      * 
-     * @return int returns selected row.
+     * @param string $column column to index counting (default: *) 
+     * 
+     * @return int returns total counts of records.
     */
-    public function total(string $column = "*"): int 
+    public function total(string $column = '*'): int 
     {
         if($this->cache !== null && $this->hasCache){
             $response = $this->cache->getItem($this->cacheKey);
@@ -978,11 +996,12 @@ class Query extends Connection
     }
 
     /**
-     * Delete from table
+     * Delete record from table
+     * 
      * @param int $limit row limit
      * 
-     * @return int returns affected row counts.
-     */
+     * @return int returns number of affected rows.
+    */
     public function delete(int $limit = 0): int
     {
         if ($this->queryWhere === '') {
@@ -1068,7 +1087,6 @@ class Query extends Connection
      * @return bool returns true if completed
      * @throws DatabaseException
     */
-
     public function truncate(bool $transaction = true): bool 
     {
         try {
@@ -1117,34 +1135,13 @@ class Query extends Connection
     }
 
     /**
-     * Create a new table if it doesn't exist
-     * 
-     * @param array $columns table columns and options
-     * 
-     * @return int returns affected row counts.
-     */
-    public function createTable(array $columns): int 
-    {
-        try {
-            $return = $this->db->exec("CREATE TABLE IF NOT EXISTS {$this->databaseTable} ($columns)");
-            $this->reset();
-
-            return $return;
-        } catch (DatabaseException $e) {
-            $e->handle();
-        }
-
-        return 0;
-    }
-
-    /**
      * Get table column instance 
      * 
-     * @param Columns $column table column instance
+     * @param Scheme $column table column instance
      * 
      * @return int affected row count
     */
-    public function create(Columns $column): int 
+    public function create(Scheme $column): int 
     {
         try {
             $query = $column->generate();
@@ -1164,11 +1161,11 @@ class Query extends Connection
     /**
      * Get table column instance 
      * 
-     * @return Columns column class instance
+     * @return Scheme column class instance
     */
-    public function withColumns() : Columns
+    public function scheme(): Scheme
     {
-        return new Columns($this->databaseTable);
+        return new Scheme($this->databaseTable);
     }
 
     /**
@@ -1228,7 +1225,7 @@ class Query extends Connection
     /**
      * Bind query where conditions
      * 
-     * @return ?object
+     * @return null|object
     */
     private function bindConditions(?object $db = null): ?object 
     {
@@ -1308,6 +1305,45 @@ class Query extends Connection
                 $firstCondition = false;
             }
         }
+    }
+
+    /**
+     * Export database table and download it to brower as JSON or CSV format.
+     * 
+     * @param string $as Expirt as csv or json format.
+     * @param string $filename Filename to download it as.
+     * @param array $columns Table columns to export (defaul: all)
+     * 
+     * @throws DatabaseException If invalid format is provided.
+     * @throws DatabaseException If unable to create export temp directory.
+     * @throws DatabaseException If faild to create export.
+    */
+    public function export(string $as = 'csv', ?string $filename = null, array $columns = ['*']): bool 
+    {
+        static $manager = null;
+    
+        $manager ??= new DatabseManager($this->db);
+
+        $manager->setTable($this->databaseTable);
+
+        return $manager->export($as, $filename, $columns);
+    }
+
+    /**
+     * Backup database 
+     * 
+     * @param string $filename Filename to store backup as.
+     * 
+     * @throws DatabaseException If unable to create backup directory.
+     * @throws DatabaseException If faild to create backup.
+    */
+    public function backup(?string $filename = null): bool 
+    {
+        static $manager = null;
+
+        $manager ??= new DatabseManager($this->db);
+
+        return $manager->backup($filename);
     }
 
     /**
@@ -1427,7 +1463,7 @@ class Query extends Connection
         $this->cache = null;
         $this->bindValues = [];
         $this->buildQuery = '';
-        if($this->db->getDriver() === 'pdo'){
+        if($this->db::getDriver() === 'pdo'){
             $this->db->free();
         }
     }

@@ -18,31 +18,36 @@ use \Luminova\Library\Importer;
 abstract class BaseViewController
 {
     /**
-      * HTTP request object 
-      * @var Request $request 
+     * HTTP request object 
+     * 
+     * @var Request $request 
     */
     protected ?Request $request = null;
  
     /**
-      * Input validation object 
-      * @var InputValidator $validate
+     * Input validation object 
+     * 
+     * @var InputValidator $validate
     */
     protected ?InputValidator $validate = null;
  
     /**
-      * Application instance
-      * @var Application $app 
+     * Application instance
+     * 
+     * @var Application $app 
     */
     protected ?Application $app = null;
  
     /**
-      * Importer instance
-      * @var Importer $library 
+     * Importer instance
+     * 
+     * @var Importer $library 
     */
     protected ?Importer $library = null;
 
     /**
-     * Initialize controller instance
+     * Initialize BaseViewController class instance a
+     * nd make $this->app available to controller classes.
     */
     public function __construct()
     {
@@ -52,6 +57,7 @@ abstract class BaseViewController
 
     /**
      * Uninitialized controller instance
+     * @ignore 
     */
     public function __destruct() 
     {
@@ -64,6 +70,7 @@ abstract class BaseViewController
      * @param string $key property key
      * 
      * @return ?mixed return property else null
+     * @ignore 
     */
     public function __get(string $key): mixed
     {
@@ -75,7 +82,8 @@ abstract class BaseViewController
      *
      * @param string $key property key
      * 
-     * @return bool 
+     * @return bool
+     * @ignore 
     */
     public function __isset(string $key): bool
     {
@@ -83,7 +91,8 @@ abstract class BaseViewController
     }
 
     /**
-     * Initializes the http request class
+     * Initializes the http request class instance
+     * 
      * @overridable #[\Override]
      * 
      * @return Request $request http request object 
@@ -98,7 +107,8 @@ abstract class BaseViewController
     }
 
     /**
-     * Initializes the input validator class
+     * Initializes the input validator class instance.
+     * 
      * @overridable #[\Override]
      * 
      * @return InputValidator $validate input validation object 
@@ -113,7 +123,8 @@ abstract class BaseViewController
     }
 
     /**
-     * Initializes the application class
+     * Initializes the application class instance.
+     * 
      * @overridable #[\Override]
      * 
      * @return Application $app Application instance
@@ -128,7 +139,8 @@ abstract class BaseViewController
     }
 
     /**
-     * Initializes the application class
+     * Initializes the application class instance.
+     * 
      * @overridable #[\Override]
      * 
      * @return Importer $app Application instance
@@ -143,10 +155,10 @@ abstract class BaseViewController
     }
 
     /**
-     * Render view
+     * Shorthand to render view in controller class.
      *
      * @param string $view view name
-     * @param array $options view options
+     * @param array $options Optiona options to be passed to view template.
      * 
      * @return int STATUS_SUCCESS
     */
@@ -158,7 +170,7 @@ abstract class BaseViewController
     }
 
     /**
-     * On create method 
+     * Controller onCreate method an alternative to __construct
      * 
      * @overridable #[\Override]
      * 
@@ -167,7 +179,7 @@ abstract class BaseViewController
     protected function onCreate(): void {}
 
     /**
-     * On destroy method 
+     * Controller onDestroy method an alternative to __distruct 
      * 
      * @overridable #[\Override]
      * 
