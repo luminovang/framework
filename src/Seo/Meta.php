@@ -277,7 +277,7 @@ class Meta
                     "sameAs" => (array) static::$manifest['social_media'],
                     "logo" => [
                         "@type" => "ImageObject",
-                        "inLanguage" => static::$manifest['locale'],
+                        "inLanguage" => static::$manifest['language'],
                         "@id" => static::$manifest['site_id'] . '/#logo',
                         "url" => static::getConfig("image_assets") . static::$manifest['logo_image_name'],
                         "contentUrl" => static::getConfig("image_assets") . static::$manifest['logo_image_name'],
@@ -308,7 +308,7 @@ class Meta
                             "query-input" => 'required name=search_term_string'
                         ]
                     ],
-                    "inLanguage" => static::$manifest['locale'],
+                    "inLanguage" => static::$manifest['language'],
                 ],
                 [
                     "@type" => "WebPage",
@@ -334,7 +334,7 @@ class Meta
                     "breadcrumb" => [
                         "@id" => static::getConfig("link") . '/#breadcrumb'
                     ],
-                    "inLanguage" => static::$manifest['locale'],
+                    "inLanguage" => static::$manifest['language'],
                     "potentialAction" => [
                         "@type" => "ReadAction",
                         "target" => [
@@ -344,7 +344,7 @@ class Meta
                 ],
                 [
                     "@type" => "ImageObject",
-                    "inLanguage" => static::$manifest['locale'],
+                    "inLanguage" => static::$manifest['language'],
                     "@id" => static::getConfig("link") . '/#primaryimage',
                     "url" => static::getConfig("image_assets") . static::getConfig("image_name"),
                     "contentUrl" => static::getConfig("image_assets") . static::getConfig("image_name"),
@@ -403,7 +403,7 @@ class Meta
                     "image" => [
                         "@type" => "ImageObject",
                         "@id" => static::$manifest['site_id'] . '/author/' . $authorId . '/#personlogo',
-                        "inLanguage" => static::$manifest['locale'],
+                        "inLanguage" => static::$manifest['language'],
                         "url" => static::getConfig("image_assets") . "logo-square-dark.png",
                         "contentUrl" => static::getConfig("image_assets") . "logo-square-dark.png",
                         "caption" => static::getConfig("author")
@@ -427,7 +427,7 @@ class Meta
                 "thumbnailUrl" => static::getConfig("image_assets") . static::getConfig("image_name"),
                 "keywords" => static::getConfig("article_keywords"),
                 "articleSection" => [static::getConfig("article_category")],
-                "inLanguage" => static::$manifest['locale'],
+                "inLanguage" => static::$manifest['language'],
                 "potentialAction" => [
                     [
                         "@type" => "CommentAction",
@@ -499,7 +499,7 @@ class Meta
                 <meta property="article:modified_time" content="' . static::toDate(static::getConfig("dateModified")) . '" />';
         }
 
-        $meta .= '<meta property="og:locale" content="' . static::$manifest['facebook_local'] . '" />
+        $meta .= '<meta property="og:locale" content="' . static::$manifest['locale'] . '" />
             <meta property="og:type" content="website" />
             <meta property="og:title" content="' . static::getConfig("title") . '" />
             <meta property="og:description" content="' . static::getConfig("description") . '" />
