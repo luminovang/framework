@@ -117,7 +117,7 @@ class PdoDriver implements DriversInterface
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ
         ];
 
-        if($this->config->charset !== ''){
+        if($driver === 'mysql' && $this->config->charset !== ''){
             $options[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES {$this->config->charset}";
         }
     
@@ -226,11 +226,15 @@ class PdoDriver implements DriversInterface
     {
         $result = $this->connection->exec($query);
 
-        if($result === false){
-            return 0;
+        if($result !== false){
+            if($result === 0){
+                return 1;
+            }
+
+            return $result;
         }
 
-        return $result;
+        return 0;
     }
 
     /**

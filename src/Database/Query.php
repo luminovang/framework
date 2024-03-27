@@ -1116,6 +1116,27 @@ class Query extends Connection
     }
 
     /**
+     * Execute an SQL statement and return the number of affected rows.
+     * 
+     * @param $query Query statment to execute.
+     * 
+     * @return int returns affected row counts.
+     * @throws DatabaseException
+    */
+    public function exec(string $query): int 
+    {
+        try {
+            $affected = $this->db->exec($query);
+
+            return $affected;
+        } catch (DatabaseException $e) {
+            $e->handle();
+        }
+
+        return 0;
+    }
+
+    /**
      * Drop table from database
      * 
      * @return int returns affected row counts.

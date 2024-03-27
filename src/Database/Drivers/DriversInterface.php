@@ -96,11 +96,11 @@ interface DriversInterface
     public function query(string $query): self;
 
     /**
-     * Executes a query.
-     *
-     * @param string $query The SQL query.
+     * Execute an SQL statement and return the number of affected rows.
      * 
-     * @return int The affected row count.
+     * @param $query Query statment to execute.
+     * 
+     * @return int returns affected row counts.
     */
     public function exec(string $query): int;
 

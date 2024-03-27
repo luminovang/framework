@@ -140,7 +140,6 @@ class Connection
     return $connection;
   }
 
-
   /**
    * Release connection back to pool 
    * 
@@ -186,7 +185,7 @@ class Connection
       'charset' => env('database.charset', ''),
       'persistent' => (bool) env('database.persistent.connection', true),
       'emulate_preparse' => (bool) env('database.emulate.preparse', false),
-      'sqlite_path' => env('database.sqlite.path'),
+      'sqlite_path' => APP_ROOT . DIRECTORY_SEPARATOR . trim(env("{$var}.sqlite.path"), '/'),
       'production' => PRODUCTION,
       'username' => env("{$var}.username"),
       'password' => env("{$var}.password"),
@@ -241,7 +240,7 @@ class Connection
     }
 
     if (!$connection) {
-        throw new DatabaseLimitException('Failed all attempts to establish a database connection');
+      throw new DatabaseLimitException('Failed all attempts to establish a database connection');
     }
 
     return $connection;

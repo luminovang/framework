@@ -227,10 +227,12 @@ class MySqliDriver implements DriversInterface
         }
 
         if (stripos($query, 'SELECT') === 0) {
-            $this->lastRowCount = $this->stmt->num_rows;
+            $affected = $this->stmt->num_rows;
         } else {
-            $this->lastRowCount = $this->connection->affected_rows;
+            $affected = $this->connection->affected_rows;
         }
+
+        $this->lastRowCount = ($affected === 0) ? 1 : $affected;
 
         return $this;
     }
@@ -240,9 +242,7 @@ class MySqliDriver implements DriversInterface
     */
     public function exec(string $query): int 
     {
-        $stmt = $this->query($query);
-
-        return $stmt->lastRowCount;
+        return $this->query($query)->lastRowCount;
     }
 
     /**
