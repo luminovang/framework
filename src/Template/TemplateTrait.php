@@ -538,7 +538,7 @@ trait TemplateTrait
     /**
      * Check if page cache has expired 
      * 
-     * @return bool Returns true if chache doesn't exist or expired.
+     * @return bool Returns true if cache doesn't exist or expired.
     */
     public function expired(): bool
     {
@@ -552,7 +552,7 @@ trait TemplateTrait
     /**
      * Render cached content if cache exist.
      * 
-     * @return bool Returns true if cache exsit and rendered else return false. 
+     * @return bool Returns true if cache exist and rendered else return false. 
     */
     public function renderCache(): bool
     {
@@ -569,7 +569,7 @@ trait TemplateTrait
 
     /** 
      * Return a response to render in view, api or cli.
-     * If cache is enable and it retured cached content instead.
+     * If cache is enable and it returned cached content instead.
      * 
      * @param mixed $content Content to ender.
      * @param string $type Type of content passed [json, html, xml, text]
