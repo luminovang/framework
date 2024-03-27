@@ -185,7 +185,7 @@ class Connection
       'charset' => env('database.charset', ''),
       'persistent' => (bool) env('database.persistent.connection', true),
       'emulate_preparse' => (bool) env('database.emulate.preparse', false),
-      'sqlite_path' => APP_ROOT . DIRECTORY_SEPARATOR . trim(env("{$var}.sqlite.path"), '/'),
+      'sqlite_path' => APP_ROOT . DIRECTORY_SEPARATOR . trim(env("{$var}.sqlite.path"), DIRECTORY_SEPARATOR),
       'production' => PRODUCTION,
       'username' => env("{$var}.username"),
       'password' => env("{$var}.password"),
