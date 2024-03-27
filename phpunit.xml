@@ -57,10 +57,6 @@
 
     <php>
         <const name="HOMEPATH" value="./"/>
-
-        <!-- ###+ symfony/framework-bundle ### -->
         <env name="APP_ENV" value="dev"/>
-        <env name="APP_SECRET" value="0ac21bb5d1383c805ddf64f08b309451"/>
-        <!-- ###- symfony/framework-bundle ### -->
     </php>
 </phpunit>
