@@ -10,6 +10,8 @@
 namespace Luminova\Cache;
 
 use \Luminova\Http\Header;
+use \Luminova\Cache\FileCache;
+use \DateTimeInterface;
 
 class PageViewCache
 {
@@ -40,25 +42,25 @@ class PageViewCache
     /**
      * Class constructor.
      *
-     * @param int $expiration The expiration time for cached files in seconds (default: 24 hours).
+     * @param DateTimeInterface|int $expiration The expiration time for cached files in seconds (default: 0).
      * @param string $directory The directory where cached files will be stored (default: 'cache').
      */
-    public function __construct(int $expiration = 24 * 60 * 60, string $directory = 'cache')
+    public function __construct(DateTimeInterface|int $expiration = 0, string $directory = 'cache')
     {
         $this->directory = $directory;
-        $this->expiration = $expiration;
+        $this->setExpiry($expiration);
     }
 
     /**
      * Set cache expiration in seconds.
      *  
-     * @param int $seconds Expiry (default: 24 hours).
+     * @param DateTimeInterface|int $expiration Expiry
      * 
      * @return self 
     */
-    public function setExpiry(int $seconds): self
+    public function setExpiry(DateTimeInterface|int $expiration): self
     {
-        $this->expiration = $seconds;
+        $this->expiration = is_int($expiration) ? $expiration : FileCache::ttlToSeconds($expiration);
 
         return $this;
     }

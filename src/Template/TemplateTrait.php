@@ -18,6 +18,7 @@ use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\AppException; 
 use \Luminova\Exceptions\ViewNotFoundException; 
 use \Luminova\Exceptions\RuntimeException;
+use \DateTimeInterface;
 
 trait TemplateTrait
 { 
@@ -143,9 +144,9 @@ trait TemplateTrait
     /**
      * Response cache expiry ttl
      * 
-     * @var int $cacheExpiry 
+     * @var DateTimeInterface|int|null $cacheExpiry 
     */
-    private int $cacheExpiry = 0;
+    private DateTimeInterface|int|null $cacheExpiry = 0;
 
     /**
      * Minify page content 
@@ -519,11 +520,11 @@ trait TemplateTrait
      * @example $this-app->cache('key', 60)->respond('contents');
      * 
      * @param string $key Cache content key
-     * @param int $expire Cache expiration default, set to null to use default expiration from .env file.
+     * @param DateTimeInterface|int|null $expire Cache expiration default, set to null to use default expiration from .env file.
      * 
      * @return self $this
     */
-    public function cache(string $key, ?int $expiry = null): self 
+    public function cache(string $key, DateTimeInterface|int|null $expiry = null): self 
     {
         $this->cacheKey = $key;
 
@@ -559,10 +560,7 @@ trait TemplateTrait
             return false;
         }
 
-        $cache = static::getCacheInstance(
-            $this->cacheKey, 
-            $this->cacheExpiry
-        );
+        $cache = static::getCacheInstance($this->cacheKey, $this->cacheExpiry);
 
         if ($cache->readContent()) {
             return true;
@@ -593,7 +591,7 @@ trait TemplateTrait
             $viewHeaderInfo = $minifierInstance->getHeaderInfo();
         }
 
-        if (static::$cacheView && $this->cacheKey !== null && $this->cacheExpiry > 0 && $content != null) {
+        if (static::$cacheView && $this->cacheKey !== null && !$this->emptyTtl() && $content != null) {
             $cacheInstance = static::getCacheInstance(
                 $this->cacheKey, 
                 $this->cacheExpiry
@@ -774,7 +772,7 @@ trait TemplateTrait
      * 
      * @param string $templateFile View template file 
      * @param bool $shouldCache Should cache page contents
-     * @param int $cacheExpiry Cache expiry
+     * @param DateTimeInterface|int|null $cacheExpiry Cache expiry
      * @param array $options View options
      * @param bool $ignore Ignore html codeblock during minimizing
      * @param bool $copy Allow copy on html code tag or not
@@ -784,7 +782,7 @@ trait TemplateTrait
     private static function renderIsolation(
         string $templateFile, 
         bool $shouldCache, 
-        int $cacheExpiry,
+        DateTimeInterface|int|null $cacheExpiry,
         array $options, 
         bool $ignore = true, 
         bool $copy = false
@@ -949,11 +947,25 @@ trait TemplateTrait
     */
     private function shouldCache(): bool 
     {
-        if (!static::$cacheView || $this->cacheExpiry < 1) {
+        if (!static::$cacheView || $this->emptyTtl()) {
             return false;
         }
 
         return !in_array($this->activeView, $this->cacheIgnores, true);
+    }
+
+    /** 
+     * Check if cache expiry is empty 
+     *
+     * @return bool 
+    */
+    private function emptyTtl(): bool 
+    {
+        if ($this->cacheExpiry === null || (is_int($this->cacheExpiry) && $this->cacheExpiry < 1)) {
+            return true;
+        }
+
+        return false;
     }
 
     /** 
@@ -1019,11 +1031,11 @@ trait TemplateTrait
     *
     * @param string $key
     * @param string $file 
-    * @param int $expiry 
+    * @param DateTimeInterface|int|null $expiry 
     *
     * @return PageViewCache
     */
-    private static function getCacheInstance(string $key, int $expiry = 0): PageViewCache
+    private static function getCacheInstance(string $key, DateTimeInterface|int|null $expiry = 0): PageViewCache
     {
         if(static::$viewCache === null){
             static::$viewCache = new PageViewCache();
