@@ -31,6 +31,13 @@ class Database
     public string $host = 'localhost'; 
 
     /**
+     * Database connection driver type
+     * 
+     * @var string $connection [pdo, mysqli]
+     */
+    public string $connection = 'pdo'; 
+
+    /**
      * The PDO database driver.
      * 
      * @var string|null $pdo_driver 
@@ -80,6 +87,20 @@ class Database
     public string $database = '';
 
     /**
+     * Database force socket connection
+     * 
+     * @var bool $socket 
+    */
+    public bool $socket = false;
+
+    /**
+     * Database connection socket path
+     * 
+     * @var string $socket 
+    */
+    public string $socket_path = '';
+
+    /**
      * persistent database connection
      * 
      * @var bool $persistent 
@@ -106,6 +127,7 @@ class Database
 
         $this->port = $config['port'] ?? 3306;
         $this->host = $config['host'] ?? 'localhost';
+        $this->connection = $config['connection'] ?? 'pdo';
         $this->pdo_driver = $config['pdo_driver'] ?? 'mysql';
         $this->charset = $config['charset'] ?? 'utf8mb4';
         $this->sqlite_path = $config['sqlite_path'] ?? '';
@@ -114,6 +136,8 @@ class Database
         $this->password = $config['password'] ?? '';
         $this->database = $config['database'] ?? '';
         $this->persistent = $config['persistent'] ?? true;
+        $this->socket = $config['socket'] ?? false;
+        $this->socket_path = $config['socket_path'] ?? '';
         $this->emulate_preparse = $config['emulate_preparse'] ?? false;
     }
 }

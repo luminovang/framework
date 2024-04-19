@@ -23,7 +23,7 @@ class ViewNotFoundException extends AppException
      */
     public function __construct(string $view = 'home', int $code = 500, Throwable $previous = null)
     {
-        $message = sprintf('Invalid view name provided: "%s". View was not found.', $view);
+        $message = sprintf('The view "%s" could not be found in the view directory "/resources/views/".', $view);
         parent::__construct($message, $code, $previous);
     }
 }

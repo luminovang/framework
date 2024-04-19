@@ -12,7 +12,7 @@ namespace Luminova\Database\Drivers;
 
 use \Luminova\Config\Database;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Database\Drivers\DriversInterface;
+use \Luminova\Interface\DatabaseInterface;
 use \mysqli;
 use \mysqli_stmt;
 use \mysqli_result;
@@ -20,8 +20,10 @@ use \stdClass;
 use \mysqli_sql_exception;
 use \TypeError;
 use \Exception;
+use \ReflectionClass;
+use \ReflectionException;
 
-class MySqliDriver implements DriversInterface 
+class MySqliDriver implements DatabaseInterface 
 {
     /**
      * Mysqli Database connection instance
@@ -48,14 +50,19 @@ class MySqliDriver implements DriversInterface
     private ?Database $config = null;  
 
     /**
-     * @var array $queryParams Database queries
+     * @var array $bindParams Database queries bind params
     */
-    private array $queryParams = [];
+    private array $bindParams = [];
+
+     /**
+     * @var array $bindValues Database queries bind values
+    */
+    private array $bindValues = [];
 
     /**
-     * @var int $lastRowCount last row count
+     * @var int $rowCount last row count
     */
-    private int $lastRowCount = 0;
+    private int $rowCount = 0;
 
     /**
      * @var bool $isSelect is select query
@@ -66,6 +73,13 @@ class MySqliDriver implements DriversInterface
      * @var bool $connected Connection status flag
     */
     private bool $connected = false;
+
+    /**
+     * Query executed successfully.
+     * 
+     * @var bool $executed
+    */
+    private bool $executed = false;
 
     /**
      * {@inheritdoc}
@@ -81,14 +95,6 @@ class MySqliDriver implements DriversInterface
             $this->connected = false;
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e->getPrevious());
         }
-    }
-
-    /**
-     * {@inheritdoc}
-    */
-    public static function getDriver(): string
-    {
-        return 'mysqli';
     }
 
     /**
@@ -115,12 +121,17 @@ class MySqliDriver implements DriversInterface
 
         mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
         try{
+            $socket = null;
+            if (is_command() || $this->config->socket) {
+                $socket = (empty($this->config->socket_path) ? ini_get('mysqli.default_socket') : $this->config->socket_path);
+            }
             $this->connection = new mysqli(
                 $this->config->host,
                 $this->config->username,
                 $this->config->password,
                 $this->config->database,
-                $this->config->port
+                $this->config->port,
+                $socket
             );
         
             if ($this->connection->connect_error) {
@@ -142,6 +153,22 @@ class MySqliDriver implements DriversInterface
     public function isConnected(): bool 
     {
         return $this->connected;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function raw(): mysqli|null 
+    {
+        return $this->connection;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function statement(): mysqli_stmt|mysqli_result|bool|null
+    {
+        return $this->stmt;
     }
 
     /**
@@ -183,22 +210,15 @@ class MySqliDriver implements DriversInterface
     /**
      * {@inheritdoc}
     */
-    public function dumpDebug(): string 
+    public function dumpDebug(): bool|null 
     {
-        if (!$this->onDebug || $this->stmt === false) {
-            return '';
+        if (!$this->onDebug || $this->stmt === null || $this->stmt === false) {
+            return false;
         }
 
-        $debug = '';
-        try {
-            if (method_exists($this->stmt, 'debugDumpParams')) {
-                $debug = $this->stmt->debugDumpParams();
-            }
-        } catch (Exception $e) {
-            $debug = 'Error during debugDumpParams: ' . $e->getMessage();
-        }
+        var_dump($this->stmt);
 
-        return $debug;
+        return true;
     }
 
     /**
@@ -207,7 +227,7 @@ class MySqliDriver implements DriversInterface
     public function prepare(string $query): self 
     {
         $query = preg_replace('/:([a-zA-Z0-9_]+)/', '?', $query);
-        $this->lastRowCount = 0;
+        $this->rowCount = 0;
         $this->stmt = $this->connection->prepare($query);
         $this->isSelect = (stripos($query, 'SELECT') === 0);
 
@@ -219,20 +239,20 @@ class MySqliDriver implements DriversInterface
     */
     public function query(string $query): self 
     {
-        $this->lastRowCount = 0;
+        $this->executed = false;
+        $this->rowCount = 0;
         $this->stmt = $this->connection->query($query);
 
-        if ($this->stmt === false) {
-            return $this;
+        if ($this->stmt !== null || $this->stmt !== false) {
+            $this->executed = true;
+            if (stripos($query, 'SELECT') === 0) {
+                $this->rowCount = $this->stmt->num_rows;
+            } else {
+                $this->rowCount = $this->connection->affected_rows;
+            }
         }
 
-        if (stripos($query, 'SELECT') === 0) {
-            $affected = $this->stmt->num_rows;
-        } else {
-            $affected = $this->connection->affected_rows;
-        }
-
-        $this->lastRowCount = ($affected === 0) ? 1 : $affected;
+        //$this->rowCount = ($affected === 0) ? 1 : $affected;
 
         return $this;
     }
@@ -242,7 +262,13 @@ class MySqliDriver implements DriversInterface
     */
     public function exec(string $query): int 
     {
-        return $this->query($query)->lastRowCount;
+        $this->query($query);
+
+        if ($this->stmt == null || $this->stmt === false) {
+            return 0;
+        }
+
+        return $this->rowCount;
     }
 
     /**
@@ -273,7 +299,7 @@ class MySqliDriver implements DriversInterface
     /**
      * {@inheritdoc}
     */
-    public function getType(mixed $value): string|int  
+    public static function getType(mixed $value): string|int  
     {
        return match (true) {
             is_int($value) => 'i',
@@ -286,9 +312,9 @@ class MySqliDriver implements DriversInterface
     /**
      * {@inheritdoc}
     */
-    public function bind(string $param, mixed $value, mixed $type = null): self 
+    public function bind(string $param, mixed $value, int|null $type = null): self 
     {
-        $this->queryParams[$param] = $value;
+        $this->bindValues[$param] = $value;
 
         return $this;
     }
@@ -296,65 +322,89 @@ class MySqliDriver implements DriversInterface
     /**
      * {@inheritdoc}
     */
-    public function param(string $param, mixed $value, mixed $type = null): self 
+    public function param(string $param, mixed &$value, int|null $type = null): self 
     {
-        $this->stmt->bind_param($param, $value);
-        
+        $this->bindParams[$param] = &$value;
+
         return $this;
     }
 
     /**
-     * Binds an array of values to the query parameters.
-     *
-     * @param array $values An associative array of parameter names and their corresponding values.
+     * Parses the query parameters and binds them to the statement.
      * 
-     * @return self The current instance of the MySqliDriver class.
+     * @param array<int, array> $values An array of parameter values.
+     * @param string $type Type.
     */
-    public function bindValues(array $values): self 
+    private function parseParams(array $values, $type = 'values'): void 
     {
-        foreach ($values as $key => $value) {
-            $this->queryParams[$key] = $value;
+        if($values === []){
+            return;
         }
 
-        return $this;
+        $types = '';
+        $params = [];
+        if($type === 'values'){
+            foreach ($values as $value) {
+                $types .= static::getType($value);
+                $params[] = $value;
+            }
+        }else{
+            foreach ($values as &$value) {
+                $types .= static::getType($value);
+                $params[] = $value;
+            }
+        }
+
+        array_unshift($params, $types);
+        $this->stmt->bind_param(...$params);
+        //call_user_func_array([$this->stmt, 'bind_param'], $params);
     }
   
     /**
      * {@inheritdoc}
     */
-    public function execute(?array $values = null): void 
+    public function execute(?array $params = null): bool 
     {
-        if(!$this->stmt){
+        $this->executed = false;
+        if($this->stmt === null || $this->stmt === false){
             DatabaseException::throwException("Database operation error: Statement execution failed");
-            return;
+            return false;
         }
 
-        $values = $this->queryParams === [] ? $values ?? [] : $this->queryParams;
-
+        $executed = false;
         try {
-            if($values !== []){
-                $types = '';
-                $params = [];
-                foreach ($values as $value) {
-                    $types .= $this->getType($value);
-                    $params[] = $value;
-                }
+            $bindParams = ($this->bindParams ?: $this->bindValues);
 
-                array_unshift($params, $types);
-                $this->stmt->bind_param(...$params);
-            }
-            $this->stmt->execute();
+            if(!empty($bindParams)){
+                $params = null;
+                $bindType = (empty($this->bindParams)) ? 'values' : 'params';
 
-            if ($this->stmt->errno) {
-                logger('emergency', 'Database query execution error', $this->errors());
+                $this->parseParams($bindParams, $bindType);
             }
-        
-            $this->lastRowCount = $this->isSelect ? $this->stmt->num_rows : $this->stmt->affected_rows;
+
+            $executed = $this->stmt->execute($params);
+
+            if (!$executed || $this->stmt->errno) {
+                throw new DatabaseException($this->stmt->error, $this->stmt->errno);
+            }
+            $this->executed = true;
+            $this->rowCount = $this->isSelect ? $this->stmt->num_rows : $this->stmt->affected_rows;
         } catch (mysqli_sql_exception | TypeError $e) {
-            DatabaseException::throwException($e->getMessage());
+            DatabaseException::throwException($e->getMessage(), $e->getCode());
         }
         
-        $this->queryParams = [];
+        $this->bindParams = [];
+        $this->bindValues = [];
+
+        return $executed;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function ok(): bool 
+    {
+        return $this->executed;
     }
 
     /**
@@ -362,23 +412,60 @@ class MySqliDriver implements DriversInterface
     */
     public function rowCount(): int 
     {
-        return $this->lastRowCount;
+        return $this->rowCount;
     }
 
     /**
      * {@inheritdoc}
     */
-    public function getOne(): mixed 
+    public function getItem(int $mode = RETURN_ALL, string $return = 'object'): mixed 
     {
-        return $this->fetch('next');
+        return match ($mode) {
+            RETURN_NEXT => $this->getNext($return),
+            RETURN_2D_NUM => $this->getInt(),
+            RETURN_INT => $this->getCount(),
+            RETURN_ID => $this->getLastInsertId(),
+            RETURN_COUNT => $this->rowCount(),
+            RETURN_COLUMN => $this->getColumns(),
+            RETURN_ALL => $this->getAll($return),
+            default => false
+        };
     }
-    
+
     /**
      * {@inheritdoc}
     */
-    public function getAll(): mixed 
+    public function getNext(string $type = 'object'): array|object|bool 
     {
-        return $this->fetch();
+        $result = $this->fetch('next', ($type === 'object') ? FETCH_NUM_OBJ : FETCH_ASSOC);
+
+        if($result === false || $result === null){
+            return false;
+        }
+
+        if($type === 'array'){
+            return (array) $result;
+        }
+
+        return (object) $result;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getAll(string $type = 'object'): array|object|bool 
+    {
+        $result = $this->fetch('all', ($type === 'object') ? FETCH_NUM_OBJ : FETCH_ASSOC);
+
+        if($result === false || $result === null){
+            return false;
+        }
+
+        if($type === 'array'){
+            return (array) $result;
+        }
+
+        return (object) $result;
     }
 
     /**
@@ -388,7 +475,7 @@ class MySqliDriver implements DriversInterface
     {
         $response = $this->fetch('all', ($type === 'object') ? FETCH_NUM_OBJ : FETCH_ASSOC);
 
-        if ($response === null) {
+        if ($response === null || $response === false) {
             return ($type === 'object') ? new stdClass : [];
         }
 
@@ -397,18 +484,16 @@ class MySqliDriver implements DriversInterface
 
     /**
      * {@inheritdoc}
-     */ 
-    public function getObject(): stdClass 
-    {
-        return $this->getResult('object');
-    }
-
-    /**
-     * {@inheritdoc}
     */
-    public function getColumns(): mixed 
+    public function getColumns(int $mode = FETCH_COLUMN): array 
     {
-        return null;
+        $response = $this->fetch('all', $mode);
+
+        if($response === null || $response === false){
+            return [];
+        }
+
+        return $response;
     }
 
     /**
@@ -422,18 +507,10 @@ class MySqliDriver implements DriversInterface
     /**
      * {@inheritdoc}
     */
-    public function getArray(): array 
-    {
-        return $this->getResult('array');;
-    }
-    
-    /**
-     * {@inheritdoc}
-    */
     public function fetch(string $type = 'all', int $mode = FETCH_OBJ): mixed
     {
-        if (!$this->stmt) {
-            return null;
+        if ($this->stmt === null || $this->stmt === false) {
+            return false;
         }
 
         $modes = [
@@ -449,6 +526,14 @@ class MySqliDriver implements DriversInterface
 
         if (!isset($modes[$mode])) {
             throw new DatabaseException("Unsupported fetch mode: $mode");
+        }
+
+        if ($this->stmt instanceof mysqli_stmt) {
+            $this->stmt = $this->stmt->get_result();
+        }
+
+        if ($this->stmt === null || $this->stmt === false) {
+            return false;
         }
 
         $msqliMode = null;
@@ -468,27 +553,14 @@ class MySqliDriver implements DriversInterface
             $msqliMode = $mapping[$mode] ?? MYSQLI_ASSOC;
         }
 
-        if ($this->stmt instanceof mysqli_result) {
-            $response = $msqliMode === null ? $this->stmt->$method() : $this->stmt->$method($msqliMode);
+        $response = $msqliMode === null ? $this->stmt->$method() : $this->stmt->$method($msqliMode);
+        //$this->stmt->close();
 
-            $this->stmt->close();
-        }else{
-            $result = $this->stmt->get_result();
-
-            if ($result === false) {
-                return null;
-            }
-            
-            $response = $msqliMode === null ? $result->$method() : $result->$method($msqliMode);
-
-            $result->close();
+        if(empty($response) || $response === false){
+            return false;
         }
 
-        if(empty($response)){
-            return null;
-        }
-
-        if($type === 'all' && $mode === FETCH_OBJ){
+        if($mode === FETCH_NUM_OBJ || $mode === FETCH_OBJ){
             $json = json_encode($response);
 
             if($json === false){
@@ -510,44 +582,76 @@ class MySqliDriver implements DriversInterface
 
             return $columns;
         }
-
-        if($mode === FETCH_NUM_OBJ){
-            $count = 0;
-            $nums = new stdClass();
-            foreach ($response as $row) {
-                $count++;
-                $nums->{$count} = (object) $row;
-            }
-
-            return $nums;
-        }
  
         return $response;
     }
 
     /**
      * {@inheritdoc}
-    */
-    public function getInt(): int 
+    */ 
+    public function fetchObject(string|null $class = "stdClass", array $arguments = []): object|false 
     {
-        if(!$this->stmt){
-            return 0;
+        $response = $this->fetch('all', FETCH_ASSOC);
+        $objects = [];
+
+        if ($response === null || $response === false) {
+            return false;
         }
 
-        $total = 0;
-
-        if ($this->stmt instanceof mysqli_stmt) {
-            $this->stmt->store_result();
-            $this->stmt->bind_result($total);
-            $this->stmt->fetch();
-            $this->stmt->free_result();
-        }elseif ($this->stmt instanceof mysqli_result) {
-            $result = $this->stmt->fetch_row();
-            $total = $result[0];
+        foreach ($response as $row) {
+            $objects[] = (object) $row;
         }
+
+        if ($class === null || $class === 'stdClass') {
+            return $objects;
+        }
+
+        try {
+            $reflection = new ReflectionClass($class);
+
+            if ($reflection->isInstantiable()) {
+                return $reflection->newInstanceArgs([$objects, ...$arguments]);
+            }
+        } catch (ReflectionException $e) {
+            logger('error', $e->getMessage(), [
+                'class' => $class
+            ]);
+        }
+
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getInt(): array|bool
+    {
+        $integers = $this->fetch('all', FETCH_NUM);
+
+        if($integers === false || $integers === null){
+            return false;
+        }
+
+        return $integers;
+    }
     
-        return (int) $total;
-    }  
+    /**
+     * {@inheritdoc}
+    */
+    public function getCount(): int|bool
+    {
+        $integers = $this->getInt();
+        
+        if($integers === false || $integers === []){
+            return false;
+        }
+
+        if(isset($integers[0][0])) {
+            return (int) $integers[0][0];
+        }
+
+        return (int) $integers ?? 0;
+    }
     
     /**
      * {@inheritdoc}
@@ -558,31 +662,22 @@ class MySqliDriver implements DriversInterface
     }
 
     /**
-     * Is statement object
-     * 
-     * @return bool 
-    */
-    private function isStatement(): bool 
-    {
-        return $this->stmt instanceof mysqli_stmt;
-    }
-
-    /**
      * {@inheritdoc}
     */
     public function free(): void 
     {
-        if($this->stmt === false){
+        if($this->stmt === null || $this->stmt === false){
             return;
         }
 
         if ($this->stmt instanceof mysqli_result) {
             $this->stmt->free();
-        } elseif ($this->isStatement()) {
+        } elseif($this->stmt instanceof mysqli_stmt) {
             $this->stmt->free_result();
         }
-        
 
+        //$this->stmt->close();
+        
         $this->stmt = false;
     }
 

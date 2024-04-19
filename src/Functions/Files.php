@@ -48,27 +48,44 @@ class Files
 	/**
 	 * Download a file to the user's browser.
 	 *
-	 * @param string $file The full file path to download.
+	 * @param string $file The full file path or content to to download.
 	 * @param string $name The filename as it will be shown in the download.
+	 * @param array $headers Optional passed headers for download.
 	 * @param bool $delete Whether to delete the file after download (default: false).
+	 * @param string|null $content to download
      * 
-     * @return bool
+     * @return bool Return true on success, false on failure.
 	 */
-	public static function download(string $file, ?string $name = null, bool $delete = false): bool
+	public static function download(string $file, ?string $name = null, array $headers = [], bool $delete = false): bool
 	{
+		$isFile = false;
+
 		if (file_exists($file) && is_readable($file)) {
+			$isFile = true;
 			$filename = $name ?? basename($file);
 			$mime = mime_content_type($file) ?? 'application/octet-stream';
+			$length = filesize($file);
+		} else {
+			$length = mb_strlen($file);
+			$filename = $name ?? 'file_download.txt';
+			$mime = 'application/octet-stream';
+		}
 
-			// Prevent caching
-			header('Content-Type: ' . $mime);
-			header('Content-Disposition: attachment; filename="' . $filename . '"');
-			header('Content-Transfer-Encoding: binary');
-			header('Expires: 0');
-			header('Cache-Control: must-revalidate');
-			header('Pragma: public');
-			header('Content-Length: ' . filesize($file));
+		$extend = array_merge([
+			'Content-Type' => $mime,
+			'Content-Disposition' => 'attachment; filename="' . $filename,
+			'ontent-Transfer-Encoding' => 'binary',
+			'Expires' => 0,
+			'Cache-Control' => 'must-revalidate',
+			'Pragma' => 'public',
+			'Content-Length' => $length,
+		], $headers);
 
+		foreach($extend as $key => $value) {
+			header("{$key}: {$value}");
+		}
+
+		if ($isFile) {
 			$read = readfile($file);
 
 			if ($delete && $read !== false) {
@@ -76,47 +93,47 @@ class Files
 			}
 
 			return $read !== false;
+		} else {
+			echo $file;
+			return true;
 		}
-
-		return false;
 	}
 
     /**
 	 * Deletes files and folders.
 	 *
 	 * @param string $dir   Directory to delete files.
-	 * @param bool   $base  Remove the base directory once done (default is false).
+	 * @param bool   $delete_base  Remove the base directory once done (default is false).
      * 
-	 * @return bool         Returns true once the function is called.
+	 * @return int Returns count of deleted files.
 	 */
-	public static function remove(string $dir, bool $base = false): bool 
+	public static function remove(string $dir, bool $delete_base = false): int 
 	{
+		$count = 0;
+
 		if (!file_exists($dir)) {
-			return false;
+			return $count;
 		}
 		
-		if(is_dir($dir)){
-			if (substr($dir, -1) !== DIRECTORY_SEPARATOR) {
-				$dir .= DIRECTORY_SEPARATOR;
-			}
-
-			$files = glob($dir . '*', GLOB_MARK);
-		}else{
-			$files = glob($dir . '*');
-		}
+		$files = is_dir($dir) ? 
+			glob(rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR. '*', GLOB_MARK) : 
+			glob($dir . '*');
+		//$files = glob(rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '*', GLOB_MARK);
 
 		foreach ($files as $file) {
 			if (is_dir($file)) {
 				static::remove($file, true);
 			} else {
 				unlink($file);
+				$count++;
 			}
 		}
 
-		if ($base) {
+		if ($delete_base) {
+			$count++;
 			rmdir($dir);
 		}
 
-		return true;
+		return $count;
 	}
 }

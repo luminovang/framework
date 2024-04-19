@@ -9,7 +9,7 @@
  */
 namespace Luminova\Sessions;
 
-use \Luminova\Sessions\SessionInterface;
+use \Luminova\Interface\SessionInterface;
 use \App\Controllers\Config\Session as CookieConfig;
 
 class CookieManager implements SessionInterface 
@@ -56,55 +56,16 @@ class CookieManager implements SessionInterface
     {
         return $this->storage;
     }
-  
-    /**
-     * {@inheritdoc}
-     */
-    public function add(string $key, mixed $value): self
-    {
-        $this->setContents($key, $value);
-
-        return $this;
-    }
 
     /** 
      * {@inheritdoc}
     */
-    public function set(string $key, mixed $value): self
+    public function setItem(string $index, mixed $value, string $storage = ''): self
     {
-        $this->setContents($key, $value);
-
-        return $this;
-    }
-
-    /** 
-     * {@inheritdoc}
-    */
-    public function get(string $index, mixed $default = null): mixed
-    {
-        $data = $this->getContents();
-
-        return $data[$index]??$default;
-    }
-
-    /** 
-     * {@inheritdoc}
-    */
-    public function getFrom(string $index, string $storage): mixed
-    {
-        $data = $this->getContents($storage);
-
-        return $data[$index]??null;
-    }
-
-    /** 
-     * {@inheritdoc}
-    */
-    public function setTo(string $index, mixed $value, string $storage): self
-    {
-        $data = $this->getContents($storage);
+        $storage = ($storage === '') ? $this->storage : $storage;
+        $data = $this->getItems($storage);
         $data[$index] = $value;
-        $this->updateContents($data);
+        $this->updateItems($data, $storage);
 
         return $this;
     }
@@ -112,51 +73,52 @@ class CookieManager implements SessionInterface
     /** 
      * {@inheritdoc}
     */
-    public function online($storage = ''): bool
+    public function getItem(string $index, mixed $default = null): mixed
     {
-        $data = $this->getContents($storage);
+        $result = $this->getItems();
 
-        if((isset($data["_online"]) && $data["_online"] === 'YES')){
-            return true;
+        if($result === []){
+            return $default;
         }
 
-        return false;
+        return $result[$index] ?? $default;
     }
 
     /**
      * {@inheritdoc}
     */
-    public function clear(string $storage = ''): self
+    public function deleteItem(?string $index = null, string $storage = ''): self
     {
-        $context = $storage === '' ? $this->storage : $storage;
-        $this->saveContent('',  $context, time() - static::$config::$expiration);
-        $_COOKIE[$context] = '';
+        $storage = ($storage === '') ? $this->storage : $storage;
 
-        return $this;
-    }
-
-   /**
-     * {@inheritdoc}
-    */
-    public function remove(string $index): self
-    {
-        $data = $this->getContents();
-        if (isset($_COOKIE[$this->storage], $data[$index])) {
-            unset($data[$index]);
-            $this->updateContents($data);
+        if($storage !== '' && isset($_COOKIE[$storage])) {
+            if($index === '' || $index === null){
+                $this->saveContent('',  $storage, time() - static::$config::$expiration);
+                $_COOKIE[$storage] = '';
+            }else{
+                $data = $this->getItems($storage);
+                if (isset($data[$index])) {
+                    unset($data[$index]);
+                    $this->updateItems($data, $storage);
+                }
+            }
         }
-        
+
         return $this;
     }
 
     /** 
      * {@inheritdoc}
     */
-    public function has(string $key): bool
+    public function hasItem(string $key): bool
     {
-        $data = $this->getContents();
+        $result = $this->getItems();
 
-        return isset($data[$key]);
+        if($result === []){
+            return false;
+        }
+
+        return isset($result[$key]);
     }
 
      /** 
@@ -170,29 +132,19 @@ class CookieManager implements SessionInterface
     /** 
      * {@inheritdoc}
     */
-    public function getResult(): array
+    public function getResult(string $type = 'array'): array|object
     {
+        $result = [];
+
         if (isset($_COOKIE)) {
-            return (array) $_COOKIE;
+            $result = $_COOKIE;
         }
 
-        return [];
-    }
+        if($type === 'array'){
+            return (array) $result;
+        }
 
-    /** 
-     * {@inheritdoc}
-    */
-    public function toArray(string $index = ''): array
-    {
-        return $this->toAs('array', $index);
-    }
-
-    /** 
-     * {@inheritdoc}
-    */
-    public function toObject(string $index = ''): object
-    {
-        return $this->toAs('object', $index);
+        return (object) json_decode(json_encode($result));
     }
 
     /** 
@@ -200,58 +152,35 @@ class CookieManager implements SessionInterface
     */
     public function toAs(string $type = 'array', string $index = ''): object|array
     {
-        $data = $this->getContents();
-        $result = [];
-        if($index === ''){
-            if($data !== []){
-                $result = $data;
-            }
-            if(isset($_COOKIE)){
-                $result = $_COOKIE;
-            }
-        }elseif (isset($data[$index])) {
-            $result = $data[$index];
-        }
+        $result = $this->getItems();
 
+        if($index !== '' && isset($result[$index])) {
+            $result = $result[$index];
+        }
+    
         if($type === 'array'){
             return (array) $result;
         }
 
-        return (object) $result;
+        return (object) json_decode(json_encode($result));
     }
 
     /** 
      * {@inheritdoc}
     */
-    public function getContents(string $storage = ''): array
+    public function getItems(string $storage = ''): array
     {
-        $key = $storage === '' ? $this->storage : $storage;
+        $storage = ($storage === '') ? $this->storage : $storage;
 
-        if (isset($_COOKIE[$key])) {
-            if(is_string($_COOKIE[$key])){
-                return json_decode($_COOKIE[$key], true) ?? [];
+        if (isset($_COOKIE[$storage])) {
+            if(is_string($_COOKIE[$storage])){
+                return json_decode($_COOKIE[$storage], true) ?? [];
             }
 
-            return $_COOKIE[$key] ?? [];
+            return (array) $_COOKIE[$storage];
         }
 
         return [];
-    }
-
-    /**
-     * Save data to cookie storage.
-     *
-     * @param string $key Key
-     * @param mixed $value Value
-     * 
-     * @return void
-    */
-    private function setContents(string $key, mixed $value): void
-    {
-        $data = $this->getContents();
-        $data[$key] = $value;
-
-        $this->updateContents($data);
     }
 
     /**
@@ -261,12 +190,13 @@ class CookieManager implements SessionInterface
      * 
      * @return void 
     */
-    private function updateContents(array $data): void
+    private function updateItems(array $data, string $storage = ''): void
     {
+        $storage = ($storage === '') ? $this->storage : $storage;
         $cookieValue = json_encode($data);
 
-        $this->saveContent($cookieValue, $this->storage);
-        $_COOKIE[$this->storage] =  $data;
+        $this->saveContent($cookieValue, $storage);
+        $_COOKIE[$storage] =  $data;
     }
 
     /**

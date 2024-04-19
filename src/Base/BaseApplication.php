@@ -10,19 +10,25 @@
 
 namespace Luminova\Base;
 
+use \Luminova\Application\Foundation;
 use \Luminova\Routing\Router;
 use \Luminova\Template\TemplateTrait;
 
-abstract class BaseApplication
+abstract class BaseApplication extends Foundation
 {
+    /**
+     * Adds helper class for handling view template rendering and response.
+     *
+     * @see Luminova\Template\TemplateTrait
+    */
     use TemplateTrait;
 
     /**
      * Base Application instance
      *
-     * @var ?BaseApplication $instance
+     * @var ?self $instance
     */
-    private static ?BaseApplication $instance = null;
+    private static ?self $instance = null;
 
     /**
      * @var Router $router Router class instance
@@ -50,10 +56,19 @@ abstract class BaseApplication
         $this->onCreate();
     }
 
+     /**
+     * Application on create method, an alternative method to __construct()
+     * 
+     * @overridable #[\Override]
+     * 
+     * @return void 
+    */
+    protected function onCreate(): void {}
+
     /**
      * Get the base application instance shared singleton class instance.
      * 
-     * @return static
+     * @return static Application shared instance
      */
     public static function getInstance(): static 
     {
@@ -67,7 +82,7 @@ abstract class BaseApplication
      */
     public function getView(): string 
     {
-        return $this->router->getSegmentUri();
+        return $this->router->getUriSegments();
     }
 
     /**
@@ -93,19 +108,10 @@ abstract class BaseApplication
     {
         $value = self::attrGetter($key);
 
-        if($value === '__nothing__') {
+        if($value === self::KEY_NOT_FOUND) {
             return $this->{$key} ?? null;
         }
 
         return $value;
     }
-
-    /**
-     * Application on create method, an alternative method to __construct()
-     * 
-     * @overridable #[\Override]
-     * 
-     * @return void 
-    */
-    protected function onCreate(): void {}
 }

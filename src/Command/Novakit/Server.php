@@ -9,9 +9,10 @@
 */
 namespace Luminova\Command\Novakit;
 
-use \Luminova\Base\BaseCommand;
+use \Luminova\Base\BaseConsole;
+use \Luminova\Application\Foundation;
 
-class Server extends BaseCommand 
+class Server extends BaseConsole 
 {
     /**
      * @var int $offset port offset
@@ -44,6 +45,15 @@ class Server extends BaseCommand
         '--port' => 'The HTTP Host Port [default: "8080"]',
     ];
 
+     /**
+     * Usages
+     *
+     * @var array<string, string>
+     */
+    protected array $usages = [
+        'php novakit server',
+        'php novakit server --host localhost --port 8080',
+    ];
 
     /**
      * @param array $params terminal options
@@ -57,9 +67,9 @@ class Server extends BaseCommand
         $php = escapeshellarg($this->getOption('php', PHP_BINARY));
         $host = $this->getOption('host', 'localhost');
         $port = (int) $this->getOption('port', 8080) + $this->offset;
-        $root = escapeshellarg(PUBLIC_PATH);
+        $root = escapeshellarg(DOCUMENT_ROOT);
 
-        $this->writeln('NovaKit/' . parent::$version . ' (Luminova) PHP/' . PHP_VERSION. ' (Development Server)');
+        $this->writeln('NovaKit/' . Foundation::NOVAKIT_VERSION . ' (Luminova) PHP/' . PHP_VERSION. ' (Development Server)');
         $this->newLine();
         $this->writeln('Listening on http://' . $host . ':' . $port, 'green');
         $this->writeln('Document root is ' . $root, 'green');
@@ -67,13 +77,10 @@ class Server extends BaseCommand
         $this->writeln('Press Ctrl-C to stop.');
         $this->newLine();
 
-        // Mimic Apache's mod_rewrite functionality with user settings.
-        $version = parent::$version;
+        // Apache's mod_rewrite functionality with settings.
         $rewrite = escapeshellarg(__DIR__ . '/mod_rewrite.php');
 
         // Call PHP's built-in webserver, making sure to set our
-        // base path to the public folder, and to use the mod_rewrite file
-        // to ensure our environment is set and it simulates basic mod_rewrite.
         passthru($php . ' -S ' . $host . ':' . $port . ' -t ' . $root . ' ' . $rewrite, $status);
 
         if ($status && $this->offset < $this->tries) {
@@ -83,5 +90,10 @@ class Server extends BaseCommand
         }
 
         return STATUS_SUCCESS;
+    }
+
+    public function help(array $helps): int
+    {
+        return STATUS_ERROR;
     }
 }

@@ -9,14 +9,18 @@
  */
 namespace Luminova\Http;
 
-use \Luminova\Base\BaseConfig;
+use \Luminova\Application\Foundation;
 
 class Header
 {
-    public const ERRORS = [
-        404 => '404 Not Found',
-        500 => '500 Internal Server Error'
-    ];
+    /**
+     * All allowed HTTP request methods.
+     * Must leave in upper case.
+     * 
+     * @var array<int,string> $httpMethods
+    */
+    public static array $httpMethods = ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS', 'HEAD'];
+
 
     /**
      * Get all request headers.
@@ -89,8 +93,24 @@ class Header
             'X-Firefox-Spdy' => 'h2',
             'Vary' => 'Accept-Encoding',
             'Connection' => 'keep-alive', //'close',
-            'X-Powered-By' => BaseConfig::copyright()
+            'X-Powered-By' => Foundation::copyright()
         ];
+    }
+
+    /**
+     * Set no caching headers
+     * 
+     * @param int $status HTTP status code.
+     * 
+     * @return void 
+     * @internal Used in router and template
+    */
+    public static function headerNoCache(int $status = 200): void 
+    {
+        http_response_code($status);
+        header('X-Powered-By: ' . Foundation::copyright());
+        header("Cache-Control: no-cache, no-store, must-revalidate");
+        header("Expires: 0");
     }
 
     /**

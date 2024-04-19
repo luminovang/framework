@@ -13,6 +13,41 @@ use Luminova\Exceptions\AppException;
 class FileException extends AppException
 {
     /**
-     * FileException: 
-     */
+     * Handle file excption.
+     * 
+     * @param string $path 
+     * @param string $message
+     * 
+     * @throws self
+    */
+    public static function handleFile(string $file, string $message = ''): void 
+    {
+        static::throwException('Unable to write file: "' . $file . '", ' . $message);
+    }
+
+    /**
+     * Handle directory excption.
+     * 
+     * @param string $path 
+     * @param string $message
+     * 
+     * @throws self
+    */
+    public static function handleDirectory(string $path, string $message = ''): void 
+    {
+        static::throwException('Unable to create a directory: "' . $path . '", ' . $message);
+    }
+
+    /**
+     * Handle file permission excption.
+     * 
+     * @param string $path 
+     * @param string $message
+     * 
+     * @throws self
+    */
+    public static function handlePermission(string $path, string $message = ''): void 
+    {
+        static::throwException('Unable to set permission for file: "' . $path . '", ' . $message);
+    }
 }

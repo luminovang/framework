@@ -10,57 +10,39 @@
 
 namespace Luminova\Security;
 
-use \Luminova\Security\ValidatorInterface;
+use \Luminova\Interface\ValidationInterface;
 
-class InputValidator implements ValidatorInterface
+class InputValidator implements ValidationInterface
 {
     /**
-     * @var array $errors validated errors messages
+     * @var array $failures validated errors messages.
     */
-    private array $errors = [];
-
-     /**
-     * @var array $validationRules validation rules
-    */
-    public array $validationRules = [];
+    private array $failures = [];
 
     /**
-     * @var array $errorMessages validation error messages
+     * @var array $rules validation rules.
     */
-    public array $errorMessages = [];
+    public array $rules = [];
 
     /**
-     * Validate entries
-     * @param array $input array input to validate it fields
-     * @param array $rules Optional passed rules as array
-     * 
-     * @return self Use $validate->isPassed() method to check the validity of
+     * @var array $messages validation error messages.
     */
-    public function validate(array $input, array $rules = []): self
-    {
-        $this->validateEntries($input, $rules);
-    
-        return $this;
-    }
+    public array $messages = [];
 
     /**
-     * Validate entries
-     * @param array $input array input to validate it fields
-     * @param array $rules Optional passed rules as array
-     * 
-     * @return boolean true if the rule passed else false
+     * {@inheritdoc}
     */
-    public function validateEntries(array $input, array $rules = []): bool
+    public function validate(array $input, array $rules = []): bool
     {
         if ($rules === []) {
-            $rules = $this->validationRules;
+            $rules = $this->rules;
         }
     
         if ($rules === [] || ($rules === [] && $input === [])) {
             return true;
         }
 
-        $this->errors = [];
+        $this->failures = [];
         foreach ($rules as $field => $rule) {
             if(isset($input[$field])){
                 $fieldValue = $input[$field] ?? null;
@@ -125,7 +107,7 @@ class InputValidator implements ValidatorInterface
                             $input[$field] = $defaultValue;
                         break;
                         default:
-                            if (!$this->validateField($ruleName, $fieldValue, $rulePart, $ruleParam)) {
+                            if (!static::validation($ruleName, $fieldValue, $rulePart, $ruleParam)) {
                                 $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
@@ -136,25 +118,136 @@ class InputValidator implements ValidatorInterface
             }
         }
 
-        return $this->errors === [];
+        return $this->failures === [];
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getErrors(): array
+    {
+        return $this->failures??[];
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getError(string $field): string
+    {
+        return $this->failures[$field][0]??'';
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getErrorField(string $field): string
+    {
+        return $this->failures[$field]['field']??'';
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getErrorLine(int $fieldIndex = 0, int $errorsIndex = 0): string
+    {
+        $errors = $this->getErrorLineInfo($fieldIndex);
+
+        if($errors === []){
+            return '';
+        }
+        
+        $error = array_keys($errors)[$errorsIndex] ?? null;
+
+        // Retrieve the error message based on the indices
+        $message = $errors[$error] ?? '';
+
+        return $message;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getErrorLineInfo(int $fieldIndex = 0): array
+    {
+        $errors = $this->failures;
+        // Get the keys of the provided indices
+        $field = array_keys($errors)[$fieldIndex] ?? null;
+
+        if($field === null){
+            return [];
+        }
+
+        // Retrieve the error message based on the indices
+        $infos = $errors[$field] ?? [];
+
+        // Remove the parent key from the error array
+        unset($errors[$field]);
+
+        return $infos;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getErrorFieldLine(string $prefix = ''): string
+    {
+        $errors = $this->getErrorLineInfo();
+
+        $field = $errors['field'] ?? '';
+
+        return $prefix . $field;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function setRules(array $rules, array $messages = []): self
+    {
+        $this->rules = $rules;
+
+        if($messages !== []){
+            $this->messages = $messages;
+        }
+
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function addRule(string $field, string $rules, array $messages = []): self
+    {
+        $this->rules[$field] = $rules;
+
+        if(!empty($message)){
+            $this->messages[$field] = $messages;
+        }
+
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function isPassed(): bool
+    {
+        return $this->failures === [];
     }
 
     /**
      * Validate fields 
-     * 
      * @param string $ruleName The name of the rule to validate
-     * @param mixed $value The value to validate
+     * @param string $value The value to validate
      * @param string $rule The rule line
      * @param string $param additional validation parameters
-     * 
      * @return boolean true if the rule passed else false
     */
-    public function validateField(string $ruleName, mixed $value, string $rule, mixed $param = null): bool
+    private static function validation(string $ruleName, mixed $value, string $rule, mixed $param = null): bool
     {
         return match ($ruleName) {
-            'max_length', 'max' => strlen($value) <= (int) $param,
-            'min_length', 'min' => strlen($value) >= (int) $param,
-            'exact_length', 'length' => strlen($value) == (int) $param,
+            'max_length', 'max' => mb_strlen($value) <= (int) $param,
+            'min_length', 'min' => mb_strlen($value) >= (int) $param,
+            'exact_length', 'length' => mb_strlen($value) == (int) $param,
             'integer' => match ($param) {
                 'positive' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value > 0,
                 'negative' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value < 0,
@@ -182,118 +275,6 @@ class InputValidator implements ValidatorInterface
     }
 
     /**
-     * Gets validation error
-     * @return array validation error message
-    */
-    public function getErrors(): array
-    {
-        return $this->errors??[];
-    }
-
-    /**
-     * Get validation error messages
-     * 
-     * @param string $field messages input field name
-     * 
-     * @return string Error message
-    */
-    public function getError(string $field): string
-    {
-        return $this->errors[$field][0]??'';
-    }
-
-    /**
-     * Get validation error filed
-     * 
-     * @param string $field messages input field name
-     * 
-     * @return string Error field
-    */
-    public function getErrorField(string $field): string
-    {
-        return $this->errors[$field]['field']??'';
-    }
-
-    /**
-     * Get validation error messages
-     * 
-     * @param int $fieldIndex field index
-     * @param int $errorsIndex error index
-     * 
-     * @return string Error message
-    */
-    public function getErrorLine(int $fieldIndex = 0, int $errorsIndex = 0): string
-    {
-        $errors = $this->getCurrentErrorInfo($fieldIndex);
-
-        if($errors === []){
-            return '';
-        }
-        
-        $errorKey = array_keys($errors)[$errorsIndex] ?? null;
-
-        // Retrieve the error message based on the indices
-        $errorMessage = $errors[$errorKey] ?? '';
-
-        return $errorMessage;
-    }
-
-    /**
-     * Get validation error information
-     * 
-     * @param int $fieldIndex field index
-     * 
-     * @return array Error information
-    */
-    public function getCurrentErrorInfo(int $fieldIndex = 0): array
-    {
-        $errors = $this->errors;
-        // Get the keys of the provided indices
-        $fieldKey = array_keys($errors)[$fieldIndex] ?? null;
-
-        if($fieldKey === null){
-            return [];
-        }
-
-        // Retrieve the error message based on the indices
-        $errorInfos = $errors[$fieldKey] ?? [];
-
-        // Remove the parent key from the error array
-        unset($errors[$fieldKey]);
-
-        return $errorInfos;
-    }
-
-    /**
-     * Get validation current error field
-     * 
-     * @param string $prefix prefix
-     * 
-     * @return string $errorField
-    */
-    public function getCurrentErrorField(string $prefix = ''): string
-    {
-        $errors = $this->getCurrentErrorInfo();
-
-        $errorField = $errors['field'] ?? '';
-
-        return $prefix . $errorField;
-    }
-
-     /**
-     * Get validation error messages
-     * @param int $indexField field index
-     * @param int $indexErrors error index
-     * 
-     * @deprecated This method will be removed in a future release use getErrorLine instead
-     * @return string Error message
-    */
-    public function getErrorByIndices(int $indexField = 0, int $indexErrors = 0): string 
-    {
-        return $this->getErrorLine($indexField, $indexErrors);
-    }
-
-    /**
      * Add validation error message
      * 
      * @param string $field input field name
@@ -302,90 +283,23 @@ class InputValidator implements ValidatorInterface
      * 
      * @return void 
     */
-    public function addError(string $field, string $ruleName, mixed $value = null): void
+    private function addError(string $field, string $ruleName, mixed $value = null): void
     {
-        $message = $this->errorMessages[$field][$ruleName] ?? null;
+        $message = $this->messages[$field][$ruleName] ?? null;
 
         if($message === null){
             $message = 'Validation failed for "' . $field . '" while validating [' . $ruleName . '].';
         }else{
-            $message = static::replaceMessage($message, [
+            $message = static::replace($message, [
                 $field, $ruleName, $value
             ]);
         }
 
-        $this->errors[$field][] = $message;
-        $this->errors[$field]['field'] = $field;
+        $this->failures[$field][] = $message;
+        $this->failures[$field]['field'] = $field;
     }
 
     /**
-     * Set rules array array with optional messages
-     * @param array $rules validation rules
-     * @param array $message optional pass response message for validation
-     * @return self InputValidator instance 
-    */
-    public function setRules(array $rules, array $messages = []): self
-    {
-        $this->validationRules = $rules;
-        if($messages !== []){
-            $this->errorMessages = $messages;
-        }
-
-        return $this;
-    }
-
-   /**
-     * Add single rule with optional message
-     * @param string $field validation rule input field name
-     * @param array $messages optional pass response message for rule validation
-     * @return self InputValidator instance 
-    */
-    public function addRule(string $field, string $rules, array $messages = []): self
-    {
-        $this->validationRules[$field] = $rules;
-        if(!empty($message)){
-            $this->errorMessages[$field] = $messages;
-        }
-
-        return $this;
-    }
-
-    /**
-     * Set array list rule messages
-     * @param array $messages messages to set
-     * @return self InputValidator instance 
-    */
-    public function setMessages(array $messages): self
-    {
-        $this->errorMessages = $messages;
-
-        return $this;
-    }
-
-    /**
-     * Set a single validation rule messages
-     * @param string $field messages input field name
-     * @param array $messages messages to set
-     * @return self InputValidator instance 
-    */
-    public function addMessage(string $field, array $messages): self
-    {
-        $this->errorMessages[$field] = $messages;
-
-        return $this;
-    }
-
-    /**
-     * Check if validation passed
-     * 
-     * @return boolean true if the rule passed else false
-    */
-    public function isPassed(): bool
-    {
-        return $this->errors === [];
-    }
-
-     /**
      * Translate placeholders
      * 
      * @param string $message message to be translated
@@ -393,13 +307,13 @@ class InputValidator implements ValidatorInterface
      * 
      * @return string 
     */
-    private static function replaceMessage(string $message, array $placeholders = []): string 
+    private static function replace(string $message, array $placeholders = []): string 
     {
         if($placeholders === []){
             return $message;
         }
 
-        $replaced = str_replace(['[field]', '[rule]', '[value]'], $placeholders, $message);
+        $replaced = str_replace(['{field}', '{rule}', '{value}'], $placeholders, $message);
 
         return $replaced;
     }

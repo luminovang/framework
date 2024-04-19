@@ -11,13 +11,13 @@
 namespace Luminova\Http\Client;
 
 use \Luminova\Http\Message\Response;
-use \Luminova\Http\Client\ClientInterface;
+use \Luminova\Interface\HttpClientInterface;
 use \Luminova\Http\Exceptions\RequestException;
 use \Luminova\Http\Exceptions\ConnectException;
 use \Luminova\Http\Exceptions\ClientException;
 use \Luminova\Http\Exceptions\ServerException;
  
-class Curl implements ClientInterface
+class Curl implements HttpClientInterface
 {
     /**
      * {@inheritdoc}

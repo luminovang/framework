@@ -12,11 +12,12 @@ namespace Luminova\Database;
 
 use \Luminova\Database\Drivers\MySqliDriver;
 use \Luminova\Database\Drivers\PdoDriver;
-use \Luminova\Database\Drivers\DriversInterface;
+use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Config\Database;
-use \App\Controllers\Config\Servers;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Exceptions\DatabaseLimitException;
+use \Luminova\Exceptions\InvalidArgumentException;
+use \App\Controllers\Config\Servers;
 use \Exception;
 
 class Connection
@@ -24,9 +25,9 @@ class Connection
   /** 
    * Database connection instance 
    * 
-   * @var DriversInterface|null $db
+   * @var DatabaseInterface|null $db
   */
-  protected ?DriversInterface $db = null;
+  protected ?DatabaseInterface $db = null;
 
   /** 
    * @var ?Connection $instance
@@ -34,163 +35,41 @@ class Connection
   private static ?self $instance = null;
 
   /**
-   * Pool connections 
+   * Use a pool connections
    * 
-   * @var array $pool
+   * @var bool $pools
   */
-  private array $pool = [];
+  private bool $pool = false;
 
   /**
-   * Maximum number of connections
+   * Pool connections 
+   * 
+   * @var array $pools
+  */
+  private array $pools = [];
+
+  /**
+   * Maximum number of open database connections.
    * 
    * @var int $maxConnections 
   */
   private int $maxConnections = 0;
 
   /**
-  * Connection constructor.
-  *
-  * Initializes the database connection based on configuration.
-  * @throws DatabaseException
-  * @throws DatabaseLimitException
-  * @throws InvalidArgumentException
-  * @throws Exception
-  */
-  final public function __construct()
-  {
-    $this->maxConnections = (int) env('database.max.connections', 0);
-    $this->db ??= $this->reuse();
-
-    if((bool) env('database.connection.pool', false) && $this->maxConnections > 0){
-      $this->release($this->db);
-    }
-  }
-
-  /**
-    * Create or return connection instance from pool
-    * If there is no maximum connection limit or the pool is empty, create a new instance
-    * Check if the total number of connections in the pool has reached the maximum limit
-    * Else reuse an existing connection from the pool
-    *
-    * @return object Database driver instance (either MySqliDriver or PdoDriver).
-    * @throws DatabaseException
-    * @throws DatabaseLimitException
-    * @throws InvalidArgumentException
-    * @throws Exception
-  */
-  private function reuse(): object
-  {
-    if ($this->maxConnections === 0 || empty($this->pool)) {
-      return static::newInstance();
-    }
-
-    if (count($this->pool) >= $this->maxConnections) {
-      $servers = Servers::getDatabaseServers();
-
-      if($servers === []){
-        throw new DatabaseLimitException("Database connection limit has reached it limit per user.");
-      }
-
-      return $this->retry($servers);
-    }
-
-    return array_pop($this->pool);
-  }
-
-  /**
-   * Get the singleton instance of Connection.
-   *
-   * @return self Connection instance
-   * @throws DatabaseException
-   * @throws InvalidArgumentException
-   * @throws Exception
-  */
-  public static function getInstance(): self 
-  {
-    return static::$instance ??= new static();
-  }
-
-  /**
-   * Get new database connection instance
-   * No shared instance connection
+   * Initializes the Connection class constructor based on configuration in the .env file.
    * 
-   * @param Database $config 
-   *
-   * @return DriversInterface Database driver instance
-   * @throws DatabaseException
-   * @throws InvalidArgumentException
-   * @throws Exception
-  */
-  public static function newInstance(Database $config = null): DriversInterface 
-  {
-    static $connection = null;
-    
-    if ($connection === null) {
-        $driver = strtolower(env('database.connection', 'PDO'));
-        $config ??= static::getConfig();
-
-        $connection = match ($driver) {
-            'mysqli' => new MySqliDriver($config),
-            default => new PdoDriver($config)
-        };
-
-        $connection->setDebug(!PRODUCTION);
-    }
-
-    return $connection;
-  }
-
-  /**
-   * Release connection back to pool 
+   * Initializes the maxConnections and pool properties based on values from the .env file.
+   * Establishes the database connection.
    * 
-   * @param DriversInterface $connection
-   * 
-   * @return void
-  */
-  public function release(DriversInterface $connection): void
+   * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
+   * @throws DatabaseLimitException When the maximum connection limit is reached.
+   * @throws InvalidArgumentException If an invalid connection configuration or driver is passed.
+   */
+  public final function __construct()
   {
-    if (count($this->pool) < $this->maxConnections) {
-      $this->pool[] = $connection;
-    } else {
-      $connection = null;
-    }
-  }
-
-  /**
-   * Close all stacked pool connection
-   * 
-   * @return void 
-  */
-  public function closeAll(): void
-  {
-    foreach ($this->pool as $connection) {
-      $connection = null;
-    }
-
-    $this->pool = [];
-  }
-
-  /**
-    * Get the database configuration based on environment and settings.
-    *
-    * @return Database Database configuration object.
-  */
-  private static function getConfig(): Database
-  {
-    $var = PRODUCTION ? 'database' : 'database.development';
-    return new Database([
-      'port' => env('database.port'),
-      'host' => env('database.hostname'),
-      'pdo_driver' => env('database.pdo.driver'),
-      'charset' => env('database.charset', ''),
-      'persistent' => (bool) env('database.persistent.connection', true),
-      'emulate_preparse' => (bool) env('database.emulate.preparse', false),
-      'sqlite_path' => APP_ROOT . DIRECTORY_SEPARATOR . trim(env("{$var}.sqlite.path"), DIRECTORY_SEPARATOR),
-      'production' => PRODUCTION,
-      'username' => env("{$var}.username"),
-      'password' => env("{$var}.password"),
-      'database' => env("{$var}.name")
-    ]);
+    $this->maxConnections = (int) env('database.max.connections', 3);
+    $this->pool = (bool) env('database.connection.pool', false);
+    $this->db ??= $this->connect();
   }
 
   /**
@@ -211,39 +90,256 @@ class Connection
   */
   public function __unserialize(array $data): void
   {
-    $this->db ??= $this->reuse();
+    $this->db ??= $this->connect();
   }
 
   /**
-   * Retry database connection
+   * Retrieves the database driver connection instance.
    * 
-   * @param array $service array of service to try to connect
-   * 
-   * @return DriversInterface|bool 
-  */
-  public function retry(array $servers): DriversInterface|bool
+   * @return DatabaseInterface|null Return driver connection instance..
+   */
+  public function database(): DatabaseInterface|null
   {
-    $maxAttempts = count($servers);
-    $attemptCount = 0;
-    $connection = false;
+      return $this->db;
+  }
 
-    while (!$connection && $attemptCount < $maxAttempts) {
-      $config = $servers[$attemptCount];
+  /**
+   * Retrieves the shared singleton instance of the Connection class.
+   *
+   * @return self Connection class instance.
+   * 
+   * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
+   * @throws DatabaseLimitException When the maximum connection limit is reached.
+   * @throws InvalidArgumentException If an invalid connection configuration or driver is passed.
+   */
+  public static function getInstance(): self 
+  {
+      return static::$instance ??= new static();
+  }
 
-      try {
-        $connection = $this->db->isConnected() ? $this->db : $this->newInstance(new Database($config));
-      } catch (DatabaseException | Exception $e) {
-          logger('error', 'Failed to connect to database: ' . $e->getMessage());
-      }
+  /**
+   * Retrieves a new database driver instance based on the provided configuration.
+   * 
+   * If no configuration is provided, the default configuration will be used.
+   * 
+   * @param Database|null $config Database configuration (default: null).
+   *
+   * @return DatabaseInterface|null Database driver instance.
+   * 
+   * @throws DatabaseException If all retry attempts fail, an error occurs during connection, or an invalid driver interface is detected.
+   * @throws DatabaseLimitException When the maximum connection limit is reached.
+   * @throws InvalidArgumentException If an invalid database driver is provided.
+  */
+  public static function newInstance(Database|null $config = null): DatabaseInterface|null
+  {
+    $config ??= static::getConfig();
 
-      $attemptCount++;
+    $drivers = [
+      'mysqli' => MySqliDriver::class,
+      'pdo' => PdoDriver::class
+    ];
+
+    $driverClass = $drivers[$config->connection] ?? null;
+
+    if($driverClass === null){
+      throw new InvalidArgumentException("Invalid database connection driver: '{$config->connection}', use [mysql or pdo].");
     }
 
-    if (!$connection) {
-      throw new DatabaseLimitException('Failed all attempts to establish a database connection');
+    $connection = new $driverClass($config);
+
+    if (!$connection instanceof DatabaseInterface) {
+      throw new DatabaseException("Driver class '{$driverClass}' does not implement DatabaseInterface.");
+    }
+    
+    $connection->setDebug(!PRODUCTION);
+
+    return $connection;
+  }
+
+  /**
+   * Connects to the database, either returning a connection instance or reusing a previous connection from the pool if available.
+   * Optionally retries failed connections based on the retry attempt value set in the .env file (`database.connection.retry`).
+   *
+   * @param int|null $retry Number of retry attempts (default: 1).
+   * 
+   * @return DatabaseInterface|null Database driver instance (either MySqliDriver or PdoDriver).
+   * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
+   * @throws DatabaseLimitException When the maximum connection limit is reached.
+   * @throws InvalidArgumentException If an invalid connection configuration or driver is passed.
+  */
+  public function connect(): ?DatabaseInterface
+  {
+    $connection = $this->retry((int) env('database.connection.retry', 1));
+
+    if($connection === null){
+      $connection = $this->retry(null);
+
+      if($connection === null){
+        throw new DatabaseException('Failed all attempts to establish a database connection');
+      }
     }
 
     return $connection;
+  }
+
+  /**
+   * Retries the database connection with optional backup server fallback.
+   * 
+   * If the retry parameter is set to null, retries the connection with backup servers if available.
+   * 
+   * @param int|null $retry Number of retry attempts (default: 1).
+   * 
+   * @return DatabaseInterface|null Connection instance or null if all retry attempts fail.
+   * 
+   * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
+   * @throws DatabaseLimitException When the maximum connection limit is reached.
+   * @throws InvalidArgumentException If an invalid connection configuration or driver is passed.
+  */
+  public function retry(int|null $retry = 1): DatabaseInterface|null
+  {
+    if(isset($this->db) && $this->db->isConnected()){
+      return $this->db;
+    }
+
+    if ($this->pool) {
+      if (count($this->pools) >= $this->maxConnections) {
+        throw new DatabaseLimitException("Database connection limit has reached it limit per user.");
+      }
+
+      if (!empty($this->pools)) {
+        $connection = array_pop($this->pools);
+
+        if (isset($connection) && $connection->isConnected()) {
+          return $connection;
+        }
+
+        $this->purge(true);
+      }
+    }
+
+    $connection = null;
+
+    if ($retry === null) {
+      $servers = Servers::getDatabaseServers();
+
+      foreach ($servers as $config) {
+          try {
+            $connection = static::newInstance(new Database($config));
+          } catch (DatabaseException | Exception $e) {
+            logger('error', 'Failed to connect to backup database: ' . $e->getMessage(), [
+                'host' => $config['host'],
+                'port' => $config['port'],
+                'database' => $config['database']
+            ]);
+          }
+
+          if (isset($connection) && $connection->isConnected()) {
+            if($this->pool){
+              $this->release($connection);
+            }
+
+            return $connection;
+          }
+      }
+
+      return $connection;
+    }
+
+    $maxAttempts = max(1, $retry);
+      
+    for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+        try {
+            $connection = static::newInstance();
+        } catch (DatabaseException | Exception $e) {
+          logger('error', 'Attempt (' . $attempt . '), failed to connect to database: ' . $e->getMessage());
+        }
+
+        if (isset($connection) && $connection->isConnected()) {
+          if($this->pool){
+            $this->release($connection);
+          }
+
+          return $connection;
+        }
+    }
+
+    return $connection;
+  }
+
+  /**
+   * Releases a connection back to the connection pool.
+   * 
+   * If the connection pool is not full, adds the provided connection to the pool.
+   * If the connection pool is full, closes the provided connection.
+   * 
+   * @param DatabaseInterface|null $connection The connection to release.
+   * 
+   * @return void
+   */
+  public function release(DatabaseInterface|null $connection): void
+  {
+    if (count($this->pools) < $this->maxConnections) {
+        $this->pools[] = $connection;
+        return;
+    }
+    
+    $connection?->close();
+    $connection = null;
+  }
+
+
+  /**
+   * Purges all stacked pool connections and optionally closes the database connection.
+   * 
+   * If the conn parameter is true, the database connection will be closed; otherwise, only the pool connections will be closed.
+   * 
+   * @param bool $conn If true, close the database connection. Default is false.
+   * 
+   * @return void 
+   */
+  public function purge(bool $conn = false): void
+  {
+    foreach ($this->pools as $connection) {
+      $connection?->close();
+      $connection = null;
+    }
+
+    $this->pools = [];
+
+    if($conn){
+      $this->db?->close();
+    }
+  }
+
+  /**
+    * Get the database configuration based on environment and settings.
+    *
+    * @return Database Database configuration object.
+  */
+  private static function getConfig(): Database
+  {
+    $var = PRODUCTION ? 'database' : 'database.development';
+    $sqlite = env("{$var}.sqlite.path", '');
+    if($sqlite !== ''){
+      $sqlite = APP_ROOT . DIRECTORY_SEPARATOR . trim($sqlite, DIRECTORY_SEPARATOR);
+    }
+
+    return new Database([
+      'port' => env('database.port'),
+      'host' => env('database.hostname'),
+      'pdo_driver' => env('database.pdo.driver'),
+      'connection' => strtolower(env('database.connection', 'pdo')),
+      'charset' => env('database.charset', ''),
+      'persistent' => (bool) env('database.persistent.connection', true),
+      'emulate_preparse' => (bool) env('database.emulate.preparse', false),
+      'sqlite_path' => $sqlite,
+      'socket' => (bool) env('database.mysql.socket', false),
+      'socket_path' => env('database.mysql.socket.path', ''),
+      'production' => PRODUCTION,
+      'username' => env("{$var}.username"),
+      'password' => env("{$var}.password"),
+      'database' => env("{$var}.name")
+    ]);
   }
 }
  

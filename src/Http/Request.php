@@ -110,7 +110,6 @@ class Request
     */
     public function __construct()
     {
-
         $this->get = $_GET;
         $this->post = $_POST;
         
@@ -212,8 +211,6 @@ class Request
         
         throw new InvalidArgumentException("Method '$method' is not allowed. Use any of [" . implode(', ', $this->methods) . "]");
     }
-
-
 
     /**
      * Get a value from the PUT request.
@@ -554,11 +551,13 @@ class Request
 	public function getAuthBearer(): ?string 
     {
 		$auth = Header::getAuthorization();
+
 		if (!empty($auth)) {
 			if (preg_match('/Bearer\s(\S+)/', $auth, $matches)) {
 				return $matches[1];
 			}
 		}
+        
 		return null;
 	}
 
@@ -593,7 +592,39 @@ class Request
     public function isAJAX(): bool
     {
         $with = $_SERVER['HTTP_X_REQUESTED_WITH']??'';
+
         return $with !== '' && strtolower($with) === 'xmlhttprequest';
+    }
+
+    /**
+     * Check if the request URL indicates an API endpoint.
+     *
+     * This method checks if the URL path starts with '/api' or 'public/api'.
+     *
+     * @param string|null $url The request URL to check.
+     * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
+    */
+    public static function isApi(?string $url = null): bool
+    {
+        $url ??= ($_SERVER['REQUEST_URI']??'');
+
+        if($url === ''){
+            return false;
+        }
+
+        $segments = explode('/', trim($url, '/'));
+
+        // Check if the URL path starts with '/api' or 'public/api'
+        if (!empty($segments) && ($segments[0] === 'api' || ($segments[0] === 'public' && isset($segments[1]) && $segments[1] === 'api'))) {
+            return true;
+        }
+
+        // Additional check for custom project structure like '/my-project/api'
+        if (basename(root(__DIR__)) === $segments[0] && isset($segments[2]) && $segments[2] === 'api') {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -620,11 +651,11 @@ class Request
      * Pass user agent string browser info
      * 
      * @param ?string $userAgent
-     * @param bool $returnObject If set to true, this function will return an array instead of an object.
+     * @param bool $return_array If set to true, this function will return an array instead of an object.
      * 
      * @return array|object 
     */
-    public static function parseUserAgent(?string $userAgent = null, bool $returnObject = false): array|object
+    public static function parseUserAgent(?string $userAgent = null, bool $return_array = false): array|object
     {
         if($userAgent === null){
             $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
@@ -645,11 +676,11 @@ class Request
             }
         }
 
-        if ($returnObject) {
-            return (object) $browserInfo;
+        if ($return_array) {
+            return (array) $browserInfo;
         }
-        
-        return $browserInfo;
+
+        return (object) $browserInfo;
     }
 
     /**

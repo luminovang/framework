@@ -9,10 +9,10 @@
 */
 namespace Luminova\Command\Novakit;
 
-use \Luminova\Base\BaseCommand;
+use \Luminova\Base\BaseConsole;
 use \Luminova\Command\Novakit\Commands;
 
-class Help extends BaseCommand 
+class Help extends BaseConsole 
 {
     /**
      * @var string $group command group
@@ -38,9 +38,29 @@ class Help extends BaseCommand
     */
     public function run(?array $options = []): int
     {
+        $this->explain($options);
+        $command = $this->getArgument(1);
+        $helps = [];
+        $all = false;
+        if(empty($command) || $command === null){
+            $all = true;
+            $helps = Commands::getCommands();
+        }else{
+            $helps = Commands::get($command);
+        }
 
-        $this->printHelp(Commands::get('help'));
+        if($helps === []){
+            $this->error('Unknown command ' . $this->color("'$command'", 'red') . ' not found', null);
+            return STATUS_ERROR;
+        }
+
+        $this->helper($helps, $all);
     
         return STATUS_SUCCESS;
+    }
+
+    public function help(array $helps): int
+    {
+        return STATUS_ERROR;
     }
 }

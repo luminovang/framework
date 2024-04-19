@@ -10,10 +10,12 @@
 namespace Luminova\Cache;
 
 use \Luminova\Exceptions\ErrorException;
+use \Luminova\Functions\Files;
 use \Generator;
 use \DateTimeInterface;
 use \DateInterval;
 use \Luminova\Time\Time;
+use \Luminova\Time\Timestamp;
 
 class FileCache 
 {
@@ -120,17 +122,15 @@ class FileCache
     /**
      * Constructor.
      * 
-     * @param string $filename cache storage filename to hash
+     * @param string|null $filename cache storage filename to hash
      * @param string $folder cache storage sub folder.
      */
-    public function __construct(string $storage = '', string $folder = '')
+    public function __construct(?string $storage = null, string $folder = '')
     {
-
-        $path = path('caches') . $folder;
         $this->setExtension(self::JSON);
-        $this->setPath($path);
+        $this->setPath(path('caches') . $folder);
 
-        if( $storage !== ''){
+        if( $storage !== null){
             $this->storageHashed = static::hashStorage($storage);
             $this->create();
         }
@@ -139,12 +139,12 @@ class FileCache
     /**
      * Get static Singleton Class.
      * 
-     * @param string $storage cache storage filename to hash
+     * @param string|null $storage cache storage filename to hash
      * @param string $folder cache storage sub folder.
      * 
      * @param static $instance Instance
      */
-    public static function getInstance(string $storage = '', string $folder = ''): static 
+    public static function getInstance(?string $storage = null, string $folder = ''): static 
     {
         if (static::$instance === null) {
             static::$instance = new static($storage, $folder);
@@ -161,9 +161,7 @@ class FileCache
      */
     public function setPath(string $path): self 
     {
-        $path = rtrim($path, DIRECTORY_SEPARATOR);
-        $path .= DIRECTORY_SEPARATOR;
-        $this->storagePath = $path;
+        $this->storagePath = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 
         return $this;
     }
@@ -223,7 +221,7 @@ class FileCache
             $expiration = 0;
         }
 
-        $this->expiration = static::ttlToSeconds($expiration);
+        $this->expiration = Timestamp::ttlToSeconds($expiration);
         $this->expireAfter = null;
 
         return $this;
@@ -238,7 +236,7 @@ class FileCache
      */
     public function expiresAfter(int|DateInterval|null $time): static
     {
-        $this->expireAfter = $time === null ? null : static::ttlToSeconds($time);
+        $this->expireAfter = $time === null ? null : Timestamp::ttlToSeconds($time);
 
         return $this;
     }
@@ -582,48 +580,13 @@ class FileCache
 
         $this->cacheInstance[$key] = [
             "timestamp" => time(),
-            "expiration" => static::ttlToSeconds($expiration),
-            "expireAfter" => $expireAfter === null ? null : static::ttlToSeconds($expireAfter),
+            "expiration" => Timestamp::ttlToSeconds($expiration),
+            "expireAfter" => $expireAfter === null ? null : Timestamp::ttlToSeconds($expireAfter),
             "data" => ($this->encode ? base64_encode($serialize) : $serialize),
             "lock" => $lock
         ];
 
         return $this->commit();
-    }
-
-    /**
-     * Convert DateInterval to seconds.
-     * 
-     * @param DateInterval|DateTimeInterface $ttl Time 
-     * 
-     * @return int seconds.
-    */
-    public static function ttlToSeconds(DateInterval|DateTimeInterface|int|null $ttl): int
-    {
-        if($ttl === null){
-            return 0;
-        }
-
-        if(is_int($ttl)){
-            return $ttl;
-        }
-
-        $now = new Time();
-        if($ttl instanceof DateInterval){
-            $endTime = $now->add($ttl);
-
-            return $endTime->getTimestamp() - $now->getTimestamp();
-        }
-
-        if($ttl instanceof DateTimeInterface){
-            $diff = $now->diff($ttl);
-
-            $seconds = $diff->s + ($diff->i * 60) + ($diff->h * 3600) + ($diff->d * 86400) + ($diff->m * 2592000) + ($diff->y * 31536000);
-            
-            return $seconds;
-        }
-
-        return 0;
     }
 
     /**
@@ -693,17 +656,23 @@ class FileCache
     /**
      * Wipes clean the entire cache's.
      * 
+     * @param bool $clearDisk Whether to clear all cache disk 
+     * 
      * @return bool
      */
-    public function clear(): bool
+    public function clear(bool $clearDisk = false): bool
     {
         $this->cacheInstance = [];
+
+        if($clearDisk && Files::remove($this->storagePath)){
+            return true;
+        }
 
         return $this->commit();
     }
 
     /**
-     * Remove cache file
+     * Remove current cache file 
      * 
      * @return bool true if file path exist else false
      */
@@ -719,26 +688,45 @@ class FileCache
     }
 
     /**
-     * Remove cache file from disk with full path
+     * Remove cached storage file from disk with full path.
+     * This will use the current storage path
      * 
-     * @param string $path cache full path /
-     * @param array $filenames cache file array names
+     * @param string $path Storage cache full path /
+     * @param string $storage cache storage names
      * @param string $extension cache file extension type
      * 
      * @return bool
-     */
-    public static function deleteStorageDisk(string $path, array $filenames, string $extension = self::JSON): bool 
+    */
+    public function delete(string $storage, string $extension = self::JSON): bool 
     {
-        $success = true;
-        foreach($filenames as $name){
-            $fileCache = $path . static::hashStorage($name) . $extension;
-            if(file_exists($fileCache)){
-                if (!unlink($fileCache)) {
-                    $success = false;
-                }
+        if(static::deleteDisk($this->storagePath, $storage, $extension)){
+           return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Remove cache file from disk with full path
+     * 
+     * @param string $path cache full path /
+     * @param string $storage cache file array names
+     * @param string $extension cache file extension type
+     * 
+     * @return bool
+    */
+    public static function deleteDisk(string $path, string $storage, string $extension = self::JSON): bool 
+    {
+        $path = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $extension = trim($extension, '.');
+
+        if(file_exists($cacheDisk = $path . static::hashStorage($storage) . '.' . $extension)){
+            if (unlink($cacheDisk)) {
+                return true;
             }
         }
-        return $success;
+
+        return false;
     }
 
     /**

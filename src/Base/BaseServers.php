@@ -20,8 +20,11 @@ abstract class BaseServers
      *      [
      *          'port' => 0,
      *          'host' => '',
-     *          'version' => 'mysql',
+     *          'pdo_driver' => 'mysql',
+     *          'connection' => 'pdo',
      *          'charset' => 'utf8',
+     *          'persistent' => true,
+     *          'emulate_preparse' => false,
      *          'sqlite_path' => '',
      *          'username' => 'root',
      *          'password' => '',
@@ -38,6 +41,7 @@ abstract class BaseServers
      * Get the value of the protected property $databaseServers
      *
      * @return array<int, mixed>
+     * @internal 
      */
     public static function getDatabaseServers(): array
     {

@@ -17,6 +17,7 @@ use \Luminova\Command\Novakit\Database;
 use \Luminova\Command\Novakit\Generators;
 use \Luminova\Command\Novakit\System;
 use \Luminova\Command\Novakit\Builder;
+use \Luminova\Command\Novakit\Context;
 use \Luminova\Command\Novakit\Commands;
 
 class Executor
@@ -33,24 +34,27 @@ class Executor
     {
         $command = trim($terminal->getCommand());
    
-        $findGroup = match($command){
-            'help', '-help', '--help' => Help::class,
-            'create:controller','create:view','create:class' => Generators::class,
+        $newCommand = match($command){
+            '-help', '--help' => Help::class,
+            'create:controller','create:view','create:class', => Generators::class,
             'list' => Lists::class,
             'db:create','db:update','db:insert','db:delete','db:drop','db:truncate','db:select' => Database::class,
             'server', 'serve' => Server::class,
-            'generate:key' => System::class,
+            'generate:key','generate:sitemap','env:add','env:remove' => System::class,
             'build:project' => Builder::class,
+            'context' => Context::class,
             default => null
         };
 
-        if ($findGroup === null) {
+        if ($newCommand === null) {
             $terminal::error('Unknown command ' . $terminal::color("'$command'", 'red') . ' not found', null);
 
             return STATUS_ERROR;
         } 
-        
-        return (int) (new $findGroup())->run($options);
+
+        $instance = new $newCommand();
+ 
+        return (int) $instance->run($options);
     }
 
     /**
@@ -74,7 +78,7 @@ class Executor
     */
     public static function has(string $command): bool
     {
-        return Commands::has($command) || $command === '-help';
+        return Commands::has($command) || Terminal::isHelp($command);
     }
 
     /**

@@ -9,10 +9,10 @@
  */
 namespace Luminova\Email\Clients;
 
-use \Luminova\Email\Clients\MailClientInterface;
-use \PHPMailer\PHPMailer\PHPMailer as PHPMailerClient;
+use \Luminova\Interface\MailClientInterface;
+use \PHPMailer\PHPMailer\PHPMailer as MailerClient;
 
-class PHPMailer extends PHPMailerClient implements MailClientInterface
+class PHPMailer extends MailerClient implements MailClientInterface
 {
     /**
      * Constructor.

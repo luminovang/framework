@@ -10,61 +10,112 @@
 
 namespace Luminova\Base;
 
-use \Luminova\Functions\FunctionTrait;
-use \Luminova\Functions\StringTrait;
+use \Luminova\Functions\Escaper;
+use \Luminova\Functions\IPAddress;
+use \Luminova\Functions\Files;
+use \Luminova\Functions\TorDetector;
+use \Luminova\Functions\Maths;
+use \Luminova\Functions\NormalizerTrait;
+use \Luminova\Exceptions\InvalidArgumentException;
 
 abstract class BaseFunction
 {
     /**
-     * Flag for gnerating random numbers.
-     * 
-     * @var string RANDOM_INT
+     * @var array $instance method instances
     */
-    public const RANDOM_INT = "int";
+    private static array $instances = [];
 
     /**
-     * Flag for gnerating random characters.
-     * 
-     * @var string RANDOM_CHAR
+     * Adds helper class for basic string helper functions.
+     *
+     * @see \Luminova\Functions\NormalizerTrait;
+     * @see https://luminova.ng/docs/0.0.0/functions/normalizer
     */
-	public const RANDOM_CHAR = "char";
+    use NormalizerTrait;
 
     /**
-     * Flag for gnerating random string.
-     * 
-     * @var string RANDOM_STR
+     * Initalize or return a shared an instance of the IP address class.
+     *
+     * @return IPAddress Returns a ip address class instance
     */
-	public const RANDOM_STR = "str";
+    public static function ip(): IPAddress
+    {
+        return static::$instances['ip'] ??= new IPAddress();
+    }
 
     /**
-     * Flag for gnerating random salt.
-     * 
-     * @var string RANDOM_SALT
+     * Initalize or return a shared an instance of the Files class.
+     *
+     * @return Files Returns a file class instance
     */
-	public const RANDOM_SALT = "salt";
+    public static function files(): Files
+    {
+        return static::$instances['files'] ??= new Files();
+    }
 
     /**
-     * Flag for gnerating random ssid.
-     * 
-     * @var string RANDOM_SID
+     * Initalize or return a shared an instance of the tor detector class.
+     *
+     * @return TorDetector Returns a tor detector class instance
     */
-	public const RANDOM_SID = "sid";
+    public static function tor(): TorDetector
+    {
+        return static::$instances['tor'] ??= new TorDetector();
+    }
+
+     /**
+     * Initalize or return a shared an instance of the math class.
+     *
+     * @return Maths Returns a math class instance
+    */
+    public static function math(): Maths
+    {
+        return static::$instances['math'] ??= new Maths();
+    }
 
     /**
-     * Flag for gnerating random uuid.
+     * Escapes a string or array of strings based on the specified context.
+     *
+     * @param string|array $input The string or array of strings to be escaped.
+     *  - @example @var array<string, string> - Use the key as the context.
+     *  - @example @var array<int, string> Use the default context fall all values.
+     * @param string $context The context in which the escaping should be performed.
+     *                        Possible values: 'html', 'js', 'css', 'url', 'attr', 'raw'.
+     * @param string|null $encoding The character encoding to use. Defaults to null.
      * 
-     * @var string RANDOM_UUID
-    */
-	public const RANDOM_UUID = "uui";
+     * @return array|string The escaped string or array of strings.
+     * @throws InvalidArgumentException|Exception When an invalid escape context is provided.
+     * @throws BadMethodCallException When the called method does not exist.
+     * @throws RuntimeException When the string is not valid UTF-8 or cannot be converted.
+     */
+    public static function escape(string|array $input, string $context = 'html', ?string $encoding = null): array|string
+    {
+        if (is_array($input)) {
+            array_walk_recursive($input, function (&$value, $key) use ($context, $encoding) {
+                $context = is_string($key) ? $key : $context;
+                $value = static::escape($value, $context, $encoding);
+            });
+        } elseif (is_string($input)) {
+            $context = strtolower($context);
 
-    /**
-     * Flag for gnerating random password.
-     * 
-     * @var string RANDOM_PASS
-    */
-	public const RANDOM_PASS = "pass";
+            if ($context === 'raw') {
+                return $input;
+            }
 
-    use FunctionTrait;
-    use StringTrait;
+            if (!in_array($context, ['html', 'js', 'css', 'url', 'attr'], true)) {
+                throw new InvalidArgumentException('Invalid escape context provided.');
+            }
 
+            $method = $context === 'attr' ? 'escapeHtmlAttr' : 'escape' . ucfirst($context);
+            static $escaper;
+
+            if (!$escaper || ($encoding && $escaper->getEncoding() !== $encoding)) {
+                $escaper = new Escaper($encoding);
+            }
+
+            $input = $escaper->{$method}($input);
+        }
+
+        return $input;
+    }
 }

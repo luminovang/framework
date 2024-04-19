@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Luminova Framework
  *
@@ -7,166 +8,93 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
+
 namespace Luminova\Time;
 
 use \Luminova\Time\Time;
 use \DateTimeZone;
 use \DateInterval;
+use \Luminova\Exceptions\InvalidArgumentException;
 
 class Task
 {
-    public static function create(string $timeDate, string $timezone = 'GMT')
-    {
-        return Time::fromFormat('Y-m-d H:iA', $timeDate, $timezone);
-    }
-
     /**
-     * Function responsible for corn-job deal opening.
-     *
-     * @param string $startDate 2023-09-25
-     * @param string $startTime 17:00PM
-     * @param string $timezone
-     *
-     * @return bool
-     */
-    public static function isActive(string $startDate, string $startTime, string $timezone = 'GMT'): bool
-    {
-        $startTime = self::create(self::toDateTime($startDate . ' ' . $startTime),  $timezone);
-        $nowTime = Time::now($timezone);
-        return $nowTime >= $startTime;
-    }
-
-    /**
-     * Check between opening and closing time has passed
+     * Check if the current time is between opening and closing times.
      * 
-     * @param string $open 2023-09-25 08:00AM
-     * @param string $close 2023-09-25 17:00PM
-     * @param string $timezone
+     * @param string $openDatetime Opening date and time (e.g., '2023-09-25 08:00AM').
+     * @param string $closeDatetime Closing date and time (e.g., '2023-09-25 05:00PM').
+     * @param null|DateTimeZone|string $timezone Optional timezone string.
      *
-     * @return bool
+     * @return bool Returns true if the task is still open, false otherwise.
+     * 
+     * > This utility function is useful for checking business opening and closing hours.
      */
-    public static function isOpen(string $open, string $close, string $timezone = 'GMT'): bool
+    public static function isOpen(string $openDatetime, string $closeDatetime, null|DateTimeZone|string $timezone = 'UTC'): bool
     {
-        $openTime = self::create($open,  $timezone);
-        $closeTime = self::create($close,  $timezone);
+        $opening = static::format($openDatetime, $timezone);
+        $closing = static::format($closeDatetime, $timezone);
         $nowTime = Time::now($timezone);
-        
-        if ($closeTime <= $openTime) {
-            $closeTime->add(new DateInterval('P1D'));
+
+        if ($closing <= $opening) {
+            $closing->add(new DateInterval('P1D'));
         }
 
-        return ($nowTime > $openTime && $nowTime >= $closeTime);
+        return ($nowTime > $opening && $nowTime >= $closing);
     }
 
     /**
-     * Function to check if a given expiry date and time has passed.
+     * Check if a given date and time has passed.
      *
-     * @param string $expiryDateTime
-     * @param string $timezone
+     * @param string $datetime The expiration date and time (e.g., '2023-09-25 08:00AM').
+     * @param null|DateTimeZone|string $timezone Optional timezone string.
      *
-     * @return bool
+     * @return bool Returns true if the task has expired, false otherwise.
+     * 
+     * > Useful for checking if a deal or promo code has expired.
      */
-    public static function expired(string $expiryDateTime, string $timezone = 'UTC'): bool
+    public static function expired(string $datetime, null|DateTimeZone|string $timezone = 'UTC'): bool
     {
-        $currentDatetime = Time::now($timezone);
-        $expiryDatetime = Time::parse($expiryDateTime, $timezone);
-        return ($expiryDatetime < $currentDatetime);
+        $now = Time::now($timezone);
+        $expiration = Time::parse($datetime, $timezone);
+
+        return $now >= $expiration;
     }
 
     /**
-     * Function to check if a campaign has expired.
+     * Check if the given date is within a specified number of days before expiration.
      *
-     * @param string $open
-     * @param string $timezone
+     * @param string $datetime Expiration date and time (e.g., '2023-09-25 08:00AM').
+     * @param int $days Number of days to check before expiration (default: 2). 
+     * @param null|DateTimeZone|string $timezone Optional timezone string.
      *
-     * @return bool
+     * @return bool Returns true if it's within the specified number of days before expiration.
+     * @throws InvalidArgumentException If invalid days was passed.
+     * 
+     * > This method is useful to check and send notification days before subscription expiration.
      */
-    public static function campaignExpired(string $open, string $timezone = 'GMT'): bool
+    public static function before(string $datetime, int $days = 2, null|DateTimeZone|string $timezone = 'UTC'): bool
     {
-        $nowTime = Time::now($timezone);
-        $startTime = self::create($open,  $timezone);
-        $openTime = $startTime->modify('-2 days');
-
-        return ($nowTime >= $openTime);
-    }
-
-    /**
-     * Function to check if an event has expired.
-     *
-     * @param string $start
-     * @param string $timezone
-     * @param bool $format
-     *
-     * @return bool
-     */
-    public static function hasExpired(string $start, string $timezone = 'GMT',  bool $format = false): bool
-    {
-        if ($format) {
-            [$date, $time] = explode(' ', $start);
-            $startTime = Time::parse(self::format($date, $time), $timezone);
-        } else {
-            $startTime = self::create($start,  $timezone);
+        if($days < 1){
+            throw new InvalidArgumentException('Days must be greater than 0 and non-negative integer.');
         }
-        
-        $nowTime = Time::now($timezone);
 
-        return $nowTime >= $startTime;
+        $nowTime = Time::now($timezone);
+        $expirs = static::format($datetime,  $timezone);
+        $threshhold = $expirs->modify("-{$days} days");
+
+        return ($nowTime >= $threshhold);
     }
 
     /**
-     * Check if a certain amount of minutes has passed since the given timestamp.
-     *
-     * @param int|string $timestamp Either a Unix timestamp or a string representing a date/time.
-     * @param int $minutes The number of minutes to check against.
-     * @param null|DateTimeZone|string $timezone Optional timezone. If null, the default timezone is used.
-     *
-     * @return bool True if the specified minutes have passed, false otherwise.
+     * Format datetime to 'Y-m-d H:iA'.
+     * 
+     * @param string $datetime Date and time to format.
+     * @param null|DateTimeZone|string $timezone Optional timezone string.
+     * 
+     * @return Time Returns a new Time instance.
     */
-    public static function hasPassed($timestamp, int $minutes, null|DateTimeZone|string $timezone = null): bool {
-
-        $dateTimestamp = is_numeric($timestamp) ? Time::parse("@$timestamp", $timezone): Time::fromFormat('Y-m-d H:i:s', $timestamp, $timezone);
-
-        if (!$dateTimestamp) {
-            return false;
-        }
-
-        $dateTimeNow = Time::now($timezone);
-
-        // Calculate the interval between the two DateTime objects
-        $interval = $dateTimeNow->diff($dateTimestamp);
-
-        // Get the total minutes difference
-        $minutesDifference = $interval->days * 24 * 60 + $interval->h * 60 + $interval->i;
-
-        return $minutesDifference >= $minutes;
-    }
-
-    /**
-     * Function to format date and time.
-     *
-     * @param string $date
-     * @param string $time
-     *
-     * @return string|false
-     */
-    public static function format(string $date, string $time): mixed
+    private static function format(string $datetime, null|DateTimeZone|string $timezone = 'UTC'): Time
     {
-        $time = date('h:i:sA', strtotime($time));
-        $setDate = $date . ' ' . $time;
-        $build = date_create($setDate);
-
-        return $build ? date_format($build, 'M d, Y H:i:s') : $build;
-    }
-
-    /**
-     * Function to convert a string to a formatted date and time.
-     *
-     * @param string $string
-     *
-     * @return string
-     */
-    public static function toDateTime(string $string): string
-    {
-        return date('Y-m-d H:iA', strtotime($string));
+        return Time::fromFormat('Y-m-d H:iA', $datetime, $timezone);
     }
 }

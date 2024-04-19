@@ -10,22 +10,31 @@
 namespace Luminova\Template;
 
 use \Luminova\Functions\Files;
+use \Luminova\Http\Header;
+use \Luminova\Http\Encoder;
 
 class ViewResponse 
 {
     /**
      * @var int $statusCode
     */
-    private int $statusCode = 200; 
+    private static int $statusCode = 200; 
+
+    /**
+     * @var bool $enableEncoding
+    */
+    private static bool $enableEncoding = true;
 
     /**
      * Response constructor.
      *
      * @param int $status HTTP status code (default: 200 OK)
+     * @param bool $encode Enable content encoding like gzip.
      */
-    public function __construct(int $status = 200)
+    public function __construct(int $status = 200, bool $encode = true)
     {
-        $this->statusCode = $status;
+        static::$statusCode = $status;
+        static::$enableEncoding = $encode;
     }
 
     /**
@@ -33,11 +42,25 @@ class ViewResponse
      *
      * @param int $status HTTP status code (default: 200 OK)
      * 
-     * @return self $this
+     * @return self $this Return class instance.
      */
     public function setStatus(int $status = 200): self 
     {
-        $this->statusCode = $status;
+        static::$statusCode = $status;
+
+        return $this;
+    }
+
+    /**
+     * Set status code
+     *
+     * @param bool $encode Enable content encoding like gzip.
+     * 
+     * @return self $this Return class instance.
+     */
+    public function encode(bool $encode): self 
+    {
+        static::$enableEncoding = $encode;
 
         return $this;
     }
@@ -47,22 +70,48 @@ class ViewResponse
      *
      * @param mixed $content Response content
      * @param string $contentType Content type of the response
-     */
-    public function render(string $content, string $contentType): void
+     * 
+     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR otherwise empty content or ening failed.
+    */
+    public static function render(string $content, string $contentType = 'application/json'): int
     {
-        http_response_code($this->statusCode);
+        if(empty($content)){
+            return STATUS_ERROR;
+        }
 
-        header("Content-Type: $contentType");
+        [$encoding, $content] = (static::$enableEncoding ? Encoder::encode($content) : [false, $content]);
+
+        if(empty($content)){
+            return STATUS_ERROR;
+        }
+
+        $headers = Header::getSystemHeaders();
+        $headers['Content-Type'] = $contentType;
+        $headers['Content-Length'] = (is_utf8($content) ? mb_strlen($content, 'utf8') : strlen($content));
+
+        if ($encoding !== false) {
+            $headers['Content-Encoding'] = $encoding;
+        }
+
+        http_response_code(static::$statusCode);
+ 
+        foreach ($headers as $header => $value) {
+            header("$header: $value");
+        }
 
         echo $content;
+
+        return STATUS_SUCCESS;
     }
 
     /**
      * Send a JSON response.
      *
      * @param array|object $content Data to be encoded as JSON
+     * 
+     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR otherwise empty content or ening failed.
      */
-    public function json(array|object $content): void 
+    public function json(array|object $content): int 
     {
         if (is_object($content)) {
             $content = (array) $content;
@@ -70,62 +119,57 @@ class ViewResponse
 
         $body = json_encode($content);
 
-        $this->render($body, 'application/json');
+        return static::render($body, 'application/json');
     }
 
     /**
      * Send a plain text response.
      *
      * @param string $content Text content
+     * 
+     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR otherwise empty content or ening failed.
      */
-    public function text(string $content): void 
+    public function text(string $content): int 
     {
-        $this->render($content, 'text/plain');
+        return static::render($content, 'text/plain');
     }
 
     /**
      * Send an HTML response.
      *
-     * @param string $content HTML content
+     * @param string $content HTML content.
+     * 
+     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR otherwise empty content or ening failed.
      */
-    public function html(string $content): void 
+    public function html(string $content): int 
     {
-        $this->render($content, 'text/html');
+        return static::render($content, 'text/html');
     }
 
     /**
      * Send an XML response.
      *
-     * @param string $content XML content
-     */
-    public function xml(string $content): void 
-    {
-        $this->render($content, 'application/xml');
-    }
-
-    /**
-     * Write content to a file and send as a download response.
-     *
-     * @param mixed $content Content to be written to the file
-     * @param string $filename Name of the file to be downloaded
+     * @param string $content XML content.
      * 
-     * @return bool True if the content was saved successful, false otherwise
+     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR otherwise empty content or ening failed.
      */
-    public function write(mixed $content, string $filename): bool 
+    public function xml(string $content): int 
     {
-       return write_content($filename, $content);
+        return static::render($content, 'application/xml');
     }
 
     /**
-     * Download a file as a response.
+     * Download a file
      *
-     * @param string $path Path to the file to be downloaded
-     * @param string|null $name (Optional) Name to be used for the downloaded file
+     * @param string $fileOrContent Path to the file or content to be downloaded
+     * @param string|null $name Optional Name to be used for the downloaded file
+     * @param array $headers Optional download headers.
+     * 
      * @return bool True if the download was successful, false otherwise
      */
-    public function download(string $path, ?string $name = null): bool 
+    public function download(string $fileOrContent, ?string $name = null, array $headers = []): bool 
     {
-        return Files::download($path, $name);
+        return Files::download($fileOrContent, $name, $headers);
     }
 
     /** 
@@ -140,6 +184,6 @@ class ViewResponse
     {
         header("Location: $url", true, $response_code);
 
-        exit();
+        exit(0);
     }
 }

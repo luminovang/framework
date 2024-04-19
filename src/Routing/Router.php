@@ -9,13 +9,17 @@
  */
 namespace Luminova\Routing;
 
+use \App\Controllers\Config\ViewErrors;
 use \Luminova\Http\Header;
 use \Luminova\Command\Terminal;
 use \Luminova\Routing\Bootstrap;
+use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseApplication;
 use \Luminova\Base\BaseViewController;
 use \Luminova\Routing\RouterException;
 use \ReflectionMethod;
+use \ReflectionFunction;
+use \ReflectionNamedType;
 use \ReflectionException;
 use \ReflectionClass;
 use \Closure;
@@ -27,7 +31,7 @@ final class Router
      * 
      * @var array<string, array> $controllers
     */
-    private array $controllers = [
+    private static array $controllers = [
         'routes' => [], 'routes_after' => [], 'routes_middleware' => [], 
         'cli_routes' => [], 'cli_middleware' => [], 'errors' => []
     ];
@@ -44,14 +48,7 @@ final class Router
      * 
      * @var string $method
     */
-    private string $method = '';
-
-    /**
-     * CLI request command name
-     * 
-     * @var string $commandName 
-    */
-    private string $commandName = '';
+    private static string $method = '';
 
     /**
      * Server base path for router
@@ -68,11 +65,18 @@ final class Router
     private static array $namespace = [];
 
     /**
+     * Command router groups
+     * 
+     * @var array $groups
+    */
+    private static array $groups = [];
+
+    /**
      * All allowed HTTP request methods
      * 
-     * @var string ALL_METHODS
+     * @var string $httpStrMethods
     */
-    private const ALL_METHODS = 'GET|POST|PUT|DELETE|OPTIONS|PATCH|HEAD';
+    private static $httpStrMethods = 'GET|POST|PUT|DELETE|OPTIONS|PATCH|HEAD';
 
     /**
      * @var Terminal $terminal 
@@ -80,64 +84,52 @@ final class Router
     private static ?Terminal $terminal = null;
 
     /**
-     * HTTP middleware, it captures the front controller request method and patterns to handle middleware authentication before executing other routes.
-     * If middleware callback returns "STATUS_ERROR" the execution will be terminatated 
+     * @var BaseApplication $application 
+    */
+    private static ?BaseApplication $application = null;
+
+    /**
+     * Before HTTP middleware, it captures the front controller request method and patterns to handle middleware authentication before executing other routes.
+     * If middleware callback returns "STATUS_ERROR" the execution will be terminated 
      * resulting the following to be ignored as a result of failed authentication else if it return "STATUS_SUCCESS" the following routes will be executed.
      *
      * @param string  $methods  Allowed methods, can be serrated with | pipe symbol
      * @param string  $pattern A route pattern or template view name
-     * @param callable|string $callback Callback function to execute
+     * @param Closure|string $callback Callback function to execute
      * 
      * @return void
     */
-    public function before(string $methods, string $pattern, callable|string $callback): void
-    {
-        if ($methods === '') {
-            return;
-        }
-
-        $this->addMiddleWare('routes_middleware', $methods, $pattern, $callback, true);
-    }
-
-    /**
-     * HTTP and CLI middleware, it captures the front controller request method and patterns to handle middleware authentication before executing other routes
-     * If middleware callback returns "STATUS_ERROR" the execution will be terminatated 
-     * resulting the following to be ignored as a result of failed authentication else if it return "STATUS_SUCCESS" the following routes will be executed.
-     *  
-     * @param string $methods  Allowed methods, can be serrated with | pipe symbol
-     * @param string $pattern A route pattern or template view name
-     * @param callable|string $callback Callback function to execute
-     * 
-     * @return void
-    */
-    public function middleware(string $methods, string $pattern, callable|string $callback): void
+    public function middleware(string $methods, string $pattern, Closure|string $callback): void
     {
         if(is_command()){
-            $this->authenticate($pattern, $callback);
-            return;
+            RouterException::throwWith('invalid_middleware');
         }
 
         if ($methods === '') {
             return;
         }
 
-        $this->addMiddleWare('routes_middleware', $methods, $pattern, $callback, true);
+        $this->authentication('routes_middleware', $methods, $pattern, $callback, true);
     }
 
     /**
-     * CLI middleware, it captures the front controller request method and patterns to handle middleware authentication before executing other routes.
-     * If middleware callback returns "STATUS_ERROR" the execution will be terminatated 
+     * Before CLI middleware, it captures the front controller request method and patterns to handle middleware authentication before executing other routes.
+     * If middleware callback returns "STATUS_ERROR" the execution will be terminated 
      * resulting the following to be ignored as a result of failed authentication else if it return "STATUS_SUCCESS" the following routes will be executed.
      *
-     * @param callable|string $pattern Allowed command pattern, script name or callback function
-     * @param callable|string $callback Callback function to execute
+     * @param Closure|string $pattern Allowed command pattern, script name or callback function
+     * @param Closure|string $callback Callback function to execute
      * @param array $options Optional options
      * 
      * @return void
     */
-    public function authenticate(callable|string $pattern, callable|string $callback = null, array $options = []): void
+    public function before(Closure|string $pattern, Closure|string $callback = null, array $options = []): void
     {
-        if(is_callable($pattern)){
+        if(!is_command()){
+            RouterException::throwWith('invalid_cli_middleware');
+        }
+
+        if($pattern instanceof Closure) {
             $callback = $pattern;
             $parsedPattern = 'before';
             $isController = false;
@@ -147,7 +139,7 @@ final class Router
             $parsedPattern = $isController ? $build_pattern : trim($pattern, '/');
         }
     
-        $this->controllers['cli_middleware']["CLI"][] = [
+        static::$controllers['cli_middleware']['CLI'][] = [
             'callback' => $callback,
             'pattern' => $parsedPattern,
             'options' => $options,
@@ -161,17 +153,17 @@ final class Router
      *
      * @param string  $methods  Allowed methods, can be serrated with | pipe symbol
      * @param string  $pattern A route pattern or template view name
-     * @param callable|string $callback Callback function to execute
+     * @param Closure|string $callback Callback function to execute
      * 
      * @return void
     */
-    public function after(string $methods, string $pattern, callable|string $callback): void
+    public function after(string $methods, string $pattern, Closure|string $callback): void
     {
         if ($methods === '') {
             return;
         }
 
-        $this->addMiddleWare('routes_after', $methods, $pattern, $callback);
+        $this->authentication('routes_after', $methods, $pattern, $callback);
     }
 
     /**
@@ -179,11 +171,11 @@ final class Router
      *
      * @param string $methods Allowed methods, can be separated with | pipe symbol
      * @param string $pattern A route pattern or template view name
-     * @param callable|string $callback Callback function to execute
+     * @param Closure|string $callback Callback function to execute
      * 
      * @return void
     */
-    public function capture(string $methods, string $pattern, callable|string $callback): void
+    public function capture(string $methods, string $pattern, Closure|string $callback): void
     {
         if ($methods === '') {
             return;
@@ -194,7 +186,7 @@ final class Router
         $pipes = explode('|', $methods);
 
         foreach ($pipes as $method) {
-            $this->controllers['routes'][$method][] = [
+            static::$controllers['routes'][$method][] = [
                 'pattern' => $pattern,
                 'callback' => $callback,
                 'middleware' => false
@@ -205,116 +197,37 @@ final class Router
     /**
      * Capture front controller command request names and execute callback
      *
-     * @param string $pattern Allowed command pattern or script name
-     * @param callable|string $callback Callback function to execute
-     * @param array $options Optional params to pass to command constructor
+     * @param string $pattern Allowed command pattern or script name.
+     * @param Closure|string $callback Callback function to execute.
      * 
      * @return void
     */
-    public function command(string $pattern, callable|string $callback, ?array $options = []): void
+    public function command(string $pattern, Closure|string $callback): void
     {
         $build_pattern = static::parsePatternValue($pattern);
         $isController = ($build_pattern !== false);
         $parsedPattern = $isController ? $build_pattern : trim($pattern, '/');
        
-        $this->controllers['cli_routes']["CLI"][] = [
+        static::$controllers['cli_routes']["CLI"][] = [
             'callback' => $callback,
             'pattern' => $parsedPattern,
-            'options' => $options,
+            //'options' => $options,
             'controller' => $isController,
             'middleware' => false
         ];
     }
 
     /**
-     * A shorthand for route capture method to handle any type of rquest method.
+     * A shorthand for route capture method to handle any type of request method.
      *
      * @param string $pattern A route pattern or template view name
-     * @param callable|string $callback Handle callback for router
+     * @param Closure|string $callback Handle callback for router
      * 
      * @return void
     */
-    public function any(string $pattern, callable|string $callback): void
+    public function any(string $pattern, Closure|string $callback): void
     {
-        $this->capture(static::ALL_METHODS, $pattern, $callback);
-    }
-
-    /**
-     * Get, a shorthand for route capture method to handle "GET" rquest method.
-     *
-     * @param string pattern A route pattern or template view name
-     * @param callable|string $callback  Handle callback for router
-     * 
-     * @return void
-    */
-    public function get(string $pattern, callable|string $callback): void
-    {
-        $this->capture('GET', $pattern, $callback);
-    }
-
-    /**
-     * Post, a shorthand for route capture method to handle "POST" rquest method.
-     *
-     * @param string  $pattern A route pattern or template view name
-     * @param callable|string $callback Callback function to execute
-     * 
-     * @return void
-    */
-    public function post(string $pattern, callable|string $callback): void
-    {
-        $this->capture('POST', $pattern, $callback);
-    }
-
-    /**
-     * Patch, a shorthand for route capture method to handle "PATVH" rquest method.
-     *
-     * @param string  $pattern A route pattern or template view name
-     * @param callable|string $callback Handle callback for router
-     * 
-     * @return void
-    */
-    public function patch(string $pattern, callable|string $callback): void
-    {
-        $this->capture('PATCH', $pattern, $callback);
-    }
-
-    /**
-     * Delete, a shorthand for route capture method to handle "DELETE" rquest method.
-     *
-     * @param string $pattern A route pattern or template view name
-     * @param callable|string $callback Callback function to execute
-     * 
-     * @return void
-    */
-    public function delete(string $pattern, callable|string $callback): void
-    {
-        $this->capture('DELETE', $pattern, $callback);
-    }
-
-    /**
-     * Put, a shorthand for route capture method to handle "PUT" rquest method.
-     *
-     * @param string $pattern A route pattern or template view name
-     * @param callable|string $callback Callback function to execute
-     * 
-     * @return void
-    */
-    public function put(string $pattern, callable|string $callback): void
-    {
-        $this->capture('PUT', $pattern, $callback);
-    }
-
-    /**
-     * Options, a shorthand for route capture method to handle "OPTIONS" rquest method.
-     *
-     * @param string $pattern A route pattern or template view name
-     * @param callable|string $callback Callback function to execute
-     * 
-     * @return void
-    */
-    public function options(string $pattern, callable|string $callback): void
-    {
-        $this->capture('OPTIONS', $pattern, $callback);
+        $this->capture(static::$httpStrMethods, $pattern, $callback);
     }
 
     /**
@@ -338,7 +251,50 @@ final class Router
             return;
         }
         
-        RouterException::throwWith('invalid_argument', 0, '$callback', 'callable', gettype($callback));
+        RouterException::throwWith('invalid_argument', 0, null, '$callback', 'callable', gettype($callback));
+    }
+
+    /**
+     * Binds a command route group.
+     *
+     * @param string $group The binding group name.
+     * @param Closure $callback Callback command function to handle group
+     * 
+     * @return void
+     * @throws RouterException If invalid callback is provided
+    */
+    public function group(string $group, Closure $callback): void
+    {
+        if ($callback instanceof Closure) {
+            static::$groups[$group][] = $callback;
+            return;
+        }
+
+        RouterException::throwWith('invalid_argument', 0, null, '$callback', 'callable', gettype($callback));
+    }
+
+    /**
+     * A shorthand for route capture https methods to handle "METHOD" request method.
+     *
+     * @param string  $pattern A route pattern or template view name
+     * @param Closure|string $callback Handle callback for router
+     * 
+     * @return mixed
+     * @throws RouterException If method does not exist.
+    */
+    public function __call(string $name, mixed $arguments): mixed
+    {
+        $method = strtoupper($name);
+
+        if (in_array($method, Header::$httpMethods, true)) {
+            return $this->capture($method, ...$arguments);
+        }
+
+        if(method_exists($this, $name)){
+            return $this->{$name}(...$arguments);
+        }
+
+        throw new RouterException("Method $name does not exist");
     }
 
     /**
@@ -354,21 +310,22 @@ final class Router
     */
     public function bootstraps(BaseApplication $application, Bootstrap ...$callbacks): void 
     {
-        $methods = explode('|', static::ALL_METHODS);
+        $methods = Header::$httpMethods;
         $methods[] = 'CLI'; //Fake a request method for cli
-        $method = Header::getRoutingMethod();
+        static::$method  = Header::getRoutingMethod();
+        static::$application = $application;
 
-        if (in_array($method, $methods)) {
-            $firstSegment = $this->getFirstSegment();
+        if (in_array(static::$method , $methods)) {
+            $firstSegment = $this->getFirst();
             $routeInstances = Bootstrap::getInstances();
             $current = $this->routeBase;
 
             foreach ($callbacks as $bootstrap) {
                 $name = $bootstrap->getName();
+
                 if ($name !== '') {
                     $errorHandler = $bootstrap->getErrorHandler();
-                    $withError = ($errorHandler !== null && is_callable($errorHandler));
-                    $this->reset();
+                    static::reset();
 
                     if($firstSegment === $name) {
                         if ($name === Bootstrap::CLI){
@@ -377,8 +334,8 @@ final class Router
                             if(!is_command()) {
                                 return;
                             }
-                        }elseif($withError){
-                            $this->setErrorHandler($errorHandler);
+                        }elseif($errorHandler !== null){
+                            $this->setErrorListener($errorHandler);
                         }
                    
                         if (in_array($name, $routeInstances)) {  
@@ -388,8 +345,8 @@ final class Router
                         static::boot($name, $this, $application);
                         break;
                     }elseif (!in_array($firstSegment, $routeInstances) && static::isWeContext($name, $firstSegment)) {
-                        if($withError){
-                            $this->setErrorHandler($errorHandler);
+                        if($errorHandler !== null){
+                            $this->setErrorListener($errorHandler);
                         }
 
                         static::boot($name, $this, $application);
@@ -397,8 +354,34 @@ final class Router
                     }
                 }
             }
+
             $this->routeBase = $current;
         }
+    }
+
+     /**
+     * Boot route context
+     *
+     * @param string $context bootstrap route context name
+     * @param Router $router  Make router instance available in route
+     * @param BaseApplication $app Make application instance available in route
+     * 
+     * @return void
+     * @throws RouterException
+    */
+    private static function boot(string $context, Router $router, BaseApplication $app): void 
+    {
+        if (is_file(APP_ROOT . "/routes/{$context}.php")) {
+            require_once APP_ROOT . "/routes/{$context}.php";
+
+            return;
+        } 
+
+        static::printError(
+            '500 Internal Server Error', 
+            RouterException::withMessage('invalid_context', $context), 
+            500
+        );
     }
 
     /**
@@ -412,7 +395,7 @@ final class Router
     public function addNamespace(string $namespace): void
     {
         if($namespace === '') {
-            RouterException::throwWith('empty_argument', 0, '$namespace');
+            RouterException::throwWith('empty_argument', 0, null, '$namespace');
 
             return;
         }
@@ -454,21 +437,14 @@ final class Router
     /**
      * Run application routes, loop all defined routing methods to call controller 
      * if method matches view  or command name.
-     *
-     * @param null|callable $callback Optional final callback function to execute after run
      * 
      * @return void
      * @throws RouterException Encounter error while executing controller callback
     */
-    public function run(?callable $callback = null): void
+    public function run(): void
     {
-        $this->method = Header::getRoutingMethod();
-       
-        $status = ($this->method === 'CLI' ? $this->runAsCommand() : $this->runAsHttp());
-       
-        if ($status && $callback !== null && is_callable($callback)) {
-            $callback();
-        }
+        //static::$method = Header::getRoutingMethod();
+        $status = static::$method === 'CLI' ? static::runAsCommand() : $this->runAsHttp();
 
         if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] == 'HEAD') {
             ob_end_clean();
@@ -478,19 +454,19 @@ final class Router
     }
 
     /**
-     * Set an error handling callback function.
+     * Set an error listener callback function.
      *
-     * @param callable $match Matching route pattern
-     * @param null|callable $callback Optional error callback handler function
-     * 
+     * @param Closure|string|array<int,string> $match Matching route pattern
+     * @param Closure|array<int,string>|null $callback Optional error callback handler function
+     *  
      * @return void
     */
-    public function setErrorHandler(mixed $match, ?callable $callback = null): void
+    public function setErrorListener(Closure|string|array $match, Closure|array|null $callback = null): void
     {
         if ($callback === null) {
-            $this->controllers['errors']['/'] = $match;
+            static::$controllers['errors']['/'] = $match;
         } else {
-            $this->controllers['errors'][$match] = $callback;
+            static::$controllers['errors'][$match] = $callback;
         }
     }
 
@@ -503,26 +479,21 @@ final class Router
     */
     public function triggerError(int $status = 404): void
     {
-        $status = false;
-
-        if (count($this->controllers['errors']) > 0)
-        {
-            foreach ($this->controllers['errors'] as $pattern => $callable) {
-                $isMatch = static::uriMatchedPattern($pattern, $this->getSegmentUri(), $matches);
-                if ($isMatch) {
-                    //$params = static::matchesToArray($matches);
-                    $status = static::execute($callable);
-                    break;
-                }
+        $result = false;
+  
+        foreach (static::$controllers['errors'] as $pattern => $callable) {
+            if (static::uriCapture($pattern, $this->getUriSegments(), $matches)) {
+                $result = static::call($callable, [], true);
+                break;
             }
         }
 
-        if(!$status){
-            if(isset($this->controllers['errors']['/'])){
-                static::execute($this->controllers['errors']['/']);
-            }else{
-                static::printError('Error file not found', null, $status);
-            }
+        if (!$result && isset(static::$controllers['errors']['/'])) {
+            $result = static::call(static::$controllers['errors']['/'], [], true);
+        }
+
+        if (!$result) {
+            static::printError('Error file not found', null, $status);
         }
     }
 
@@ -538,9 +509,7 @@ final class Router
     */
     private static function printError(string $header, ?string $message = null, int $status = 404): void 
     {
-        http_response_code($status);
-        header(SERVER_PROTOCOL . $header);
-
+        Header::headerNoCache($status);
         if($message){
             echo "<html><body><h1>{$header}</h1><p>{$message}</p></body></html>";
         }
@@ -552,6 +521,7 @@ final class Router
      * Get list of registered controller namespaces
      *
      * @return array<int, string> Registered namespaces
+     * @internal
     */
     public static function getNamespaces(): array
     {
@@ -567,11 +537,9 @@ final class Router
     {
         if ($this->base === null) {
             if (isset($_SERVER['SCRIPT_NAME'])) {
-                //$this->base = implode('/', array_slice(explode('/', $_SERVER['SCRIPT_NAME']), 0, -1)) . '/';
                 $script = $_SERVER['SCRIPT_NAME'];
-                $last = strrpos($script, '/');
-                
-                if ($last !== false && $last > 0) {
+
+                if (($last = strrpos($script, '/')) !== false && $last > 0) {
                     $this->base = substr($script, 0, $last) . '/';
 
                     return $this->base;
@@ -584,12 +552,13 @@ final class Router
         return $this->base;
     }
 
+
     /**
      * Get the current segment relative URI.
      * 
      * @return string Relative paths
     */
-    public function getSegmentUri(): string
+    public function getUriSegments(): string
     {
         if (isset($_SERVER['REQUEST_URI'])) {
             $uri = rawurldecode($_SERVER['REQUEST_URI']);
@@ -610,115 +579,15 @@ final class Router
     }
 
     /**
-     * Get the current view segments as array.
+     * Get segment class instance 
      * 
-     * @return array<int, string> Array list of url segments
+     * @return Segments Segments instance
     */
-    public function getSegments(): array
+    public function getSegment(): Segments 
     {
-        $baseView = trim($this->getSegmentUri(), '/');
-        $segments = explode('/', $baseView);
-        $public = array_search('public', $segments);
-
-        if ($public !== false) {
-            array_splice($segments, $public, 1);
-        }
-
-        return $segments;
+        return new Segments($this->getSegments());
     }
 
-    /**
-     * Get the current view uri segment by index position.
-     * 
-     * @param int $index Position index to return segment
-     * 
-     * @return string view segment
-    */
-    public function getSegmentIndex(int $index = 0): string
-    {
-        $segments = $this->getSegments();
-
-        return $segments[$index] ?? '';
-    }
-
-    /**
-     * Get first segment of current view uri.
-     * 
-     * @return string First url segment
-    */
-    public function getFirstSegment(): string
-    {
-        $segments = $this->getSegments();
-
-        return reset($segments);
-    }
-    
-    /**
-     * Get the last segment of current view uri.
-     * 
-     * @return string Current uri segment 
-    */
-    public function getSegment(): string 
-    {
-        $segments = $this->getSegments();
-
-        return end($segments);
-    }
-
-    /**
-     * Get the current view segment before last segment.
-     * 
-     * @return string
-    */
-    public function getPreviousSegment(): string 
-    {
-        $segments = $this->getSegments();
-
-        if (count($segments) > 1) {
-            $secondToLastSegment = $segments[count($segments) - 2];
-
-            return $secondToLastSegment;
-        }
-
-        return '';
-    }
-    
-    /**
-     * Set application router base path
-     * 
-     * @param string $base Your application base path
-     * 
-     * @return void
-    */
-    public function setBase(string $base): void
-    {
-        $this->base = $base;
-    }
-
-    /**
-     * Boot route context
-     *
-     * @param string $context bootstrap route context name
-     * @param Router $router  Make router instance available in route
-     * @param BaseApplication $app Make application instance available in route
-     * 
-     * @return void
-     * @throws RouterException
-    */
-    private static function boot(string $context, Router $router, BaseApplication $app): void 
-    {
-        if (is_file(APP_ROOT . "/routes/{$context}.php")) {
-            require_once APP_ROOT . "/routes/{$context}.php";
-
-            return;
-        } 
-
-        static::printError(
-            '500 Internal Server Error', 
-            RouterException::withMessage('invalid_context', $context), 
-            500
-        );
-    }
 
     /**
      * Is bootstrap a web instance
@@ -744,21 +613,21 @@ final class Router
     }
 
     /**
-     * Register a middleware
+     * Register a middleware authentication
      *
      * @param string  $to group name
      * @param string  $methods  Allowed methods, can be serrated with | pipe symbol
      * @param string  $pattern A route pattern or template view name
-     * @param callable|string $callback Callback function to execute
+     * @param Closure|string $callback Callback function to execute
      * @param bool $exit is before middleware
      * 
      * @return void
     */
-    private function addMiddleWare(
+    private function authentication(
         string $to, 
         string $methods, 
         string $pattern, 
-        callable|string $callback, 
+        Closure|string $callback, 
         bool $exit = false
     ): void
     {
@@ -767,7 +636,7 @@ final class Router
         $pipes = explode('|', $methods);
 
         foreach ($pipes as $method) {
-            $this->controllers[$to][$method][] = [
+            static::$controllers[$to][$method][] = [
                 'pattern' => $pattern,
                 'callback' => $callback,
                 'middleware' => $exit
@@ -782,24 +651,40 @@ final class Router
      * @return bool
      * @throws RouterException
     */
-    private function runAsCommand(): bool
+    private static function runAsCommand(): bool
     {
-        if (isset($this->controllers['cli_middleware'][$this->method])) {
-            if(!$this->handleCommand($this->controllers['cli_middleware'][$this->method])){
+        $command = static::getArgument(2);
+        $group = static::getArgument();
+
+        if(static::terminal()->isHelp($group)){
+            static::terminal()->helper(null, true);
+
+            return true;
+        }
+
+        if (isset(static::$controllers['cli_middleware'][static::$method])) {
+            if(!static::handleCommand(static::$controllers['cli_middleware'][static::$method], $command)){
                 return false;
             }
         }
 
         $result = false;
-        $routes = $this->controllers['cli_routes'][$this->method] ?? null;
+        if(isset(static::$groups[$group])){
+            $groups = static::$groups[$group];
 
-        if ($routes !== null) {
-            $this->commandName = static::getCommandName();
-            $result = $this->handleCommand($routes);
+            foreach($groups as $register){
+                $register();
+            }
+
+            $routes = static::$controllers['cli_routes'][static::$method] ?? null;
+
+            if ($routes !== null) {
+                $result = static::handleCommand($routes, $command);
+            }
         }
 
         if (!$result) {
-            static::terminal()->error('Unknown command ' . static::terminal()->color("'{$this->commandName}'", 'red') . ' not found', null);
+            static::terminal()->error('Unknown command ' . static::terminal()->color("'{$command}'", 'red') . ' not found', null);
         }
 
         return $result;
@@ -815,21 +700,23 @@ final class Router
     private function runAsHttp(): bool
     {
         $result = true;
-       
-        if (isset($this->controllers['routes_middleware'][$this->method])) {
-            $result = $this->handleWebsite($this->controllers['routes_middleware'][$this->method]);
+        $uri = $this->getUriSegments();
+
+        if (isset(static::$controllers['routes_middleware'][static::$method])) {
+            $result = static::handleWebsite(static::$controllers['routes_middleware'][static::$method], $uri);
         }
 
         if($result){
             
             $result = false;
-            $routes = $this->controllers['routes'][$this->method] ?? null;
+            $routes = static::$controllers['routes'][static::$method] ?? null;
 
             if ($routes !== null) {
-                $result = $this->handleWebsite($routes);
+                $result = static::handleWebsite($routes, $uri);
+
                 if($result){
-                    if (isset($this->controllers['routes_after'][$this->method])) {
-                        $this->handleWebsite($this->controllers['routes_after'][$this->method]);
+                    if (isset(static::$controllers['routes_after'][static::$method])) {
+                        static::handleWebsite(static::$controllers['routes_after'][static::$method], $uri);
                     }
                 }
             }
@@ -846,20 +733,18 @@ final class Router
      * Handle a set of routes: if a match is found, execute the relating handling function.
      *
      * @param array $routes  Collection of route patterns and their handling functions
+     * @param string $uri  View URI
      *
      * @return bool $error error status [0 => true, 1 => false]
      * @throws RouterException if method is not callable or doesn't exist
     */
-    private function handleWebsite(array $routes): bool
+    private static function handleWebsite(array $routes, string $uri): bool
     {
         $error = false;
-        $uri = $this->getSegmentUri();
 
         foreach ($routes as $route) {
-            $isMatch = static::uriMatchedPattern($route['pattern'], $uri, $matches);
-
-            if ($isMatch) {
-                $error = static::execute($route['callback'], static::matchesToArray($matches));
+            if (static::uriCapture($route['pattern'], $uri, $matches)) {
+                $error = static::call($route['callback'], static::matchesToArray($matches));
 
                 if (!$route['middleware'] || (!$error && $route['middleware'])) {
                     break;
@@ -873,46 +758,53 @@ final class Router
     /**
     * Handle C=command router CLI callback class method with the given parameters 
     * using instance callback or reflection class
+    *
     * @param array $routes Command name array values
+    * @param string $command Command string
+    *
     * @return void $error error status [0 => true, 1 => false]
     *
     * @throws RouterException if method is not callable or doesn't exist
     */
-    private function handleCommand(array $routes): bool
+    private static function handleCommand(array $routes, string $command): bool
     {
-        $error = false;
-        $commands = static::terminal()->parseCommands($_SERVER['argv'] ?? []);
+        $passed = false;
+        $commands = static::terminal()->parseCommands($_SERVER['argv'] ?? [], true);
+        $queries = static::getArguments();
+        $argument = static::getArgument(2);
 
         foreach ($routes as $route) {
-            if ($route['controller']) {
-                $queries = static::terminal()->getRequestCommands();
-                $controllerView = trim($queries['view'], '/');
-                $isMatch = static::uriMatchedPattern($route['pattern'], $queries['view'], $matches);
+            if($route['controller']) {
+                $isMatch = static::uriCapture($route['pattern'], $queries['view'], $matches);
 
-                if ($isMatch || $controllerView === $route['pattern']) {
+                if($isMatch || $queries['view'] === $route['pattern']) {
 
-                    $parameter = $isMatch ? static::matchesToArray($matches) : [$commands];
-                    $error = static::execute($route['callback'], $parameter);
+                    if($isMatch){
+                        $commands['params'] = static::matchesToArray($matches);
+                    }
 
-                    if (!$route['middleware'] || (!$error && $route['middleware'])) {
+                    $passed = static::call($route['callback'], $commands);
+
+                    if (!$route['middleware'] || (!$passed && $route['middleware'])) {
                         break;
                     }
                 }
-            } elseif ($this->commandName === $route['pattern'] || $route['middleware']) {
-                $error = static::execute($route['callback'], [$commands]);
+            } elseif($command === $route['pattern'] || $route['middleware'] || static::terminal()->isHelp($argument)) {
+                $passed = static::call($route['callback'], $commands);
 
-                if (!$route['middleware'] || (!$error && $route['middleware'])) {
+                if (!$route['middleware'] || (!$passed && $route['middleware'])) {
                     break;
                 }
-            }else {
-                if(static::terminal()->hasCommand($this->commandName, $commands)){
-                   $error = true;
+            }else{
+                //Call framework command from controller class
+                if(static::terminal()->call($command, $commands)){
+                   $passed = true;
                    break;
                 }
             }
         }
 
-        return $error;
+        return $passed;
     }
 
     /**
@@ -937,103 +829,143 @@ final class Router
         return array_slice($params, 1);
     }
 
-    /*private static function matchesToArray(array $array): array
+    /**
+    * Dependency injection
+    *
+    * @param Closure|string|array $callback Class public callback or an extracted array params method eg: UserController:update
+    * @param array $arguments Method arguments to pass to callback method
+    * @param bool $injection Force use dpendancy injection. Default is false
+    *
+    * @return array 
+    * @internal 
+    */
+    private static function injection(Closure|string|array $callback, array $arguments = [], bool $injection = false): array
     {
-        $array = array_slice($array, 1);
-        $params = array_map(function ($match, $index) use ($array) {
-            if (isset($array[$index + 1]) && isset($array[$index + 1][0]) && is_array($array[$index + 1][0])) {
-                if ($array[$index + 1][0][1] > -1) {
-                    return trim(substr($match[0][0], 0, $array[$index + 1][0][1] - $match[0][1]), '/');
-                }
-            } 
-            
-            return isset($match[0][0]) && $match[0][1] != -1 ? trim($match[0][0], '/') : null;
-        }, $array, array_keys($array));
+        $injection = $injection || (bool) env('feature.route.dependency.injection', false);
 
-        return $params;
-    }*/
+        if (!$injection) {
+            return $arguments;
+        }
+
+        try {
+            //$isParams = (is_array($callback) && !is_callable(!$callback));
+            $parameters = is_array($callback) ? $callback : (new ReflectionFunction($callback))->getParameters();
+            $instances = [];
+
+            foreach ($parameters as $parameter) {
+                $type = $parameter->getType();
+               
+                if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
+                    $class = $type->getName();
+
+                    if(is_subclass_of($class, BaseApplication::class)) {
+                        $instances[] = (static::$application ?? app());
+                    }elseif(is_subclass_of($class, Router::class)) {
+                        $instances[] = (static::$application?->router ?? app()->router);
+                    }else{
+                        $instances[] = new $class();
+                    }
+                } elseif (!empty($arguments)) {
+                    $instances[] = array_shift($arguments);
+                }
+            }
+
+            return array_merge($instances, $arguments);
+        } catch (ReflectionException $e) {
+            return $arguments;
+        }
+    }
 
     /**
     * Execute router HTTP callback class method with the given parameters using instance callback or reflection class
     *
-    * @param callable|string $callback Class public callback method eg: UserController:update
-    * @param array $arguments Method arguments to pass to callback method
+    * @param Closure|string|array<int,string> $callback Class public callback method eg: UserController:update
+    * @param array $arguments Method arguments to pass to callback method.
+    * @param bool $injection Force use dpendancy injection. Default is false.
     *
     * @return bool 
     * @throws RouterException if method is not callable or doesn't exist
     */
-    private static function execute(callable|string $callback, array $arguments = []): bool
+    private static function call(Closure|string|array $callback, array $arguments = [], bool $injection = false): bool
     {
-        $result = true;
+        if ($callback instanceof Closure) {
+            $isCommand = isset($arguments['command']) && is_command();
+            $arguments = $isCommand ? ($arguments['params'] ?? []) : static::injection($callback, $arguments, $injection);
 
-        if(is_callable($callback)) {
-            $result = call_user_func_array($callback, $arguments);
-        } elseif(stripos($callback, '::') !== false) {
-            $result = static::callReflection($callback, $arguments);
+            return status_code(call_user_func_array($callback, $arguments), false);
         }
-      
-        return static::toStatusBool($result);
+
+        if (is_array($callback)) {
+            return static::reflection($callback[0], $callback[1], $arguments, $injection);
+        }
+
+        if (stripos($callback, '::') !== false) {
+            [$controller, $method] = explode('::', $callback);
+            $class = static::getControllerClass($controller);
+
+            return static::reflection($class, $method, $arguments, $injection);
+        }
+
+        return false;
     }
 
     /**
      * Execute class using reflection method
      *
-     * @param string $callback Controller callback class
+     * @param string $className Controller class name.
+     * @param string $method Controller class method name.
      * @param array $arguments Optional arguments to pass to the method
+     * @param bool $injection Force use dpendancy injection. Default is false.
      *
      * @return bool If method was called successfully
      * @throws RouterException if method is not callable or doesn't exist
     */
-    private static function callReflection(string $callback, array $arguments = []): bool 
+    private static function reflection(string $className, string $method, array $arguments = [], bool $injection = false): bool 
     {
         $throw = true;
-        $isCommand = isset($arguments[0]['command']) && is_command();
 
-        [$controller, $method] = explode('::', $callback);
-        $method = ($isCommand ? 'run' : $method); // Only call run method for CLI
-
-        $className = static::getControllerClass($controller);
-
-        if($className === ''){
-            RouterException::throwWith('invalid_class', -1, $className);
-
+        if ($className === '') {
+            RouterException::throwWith('invalid_class', -1, null, $className);
             return false;
         }
-    
+
         try {
-            $checkClass = new ReflectionClass($className);
-        
-            if (!$checkClass->isInstantiable() || 
-                !($checkClass->isSubclassOf(Terminal::class) || 
-                    $checkClass->isSubclassOf(BaseViewController::class) ||
-                    $checkClass->isSubclassOf(BaseApplication::class))) {
-                RouterException::throwWith('invalid_controller', 0, $className);
+            $class = new ReflectionClass($className);
+            $isErrorClass = ($class->getName() === ViewErrors::class);
+
+            if (!($class->isInstantiable() && (
+                $class->isSubclassOf(Terminal::class) || 
+                $class->isSubclassOf(BaseViewController::class) ||
+                $isErrorClass ||
+                $class->isSubclassOf(BaseApplication::class)))) {
+                RouterException::throwWith('invalid_controller', 0, null, $className);
             }
-            
-            $caller = new ReflectionMethod($className, $method);
 
-            if ($caller->isPublic() && !$caller->isAbstract() && !$caller->isStatic()) {
-  
-                $newClass = new $className();
+            $caller = $class->getMethod($method);
 
-                if($isCommand && $newClass !== null) {
-                    [$throw, $result] = static::invokeCommandArgs($newClass, $arguments, $className, $caller);
-                }else{
-                    $result = $caller->invokeArgs($newClass, $arguments);
+            if ($caller->isPublic() && !$caller->isAbstract() && (!$caller->isStatic() || $isErrorClass)) {
+                if (isset($arguments['command']) && is_command()) {
+                    $instance = new $className();
+                    if(isset($instance->group) && $instance->group === static::getArgument(1)) {
+                        $arguments['classMethod'] = $method;
+                        [$throw, $result] = static::invokeCommandArgs($instance, $arguments, $className, $caller);
+                    }else{
+                        unset($instance);
+                        return false;
+                    }
+                } else {
+                    $arguments = static::injection($caller->getParameters(), $arguments, $injection);
+                    $result = $caller->invokeArgs(new $className(), $arguments);
                 }
-                
-                unset($newClass);
-                
-                return static::toStatusBool($result);
+
+                return status_code($result, false);
             }
-            
+
             RouterException::throwWith('invalid_method');
-            return false;
         } catch (ReflectionException $e) {
             if ($throw) {
-                RouterException::throwException($e->getMessage(), $e->getCode());
+                RouterException::throwException($e->getMessage(), $e->getCode(), $e);
             }
-            return false;
         }
 
         return false;
@@ -1042,73 +974,43 @@ final class Router
     /**
      * Invoke class using reflection method
      *
-     * @param object $newClass Class instance
+     * @param object $instance Class instance
      * @param array $arguments Pass arguments to reflection method
      * @param string $className Invoking class name
      * @param ReflectionMethod $method Controller class method
      *
-     * @return array<bool, bool> 
+     * @return array<int, bool> 
     */
     private static function invokeCommandArgs(
-        object $newClass, 
+        object $instance, 
         array $arguments, 
         string $className, 
         ReflectionMethod $method
     ): array
     {
-        $result = false;
-        $throw = true;
+        $commandId = '_about_' . $instance->name;
+        $arguments[$commandId] = [
+            'class' => $className, 
+            'group' => $instance->group,
+            'name' => $instance->name,
+            'description' => $instance->description,
+            'usages' => $instance->usages,
+            'options' => $instance->options
+        ];
 
-        if (method_exists($newClass, 'registerCommands')) {
-            $commands = $arguments[0]??[];
-            $commandId = '_about_';
-            if(isset($newClass->group)) {
-                $commandId .= $newClass->name;
-                $commands[$commandId] = [
-                    'class' => $className, 
-                    'group' => $newClass->group,
-                    'name' => $newClass->name,
-                    'options' => $newClass->options,
-                    'usages' => $newClass->usages,
-                    'description' => $newClass->description
-                ];
+        if(static::terminal()->isHelp($arguments['command'])){
+            if($instance->help($arguments[$commandId]) === STATUS_ERROR){
+                static::terminal()->helper($arguments[$commandId]);
             }
-           
-            $code = $newClass->registerCommands($commands);
 
-            if($code === STATUS_SUCCESS) {
-                if (array_key_exists('help', $commands['options'])) {
-                    $result = true;
-                    static::terminal()->printHelp($commands[$commandId]);
-                }else{
-                    $result = $method->invokeArgs($newClass, $arguments);
-                }
-            } elseif($code === STATUS_ERROR) {
-                $throw = false;
-            }
+            return [false, true];
         }
 
-        unset($newClass);
-        
-        return [$throw, $result];
-    }
+        $instance->explain($arguments);
 
-    /**
-     * Convert status to bool, return run status based on result
-     * In cli 0 is considered as success while 1 is failure.
-     * In few occasion void or null may be returned so we treat it as success
-     * 
-     * @param void|bool|null|int $result response from callback function
-     * 
-     * @return bool
-    */
-    private static function toStatusBool(mixed $result = null): bool
-    {
-        if ($result === false || (is_int($result) && (int) $result === STATUS_ERROR)) {
-            return false;
-        }
+        $result = $method->invokeArgs($instance, $arguments['params']??[]);
 
-        return true;
+        return [true, $result];
     }
     
     /**
@@ -1121,11 +1023,8 @@ final class Router
     *
     * @return bool is match true or false
     */
-    private static function uriMatchedPattern(string $pattern, string $uri, mixed &$matches): bool
+    private static function uriCapture(string $pattern, string $uri, mixed &$matches): bool
     {
-        //$pattern = str_replace(['/', '{', '}'], ['\/', '(.*?)', ''], $pattern);
-        //$matched = preg_match_all('/^' . $pattern . '$/', $uri, $matches, PREG_OFFSET_CAPTURE);
-
         $pattern = preg_replace('/\/{(.*?)}/', '/(.*?)', $pattern);
         $matched = preg_match_all('#^' . $pattern . '$#', $uri, $matches, PREG_OFFSET_CAPTURE);
 
@@ -1148,6 +1047,7 @@ final class Router
             $replacement = '([^/]+)';
 
             $output = preg_replace($pattern, $replacement, $input);
+
             return '/' . $output;
         }
 
@@ -1163,13 +1063,36 @@ final class Router
      *
      * @return string
     */
-    private static function getCommandName(): string 
+    private static function getArgument(int $index = 1): string 
     {
         if(isset($_SERVER['argv'])){
-            return $_SERVER['argv'][1] ?? '';
+            return $_SERVER['argv'][$index] ?? '';
         }
 
         return '';
+    }
+
+    /**
+     * Get the current command controller views
+     * 
+     * @return array $views
+    */
+    public static function getArguments(): array
+    {
+        $views = [
+            'view' => '',
+            'options' => [],
+        ];
+       
+        if (isset($_SERVER['argv'][2])) {
+            $arguments = array_slice($_SERVER['argv'], 2);
+            $result = static::terminal()->extract($arguments, true);
+
+            $views['view'] = '/' . implode('/', $result['arguments']);
+            $views['options'] = $result['options'];
+        }
+
+        return $views;
     }
     
     /**
@@ -1177,13 +1100,43 @@ final class Router
      * 
      * @return void
     */
-    private function reset(): void
+    private static function reset(): void
     {
-        $this->controllers['routes'] = [];
-        $this->controllers['routes_after'] = [];
-        $this->controllers['routes_middleware'] = [];
-        $this->controllers['cli_routes'] = [];
-        $this->controllers['cli_middleware'] = [];
-        $this->controllers['errors'] = [];
+        static::$controllers['routes'] = [];
+        static::$controllers['routes_after'] = [];
+        static::$controllers['routes_middleware'] = [];
+        static::$controllers['cli_routes'] = [];
+        static::$controllers['cli_middleware'] = [];
+        static::$controllers['errors'] = [];
+        static::$groups = [];
+    }
+
+     /**
+     * Get the current view segments as array.
+     * 
+     * @return array<int, string> Array list of url segments
+    */
+    private function getSegments(): array
+    {
+        $segments = explode('/', trim($this->getUriSegments(), '/'));
+        $public = array_search('public', $segments);
+
+        if ($public !== false) {
+            array_splice($segments, $public, 1);
+        }
+
+        return $segments;
+    }
+
+    /**
+     * Get first segment of current view uri.
+     * 
+     * @return string First url segment
+    */
+    private function getFirst(): string
+    {
+        $segments = $this->getSegments();
+
+        return reset($segments);
     }
 }

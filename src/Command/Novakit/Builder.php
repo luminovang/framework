@@ -9,10 +9,10 @@
 */
 namespace Luminova\Command\Novakit;
 
-use \Luminova\Base\BaseCommand;
+use \Luminova\Base\BaseConsole;
 use \Luminova\Composer\Builder as AppBuilder;
 
-class Builder extends BaseCommand 
+class Builder extends BaseConsole 
 {
     /**
      * @var string $group command group
@@ -66,9 +66,14 @@ class Builder extends BaseCommand
         if($type === 'build'){
             AppBuilder::export('builds');
         }elseif($type === 'zip'){
-            AppBuilder::archive('my_project.zip');
+            AppBuilder::archive('project.zip');
         }
 
         return STATUS_SUCCESS;
+    }
+
+    public function help(array $helps): int
+    {
+        return STATUS_ERROR;
     }
 }

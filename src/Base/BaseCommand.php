@@ -24,7 +24,8 @@ abstract class BaseCommand extends Terminal
     protected string $name = '';
 
     /**
-     * @var string|array $usage command usages
+     * @var string|array<string,string> $usage command usages.
+     * Use the array key for command usage and the value for description.
     */
     protected string|array $usage = '';
 
@@ -58,11 +59,21 @@ abstract class BaseCommand extends Terminal
     public static function __callStatic(string $method, array $arguments): mixed
     {
         if (method_exists(static::class, $method)) {
-            return forward_static_call_array([static::class, $method], $arguments);
+            return static::$method(...$arguments);
         }
 
         return null;
     }
+
+
+    /**
+     * Override the default help implementation
+     *
+     * @param array $helps Helps information
+     * 
+     * @return int return STATUS_SUCCESS if you implemented your own help else return STATUS_ERROR.
+    */
+    abstract public function help(array $helps): int;
 
     /**
      * Property getter
@@ -89,13 +100,4 @@ abstract class BaseCommand extends Terminal
     {
         return isset($this->{$key});
     }
-
-    /**
-     * Handle execution of command in command controller class.
-     *
-     * @param array<string, mixed> $params Command arguments and parameters
-     * 
-     * @return int status code STATUS_SUCCESS on success else STATUS_ERROR
-    */
-    abstract public function run(?array $params = []): int;
 }

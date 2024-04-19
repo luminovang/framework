@@ -15,7 +15,7 @@ if (PHP_SAPI === 'cli') {
 $uri = urldecode(parse_url('https://luminova.ng' . $_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '');
 
 $_SERVER['SCRIPT_NAME'] = '/index.php';
-$_SERVER['SERVER_SOFTWARE'] = 'NovaKit/' . ($version ?? '2.5.0') . ' (Luminova) PHP/' . PHP_VERSION. ' (Development Server)';
+$_SERVER['SERVER_SOFTWARE'] = 'NovaKit/ (Luminova) PHP/' . PHP_VERSION. ' (Development Server)';
 $_SERVER['NOVAKIT_EXECUTION_ENV'] = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'php novakit';
 $path = $_SERVER['DOCUMENT_ROOT'] . DIRECTORY_SEPARATOR . ltrim($uri, '/');
 

@@ -185,7 +185,7 @@ class Escaper
 
         $result = $this->encoding === 'utf-8' ? $string : $this->convertEncoding($string, 'UTF-8', $this->encoding);
 
-        if (!$this->isUtf8($result)) {
+        if (!is_utf8($result)) {
             throw new RuntimeException(
                 sprintf('String to be escaped was not valid UTF-8 or could not be converted: %s', $result)
             );
@@ -205,17 +205,6 @@ class Escaper
         $result = $this->encoding === 'utf-8' ? $string : $this->convertEncoding($string, $this->encoding, 'UTF-8');
 
         return $result;
-    }
-
-    /**
-     * Check if a string is UTF-8 encoded.
-     * 
-     * @param string $string The string to be checked.
-     * @return bool True if the string is UTF-8 encoded, false otherwise.
-     */
-    protected function isUtf8(string $string): bool
-    {
-        return $string === '' || preg_match('/^./su', $string);
     }
 
     /**

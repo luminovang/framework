@@ -23,9 +23,7 @@ class CookieException extends AppException
         'invalid_host_prefix' => 'Invalid host prefix: "%s". The "__Host-" prefix can only be used when the cookie is set with the "Secure" attribute, and only when the domain is empty and the path is set to "/".',
         'invalid_same_site' => 'Invalid SameSite attribute: "%s". The SameSite attribute must be one of "None", "Lax", or "Strict".',
         'invalid_same_site_none' => 'Invalid SameSite attribute: "%s". The SameSite attribute cannot be set to "None" unless the cookie is also set with the "Secure" attribute.',
-        'invalid_value' => 'Invalid cookie value: "%s".',
-        'invalid_time' => 'Invalid time format: %s',
-        'invalid_time_value' => 'Invalid time value',
+        'invalid_value' => 'Invalid cookie value: "%s".'
     ];
 
     /**

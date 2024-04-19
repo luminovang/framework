@@ -9,7 +9,7 @@
  */
 namespace Luminova\Sessions;
 
-use \Luminova\Sessions\SessionInterface;
+use \Luminova\Interface\SessionInterface;
 
 class SessionManager implements SessionInterface 
 {
@@ -56,48 +56,28 @@ class SessionManager implements SessionInterface
     {
         return $this->storage;
     }
-  
-    /**
-     * {@inheritdoc}
-     */
-    public function add(string $key, mixed $value): self
-    {
-        $_SESSION[$this->storage][$key] = $value;
 
-        return $this;
+    /** 
+     * {@inheritdoc}
+    */
+    public function getItem(string $index, mixed $default = null): mixed
+    {
+        $result = $this->getItems();
+
+        if($result === []){
+            return $default;
+        }
+
+        return $result[$index] ?? $default;
     }
 
     /** 
      * {@inheritdoc}
     */
-    public function set(string $key, mixed $value): self
+    public function setItem(string $index, mixed $data, string $storage = ''): self
     {
-        $_SESSION[$this->storage][$key] = $value;
+        $storage = ($storage === '') ? $this->storage : $storage;
 
-        return $this;
-    }
-
-    /** 
-     * {@inheritdoc}
-    */
-    public function get(string $index, mixed $default = null): mixed
-    {
-        return $_SESSION[$this->storage][$index]??$default;
-    }
-
-    /** 
-     * {@inheritdoc}
-    */
-    public function getFrom(string $index, string $storage): mixed
-    {
-        return $_SESSION[$storage][$index]??null;
-    }
-
-    /** 
-     * {@inheritdoc}
-    */
-    public function setTo(string $index, mixed $data, string $storage): self
-    {
         $_SESSION[$storage][$index] = $data;
 
         return $this;
@@ -106,20 +86,17 @@ class SessionManager implements SessionInterface
     /** 
      * {@inheritdoc}
     */
-    public function online($storage = ''): bool
+    public function deleteItem(?string $index = null, string $storage = ''): self
     {
-        $data = $this->getContents($storage);
+        $storage = ($storage === '') ? $this->storage : $storage;
 
-        return (isset($data["_online"]) && $data["_online"] === 'YES');
-    }
-
-    /** 
-     * {@inheritdoc}
-    */
-    public function clear(string $storage = ''): self
-    {
-        $storageKey = $storage === '' ? $this->storage : $storage;
-        unset($_SESSION[$storageKey]);
+        if($storage !== '' && isset($_SESSION[$storage])){
+            if($index === '' || $index === null){
+                unset($_SESSION[$storage]);
+            }else{
+                unset($_SESSION[$storage][$index]);
+            }
+        }
 
         return $this;
     }
@@ -127,19 +104,13 @@ class SessionManager implements SessionInterface
     /** 
      * {@inheritdoc}
     */
-    public function remove(string $index): self
+    public function hasItem(string $key): bool
     {
-        unset($_SESSION[$this->storage][$index]);
+        if(isset($_SESSION[$this->storage])){
+            return isset($_SESSION[$this->storage][$key]);
+        }
 
-        return $this;
-    }
-
-    /** 
-     * {@inheritdoc}
-    */
-    public function has(string $key): bool
-    {
-        return isset($_SESSION[$this->storage][$key]);
+        return false;
     }
 
     /** 
@@ -153,25 +124,19 @@ class SessionManager implements SessionInterface
     /** 
      * {@inheritdoc}
     */
-    public function getResult(): array
+    public function getResult(string $type = 'array'): array|object
     {
-        return (array) $_SESSION ?? [];
-    }
+        $result = [];
+        
+        if (isset($_SESSION)) {
+            $result = $_SESSION;
+        }
 
-    /** 
-     * {@inheritdoc}
-    */
-    public function toArray(string $index = ''): array
-    {
-        return $this->toAs('array', $index);
-    }
+        if($type === 'array'){
+            return (array) $result;
+        }
 
-    /** 
-     * {@inheritdoc}
-    */
-    public function toObject(string $index = ''): object
-    {
-        return $this->toAs('object', $index);
+        return (object) json_decode(json_encode($result));
     }
 
     /** 
@@ -179,36 +144,28 @@ class SessionManager implements SessionInterface
     */
     public function toAs(string $type = 'array', string $index = ''): object|array
     {
-        $result = [];
+        $result = $this->getItems();
 
-        if( $index === ''){
-            if(isset($_SESSION[$this->storage])){
-                $result = $_SESSION[$this->storage];
-            }
-
-            if(isset($_SESSION)){
-                $result = $_SESSION;
-            }
-        }elseif(isset($_SESSION[$this->storage][$index])){
-            $result = $_SESSION[$this->storage][$index];
+        if($index !== '' && isset($result[$index])) {
+            $result = $result[$index];
         }
-
+    
         if($type === 'array'){
             return (array) $result;
         }
 
-        return (object) $result;
+        return (object) json_decode(json_encode($result));
     }
 
     /** 
      * {@inheritdoc}
     */
-    public function getContents(string $storage = ''): array
+    public function getItems(string $storage = ''): array
     {
-        $storageKey = $storage === '' ? $this->storage : $storage;
+        $storage = ($storage === '') ? $this->storage : $storage;
 
-        if (isset($_SESSION[$storageKey])) {
-            return $_SESSION[$storageKey];
+        if (isset($_SESSION[$storage])) {
+            return (array) $_SESSION[$storage];
         }
 
         return [];

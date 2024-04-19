@@ -9,7 +9,8 @@
  */
 namespace Luminova\Cache;
 
-use Luminova\Http\Header;
+use \Luminova\Http\Header;
+use \Luminova\Http\Encoder;
 
 class PageMinifier 
 {
@@ -38,12 +39,6 @@ class PageMinifier
 	public const XML = 'application/xml';
 
     /** 
-	*  Gzip compression status
-	* @var bool $gzip
-	*/
-    private bool $gzip; 
-
-    /** 
      * Ignore html code block tag <code></code>
      * @var bool $minifyCodeTags
      */
@@ -60,12 +55,6 @@ class PageMinifier
 	* @var mixed $minifiedContent
 	*/
     private mixed $minifiedContent = '';
-
-    /** 
-	* Compression level  
-	* @var int $compressionLevel
-	*/
-    private int $compressionLevel = 6;
 
     /** 
 	* Allow copying of code blocks  
@@ -111,34 +100,7 @@ class PageMinifier
      */
     public function __construct() 
     {
-        $this->gzip = true;
     }
-   
-    /**
-     * Enable or disable Gzip compression.
-     *
-     * @param bool $gzip Enable Gzip compression (true) or disable it (false).
-     * @return self Returns the class instance for method chaining.
-     */
-    public function useGzip(bool $gzip): self 
-    {
-        $this->gzip = $gzip;
-
-        return $this;
-    }
-
-    /**
-     * sets compression level
-     *
-     * @param int $level Level
-     * @return self $this
-     */
-	public function setCompressionLevel(int $level): self 
-    {
-		$this->compressionLevel = min(9, $level);
-
-		return $this;
-	}
     
     /**
      * sets ignore minifying code block
@@ -197,36 +159,29 @@ class PageMinifier
      */
     public function compress(string|array|object $data, string $contentType): string 
     {
-        $content = (!is_string($data) ? static::toJsonString($data) : $data);
+        $content = is_string($data) ? $data : static::toJsonString($data);
+        $minifiedContent = $this->minifiedContent = $this->minifyCodeTags ? static::minify($content) : static::minifyIgnore($content, $this->enableCopy);
 
-        $this->minifiedContent = $this->minifyCodeTags ? 
-            static::minify($content) : 
-                static::minifyIgnore($content, $this->enableCopy);
-        $compressed = $this->minifiedContent;
+        [$encoding, $encoded] = Encoder::encode($minifiedContent);
+
+        $contentLength = (is_utf8($encoded) ? mb_strlen($encoded, 'utf8') : strlen($encoded));
         $headers = Header::getSystemHeaders();
 
-        if ($this->gzip && function_exists('gzencode') && isset($_SERVER['HTTP_ACCEPT_ENCODING']) && strpos($_SERVER['HTTP_ACCEPT_ENCODING'], 'gzip') !== false) {
-            $compressed = gzencode($this->minifiedContent, $this->compressionLevel);
-
-            if($compressed === false){
-                $compressed = $this->minifiedContent;
-            }else{
-                $headers['Content-Encoding'] = 'gzip';
-                $this->info['Content-Encoding'] = 'gzip';
-            }
-        }
-
-        $this->info['Content-Length'] = strlen($compressed);
+        $headers['Content-Length'] = $contentLength;
+        $headers['Content-Type'] = $contentType;
+        $this->info['Content-Length'] = $contentLength;
         $this->info['Content-Type'] = $contentType;
 
-        $headers['Content-Length'] = $this->info['Content-Length'];
-        $headers['Content-Type'] = $contentType;
-  
+        if ($encoding !== false) {
+            $headers['Content-Encoding'] = $encoding;
+            $this->info['Content-Encoding'] = $encoding;
+        }
+
         foreach ($headers as $header => $value) {
             header("$header: $value");
         }
 
-        return $compressed;
+        return $encoded;
     }
 
     /**

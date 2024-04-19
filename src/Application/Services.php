@@ -75,22 +75,21 @@ class Services
     }
 
     /**
-     * Finds an entry of the container by its identifier and returns it.
+     * Finds and call an entry of the container by its identifier.
      *
-     * @param string $id Identifier of the entry to look for.
+     * @param string $aliases Identifier of the entry to look for.
      *
-     * @throws NotFoundExceptionInterface  No entry was found for **this** identifier.
-     * @throws ContainerExceptionInterface Error while retrieving the entry.
+     * @throws RuntimeException No method was found foridentifier.
+     * @throws RuntimeException Error while instantiating the method class.
      *
-     * @return mixed Entry.
-     */
-    public static function get(string $id): mixed 
+     * @return mixed Instance of called method.
+    */
+    public static function call(string $aliases): mixed 
     {
-        $name = get_class_name($id);
-        $instance = static::getInstance($name);
+        $instance = static::getInstance($aliases);
         
         if($instance === null){
-            throw new RuntimeException("Failed to instantiate service '$id'. Service not found ");
+            throw new RuntimeException("Failed to instantiate service '$aliases'. Service not found ");
         }
 
         return $instance;

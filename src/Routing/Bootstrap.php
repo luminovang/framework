@@ -9,6 +9,9 @@
  */
 namespace Luminova\Routing;
 
+use \Luminova\Exceptions\RuntimeException;
+use \Closure;
+
 final class Bootstrap 
 {
     /** 
@@ -52,9 +55,9 @@ final class Bootstrap
     private string $name = '';
 
     /**
-     * @var callable|null $onError
+     * @var null|Closure|array<int,string>$onError
     */
-    private $onError = null;
+    private Closure|array|null $onError = null;
 
     /**
      * @var array $instances
@@ -65,11 +68,19 @@ final class Bootstrap
      * Initialize Constructor
      * 
      * @param string  $name  Bootstrap route name
-     * @param ?callable $onError Bootstrap Callback function to execute
+     * @param Closure|array<int,string>|null $onError Bootstrap Callback function to execute.
+     *      - string - Method name in [ViewErrors::class, 'methodname']; to handle error.
+     * 
+     * @throws RuntimeException If invalid error callback was provided.
      */
-    public function __construct(string $name, ?callable $onError = null) 
+    public function __construct(string $name, Closure|array|null $onError = null) 
     {
         $this->name = $name;
+
+        if($onError !== null && !($onError instanceof Closure) && is_array($onError) && count($onError) !== 2){
+            throw new RuntimeException('Invalid error callback method.');
+        }
+
         $this->onError = $onError;
 
         if( $name !== self::WEB){
@@ -80,7 +91,8 @@ final class Bootstrap
     /**
      * Get bootstrap route name
      * 
-     * @return string $this->name route instance type
+     * @return string $this->name route instance type.
+     * @internal
     */
     public function getName(): string 
     {
@@ -90,9 +102,10 @@ final class Bootstrap
     /**
      * Get bootstrap controller error callback handler
      * 
-     * @return ?callable $this->onError 
+     * @return null|callable|array<int,string> $this->onError 
+     * @internal
     */
-    public function getErrorHandler(): ?callable 
+    public function getErrorHandler(): Closure|array|null
     {
         return $this->onError;
     }
@@ -100,7 +113,8 @@ final class Bootstrap
     /**
      * Get bootstrap registered custom instance
      * 
-     * @return array<T, string> static::$instances 
+     * @return array<int, string> static::$instances 
+     * @internal
     */
     public static function getInstances(): array 
     {

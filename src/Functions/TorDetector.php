@@ -14,12 +14,12 @@ class TorDetector
     /**
      * @var string $torExitNodeListUrl
     */
-    private static $torExitNodeListUrl = 'https://check.torproject.org/torbulkexitlist';
+    private static string $torExitNodeListUrl = 'https://check.torproject.org/torbulkexitlist';
 
     /**
      * @var int $cacheExpiry
     */
-    private static $cacheExpiry = 86400; 
+    private static int $cacheExpiry = 86400; 
 
     /**
      * Function to fetch and cache the Tor exit node list
@@ -45,11 +45,11 @@ class TorDetector
     /**
      * Checks if the given IP address is a Tor exit node
      * 
-     * @param string $ip
+     * @param string $ip Ip address to check.
      * 
-     * @return bool 
+     * @return bool true if the IP address is a Tor exit node otherwise false.
     */
-    public static function isTorExitNode(string $ip): bool 
+    public static function isTor(string $ip): bool 
     {
         $result = static::fetchTorExitNodeList();
         
@@ -75,6 +75,5 @@ class TorDetector
         $file = $path . 'torbulkexitlist.txt';
 
         return $file;
-        
     }
 }

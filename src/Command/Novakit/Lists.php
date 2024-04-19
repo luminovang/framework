@@ -9,11 +9,11 @@
 */
 namespace Luminova\Command\Novakit;
 
-use \Luminova\Base\BaseCommand;
+use \Luminova\Base\BaseConsole;
 use \Luminova\Command\TextUtils;
 use \Luminova\Command\Novakit\Commands;
 
-class Lists extends BaseCommand 
+class Lists extends BaseConsole 
 {
     /**
      * @var string $group command group
@@ -46,6 +46,11 @@ class Lists extends BaseCommand
         return STATUS_SUCCESS;
     }
 
+    public function help(array $helps): int
+    {
+        return STATUS_ERROR;
+    }
+
     public static function listCommands(): void 
     {
         $commands = Commands::getCommands();
@@ -58,7 +63,7 @@ class Lists extends BaseCommand
         foreach ($groupedCommands as $group => $list) {
             self::writeln($group);
             foreach ($list as $command) {
-                self::writeln('   ' . self::color(TextUtils::rightPad($command['name'], 25), 'green') . $command['description']);
+                self::writeln('   ' . self::color(TextUtils::padEnd($command['name'], 25), 'green') . $command['description']);
             }
             self::newLine();
         }

@@ -10,7 +10,7 @@
 namespace Luminova\Email\Clients;
 
 use \Luminova\Email\Helpers\Helper;
-use \Luminova\Email\Clients\MailClientInterface;
+use \Luminova\Interface\MailClientInterface;
 use \Luminova\Email\Exceptions\MailerException;
 use \Swift_SmtpTransport;
 use \Swift_Mailer;

@@ -9,9 +9,9 @@
 */
 namespace Luminova\Command\Novakit;
 
-use \Luminova\Base\BaseCommand;
+use \Luminova\Base\BaseConsole;
 
-class Database extends BaseCommand 
+class Database extends BaseConsole 
 {
     /**
      * @var string $group command group
@@ -43,8 +43,6 @@ class Database extends BaseCommand
     */
     public function run(?array $params = []): int
     {
-        //$options = $params['options']??[];
-
         $result = match(true){
             'db:create' => function () {
                 echo "TODO Database create";
@@ -74,5 +72,10 @@ class Database extends BaseCommand
         };
     
         return STATUS_SUCCESS;
+    }
+
+    public function help(array $helps): int
+    {
+        return STATUS_ERROR;
     }
 }

@@ -10,7 +10,7 @@
 namespace Luminova\Cache;
 
 use \Luminova\Http\Header;
-use \Luminova\Cache\FileCache;
+use \Luminova\Time\Timestamp;
 use \DateTimeInterface;
 
 class PageViewCache
@@ -60,7 +60,7 @@ class PageViewCache
     */
     public function setExpiry(DateTimeInterface|int $expiration): self
     {
-        $this->expiration = is_int($expiration) ? $expiration : FileCache::ttlToSeconds($expiration);
+        $this->expiration = is_int($expiration) ? $expiration : Timestamp::ttlToSeconds($expiration);
 
         return $this;
     }
@@ -221,22 +221,17 @@ class PageViewCache
      * Save the content to the cache file.
      *
      * @param string $content The content to be saved to the cache file.
-     * @param string $info Framework copyright information
      * @param array|null $metadata Cache information
      *
      * @return bool True if saving was successful; false otherwise.
      */
-    public function saveCache(string $content, ?string $info = null, ?array $metadata = null): bool
+    public function saveCache(string $content, ?array $metadata = null): bool
     {
         $location = $this->getLocation();
         $filename = $this->getFilename();
 
         make_dir($location);     
 
-        if($info !== null){
-            $content .= '<!--[File was cached on - '. date('D jS M Y H:i:s') . ', Using: ' . $info . ']-->';
-        }
-  
         if(write_content($filename, $content)){
             $metadata = ($metadata === null) ? [] : $metadata;
 

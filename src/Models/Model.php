@@ -9,45 +9,51 @@
  */
 namespace Luminova\Models;
 
-use Luminova\Database\Query;
+use \Luminova\Database\Query;
 
 abstract class Model
 {
     /**
      *  Table name should be specified in child models.
+     * 
      * @var string $table
     */
     protected string $table = ''; 
 
     /**
      *  Default primary key column.
+     * 
      * @var string $primaryKey
     */
     protected string $primaryKey = 'uid'; 
 
     /**
      * Fields that can be inserted or updated.
+     * 
      * @var array $allowedFields
     */
     protected array $allowedFields = []; 
 
     /**
-     * Input validation rules for
+     * Input validation rules for.
+     * 
      * @var array $validationRules
     */
     protected array $validationRules = [];
 
     /**
-     * Input validation message for rules
+     * Input validation message for rules.
+     * 
      * @var array $validationMessages
     */
     protected array $validationMessages = [];
 
     /**
-     * Database query class instance
+     * Database query class instance.
+     * 
      * @var Query $query
     */
-    protected $query = null;
+    protected ?Query $query = null;
 
     /**
      * Constructor for the Model class.
@@ -60,11 +66,11 @@ abstract class Model
     /**
      * Insert a new record into the database.
      *
-     * @param array $data The data to be inserted.
+     * @param array<int, mixed> $data The data to be inserted.
      * 
      * @return int 
      */
-    public function insertRecord(array $data): int
+    public function insert(array $data): int
     {
         return $this->query->table($this->table)->insert($data);
     }
@@ -77,9 +83,11 @@ abstract class Model
      * 
      * @return int 
      */
-    public function updateRecord(string $key, array $data): int
+    public function update(string $key, string $operator, array $data): int
     {
-        return $this->query->table($this->table)->where($this->primaryKey, $key)->update($data);
+        return $this->query->table($this->table)
+            ->where($this->primaryKey, $operator, $key)
+            ->update($data);
     }
 
     /**
@@ -90,9 +98,11 @@ abstract class Model
      * 
      * @return mixed An associative array representing the record, or null if not found.
      */
-    public function getRecord(string $key, array $fields = ["*"]): mixed
+    public function get(string $key, string $operator, array $fields = ["*"]): mixed
     {
-        return $this->query->table($this->table)->where($this->primaryKey, $key)->find($fields);
+        return $this->query->table($this->table)
+            ->where($this->primaryKey, $operator, $key)
+            ->find($fields);
     }
 
     /**
@@ -103,9 +113,11 @@ abstract class Model
      * 
      * @return mixed An array of records matching the criteria.
      */
-    public function selectRecords(string $key, array $fields): mixed
+    public function select(string $key, string $operator, array $fields): mixed
     {
-        return $this->query->table($this->table)->where($this->primaryKey, $key)->select($fields);
+        return $this->query->table($this->table)
+            ->where($this->primaryKey, $operator, $key)
+            ->select($fields);
     }
 
     /**
@@ -113,11 +125,13 @@ abstract class Model
      *
      * @param string $key The primary key value for the record to be deleted.
      * 
-     * @return int 
+     * @return bool 
      */
-    public function deleteRecord(string $key): bool
+    public function delete(string $key, string $operator): bool
     {
-        return $this->query->table($this->table)->where($this->primaryKey, $key)->delete();
+        return $this->query->table($this->table)
+            ->where($this->primaryKey, $operator, $key)
+            ->delete() > 0;
     }
 
     /**

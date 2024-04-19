@@ -9,24 +9,17 @@
  */
 namespace Luminova\Command;
 
+use \Luminova\Application\Foundation;
 use \Luminova\Command\Colors;
 use \Luminova\Command\Executor;
 use \Luminova\Command\TextUtils;
 use \Luminova\Security\InputValidator;
+use \Luminova\Command\Novakit\Commands;
 use \Luminova\Exceptions\InvalidArgumentException;
+use Closure;
 
 class Terminal 
 {
-    /**
-     * @var string $version command line tool version
-    */
-    public static string $version = '2.5.0';
-
-    /**
-     * @var int $version command line tool version code
-    */
-    public static int $versionCode = 250;
-
     /**
      * Height of terminal visible window
      *
@@ -53,7 +46,7 @@ class Terminal
      *
      * @var string $waitMessage
      */
-    public static $waitMessage = 'Press any key to continue...';
+    private static $waitMessage = 'Press any key to continue...';
 
     /**
      * Write in a new line enabled
@@ -190,20 +183,20 @@ class Terminal
      * @example $this->watcher(100, Closure, Closure, true) Show 100 lines of progress bar with a callbacks and beep on finish
      * 
      * @param int $progressCount Total count of progress bar to show
-     * @param ?callable $onFinish Execute callback when progress finished
-     * @param ?callable $onProgress Execute callback on each progress step
+     * @param Closure|null $onFinish Execute callback when progress finished
+     * @param Closure|null $onProgress Execute callback on each progress step
      * @param bool $beep Beep when progress is completed, default is true
      *
      * @return void
     */
-    protected static function watcher(int $progressCount, ?callable $onFinish = null, ?callable $onProgress = null, bool $beep = true): void 
+    protected static function watcher(int $progressCount, ?Closure $onFinish = null, ?Closure $onProgress = null, bool $beep = true): void 
     {
         $progress = 0;
     
         for ($step = 1; $step <= $progressCount; $step++) {
             if ($progress < 100) {
                 $progress = static::progress($step, $progressCount);
-                if (is_callable($onProgress)) {
+                if ($onProgress instanceof Closure) {
                     $onProgress($progress);
                 }
             }
@@ -215,7 +208,7 @@ class Terminal
         }
 
         static::progress(false, null, $beep);
-        if (is_callable($onFinish)) {
+        if ($onFinish instanceof Closure) {
             static::newLine();
             $onFinish();
         }
@@ -251,6 +244,7 @@ class Terminal
      * @param string $message Prompt message
      * @param array $options  Options to prompt selection, 
      * @param string|null $validations Validation rules
+     * @param bool $silent Print validation failure message parameter is true (default: false);
      *
      * @return string The user input
     */
@@ -358,6 +352,24 @@ class Terminal
     }
 
     /**
+     * Execute a system command.
+     * 
+     * @param string $command The command to execute
+     * 
+     * @return array|false The output of the command as an array of lines, or false on failure
+     */
+    public function execute(string $command): mixed
+    {
+        exec($command, $output, $returnCode);
+        
+        if ($returnCode === STATUS_SUCCESS) {
+            return $output;
+        } else {
+            return STATUS_ERROR;
+        }
+    }
+
+    /**
      * Return user selected options
      * Get Input Array Values
      * 
@@ -387,7 +399,7 @@ class Terminal
     private static function writeOptions(array $options, int $max): void
     {
         foreach ($options as $key => $value) {
-            $name = str_pad('  [' . $key . ']  ', $max, ' ');
+            $name = TextUtils::padEnd('  [' . $key . ']  ', $max, ' ');
             static::writeln(static::color($name, 'green') . static::wrap($value['value'], 125, $max));
         }
         static::newLine();
@@ -420,14 +432,45 @@ class Terminal
     }
 
     /**
+     * Create a card text.
+     *
+     * @param string $text string to pad
+     * @param int|null $padding maximum padding
+     * 
+     * @return string Return beautiful card text.
+    */
+    public static function card(string $text, ?int $padding = null): string 
+    {
+        $width = static::getWidth() / 2;
+        $padding ??= $width;
+        $padding = max(20, $padding);
+        $padding = (int) min($width, $padding);
+
+        $text = static::wrap($text, $padding);
+        $largest = TextUtils::largest($text)[1];
+        $lines = explode(PHP_EOL, $text);
+        $text = str_repeat(' ', $largest + 2) . PHP_EOL;
+
+        foreach ($lines as $line) {
+            $length = max(0, $largest - TextUtils::strlen($line));
+            $text .= ' ' . $line . str_repeat(' ', $length) . ' '  . PHP_EOL;
+        }
+        $text .= str_repeat(' ', $largest + 2);
+
+        return $text;
+    }
+
+    /**
      * Attempts to determine the width of the viewable CLI window.
+     * 
+     * @param int $width Optional default width (default: 80)
      * 
      * @return int static::$width or fallback to default
     */
     protected static function getWidth(int $default = 80): int
     {
         if (static::$width === null) {
-            static::getVisibleWindow();
+            static::calculateVisibleWindow();
         }
 
         return static::$width ?: $default;
@@ -436,23 +479,25 @@ class Terminal
     /**
      * Attempts to determine the height of the viewable CLI window.
      * 
+     * @param int $width Optional default height (default: 24)
+     * 
      * @return int static::$height or fallback to default
     */
     protected static function getHeight(int $default = 24): int
     {
         if (static::$height === null) {
-            static::getVisibleWindow();
+            static::calculateVisibleWindow();
         }
 
         return static::$height ?: $default;
     }
 
     /**
-     * Get the visible CLI width and height.
+     * Calculate the visible CLI window width and height.
      *
      * @return void
     */
-    protected static function getVisibleWindow(): void
+    private static function calculateVisibleWindow(): void
     {
         if (static::$height !== null && static::$width !== null) {
             return;
@@ -479,9 +524,11 @@ class Terminal
      * Get input from the shell, using readline or the standard STDIN
      *
      * Named options must be in the following formats:
-     * php index.php user -v --v -name=John --name=John
+     * php index.php user -v --v -name=Peter --name=Peter
      *
      * @param string|null $prefix You may specify a string with which to prompt the user.
+     * 
+     * @return string User input string.
     */
     protected static function input(?string $prefix = null): string
     {
@@ -502,13 +549,14 @@ class Terminal
     */
     protected static function validate(string $value, array $rules): bool
     {
-        $validation = new InputValidator();
+        static $validation = null;
+        $validation ??= new InputValidator();
         $validation->setRules($rules);
         $field = [
             'input' => $value
         ]; 
 
-        if (!$validation->validateEntries($field)) {
+        if (!$validation->validate($field)) {
             static::error($validation->getError('input'));
             return false;
         }
@@ -525,10 +573,34 @@ class Terminal
      * 
      * @return void
     */
-    public static function error(string $text, string|null $foreground = 'red', ?string $background = null): void
+    public static function error(string $text, string|null $foreground = 'white', ?string $background = 'red'): void
     {
         $stdout = static::$isColored;
         static::$isColored = static::isColorSupported(STDERR);
+        $text = static::card($text);
+
+        if ($foreground || $background) {
+            $text = static::color($text, $foreground, $background);
+        }
+
+        static::fwrite($text . PHP_EOL, STDERR);
+        static::$isColored = $stdout;
+    }
+
+    /**
+     * Display success text on CLI 
+     *
+     * @param string $text Error message
+     * @param string|null $foreground Foreground color name
+     * @param string|null $background Optional background color name
+     * 
+     * @return void
+    */
+    public static function success(string $text, string|null $foreground = 'white', ?string $background = 'green'): void
+    {
+        $stdout = static::$isColored;
+        static::$isColored = static::isColorSupported(STDERR);
+        $text = static::card($text);
 
         if ($foreground || $background) {
             $text = static::color($text, $foreground, $background);
@@ -582,7 +654,7 @@ class Terminal
     }
 
     /**
-     * Echo / output text if
+     * Echo / output a message to CLI
      *
      * @param string $text string to output
      * @param string|null $foreground Optional foreground color name
@@ -634,7 +706,7 @@ class Terminal
      *
      * @return void
     */
-    public static function wipeout(): void
+    public static function flush(): void
     {
         static::fwrite("\033[1A");
     }
@@ -644,13 +716,13 @@ class Terminal
      * optionally a background color.
      *
      * @param string $text Text to color
-     * @param string $foreground Foreground color name
+     * @param string|null $foreground Foreground color name
      * @param string|null $background Optional background color name
      * @param int|null $format Optionally apply text formatting.
      *
      * @return string A colored text if color is supported
     */
-    public static function color(string $text, string $foreground, ?string $background = null, ?int $format = null): string
+    public static function color(string $text, string|null $foreground, ?string $background = null, ?int $format = null): string
     {
         if (!static::$isColored) {
             return $text;
@@ -692,40 +764,13 @@ class Terminal
     }
 
     /**
-     * Register command line queries to static::$options and run it
-     * This method is being called in router to parse commands
-     * 
-     * @param array $values arguments 
-     * @param bool $run run command after it has been registered 
-     * 
-     * @return int
-    */
-    public static function registerCommands(array $values, bool $run = true): int
-    {
-        static::explain($values);
-
-        if($run){
-            $argument = static::getArgument(1);
-
-            if($argument === 'help'){
-                return STATUS_ERROR;
-            }
-            
-            if($argument === 'list'){
-                return STATUS_ERROR;
-            }
-        }
-
-        return STATUS_SUCCESS;
-    }
-
-    /**
      * Register command line queries to static::$options 
      * To make available using getOptions() etc
      * 
      * @param array $values arguments 
      * 
      * @return void
+     * @internal
     */
     public static function explain(array $values): void
     {
@@ -738,21 +783,28 @@ class Terminal
      * @param array $arguments arguments $_SERVER['argv']
      * 
      * @return array<string, mixed>
+     * @internal Pass raw command arguments from $_SERVER['argv'].
     */
-    public static function parseCommands(array $arguments): array
+    public static function parseCommands(array $arguments, bool $controller = false): array
     {
-        $optionValue = false;
         $caller = $arguments[0] ?? '';
         $result = [
             'caller' => '',
             'command' => '',
+            'group' => '',
             'arguments' => [],
             'options' => [],
         ];
         if ($caller === 'novakit' || $caller === 'php' || preg_match('/^.*\.php$/', $caller)) {
             array_shift($arguments); //Remove the front controller file
             $result['caller'] = implode(' ', $arguments);
-            $result['command'] = $arguments[0]??'';
+
+            if($controller){
+                $result['group'] = $arguments[0]??'';
+                $result['command'] = $arguments[1]??'';
+            }else{
+                $result['command'] = $arguments[0]??'';
+            }
         }else{
             $hasSpace = array_reduce($arguments, function ($carry, $item) {
                 return $carry || strpos($item, ' ') !== false;
@@ -767,14 +819,49 @@ class Terminal
             $result['command'] = $arguments[1]??'';
         }
 
-        unset($arguments[0]); // Unset command name 
-        
+        // Unset command name 
+        if($controller){
+            unset($arguments[0], $arguments[1]);
+        }else{
+            unset($arguments[0]); 
+        }
+
+        $response = static::extract($arguments);
+        $result['arguments'] = $response['arguments'];
+        $result['options'] = $response['options'];
+
+        return $result;
+    }
+
+
+    /**
+     * Extract and process command line arguments.
+     * 
+     * @param array $arguments Command line arguments
+     * @param bool $controller is the controller command?
+     * 
+     * @return array<string,array>
+     * @internal
+    */
+    public static function extract(array $arguments, $controller = false): array
+    {
+        $optionValue = false;
+        $result = [
+            'arguments' => [],
+            'options' => [],
+        ];
         foreach ($arguments as $i => $arg) {
             if ($arg[0] !== '-') {
                 if ($optionValue) {
                     $optionValue = false;
                 } else {
-                    $result['arguments'][] = $arg;
+                    if($controller && strpos($arg, '=') !== false){
+                        [$arg, $value] = explode('=', $arg);
+                        $result['arguments'][] = $arg;
+                        $result['arguments'][] = $value;
+                    }else{
+                        $result['arguments'][] = $arg;
+                    }
                 }
             } else {
                 $arg = ltrim($arg, '-');
@@ -797,43 +884,11 @@ class Terminal
     }
 
     /**
-     * Get the current command controller views
-     * @return array $views
-    */
-    public static function getRequestCommands(): array
-    {
-        $views = [
-            'view' => '',
-            'options' => [],
-        ];
-       
-        if (is_command() && isset($_SERVER['argv'][1])) {
-            $viewArgs = array_slice($_SERVER['argv'], 1);
-            $view = '/';
-            $options = [];
-
-            foreach ($viewArgs as $arg) {
-                if (strpos($arg, '-') === 0) {
-                    $options[] = $arg;
-                } else {
-                    $view .= $arg . '/';
-                }
-            }
-
-            $view = rtrim($view, '/');
-            $views['view'] = $view;
-            $views['options'] = $options;
-        }
-
-        return $views;
-    }
-
-    /**
      * Get command argument by index number
      * 
      * @param int $index Index postion
      * 
-     * @return string|null|int
+     * @return mixed
     */
     public static function getArgument(int $index): mixed
     {
@@ -865,7 +920,7 @@ class Terminal
     }
 
     /**
-     * Get command caller command string
+     * Get command caller command string.
      * The full passed command, options and arguments 
      * 
      * @return string|null
@@ -876,13 +931,13 @@ class Terminal
     }
 
     /**
-     * Get options value 
-     * If option flag is passed with an empty value true will be return else false
+     * Get options value from command arguments.
+     * If option flag is passed with an empty value true will be return else default or false
      * 
      * @param string $key Option key to retrieve
      * @param string $default Default value to return (default: false)
      * 
-     * @return null|string|int|bool
+     * @return mixed Option ot default value.
      */
     public static function getOption(string $key, mixed $default = false): mixed
     {
@@ -893,6 +948,16 @@ class Terminal
         }
     
         return $default;
+    }
+
+    /**
+     * Returns the command controller class method.
+     * 
+     * @return string|null The command controller class method or null
+    */
+    public static function getMethod(): string|null
+    {
+        return static::getQuery('classMethod');
     }
 
     /**
@@ -911,7 +976,7 @@ class Terminal
      *
      * @param string $name Option key name
      * 
-     * @return string|array|null
+     * @return mixed Command option query value.
     */
     public static function getQuery(string $name): mixed
     {
@@ -936,9 +1001,10 @@ class Terminal
      * Check if the stream resource supports colors.
      *
      * @param resource $resource STDIN/STDOUT
+     * 
      * @return bool 
     */
-    public static function isColorSupported($resource): bool
+    public static function isColorSupported($resource = STDOUT): bool
     {
         if (static::isColorDisabled()) {
             return false;
@@ -993,78 +1059,122 @@ class Terminal
     }
 
     /**
-     * Checks whether system has requested command
+     * Checks whether framework has the requested command.
      *
-     * @param string $command
-     * @param array $options
+     * @param string $command Command name to check
      * 
-     * @return bool
+     * @return bool Return true if command exist, false otherwise.
     */
-    public static function hasCommand(string $command, array $options): bool
+    public static function hasCommand(string $command): bool
+    {
+        return Executor::has($command);
+    }
+
+    /**
+     * Checks whether system controller has requested command and run the command.
+     *
+     * @param string $command Command name to check
+     * @param array $options Command compiled arguments
+     * 
+     * @return bool Return true if command exist, false otherwise.
+     * @internal Used in router to execute controller command.
+    */
+    public static function call(string $command, array $options): bool
     {
         static $terminal = null;
+
         if(Executor::has($command)){
             $terminal ??= new static();
-            
-            $terminal->registerCommands($options);
-            Executor::call($terminal, $options);
+            $terminal->explain($options);
 
-            return true;
+            $call = Executor::call($terminal, $options);
+
+            return $call === STATUS_SUCCESS;
         }
 
         return false;
     }
 
     /**
-     * Print help
-     *
-     * @param array $help
+     * Check if command is help command 
      * 
-     * @return void
+     * @param string $command Command name to check.
+     * 
+     * @return bool Return true if command is help, false otherwise.
     */
-    public static function printHelp(array $help): void
+    public static function isHelp(string $command):bool 
     {
-        foreach($help as $key => $value){
-            if($key === 'usage'){
-                static::writeln('Usages:');
-                if(is_array($value)){
-                    static::newLine();
-                    foreach($value as $usages){
-                        static::writeln(TextUtils::leftPad('', 7) . $usages);
-                    }
-                }else{
-                    static::writeln($value);
-                }
-            }elseif($key === 'description'){
-                static::writeln('Description:');
-                static::newLine();
-                static::writeln($value);
-            }elseif($key === 'options' && is_array($value)){
-                static::writeln('Options:');
-                static::newLine();
-                foreach($value as $info => $option){
-                    //static::writeln(TextUtils::leftPad('', 8) . static::color($info, 'lightGreen') . TextUtils::leftPad('', 10) . $option);
-                    static::writeln(TextUtils::leftPad('', 8) . static::color($info, 'lightGreen'));
-                    static::writeln(TextUtils::leftPad('', 15) . $option);
-                }
-            }
-            static::newLine();
-        }
+        return preg_match('/^-{1,2}help/', $command);
     }
 
     /**
-     * Gets request status code [1, 0]
-     * @param void|bool|null|int $result response from callback function
-     * @return int
+     * Print help
+     *
+     * @param array $help Pass the command protected properties as an array.
+     * @param bool $all Indicate whether you are printing all help commands or not
+     *      - Used by system only
+     * 
+     * @return void
+     * @internal Used in router to print controller help information.
     */
-    public static function getStatusCode(mixed $result = null): int
+    public static function helper(array|null $helps, bool $all = false): void
     {
-        if ($result === false || (is_int($result) && $result == STATUS_ERROR)) {
-            return STATUS_ERROR;
+        if( $helps === null){
+            $helps = Commands::getCommands();
+        }else{
+            $helps = ($all ? $helps : [$helps]);
         }
 
-        return STATUS_SUCCESS;
+        foreach($helps as $name => $help){
+
+            /*$name = is_string($name) ? $name : ($help['name'] ?? null);
+            if($name !== null){
+                static::newLine();
+                static::writeln('[ ' . strtoupper( $name ) . ' HELP COMMANDS ]', 'yellow');
+                static::newLine();
+            }*/
+
+            foreach($help as $key => $value){
+                if($key === 'description'){
+                    static::writeln('Description:');
+                    static::writeln(TextUtils::padStart('', 7) . $value);
+                    static::newLine();
+                }
+
+                if($key === 'usages'){
+                    static::writeln('Usages:');
+                    if(is_array($value)){
+                        foreach($value as $usage => $usages){
+                            if(is_string($usage)){
+                                static::writeln(TextUtils::padStart('', 7) . static::color($usage, 'yellow'));
+                                static::writeln(TextUtils::padStart('', 10) . $usages);
+                            }else{
+                                static::writeln(TextUtils::padStart('', 7) . $usages);
+                            }
+                        }
+                    }else{
+                        static::writeln($value);
+                    }
+                    static::newLine();
+                }
+
+                if($key === 'options' && is_array($value)){
+                    static::writeln('Options:');
+                    foreach($value as $info => $option){
+                        if(is_string($info)){
+                            static::writeln(TextUtils::padStart('', 8) . static::color($info, 'lightGreen'));
+                            static::writeln(TextUtils::padStart('', 11) . $option);
+                        }else{
+                            static::writeln(TextUtils::padStart('', 8) . $option);
+                        }
+                    }
+                    static::newLine();
+                }
+            }
+        }
     }
+
+
 
     /**
      * Print NovaKit Command line header information
@@ -1075,20 +1185,10 @@ class Terminal
     {
         static::write(sprintf(
             'PHP Luminova v%s NovaKit Command Line Tool - Server Time: %s UTC%s',
-            static::$version,
+            Foundation::NOVAKIT_VERSION,
             date('Y-m-d H:i:s'),
             date('P')
         ), 'green');
         static::newLine();
-    }
-
-    /**
-     * Get the PHP script path.
-     *
-     * @return string
-    */
-    public static function phpScript(): string 
-    {
-        return PHP_BINARY;
     }
 }

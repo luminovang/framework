@@ -20,7 +20,8 @@ class Commands
         'help' => [
             'name' => 'help',
             'group' => 'Help',
-            'usage' => [
+            'description' => "Command helps options for nokakit cli tool.",
+            'usages' => [
                 'php index.php <command> <argument> ',
                 'php index.php <command> <option> <argument> <option>',
                 'php index.php <command> <segment> <argument> <option>',
@@ -28,35 +29,70 @@ class Commands
                 'novakit <command> <option> <argument> <option>',
                 'novakit <command> <segment> <argument> <option>'
             ],
-            'description' => "Command helps options for nokakit cli tool.",
             'options' => [
                 'foo -help' => 'Show help related to foo command',
-                'create:controller userController -extend Controller' => 'Create user controller specifying class and class to extend.',
+                'create:controller userController --extend Controller' => 'Create user controller specifying class and class to extend.',
                 'create:controller userController' => 'Create user controller.',
                 'create:model userModel -extend userController' => 'Create user model and extend userController.',
                 'create:view user' => 'Create user view',
-                'create:view user -directory users' => 'Create user view in users directory.',
+                'create:view user --dir users' => 'Create user view in users directory.',
                 'create:class myClass' => 'Create class.',
-                'create:class myClass -extend otherClass' => 'Create class specifying class other class to extend.',
-                'create:class myClass -extend otherClass -directory myPath' => 'Create class specifying class other class to extend and directory to class.',
-                'myControllerClass segment -name Peter -id 1' => 'Query your controller class, pass method as segment and parameter key followed by value.',
+                'create:class myClass --extend otherClass' => 'Create class specifying class other class to extend.',
+                'create:class myClass --extend otherClass --dir myPath' => 'Create class specifying class other class to extend and directory to class.',
+                'myControllerClass segment --name Peter --id 1' => 'Query your controller class, pass method as segment and parameter key followed by value.',
             ]
         ],
         'build:project' => [
             'name' => 'build:project',
             'group' => 'System',
-            'usage' => 'php novakit build:project',
             'description' => "Generates application build files for production",
+            'usages' => 'php novakit build:project',
             'options' => [
-                '--type zip',
+                '--type zip' => "build",
                 '--type build'
             ]
         ],
         'generate:key' => [
             'name' => 'generate:key',
             'group' => 'System',
-            'usage' => 'php novakit generate:key',
             'description' => "Generates application key",
+            'usages' => 'php novakit generate:key',
+            'options' => [
+
+            ]
+        ],
+        'generate:sitemap' => [
+            'name' => 'generate:sitemap',
+            'group' => 'System',
+            'description' => "Generates application sitemap",
+            'usages' => 'php novakit generate:sitemap',
+            'options' => [
+
+            ]
+        ],
+        'env:add' => [
+            'name' => 'env:add',
+            'group' => 'System',
+            'description' => "Add a variable to env file",
+            'usages' => 'php novakit env:add',
+            'options' => [
+
+            ]
+        ],
+        'env:remove' => [
+            'name' => 'env:remove',
+            'group' => 'System',
+            'description' => "Remove a variable from env file",
+            'usages' => 'php novakit env:remove',
+            'options' => [
+
+            ]
+        ],
+        'context' => [
+            'name' => 'context',
+            'group' => 'System',
+            'description' => "Generates application key",
+            'usages' => 'php novakit context "name"',
             'options' => [
 
             ]
@@ -64,12 +100,12 @@ class Commands
         'create:controller' => [
             'name' => 'create:controller',
             'group' => 'Generators',
-            'usage' => [
+            'description' => "Create a new controller class",
+            'usages' => [
                 '<command> <argument> <option>',
                 '<command> <option>',
                 '<command> <argument> <option> <argument> <option>',
             ],
-            'description' => "Create a new controller class",
             'options' => [
                 'userController -extend Controller' => 'Create user controller specifying class and class to extend.',
                 'userController' => 'Create user controller.',
@@ -78,11 +114,11 @@ class Commands
         'create:view' => [
             'name' => 'create:view',
             'group' => 'Generators',
-            'usage' => [
+            'description' => "Create a new template view",
+            'usages' => [
                 '<command> <option> ',
                 '<command> <option> <argument>'
             ],
-            'description' => "Create a new template view",
             'options' => [
                 'user' => 'Create user.php template view.',
                 'user -directory user' => 'Create user.php template view in user/ directory.',
@@ -91,11 +127,11 @@ class Commands
         'create:class' => [
             'name' => 'create:class',
             'group' => 'Generators',
-            'usage' => [
+            'description' => "Create a new controller class",
+            'usages' => [
                 '<command> <option>',
                 '<command> <option> <argument> <option>'
             ],
-            'description' => "Create a new controller class",
             'options' => [
                 'myClass' => 'Create a new class.',
                 'myClass -extend otherClass' => 'Create a new class and extend otherClass.',
@@ -105,15 +141,15 @@ class Commands
         'list' => [
             'name' => 'list',
             'group' => 'Lists',
-            'usage' => 'php novakit list',
             'description' => "List available commands it descriptions.",
+            'usages' => 'php novakit list',
             'options' => []
         ],
         'db:create' => [
             'name' => 'db:create',
             'group' => 'Database',
-            'usage' => '',
             'description' => "Create database datable if not exist",
+            'usages' => '',
             'options' => [
 
             ]
@@ -121,8 +157,8 @@ class Commands
         'db:update' => [
             'name' => 'db:update',
             'group' => 'Database',
-            'usage' => '',
             'description' => "Update database record",
+            'usages' => '',
             'options' => [
 
             ]
@@ -130,8 +166,8 @@ class Commands
         'db:insert' => [
             'name' => 'db:insert',
             'group' => 'Database',
-            'usage' => '',
             'description' => "Insert new record to database",
+            'usages' => '',
             'options' => [
 
             ]
@@ -139,8 +175,8 @@ class Commands
         'db:drop' => [
             'name' => 'db:drop',
             'group' => 'Database',
-            'usage' => '',
             'description' => "Drop database table",
+            'usages' => '',
             'options' => [
 
             ]
@@ -148,8 +184,8 @@ class Commands
         'db:delete' => [
             'name' => 'db:delete',
             'group' => 'Database',
-            'usage' => '',
             'description' => "Delete record from database table",
+            'usages' => '',
             'options' => [
 
             ]
@@ -157,8 +193,8 @@ class Commands
         'db:truncate' => [
             'name' => 'db:truncate',
             'group' => 'Database',
-            'usage' => '',
             'description' => "Clear all database table records",
+            'usages' => '',
             'options' => [
 
             ]
@@ -166,8 +202,8 @@ class Commands
         'db:select' => [
             'name' => 'db:select',
             'group' => 'Database',
-            'usage' => '',
             'description' => "Select record from database",
+            'usages' => '',
             'options' => [
 
             ]
@@ -175,12 +211,12 @@ class Commands
         'server' => [
             'name' => 'server',
             'group' => 'Server',
-            'usage' => [
+            'description' => "Start Luminova PHP development server",
+            'usages' => [
                 'php novakit server',
                 'php novakit server --host localhost --port 8080',
                 'php novakit server <flag> <option>',
             ],
-            'description' => "Start Luminova PHP development server",
             'options' => [
                 '--php'  => 'The PHP Binary [default: "PHP_BINARY"]',
                 '--host' => 'The HTTP Host [default: "localhost"]',
@@ -190,12 +226,12 @@ class Commands
         'cache' => [
             'name' => 'cache',
             'group' => 'Cache',
-            'usage' => [
+            'description' => "Manage system caches, clear, delete by key or list cache inhumations",
+            'usages' => [
                 'php novakit cache:clear',
                 'php novakit cache:clear --key <key>',
                 'php novakit cache:list',
             ],
-            'description' => "Manage system caches, clear, delete by key or list cache inhumations",
             'options' => [
                 '--key'  => 'Set the cache key to delete',
                 '--storage'  => 'Set the cache storage name to delete',

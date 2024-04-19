@@ -56,23 +56,22 @@ class Colors
 
 
      /**
-     * Returns the given text with the correct color codes for a foreground and
-     * optionally a background color.
+     * Returns the given text with the correct color codes for a foreground and optional background color.
      *
      * @param string $text Text to color
-     * @param int|null $format Optionally apply text formatting.
-     * @param string $foreground Foreground color name
+     * @param int|null $format Optionally apply text formatting (ex: TextUtils::ANSI_BOLD).
+     * @param string|null $foreground Foreground color name
      * @param string|null $background Optional background color name
      *
      * @return string A colored text if color is supported
     */
     public static function apply(string $text, ?int $format = null, ?string $foreground = null, ?string $background = null): string
     {
-        if ($text === '' || TextUtils::hasAnsiMethod($text)) {
+        if ($text === '' || TextUtils::hasAnsi($text)) {
             return $text;
         }
 
-        $formatCode = TextUtils::style($text, $format, false);
+        $formatCode = ($format === null) ? '' : TextUtils::style($text, $format, false);
 
         if (!static::isValidColor($foreground, static::$foregroundColors)) {
             return "\033[{$formatCode}m{$text}\033[0m";

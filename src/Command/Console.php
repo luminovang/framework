@@ -9,6 +9,7 @@
  */
 namespace Luminova\Command;
 
+use \Luminova\Application\Foundation;
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Executor;
 
@@ -22,21 +23,10 @@ class Console
     private static ?Terminal $instance = null;
 
     /**
-     * Is header suppressed?
-     * 
-     * @var bool $noHeader 
-    */
-    private bool $noHeader = false;
-
-    /**
      * Initialize console instance
      * 
-     * @param bool $noHeader Suppress header if no header is detected
     */
-    public function __construct(bool $noHeader)
-    {
-        $this->noHeader = $noHeader;
-    }
+    public function __construct(){ }
 
     /**
      * Get novakit static CLI instance 
@@ -52,7 +42,8 @@ class Console
     }
 
     /**
-     * Run CLI
+     * Run CLI.
+     * 
      * @param array $commands commands to execute
      * 
      * @return void
@@ -60,19 +51,15 @@ class Console
     public function run(array $commands): void
     {
         $terminal = static::getTerminal();
-
         $commands = $terminal::parseCommands($commands);
-        $terminal::explain($commands);
 
+        $terminal::explain($commands);
         $command = $terminal::getCommand();
-     
-        if (!$this->noHeader) {
-            $terminal::header();
-        }
 
         if('--version' === $command){
+            $terminal::header();
             $terminal::writeln('Novakit Command Line Tool');
-            $terminal::writeln('version: ' . $terminal::$version, 'green');
+            $terminal::writeln('version: ' . Foundation::NOVAKIT_VERSION, 'green');
 
             exit(STATUS_SUCCESS);
         }

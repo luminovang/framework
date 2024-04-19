@@ -9,12 +9,12 @@
  */
 namespace Luminova\Email;
 
-use Exception;
-use \Luminova\Email\Clients\MailClientInterface;
+use \Luminova\Interface\MailClientInterface;
 use \Luminova\Email\Clients\NovaMailer;
 use \Luminova\Email\Clients\PHPMailer;
 use \Luminova\Base\BaseConfig;
 use \Luminova\Email\Exceptions\MailerException;
+use \Exception;
 
 class Mailer
 {

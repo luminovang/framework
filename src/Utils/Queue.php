@@ -40,6 +40,7 @@ class Queue
      * @param string $key The property key.
      *
      * @return mixed|null The property value.
+     * @internal
      */
     public function __get(string $key): mixed
     {
@@ -52,6 +53,7 @@ class Queue
      * @param string $key The property key.
      *
      * @return bool True if the property is set, otherwise false.
+     * @internal
      */
     public function __isset(string $key): bool
     {
@@ -139,6 +141,7 @@ class Queue
      * Check if the queue is empty.
      *
      * @return bool True if the queue is empty, otherwise false.
+     * @internal
      */
     public function isEmpty(): bool
     {
@@ -178,14 +181,13 @@ class Queue
     }
 
     /**
-     * Delete the queue.
+     * Delete the first task from the queue
      *
      * @return void
      */
     public function delete(): void
     {
         array_shift($this->jobs);
-       // unset($this->jobs[0]);
     }
 
     /**
@@ -198,13 +200,14 @@ class Queue
     public function remove(mixed $job): void
     {
         $index = array_search($job, $this->jobs);
+
         if ($index !== false) {
             unset($this->jobs[$index]);
         }
     }
 
     /**
-     * Free resources
+     * Free all resources by clearing the queue
      *
      * @return void
      */
@@ -222,7 +225,7 @@ class Queue
      */
     private function returnInstance(array $job): Queue
     {
-        return new Queue($job);
+        return new self($job);
     }
 
     /**

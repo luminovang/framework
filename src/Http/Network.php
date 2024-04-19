@@ -10,7 +10,8 @@
 
 namespace Luminova\Http;
 
-use \Luminova\Http\Client\ClientInterface;
+use \Luminova\Interface\HttpClientInterface;
+use \Luminova\Interface\NetworkInterface;
 use \Luminova\Http\Message\Response;
 use \GuzzleHttp\Promise\PromiseInterface;
 use \GuzzleHttp\Client;
@@ -20,14 +21,14 @@ use \GuzzleHttp\Psr7\Request;
 class Network implements NetworkInterface
 {
     /**
-     * @var ClientInterface $client
+     * @var HttpClientInterface $client
      */
-    private ClientInterface $client;
+    private HttpClientInterface $client;
 
     /**
      * {@inheritdoc}
     */
-    public function __construct(?ClientInterface $client = null)
+    public function __construct(?HttpClientInterface $client = null)
     {
         if($client === null){
             $this->client = new Curl();
@@ -39,7 +40,7 @@ class Network implements NetworkInterface
     /**
      * {@inheritdoc}
     */
-    public function getClient(): ClientInterface
+    public function getClient(): HttpClientInterface
     {
         return $this->client;
     }

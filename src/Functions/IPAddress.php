@@ -55,6 +55,7 @@ class IPAddress
 
       foreach (static::$ipHeaders as $header) {
          $ips = isset($_SERVER[$header]) ? $_SERVER[$header] : getenv($header);
+         
          if ($ips !== false) {
             $list = array_map('trim', explode(',', $ips));
             foreach ($list as $ip) {
@@ -76,7 +77,7 @@ class IPAddress
     *
     * @return null|object $ipInfo
    */
-   public static function getInfo(?string $ip = null, array $options = []): ?object
+   public static function info(?string $ip = null, array $options = []): ?object
    {
       if ($ip === null) {
          $ip = static::get();
@@ -244,16 +245,16 @@ class IPAddress
    /**
      * Checks if the given IP address is a Tor exit node
      * 
-     * @param string|null $ip
+     * @param string|null $ip Ip address if null it wull use current user's IP.
      * 
-     * @return bool 
-    */
+     * @return bool Return true if the IP address is a Tor exit node.
+   */
    public static function isTor(string|null $ip = null): bool 
    {
       if($ip === null){
          $ip = static::get();
       }
 
-      return TorDetector::isTorExitNode($ip);
+      return TorDetector::isTor($ip);
    }
 }

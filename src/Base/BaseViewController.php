@@ -46,8 +46,7 @@ abstract class BaseViewController
     protected ?Importer $library = null;
 
     /**
-     * Initialize BaseViewController class instance a
-     * nd make $this->app available to controller classes.
+     * Initialize BaseViewController class instance and make $this->app available to controller classes.
     */
     public function __construct()
     {

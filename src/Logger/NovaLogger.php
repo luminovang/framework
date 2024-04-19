@@ -95,13 +95,14 @@ class NovaLogger extends AbstractLogger
         
         $time = Time::now()->format('Y-m-d\TH:i:sP');
 
-        $log = "[{$level}] [{$time}]: {$message}";
+        $message = "[{$level}] [{$time}]: {$message}";
+        
         if ($context !== []) {
-            $log .= " Context: " . print_r($context, true);
+            $message .= " Context: " . print_r($context, true);
         }
 
-        $log .= PHP_EOL;
+        $message .= PHP_EOL;
 
-        write_content($filepath, $log, FILE_APPEND);
+        write_content($filepath, $message, FILE_APPEND);
     }
 }
