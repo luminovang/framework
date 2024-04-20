@@ -626,7 +626,7 @@ trait TemplateTrait
                     }
                 }
             }
-        } catch (ViewNotFoundException $e) {
+        } catch (ViewNotFoundException|AppException $e) {
             static::handleException($e, $options);
         }
 
@@ -677,15 +677,19 @@ trait TemplateTrait
     {
         static $smarty = null;
         $smarty ??= new Smarty(static::viewRoot());
-        $smarty->setDirectories(
-            $this->templateDir, 
-            TemplateConfig::$smartyCompileFolder,
-            TemplateConfig::$smartyConfigFolder,
-            TemplateConfig::$smartyCacheFolder
-        );
-        $smarty->assignOptions($options);
-        $smarty->caching($shouldCache);
-        $smarty->display($this->activeView . $this->typeOfEngine());
+        try{
+            $smarty->setDirectories(
+                $this->templateDir, 
+                TemplateConfig::$smartyCompileFolder,
+                TemplateConfig::$smartyConfigFolder,
+                TemplateConfig::$smartyCacheFolder
+            );
+            $smarty->assignOptions($options);
+            $smarty->caching($shouldCache);
+            $smarty->display($this->activeView . $this->typeOfEngine());
+        }catch(AppException $e){
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+        }
     }
 
     /**

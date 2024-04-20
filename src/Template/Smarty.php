@@ -67,11 +67,11 @@ class Smarty
     */
     public static function getSmarty(): SmartyTemplate
     {
-        if(class_exists('\Smarty')){
+        if(class_exists(SmartyTemplate::class)){
             return new SmartyTemplate();
         }
        
-        throw new RuntimeException('Smarty is not available, run composer command "composer install smarty/smarty" if you want to use smarty template', 404);
+        throw new RuntimeException('Smarty is not available, run composer command "composer require smarty/smarty" if you want to use smarty template', 1991);
     }
 
     /**
@@ -167,7 +167,7 @@ class Smarty
         try{
             $this->smarty->display($template, $cache_id, $compile_id, $parent);
         }catch(Exception | SmartyException $e){
-            throw new RuntimeException($e->getMessage(), $e->getCode());
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -188,5 +188,4 @@ class Smarty
             make_dir($this->root . $dir);
         }
     }
-
 }

@@ -36,6 +36,14 @@ class ErrorStack
     private mixed $message = '';
 
     /** 
+     * The error name.
+     * 
+     * @var mixed $name
+     * 
+    */
+    private mixed $name = 'ERROR';
+
+    /** 
      * The error code.
      * 
      * @var int $code
@@ -83,6 +91,16 @@ class ErrorStack
     }
 
     /**
+     * Sets the error name
+     * 
+     * @param string $name The error display name
+     */
+    public function setName(string $name): void
+    {
+        $this->name = $name;
+    }
+
+    /**
      * Gets the error code.
      * @return int The error code.
      */
@@ -107,6 +125,16 @@ class ErrorStack
     public function getFile(): string
     {
         return $this->file;
+    }
+
+    /**
+     * Gets the display name
+     * 
+     * @return string The error display name.
+     */
+    public function getName(): string
+    {
+        return $this->name;
     }
 
     /**

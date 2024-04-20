@@ -10,7 +10,16 @@
 namespace Luminova\Errors;
 
 use \Luminova\Errors\ErrorStack;
-use \Luminova\Http\Request;
+
+/**
+ * If composer didn't load correctly manually load our configuration needed for error message.
+*/
+if(!defined('APP_ROOT')){
+    require_once __DIR__ . '/../../system/Config/DotEnv.php';
+    require_once __DIR__ . '/../../libraries/sys/constants.php';
+    require_once __DIR__ . '/../../libraries/sys/functions.php';
+    require_once __DIR__ . '/ErrorStack.php';
+}
 
 final class Error
 {
@@ -104,16 +113,15 @@ final class Error
      * This method includes an appropriate error view based on the environment and request type.
      *
      * @param ErrorStack $stack The error stack containing errors to display.
-     * @param string $name The name of the error view to display (default: 'ERROR').
      * @return void
      */
-    private static function display(ErrorStack $stack, string $name = 'ERROR'): void 
+    private static function display(ErrorStack $stack): void 
     {
-        $path = path('views') . 'system_errors' . DIRECTORY_SEPARATOR;
+        $path = __DIR__ . '/../../resources/views/system_errors/';
 
         if (is_command()) {
             $path .= 'cli.php';
-        } elseif(Request::isApi()) {
+        } elseif(static::isApi()) {
             $path .= 'api.php';
         } else {
             $path .= 'errors.php';
@@ -130,6 +138,36 @@ final class Error
     public function getErrors(): array 
     {
         return static::$errors;
+    }
+
+    /**
+     * Check if the request URL indicates an API endpoint.
+     *
+     * This method checks if the URL path starts with '/api' or 'public/api'.
+     * 
+     * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
+    */
+    public static function isApi(): bool
+    {
+        $url = ($_SERVER['REQUEST_URI']??'');
+
+        if($url === ''){
+            return false;
+        }
+
+        $segments = explode('/', trim($url, '/'));
+
+        // Check if the URL path starts with '/api' or 'public/api'
+        if (!empty($segments) && ($segments[0] === 'api' || ($segments[0] === 'public' && isset($segments[1]) && $segments[1] === 'api'))) {
+            return true;
+        }
+
+        // Additional check for custom project structure like '/my-project/api'
+        if (basename(root(__DIR__)) === $segments[0] && isset($segments[2]) && $segments[2] === 'api') {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -152,6 +190,7 @@ final class Error
         $stack = new ErrorStack($errstr, $errno);
         $stack->setFile(filter_paths($errfile));
         $stack->setLine($errline);
+        $stack->setName(static::getName($errno));
        
         self::$errors[] = $stack;
 
@@ -170,20 +209,44 @@ final class Error
             $stack = new ErrorStack($error['message'], $error['type']);
             $stack->setFile($error['file']);
             $stack->setLine($error['line']);
-   
-            if(!PRODUCTION && static::isFatal($stack->getCode())){
-                static::display($stack, static::getName($stack->getCode()));
-            }else{
-                static::$errors[] = $stack;
+            $stack->setName(static::getName($error['type']));
+            static::$errors[] = $stack;
+
+            if(static::isFatal($stack->getCode()) && !ini_get('display_errors')){
+                static::display($stack);
             }
         }
 
         foreach (static::$errors as $err) {
             if(!static::isFatal($err->getCode())){
-                $name = static::getName($err->getCode());
-                $message = "[{$name} ({$err->getCode()})] {$err->getMessage()} File: {$err->getFile()} Line: {$err->getLine()}";
-                logger(static::getLevel($err->getCode()), $message);
+                $message = "[{$err->getName()} ({$err->getCode()})] {$err->getMessage()} File: {$err->getFile()} Line: {$err->getLine()}";
+                static::log(static::getLevel($err->getCode()), $message);
             }
+        }
+    }
+
+    /**
+     * Log an error message 
+     * 
+     * @param string $level Error level
+     * @param string $message Error message
+     * 
+     * @return void
+    */
+    private static function log(string $level, string $message): void 
+    {
+        if(function_exists('logger')){
+            logger($level, $message);
+            return;
+        }
+
+        $time = date('Y-m-d\TH:i:sP');
+        $message = "[{$time}]: {$message}\n";
+
+        $log = __DIR__ . "/../../writeable/log/{$level}.log";
+
+        if (@file_put_contents($log, $message, FILE_APPEND | LOCK_EX) === false) {
+            @chmod($log, 0666);
         }
     }
 
