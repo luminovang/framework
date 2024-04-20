@@ -15,7 +15,7 @@ class Foundation
     /**
     * @var string VERSION version name
     */
-    public const VERSION = '1.9.6';
+    public const VERSION = '2.9.7';
 
     /**
      * Minimum required php version.
@@ -27,7 +27,7 @@ class Foundation
     /**
      * @var string $version command line tool version
     */
-    public const NOVAKIT_VERSION = '1.9.6';
+    public const NOVAKIT_VERSION = '2.9.7';
 
     /**
      * Get the framework copyright information
