@@ -15,6 +15,7 @@ use \Luminova\Sessions\Session;
 use \Luminova\Library\Modules;
 use \Luminova\Languages\Translator;
 use \Luminova\Application\FileSystem;
+use \Luminova\Http\Request;
 use \App\Controllers\Config\Services;
 use \Luminova\Template\ViewResponse;
 use \Luminova\Logger\NovaLogger;
@@ -39,6 +40,7 @@ use \ReflectionMethod;
  * @method static InputValidator      validate($shared = true)                              @return InputValidator
  * @method static Services            services($shared = true)                              @return Services
  * @method static ViewResponse        response(int $status, $shared = true)                 @return ViewResponse
+ * @method static Request             request($shared = true)                               @return Request
 */
 
 class Factory 
@@ -70,7 +72,8 @@ class Factory
             'files' => FileSystem::class,
             'validate' => InputValidator::class,
             'response' => ViewResponse::class,
-            'services' => Services::class
+            'services' => Services::class,
+            'request' => Request::class
         ];
 
         return $classes[$aliases] ?? null;

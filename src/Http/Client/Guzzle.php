@@ -10,14 +10,14 @@
 namespace Luminova\Http\Client;
 
 use \GuzzleHttp\Client;
-use \Luminova\Http\Client\ClientInterface;
+use \Luminova\Interface\HttpClientInterface;
 use \Luminova\Http\Message\Response;
 use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
 use \GuzzleHttp\Exception\GuzzleException;
 use \Luminova\Http\Exceptions\RequestException;
 use \Luminova\Http\Exceptions\ConnectException;
 
-class Guzzle implements ClientInterface
+class Guzzle implements HttpClientInterface
 {
     /**
      * @var Client $client guzzle client

@@ -32,7 +32,11 @@
         "ext-intl": "Needed if you use Local",
         "psr/log": "Needed to use PSR logging",
         "phpmailer/phpmailer": "Needed if you use Mailer",
-        "smarty/smarty": "Needed if you use Template engine"
+        "smarty/smarty": "Needed if you want to use Smarty template engine",
+        "twig/twig": "Needed if you want to use Twig template engine",
+        "league/flysystem": "Needed if you use FileSystem storage",
+        "nanoblocktech/psr-cache": "If you need to use psr-cache",
+        "peterujah/php-search-controller": "If you want to use model searching doSearch"
     },
     "autoload": {
         "psr-4": {

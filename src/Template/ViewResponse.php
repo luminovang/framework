@@ -9,7 +9,7 @@
 */
 namespace Luminova\Template;
 
-use \Luminova\Functions\Files;
+use \Luminova\Application\FileSystem;
 use \Luminova\Http\Header;
 use \Luminova\Http\Encoder;
 
@@ -71,7 +71,7 @@ class ViewResponse
      * @param mixed $content Response content
      * @param string $contentType Content type of the response
      * 
-     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR otherwise empty content or ening failed.
+     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
     */
     public static function render(string $content, string $contentType = 'application/json'): int
     {
@@ -93,12 +93,7 @@ class ViewResponse
             $headers['Content-Encoding'] = $encoding;
         }
 
-        http_response_code(static::$statusCode);
- 
-        foreach ($headers as $header => $value) {
-            header("$header: $value");
-        }
-
+        Header::parseHeaders($headers, static::$statusCode);
         echo $content;
 
         return STATUS_SUCCESS;
@@ -109,7 +104,7 @@ class ViewResponse
      *
      * @param array|object $content Data to be encoded as JSON
      * 
-     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR otherwise empty content or ening failed.
+     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
      */
     public function json(array|object $content): int 
     {
@@ -127,7 +122,7 @@ class ViewResponse
      *
      * @param string $content Text content
      * 
-     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR otherwise empty content or ening failed.
+     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
      */
     public function text(string $content): int 
     {
@@ -139,7 +134,7 @@ class ViewResponse
      *
      * @param string $content HTML content.
      * 
-     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR otherwise empty content or ening failed.
+     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
      */
     public function html(string $content): int 
     {
@@ -151,7 +146,7 @@ class ViewResponse
      *
      * @param string $content XML content.
      * 
-     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR otherwise empty content or ening failed.
+     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
      */
     public function xml(string $content): int 
     {
@@ -169,7 +164,7 @@ class ViewResponse
      */
     public function download(string $fileOrContent, ?string $name = null, array $headers = []): bool 
     {
-        return Files::download($fileOrContent, $name, $headers);
+        return FileSystem::download($fileOrContent, $name, $headers);
     }
 
     /** 

@@ -17,7 +17,7 @@ use Luminova\Base\BaseFunction;
  * @method static TorDetector         tor()       @return TorDetector
  * @method static Files               file()      @return Files
  * @method static IPAddress           ip()        @return IPAddress
- * @method static MathTrait           math()      @return MathTrait
+ * @method static Math                math()      @return Math
 */
 
 class Functions extends BaseFunction{}

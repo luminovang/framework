@@ -161,7 +161,6 @@ class Schema
     private static function getConfig(string $key): mixed
     {
         $config = array_replace(static::$defaultConfig, array_filter(static::$extendedConfig));
-        
         $param = $config[$key] ?? '';
 
         if(is_array($param)){
@@ -243,7 +242,7 @@ class Schema
 
         if (static::getConfig("isArticle")) {
             $meta .= '<!-- Article meta tags -->
-                <meta property="article:publisher" content="' . static::getConfig("company") . '" />
+                <meta property="article:publisher" content="' . static::getConfig("company_name") . '" />
                 <meta property="article:published_time" content="' . static::toDate(static::getConfig("published_date")) . '" />
                 <meta property="article:modified_time" content="' . static::toDate(static::getConfig("modified_date")) . '" />';
         }
@@ -254,7 +253,7 @@ class Schema
             <meta property="og:title" content="' . static::getConfig("title") . '" />
             <meta property="og:description" content="' . static::getConfig("page_description") . '" />
             <meta property="og:url" content="' . static::getConfig("link") . '" />
-            <meta property="og:site_name" content="' . static::getConfig("company_name") . '" />
+            <meta property="og:site_name" content="' . static::getConfig("name") . '" />
             <meta property="og:image" content="' . static::getConfig("image_assets") . static::getConfig("image_name") . '" />
             <meta property="og:image:width" content="' . static::getConfig("image_width") . '" />
             <meta property="og:image:height" content="' . static::getConfig("image_height") . '" />
@@ -295,8 +294,11 @@ class Schema
         $schema["organisation"] = [
             "@type" => "Organization",
             "@id" => static::getManifest('site_id', '') . '/#organization',
-            "name" => static::getConfig("company"),
+            "name" => static::getConfig("company_name"),
             "url" => static::$link . '/',
+            "brand" => static::getConfig("company_brands"),
+            "duns" => static::getConfig("company_duns"),
+            "email" => static::getConfig("company_email"),
             "sameAs" => (array) static::getManifest('social_media', []),
             "logo" => [
                 "@type" => "ImageObject",
@@ -310,6 +312,13 @@ class Schema
             ],
             "image" => [
                 "@id" => static::getManifest('site_id', '') . '/#logo'
+            ],
+            "address" => [
+                "@type" => "PostalAddress",
+                "addressLocality" => static::getConfig("address_locality"),
+                "addressCountry" => static::getConfig("address_country"),
+                "postalCode" => static::getConfig("address_postalcode"),
+                "streetAddress" => static::getConfig("address_street")
             ]
         ];
 
@@ -317,7 +326,7 @@ class Schema
             "@type" => "WebSite",
             "@id" => static::getManifest('site_id', '') . '/#website',
             "url" => static::$link . '/',
-            "name" => static::getConfig("company"),
+            "name" => static::getConfig("name"),
             "description" => static::getConfig("company_description"),
             "publisher" => [
                 "@id" => static::getManifest('site_id', '') . '/#organization'
@@ -332,7 +341,7 @@ class Schema
                     "query-input" => 'required name=' . static::getConfig("search_input")
                 ]
             ],
-            "inLanguage" => static::getManifest('language', 'en')
+            "inLanguage" => static::getManifest('language', 'en'),
         ];
 
         $schema["webpage"] = [
@@ -525,10 +534,17 @@ class Schema
             "canonical" => static::$link,
             "breadcrumbs" => [],
             'image_assets' => static::getManifest('image_assets'),
-            'company' => "Company",
+            'name' => static::getManifest('name'),
+            'company_brands' => static::getManifest('company_brands', [static::getManifest('name')]),
+            'company_duns'  => static::getManifest('duns'),
             "company_name" => static::getManifest('company_name'),
-            "page_description" => static::getManifest('page_description'),
+            "company_email" => static::getManifest('company_email'),
             "company_description" => static::getManifest('company_description'),
+            "address_locality" => static::getManifest('address_locality', ''),
+            "address_country" => static::getManifest('address_country', ''),
+            "address_postalcode" => static::getManifest('address_postalcode', ''),
+            "address_street" => static::getManifest('address_street', ''),
+            "page_description" => static::getManifest('page_description'),
             "title" => static::getManifest('title'),
             "headline" => static::getManifest('title'),
             "image_name" =>static::getManifest('image_name'),

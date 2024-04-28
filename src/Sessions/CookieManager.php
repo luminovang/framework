@@ -150,12 +150,16 @@ class CookieManager implements SessionInterface
     /** 
      * {@inheritdoc}
     */
-    public function toAs(string $type = 'array', string $index = ''): object|array
+    public function toAs(string $type = 'array', ?string $index = null): object|array|null
     {
         $result = $this->getItems();
 
-        if($index !== '' && isset($result[$index])) {
-            $result = $result[$index];
+        if($index !== null) {
+            if(isset($result[$index])) {
+                $result = $result[$index];
+            }else{
+                return null;
+            }
         }
     
         if($type === 'array'){

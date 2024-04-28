@@ -13,10 +13,7 @@ use \Luminova\Functions\TorDetector;
 use \App\Controllers\Config\IPConfig;
 use \Luminova\Time\Time;
 use \Luminova\Http\Network;
-use \Luminova\Http\Exceptions\RequestException;
-use \Luminova\Http\Exceptions\ConnectException;
-use \Luminova\Http\Exceptions\ClientException;
-use \Luminova\Http\Exceptions\ServerException;
+use \Luminova\Exceptions\AppException;
 use \Exception;
 
 class IPAddress
@@ -50,6 +47,7 @@ class IPAddress
       if (isset($_SERVER[static::$cf])) {
          $_SERVER['REMOTE_ADDR'] = $_SERVER[static::$cf];
          $_SERVER['HTTP_CLIENT_IP'] = $_SERVER[static::$cf];
+         
          return $_SERVER[static::$cf];
       }
 
@@ -79,11 +77,8 @@ class IPAddress
    */
    public static function info(?string $ip = null, array $options = []): ?object
    {
-      if ($ip === null) {
-         $ip = static::get();
-      }
-
-      $path = path('caches') . "ip" . DIRECTORY_SEPARATOR;
+      $ip ??= static::get();
+      $path = path('caches') . 'ip' . DIRECTORY_SEPARATOR;
 
       make_dir($path);
 
@@ -102,10 +97,10 @@ class IPAddress
       $headers = [];
 
       if (IPConfig::$apiProvider === 'ipapi') {
-         $url = IPConfig::$apiKey === '' ? "https://ipapi.co/$ip/json/" : "https://ipapi.co/$ip/json/?key=" . IPConfig::$apiKey;
+         $url = "https://ipapi.co/$ip/json/" . (IPConfig::$apiKey === '' ?: '?key=' . IPConfig::$apiKey);
       } elseif (IPConfig::$apiProvider === 'iphub') {
-         $url = "http://" . IPConfig::$ipHubVersion . ".api.iphub.info/ip/$ip";
-         $headers = IPConfig::$apiKey === [] ? [] : ['X-Key' => IPConfig::$apiKey];
+         $url = 'http://' . IPConfig::$ipHubVersion . '.api.iphub.info/ip/' . $ip;
+         $headers = (IPConfig::$apiKey === [] ? [] : ['X-Key' => IPConfig::$apiKey]);
       }else{
          return static::ipInfoError('Invalid ip address info api provider ' . IPConfig::$apiProvider , 700);
       }
@@ -136,11 +131,49 @@ class IPAddress
          write_content($cacheFile, json_encode($ipInfo));
 
          return (object) $ipInfo;
-      } catch (RequestException | ConnectException | ClientException | ServerException | Exception $e) {
+      } catch (AppException | Exception $e) {
          return static::ipInfoError($e->getMessage(), $e->getCode());
       }
 
       return null;
+   }
+
+   /**
+     * Check if the request origin IP matches any of the trusted proxy IP addresses or subnets.
+     * 
+     * @param string $ip The origin IP address
+     * 
+     * @return bool Return true if the request origin IP matches the trusted proxy IPs, false otherwise.
+     */
+    public static function isTrustedProxy(?string $ip = null): bool
+    {
+      if(IPConfig::$trustedProxies === []){
+         return false;
+      }
+
+      $ip ??= static::get();
+
+      if ($ip === '' || $ip === null) {
+         return false;
+      }
+
+      foreach (IPConfig::$trustedProxies as $proxy) {
+         if (strpos($proxy, '/') !== false) {
+               [$subnet, $mask] = explode('/', $proxy);
+               $subnet = ip2long($subnet);
+               $mask = ~((1 << (32 - $mask)) - 1);
+
+               if ((ip2long($ip) & $mask) === ($subnet & $mask)) {
+                  return true;
+               }
+         } else {
+            if ($ip === $proxy) {
+               return true;
+            }
+         }
+      }
+
+      return false;
    }
 
    /**
@@ -177,9 +210,7 @@ class IPAddress
    */
   public static function isValid(?string $address = null, int $version = 0): bool 
   {
-      if($address === null){
-         $address = static::get();
-      }
+      $address ??= static::get();
 
       return match ($version) {
          4 => filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false,
@@ -197,10 +228,7 @@ class IPAddress
    */
   public static function toNumeric(?string $address = null): int|string
   {
-      if($address === null){
-         $address = static::get();
-      }
-
+      $address ??= static::get();
       $ip = false;
 
       if (static::isValid($address, 4)) {
@@ -209,7 +237,7 @@ class IPAddress
          $ip = inet_pton($address);
       }
 
-      if( $ip === false){
+      if($ip === false){
          return '';
       }
 
@@ -226,16 +254,11 @@ class IPAddress
    public static function toAddress(int|string $numeric = null): string
    {
          $ip = ''; 
-         if($numeric === null){
-            $numeric = static::toNumeric();
-         }
+         $numeric ??= static::toNumeric();
 
-         // Check if it's binary (IPv6) or numeric (IPv4).
          if (is_numeric($numeric)) {
-            // Convert numeric (IPv4) to human-readable IPv4 address.
             $ip = long2ip($numeric);
          }elseif (is_string($numeric)) {
-            // Convert binary (IPv6) to human-readable IPv6 address.
             $ip = inet_ntop($numeric);
          }
 
@@ -245,16 +268,12 @@ class IPAddress
    /**
      * Checks if the given IP address is a Tor exit node
      * 
-     * @param string|null $ip Ip address if null it wull use current user's IP.
+     * @param string|null $ip Ip address if null it will use current user's IP.
      * 
      * @return bool Return true if the IP address is a Tor exit node.
    */
    public static function isTor(string|null $ip = null): bool 
    {
-      if($ip === null){
-         $ip = static::get();
-      }
-
-      return TorDetector::isTor($ip);
+      return TorDetector::isTor($ip ?? static::get());
    }
 }

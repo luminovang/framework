@@ -103,11 +103,11 @@ class Queue
     {
         if (function_exists('pcntl_fork')) {
             $pid = pcntl_fork();
-            if ($pid == -1) {
+            if ($pid === -1) {
                 // Fork failed
                 $className = is_callable($job) && is_array($job) ? get_class($job[0]) : null;
-                $errorMessage = 'Queue could not fork.' . ($className ? ' Class: ' . $className : '');
-                error_log($errorMessage);
+                $message = 'Queue could not fork.' . ($className ? ' Class: ' . $className : '');
+                logger('debug', $message);
             } elseif ($pid) {
                 // Parent process
                 // In the parent, we can continue without waiting for the child to finish

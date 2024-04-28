@@ -122,9 +122,10 @@ class MySqliDriver implements DatabaseInterface
         mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
         try{
             $socket = null;
-            if (is_command() || $this->config->socket) {
+            if (is_command() || NOVAKIT_ENV !== null || $this->config->socket) {
                 $socket = (empty($this->config->socket_path) ? ini_get('mysqli.default_socket') : $this->config->socket_path);
             }
+         
             $this->connection = new mysqli(
                 $this->config->host,
                 $this->config->username,

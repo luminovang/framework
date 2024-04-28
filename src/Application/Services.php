@@ -10,9 +10,10 @@
 
 namespace Luminova\Application;
 
-use \Luminova\Functions\Files;
-use \RuntimeException;
+use \Luminova\Application\FileSystem;
+use \Luminova\Exceptions\RuntimeException;
 use \Throwable;
+use \Exception;
 use \ReflectionClass;
 use \ReflectionException;
 
@@ -184,7 +185,7 @@ class Services
 
         static::$instances = [];
 
-        return is_dir($servicePath) ? Files::remove($servicePath) : false;
+        return is_dir($servicePath) ? FileSystem::remove($servicePath) : false;
     }
 
     /**
@@ -266,6 +267,51 @@ class Services
      * Reinstate instance with new contractor arguments
      *
      * @param string $service Service name or class namespace
+     *      -   @example \Namespace\Utils\MyClass, MyClass or MyClass::class
+     * @param arguments ...$arguments Arguments to initialize class with
+     * The last param argument should be boolean value to indicate whether shared cached or not
+     * @param bool $serialize Whether the instance should be serialized and (cached) or not.
+     *      - defaults false
+     * @param bool $shared Whether the instance should be shared (cached) or not.
+     * 
+     * @return object Return updated class instance
+     * @throws RuntimeException If service does not exist or unable to initiate class
+     */
+    public static function config(string $service, ...$arguments): object
+    {
+        $shared = static::isShared($arguments);
+        $serialize = static::isSerialize($arguments);
+        $name = get_class_name($service);
+        $instance = null;
+
+        if (empty($arguments)) {
+            $shared = $serialize && !$shared ? true : $shared;
+
+            if($shared || $serialize){
+                $instance = static::getInstance($name);
+            }
+           
+        }
+
+        try{
+            if($instance === null){
+                $instance = new $service(...$arguments);
+
+                if($shared || $serialize){
+                    static::prepareInstance($name, $instance, $shared, $serialize);
+                }
+            }
+        }catch(Exception|Throwable $e){
+            throw new RuntimeException("Failed to instantiate service '$name'. Service not found ", $e->getCode(), $e);
+        }
+
+        return $instance;;
+    }
+
+    /**
+     * Reinstate instance with new contractor arguments
+     *
+     * @param string $service Service name or class namespace
      * @example \Namespace\Utils\MyClass, MyClass or MyClass::class
      * @param arguments ...$arguments Arguments to initialize class with
      * The last param argument should be boolean value to indicate whether shared cached or not
@@ -274,8 +320,7 @@ class Services
      *      - defaults false
      * 
      * @return object Return updated class instance
-     * @throws RuntimeException If service does not exist or unable to initiate class
-     * @throws Throwable 
+     * @throws RuntimeException If service does not exist or unable to initiate class.
      */
     public static function newInstance(string $service, ...$arguments): object
     { 
@@ -294,10 +339,8 @@ class Services
             try{
                 $reflection = new ReflectionClass($instance);
                 $instance = $reflection->newInstance(...$arguments);
-            } catch (ReflectionException $e) {
-                throw new RuntimeException($e->getMessage(), $e->getCode(), $e->getPrevious());
-            } catch (Throwable $e) {
-                throw new RuntimeException($e->getMessage());
+            } catch (ReflectionException|Throwable $e) {
+                throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
             }
         }
 
@@ -351,11 +394,8 @@ class Services
             static::prepareInstance($name, $instance, $shared, $serialize);
 
             return $instance;
-        } catch (Throwable $e) {
-            //"Failed to instantiate service '$name'. Error: " .
-            throw new RuntimeException($e->getMessage());
-        } catch (ReflectionException $e) {
-            throw new RuntimeException($e->getMessage(), $e->getCode(), $e->getPrevious());
+        } catch (ReflectionException|Throwable $e) {
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
         return false;
@@ -395,7 +435,7 @@ class Services
      * @param object $instance Instance of service class 
      * 
      * @return bool 
-     * @throws Throwable
+     * @throws RuntimeException
     */
     private static function cacheInstance(string $name, object $instance): bool 
     {
@@ -412,7 +452,7 @@ class Services
 
             return true;
         } catch (Throwable $e) {
-            throw $e; 
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
         return false;

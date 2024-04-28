@@ -12,7 +12,7 @@ namespace Luminova\Base;
 
 use \Luminova\Functions\Escaper;
 use \Luminova\Functions\IPAddress;
-use \Luminova\Functions\Files;
+use \Luminova\Application\FileSystem;
 use \Luminova\Functions\TorDetector;
 use \Luminova\Functions\Maths;
 use \Luminova\Functions\NormalizerTrait;
@@ -46,11 +46,11 @@ abstract class BaseFunction
     /**
      * Initalize or return a shared an instance of the Files class.
      *
-     * @return Files Returns a file class instance
+     * @return FileSystem Returns a file class instance
     */
-    public static function files(): Files
+    public static function files(): FileSystem
     {
-        return static::$instances['files'] ??= new Files();
+        return static::$instances['files'] ??= new FileSystem();
     }
 
     /**

@@ -108,9 +108,9 @@ interface SessionInterface
    * @param string $type Return type of 'array' or 'object'. Default is 'array'.
    * @param string $index Optional key to retrieve.
    * 
-   * @return object|array The retrieved data.
+   * @return object|array|null The retrieved data or null if key index not found.
   */
-  public function toAs(string $type = 'array', string $index = ''): object|array;
+  public function toAs(string $type = 'array', ?string $index = null): object|array|null;
 
   /** 
    * Sets the session configuration class name.

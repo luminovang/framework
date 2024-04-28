@@ -10,7 +10,9 @@
 
 namespace Luminova\Notifications;
 use \Kreait\Firebase\Factory;
-class FirebaseRealtime {
+
+class FirebaseRealtime 
+{
 	protected $database;
 	protected $tableName;
 	

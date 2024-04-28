@@ -162,6 +162,7 @@ class System extends BaseConsole
         }
 
         $this->beeps();
+        $this->newLine();
         $this->error('Sitemap creation failed');
     
         return STATUS_ERROR;

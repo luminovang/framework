@@ -23,7 +23,9 @@ class Curl implements HttpClientInterface
      * {@inheritdoc}
      * 
     */
-    public function __construct(array $config = []){ }
+    public function __construct(array $config = []){
+        
+     }
     
     /**
       * {@inheritdoc}

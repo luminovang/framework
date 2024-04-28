@@ -257,9 +257,9 @@ class InputValidator implements ValidationInterface
             'alphanumeric' => preg_match("/[^A-Za-z0-9]/", $value) !== false,
             'alphabet' => preg_match("/^[A-Za-z]+$/", $value) !== false,
             'url' => filter_var($value, FILTER_VALIDATE_URL) !== false,
-            'uuid' => func()->is_uuid($value), //$version = (int) $param;
+            'uuid' => func()->isUuid($value), //$version = (int) $param;
             'ip' =>  func()->ip()->isValid($value, (int) $param),
-            'phone' => func()->is_phone($value),
+            'phone' => func()->isPhone($value),
             'decimal' => preg_match('/^-?\d+(\.\d+)?$/', $value) === 1,
             'binary' => ctype_print($value) && !preg_match('/[^\x20-\x7E\t\r\n]/', $value),
             'hexadecimal' => ctype_xdigit($value),
@@ -279,7 +279,7 @@ class InputValidator implements ValidationInterface
      * 
      * @param string $field input field name
      * @param string $ruleName Rule name
-     * @param mixed $value Filed valu
+     * @param mixed $value Filed value
      * 
      * @return void 
     */

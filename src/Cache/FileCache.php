@@ -10,11 +10,10 @@
 namespace Luminova\Cache;
 
 use \Luminova\Exceptions\ErrorException;
-use \Luminova\Functions\Files;
+use \Luminova\Application\FileSystem;
 use \Generator;
 use \DateTimeInterface;
 use \DateInterval;
-use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
 
 class FileCache 
@@ -664,7 +663,7 @@ class FileCache
     {
         $this->cacheInstance = [];
 
-        if($clearDisk && Files::remove($this->storagePath)){
+        if($clearDisk && FileSystem::remove($this->storagePath)){
             return true;
         }
 

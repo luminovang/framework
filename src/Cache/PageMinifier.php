@@ -98,9 +98,7 @@ class PageMinifier
      * Class constructor.
      * Initializes default settings for the response headers and cache control.
      */
-    public function __construct() 
-    {
-    }
+    public function __construct() {}
     
     /**
      * sets ignore minifying code block
@@ -177,9 +175,7 @@ class PageMinifier
             $this->info['Content-Encoding'] = $encoding;
         }
 
-        foreach ($headers as $header => $value) {
-            header("$header: $value");
-        }
+        Header::parseHeaders($headers);
 
         return $encoded;
     }
@@ -307,6 +303,7 @@ class PageMinifier
      * Minify the given content by removing unwanted tags and whitespace.
      *
      * @param string $content The content to minify.
+     * 
      * @return string minified content.
      */
     public static function minify(string $content): string 
@@ -320,13 +317,15 @@ class PageMinifier
     /**
      * Minify the given content by removing unwanted tags and whitespace.
      * Ignore html <code></code> block
+     * 
      * @param string $content The content to minify.
-     * @return string minified content.
+     * @param bool $allowCopy Allow copying codeblock (default: false).
+     * 
+     * @return string Return minified content.
     */
     public static function minifyIgnore(string $content, bool $allowCopy = false): string 
     {
         $ignores = [];
-        //$pattern = '/<pre[^>]*><code[^>]*>[\s\S]*?<\/code><\/pre>/i';
         $pattern = '/<pre[^>]*>\s*<code[^>]*>[\s\S]*?<\/code>\s*<\/pre>/i';
         $ignorePatten = '###IGNORED_CODE_BLOCK###';
 

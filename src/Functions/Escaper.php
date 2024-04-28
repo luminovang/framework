@@ -87,7 +87,7 @@ class Escaper
         }
         $this->encodingFlags = ENT_QUOTES | ENT_SUBSTITUTE;
 
-        if (class_exists('\Laminas\Escaper\Escaper')) {
+        if (class_exists(LaminasEscaper::class)) {
             $this->escaper = new LaminasEscaper($encoding);
         }
     }

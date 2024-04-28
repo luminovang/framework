@@ -443,7 +443,6 @@ final class Router
     */
     public function run(): void
     {
-        //static::$method = Header::getRoutingMethod();
         $status = static::$method === 'CLI' ? static::runAsCommand() : $this->runAsHttp();
 
         if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] == 'HEAD') {
@@ -707,17 +706,13 @@ final class Router
         }
 
         if($result){
-            
             $result = false;
             $routes = static::$controllers['routes'][static::$method] ?? null;
 
             if ($routes !== null) {
                 $result = static::handleWebsite($routes, $uri);
-
-                if($result){
-                    if (isset(static::$controllers['routes_after'][static::$method])) {
-                        static::handleWebsite(static::$controllers['routes_after'][static::$method], $uri);
-                    }
+                if($result && isset(static::$controllers['routes_after'][static::$method])) {
+                    static::handleWebsite(static::$controllers['routes_after'][static::$method], $uri);
                 }
             }
 
@@ -834,7 +829,7 @@ final class Router
     *
     * @param Closure|string|array $callback Class public callback or an extracted array params method eg: UserController:update
     * @param array $arguments Method arguments to pass to callback method
-    * @param bool $injection Force use dpendancy injection. Default is false
+    * @param bool $injection Force use dependency injection. Default is false
     *
     * @return array 
     * @internal 
@@ -881,7 +876,7 @@ final class Router
     *
     * @param Closure|string|array<int,string> $callback Class public callback method eg: UserController:update
     * @param array $arguments Method arguments to pass to callback method.
-    * @param bool $injection Force use dpendancy injection. Default is false.
+    * @param bool $injection Force use dependency injection. Default is false.
     *
     * @return bool 
     * @throws RouterException if method is not callable or doesn't exist
@@ -915,7 +910,7 @@ final class Router
      * @param string $className Controller class name.
      * @param string $method Controller class method name.
      * @param array $arguments Optional arguments to pass to the method
-     * @param bool $injection Force use dpendancy injection. Default is false.
+     * @param bool $injection Force use dependency injection. Default is false.
      *
      * @return bool If method was called successfully
      * @throws RouterException if method is not callable or doesn't exist

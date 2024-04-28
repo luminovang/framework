@@ -157,15 +157,13 @@ abstract class BaseViewController
      * Shorthand to render view in controller class.
      *
      * @param string $view view name
-     * @param array $options Optiona options to be passed to view template.
+     * @param array $options Optional options to be passed to view template.
      * 
      * @return int STATUS_SUCCESS
     */
     protected function view(string $view, array $options = []): int
     {
-        $this->app->view($view)->render($options);
-
-        return STATUS_SUCCESS;
+        return $this->app->view($view)->render($options);
     }
 
     /**

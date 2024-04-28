@@ -9,6 +9,8 @@
  */
 namespace Luminova\Functions;
 
+use \NumberFormatter;
+
 class Maths
 {
     /**
@@ -17,6 +19,30 @@ class Maths
      * @var array $units
      */
     private static array $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+
+    /**
+     * Array of crypto currecny length.
+     * 
+     * @var array<string,int> $decimals
+     */
+    private static array $cryptos = [
+        'BTC' => 8, 
+        'ETH' => 18,
+        'LTC' => 8,
+        'XRP' => 6,
+        'DOGE' => 8
+    ];
+
+    /**
+     * Radius of the Earth in different units
+     * 
+     * @var array<string,float> $radius
+    */
+    private static array $radius = [
+        'km' => 6371,
+        'mi' => 3959, 
+        'nmi' => 3440.065,
+    ];
 
     /**
      * Converts bytes to the appropriate unit.
@@ -66,16 +92,15 @@ class Maths
         return $value;
     }
 
-
     /**
      * Calculate the average from individual ratings.
      *
-     * @param int ...$ratings Individual ratings.
-     *  - @example average(10, 20, 30, 40, 50) - return 30 as the average.
+     * @param int|float ...$ratings Individual ratings.
+     *      - @example average(10, 20, 30, 40, 50) - return 30 as the average.
      * 
      * @return float|null The average rating, or null if no ratings are provided.
     */
-    public static function average(int ...$numbers): ?float 
+    public static function average(int|float ...$numbers): ?float 
     {
         if (empty($numbers)) {
             return null;
@@ -112,21 +137,96 @@ class Maths
 	/**
 	 * Formats currency with decimal places and comma separation.
 	 *
-	 * @param mixed $number Amount you want to format.
-	 * @param bool $fractional Whether to format fractional numbers.
+	 * @param mixed $amount Amount you want to format.
+	 * @param bool $decimals Decimals places.
 	 * 
 	 * @return string Formatted currency string.
 	*/
-	public static function money(mixed $number, bool $fractional = true): string 
+	public static function money(mixed $amount, int $decimals = 2): string 
 	{
-		if (!is_numeric($number)) {
-			return $number;
+		if (!is_numeric($amount)) {
+			return $amount ?? '0.00';
 		}
 
-		$decimals = ($fractional) ? 2 : 0;
-
-		return number_format((float) $number, $decimals, '.', ',');
+		return number_format((float) $amount, $decimals, '.', ',');
 	}
+
+    /**
+     * Format a number as a currency string using your application local as the default currency locale.
+     * 
+     * @param float $number The number to format.
+     * @param string $code The currency code (optional).
+     * 
+     * @return string|false The formatted currency string, or false if unable to format.
+     */
+    public static function currency(float $number, string $code = 'USD', ?string $locale = null): string|false
+    {
+        $locale ??= env('app.locale', 'en-US');
+
+        $formatter = new NumberFormatter($locale, NumberFormatter::CURRENCY);
+
+        return $formatter->formatCurrency($number, $code);
+    }
+
+    /**
+     * Convert a number to cryptocurrency.
+     *
+     * @param int|float|string $amount The amount to convert.
+     * @param string $crypto The cryptocurrency code (e.g., 'BTC', 'ETH', 'LTC').
+     * 
+     * @return float|false The equivalent amount in cryptocurrency.
+    */
+    public static function crypto(int|float|string $amount, string $network = 'BTC'): float|false
+    {
+        if (!is_numeric($amount)) {
+			return false;
+		}
+
+        if ($network === 'USDT') {
+			return static::money($amount);
+		}
+
+        $decimal = isset(static::$cryptos[$network]) ? static::$cryptos[$network] : 8;
+
+        return number_format((float) $amount, $decimal, '.', '') . ' ' . $network;
+    }
+
+    /**
+     * Calculate the distance between two points on the Earth's surface.
+     * 
+     * @param float|string $olat The latitude of the origin point.
+     * @param float|string $olon The longitude of the origin point.
+     * @param float|string $dlat The latitude of the destination point.
+     * @param float|string $dlon The longitude of the destination point.
+     * @param string $unit The unit of distance to be returned (default is 'km').
+     *                     Supported units: 'km', 'mi', 'nmi'.
+     * 
+     * @return float|false The distance between the two points, or false on invalid input.
+     * 
+     * > If you are passing a string, make sure its a float string.
+     */
+    public static function distance(float|string $olat, float|string $olon, float|string $dlat, float|string $dlon, string $unit = 'km'): float|false 
+    {
+        if (!isset(static::$radius[$unit]) || !is_float($olat) || !is_float($olon) || !is_float($dlat) || !is_float($dlon)) {
+            return false;
+        }
+
+        $lat1 = deg2rad((float) $olat);
+        $lon1 = deg2rad((float) $olon);
+        $lat2 = deg2rad((float) $dlat);
+        $lon2 = deg2rad((float) $dlon);
+
+        $deltaLat = $lat2 - $lat1;
+        $deltaLon = $lon2 - $lon1;
+
+        $a = sin($deltaLat / 2) * sin($deltaLat / 2) +
+            cos($lat1) * cos($lat2) *
+            sin($deltaLon / 2) * sin($deltaLon / 2);
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return static::$radius[$unit] * $c;
+    }
 
 	/**
 	 * Format a number with optional rounding.
@@ -136,7 +236,7 @@ class Maths
 	 * 
 	 * @return string The formatted number.
 	 */
-	public static function fixed($number, ?int $decimals = null): string 
+	public static function fixed(float|int|string $number, ?int $decimals = null): string 
 	{
 		$number = is_numeric($number) ? (float) $number : 0.0;
 		
@@ -151,7 +251,7 @@ class Maths
      * Calculate the discounted amount.
      *
      * @param float|int|string $total The total amount you want to discount.
-     * @param int $rate The discount rate (percentage) as an integer.
+     * @param float|int|string $rate The discount rate (percentage) as an integer.
      * 
      * @return float The discounted amount.
      */
@@ -167,7 +267,7 @@ class Maths
      * Calculate the total amount after adding interest.
      *
      * @param float|int|string $total The amount to which interest will be added.
-     * @param float|int $rate The interest rate as a percentage (float or int).
+     * @param float|int|string $rate The interest rate as a percentage (float or int).
      * 
      * @return float The total amount after adding interest.
      */

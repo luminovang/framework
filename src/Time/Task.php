@@ -79,10 +79,10 @@ class Task
         }
 
         $nowTime = Time::now($timezone);
-        $expirs = static::format($datetime,  $timezone);
-        $threshhold = $expirs->modify("-{$days} days");
+        $expires = static::format($datetime,  $timezone);
+        $threshold = $expires->modify("-{$days} days");
 
-        return ($nowTime >= $threshhold);
+        return ($nowTime >= $threshold);
     }
 
     /**

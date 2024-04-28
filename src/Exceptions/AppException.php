@@ -23,13 +23,11 @@ class AppException extends Exception
     */
     public function __construct(string $message, int $code = 0, Throwable $previous = null)
     {
-        $caller = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-        if(isset($caller[1])){
+        if($caller = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2) && isset($caller[1])){
             $message .= isset($caller[1]['file']) ? ' File: ' .  filter_paths($caller[1]['file']) : '';
             $message .= isset($caller[1]['line']) ? ' Line: ' . $caller[1]['line'] : '';
         }
-
-        $message .= ' Timestamp: ' . date('Y-m-d H:i:s');
+        
         parent::__construct($message, $code, $previous);
     }
 
@@ -73,8 +71,7 @@ class AppException extends Exception
     */
     public function logMessage(): void
     {
-        $message = "Exception: {$this->getMessage()}";
-        logger('exception', $message);
+        logger('exception', "Exception: {$this->getMessage()}");
     }
 
     /**

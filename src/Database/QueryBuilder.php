@@ -327,15 +327,11 @@ class QueryBuilder extends Connection
      * @param int $offset start offset query limit
      * 
      * @return self class instance.
-     * @throws InvalidArgumentException If invalid limit or offset are provided.
     */
     public function limit(int $limit = 0, int $offset = 0): self
     {
-        if ($limit < 0 || $offset < 0) {
-            throw new InvalidArgumentException('Limit and offset must be non-negative integers.');
-        }
-
         if($limit > 0){
+            $offset = max(0, $offset);
             $this->queryLimit = " LIMIT {$offset},{$limit}";
         }
 
@@ -351,7 +347,7 @@ class QueryBuilder extends Connection
     */
     public function max(int $limit): self
     {
-        $this->maxLimit = $limit;
+        $this->maxLimit = max(1, $limit);
 
         return $this;
     }
@@ -898,7 +894,7 @@ class QueryBuilder extends Connection
             } 
             static::$handler->execute();
         }
-
+        
         if(static::$handler->ok()){
             if($this->returnType === 'stmt'){
                 $response = true;

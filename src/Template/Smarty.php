@@ -9,10 +9,14 @@
 */
 namespace Luminova\Template;
 
-use \Smarty as SmartyTemplate;
+use \Smarty\Smarty as SmartyTemplate;
+use \App\Controllers\Config\Template as TemplateConfig;
+use \App\Controllers\Config\Templates\Smarty\Classes;
+use \App\Controllers\Config\Templates\Smarty\Modifiers;
+use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Template\Helper;
 use \Exception;
 use \SmartyException;
-use \Luminova\Exceptions\RuntimeException;
 
 class Smarty 
 {
@@ -22,14 +26,34 @@ class Smarty
     public ?SmartyTemplate $smarty = null;
 
     /**
-     * @var SmartyTemplate $instance static instance 
+     * @var self $instance static instance 
     */
-    public static $instance = null;
+    public static ?self $instance = null;
 
     /**
      * @var string $root framework root directory
     */
-    public string $root = '';
+    public static string $root = '';
+
+    /**
+      * Minification options.
+      * @var array $minifyOptions
+    */
+    public array $minifyOptions = [];
+
+    /**
+     * Minification flag 
+     * 
+     * @var bool $minify 
+    */
+    private bool $minify = false;
+
+    /**
+     * view type 
+     * 
+     * @var string $view
+    */
+    private string $viewType = 'html';
 
     /**
      * Initializes the Smarty
@@ -38,22 +62,42 @@ class Smarty
      * 
      * @throws RuntimeException
     */
-    public function __construct(string $root)
+    public function __construct(string $root, array $configs = [])
     {
-        $this->root = $root . DIRECTORY_SEPARATOR;
-        $this->smarty = static::getSmarty();
+        static::$root = $root;
+
+        if(class_exists(SmartyTemplate::class)){
+            $this->smarty = new SmartyTemplate();
+            static::makedirs();
+        }else{
+            throw new RuntimeException('Smarty is not available, run composer command "composer require smarty/smarty" if you want to use smarty template', 1991);
+        }
+
+        $sufix = DIRECTORY_SEPARATOR . 'smarty';
+
+        $this->smarty->setCompileDir($root . Helper::bothtrim(TemplateConfig::$compileFolder) . $sufix);
+        $this->smarty->setConfigDir($root . Helper::bothtrim(TemplateConfig::$configFolder) . $sufix);
+        $this->smarty->setCacheDir($root . Helper::bothtrim(TemplateConfig::$cacheFolder) . $sufix);
+        $this->smarty->addExtension(new Modifiers());
+
+        if(PRODUCTION){
+            $this->smarty->setCompileCheck(SmartyTemplate::COMPILECHECK_OFF);
+        }
     }
 
     /**
-     * Get Smarty singleton instance
+     * Get smarty singleton instance
      * 
-     * @return SmartyTemplate static::$instance static instance 
+     * @param string $root framework root directory
+     * @param array $configs Filesystem loader configuration.
+     * 
+     * @return static static instance 
      * @throws RuntimeException
     */
-    public static function getInstance(): SmartyTemplate
+    public static function getInstance(string $root, array $configs = []): static
     {
         if(static::$instance === null){
-            static::$instance = static::getSmarty();
+            static::$instance = new static($root, $configs);
         }
 
         return static::$instance;
@@ -65,33 +109,22 @@ class Smarty
      * @return SmartyTemplate new instance 
      * @throws RuntimeException
     */
-    public static function getSmarty(): SmartyTemplate
+    public function getClient(): SmartyTemplate
     {
-        if(class_exists(SmartyTemplate::class)){
-            return new SmartyTemplate();
-        }
-       
-        throw new RuntimeException('Smarty is not available, run composer command "composer require smarty/smarty" if you want to use smarty template', 1991);
+        return $this->smarty;
     }
 
     /**
      * Initialize smarty template directories
      * 
-     * @param string $templateFolder smarty template directory
-     * @param string $compileFolder smarty template complied directory
-     * @param string $configFolder smarty template config directory
-     * @param string $cacheFolder smarty template cache directory
+     * @param string $viewPath smarty template directory
      * 
      * @return self $this Luminova smarty class instance
     */
-    public function setDirectories(string $templateFolder, string $compileFolder, string $configFolder, string $cacheFolder): self 
+    public function setPath(string $viewPath): self 
     {
-        $this->makeDir([$compileFolder, $configFolder, $cacheFolder]);
-        $this->smarty->setTemplateDir($templateFolder);
-        $this->smarty->setCompileDir($this->root . $compileFolder);
-        $this->smarty->setConfigDir($this->root . $configFolder);
-        $this->smarty->setCacheDir($this->root . $cacheFolder);
-
+        $this->smarty->setTemplateDir($viewPath);
+       
         return $this;
     }
 
@@ -105,26 +138,81 @@ class Smarty
     */
     public function assignOptions(array $options, bool $nocache = false): void 
     {
+        $this->viewType = ($options['viewType'] ?? 'html');
+
         foreach($options as $k => $v){
             $this->smarty->assign($k, $v, $nocache);
         }
     }
 
     /**
+     * Get smarty environment instance.
+     * 
+     * @param array<string, mixed> $classes Protected and Public classes registered in application controller.
+     * 
+     * @return self Luminova smarty class instance.
+    */
+    public function assignClasses(array $classes = []): self
+    {
+        $getClasses = (new Classes())->getClass();
+
+        if($getClasses !== []){
+            $classes = array_merge($classes, $getClasses);
+        }
+
+        foreach ($classes as $aliases => $class) {
+            $this->smarty->registerObject($aliases, $class);
+        }
+
+        return $this;
+    }
+
+    /**
      * Initialize smarty template directories
      * 
      * @param bool $cache allow caching template
-     * @param int $mode Caching modes
+     * @param int $expiry Cache expiration ttl.
      * 
      * @return void 
     */
-    public function caching(bool $cache, int $mode = SmartyTemplate::CACHING_LIFETIME_CURRENT): void 
+    public function caching(bool $cache, int $expiry): void 
     {
         if($cache){
-            $this->smarty->caching = $mode;
+            //ACHING_LIFETIME_SAVED
+            $this->smarty->setCaching(SmartyTemplate::CACHING_LIFETIME_CURRENT);
+            $this->smarty->setCacheLifetime($expiry);
             return;
         }
-        $this->smarty->caching = SmartyTemplate::CACHING_OFF;
+
+        $this->smarty->setCaching(SmartyTemplate::CACHING_OFF);
+    }
+
+    /**
+     * Determin if template was checked.
+     * 
+     * @param string $view Template view name.
+     * 
+     * @return bool Return true if cached false otherwise.
+    */
+    public function isCached(string $view): bool
+    {
+        return $this->smarty->isCached($view, Helper::cachekey());
+    }
+
+    /**
+     * Minify template ouput
+     * 
+     * @param bool $minify Should the template be minified.
+     * @param array $options Minification options.
+     * 
+     * @return self Luminova smarty template instance.
+    */
+    public function minify(bool $minify, array $options): self 
+    {
+        $this->minify = $minify;
+        $this->minifyOptions = $options;
+
+        return $this;
     }
 
     /**
@@ -154,18 +242,31 @@ class Smarty
     /**
      * displays a Smarty template
      *
-     * @param string $template   the resource handle of the template file or template object
-     * @param mixed  $cache_id   cache id to be used with this template
-     * @param mixed  $compile_id compile id to be used with this template
-     * @param object $parent     next higher level of Smarty variables
+     * @param string $view   the resource handle of the template file or template object
      *
      * @return void 
      * @throws RuntimeException
-     */
-    public function display(?string $template = null, mixed $cache_id = null, mixed $compile_id = null, ?object $parent = null): void
+    */
+    public function display(string $view): void
     {
+        $cache_id = Helper::cachekey();
         try{
-            $this->smarty->display($template, $cache_id, $compile_id, $parent);
+            if($this->minify){
+                //http_response_code(200);
+                //ob_start(BaseConfig::getEnv('script.ob.handler', null, 'nullable'));
+    
+                $content = $this->smarty->fetch($view, $cache_id);
+                $minifierInstance = Helper::getMinifier(
+                    $content, 
+                    $this->viewType, 
+                    $this->minifyOptions['codeblock'], 
+                    $this->minifyOptions['copyable']
+                );
+                $content = $minifierInstance->getMinified();
+                exit($content);
+            }
+
+            $this->smarty->display($view, $cache_id);
         }catch(Exception | SmartyException $e){
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
@@ -173,19 +274,23 @@ class Smarty
 
     /**
      * Create smarty directories if they don't exist
-     *
-     * @param array $dirs Directories
      * 
      * @return void
      */
-    private function makeDir(array $dirs): void 
+    private static function makedirs(): void 
     {
+        $dirs = [
+            TemplateConfig::$compileFolder, 
+            TemplateConfig::$configFolder, 
+            TemplateConfig::$cacheFolder
+        ];
+
         $notFounds = array_filter($dirs, function ($dir) {
-            return !file_exists($this->root . $dir); 
+            return !file_exists(static::$root .  Helper::bothtrim($dir) . DIRECTORY_SEPARATOR . 'smarty'); 
         });
 
         foreach ($notFounds as $dir) {
-            make_dir($this->root . $dir);
+            make_dir(static::$root . $dir);
         }
     }
 }

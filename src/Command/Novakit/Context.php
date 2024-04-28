@@ -100,7 +100,7 @@ class Context extends BaseConsole
      */
     private function installContext(string $name, bool $noError = false): int 
     {
-        $camelcase = camelcased('on' . $name) . 'Error';
+        $camelcase = camel_case('on' . $name) . 'Error';
         $controller = ucfirst($name) . 'Controller::index';
         $onError = ($noError ? '' : ', ' . "[ViewErrors::class, '$camelcase']");
         $index = root(__DIR__, '/public/') . 'index.php';

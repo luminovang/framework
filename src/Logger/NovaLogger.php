@@ -15,8 +15,20 @@ use \Luminova\Time\Time;
 
 class NovaLogger extends AbstractLogger
 {
+    /**
+     * Excption log level
+     * 
+     * @var string EXCEPTION
+    */
     public const EXCEPTION = 'exception';
+
+    /**
+     * PHP log level
+     * 
+     * @var string PHP
+    */
     public const PHP = 'php_errors';
+
     /**
      * @var string $path log path
     */
@@ -28,7 +40,9 @@ class NovaLogger extends AbstractLogger
     private string $extension = '.log';
 
     /**
-     * @var array $levels log levels
+     * Error log levels
+     * 
+     * @var array<string, string> $levels
     */
     private array $levels = [
         'emergency' => LogLevel::EMERGENCY,
@@ -79,7 +93,7 @@ class NovaLogger extends AbstractLogger
     /**
      * Log a message at the given level.
      *
-     * @param string $level The log level.
+     * @param string $level The log level (e.g., "emergency," "error," "info").
      * @param string $message The log message.
      * @param array $context Additional context data (optional).
      *
@@ -88,12 +102,10 @@ class NovaLogger extends AbstractLogger
     public function log($level, $message, array $context = [])
     {
         $level = $this->levels[$level] ?? LogLevel::INFO;
-        
         $filepath = $this->path . "{$level}{$this->extension}";
+        $time = Time::now()->format('Y-m-d\TH:i:sP');
 
         make_dir($this->path);
-        
-        $time = Time::now()->format('Y-m-d\TH:i:sP');
 
         $message = "[{$level}] [{$time}]: {$message}";
         
@@ -102,7 +114,6 @@ class NovaLogger extends AbstractLogger
         }
 
         $message .= PHP_EOL;
-
         write_content($filepath, $message, FILE_APPEND);
     }
 }

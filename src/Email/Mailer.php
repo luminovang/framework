@@ -12,7 +12,7 @@ namespace Luminova\Email;
 use \Luminova\Interface\MailClientInterface;
 use \Luminova\Email\Clients\NovaMailer;
 use \Luminova\Email\Clients\PHPMailer;
-use \Luminova\Base\BaseConfig;
+use \Luminova\Application\Foundation;
 use \Luminova\Email\Exceptions\MailerException;
 use \Exception;
 
@@ -254,7 +254,7 @@ class Mailer
     {
         static::$client->SMTPDebug = static::shouldDebug() ? 3 : 0;
         static::$client->CharSet = static::getCharset(env("smtp.charset"));
-        static::$client->XMailer = BaseConfig::copyright();
+        static::$client->XMailer = Foundation::copyright();
         if ((bool) env("smtp.use.credentials")) {
             static::$client->isSMTP();
             static::$client->Host = env("smtp.host");

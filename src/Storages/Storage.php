@@ -10,10 +10,11 @@
 namespace Luminova\Storages;
 
 use \Luminova\Storages\StorageAdapters;
-use \Luminova\Functions\Files;
+use \Luminova\Application\FileSystem as Files;
 use \League\Flysystem\Filesystem;
 use \League\Flysystem\FileAttributes;
 use \League\Flysystem\DirectoryAttributes;
+use \Luminova\Http\File;
 use \Luminova\Time\Time;
 use \Luminova\Exceptions\StorageException;
 use \Exception;
@@ -66,6 +67,7 @@ class Storage extends StorageAdapters
      * Constructs a new `Storage` instance with the specified adapter.
      * 
      * @param string $adapter The storage adapter to use.
+     * Supported Storage Adapters: [local, ftp, memory, aws-s3, aws-async-s3, azure-blob, google-cloud, sftp-v3, web-dev or zip-archive]
     */
     public function __construct(string $adapter)
     {
@@ -85,6 +87,8 @@ class Storage extends StorageAdapters
      * Creates a new `Storage` instance for the specified adapter context.
      * 
      * @param string $adapter The storage adapter context.
+     * Supported Storage Adapters: [local, ftp, memory, aws-s3, aws-async-s3, azure-blob, google-cloud, sftp-v3, web-dev or zip-archive]
+     * 
      * @return self The New `Storage` instance.
     */
     public static function context(string $adapter = 'local'): self
@@ -106,7 +110,7 @@ class Storage extends StorageAdapters
             throw new StorageException('Disk method doesn\'t support blank string or patterns "' . $location . '".');
         }
 
-        $this->chdir($location)->mkdir('');
+        $this->chdir($location)->mkdir(null);
 
         return $this;
     }
@@ -196,8 +200,12 @@ class Storage extends StorageAdapters
         }
 
         if(!file_exists($linkpath) && !make_dir($linkpath, 0755)){
-            logger('alert', 'Unable tocreate symlink destination directory');
+            logger('alert', 'Unable to create symlink destination directory');
             return false;
+        }
+
+        if(file_exists($link)){
+            unlink($link);
         }
 
         error_clear_last();
@@ -253,6 +261,30 @@ class Storage extends StorageAdapters
         }
 
         return $this;
+    }
+
+    /**
+     * Upload file in working directory.
+     *
+     * @param File $file Instance of file being uploaded.
+     * 
+     * @return bool Return true if upload was successful false otherwise.
+     * @throws StorageException If an error occurs during the upload operation.
+    */
+    public function upload(File $file): bool
+    {
+        if ($file === false || !$file->valid()) {
+            return false;
+        }
+
+        try {
+            $filename = basename($file->getName());
+            $this->write($filename, fopen($file->getTemp(), 'r'), true);
+
+            return true;
+        } catch (Exception $e) {
+            StorageException::throwException($e->getMessage(), $e->getCode(), $e);
+        }
     }
 
     /**
@@ -566,7 +598,7 @@ class Storage extends StorageAdapters
      * 
      * @return false|string If $visibility is null, returns the current visibility as a string ('public' or 'private').
      *                    If $visibility is provided update visibility and returns the visibility that was set.
-     *                    Otherwise returns false if opration failed.
+     *                    Otherwise returns false if operation failed.
      * @throws StorageException If an error occurs during the operation.
      */
     public function visibility(string $filename, ?string $visibility = null): false|string 
@@ -594,14 +626,15 @@ class Storage extends StorageAdapters
     }
 
     /**
-     * Creates a new directory in the current workind `disk` or `chdir`.
+     * Creates a new directory in the current working `disk` or `chdir`.
      * 
      * @param string $path The path of the directory to create.
      * 
      * @throws StorageException If an error occurs during the creation.
     */
-    public function mkdir(string $path): void 
+    public function mkdir(string|null $path): void 
     {
+        $path ??= '';
         try {
             $path = $this->getDisk($path);
             $this->filesystem->createDirectory($path, static::$configs['default']);
@@ -611,7 +644,7 @@ class Storage extends StorageAdapters
     }
 
     /**
-     * Moves a file or directory from the current workind `disk` or `chdir` to a new location.
+     * Moves a file or directory from the current working `disk` or `chdir` to a new location.
      * 
      * @param string $source The current path of the file or directory.
      * @param string $destination The new path for the file or directory.
@@ -629,7 +662,7 @@ class Storage extends StorageAdapters
     }
 
     /**
-     * Copies a file or directory from the current workind `disk` or `chdir` to a new location.
+     * Copies a file or directory from the current working `disk` or `chdir` to a new location.
      * 
      * @param string $source The path of the original file or directory.
      * @param string $destination The path of the destination file or directory.

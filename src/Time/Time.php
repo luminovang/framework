@@ -32,7 +32,7 @@ class Time extends DateTimeImmutable
      *
      * @var string $stringFormat
     */
-    private static string $stringFormat = 'Y-M-d H:m:s';
+    private static string $stringFormat = 'Y-M-D H:i:s';
 
     /**
      * Default datetime format to use.
@@ -226,7 +226,6 @@ class Time extends DateTimeImmutable
         return $this->toFormat('s');
     }
 
-
     /**
      * Gets day of the year, from the current datetime format.
      *
@@ -299,11 +298,11 @@ class Time extends DateTimeImmutable
     }
 
     /**
-     * Check whether the passed timezone is the same as the local timezone.
+     * Check whether the passed timezone is the same as the application timezone.
      * 
      * @return bool true if the passed timezone is the same as the local timezone false otherswise.
     */
-    public function isLocalTimezone(): bool
+    public function isSystemTimezone(): bool
     {
         $local = date_default_timezone_get();
 
@@ -357,7 +356,7 @@ class Time extends DateTimeImmutable
     /**
      * Returns a formatted datetime to your prefered format.
      * 
-     * @param null|string $format Formt to return (default: `yyyy-MM-dd HH:mm:ss`).
+     * @param null|string $format Formt to return (default: `YYYY-MM-DD HH:MM:SS`).
      * 
      * @return false|string Formatted datetime string otherwise false.
     */
@@ -705,47 +704,55 @@ class Time extends DateTimeImmutable
      * Convert datetime to relative a human-readable representation of the time elapsed since the given datetime.
      *
      * @param string|int|Time|DateTimeImmutable $datetime The datetime string, Unix timestamp, or time string.
+     * @param bool $full Return full relative time (e.g. 1 hour, 3 minutes, 5 seconds ago) default is false.
+     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      *
      * @return string A string representing the time elapsed since the given datetime, in human-readable format.
      *
      * > If a string is provided, it must be a valid datetime string or time string.
     */
-    public static function ago(string|int|Time|DateTimeImmutable $datetime): string 
+    public static function ago(string|int|Time|DateTimeImmutable $datetime, bool $full = false, DateTimeZone|string|null $timezone = null): string
     {
-        if ($datetime instanceof Time) {
-            $datetime = $datetime->getTimestamp();
-        }elseif($datetime instanceof DateTime || $datetime instanceof DateTimeImmutable) {
-            $datetime = $datetime->getTimestamp();
-        }elseif(is_string($datetime)) {
-            $datetime = strtotime($datetime);
+        if (is_string($datetime)) {
+            $datetime = new static($datetime, $timezone);
         }
 
-        $now = static::now()->getTimestamp();
-        $elapsed = $now - $datetime;
-
-        if ($elapsed <= 60) {
-            return "just now";
+        if (!$datetime instanceof Time && !$datetime instanceof DateTime && !$datetime instanceof DateTimeImmutable) {
+            return false;
         }
 
-        $units = [
-            29030400 => ['year', 'years'],
-            2419200 => ['month', 'months'],
-            604800 => ['week', 'weeks'],
-            86400 => ['day', 'days'],
-            3600 => ['hour', 'hours'],
-            60 => ['minute', 'minutes']
+        $now = static::now($timezone);
+        $elapsed = $now->diff($datetime);
+        $elapsed->w = floor($elapsed->d / 7);
+        $elapsed->d -= $elapsed->w * 7;
+
+        $formats = [
+            ['year', $elapsed->y],
+            ['month', $elapsed->m],
+            ['week', $elapsed->w],
+            ['day', $elapsed->d],
+            ['hour', $elapsed->h],
+            ['minute', $elapsed->i],
+            ['second', $elapsed->s],
         ];
 
-        foreach ($units as $interval => [$singular, $plural]) {
-            if ($elapsed <= $interval) {
-                $quantity = round($elapsed / $interval);
-                return sprintf('%d %s%s ago', $quantity, $quantity == 1 ? $singular : $plural, $quantity == 1 ? '' : 's');
+        $intervals = '';
+        foreach ($formats as [$relative, $unit]) {
+            if ($unit > 0) {
+                $interval = $unit . ' ' . $relative . ($unit > 1 ? 's' : '');
+                if (!$full) {
+                    return $interval . ' ago';
+                }
+
+                $intervals .= $interval . ', ';
             }
         }
 
-        // If none of the intervals match, return the years ago
-        $quantity = round($elapsed / 29030400);
-        return sprintf('%d year%s ago', $quantity, $quantity == 1 ? '' : 's');
+        if($intervals === ''){
+            return 'just now';
+        }
+
+        return trim($intervals, ', ') . ' ago';
     }
 
     /**
@@ -788,11 +795,8 @@ class Time extends DateTimeImmutable
             throw new DateTimeException('Invalid time unit: ' . $unit);
         }
 
-        $pattern = sprintf($intervals[$unit], $quantity);
-        $timeInterval = new DateInterval($pattern);
-
         $dateTime = new DateTime('now', $timezone);
-        $dateTime->sub($timeInterval);
+        $dateTime->sub(new DateInterval(sprintf($intervals[$unit], $quantity)));
 
         return $dateTime;
     }
@@ -809,26 +813,27 @@ class Time extends DateTimeImmutable
 	public static function passed(string|int|Time|DateTimeImmutable $datetime, int $minutes, null|DateTimeZone|string $timezone = 'UTC'): bool 
 	{
         if (is_numeric($datetime)) {
+            if ($datetime < $minutes) {
+                return false;
+            }
+
             $datetime = static::parse("@$datetime", $timezone);
-        } elseif (!($datetime instanceof Time || $datetime instanceof DateTime || $datetime instanceof DateTimeImmutable)) {
+        } elseif(!($datetime instanceof Time || $datetime instanceof DateTime || $datetime instanceof DateTimeImmutable)) {
             $datetime = static::fromFormat(static::$defaultFormat, $datetime, $timezone);
         }
-        
+
         $timestamp = $datetime->getTimestamp();
        
         if ($timestamp === false || $timestamp === 0) {
             throw new DateTimeException('Invalid datetime "' . $datetime . '" specified');
         }
     
-        $now = static::now($timezone);
-		$interval = $now->getTimestamp() - $timestamp;
-		$difference = $interval / 60;
-
-        /*
-        $interval = $now->diff($datetime);
+		//$interval = static::now($timezone)->getTimestamp() - $timestamp;
+		//$difference = $interval / 60;
+        
+        $interval = static::now($timezone)->diff($datetime);
         $difference = $interval->days * 24 * 60 + $interval->h * 60 + $interval->i;
-        */
-
+        
 		return $difference >= $minutes;
 	}
 
@@ -914,6 +919,14 @@ class Time extends DateTimeImmutable
     }
 
     /**
+     * Return the current current datetime string
+    */
+    public function __toString(): string
+    {
+        return static::now()->format(static::$stringFormat);
+    }
+
+    /**
      * Magic getter method to allow access to properties.
      *
      * @param string $name Method name to get
@@ -936,7 +949,7 @@ class Time extends DateTimeImmutable
      *
      * @param string $name Method name to get
      * 
-     * @return bool Return true if method exisit.
+     * @return bool Return true if method exist.
      */
     public function __isset(string $name): bool
     {

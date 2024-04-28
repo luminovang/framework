@@ -11,96 +11,112 @@ namespace Luminova\Interface;
 
 use \Luminova\Http\Message\Response;
 use \Luminova\Interface\HttpClientInterface;
+use \GuzzleHttp\Promise\PromiseInterface;
+use \GuzzleHttp\Psr7\Request;
 
 interface NetworkInterface 
 {
     /**
-     * Network constructor with http client instance 
+     * Constructor for NetworkInterface.
      *
-     * @param HttpClientInterface $client 
+     * @param HttpClientInterface|null $client The HTTP client instance.
      */
     public function __construct(?HttpClientInterface $client = null);
 
     /**
-     * Get network client instance 
+     * Get the HTTP client instance.
      * 
-     * @return HttpClientInterface
+     * @return HttpClientInterface The HTTP client instance.
     */
     public function getClient(): HttpClientInterface;
 
     /**
      * Send a request.
      *
-     * @param string $method
-     * @param string $url
-     * @param array $data
-     * @param array $headers
+     * @param string $method The HTTP method (GET, POST, etc.).
+     * @param string $url The URL to send the request to.
+     * @param array $data The request body data.
+     * @param array $headers The request headers.
      *
-     * @return Response
-     * @throws RequestException
-     * @throws ConnectException
-     * @throws ClientException
-     * @throws ServerException
+     * @return Response The response from the request.
+     *
+     * @throws RequestException If there is an error making the request.
+     * @throws ConnectException If there is an error connecting to the server.
+     * @throws ClientException If there is an error on the client side.
+     * @throws ServerException If there is an error on the server side.
      */
     public function send(string $method, string $url, array $data = [], array $headers = []): Response;
 
     /**
      * Perform a GET request.
      *
-     * @param string $url
-     * @param array $data
-     * @param array $headers
+     * @param string $url The URL to send the request to.
+     * @param array $data The request body data.
+     * @param array $headers The request headers.
      *
-     * @return Response
-     * @throws RequestException
-     * @throws ConnectException
-     * @throws ClientException
-     * @throws ServerException
+     * @return Response The response from the request.
+     *
+     * @throws RequestException If there is an error making the request.
+     * @throws ConnectException If there is an error connecting to the server.
+     * @throws ClientException If there is an error on the client side.
+     * @throws ServerException If there is an error on the server side.
      */
     public function get(string $url, array $data = [], array $headers = []): Response;
 
     /**
      * Fetch data using a GET request.
      *
-     * @param string $url
-     * @param array $headers
+     * @param string $url The URL to send the request to.
+     * @param array $headers The request headers.
      *
-     * @return Response
-     * @throws RequestException
-     * @throws ConnectException
-     * @throws ClientException
-     * @throws ServerException
+     * @return Response The response from the request.
+     *
+     * @throws RequestException If there is an error making the request.
+     * @throws ConnectException If there is an error connecting to the server.
+     * @throws ClientException If there is an error on the client side.
+     * @throws ServerException If there is an error on the server side.
      */
     public function fetch(string $url, array $headers = []): Response;
 
     /**
      * Perform a POST request.
      *
-     * @param string $url
-     * @param array $data
-     * @param array $headers
+     * @param string $url The URL to send the request to.
+     * @param array $data The request body data.
+     * @param array $headers The request headers.
      *
-     * @return Response
-     * @throws RequestException
-     * @throws ConnectException
-     * @throws ClientException
-     * @throws ServerException
+     * @return Response The response from the request.
+     *
+     * @throws RequestException If there is an error making the request.
+     * @throws ConnectException If there is an error connecting to the server.
+     * @throws ClientException If there is an error on the client side.
+     * @throws ServerException If there is an error on the server side.
      */
     public function post(string $url, array $data = [], array $headers = []): Response;
 
     /**
      * Perform a request.
      *
-     * @param string $method
-     * @param string $url
-     * @param array $data
-     * @param array $headers
+     * @param string $method The HTTP method (GET, POST, etc.).
+     * @param string $url The URL to send the request to.
+     * @param array $data The request body data.
+     * @param array $headers The request headers.
      *
-     * @return Response
-     * @throws RequestException
-     * @throws ConnectException
-     * @throws ClientException
-     * @throws ServerException
+     * @return Response The response from the request.
+     *
+     * @throws RequestException If there is an error making the request.
+     * @throws ConnectException If there is an error connecting to the server.
+     * @throws ClientException If there is an error on the client side.
+     * @throws ServerException If there is an error on the server side.
      */
     public function request(string $method, string $url, array $data = [], array $headers = []): Response;
-} 
+
+    /**
+     * Send a request asynchronously.
+     *
+     * @param Request $request The request object to send.
+     *
+     * @return PromiseInterface A promise that resolves with the response.
+     */
+    public function sendAsync(Request $request): PromiseInterface;
+}

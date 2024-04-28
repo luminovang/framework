@@ -11,8 +11,6 @@ namespace Luminova\Sessions;
 
 use \Luminova\Interface\SessionInterface;
 use \App\Controllers\Config\Session as SessionConfig;
-use \Psr\Log\LoggerInterface;
-use \Luminova\Logger\NovaLogger;
 use \Luminova\Sessions\SessionManager;
 
 class Session 
@@ -23,13 +21,6 @@ class Session
      * @var SessionInterface $manager
     */
     protected ?SessionInterface $manager = null;
-
-    /**
-     * logger interface
-     * 
-     * @var LoggerInterface $logger
-    */
-    protected ?LoggerInterface $logger = null;
 
     /**
      * static class instance
@@ -70,16 +61,6 @@ class Session
         }
 
         return static::$instance;
-    }
-
-    /**
-     * Set the logger for this session.
-     *
-     * @param LoggerInterface $logger The logger to set.
-    */
-    public function setLogger(LoggerInterface $logger): void
-    {
-        $this->logger = $logger;
     }
 
     /** 
@@ -336,15 +317,14 @@ class Session
     public function start(): void
     {
         if ($this->manager instanceof SessionManager) {
-            $this->logger ??= new NovaLogger();
             if ((bool) ini_get('session.auto_start')) {
-                $this->logger->error('Session: session.auto_start is enabled in php.ini. Aborting.');
+                logger('error', 'Session: session.auto_start is enabled in php.ini. Aborting.');
                 return;
             }
 
             if (session_status() === PHP_SESSION_ACTIVE) {
                 $this->ipChangeListener();
-                //$this->logger->warning('Session: Sessions is enabled, and one exists. Please don\'t $session->start();');
+                //logger('warning', 'Session: Sessions is enabled, and one exists. Please don\'t $session->start();');
                 return;
             }
 

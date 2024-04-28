@@ -11,6 +11,7 @@ namespace Luminova\Cache;
 
 use \Luminova\Http\Header;
 use \Luminova\Time\Timestamp;
+use \Luminova\Application\FileSystem;
 use \DateTimeInterface;
 
 class PageViewCache
@@ -100,7 +101,7 @@ class PageViewCache
      */
     public function setKey(string $key): void
     {
-        $this->key = md5($key);
+        $this->key = $key;
     }
 
     /**
@@ -138,7 +139,7 @@ class PageViewCache
      *
      * @return bool True if the cache is still valid; false otherwise.
      */
-    public function hasCache(): bool
+    public function has(): bool
     {
         $location = $this->getFilename();
 
@@ -155,9 +156,10 @@ class PageViewCache
     public static function expired(string $key, string $directory): bool
     {
         $metaLocation = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'pagecache.lock';
-
+      
         if(file_exists($metaLocation)){
             $info = json_decode(file_get_contents($metaLocation), true);
+
             if(isset($info[$key])){
                 return time() >= (int) ($info[$key]['Expiry'] ?? 0);
             }
@@ -166,12 +168,39 @@ class PageViewCache
         return true;
     }
 
-    public function delete(){
-        
+    /**
+     * Delete a cache entry.
+     * 
+     * @return bool Return true if the cache entry was deleted, false otherwise.
+    */
+    public function delete(): bool 
+    {
+        $lockFile = $this->getLocation() . 'pagecache.lock';
+
+        if (file_exists($lockFile)) {
+            $lock = json_decode(file_get_contents($lockFile), true);
+
+            if(isset($lock[$this->key])){
+                unset($lock[$this->key]);
+
+                $lockInfo = json_encode($lock, JSON_PRETTY_PRINT);
+                write_content($lockFile, $lockInfo);
+            }
+        }
+
+        return unlink($this->getFilename());
     }
 
-    public function clear(){
-        
+    /**
+     * Clear all cache entries.
+     * 
+     * @return int Return number of deleted caches.
+    */
+    public function clear(): int 
+    {
+        $location = $this->getLocation();
+
+        return FileSystem::remove($location);
     }
 
     /**
@@ -179,7 +208,7 @@ class PageViewCache
      * 
      * @return bool True if loading was successful; false otherwise.
     */
-    public function readContent(): bool
+    public function read(): bool
     {
         $headers = [];
         $metadta = $this->getLocation() . 'pagecache.lock';
@@ -202,13 +231,8 @@ class PageViewCache
             return false;
         }
 
-        $location = $this->getFilename();
-        
-        foreach ($headers as $header => $value) {
-            header("$header: $value");
-        }
-        
-        $bytesRead = readfile($location);
+        Header::parseHeaders($headers);
+        $bytesRead = @readfile($this->getFilename());
         
         if (ob_get_length() > 0) {
             ob_end_flush();
@@ -235,21 +259,18 @@ class PageViewCache
         if(write_content($filename, $content)){
             $metadata = ($metadata === null) ? [] : $metadata;
 
-            $metaLocation = $location . 'pagecache.lock';
-            $jsonData = file_get_contents($metaLocation);
+            $lockFile = $location . 'pagecache.lock';
+            $locks = file_get_contents($lockFile);
     
-            $madatadaInfo = ($jsonData === false) ? [] : json_decode($jsonData, true);
+            $locks = ($locks === false) ? [] : json_decode($locks, true);
     
             $metadata['MaxAge'] = $this->expiration;
             $metadata['Expiry'] = time() + $this->expiration;
             $metadata['Date'] = date("D, d M Y H:i:s");
             $metadata['ETag'] = md5_file($filename);
+            $locks[$this->key] = $metadata;
 
-            $madatadaInfo[$this->key] = $metadata;
-    
-            $updateInfo = json_encode($madatadaInfo, JSON_PRETTY_PRINT);
-    
-            if(!write_content($metaLocation, $updateInfo)){
+            if(!write_content($lockFile, json_encode($locks, JSON_PRETTY_PRINT))){
                 unlink($filename);
 
                 return false;

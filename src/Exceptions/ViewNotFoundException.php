@@ -18,12 +18,17 @@ class ViewNotFoundException extends AppException
      * Constructor for ViewNotFoundException.
      *
      * @param string     $view   The exception view
-     * @param int        $code      The exception code (default: 500).
+     * @param string     $path   The view path
+     * @param int        $code   The exception code (default: 500).
      * @param Throwable $previous  The previous exception if applicable (default: null).
      */
-    public function __construct(string $view = 'home', int $code = 500, Throwable $previous = null)
+    public function __construct(string $view = 'home', string $path = '/resources/views/', int $code = 500, Throwable $previous = null)
     {
-        $message = sprintf('The view "%s" could not be found in the view directory "/resources/views/".', $view);
+        $message = sprintf(
+            'The view "%s" could not be found in the view directory "%s".', 
+            $view, 
+            filter_paths($path)
+        );
         parent::__construct($message, $code, $previous);
     }
 }

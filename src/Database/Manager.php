@@ -11,7 +11,7 @@ namespace Luminova\Database;
 
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Functions\Files;
+use \Luminova\Application\FileSystem;
 
 class Manager 
 {
@@ -105,7 +105,7 @@ class Manager
                 }
             }
 
-            if($count > 0 && Files::download($filepath, $filename, true)){
+            if($count > 0 && FileSystem::download($filepath, $filename, [], true)){
                 $count++;
             }
         }

@@ -33,14 +33,14 @@ final class Error
     /**
      * Initializes error display
      * 
-     * @param string $envirnment The application environment context.
+     * @param string $environment The application environment context.
      * 
      * @return void 
     */
-    public static function initialize(string $envirnment = 'http'): void 
+    public static function initialize(string $environment = 'http'): void 
     {
         static::$errors = [];
-        if ($envirnment !== 'http') {
+        if ($environment !== 'http') {
             return;
         }
 

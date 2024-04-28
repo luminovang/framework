@@ -91,7 +91,7 @@ class FileSystem
      */
     public static function permission(string $permission = 'rw', ?string $file = null, bool $quiet = false): bool
     {
-        $file ??= static::trimPath('writeable/');
+        $file ??= root(__DIR__, 'writeable' . DIRECTORY_SEPARATOR);
 
         if ($permission === 'rw' && (!is_readable($file) || !is_writable($file))) {
             $error = "Read and Write permission denied for '{$file}', please grant 'read' and 'write' permission.";
@@ -219,7 +219,7 @@ class FileSystem
         if (!file_exists($path)) {
             error_clear_last();
 
-            if(! @mkdir($path, $permissions, $recursive)){
+            if(!@mkdir($path, $permissions, $recursive)){
                 FileException::handleDirectory($path, (error_get_last()['message'] ?? ''));
                 
                 return true;
@@ -232,19 +232,160 @@ class FileSystem
         return true;
     }
 
-    /**
-     * Trim path based on os.
-     * 
-     * @param string $path 
-     * 
-     * @return string $path 
-    */
-    private static function trimPath(string $path): string 
-    {
-        $path = str_replace('/', DIRECTORY_SEPARATOR, $path);
 
-        return root(__DIR__, $path);
-    }
+    /**
+	 * Copy files and folders from the source directory to the destination directory.
+	 *
+	 * @param string $origin The source directory.
+	 * @param string $dest The destination directory.
+	 *
+	 * @return bool True if the copy operation is successful, false otherwise.
+	 */
+	public static function copy(string $origin, string $dest): bool
+	{
+		make_dir($dest);
+
+		$dir = opendir($origin);
+
+		if (!$dir) {
+			return false;
+		}
+
+		while (false !== ($file = readdir($dir))) {
+			if (($file != '.') && ($file != '..')) {
+				$srcFile = $origin . DIRECTORY_SEPARATOR . $file;
+				$destFile = $dest . DIRECTORY_SEPARATOR . $file;
+
+				if (is_dir($srcFile)) {
+					static::copy($srcFile, $destFile);
+				} else {
+					copy($srcFile, $destFile);
+				}
+			}
+		}
+		closedir($dir);
+		return true;
+	}
+
+	/**
+	 * Download a file to the user's browser.
+	 *
+	 * @param string $file The full file path or content to to download.
+	 * @param string $name The filename as it will be shown in the download.
+	 * @param array $headers Optional passed headers for download.
+	 * @param bool $delete Whether to delete the file after download (default: false).
+	 * @param string|null $content to download
+     * 
+     * @return bool Return true on success, false on failure.
+	 */
+	public static function download(string $file, ?string $name = null, array $headers = [], bool $delete = false): bool
+	{
+		$isFile = false;
+
+		if (file_exists($file) && is_readable($file)) {
+			$isFile = true;
+			$filename = $name ?? basename($file);
+			$mime = mime_content_type($file) ?? 'application/octet-stream';
+			$length = filesize($file);
+		} else {
+			$length = mb_strlen($file);
+			$filename = $name ?? 'file_download.txt';
+			$mime = 'application/octet-stream';
+		}
+
+		$extend = array_merge([
+			'Content-Type' => $mime,
+			'Content-Disposition' => 'attachment; filename="' . $filename,
+			'ontent-Transfer-Encoding' => 'binary',
+			'Expires' => 0,
+			'Cache-Control' => 'must-revalidate',
+			'Pragma' => 'public',
+			'Content-Length' => $length,
+		], $headers);
+
+		foreach($extend as $key => $value) {
+			header("{$key}: {$value}");
+		}
+
+		if ($isFile) {
+			$read = readfile($file);
+
+			if ($delete && $read !== false) {
+				unlink($file);
+			}
+
+			return $read !== false;
+		} else {
+			echo $file;
+			return true;
+		}
+	}
+
+    /**
+	 * Deletes files and folders.
+	 *
+	 * @param string $dir   Directory to delete files.
+	 * @param bool   $delete_base  Remove the base directory once done (default is false).
+     * 
+	 * @return int Returns count of deleted files.
+	 */
+	public static function remove(string $dir, bool $delete_base = false): int 
+	{
+		$count = 0;
+
+		if (!file_exists($dir)) {
+			return $count;
+		}
+		
+		$files = is_dir($dir) ? 
+			glob(rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR. '*', GLOB_MARK) : 
+			glob($dir . '*');
+		//$files = glob(rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '*', GLOB_MARK);
+
+		foreach ($files as $file) {
+			if (is_dir($file)) {
+				static::remove($file, true);
+			} else {
+				unlink($file);
+				$count++;
+			}
+		}
+
+		if ($delete_base) {
+			$count++;
+			rmdir($dir);
+		}
+
+		return $count;
+	}
+
+    /**
+     * Get path properties in compatible based on os return from application root.
+     * 
+     * @param string $name File property name.
+     * 
+     * @return string $path Return os compatible path
+    */
+    public function getCompatible(string $name): string 
+    {
+        if (property_exists($this, $name)) {
+            return root(__DIR__, str_replace('/', DIRECTORY_SEPARATOR, $this->{$name}));
+        }
+    
+        return '';
+    } 
+    
+    /**
+     * Convert file path be compatible based on os.
+     * 
+     * @param string $path File path
+     * 
+     * @return string $path Return os compatible path
+    */
+    public static function tocompatible(string $path): string 
+    {
+        return str_replace('/', DIRECTORY_SEPARATOR, $path);
+    } 
 
     /**
      * Get protected properties path.
@@ -255,12 +396,6 @@ class FileSystem
     */
     public function __get(string $key): string 
     {
-        $path = $this->{$key} ?? '';
-
-        if($path === ''){
-            return '';
-        }
-
-        return static::trimPath($path);
+        return $this->getCompatible($key);
     }
 }

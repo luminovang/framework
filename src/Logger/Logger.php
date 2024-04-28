@@ -12,6 +12,8 @@ namespace Luminova\Logger;
 use \Psr\Log\LoggerInterface;
 use \Psr\Log\LogLevel;
 use \Luminova\Logger\NovaLogger;
+use \App\Controllers\Config\Preference;
+use \Luminova\Exceptions\InvalidArgumentException;
 
 class Logger implements LoggerInterface
 {
@@ -139,20 +141,26 @@ class Logger implements LoggerInterface
     }
 
     /**
-     * Log a message.
+     * Log a message at a specified log level.
      *
-     * @param string $level The log level.
+     * @param string $level The log level (e.g., "emergency," "error," "info").
      * @param string $message The log message.
      * @param array $context Additional context data (optional).
      *
      * @return void
+     * @throws InvalidArgumentException If logger does not implement LoggerInterface.
      */
-    public function log($level, $message, array $context = [])
+    public function log($level, $message, array $context = []): void
     {
-        $this->logger ??= new NovaLogger();
+        if($this->logger === null){
+            $this->logger = (Preference::getLogger() ?? new NovaLogger());
+        }
 
         if ($this->logger instanceof LoggerInterface) {
             $this->logger->log($level, $message, $context);
+            return;
         }
+
+        throw new InvalidArgumentException('Logger must implement Psr\Log\LoggerInterface');
     }
 }

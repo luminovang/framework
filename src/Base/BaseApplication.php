@@ -19,7 +19,7 @@ abstract class BaseApplication extends Foundation
     /**
      * Adds helper class for handling view template rendering and response.
      *
-     * @see Luminova\Template\TemplateTrait
+     * @see https://luminova.ng/docs/0.0.0/templates/views
     */
     use TemplateTrait;
 
@@ -48,9 +48,6 @@ abstract class BaseApplication extends Foundation
 
         // Initialize the template engine
         $this->initialize(__DIR__);
-
-        // Set the project base path
-        $this->setProjectBase($this->router->getBase());
 
         // Initialize onCreate method
         $this->onCreate();
@@ -96,12 +93,11 @@ abstract class BaseApplication extends Foundation
     }
     
     /**
-     * Magic method getter
-     * Get properties from template class 
+     * Get protected property from template class static::$publicOptions or static::$publicClasses
      *
      * @param string $key property or attribute key
      * 
-     * @return ?mixed return property else null
+     * @return ?mixed return property otherwise null if not found.
      * @ignore
     */
     public function __get(string $key): mixed

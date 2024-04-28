@@ -75,9 +75,7 @@ class Sitemap
         $totalMemory = ini_get('memory_limit');
 
         if (!is_command()) {
-
             throw new RuntimeException('Sitemap generator should be run in cli mode.');
-
             return false;
         }
 
@@ -93,6 +91,11 @@ class Sitemap
         http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">' . PHP_EOL;
 
         $url = ($url === null) ? static::startUrl() : static::toUrl($url);
+       
+        if($url === '' || $url === '/'){
+            throw new RuntimeException(sprintf('Invalid start url: "%s", set start url in .env file "dev.app.start.url".', $url));
+            return false;
+        }
         static::$cli = $cli;
         static::$visited = [];
         static::$faied = [];
@@ -155,12 +158,12 @@ class Sitemap
             $regex = '#^' . preg_replace('/\/{(.*?)}/', '/(.*?)', $pattern) . '$#';
 
             if (preg_match($regex, rtrim($url)) === 1) {
-                $viewInfo = $app->view($view)->viewinfo();
+                $viewInfo = $app->view($view)->viewInfo();
                 $lastmod = $viewInfo['modified'] ?? null;
                 break; 
             }
         }
-
+        
         return $lastmod ?? date('Y-m-d\TH:i:sP');
     }
 
@@ -224,7 +227,7 @@ class Sitemap
     */
     private static function startUrl(): string 
     {
-        return static::toUrl(SitemapConfig::$startUrl);
+        return static::toUrl(env('dev.app.start.url', ''));
     }
 
     /**
@@ -378,12 +381,14 @@ class Sitemap
         $info = curl_getinfo($ch);
 
         if (curl_errno($ch)) {
+            static::$cli?->writeln('[Error] ' . curl_error($ch), 'red');
             return false;
         }
 
         curl_close($ch);
 
         if (empty($document)) {
+            static::$cli?->writeln('[Empty] ' . $url, 'red');
             return false;
         }
 

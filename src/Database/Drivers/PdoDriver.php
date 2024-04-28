@@ -157,7 +157,7 @@ class PdoDriver implements DatabaseInterface
     */
     private function mysqlDns(): string
     {
-        if (is_command() || $this->config->socket) {
+        if (is_command() || NOVAKIT_ENV !== null || $this->config->socket) {
             $socket = (empty($this->config->socket_path) ? ini_get('pdo_mysql.default_socket') : $this->config->socket_path);
 
             return "mysql:unix_socket={$socket};dbname={$this->config->database}";

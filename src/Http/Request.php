@@ -7,115 +7,108 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Http;
 
 use \Luminova\Http\Header;
+use \Luminova\Http\Server;
+use \Luminova\Http\File;
+use \Luminova\Http\UserAgent;
+use \Luminova\Functions\IPAddress;
+use \App\Controllers\Config\Security;
 use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Exceptions\SecurityException;
 
+/**
+ * Requet HTTP getter method 
+ * 
+ * @method mixed getGet(string $key, mixed $default = null)       Get a value from the GET request.
+ * @method mixed getPost(string $key, mixed $default = null)      Get a value from the POST request.
+ * @method mixed getPut(string $key, mixed $default = null)       Get a value from the PUT request.
+ * @method mixed getOptions(string $key, mixed $default = null)   Get a value from the OPTIONS request.
+ * @method mixed getPatch(string $key, mixed $default = null)     Get a value from the PATCH request.
+ * @method mixed getHead(string $key, mixed $default = null)      Get a value from the HEAD request.
+ * @method mixed getConnect(string $key, mixed $default = null)   Get a value from the CONNECT request.
+ * @method mixed getTrace(string $key, mixed $default = null)     Get a value from the TRACE request.
+ * @method mixed getPropfind(string $key, mixed $default = null)  Get a value from the PROPFIND request.
+ * @method mixed getMkcol(string $key, mixed $default = null)     Get a value from the MKCOL request.
+ * @method mixed getCopy(string $key, mixed $default = null)      Get a value from the COPY request.
+ * @method mixed getMove(string $key, mixed $default = null)      Get a value from the MOVE request.
+ * @method mixed getLock(string $key, mixed $default = null)      Get a value from the LOCK request.
+ * @method mixed getUnlock(string $key, mixed $default = null)    Get a value from the UNLOCK request.
+ * 
+ * @param string $key     The key of the value to retrieve.
+ * @param mixed $default  (optional) The default value to return if the key is not found.
+ * @return mixed Response from HTTP request method body key value.
+ */
 class Request
 {
     /**
-     * @var array $get Http GET request method
+     * Http request method and body.
+     *
+     * @var array<string,mixed> $httpBody
      */
-    private array $get;
-    
-    /**
-     * @var array $post Http POST request method
-     */
-    private array $post;
-    
-    /**
-     * @var array $put Http PUT request method
-     */
-    private array $put;
-    
-    /**
-     * @var array $delete Http DELETE request method
-     */
-    private array $delete;
-    
-    /**
-     * @var array $options Http OPTIONS request method
-     */
-    private array $options;
-    
-    /**
-     * @var array $patch Http PATCH request method
-     */
-    private array $patch;
-    
-    /**
-     * @var array $head Http HEAD request method
-     */
-    private array $head;
-    
-    /**
-     * @var array $connect Http CONNECT request method
-     */
-    private array $connect;
-    
-    /**
-     * @var array $trace Http TRACE request method
-     */
-    private array $trace;
-    
-    /**
-     * @var array $propfind Http PROPFIND request method
-     */
-    private array $propfind;
-    
-    /**
-     * @var array $mkcol Http MKCOL request method
-     */
-    private array $mkcol;
-    
-    /**
-     * @var array $copy Http COPY request method
-     */
-    private array $copy;
-    
-    /**
-     * @var array $move Http MOVE request method
-     */
-    private array $move;
-    
-    /**
-     * @var array $lock Http LOCK request method
-     */
-    private array $lock;
-    
-    /**
-     * @var array $unlock Http UNLOCK request method
-     */
-    private array $unlock;
-    
-    /**
-     * @var array $body Http request body
-    */
-    private array $body;
+    private array $httpBody = [];
 
     /**
-     * @var array $methods Http request methods
-    */
+     * Http request body.
+     *
+     * @var array<string,mixed> $body
+     */
+    private array $body = [];
+
+    /**
+     * Http request methods.
+     *
+     * @var array<int, string> $methods
+     */
     private array $methods = [
-        'get', 'post', 'put',
-        'delete', 'options', 'patch',
-        'head', 'connect', 'trace',
-        'propfind', 'mkcol', 'copy', 'move', 'lock', 'unlock'
+        'get', 'post', 'put','delete', 'options', 
+        'patch', 'head', 'connect', 'trace', 'propfind', 
+        'mkcol', 'copy', 'move', 'lock', 'unlock'
     ];    
 
     /**
-     * Initializes
+     * Http server instance.
+     *
+     * @var null|Server $server
+     */
+    public ?Server $server = null;
+
+    /**
+     * Http request header instance.
+     *
+     * @var null|Header $header
     */
+    public ?Header $header = null;
+
+     /**
+     * Browser request user-agent information.
+     *
+     * @var null|UserAgent $agent
+     */
+    public ?UserAgent $agent = null;
+
+    /**
+     * Request uri 
+     * 
+     * @var null|string $uri
+    */
+    private ?string $uri = null;
+
+    /**
+     * Initializes the Request object.
+     */
     public function __construct()
     {
-        $this->get = $_GET;
-        $this->post = $_POST;
-        
+        $this->server = new Server((array) $_SERVER);
+        $this->header = new Header();
+        $this->httpBody['get'] = $_GET;
+        $this->httpBody['post'] = $_POST;
+        $this->uri = null;
+
         foreach ($this->methods as $method) {
             if( $method !== 'post' && $method !== 'get'){
-                $this->{$method} = $this->parseRequestBody($method);
+                $this->httpBody[$method] = $this->parseRequestBody($method);
             }
         }
         
@@ -123,390 +116,622 @@ class Request
     }
 
     /**
-     * Get a value from the Specified request method.
+     * Get a value from the HTTP request.
      *
-     * @param string $method
-     * @param string $key
-     * @param mixed $default
+     * @param string $key     HTTP request body key.
+     * @param mixed $default Default value (default: blank string).
      * 
-     * @return mixed
-     */
-    public function find(string $method, string $key, mixed $default = null): mixed
-    {
-        $property = strtolower($method);
-        $value = isset($this->methods[$property]) ? $this->{$property}[$key] : $default;
-
-        return $value ?? $default;
-    }
-
-    /**
-     * Get a value from the GET request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * 
-     * @deprecated This method will be changed later to replace find(), use getGet() instead 
-     * @return mixed
-     */
-    public function get(string $key, mixed $default = null): mixed
-    {
-        return $this->get[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the GET request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getGet(string $key, mixed $default = null): mixed
-    {
-        return $this->get[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the POST request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * 
-     * @return mixed
-     */
-    public function getPost(string $key, mixed $default = null): mixed
-    {
-        return $this->post[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the request context array.
-     *
-     * @param string $method request method context
-     * @param string $key
-     * @param string $index array index
-     * @param mixed $default
-     * 
-     * @return mixed
-     * @throws InvalidArgumentException
-     */
-    public function getArray(string $method, string $key, string $index, mixed $default = null): mixed
-    {
-        $context = strtolower($method);
-        if(in_array($context, $this->methods, true)){
-            $contents = $this->{$context};
-            
-            if(isset($contents[$key])) {
-                $content = $contents[$key];
-                
-                if(is_string($content)) {
-                    $decodedArray = json_decode($content, true);
-                    if ($decodedArray !== null) {
-                        return $decodedArray[$index] ?? $default;
-                    }
-                }
-                
-                return $content[$index] ?? $default;
-            }
-        }
-        
-        throw new InvalidArgumentException("Method '$method' is not allowed. Use any of [" . implode(', ', $this->methods) . "]");
-    }
-
-    /**
-     * Get a value from the PUT request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getPut(string $key, mixed $default = null): mixed
-    {
-        return $this->put[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the DELETE request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getDelete(string $key, mixed $default = null): mixed
-    {
-        return $this->delete[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the OPTIONS request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getOption(string $key, mixed $default = null): mixed
-    {
-        return $this->options[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the PATCH request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getPatch(string $key, mixed $default = null): mixed
-    {
-        return $this->patch[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the HEAD request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getHead(string $key, mixed $default = null): mixed
-    {
-        return $this->head[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the CONNECT request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getConnect(string $key, mixed $default = null): mixed
-    {
-        return $this->connect[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the TRACE request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getTrace(string $key, mixed $default = null): mixed
-    {
-        return $this->trace[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the PROPFIND request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getPropfind(string $key, mixed $default = null): mixed
-    {
-        return $this->propfind[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the MKCOL request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getMkcol(string $key, mixed $default = null): mixed
-    {
-        return $this->mkcol[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the COPY request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getCopy(string $key, mixed $default = null): mixed
-    {
-        return $this->copy[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the MOVE request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getMove(string $key, mixed $default = null): mixed
-    {
-        return $this->move[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the LOCK request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getLock(string $key,mixed  $default = null): mixed
-    {
-        return $this->lock[$key] ?? $default;
-    }
-
-    /**
-     * Get a value from the UNLOCK request.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getUnlock(string $key, mixed $default = null): mixed
-    {
-        return $this->unlock[$key] ?? $default;
-    }
-
-    /**
-     * Get the request body as an array.
-     *
-     * @return array
-     */
-    public function getBody(): array
-    {
-        return $this->body;
-    }
-
-    /**
-     * Get the request body as an object.
-     *
-     * @return object
-     */
-    public function getBodyAsObject(): object
-    {
-        return (object) $this->body;
-    }
-
-    /**
-     * Get the uploaded file information.
-     * @param string $name file name
-     * @return object|null
+     * @return mixed Return value from the HTTP request if is set otherwise return null.
+     * @internal
     */
-    public function getFile(string $name): ?object
+    public function __call(string $key, array $arguments): mixed 
     {
-        if (isset($_FILES[$name])) {
-            return $this->parseFiles($_FILES[$name]);
+        $method = strtolower(substr($key, 3));
+    
+        if(in_array($method, $this->methods, true)){
+            $default = ($arguments[1] ?? '');
+
+            if(isset($this->httpBody[$method])){
+                return $this->httpBody[$method][$arguments[0]] ??  $default;
+            }
+
+            return $default;
         }
+
         return null;
     }
 
     /**
+     * Get a value from the request method context array.
+     *
+     * @param string $method HTTP request method context.
+     * @param string $key    Request body key.
+     * @param array $default Default value.
+     * 
+     * @return array Return array of HTTP request method key values.
+     * @throws InvalidArgumentException Throws if unsupported HTTP method was passed.
+     */
+    public function getArray(string $method, string $key, array $default = []): array
+    {
+        $method = strtolower($method);
+        if(in_array($method, $this->methods, true)){
+            if(isset($this->httpBody[$method][$key])) {
+                $result = $this->httpBody[$method][$key];
+                
+                if(is_string($result)) {
+                    $decode = json_decode($result, true);
+
+                    if ($decode !== null || $decode !== false) {
+                        return (array) $decode ?? $default;
+                    }
+                }
+                
+                return (array) $result ?? $default;
+            }
+        }
+        
+        throw new InvalidArgumentException("Request method '$method' is not supported, supported methods are [" . implode(', ', $this->methods) . "]");
+    }
+
+    /**
+     * Get the request body as an array or json object.
+     * 
+     * @param bool $object Whether to return an array or a json object (default: false).
+     * 
+     * @return array|object Return the request body as an array or json object.
+     */
+    public function getBody(bool $object = false): array|object
+    {
+        if($object){
+            return (object) $this->body;
+        }
+
+        return $this->body;
+    }
+
+   /**
+     * Get the uploaded file information.
+     * 
+     * @param string $name File name.
+     * 
+     * @return File|false Uploaded file information or false if file not found.
+     */
+    public function getFile(string $name): File|false
+    {
+        if (isset($_FILES[$name])) {
+            return $this->parseFile($_FILES[$name]);
+        }
+
+        return false;
+    }
+
+    /**
      * Get the uploaded files information.
      *
-     * @return object|null
+     * @return false|array<int,File> Uploaded files information or false if no files found.
     */
-    public function getFiles(): ?object
+    public function getFiles(): array|false
     {
         $files = [];
         foreach ($_FILES as $index => $fileInfo) {
-            $files[] = $this->parseFiles($fileInfo, $index);
+            $files[] = $this->parseFile($fileInfo, $index);
         }
-        if( $files  == []){
-            return null;
+
+        if($files === []){
+            return false;
         }
-        return (object) $files;
+
+        return $files;
     }
 
     /**
-     * Get the uploaded files information.
-     * @param array $fileInfo file array information
-     * @param int $index file index
-     * @return object
-    */
-    private function parseFiles(array $fileInfo, int $index = 0): object{
-        if(empty($fileInfo)){
-            return (object)[];
-        }
-
-        $extension = pathinfo($fileInfo['name'], PATHINFO_EXTENSION);
-        $mime = mime_content_type($fileInfo['tmp_name']);
-        if($extension === ''){
-            [$format, $extension] = explode('/', $mime);
-            $fileInfo['name'] = uniqid('file_') . '.' . $extension;
-        }
-        
-        return (object)[
-            'index' => $index,
-            'name' => $fileInfo['name'] ?? null,
-            'type' => $fileInfo['type'] ?? null,
-            'format' => $format ?? null,
-            'size' => $fileInfo['size']??0,
-            'mime' => $mime ?? null,
-            'extension' => strtolower( $extension ?? '' ),
-            'temp' => $fileInfo['tmp_name'] ?? null,
-            'error' => $fileInfo['error'] ?? null,
-        ];
-    }
-
-     /**
-     * Get the request method 
+     * Get the request method.
      *
-     * @return string The Request method
+     * @return string The request method.
     */
     public function getMethod(): string
     {
-        return strtolower($_SERVER['REQUEST_METHOD']??'');
+        return strtolower($this->server->get('REQUEST_METHOD', ''));
     }
 
     /**
-     * Check if the request method is get
+     * Check if the request method is GET.
      *
-     * @return bool
+     * @return bool Returns true if the request method is GET, false otherwise.
     */
     public function isGet(): bool
     {
         return $this->getMethod() === 'get';
     }
 
-    /**
-     * Check if the request method is post
+   /**
+     * Check if the request method is POST.
      *
-     * @return bool
-    */
+     * @return bool Returns true if the request method is POST, false otherwise.
+     */
     public function isPost(): bool
     {
         return $this->getMethod() === 'post';
     }
 
     /**
-     * Check if the request method is
-     * @param string $method 
+     * Check if the request method is the provided method.
+     *
+     * @param string $method The method to check against.
      * 
-     * @return bool
+     * @return bool Returns true if the request method matches the provided method, false otherwise.
     */
     public function isMethod(string $method): bool
     {
-        $method = strtolower($method);
-
-        return $this->getMethod() === $method;
+        return $this->getMethod() === strtolower($method);
     }
 
-     /**
-     * Get the request content type
+    /**
+     * Get the request content type.
      *
-     * @return string The Request content type
+     * @return string The request content type.
      */
     public function getContentType(): string
     {
-        return $_SERVER['CONTENT_TYPE'] ?? '';
+        return $this->server->get('CONTENT_TYPE', '');
+    }
+
+    /**
+     * Get HTTP request header authorization [HTTP_AUTHORIZATION, Authorization].
+     * 
+     * @return string|null Return the authorization header value or null if no authorization header was sent.
+     */
+    public function getAuthorization(): string|null
+    {
+		return Header::getAuthorization();
+	}
+	
+	/**
+     * Get HTTP request header authorization bearer value.
+     * 
+     * @return string|null Return authorization bearer value.
+     */
+	public function getAuthBearer(): string|null 
+    {
+		$auth = Header::getAuthorization();
+
+		if ($auth === null) {
+			return null;
+		}
+        
+        if (preg_match('/Bearer\s(\S+)/', $auth, $matches)) {
+            return $matches[1] ?? null;
+        }
+	}
+
+    /**
+     * Check to see if a request was made from the command line.
+     *
+     * @return bool Return true if the request was made from the command line.
+     */
+    public function isCommand(): bool
+    {
+        return is_command();
+    }
+
+    /**
+     * Check if the current connection is secure
+     * 
+     * @return bool Return true if the connection is secure false otherwise.
+     */
+    public function isSecure(): bool
+    {
+        return ($this->server->get('HTTPS') !== 'off' || $this->server->get('SERVER_PORT') === 443);
+    }
+
+    /**
+     * Check if request is ajax request, see if a request contains the HTTP_X_REQUESTED_WITH header.
+     * 
+     * @return bool Return true if request is ajax request, false otherwise
+     */
+    public function isAJAX(): bool
+    {
+        return strtolower($this->server->get('HTTP_X_REQUESTED_WITH', '')) === 'xmlhttprequest';
+    }
+
+    /**
+     * Check if the request URL indicates an API endpoint.
+     *
+     * This method checks if the URL path starts with '/api' or 'public/api'.
+     *
+     * @param string|null $url The request URL to check.
+     * 
+     * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
+     */
+    public function isApi(?string $url = null): bool
+    {
+        $url ??= $this->server->get('REQUEST_URI', '');
+
+        if($url === ''){
+            return false;
+        }
+
+        $segments = explode('/', trim($url, '/'));
+
+        if (!empty($segments) && ($segments[0] === 'api' || ($segments[0] === 'public' && isset($segments[1]) && $segments[1] === 'api'))) {
+            return true;
+        }
+
+        if (basename(root(__DIR__)) === $segments[0] && isset($segments[2]) && $segments[2] === 'api') {
+            return true;
+        }
+
+        return false;
+    }
+    
+    /**
+     * Get the request url query string.
+     *
+     * @return string Return url query string.
+    */
+    public function getQuery(): string
+    {
+        $queries = $this->getQueries();
+
+        if($queries === null){
+            return '';
+        }
+
+        return http_build_query($queries, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    /**
+     * Get current url query parameters as an array.
+     * 
+     * @return array<string, mixed> Url query parameters.
+    */
+    public function getQueries(): ?array
+    {
+        $queries = $this->server->get('QUERY_STRING');
+        if(null === $queries || $queries === ''){
+            return null;
+        }
+
+        $queries = explode('&', $queries);
+        $values = [];
+
+        foreach ($queries as $value) {
+            [$key, $value] = explode('=', $value);
+            $values[$key] = urldecode($value);
+        }
+
+        ksort($values);
+
+        return  $values;
+    }
+
+    /**
+     * Get current request url
+     * 
+     * @return string Return request url or null if not set.
+    */
+    public function getUri(): string
+    {
+        return $this->getScheme() . '://' . $this->getHost() . $this->server->get('REQUEST_URI', '');
+
+        /* 
+        if (($params = $this->getQuery()) !== '') {
+            $params = '?' . $params;
+        }
+
+        return $this->getScheme().'://'.$this->getHost() . $this->getPaths() . $params;*/
+    }
+
+    /**
+     * Get current request url path information
+     * 
+     * @return string Return request url paths.
+    */
+    public function getPaths(): string
+    {
+        $url = $this->server->get('REQUEST_URI', '');
+
+        if($url === ''){
+            return '';
+        }
+
+        return parse_url($url, PHP_URL_PATH);
+    }
+
+    /**
+     * Returns the requested URI (path and query string).
+     *
+     * @return string The raw URI (i.e. not URI decoded)
+    */
+    public function getRequestUri(): string
+    {
+        if($this->uri === null){
+            $this->uri = $this->extractRequestUri();
+        }
+        
+        return $this->uri;
+    }
+
+    /**
+     * Get current hostname without port, if allowed host is set it will check if host is in allowed list or patterns.
+     * 
+     * @param bool $extension Should throw an exception if invalid host or not allowed host (default: false).
+     * 
+     * @return string Return hostname.
+     * @throws SecurityException If host is invalid or not allowed.
+    */
+    public function getHost(bool $extension = false): string|null
+    {
+        return $this->getHostname($extension, false);
+    }
+
+    /**
+     * Get current hostname with port if port is available. 
+     * If allowed host is set it will check if host is in allowed list or patterns.
+     * 
+     * @param bool $extension Should throw an exception if invalid host or not allowed host (default: false).
+     * @param bool $port Should return hostname with port (default: true).
+     * 
+     * @return string Return hostname.
+     * @throws SecurityException If host is invalid or not allowed.
+    */
+    public function getHostname(bool $extension = false, bool $port = true): string|null
+    {
+        if (!$hostname = $this->server->get('HTTP_HOST')) {
+            if (!$hostname = $this->header->get('HOST')) {
+                if (!$hostname = $this->server->get('SERVER_NAME')) {
+                    $hostname = $this->server->get('SERVER_ADDR', '');
+                }
+            }
+        }
+
+        if($hostname === null){
+            return '';
+        }
+    
+        $hostname = trim($hostname);
+        // Remove any port number from the hostname
+        if(!$port){
+            $hostname = strtolower(preg_replace('/:\d+$/', '', $hostname));
+        }
+        $error = null;
+        // Remove any unwanted characters from the hostname
+        if($hostname && preg_replace('/(?:^\[)?[a-zA-Z0-9-:\]_]+\.?/', '', $hostname) === ''){
+            if(static::isTrusted($hostname, 'hostname')){
+                return $hostname;
+            }
+
+            $error = 'Untrusted Hostname "%s".';
+        }else{
+            $error = 'Invalid Hostname "%s".';
+        }
+    
+        if($error !== null && $extension){
+             throw new SecurityException(sprintf($error, $hostname));
+        }
+
+        return '';
+    }
+
+    /**
+     * Get the origin domain if list of trusted origin domains are specified.
+     * It will check if the origin is a trusted origin domain.
+     * 
+     * @return string|null Origin domain if found and trusted, otherwise null.
+    */
+    public function getOrigin(): ?string
+    {
+        $origin = $this->server->get('HTTP_ORIGIN');
+
+        if (!$origin) {
+            return null;
+        }
+
+        if(Security::$trustedOrigins === []){
+            return $origin;
+        }
+
+        $parse = parse_url($origin);
+        $domain = $parse['host'] ?? '';
+
+        if ($domain === '') {
+            return null;
+        }
+
+        if(static::isTrusted($domain, 'origin')){
+            return $domain;
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the request origin port.
+     *
+     * @return int|string|null Can be a string if fetched from the server bag
+     * 
+     * > Check if X-Forwarded-Port header exists and use it, if available.
+     * > If not available check for server-port header if also not available return NULL as default.
+    */
+    public function getPort(): int|string|null
+    {
+        if (!$port = $this->server->get('HTTP_X_FORWARDED_PORT')) {
+            if (!$port = $this->server->get('X_FORWARDED_PORT')) {
+                return $this->server->get('SERVER_PORT');
+            }
+        }
+        
+        $pos = ('[' === $port[0]) ? strpos($port, ':', strrpos($port, ']')) : strrpos($port, ':');
+
+        if ($pos !== false && $port = substr($port, $pos + 1)) {
+            return (int) $port;
+        }
+
+        return $this->isSecure() ? 443 : 80;
+    }
+
+    /**
+     * Gets the request's scheme.
+    */
+    public function getScheme(): string
+    {
+        return $this->isSecure() ? 'https' : 'http';
+    }
+
+    /**
+     * Gets the request server protocol (e.g: HTTP/1.1).
+    */
+    public function getProtocol(): string
+    {
+        return $this->server->get('SERVER_PROTOCOL', 'HTTP/1.1');
+    }
+ 
+    /**
+     * Get user browser information.
+     * 
+     * @return string Return browser name and platform.
+     */
+    public function getBrowser(): string
+    {
+       $agent = $this->getUserAgent();
+
+       return $agent->getBrowser() . ' on ' . $agent->getPlatform();
+    }
+
+    /**
+     * Get browser user-agent information.
+     * 
+     * @param string|null $useragent The User Agent string. If not provided, it defaults to $_SERVER['HTTP_USER_AGENT'].
+     * 
+     * @return UserAgent Return user agent object.
+     */
+    public function getUserAgent(?string $useragent = null): UserAgent
+    {
+        if($this->agent === null){
+            $this->agent = new UserAgent($useragent);
+        }
+
+        return $this->agent;
+    }
+
+    /**
+     * Get HTTP request headers.
+     *
+     * @return array<string, mixed> The request headers.
+     */
+    public static function headers(): array 
+    {
+        return Header::getHeaders();
+    }
+
+     /**
+     * Check if the given (hostnames, origins, proxy ip or subnet) matches any of the trusted patterns.
+     * 
+     * @param string $input The domain, origin or ip address to check.
+     * @param string $context The context to check (hostname, origin or proxy).
+     * 
+     * @return bool Return true if the input is trusted, false otherwise.
+     * @throws InvalidArgumentException If invalid context is provided.
+     */
+    public static function isTrusted(string $input, string $context = 'hostname'): bool
+    {
+        if($context !== 'hostname' && $context !== 'origin' && $context !== 'proxy'){
+            throw new InvalidArgumentException(sprintf('Invalid Context "%s".', $context));
+        }
+
+        if($context === 'proxy'){
+            return IPAddress::isTrustedProxy($input);
+        }
+
+        $trusted = ($context === 'hostname') ? Security::$trustedHostname : Security::$trustedOrigins;
+
+        if($trusted === []){
+            return true;
+        }
+
+        foreach ($trusted as $pattern) {
+            $pattern = str_replace('\*', '.*', preg_quote($pattern, '/'));
+            
+            if (preg_match('/^' . $pattern . '$/', $input)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Check whether this request origin ip address is from a trusted proxy.
+     * 
+     * @return bool Return true if the request origin ip address is trusted false otherwise.
+    */
+    public function isTrustedProxy(): bool
+    {
+        return static::isTrusted($this->server->get('REMOTE_ADDR', ''), 'proxy');
+    }
+
+    /**
+     * The following methods are derived from code of the Zend Framework (1.10dev - 2010-01-24)
+     *
+     * Code subject to the new BSD license (https://framework.zend.com/license).
+     *
+     * Copyright (c) 2005-2010 Zend Technologies USA Inc. (https://www.zend.com/)
+     * @internal
+    */
+    protected function extractRequestUri(): string
+    {
+        $uri = '';
+
+        if ($this->wasUrlRewrite() && $this->server->has('UNENCODED_URL')) {
+            // IIS7 with URL Rewrite: make sure we get the unencoded URL (double slash problem)
+            $uri = $this->server->get('UNENCODED_URL');
+            $this->server->remove('UNENCODED_URL');
+        } elseif ($this->server->has('REQUEST_URI')) {
+            $uri = $this->server->get('REQUEST_URI');
+
+            // To only use path and query remove the fragment.
+            $uri = strtok($uri, '#');
+
+            if (strpos($uri, '?') !== false) {
+                // Remove the fragment if exists
+                $uri = strtok($uri, '#');
+            }
+        } elseif ($this->server->has('ORIG_PATH_INFO')) {
+            // IIS 5.0, PHP as CGI
+            $uri = $this->server->get('ORIG_PATH_INFO');
+            if ($this->server->has('QUERY_STRING') && $query = $this->server->get('QUERY_STRING')) {
+                $uri .= '?' . $query;
+            }
+            $this->server->remove('ORIG_PATH_INFO');
+        }
+
+        // Set the request URI
+        $this->server->set('REQUEST_URI', $uri);
+
+        return $uri;
+    }
+
+    /**
+     * Check if header IIS with UrlRewriteModule? was set indicating that url was rewritten.
+     *
+     * @return bool Return true if header IIS with UrlRewriteModule? was set and its 1.
+     */
+    private function wasUrlRewrite(): bool
+    {
+        if ((int) $this->server->get('IIS_WasUrlRewritten', 0) === 1) {
+            $this->server->remove('IIS_WasUrlRewritten');
+            return true;
+        }
+
+        return false;
     }
 
     /**
      * Parse the request body based on the request method.
      *
-     * @param string|null $method
-     * @return array
+     * @param string|null $method HTTP request method.
+     * 
+     * @return array Return request body as an array.
      */
     private function parseRequestBody(?string $method = null): array
     {
@@ -534,232 +759,36 @@ class Request
     }
 
     /**
-	 * Get authorization header
-     * 
-     * @return string
-	*/
-    public function getAuthorization(): string
-    {
-		return Header::getAuthorization();
-	}
-	
-	/**
-	 * get access token from header
-     * 
-     * @return string|null
-	*/
-	public function getAuthBearer(): ?string 
-    {
-		$auth = Header::getAuthorization();
-
-		if (!empty($auth)) {
-			if (preg_match('/Bearer\s(\S+)/', $auth, $matches)) {
-				return $matches[1];
-			}
-		}
-        
-		return null;
-	}
-
-    /**
-     * Is CLI?
+     * Parse the uploaded files information and return file instance.
      *
-     * Test to see if a request was made from the command line.
-     *
-     * @return bool
-    */
-    public function isCommandLine(): bool
-    {
-        return is_command();
-    }
-
-    /**
-     * Check if the current connection is secure
+     * @param array $file File information array.
+     * @param int $index File index.
      * 
-     * @return bool 
-    */
-    public function isSecure(): bool
+     * @return File|false Return parsed file information or false if no file found.
+     */
+    protected function parseFile(array $file, int $index = 0): File|false
     {
-        return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443;
-    }
-
-    /**
-     * Check if request is ajax request
-     * Test to see if a request contains the HTTP_X_REQUESTED_WITH header.
-     * 
-     * @return bool 
-    */
-    public function isAJAX(): bool
-    {
-        $with = $_SERVER['HTTP_X_REQUESTED_WITH']??'';
-
-        return $with !== '' && strtolower($with) === 'xmlhttprequest';
-    }
-
-    /**
-     * Check if the request URL indicates an API endpoint.
-     *
-     * This method checks if the URL path starts with '/api' or 'public/api'.
-     *
-     * @param string|null $url The request URL to check.
-     * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
-    */
-    public static function isApi(?string $url = null): bool
-    {
-        $url ??= ($_SERVER['REQUEST_URI']??'');
-
-        if($url === ''){
+        if(empty($file)){
             return false;
         }
 
-        $segments = explode('/', trim($url, '/'));
+        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+        $mime = mime_content_type($file['tmp_name']);
 
-        // Check if the URL path starts with '/api' or 'public/api'
-        if (!empty($segments) && ($segments[0] === 'api' || ($segments[0] === 'public' && isset($segments[1]) && $segments[1] === 'api'))) {
-            return true;
+        if($extension === '' && $mime !== false){
+            [, $extension] = explode('/', $mime);
+            $file['name'] = uniqid('file_') . '.' . $extension;
         }
 
-        // Additional check for custom project structure like '/my-project/api'
-        if (basename(root(__DIR__)) === $segments[0] && isset($segments[2]) && $segments[2] === 'api') {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Get request url
-     * 
-     * @return string 
-    */
-    public function getUri(): string
-    {
-        return $_SERVER['REQUEST_URI'];
-    }
-
-    /**
-     * Get user browser info
-     * 
-     * @return array 
-    */
-    public function getBrowser(): array
-    {
-        return browser(null, true);
-    }
-
-    /**
-     * Pass user agent string browser info
-     * 
-     * @param ?string $userAgent
-     * @param bool $return_array If set to true, this function will return an array instead of an object.
-     * 
-     * @return array|object 
-    */
-    public static function parseUserAgent(?string $userAgent = null, bool $return_array = false): array|object
-    {
-        if($userAgent === null){
-            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-        }
-        $browserInfo = [];
-
-        if($userAgent !== ''){
-            $pattern = '/^(.*?)\/([\d.]+) \(([^;]+); ([^;]+); ([^)]+)\) (.+)$/';
-            if (preg_match($pattern, $userAgent, $matches)) {
-                $browserInfo['userAgent'] = $matches[0]; // Full User Agent String
-                $browserInfo['parent'] = $matches[1] . ' ' . $matches[2]; // Browser Name & Version
-                $browserInfo['browser'] = $matches[1];
-                $browserInfo['version'] = $matches[2]; // Browser Version
-                $browserInfo['platform'] = $matches[3]; // Operating System Name
-                $browserInfo['platform_version'] = $matches[4]; // Operating System Version
-                //$browserInfo['additional_info'] = $matches[5]; // Additional Information
-                //$browserInfo['gecko_info'] = $matches[6]; // Gecko Information
-            }
-        }
-
-        if ($return_array) {
-            return (array) $browserInfo;
-        }
-
-        return (object) $browserInfo;
-    }
-
-    /**
-     * Get user agent string
-     * 
-     * @return string 
-    */
-    public function getUserAgent(): string
-    {
-        $browser = $this->getBrowser();
-
-        return $browser['browser'] . ' on ' . $browser['platform'];
-    }
-
-    /**
-     * Check if request header exist
-     * 
-     * @param string $headerName
-     * 
-     * @return bool 
-    */
-    public function hasHeader(string $key): bool
-    {
-        return array_key_exists($key, $_SERVER);
-    }
-
-    /**
-     * Get request header by key name.
-     * 
-     * @param string $key
-     * 
-     * @return Header|null header instance
-    */
-    public function header(string $key): ?Header
-    {
-        if ($this->hasHeader($key)) {
-            return new Header($_SERVER[$key]);
-        }
-        return null;
-    }
-
-    /**
-     * Get request headers.
-     *
-     * @return array The request headers
-    */
-    public function getHeaders(): array 
-    {
-        return Header::getHeaders();
-    }
-
-    /**
-     * Get request header.
-     *
-     * @return string The request headers
-    */
-    public function getHeader(string $key): string 
-    {
-        $headers = Header::getHeaders();
-        $key = strtoupper($key);
-        
-        if (isset($headers[$key])) {
-            return $headers[$key];
-        }
-        
-        // Replace underscores with hyphens
-        $normalized = str_replace('_', '-', $key);
-
-        if (isset($headers[$normalized])) {
-            return $headers[$normalized];
-        }
-        
-        // Remove "HTTP_" prefix and replace underscores with hyphens
-        $stripped = str_replace('_', '-', substr($key, 5));
-
-        if (isset($headers[$stripped])) {
-            return $headers[$stripped];
-        }
-
-        return ''; 
+        return new File(
+            $index,
+            $file['name'] ?? null,
+            $file['type'] ?? null,
+            (int) ($file['size'] ?? 0),
+            $mime ?? null,
+            strtolower($extension ?? ''),
+            $file['tmp_name'] ?? null,
+            $file['error'] ?? 0
+        );
     }
 }
