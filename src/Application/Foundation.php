@@ -15,7 +15,7 @@ class Foundation
     /**
     * @var string VERSION version name
     */
-    public const VERSION = '2.9.7';
+    public const VERSION = '2.9.8';
 
     /**
      * Minimum required php version.
