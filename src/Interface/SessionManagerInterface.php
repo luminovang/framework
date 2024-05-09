@@ -9,7 +9,7 @@
  */
 namespace Luminova\Interface;
 
-interface SessionInterface 
+interface SessionManagerInterface 
 {
   /**
    * Initializes the session manager constructor.
@@ -81,6 +81,7 @@ interface SessionInterface
    * @param string $type Return type of 'array' or 'object'. Default is 'array'.
    * 
    * @return array|object All stored session data.
+   * @throws JsonException Throwd if json error occurs.
   */
   public function getResult(string $type = 'array'): array|object;
 
@@ -109,15 +110,7 @@ interface SessionInterface
    * @param string $index Optional key to retrieve.
    * 
    * @return object|array|null The retrieved data or null if key index not found.
+   * @throws JsonException Throwd if json error occurs.
   */
   public function toAs(string $type = 'array', ?string $index = null): object|array|null;
-
-  /** 
-   * Sets the session configuration class name.
-   * 
-   * @param string $config The SessionConfig class name.
-   * 
-   * @return void
-  */
-  public function setConfig(string $config): void;
 }

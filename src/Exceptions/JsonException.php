@@ -8,11 +8,12 @@
  * @license See LICENSE file
  */
 namespace Luminova\Exceptions;
+
 use Luminova\Exceptions\AppException;
 
-class DatabaseLimitException extends AppException
+class JsonException extends AppException
 {
     /**
-     * DatabaseLimitException: 
+     * InvalidException: 
     */
 }

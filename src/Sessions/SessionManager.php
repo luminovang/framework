@@ -9,19 +9,16 @@
  */
 namespace Luminova\Sessions;
 
-use \Luminova\Interface\SessionInterface;
+use \Luminova\Interface\SessionManagerInterface;
+use \Luminova\Exceptions\JsonException;
+use \Throwable;
 
-class SessionManager implements SessionInterface 
+class SessionManager implements SessionManagerInterface 
 {
     /**
      * @var string $storage Session storage name 
     */
-    protected string $storage;
-
-    /**
-     * @var ?string $config Session configuration
-    */
-    private static ?string $config = null;
+    private string $storage = '';
 
     /**
      * {@inheritdoc}
@@ -29,14 +26,6 @@ class SessionManager implements SessionInterface
     public function __construct(string $storage = 'global') 
     {
         $this->storage = $storage;
-    }
-
-    /** 
-     * {@inheritdoc}
-    */
-    public function setConfig(string $config): void 
-    {
-        static::$config = $config;
     }
 
     /**
@@ -136,7 +125,13 @@ class SessionManager implements SessionInterface
             return (array) $result;
         }
 
-        return (object) json_decode(json_encode($result));
+        try {
+            $result = json_encode($result, JSON_THROW_ON_ERROR);
+
+            return (object) json_decode($result);
+        }catch(Throwable $e){
+            throw new JsonException($e->getMessage(), $e->getCode(), $e);
+        }
     }
 
     /** 
@@ -158,7 +153,13 @@ class SessionManager implements SessionInterface
             return (array) $result;
         }
 
-        return (object) json_decode(json_encode($result));
+        try {
+            $result = json_encode($result, JSON_THROW_ON_ERROR);
+
+            return (object) json_decode($result);
+        }catch(Throwable $e){
+            throw new JsonException($e->getMessage(), $e->getCode(), $e);
+        }
     }
 
     /** 

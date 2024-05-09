@@ -78,7 +78,7 @@ class Storage extends StorageAdapters
             parent::isInstalled($this->adapter);
             $this->filesystem = new Filesystem(
                 parent::getAdapter($this->adapter, $this->config),
-                $this->config['urls']
+                $this->config['urls'] ?? []
             );
         }
     }
@@ -89,11 +89,11 @@ class Storage extends StorageAdapters
      * @param string $adapter The storage adapter context.
      * Supported Storage Adapters: [local, ftp, memory, aws-s3, aws-async-s3, azure-blob, google-cloud, sftp-v3, web-dev or zip-archive]
      * 
-     * @return self The New `Storage` instance.
+     * @return static The New `Storage` instance.
     */
-    public static function context(string $adapter = 'local'): self
+    public static function context(string $adapter = 'local'): static
     {
-        return new self($adapter);
+        return new static($adapter);
     }
 
     /**
@@ -138,7 +138,7 @@ class Storage extends StorageAdapters
     }
 
     /**
-     * Get remote file symbolic url.
+     * Get remote file public url.
      * 
      * @param string $file The file name and path to remove file.
      * 
@@ -147,7 +147,6 @@ class Storage extends StorageAdapters
     public function url(string $file): string|null
     {
         $filename = $this->getDisk($file);
-     
         try {
             return $this->filesystem->publicUrl($filename);
         } catch (Exception $e) {
@@ -179,68 +178,62 @@ class Storage extends StorageAdapters
     }
 
     /**
-     * Create a symlink to a target file or directory.
+     * Create a symlink to a target local file or directory.
      *
      * @param string $target The targe file or directory to link from.
      * @param string  $link The location of the link.
      * 
-     * @return bool|null Return true if the link was successfully created false otherwise.
+     * @return bool Return true if the link was successfully created false otherwise.
     */
     public function symbolic(string $target, string $link): bool
     {
+        if($this->adapter !== 'local'){
+            return false;
+        }
+
         $target = $this->config['base'] . ltrim($this->getDisk($target), DIRECTORY_SEPARATOR);
-      
-        $directory = $this->config['assets'];
-        $link = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($link, DIRECTORY_SEPARATOR);
-        $linkpath = dirname($link);
+        $link = rtrim($this->config['assets'], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($link, DIRECTORY_SEPARATOR);
 
-        if (!file_exists($target)) {
-            logger('alert', 'The symlink target file does not exist');
+        return Files::symbolic($target, $link);
+    }
+
+    /**
+     * Create a symbolic link after writing file to disk.
+     * 
+     * @return string|false The symbolic link location or false on failure.
+     * 
+     * > This method is only available on local filesystem.
+     * 
+     * > Also it shpuld only be called after method `write` has been called otherwise it will return false.
+    */
+    public function toLink(): string|false
+    {
+        if($this->filename === '' || $this->adapter !== 'local'){
             return false;
         }
 
-        if(!file_exists($linkpath) && !make_dir($linkpath, 0755)){
-            logger('alert', 'Unable to create symlink destination directory');
-            return false;
-        }
+        $target = basename($this->filename);
+        $link = str_replace($this->config['base'], $this->config['assets'], $this->filename);
 
-        if(file_exists($link)){
-            unlink($link);
-        }
-
-        error_clear_last();
-
-        if (is_platform('windows')) {
-            $mode = is_dir($target) ? 'D' : 'H';
-            exec("mklink /{$mode} ".escapeshellarg($link).' '.escapeshellarg($target), $output, $result);
-
-            if($result === 1){
-                logger('alert', 'Symlink creation failed:',[$output]);
-            }
-
-            return $result === 0;
-        }
-        
-        $result = symlink($target, $link);
-        if (!$result) {
-            $error = error_get_last();
-            if ($error !== null) {
-                logger('alert', 'Symlink creation failed: ' . $error['message'] ?? '');
-            } else {
-                logger('alert', 'Unknown error occurred while creating symlink.');
+        if($this->symbolic($target, $link)){
+            try {
+                //public_url
+                return $this->url($target);
+            } catch (Exception $e) {
+                return false;
             }
         }
 
-        return $result;
+        return false;
     }
 
     /**
      * Writes contents to a file in current working directory.
      * 
      * @param string $filename The name of the file.
-     * @param mixed $contents The contents to write.
-     *  - Passed true when writing large files.
+     * @param string|resource $contents The contents to write string or resource for stream large uploads.
      * @param bool $steam The type of write operation (default: false).
+     * - Passed true when writing large files.
      * 
      * @return self Class instance.
      * @throws StorageException If an error occurs during the write operation.
@@ -285,36 +278,6 @@ class Storage extends StorageAdapters
         } catch (Exception $e) {
             StorageException::throwException($e->getMessage(), $e->getCode(), $e);
         }
-    }
-
-    /**
-     * Create a symbolic link after writing file to disk.
-     * 
-     * @return string|false The symbolic link location or false on failure.
-     * 
-     * > This method is only available on local filesystem.
-     * 
-     * > Also it shpuld only be called after method `write` has been called otherwise it will return false.
-    */
-    public function toLink(): string|false
-    {
-        if($this->filename === '' || $this->adapter !== 'local'){
-            return false;
-        }
-
-        $target = basename($this->filename);
-        $link = str_replace($this->config['base'], $this->config['assets'], $this->filename);
-
-        if($this->symbolic($target, $link)){
-            try {
-                return $this->url($target);
-                //return $this->filesystem->publicUrl($this->filename);
-            } catch (Exception $e) {
-                return false;
-            }
-        }
-
-        return false;
     }
 
     /**

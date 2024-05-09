@@ -10,10 +10,11 @@
 
 namespace Luminova\Database\Drivers;
 
-use \Luminova\Config\Database;
+use \Luminova\Base\BaseDatabase;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Interface\DatabaseInterface;
-use \mysqli;
+use \Luminova\Database\Conn\mysqliConn;
+use \Luminova\Interface\ConnInterface;
 use \mysqli_stmt;
 use \mysqli_result;
 use \stdClass;
@@ -28,9 +29,9 @@ class MySqliDriver implements DatabaseInterface
     /**
      * Mysqli Database connection instance
      * 
-     * @var mysqli|null $connection 
+     * @var mysqliConn|null $connection 
     */
-    private ?mysqli $connection = null; 
+    private ?mysqliConn $connection = null; 
 
     /**
      * mysqli statement, result object or false
@@ -45,9 +46,9 @@ class MySqliDriver implements DatabaseInterface
     private bool $onDebug = false;
 
     /**
-     * @var null|Database $config Database configuration
+     * @var BaseDatabase|null $config Database configuration
     */
-    private ?Database $config = null;  
+    private ?BaseDatabase $config = null;  
 
     /**
      * @var array $bindParams Database queries bind params
@@ -84,7 +85,7 @@ class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function __construct(Database $config) 
+    public function __construct(BaseDatabase $config) 
     {
         $this->config = $config;
 
@@ -93,7 +94,7 @@ class MySqliDriver implements DatabaseInterface
             $this->connected = true;
         }catch(Exception|DatabaseException $e){
             $this->connected = false;
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e->getPrevious());
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -126,7 +127,7 @@ class MySqliDriver implements DatabaseInterface
                 $socket = (empty($this->config->socket_path) ? ini_get('mysqli.default_socket') : $this->config->socket_path);
             }
          
-            $this->connection = new mysqli(
+            $this->connection = new mysqliConn(
                 $this->config->host,
                 $this->config->username,
                 $this->config->password,
@@ -134,9 +135,9 @@ class MySqliDriver implements DatabaseInterface
                 $this->config->port,
                 $socket
             );
-        
+
             if ($this->connection->connect_error) {
-                throw new DatabaseException($this->connection->connect_error, $this->connection->connect_errno);
+                DatabaseException::throwException($this->connection->connect_error, $this->connection->connect_errno);
             }
             $this->connection->options(MYSQLI_OPT_INT_AND_FLOAT_NATIVE, $this->config->emulate_preparse);
 
@@ -144,7 +145,7 @@ class MySqliDriver implements DatabaseInterface
                 $this->connection->set_charset($this->config->charset);
             }
         }catch(Exception|mysqli_sql_exception $e){
-            throw $e;
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -159,7 +160,7 @@ class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function raw(): mysqli|null 
+    public function raw(): ConnInterface|null 
     {
         return $this->connection;
     }
@@ -391,7 +392,7 @@ class MySqliDriver implements DatabaseInterface
             $this->executed = true;
             $this->rowCount = $this->isSelect ? $this->stmt->num_rows : $this->stmt->affected_rows;
         } catch (mysqli_sql_exception | TypeError $e) {
-            DatabaseException::throwException($e->getMessage(), $e->getCode());
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
         
         $this->bindParams = [];

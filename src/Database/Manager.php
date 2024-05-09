@@ -64,14 +64,12 @@ class Manager
         $filename ??= $this->table;
         $as = strtolower($as);
         if(!in_array($as, ['csv', 'json'], true)){
-            static::error("Unsupported export format: {$as} allowed formats [csv, json]");
-            return false;
+            throw new DatabaseException("Unsupported export format: {$as} allowed formats [csv, json]");
         }
 
         $directory = path('writeable') . 'temps' . DIRECTORY_SEPARATOR;
 
         if (!make_dir($directory)) {
-            static::error("Failed to create temp directory: $directory");
             return false;
         }
 
@@ -79,8 +77,7 @@ class Manager
         $filepath = $directory . $filename . '.' . $as;
         $handle = fopen($filepath, 'w');
         if (!$handle) {
-            static::error("Failed to open file for writing: $filepath");
-            return false;
+            throw new DatabaseException("Failed to open file for writing: $filepath");
         }
 
         $columns = ($columns === ['*'])  ? '*' : implode(", ", $columns);
@@ -130,7 +127,6 @@ class Manager
         $directory = path('writeable') . 'backups' . DIRECTORY_SEPARATOR;
 
         if (!make_dir($directory)) {
-            static::error("Failed to create backup directory: $directory");
             return false;
         }
 
@@ -140,8 +136,7 @@ class Manager
         $handle = fopen($filepath, 'w');
 
         if (!$handle) {
-            static::error("Failed to open file for writing backup: $filepath");
-            return false;
+            throw new DatabaseException("Failed to open file for writing backup: $filepath");
         }
 
         $structure = $this->db->query("SHOW CREATE DATABASE {$databse}")->fetch('next', FETCH_ASSOC)['Create Database'];
@@ -193,17 +188,5 @@ class Manager
         fclose($handle);
 
         return true;
-    }
-
-    /**
-     * Throw an exception 
-     * 
-     * @param string $message
-     * 
-     * @throws DatabaseException
-    */
-    private static function error(string $message): void
-    {
-        DatabaseException::throwException($message);
     }
 }

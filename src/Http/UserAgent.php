@@ -118,11 +118,8 @@ class UserAgent
      */
     public function __construct(?string $useragent = null)
     {
-        if ($useragent === null && isset($_SERVER['HTTP_USER_AGENT'])) {
-            $useragent = trim($_SERVER['HTTP_USER_AGENT']);
-        }
-
-        $this->expose($useragent ?? '');
+        $useragent ??= trim($_SERVER['HTTP_USER_AGENT']??'');
+        $this->replace($useragent);
         $this->isReferral();
     }
 
@@ -132,6 +129,7 @@ class UserAgent
      * @param string $name The name of the property.
      * 
      * @return mixed The value of the property if exists, otherwise null.
+     * @ignore
      */
     public function __get(string $property): mixed
     {
@@ -145,6 +143,7 @@ class UserAgent
      * @param array $arguments The arguments passed to the method.
      * 
      * @return mixed The result of the method call or null if method does not exist.
+     * @ignore
      */
     public function __call(string $name, mixed $arguments): mixed
     {
@@ -187,21 +186,16 @@ class UserAgent
      */
     public static function parse(?string $userAgent = null, bool $return_array = false): array|object|false
     {
-        $userAgent ??= (trim($_SERVER['HTTP_USER_AGENT']??''));
+        $userAgent ??= trim($_SERVER['HTTP_USER_AGENT']??'');
        
         if (!empty($userAgent)) {
-            $pattern = '/^(.*?)\/([\d.]+) \(([^;]+); ([^;]+); ([^)]+)\) (.+)$/';
+            if (preg_match('/^(.*?)\/([\d.]+) \(([^;]+); ([^;]+); ([^)]+)\) (.+)$/', $userAgent, $matches)) {
+                return static::extract($matches, $return_array, true);
+            }
 
-            if (preg_match($pattern, $userAgent, $matches)) {
-                $browser = [
-                    'userAgent'        => $matches[0], // Full User Agent String
-                    'browser'          => $matches[1], // Browser Name
-                    'version'          => $matches[2], // Browser Version
-                    'platform'         => $matches[3], // Operating System Name
-                    'platform_version' => $matches[4], // Operating System Version
-                ];
-
-                return $return_array ? $browser : (object) $browser;
+            // Maybe PostMan or other API tools
+            if (preg_match('/^([^\/]+)\/([\d.]+)$/i', $userAgent, $matches)) {
+                return static::extract($matches, $return_array);
             }
         }
 
@@ -209,19 +203,19 @@ class UserAgent
     }
 
     /**
-     * Parse and expose user agent information.
+     * Parse and replace user agent class properties with new user agent information.
      * 
      * @param string $userAgent The user agent string to parse and expose.
      * 
      * @return void
      */
-    public function expose(string $userAgent): void
+    public function replace(string $userAgent): void
     {
         $agent = static::parse($userAgent, false);
         $this->useragent = $userAgent;
 
         if($agent !== false){
-            $this->isBrowser = true;
+            $this->isBrowser = $agent->isBrowser;
             $this->platform = $agent->platform;
             $this->version = $agent->version;
             $this->browser = $agent->browser;
@@ -230,6 +224,7 @@ class UserAgent
             $this->isMobile();
             return;
         }
+
         $this->reset();
     }
 
@@ -261,76 +256,171 @@ class UserAgent
     /**
      * Check if the user agent string is from a known robot.
      * 
+     * @param string|null $keyword Optional robot name, keyword or pattern.
+     * - Pass `NULL` to check if robot is in array of robot keywards `Browser::$robotPatterns`.
+     * 
      * @return bool True if the user agent is from known robot, false otherwise.
     */
-    public function isRobot(): bool 
+    public function isRobot(?string $keyword = null): bool 
     {
-        foreach (Browser::$robotPatterns as $name => $pattern) {
-            if (preg_match('/' . preg_quote($pattern, '/') . '/i', $this->useragent)) {
-                $this->isRobot = true;
-                $this->robot = $name;
-                return true;
+        if($keyword === null){
+            foreach (Browser::$robotPatterns as $pattern => $name) {
+                if($this->is($pattern)){
+                    $this->isRobot = true;
+                    $this->robot = $name;
+
+                    return true;
+                }
             }
-            
+
+            $this->isRobot = false;
+            $this->robot = '';
+
+            return false;
         }
 
-        $this->isRobot = false;
-        $this->robot = '';
-        return false;
+        if(stripos($this->robot, $keyword) !== false){
+            return true;
+        }
+
+        return $this->is($keyword);
     }
 
     /**
      * Check if the user agent string represents a mobile device.
      * 
+     * @param string|null $keyword Optional mobile device name, keyword or pattern.
+     *  - Pass `NULL` to check if mobile is in array of mobile devices `Browser::$mobileKeywords`.
+     * 
      * @return bool True if the user agent represents a mobile device, false otherwise.
     */
-    public function isMobile(): bool 
+    public function isMobile(?string $keyword = null): bool 
     {
-        foreach (Browser::$mobileKeywords as $name) {
-            if (stripos($this->useragent, $name) !== false) {
-                $this->isMobile = true;
-                $this->mobile = $name;
+        if($keyword === null){
+            foreach (Browser::$mobileKeywords as $pattern => $name) {
+                if (stripos($this->useragent, $pattern) !== false) {
+                    $this->isMobile = true;
+                    $this->mobile = $name;
+                    return true;
+                }
+            }
+
+            $this->isMobile = false;
+            $this->mobile = '';
+
+            return false;
+        }
+
+        if(stripos($this->mobile, $keyword) !== false){
+            return true;
+        }
+
+        return $this->is($keyword);
+    }
+
+    /**
+     * Check if the user agent string belongs to a specific browser.
+     *
+     * @param string|null $name Optional browser name, keyword or pattern.
+     *   If `NULL` is passed it will check if the user agent is any valid browser.
+     * 
+     * @return bool Return true if the user agent belongs to a specific browser, or if the given name matches the browser name or user-agent, false otherwise.
+    */
+    public function isBrowser(?string $name = null): bool
+    {
+        if (!$this->isBrowser || $this->browser === '') {
+            return false;
+        }
+
+        if ($name === null) {
+            return true;
+        }
+
+        if(stripos($this->browser, $name) !== false){
+            return true;
+        }
+
+        return $this->is($name);
+    }
+
+    /**
+     * Check if the user agent string is trusted based on allowed browsers.
+     * 
+     * @return bool Return true if the user agent matches any of the browser name / patterns in allowed browsers, false otherwise.
+    */
+    public function isTrusted(): bool
+    {
+        if (!$this->useragent) {
+            return false;
+        }
+
+        if (Browser::$browsers === []) {
+            return true;
+        }
+
+        if(isset(Browser::$browsers[$this->browser])){
+            return true;
+        }
+
+        foreach(Browser::$browsers as $agent){
+            if($this->is($agent)){
                 return true;
             }
         }
 
-        $this->isMobile = false;
-        $this->mobile = '';
         return false;
     }
 
     /**
-     * Check if the user agent string belongs to a browser.
-     *
-     * @param string|null $key Optional. If provided, checks if the browser name matches the given key.
+     * Check if keyword or patterns matched with the user agent string, browser, mobile or robot name.
      * 
-     * @return bool True if the user agent belongs to a browser, or if the given key matches the browser name, false otherwise.
-     */
-    public function isBrowser(?string $key = null): bool
+     * @param string $name The keyward or pattern to check if matched on user-agent string.
+     * @param string|null $lookup The context to lookup matches, if null it will search user-agent string.
+     *  - `browser`, `mobile` or `robot`
+     * 
+     * @return bool Return true if matched otherwise false.
+    */
+    public function is(string $name, ?string $lookup = null): bool 
     {
-        if (!$this->isBrowser) {
-            return false;
+        if($lookup === null && $pattern = preg_replace('/(^\/|\/$|\/[imsxADSUXJu]*)/', '', $name)){
+            return preg_match('/' . $pattern . '/i', $this->useragent);
+            //return preg_match('/' . preg_quote($pattern, '/') . '/i', $this->useragent);
         }
 
-        if ($key === null) {
-            if ($this->browser === '') {
-                return false;
-            }
+        $lookup = $this->{$lookup} ?? false;
 
-            foreach (Browser::$browsers as $keyword) {
-                if (stripos($this->browser, $keyword) !== false) {
-                    return true;
-                }
-            }
-            
+        if($lookup && stripos($lookup, $name) !== false){
             return true;
         }
 
-        return isset(Browser::$browsers[$key]) && strtolower($this->browser) === strtolower(Browser::$browsers[$key]);
+        return false;
+    }
+
+    /**
+     * Extract User Agent Information
+     * 
+     * @param array $matches Matched user agent information
+     * @param bool $return_array Return type of user agent.
+     * 
+     * @return array|object User agent information
+    */
+    private static function extract(array $matches, bool $return_array = false, bool $isBrowser = false): array|object
+    {
+        $browser = [
+            'isBrowser'        => $isBrowser,
+            'userAgent'        => $matches[0] ?? '',
+            'browser'          => $matches[1] ?? '',
+            'version'          => $matches[2] ?? '',
+            'platform'         => $matches[3] ?? '',
+            'platform_version' => $matches[4] ?? '',
+        ];
+
+        return $return_array ? $browser : (object) $browser;
     }
 
     /**
      * Reset user agent information.
+     * @ignore
     */
     protected function reset(): void 
     {

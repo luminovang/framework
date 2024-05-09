@@ -7,9 +7,9 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Cookies\Exception;
+namespace Luminova\Exceptions;
 
-use Luminova\Exceptions\AppException;
+use \Luminova\Exceptions\AppException;
 
 class CookieException extends AppException
 {
@@ -33,15 +33,11 @@ class CookieException extends AppException
      * @param mixed|null $name The cookie name associated with the error (if applicable).
      * @return static
      */
-    public static function throwWith(string $type, mixed $name = null): self
+    public static function throwWith(string $type, mixed $name = null): static
     {
         $message = static::$types[$type] ?? 'Unknown error occurred while creating cookie';
-        if ($name === null) {
-            $finalMessage = $message;
-        }else{
-            $finalMessage = sprintf($message, $name);
-        }
+        $message = ($name === null) ? $message : sprintf($message, $name);
 
-        return new static($finalMessage);
+        return new static($message);
     }
 }

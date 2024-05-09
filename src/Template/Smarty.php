@@ -244,29 +244,35 @@ class Smarty
      *
      * @param string $view   the resource handle of the template file or template object
      *
-     * @return void 
+     * @return bool|string 
      * @throws RuntimeException
     */
-    public function display(string $view): void
+    public function display(string $view, bool $return = false): bool|string
     {
         $cache_id = Helper::cachekey();
         try{
+            $content = $this->smarty->fetch($view, $cache_id);
+
             if($this->minify){
-                //http_response_code(200);
-                //ob_start(BaseConfig::getEnv('script.ob.handler', null, 'nullable'));
-    
-                $content = $this->smarty->fetch($view, $cache_id);
-                $minifierInstance = Helper::getMinifier(
+                $content = Helper::getMinifier(
                     $content, 
                     $this->viewType, 
                     $this->minifyOptions['codeblock'], 
                     $this->minifyOptions['copyable']
-                );
-                $content = $minifierInstance->getMinified();
-                exit($content);
+                )->getContent();
             }
 
-            $this->smarty->display($view, $cache_id);
+            if($return){
+                return $content;
+            }
+
+            echo $content;
+
+            if (ob_get_length() > 0) {
+                ob_end_flush();
+            }
+
+            return true;
         }catch(Exception | SmartyException $e){
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }

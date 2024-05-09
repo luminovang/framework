@@ -10,10 +10,12 @@
 namespace Luminova\Cookies;
 
 use \Luminova\Interface\CookieInterface;
-use \Luminova\Cookies\Exception\CookieException;
+use \Luminova\Exceptions\CookieException;
+use \Luminova\Exceptions\JsonException;
 use \App\Controllers\Config\Cookie as CookieConfig;
 use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
+use \Throwable;
 
 class Cookie implements CookieInterface
 {
@@ -390,9 +392,9 @@ class Cookie implements CookieInterface
     /**
      * {@inheritdoc}
     */
-    public function toString(): string
+    public function __toString(): string
     {
-        return $this->__toString();
+        return $this->toString();
     }
 
     /** 
@@ -472,7 +474,7 @@ class Cookie implements CookieInterface
     /**
      * {@inheritdoc}
     */
-    public function __toString(): string
+    public function toString(): string
     {
         $headers = [];
         $value = $this->getValue();
@@ -516,8 +518,6 @@ class Cookie implements CookieInterface
         $samesite = $this->getSameSite();
 
         if ($samesite === '') {
-            // modern browsers warn in console logs that an empty SameSite attribute
-            // will be given the `Lax` value
             $samesite = self::LAX;
         }
 
@@ -678,9 +678,13 @@ class Cookie implements CookieInterface
     */
     private function isJson(string $value): bool
     {
-        json_decode($value);
+        try {
+            json_decode($value, null, 512, JSON_THROW_ON_ERROR);
 
-        return (json_last_error() == JSON_ERROR_NONE);
+            return true;
+        } catch (Throwable|JsonException $e) {
+            return false;
+        }
     }
 
     /**
@@ -729,5 +733,21 @@ class Cookie implements CookieInterface
     {
         $name ??= $this->name;
         $_COOKIE[$name] =  $value;
+    }
+
+    /**
+     * Get cookie protected properties.
+     * 
+     * @param string $property property to retrieve.
+     * @throws CookieException Throws if property does not exist.
+     * @internal
+    */
+    public function __get(string $property): mixed 
+    {
+        if(property_exists($this, $property)){
+            return $this->{$property};
+        }
+
+        throw new CookieException(sprintf('Invalid property "%s", does not exist.', $property));
     }
 }

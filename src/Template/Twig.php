@@ -163,28 +163,34 @@ class Twig
      * @param string $view The template view file.
      * @param array<mixed,mixed> $options Options to be passed.
      * 
-     * @return void 
+     * @return bool|string 
     */
-    public function display(string $view, array $options = []): void
+    public function display(string $view, array $options = [], bool $return = false): bool|string
     {
         try{
             $template = $this->twig->load($view);
             $content = $template->render($options);
             
             if($this->minify){
-                //http_response_code(200);
-                //ob_start(BaseConfig::getEnv('script.ob.handler', null, 'nullable'));
-        
-                $minifierInstance = Helper::getMinifier(
+                $content = Helper::getMinifier(
                     $content, 
                     $options['viewType'], 
                     $this->minifyOptions['codeblock'], 
                     $this->minifyOptions['copyable']
-                );
-                $content = $minifierInstance->getMinified();
+                )->getContent();
             }
 
-            exit($content);
+            if($return){
+                return $content;
+            }
+
+            echo $content;
+
+            if (ob_get_length() > 0) {
+                ob_end_flush();
+            }
+
+            return true;
         }catch(RuntimeError | SyntaxError $e){
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }

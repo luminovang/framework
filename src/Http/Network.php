@@ -17,24 +17,21 @@ use \GuzzleHttp\Promise\PromiseInterface;
 use \GuzzleHttp\Client;
 use \Luminova\Http\Client\Curl;
 use \GuzzleHttp\Psr7\Request;
+use \Luminova\Exceptions\Http\RequestException;
 
 class Network implements NetworkInterface
 {
     /**
-     * @var HttpClientInterface $client
+     * @var HttpClientInterface|null $client
      */
-    private HttpClientInterface $client;
+    private ?HttpClientInterface $client = null;
 
     /**
      * {@inheritdoc}
     */
     public function __construct(?HttpClientInterface $client = null)
     {
-        if($client === null){
-            $this->client = new Curl();
-        }else{
-            $this->client = $client;
-        }
+        $this->client = $client ?? new Curl();
     }
 
     /**
@@ -58,7 +55,7 @@ class Network implements NetworkInterface
     */
     public function get(string $url, array $data = [], array $headers = []): Response
     {
-        return $this->client->request("GET", $url, $data, $headers);
+        return $this->client->request('GET', $url, $data, $headers);
     }
     
     /**
@@ -66,7 +63,7 @@ class Network implements NetworkInterface
     */
     public function fetch(string $url, array $headers = []): Response
     {
-        return $this->client->request("GET", $url, [], $headers);
+        return $this->client->request('GET', $url, [], $headers);
     }
 
     /**
@@ -74,7 +71,7 @@ class Network implements NetworkInterface
     */
     public function post(string $url, array $data = [], array $headers = []): Response
     {
-        return $this->client->request("POST", $url, $data, $headers);
+        return $this->client->request('POST', $url, $data, $headers);
     }
 
     /**
@@ -93,5 +90,7 @@ class Network implements NetworkInterface
         if($this->client instanceof Client){
             return $this->client->sendAsync($request);
         }
+
+        throw new RequestException('Request sendAsync is not supported in Curl client, use Guzzle client instead.');
     }
 }

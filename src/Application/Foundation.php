@@ -13,9 +13,11 @@ namespace Luminova\Application;
 class Foundation 
 {
     /**
-    * @var string VERSION version name
+     * Framework version name.
+     * 
+    * @var string VERSION
     */
-    public const VERSION = '2.9.8';
+    public const VERSION = '2.9.9';
 
     /**
      * Minimum required php version.
@@ -25,7 +27,9 @@ class Foundation
     public const MIN_PHP_VERSION = '8.0';
 
     /**
-     * @var string $version command line tool version
+     * Command line tool version
+     * 
+     * @var string NOVAKIT_VERSION
     */
     public const NOVAKIT_VERSION = '2.9.7';
 

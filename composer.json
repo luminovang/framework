@@ -24,19 +24,8 @@
         "ext-curl": "Needed if you use CURLRequest class",
         "ext-exif": "Needed if you run Image class tests",
         "ext-fileinfo": "Needed to improve mime type detection for files",
-        "ext-gd": "Needed if you use Image class GDHandler",
-        "ext-imagick": "Needed if you use Image class ImageMagickHandler",
-        "ext-memcache": "Needed if you use Cache class MemcachedHandler with Memcache",
-        "ext-memcached": "Needed if you use Cache class MemcachedHandler with Memcached",
         "ext-mysqli": "Needed if you use MySQL",
-        "ext-intl": "Needed if you use Local",
-        "psr/log": "Needed to use PSR logging",
-        "phpmailer/phpmailer": "Needed if you use Mailer",
-        "smarty/smarty": "Needed if you want to use Smarty template engine",
-        "twig/twig": "Needed if you want to use Twig template engine",
-        "league/flysystem": "Needed if you use FileSystem storage",
-        "nanoblocktech/psr-cache": "If you need to use psr-cache",
-        "peterujah/php-search-controller": "If you want to use model searching doSearch"
+        "ext-intl": "Needed if you use Local"
     },
     "autoload": {
         "psr-4": {

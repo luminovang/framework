@@ -11,6 +11,7 @@ namespace Luminova\Base;
 
 use \Luminova\Application\Services;
 use \Luminova\Interface\ServicesInterface;
+use \Luminova\Exceptions\RuntimeException;
 
 abstract class BaseServices extends Services implements ServicesInterface
 {
@@ -31,19 +32,19 @@ abstract class BaseServices extends Services implements ServicesInterface
      * @example Services::Configuration()
      * 
      * @param string|object $classOrInstance Class name or instance of a class
-     * @param arguments ...$arguments Arguments to initialize class with.
+     * @param mixed|arguments ...$arguments Arguments to initialize class with.
      * @param bool $shared — Whether the instance should be shared (cached) or not, default true
      * @param bool $serialize Whether the instance should be serialized and (cached) or not, default false.
      * 
-     * @return object|false  Return object instance if shared, false otherwise
+     * @return true Return true service was added, otherwise throw an excption.
      * @throws RuntimeException If service already exist or unable to initiate class
      */
-    protected static function addService(string|object $classOrInstance, ...$arguments): bool 
+    protected static function addService(string|object $classOrInstance, mixed ...$arguments): true 
     {
         $name = get_class_name($classOrInstance);
 
         if(isset(static::$serviceQueue[$name])){
-            return false;
+            throw new RuntimeException('Error: service is already queued with same name "' . $name . '"');
         }
 
         static::$serviceQueue[$name] = [

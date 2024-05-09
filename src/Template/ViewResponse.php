@@ -10,31 +10,43 @@
 namespace Luminova\Template;
 
 use \Luminova\Application\FileSystem;
+use \Luminova\Cache\PageMinifier;
 use \Luminova\Http\Header;
-use \Luminova\Http\Encoder;
+use \Luminova\Exceptions\JsonException;
+use \Exception;
 
 class ViewResponse 
 {
     /**
-     * @var int $statusCode
+     * @var int $status
     */
-    private static int $statusCode = 200; 
+    private int $status = 200; 
 
     /**
-     * @var bool $enableEncoding
+     * @var bool $encode
     */
-    private static bool $enableEncoding = true;
+    private bool $encode = true;
+
+    /**
+     * @var bool $minify
+    */
+    private bool $minify = false;
+
+    /**
+     * @var PageMinifier|null $minifier
+    */
+    private static ?PageMinifier $minifier = null;
 
     /**
      * Response constructor.
      *
      * @param int $status HTTP status code (default: 200 OK)
-     * @param bool $encode Enable content encoding like gzip.
      */
-    public function __construct(int $status = 200, bool $encode = true)
+    public function __construct(int $status = 200)
     {
-        static::$statusCode = $status;
-        static::$enableEncoding = $encode;
+        $this->status = $status;
+        $this->encode = (bool) env('enable.encoding', true);
+        $this->minify = (bool) env('page.minification', false);
     }
 
     /**
@@ -46,13 +58,13 @@ class ViewResponse
      */
     public function setStatus(int $status = 200): self 
     {
-        static::$statusCode = $status;
+        $this->status = $status;
 
         return $this;
     }
 
     /**
-     * Set status code
+     * Set enable content encoding
      *
      * @param bool $encode Enable content encoding like gzip.
      * 
@@ -60,40 +72,77 @@ class ViewResponse
      */
     public function encode(bool $encode): self 
     {
-        static::$enableEncoding = $encode;
+        $this->encode = $encode;
 
         return $this;
     }
 
     /**
-     * Render the response.
+     * Set enable content minification
+     *
+     * @param bool $minify Enable content minification.
+     * 
+     * @return self $this Return class instance.
+     */
+    public function minify(bool $minify): self 
+    {
+        $this->minify = $minify;
+
+        return $this;
+    }
+
+    /**
+     * Render any content format anywhere.
      *
      * @param mixed $content Response content
-     * @param string $contentType Content type of the response
+     * @param int $status Content type of the response
+     * @param array $header Additional headers.
+     * @param bool $encode Enable content encoding like gzip.
+     * @param bool $minify Enable content minification and compress.
      * 
      * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
     */
-    public static function render(string $content, string $contentType = 'application/json'): int
+    public static function render(
+        string $content, 
+        int $status = 200, 
+        array $headers = [],
+        bool $encode = true, 
+        bool $minify = false
+    ): int
     {
         if(empty($content)){
             return STATUS_ERROR;
         }
 
-        [$encoding, $content] = (static::$enableEncoding ? Encoder::encode($content) : [false, $content]);
+        if(!isset($headers['Content-Type'])){
+            $headers['Content-Type'] = 'application/json';
+        }
+
+        $length = false;
+        $encoding = false;
+
+        if($encode || $minify){
+            if(static::$minifier === null){
+                static::$minifier = new PageMinifier();
+                static::$minifier->codeblocks(false);
+                static::$minifier->copiable(false);
+            }
+
+            $instance = static::$minifier->compress($content, $headers['Content-Type'], $minify, $encode);
+            $content = $instance->getContent();
+            $encoding = $instance->getEncoding();
+            $length = $instance->getLength();
+        }
 
         if(empty($content)){
             return STATUS_ERROR;
         }
 
-        $headers = Header::getSystemHeaders();
-        $headers['Content-Type'] = $contentType;
-        $headers['Content-Length'] = (is_utf8($content) ? mb_strlen($content, 'utf8') : strlen($content));
+        $headers['default_headers'] = true;
+        $headers['Content-Encoding'] = $encoding;
+        $headers['Content-Length'] = ($length === false ? string_length($content) : $length);
 
-        if ($encoding !== false) {
-            $headers['Content-Encoding'] = $encoding;
-        }
-
-        Header::parseHeaders($headers, static::$statusCode);
+        Header::parseHeaders($headers, $status);
         echo $content;
 
         return STATUS_SUCCESS;
@@ -105,16 +154,20 @@ class ViewResponse
      * @param array|object $content Data to be encoded as JSON
      * 
      * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
+     * @throws JsonException Throws if json error occurs.
      */
     public function json(array|object $content): int 
     {
         if (is_object($content)) {
             $content = (array) $content;
         }
+        try {
+            $body = json_encode($content, JSON_THROW_ON_ERROR);
 
-        $body = json_encode($content);
-
-        return static::render($body, 'application/json');
+            return static::render($body, $this->status, [], $this->encode, $this->minify);
+        }catch(Exception $e){
+            throw new JsonException($e->getMessage(), $e->getCode(), $e);
+        }
     }
 
     /**
@@ -126,7 +179,9 @@ class ViewResponse
      */
     public function text(string $content): int 
     {
-        return static::render($content, 'text/plain');
+        return static::render($content, $this->status, [
+            'Content-Type' => 'text/plain'
+        ], $this->encode, $this->minify);
     }
 
     /**
@@ -138,7 +193,9 @@ class ViewResponse
      */
     public function html(string $content): int 
     {
-        return static::render($content, 'text/html');
+        return static::render($content, $this->status, [
+            'Content-Type' => 'text/html'
+        ], $this->encode, $this->minify);
     }
 
     /**
@@ -150,7 +207,9 @@ class ViewResponse
      */
     public function xml(string $content): int 
     {
-        return static::render($content, 'application/xml');
+        return static::render($content, $this->status, [
+            'Content-Type' => 'application/xml'
+        ], $this->encode, $this->minify);
     }
 
     /**

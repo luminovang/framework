@@ -7,7 +7,7 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Routing;
+namespace Luminova\Exceptions;
 
 use \Luminova\Exceptions\AppException;
 use \Throwable;
@@ -31,7 +31,7 @@ class RouterException extends AppException
     ];
 
     /**
-     * Thrown when a cookie-related error occurs.
+     * Thrown router exception.
      *
      * @param string $type The type of error.
      * @param int $code Exception code 
@@ -42,11 +42,22 @@ class RouterException extends AppException
     */
     public static function throwWith(string $type, int $code = 0, ?Throwable $previous = null, mixed ...$values): void
     {
-     
-        $message = static::withMessage($type, ...$values);
+        throw new static(static::withMessage($type, ...$values), $code, $previous);
+    }
 
-        static::throwException($message, $code, $previous);
-
+    /**
+     * Handle router exception.
+     *
+     * @param string $type The type of error.
+     * @param int $code Exception code 
+     * @param mixed ...$values Message placeholders
+     * 
+     * @return void
+     * @throws self
+    */
+    public static function handleWith(string $type, int $code = 0, ?Throwable $previous = null, mixed ...$values): void
+    {
+        static::throwException(static::withMessage($type, ...$values), $code, $previous);
         if($type === 'invalid_context'){
             logger('critical', static::withMessage('invalid_context_log', $values));
         }
@@ -63,8 +74,6 @@ class RouterException extends AppException
     public static function withMessage(string $type, mixed ...$values): string
     {
         $message = static::$types[$type] ?? 'Unknown error occurred while creating route';
-        $finalMessage = empty($values) ? $message : sprintf($message, ...$values);
-
-        return $finalMessage;
+        return empty($values) ? $message : sprintf($message, ...$values);
     }
 }

@@ -11,6 +11,7 @@
 namespace Luminova\Security;
 
 use \Luminova\Interface\ValidationInterface;
+use \JsonException;
 
 class InputValidator implements ValidationInterface
 {
@@ -244,34 +245,38 @@ class InputValidator implements ValidationInterface
     */
     private static function validation(string $ruleName, mixed $value, string $rule, mixed $param = null): bool
     {
-        return match ($ruleName) {
-            'max_length', 'max' => mb_strlen($value) <= (int) $param,
-            'min_length', 'min' => mb_strlen($value) >= (int) $param,
-            'exact_length', 'length' => mb_strlen($value) == (int) $param,
-            'integer' => match ($param) {
-                'positive' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value > 0,
-                'negative' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value < 0,
-                default => filter_var($value, FILTER_VALIDATE_INT) !== false,
-            },
-            'email' => filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
-            'alphanumeric' => preg_match("/[^A-Za-z0-9]/", $value) !== false,
-            'alphabet' => preg_match("/^[A-Za-z]+$/", $value) !== false,
-            'url' => filter_var($value, FILTER_VALIDATE_URL) !== false,
-            'uuid' => func()->isUuid($value), //$version = (int) $param;
-            'ip' =>  func()->ip()->isValid($value, (int) $param),
-            'phone' => func()->isPhone($value),
-            'decimal' => preg_match('/^-?\d+(\.\d+)?$/', $value) === 1,
-            'binary' => ctype_print($value) && !preg_match('/[^\x20-\x7E\t\r\n]/', $value),
-            'hexadecimal' => ctype_xdigit($value),
-            'array' => is_array(json_decode($value, true)) || is_array($value),
-            'json' => (json_decode($value) && json_last_error() == JSON_ERROR_NONE),
-            'path' => match ($param) {
-                'true' => is_string($value) && is_readable($value),
-                default => is_string($value) && preg_match("#^[a-zA-Z]:[\\\/]{1,2}#", $value)
-            },
-            'scheme' => strpos($value, rtrim($param, '://')) === 0,
-            default => true,
-        };
+        try{
+            return match ($ruleName) {
+                'max_length', 'max' => mb_strlen($value) <= (int) $param,
+                'min_length', 'min' => mb_strlen($value) >= (int) $param,
+                'exact_length', 'length' => mb_strlen($value) == (int) $param,
+                'integer' => match ($param) {
+                    'positive' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value > 0,
+                    'negative' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value < 0,
+                    default => filter_var($value, FILTER_VALIDATE_INT) !== false,
+                },
+                'email' => filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
+                'alphanumeric' => preg_match("/[^A-Za-z0-9]/", $value) !== false,
+                'alphabet' => preg_match("/^[A-Za-z]+$/", $value) !== false,
+                'url' => filter_var($value, FILTER_VALIDATE_URL) !== false,
+                'uuid' => func()->isUuid($value), //$version = (int) $param;
+                'ip' =>  func()->ip()->isValid($value, (int) $param),
+                'phone' => func()->isPhone($value),
+                'decimal' => preg_match('/^-?\d+(\.\d+)?$/', $value) === 1,
+                'binary' => ctype_print($value) && !preg_match('/[^\x20-\x7E\t\r\n]/', $value),
+                'hexadecimal' => ctype_xdigit($value),
+                'array' => is_array(json_decode($value, true, 512, JSON_THROW_ON_ERROR)) || is_array($value),
+                'json' => (json_decode($value, null, 512, JSON_THROW_ON_ERROR) && json_last_error() === JSON_ERROR_NONE),
+                'path' => match ($param) {
+                    'true' => is_string($value) && is_readable($value),
+                    default => is_string($value) && preg_match("#^[a-zA-Z]:[\\\/]{1,2}#", $value)
+                },
+                'scheme' => strpos($value, rtrim($param, '://')) === 0,
+                default => true,
+            };
+        } catch (JsonException $e) {
+            return false;
+        }
     }
 
     /**

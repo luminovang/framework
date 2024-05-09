@@ -39,11 +39,11 @@ final class Error
     */
     public static function initialize(string $environment = 'http'): void 
     {
-        static::$errors = [];
         if ($environment !== 'http') {
             return;
         }
 
+        static::$errors = [];
         $display = (!PRODUCTION && env('debug.display.errors', false)) ? '1' : '0';
         $reporting = PRODUCTION 
             ? E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_STRICT & ~E_USER_NOTICE & ~E_USER_DEPRECATED 
@@ -255,7 +255,7 @@ final class Error
      * 
      * @param int $errno Error code
      * 
-     * @return bool
+     *@return bool Return true if is fatal, otherwise false.
     */
     private static function isFatal(int $errno): bool 
     {

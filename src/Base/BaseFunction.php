@@ -15,23 +15,15 @@ use \Luminova\Functions\IPAddress;
 use \Luminova\Application\FileSystem;
 use \Luminova\Functions\TorDetector;
 use \Luminova\Functions\Maths;
-use \Luminova\Functions\NormalizerTrait;
+use \Luminova\Functions\Normalizer;
 use \Luminova\Exceptions\InvalidArgumentException;
 
-abstract class BaseFunction
+abstract class BaseFunction extends Normalizer
 {
     /**
      * @var array $instance method instances
     */
     private static array $instances = [];
-
-    /**
-     * Adds helper class for basic string helper functions.
-     *
-     * @see \Luminova\Functions\NormalizerTrait;
-     * @see https://luminova.ng/docs/0.0.0/functions/normalizer
-    */
-    use NormalizerTrait;
 
     /**
      * Initalize or return a shared an instance of the IP address class.

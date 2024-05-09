@@ -14,6 +14,7 @@ use \Luminova\Http\Server;
 use \Luminova\Http\File;
 use \Luminova\Http\UserAgent;
 use \Luminova\Functions\IPAddress;
+use \Luminova\Functions\Normalizer;
 use \App\Controllers\Config\Security;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
@@ -137,7 +138,7 @@ class Request
 
             return $default;
         }
-
+       
         return null;
     }
 
@@ -227,7 +228,7 @@ class Request
     /**
      * Get the request method.
      *
-     * @return string The request method.
+     * @return string Return the request method in lowercased.
     */
     public function getMethod(): string
     {
@@ -277,32 +278,24 @@ class Request
     }
 
     /**
-     * Get HTTP request header authorization [HTTP_AUTHORIZATION, Authorization].
+     * Get request header authorization header [HTTP_AUTHORIZATION, Authorization].
      * 
      * @return string|null Return the authorization header value or null if no authorization header was sent.
      */
-    public function getAuthorization(): string|null
+    public function getAuth(): string|null
     {
-		return Header::getAuthorization();
-	}
-	
-	/**
-     * Get HTTP request header authorization bearer value.
-     * 
-     * @return string|null Return authorization bearer value.
-     */
-	public function getAuthBearer(): string|null 
-    {
-		$auth = Header::getAuthorization();
-
-		if ($auth === null) {
-			return null;
-		}
-        
-        if (preg_match('/Bearer\s(\S+)/', $auth, $matches)) {
-            return $matches[1] ?? null;
+        if(!$auth = $this->header->get('Authorization')){
+            if(!$auth = $this->server->get('HTTP_AUTHORIZATION')){
+                $auth = $this->server->get('REDIRECT_HTTP_AUTHORIZATION');
+            }
         }
-	}
+
+        if($auth === null){
+            return null;
+        }
+
+        return trim($auth ?? '');
+    }
 
     /**
      * Check to see if a request was made from the command line.
@@ -345,23 +338,7 @@ class Request
      */
     public function isApi(?string $url = null): bool
     {
-        $url ??= $this->server->get('REQUEST_URI', '');
-
-        if($url === ''){
-            return false;
-        }
-
-        $segments = explode('/', trim($url, '/'));
-
-        if (!empty($segments) && ($segments[0] === 'api' || ($segments[0] === 'public' && isset($segments[1]) && $segments[1] === 'api'))) {
-            return true;
-        }
-
-        if (basename(root(__DIR__)) === $segments[0] && isset($segments[2]) && $segments[2] === 'api') {
-            return true;
-        }
-
-        return false;
+        return Header::isApi($url);
     }
     
     /**
@@ -494,7 +471,7 @@ class Request
         if(!$port){
             $hostname = strtolower(preg_replace('/:\d+$/', '', $hostname));
         }
-        $error = null;
+        $error = 'Invalid Hostname "%s".';
         // Remove any unwanted characters from the hostname
         if($hostname && preg_replace('/(?:^\[)?[a-zA-Z0-9-:\]_]+\.?/', '', $hostname) === ''){
             if(static::isTrusted($hostname, 'hostname')){
@@ -502,12 +479,10 @@ class Request
             }
 
             $error = 'Untrusted Hostname "%s".';
-        }else{
-            $error = 'Invalid Hostname "%s".';
         }
     
-        if($error !== null && $extension){
-             throw new SecurityException(sprintf($error, $hostname));
+        if($extension){
+            throw new SecurityException(sprintf($error, $hostname));
         }
 
         return '';
@@ -531,8 +506,7 @@ class Request
             return $origin;
         }
 
-        $parse = parse_url($origin);
-        $domain = $parse['host'] ?? '';
+        $domain = parse_url($origin, PHP_URL_HOST);
 
         if ($domain === '') {
             return null;
@@ -603,7 +577,7 @@ class Request
      * 
      * @param string|null $useragent The User Agent string. If not provided, it defaults to $_SERVER['HTTP_USER_AGENT'].
      * 
-     * @return UserAgent Return user agent object.
+     * @return UserAgent Return user agent instance.
      */
     public function getUserAgent(?string $useragent = null): UserAgent
     {
@@ -615,16 +589,38 @@ class Request
     }
 
     /**
-     * Get HTTP request headers.
+     * Check if the request's origin matches the current host.
      *
-     * @return array<string, mixed> The request headers.
+     * @param bool $subdomains Whether to consider subdomains or not. Default is true.
+     * 
+     * @return bool Returns true if the request's origin matches the current host, false otherwise.
      */
-    public static function headers(): array 
+    public function isSameOrigin(bool $subdomains = true): bool
     {
-        return Header::getHeaders();
+        $origin = $this->server->get('HTTP_ORIGIN');
+
+        if (!$origin) {
+            return true;
+        }
+
+        $origin = parse_url($origin, PHP_URL_HOST);
+
+        if (empty($origin)) {
+            return false;
+        }
+
+        if($origin === APP_HOSTNAME){
+            return true;
+        }
+
+        if ($subdomains) {
+            return Normalizer::mainDomain($origin) === APP_HOSTNAME;
+        }
+
+        return false;
     }
 
-     /**
+    /**
      * Check if the given (hostnames, origins, proxy ip or subnet) matches any of the trusted patterns.
      * 
      * @param string $input The domain, origin or ip address to check.
@@ -668,6 +664,36 @@ class Request
     public function isTrustedProxy(): bool
     {
         return static::isTrusted($this->server->get('REMOTE_ADDR', ''), 'proxy');
+    }
+
+    /**
+     * Check whether this request origin is from a trusted origins.
+     * 
+     * @return bool Return true if the request origin is trusted false otherwise.
+    */
+    public function isTrustedOrigin(): bool
+    {
+        $origin = $this->server->get('HTTP_ORIGIN');
+
+        if (!$origin) {
+            return false;
+        }
+
+        if(Security::$trustedOrigins === []){
+            return true;
+        }
+
+        $domain = parse_url($origin, PHP_URL_HOST);
+
+        if ($domain === '') {
+            return false;
+        }
+
+        if(static::isTrusted($domain, 'origin')){
+            return true;
+        }
+
+        return false;
     }
 
     /**

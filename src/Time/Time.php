@@ -53,7 +53,7 @@ class Time extends DateTimeImmutable
      * 
      * @var string $agoRelativePattern 
     */
-    private static string $agoRelativePattern = '/^\d+\s+(second|minute|hour|day|week|month|year)s?\s+ago$/i';
+    private static string $agoRelativePattern = '/^\d+\s+(second|minute|hour|day|week|month|year|decade)s?\s+ago$/i';
 
     /**
      * Time constructor.
@@ -723,13 +723,18 @@ class Time extends DateTimeImmutable
 
         $now = static::now($timezone);
         $elapsed = $now->diff($datetime);
-        $elapsed->w = floor($elapsed->d / 7);
-        $elapsed->d -= $elapsed->w * 7;
+        $week = floor($elapsed->d / 7);
+        $elapsed->d -= $week * 7;
+
+         // Calculate decades
+        $decades = floor($elapsed->y / 10);
+        $elapsed->y -= $decades * 10;
 
         $formats = [
+            ['decade', $decades],
             ['year', $elapsed->y],
             ['month', $elapsed->m],
-            ['week', $elapsed->w],
+            ['week', $week],
             ['day', $elapsed->d],
             ['hour', $elapsed->h],
             ['minute', $elapsed->i],
@@ -789,16 +794,21 @@ class Time extends DateTimeImmutable
             'week' => 'P%dW',
             'month' => 'P%dM',
             'year' => 'P%dY',
+            'decade' => 'P%dY',
         ];
 
         if (!isset($intervals[$unit])) {
             throw new DateTimeException('Invalid time unit: ' . $unit);
         }
 
-        $dateTime = new DateTime('now', $timezone);
-        $dateTime->sub(new DateInterval(sprintf($intervals[$unit], $quantity)));
+        if ($unit === 'decade') {
+            $quantity *= 10;
+        }
 
-        return $dateTime;
+        $datetime = new DateTime('now', $timezone);
+        $datetime->sub(new DateInterval(sprintf($intervals[$unit], $quantity)));
+
+        return $datetime;
     }
 
     /**
@@ -827,9 +837,6 @@ class Time extends DateTimeImmutable
         if ($timestamp === false || $timestamp === 0) {
             throw new DateTimeException('Invalid datetime "' . $datetime . '" specified');
         }
-    
-		//$interval = static::now($timezone)->getTimestamp() - $timestamp;
-		//$difference = $interval / 60;
         
         $interval = static::now($timezone)->diff($datetime);
         $difference = $interval->days * 24 * 60 + $interval->h * 60 + $interval->i;
@@ -865,7 +872,6 @@ class Time extends DateTimeImmutable
 
         return $day . "th";
     }
-
 
     /**
      * Check if time string has a relative time keywords.

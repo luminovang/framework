@@ -11,6 +11,7 @@ namespace Luminova\Cache;
 
 use \Luminova\Http\Header;
 use \Luminova\Http\Encoder;
+use \JsonException;
 
 class PageMinifier 
 {
@@ -40,33 +41,28 @@ class PageMinifier
 
     /** 
      * Ignore html code block tag <code></code>
-     * @var bool $minifyCodeTags
+     * @var bool $codeblocks
      */
-    private bool $minifyCodeTags = false;
-
-    /** 
-	*  Compressed content
-	* @var mixed $compressedContent
-	*/
-    private mixed $compressedContent = '';
+    private bool $codeblocks = false;
 
     /** 
 	*  Minified content
-	* @var mixed $minifiedContent
+	* @var mixed $contents
 	*/
-    private mixed $minifiedContent = '';
+    private mixed $contents = '';
 
     /** 
 	* Allow copying of code blocks  
-	* @var bool $enableCopy
+	* @var bool $copiable
 	*/
-    private bool $enableCopy = false;
+    private bool $copiable = false;
 
     /** 
-	* Info 
-	* @var array $info
+	* Minified content headers.
+    *
+	* @var array $headers
 	*/
-    private array $info = [];
+    private array $headers = [];
 
     /**
      * Regular expression patterns for content stripping
@@ -104,11 +100,11 @@ class PageMinifier
      * sets ignore minifying code block
      *
      * @param bool $ignore
-     * @return self Returns the class instance for method chaining.
+     *  @return self Returns minifier class instance.
      */
-	public function minifyCodeblock(bool $ignore): self 
+	public function codeblocks(bool $ignore): self 
     {
-		$this->minifyCodeTags = $ignore;
+		$this->codeblocks = $ignore;
 
 		return $this;
 	}
@@ -118,33 +114,53 @@ class PageMinifier
      *
      * @param bool $allow
      * 
-     * @return self Returns the class instance for method chaining.
+     *  @return self Returns minifier class instance.
      */
-	public function allowCopyCodeblock(bool $allow): self 
+	public function copiable(bool $allow): self 
     {
-		$this->enableCopy = $allow;
+		$this->copiable = $allow;
 
 		return $this;
 	}
 
     /**
-     * Get compressed content
+     * Get minified content
      * 
-     * @return mixed compressed content $this->compressedContent
+     * @return string Return minified contents
      */
-    public function getCompressed(): mixed 
+    public function getContent(): string 
     {
-		return $this->compressedContent;
+		return $this->contents;
     }
 
     /**
-     * Get minified content
+     * Get content encoding
      * 
-     * @return string minified content $this->minifiedContent
+     * @return string|null Return minified content encoding.
      */
-    public function getMinified(): string 
+    public function getEncoding(): ?string 
     {
-		return $this->minifiedContent;
+		return $this->headers['Content-Encoding']??false;
+    }
+
+     /**
+     * Get content encoding
+     * 
+     * @return string|null Return minified content encoding.
+     */
+    public function getLength(): int 
+    {
+		return $this->headers['Content-Length']??0;
+    }
+
+    /**
+     * Get page header information
+     * 
+     * @return array Get minified content headers.
+     */
+    public function getHeaders(): array 
+    {
+		return $this->headers;
     }
 
     /**
@@ -152,42 +168,38 @@ class PageMinifier
      *
      * @param string|array|object $data The content to compress (can be an array or object for JSON response).
      * @param string $contentType The expected content type for the response.
+     * @param bool $minify Minify contents.
+     * @param bool $encode Compress and encode contents.
      * 
-     * @return string $compressed The compressed content for output.
+     * @return self Returns minifier class instance.
      */
-    public function compress(string|array|object $data, string $contentType): string 
-    {
-        $content = is_string($data) ? $data : static::toJsonString($data);
-        $minifiedContent = $this->minifiedContent = $this->minifyCodeTags ? static::minify($content) : static::minifyIgnore($content, $this->enableCopy);
-
-        [$encoding, $encoded] = Encoder::encode($minifiedContent);
-
-        $contentLength = (is_utf8($encoded) ? mb_strlen($encoded, 'utf8') : strlen($encoded));
-        $headers = Header::getSystemHeaders();
-
-        $headers['Content-Length'] = $contentLength;
-        $headers['Content-Type'] = $contentType;
-        $this->info['Content-Length'] = $contentLength;
-        $this->info['Content-Type'] = $contentType;
-
-        if ($encoding !== false) {
-            $headers['Content-Encoding'] = $encoding;
-            $this->info['Content-Encoding'] = $encoding;
+    public function compress(
+        string|array|object $data,
+        string $contentType,
+        bool $minify = true,
+        bool $encode = true
+    ): self {
+        // Resolve content type if it's a shorthand
+        if (strpos($contentType, '/') === false) {
+            $contentType = Header::getContentTypes($contentType);
         }
 
-        Header::parseHeaders($headers);
+        // Convert data to string if not already
+        $content = is_string($data) ? $data : static::toJsonString($data);
 
-        return $encoded;
-    }
+        // Minify content if required
+        $content = $minify ? ($this->codeblocks ? static::minify($content) : static::minifyIgnore($content, $this->copiable)) : $content;
 
-    /**
-     * Get page header information
-     * 
-     * @return array
-    */
-    public function getHeaderInfo(): array
-    {
-        return $this->info;
+        // Encode content if required
+        [$encoding, $content] = $encode ? Encoder::encode($content) : [false, $content];
+
+        // Set response headers
+        $this->headers['Content-Length'] = string_length($content);
+        $this->headers['Content-Type'] = $contentType;
+        $this->headers['Content-Encoding'] = $encoding;
+        $this->contents = $content;
+
+        return $this;
     }
 
     /**
@@ -203,10 +215,14 @@ class PageMinifier
             $data = (array) $data;
         }
 
-        $encoded = json_encode($data);
+        try{
+            $encoded = json_encode($data, JSON_THROW_ON_ERROR);
 
-        if ($encoded !== false) {
-            return $encoded;
+            if ($encoded !== false) {
+                return $encoded;
+            }
+        } catch (JsonException $e) {
+            return '';
         }
         
         return '';
@@ -221,10 +237,12 @@ class PageMinifier
     */
     private function respond(mixed $body, string $type): void 
     {
-        // Echo the stored compressed content
-        echo $this->compress($body, $type);
-    
-        // If there is any content in the output buffer, end and flush it
+        $this->compress($body, $type);
+        $this->headers['default_headers'] = true;
+        Header::parseHeaders($this->headers);
+
+        echo $this->contents;
+
         if (ob_get_length() > 0) {
             ob_end_flush();
         }
@@ -296,7 +314,7 @@ class PageMinifier
     */
     public function startMinify(): void 
     {
-        ob_start(['self', $this->minifyCodeTags ? 'minifyIgnore' : 'minify']);
+        ob_start(['self', $this->codeblocks ? 'minifyIgnore' : 'minify']);
     }
     
     /**

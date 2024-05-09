@@ -9,7 +9,7 @@
  */
 namespace Luminova\Http;
 
-final class StatusCodes 
+final class HttpCode
 {
     /**
      * Http status code.
@@ -89,7 +89,7 @@ final class StatusCodes
      * @param string $name Status method name.
      * @param array $arguments
      * 
-     * @example StatusCodes::status200();
+     * @example HttpCode::status200;
      * 
      * @return string|null Status code title.
     */

@@ -10,6 +10,8 @@
 namespace Luminova\Http;
 
 use \Luminova\Application\Foundation;
+use \Luminova\Functions\Normalizer;
+use \App\Controllers\Config\Apis;
 
 class Header
 {
@@ -123,6 +125,36 @@ class Header
         return null;
     }
 
+    /**
+     * Check if the request URL indicates an API endpoint.
+     *
+     * This method checks if the URL path starts with '/api' or 'public/api'.
+     *
+     * @param string|null $url The request URL to check.
+     * 
+     * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
+     */
+    public static function isApi(?string $url = null): bool
+    {
+        $url ??= static::server('REQUEST_URI');
+
+        if($url === null){
+            return false;
+        }
+
+        $segments = explode('/', trim($url, '/'));
+
+        if (!empty($segments) && ($segments[0] === 'api' || ($segments[0] === 'public' && isset($segments[1]) && $segments[1] === 'api'))) {
+            return true;
+        }
+
+        if (basename(root(__DIR__)) === $segments[0] && isset($segments[2]) && $segments[2] === 'api') {
+            return true;
+        }
+
+        return false;
+    }
+
    /**
      * Get all request headers.
      *
@@ -151,15 +183,36 @@ class Header
         return $headers;
     }
 
-    /**
-     * Get the request method.
-     *
-     * @return string The request method.
-     * @internal
-     */
-    public static function getMethod(): string
+    /** 
+     * Get output headers
+     * 
+     * @return array<string, mixed> $info
+    */
+    public static function requestHeaders(): array
     {
-        return $_SERVER['REQUEST_METHOD']??'';
+        $headers = headers_list();
+        $info = [];
+
+        foreach ($headers as $header) {
+            [$name, $value] = explode(':', $header, 2);
+
+            $name = trim($name);
+            $value = trim($value);
+
+            switch ($name) {
+                case 'Content-Type':
+                    $info['Content-Type'] = $value;
+                    break;
+                case 'Content-Length':
+                    $info['Content-Length'] = (int) $value;
+                    break;
+                case 'Content-Encoding':
+                    $info['Content-Encoding'] = $value;
+                    break;
+            }
+        }
+
+        return $info;
     }
 
     /**
@@ -202,8 +255,8 @@ class Header
         ], $status);
     }
 
-    /**
-     * Parse and modify the "Content-Type" header to ensure it contains "charset".
+   /**
+     * Parses and modifies the HTTP headers, ensuring necessary headers are set.
      *
      * @param array $headers An array of HTTP headers.
      * @param int|null $statusCode HTTP response code (default: NULL)
@@ -214,18 +267,70 @@ class Header
     public static function parseHeaders(array $headers, ?int $statusCode = null): void
     {
         if (headers_sent()) {
-            return; 
+            return;
         }
-        
-        if($statusCode !== null){
+
+        if ($statusCode !== null) {
             http_response_code($statusCode);
         }
+
+        if (isset($headers['default_headers'])) {
+            $headers = array_replace(static::getSystemHeaders(), $headers);
+        }
+
+        if (static::isApi()) {
+            $origin = static::server('HTTP_ORIGIN');
+            if($origin){
+                if (!isset($headers['Access-Control-Allow-Origin']) && !empty(Apis::$allowOrigins)) {
+                    $allowed = null;
+                    if (Apis::$allowOrigins === '*' || Apis::$allowOrigins === 'null') {
+                        $allowed = '*';
+                    } else {
+                        foreach ([$origin, Normalizer::mainDomain($origin)] as $value) {
+                            if (in_array($value, (array) Apis::$allowOrigins)) {
+                                $allowed = $value;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($allowed === null) {
+                        header("HTTP/1.1 403 Forbidden");
+                        exit();
+                    }
+
+                    header('Access-Control-Allow-Origin: ' . $allowed);
+                }
+            }elseif(!$origin && Apis::$forbidEmptyOrigin){
+                header("HTTP/1.1 400 Bad Request");
+                exit();
+            }
+
+            if (!isset($headers['Access-Control-Allow-Headers']) && Apis::$allowHeaders !== []) {
+                header('Access-Control-Allow-Headers: ' . implode(', ', Apis::$allowHeaders));
+            }
+
+            if (!isset($headers['Access-Control-Allow-Credentials'])) {
+                header('Access-Control-Allow-Credentials: ' . (Apis::$allowCredentials ? 'true' : 'false'));
+            }
+        }
+
+        $charset = env('app.charset', 'utf-8');
+        
         foreach ($headers as $header => $value) {
+            if ($header === 'default_headers' || ($header === 'Content-Encoding' && $value === false)) {
+                continue;
+            }
+
             if ($header === 'Content-Type' && strpos($value, 'charset') === false) {
-                header("$header: {$value}; charset=" . env('app.charset', 'utf-8'));
-            }else{
+                header("$header: {$value}; charset=$charset");
+            } else {
                 header("$header: $value");
             }
+        }
+
+        if (!env('x.powered', true)) {
+            header_remove('X-Powered-By');
         }
     }
 
@@ -240,13 +345,8 @@ class Header
     public static function getContentType(string $extension = 'html', ?string $charset = null): string
     {
         $charset ??= env('app.charset', 'utf-8');
-        $types = static::contentTypes($extension);
 
-        if($types === null){
-            $types = ['text/html'];
-        }
-
-        return $types[0] . ($charset !== '' ? '; charset=' . $charset : '');
+        return static::contentTypes($extension, 0) . ($charset === '' ?: '; charset=' . $charset);
     }
 
     /**
@@ -254,9 +354,9 @@ class Header
      * 
      * @param string $type Type of content types to retrieve.
      * 
-     * @return array<int,array> Array of content types or null if not found.
+     * @return array<int,array>|string|null Return array, string of content types or null if not found.
     */
-    public static function getContentTypes(string $type): ?array 
+    public static function getContentTypes(string $type, int|null $index = 0): array|string|null
     {
         $types = [
             'html'   => ['text/html', 'application/xhtml+xml'],
@@ -269,10 +369,14 @@ class Header
             'rdf'    => ['application/rdf+xml'],
             'atom'   => ['application/atom+xml'],
             'rss'    => ['application/rss+xml'],
-            'form'   => ['application/x-www-form-urlencoded', 'multipart/form-data'],
+            'form'   => ['application/x-www-form-urlencoded', 'multipart/form-data']
         ];
 
-        return $types[$type] ?? null;
+        if($index === null){
+            return $types[$type] ?? null;
+        }
+
+        return $types[$type][$index] ?? 'text/html';
     }
 
    /**
@@ -283,9 +387,9 @@ class Header
      */
     public static function getRoutingMethod(): string
     {
-        $method = static::getMethod();
+        $method = static::server('REQUEST_METHOD');
 
-        if($method === '' && php_sapi_name() === 'cli'){
+        if($method === null && php_sapi_name() === 'cli'){
             return 'CLI';
         }
   
@@ -304,36 +408,4 @@ class Header
         
         return $method;
     }
-
-    /**
-     * Get request header authorization header.
-     *
-     * @return string|null The authorization header, or null if not present.
-     */
-    public static function getAuthorization(): string|null
-    {
-		$auth = null;
-
-        if(!$auth = static::server('Authorization')){
-            if(!$auth = static::server('HTTP_AUTHORIZATION')){ //Nginx or fast CGI
-                if(function_exists('apache_request_headers')){ 
-                    $headers = apache_request_headers();
-                    $headers = array_combine(
-                        array_map('ucwords', array_keys($headers)),
-                        array_values($headers)
-                    );
-        
-                    if (isset($headers['Authorization'])) {
-                        $auth = $headers['Authorization'];
-                    }
-                }
-            }
-        }
-
-        if($auth === null){
-            return null;
-        }
-
-        return trim($auth);
-	}
 }

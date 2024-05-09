@@ -9,7 +9,6 @@
  */
 
 namespace Luminova\Models;
-use Luminova\Database\Query;
 
 class PushMessage
 {

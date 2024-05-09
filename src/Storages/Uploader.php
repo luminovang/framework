@@ -10,6 +10,7 @@
 namespace Luminova\Storages;
 
 use \Luminova\Http\File;
+use \Luminova\Application\FileSystem;
 use \Luminova\Exceptions\StorageException;
 
 final class Uploader
@@ -25,7 +26,7 @@ final class Uploader
     */
     public static function upload(File $file, ?string $path = null): bool
     {
-        $destination = static::beforeUpload($file, $path);
+        $destination = static::beforeUpload($file, $path, $symlink);
       
         if ($destination === false) {
             return false;
@@ -37,6 +38,9 @@ final class Uploader
 
         if (static::execute($temp, $file->getTemp(), $chunk) && rename($temp, $destination)) {
             $file->free();
+            if($symlink !== null){
+                FileSystem::symbolic($destination, $symlink);
+            }
             return true;
         }
 
@@ -55,7 +59,7 @@ final class Uploader
      */
     public static function move(File $file, ?string $path = null): bool
     {
-        $destination = static::beforeUpload($file, $path);
+        $destination = static::beforeUpload($file, $path, $symlink);
 
         if ($destination === false) {
             return false;
@@ -63,6 +67,9 @@ final class Uploader
 
         if (move_uploaded_file($file->getTemp(),  $destination)) {
             $file->free();
+            if($symlink !== null){
+                FileSystem::symbolic($destination, $symlink);
+            }
             return true;
         }
         
@@ -84,7 +91,7 @@ final class Uploader
      */
     public static function chunk(File $file, ?string $path = null, int $chunk = 1, int $chunks = 1): bool|int
     {
-        $destination = static::beforeUpload($file, $path);
+        $destination = static::beforeUpload($file, $path, $symlink);
 
         if ($destination === false) {
             return false;
@@ -116,6 +123,9 @@ final class Uploader
 
         if ($chunks !== 1 || $chunk === $chunks) {
             if (rename($temp, $destination)) {
+                if($symlink !== null){
+                    FileSystem::symbolic($destination, $symlink);
+                }
                 return true;
             }
             
@@ -193,15 +203,13 @@ final class Uploader
      * @return string|false Return upload destination or false on failure.
      * @throws StorageException If upload path is not specified in configuration.
     */
-    private static function beforeUpload(File $file, ?string $path = null): string|false
+    private static function beforeUpload(File $file, ?string $path = null, ?string &$symlink = null): string|false
     {
         if ($file === false) {
             return false;
         }
 
         $config = $file->getConfig();
-
-       
 
         if(!isset($config->uploadPath) && $path === null){
             throw new StorageException('Upload path must be specified in setConfig of file object or pass in second parameter.');
@@ -216,15 +224,18 @@ final class Uploader
 
         $filename = basename($file->getName());
         $destination = $path . $filename;
-
+      
         if(file_exists($destination)){
             $overwrite = (isset($config->ifExisted) ? $config->ifExisted : 'overwrite');
             if($overwrite === 'overwrite'){
                 unlink($destination);
             }else{
-                $destination = $path . uniqid() . '-' . $filename;
+                $filename =  uniqid() . '-' . $filename;
+                $destination = $path . $filename;
             }
         }
+
+        $symlink = (isset($config->symlink) ? rtrim($config->symlink, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename : null);
 
         return $destination;
     }

@@ -21,9 +21,12 @@ class ClassException extends AppException
      * @param int        $code      The exception code (default: 500).
      * @param Throwable $previous  The previous exception if applicable (default: null).
      */
-    public function __construct(string $class = 'error', int $code = 500, Throwable $previous = null)
+    public function __construct(string $class, int $code = 500, Throwable $previous = null)
     {
-        $message = sprintf('Invalid class name: (%s) of type: (%s) was not found.', $class,  gettype($class));
-        parent::__construct($message, $code, $previous);
+        parent::__construct(
+            sprintf('Invalid class name: (%s) of type: (%s) was not found.', $class,  gettype($class)), 
+            $code, 
+            $previous
+        );
     }
 }

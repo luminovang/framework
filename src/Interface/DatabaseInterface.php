@@ -9,10 +9,9 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Config\Database;
+use \Luminova\Base\BaseDatabase;
+use \Luminova\Interface\ConnInterface;
 use \PDOStatement;
-use \PDO;
-use \mysqli;
 use \mysqli_stmt;
 use \mysqli_result;
 
@@ -24,11 +23,11 @@ interface DatabaseInterface
     /**
      * Constructor.
      *
-     * @param Database $config Database configuration.
+     * @param BaseDatabase $config Database configuration.
      * 
      * @throws DatabaseException If the database connection fails.
      */
-    public function __construct(Database $config);
+    public function __construct(BaseDatabase $config);
 
     /**
      * Checks if the database is connected.
@@ -40,9 +39,9 @@ interface DatabaseInterface
     /**
      * Get the actual raw database connection instance of PDO or mysqli.
      * 
-     * @return PDO|mysqli|null Connection instance if connected, null otherwise.
+     * @return ConnInterface|null Connection instance if connected, null otherwise.
      */
-    public function raw(): PDO|mysqli|null;
+    public function raw(): ConnInterface|null;
 
     /**
      * Get prepared statement of a query result.

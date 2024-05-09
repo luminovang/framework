@@ -117,6 +117,7 @@ interface NetworkInterface
      * @param Request $request The request object to send.
      *
      * @return PromiseInterface A promise that resolves with the response.
+     * @throws RequestException Throws if called method while using Curl client.
      */
     public function sendAsync(Request $request): PromiseInterface;
 }

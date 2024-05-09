@@ -14,76 +14,101 @@ use \Luminova\Exceptions\FileException;
 class FileSystem
 {
     /**
+     * Path to the system framework codes.
+     * 
      * @var string $system
-    */
-    protected string $system =  'system/';
-    
+     */
+    protected string $system = 'system/';
+
     /**
-     * @var string $systemPlugins
-    */
+     * Path to the system third-party plugins.
+     * 
+     * @var string $plugins
+     */
     protected string $plugins = 'system/plugins/';
 
     /**
-     * @var string $systemPlugins
-    */
+     * Path to the libraries and third-party modules.
+     * 
+     * @var string $library
+     */
     protected string $library = 'libraries/libs/';
 
     /**
-     * @var string $systemPlugins
-    */
+     * Path to the serialized shared services.
+     * 
+     * @var string $services
+     */
     protected string $services = 'writeable/services/';
 
     /**
+     * Path to the application controllers.
+     * 
      * @var string $controllers
-    */
-    protected string $controllers =  'app/Controllers/';
+     */
+    protected string $controllers = 'app/Controllers/';
 
     /**
+     * Path to the writeable files.
+     * 
      * @var string $writeable
      */
-    protected string $writeable =  'writeable/';
-    
+    protected string $writeable = 'writeable/';
+
     /**
+     * Path to the error logs.
+     * 
      * @var string $logs
      */
-    protected string $logs =  'writeable/log/';
+    protected string $logs = 'writeable/log/';
 
     /**
+     * Path to the application caches.
+     * 
      * @var string $caches
      */
-    protected string $caches =  'writeable/caches/';
+    protected string $caches = 'writeable/caches/';
 
     /**
-     * @var string $public 
+     * Path to the public controller document root.
+     * 
+     * @var string $public
      */
     protected string $public = 'public/';
 
-     /**
+    /**
+     * Path to the public assets directory.
+     * 
      * @var string $assets
      */
     protected string $assets = 'public/assets/';
 
     /**
+     * Path to the template views files.
+     * 
      * @var string $views
      */
-    protected string $views =  'resources/views/';
-
-     /**
-     * @var string $routes
-     */
-    protected string $routes =  'routes/';
-
-     /**
-     * @var string $languages
-     */
-    protected string $languages =  'app/Controllers/Languages/';
-
+    protected string $views = 'resources/views/';
 
     /**
-     * Check if file read and write permission is granted.
+     * Path to the application routes.
+     * 
+     * @var string $routes
+     */
+    protected string $routes = 'routes/';
+
+    /**
+     * Path to the languages modules.
+     * 
+     * @var string $languages
+     */
+    protected string $languages = 'app/Controllers/Languages/';
+
+    /**
+     * Check if file has read or write permission is granted.
      * 
      * @param string $permission File access permission.
-     * @param string|null $file File name or file path to check permissions.
+     * @param string|null $file File name or file path to check permissions (default: writeable dir).
      * @param bool $quiet Indicate whether to throws an exception if permission is not granted.
      * 
      * @return bool Returns true if permission is granted otherwise false.
@@ -94,11 +119,11 @@ class FileSystem
         $file ??= root(__DIR__, 'writeable' . DIRECTORY_SEPARATOR);
 
         if ($permission === 'rw' && (!is_readable($file) || !is_writable($file))) {
-            $error = "Read and Write permission denied for '{$file}', please grant 'read' and 'write' permission.";
+            $error = "Read and Write permission denied for '%s, please grant 'read' and 'write' permission.";
         } elseif ($permission === 'r' && !is_readable($file)) {
-            $error = "Read permission denied for '{$file}', please grant 'read' permission.";
+            $error = "Read permission denied for '%s', please grant 'read' permission.";
         } elseif ($permission === 'w' && !is_writable($file)) {
-            $error = "Write permission denied for '{$file}', please grant 'write' permission.";
+            $error = "Write permission denied for '%s', please grant 'write' permission.";
         } else {
             return true;
         }
@@ -107,15 +132,23 @@ class FileSystem
             return false;
         }
 
-        throw new FileException($error);
+        throw new FileException(sprintf($error, $file));
     }
 
+    /**
+     * Set permissions for a file or directory.
+     *
+     * @param string $location The path to the file or directory.
+     * @param int $permission The permission to set (Unix file permissions).
+     * 
+     * @return bool True on success, false on failure.
+     */
     public static function setPermission(string $location, int $permission): bool
     {
         error_clear_last();
-        if ( ! @chmod($location, $permission)) {
+        if (!@chmod($location, $permission)) {
             FileException::handlePermission($location, (error_get_last()['message'] ?? ''));
-            
+
             return false;
         }
 
@@ -157,34 +190,71 @@ class FileSystem
         return $symbolic;
     }
 
+    /**
+     * Convert permission string to Unix integer permission.
+     * 
+     * @param string $permission The permission string (e.g., 'rw-r--r--').
+     * 
+     * @return int|null The Unix integer permission, or null if the conversion failed.
+     */
+    public static function toUnixPermission(string $permission): ?int
+    {
+        $permissions = [
+            'r' => 4,
+            'w' => 2,
+            'x' => 1,
+            '-' => 0,
+        ];
+
+        $unixPermission = 0;
+
+        if (strlen($permission) !== 9) {
+            return null;
+        }
+
+        for ($i = 0; $i < 9; $i++) {
+            $char = $permission[$i];
+            if (!isset($permissions[$char])) {
+                return null; 
+            }
+            $unixPermission += $permissions[$char] << (8 - $i);
+        }
+
+        return $unixPermission;
+    }
 
     /**
-     * Write, append contents to file.
-     * @param string $filename — Path to the file where to write the data.
-     * @param mixed $content
-     * @param int $flags [optional] The value of flags can be any combination of the following flags (with some restrictions), joined with the binary OR (|) operator.
+     * Write or append contents to a file.
+     *
+     * @param string $filename The path to the file where to write the data.
+     * @param string|resource $content The contents to write to the file, either as a string or a stream resource.
+     * @param int $flags [optional] The flags determining the behavior of the write operation. Defaults to 0.
      * @param resource $context [optional] A valid context resource created with stream_context_create.
      * 
-     * @return bool true or false on failure.
-     * @throws FileException If unable to write file.
-    */
-    public static function write(string $filename, mixed $content, int $flag = 0, $context = null): bool 
+     * @return bool True if the operation was successful, false otherwise.
+     * @throws FileException If unable to write to the file.
+     */
+    public static function write(string $filename, mixed $content, int $flags = 0, $context = null): bool 
     {
         if(empty($filename)){
             return false;
         }
 
+        if (static::isResource($content, 'stream')) {
+            return static::stream($filename, $content, $flags, $context);
+        }
+
         error_clear_last();
         $handler = false;
-        $lock = $flag & (LOCK_EX | LOCK_NB | LOCK_SH | LOCK_UN);
+        $lock = $flags & (LOCK_EX | LOCK_NB | LOCK_SH | LOCK_UN);
         if(!$lock){
-            $include = $flag & FILE_USE_INCLUDE_PATH;
-            $mode = $flag & FILE_APPEND ? 'a' : 'w';
+            $include = $flags & FILE_USE_INCLUDE_PATH;
+            $mode = $flags & FILE_APPEND ? 'a' : 'w';
             $handler = @fopen($filename, $mode, $include, $context);
         }
         
         if ($handler === false) {
-            $result = @file_put_contents($filename, $content, $flag, $context);
+            $result = @file_put_contents($filename, $content, $flags, $context);
         }else{
             $result = @fwrite($handler, $content);
             @fclose($handler);
@@ -192,7 +262,6 @@ class FileSystem
 
         if ($result === false) {
             FileException::handleFile($filename, (error_get_last()['message'] ?? ''));
-
             return false;
         }
 
@@ -200,7 +269,67 @@ class FileSystem
     }
 
     /**
-     * Attempts to create the directory specified by pathname if not exist.
+     * Write or append contents to a file using a stream resource.
+     *
+     * @param string $filename The path to the file where to write the data.
+     * @param resource $content The contents to write to the file as a stream resource.
+     * @param int $flags [optional] The value of flags can be any combination of the following flags (with some restrictions), joined with the binary OR (|) operator.
+     * @param resource $context [optional] A valid context resource created with stream_context_create.
+     * 
+     * @return bool True if the operation was successful, false otherwise.
+     * @throws FileException If unable to write to the file.
+     */
+    public static function stream(string $filename, mixed $resource, int $flags = 0, mixed $context = null): bool
+    {
+        if (empty($filename)) {
+            return false;
+        }
+
+        if (!static::isResource($resource, 'stream')) {
+            throw new FileException(
+                "Invalid stream provided, expected stream resource, received " . gettype($resource)
+            );
+        }
+
+        error_clear_last();
+
+        // Rewind the stream if needed
+        if (ftell($resource) !== 0 && stream_get_meta_data($resource)['seekable']) {
+            rewind($resource);
+        }
+
+        // Write to the file
+        if (@file_put_contents($filename, $resource, $flags, $context) === false) {
+            FileException::handleFile($filename, (error_get_last()['message'] ?? ''));
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Checks if a variable is a valid resource of the specified type.
+     *
+     * @param mixed $resource The resource to check.
+     * @param string|null $type The expected resource type. Possible values are: 'stream-context', 'stream', etc.
+     * 
+     * @return bool Returns true if the variable is a resource and matches the expected resource type, otherwise returns false.
+     */
+    public static function isResource(mixed $resource, ?string $type = null): bool 
+    {
+        if (!is_resource($resource)) {
+            return false;
+        } 
+            
+        if ($type !== null && get_resource_type($resource) !== $type) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Attempts to create the directory, if it doesn't exist.
      * 
      * @param string $path Directory path to create.
      * @param int $permissions Unix file permissions
@@ -222,7 +351,7 @@ class FileSystem
             if(!@mkdir($path, $permissions, $recursive)){
                 FileException::handleDirectory($path, (error_get_last()['message'] ?? ''));
                 
-                return true;
+                return false;
             }
             
             // Check if mkdir failed due to lack of write permission
@@ -232,16 +361,16 @@ class FileSystem
         return true;
     }
 
-
     /**
 	 * Copy files and folders from the source directory to the destination directory.
 	 *
 	 * @param string $origin The source directory.
 	 * @param string $dest The destination directory.
+     * @param int &$copied Reference to a variable to store the number of copied items.
 	 *
 	 * @return bool True if the copy operation is successful, false otherwise.
 	 */
-	public static function copy(string $origin, string $dest): bool
+	public static function copy(string $origin, string $dest, int &$copied = 0): bool
 	{
 		make_dir($dest);
 
@@ -257,24 +386,73 @@ class FileSystem
 				$destFile = $dest . DIRECTORY_SEPARATOR . $file;
 
 				if (is_dir($srcFile)) {
-					static::copy($srcFile, $destFile);
+					if(static::copy($srcFile, $destFile, $copied)){
+                        $copied++;
+                    }
 				} else {
-					copy($srcFile, $destFile);
+					if(copy($srcFile, $destFile)){
+                        $copied++;
+                    }
 				}
 			}
 		}
+
 		closedir($dir);
-		return true;
+
+		return $copied > 0;
 	}
+
+    /**
+     * Move files and folders from one location to another recursively.
+     *
+     * @param string $origin The source directory or file path.
+     * @param string $dest The destination directory path.
+     * @param int &$moved Reference to a variable to store the number of moved items.
+     * 
+     * @return bool True if the operation is successful, false otherwise.
+     */
+    public static function move(string $origin, string $dest, int &$moved = 0): bool
+    {
+        make_dir($dest);
+
+        $dir = opendir($origin);
+
+        if (!$dir) {
+            return false;
+        }
+
+        while (false !== ($file = readdir($dir))) {
+            if ($file != '.' && $file != '..') {
+                $srcFile = $origin . DIRECTORY_SEPARATOR . $file;
+                $destFile = $dest . DIRECTORY_SEPARATOR . $file;
+
+                if (is_dir($srcFile)) {
+                    if (static::move($srcFile, $destFile, $moved)) {
+                        $moved++;
+                    }
+                } else {
+                    if (rename($srcFile, $destFile)) {
+                        $moved++;
+                    }
+                }
+            }
+        }
+        closedir($dir);
+
+        if (rmdir($origin)) {
+            $moved++;
+        }
+
+        return $moved > 0;
+    }
 
 	/**
 	 * Download a file to the user's browser.
 	 *
 	 * @param string $file The full file path or content to to download.
-	 * @param string $name The filename as it will be shown in the download.
+	 * @param string|null $name The filename as it will be shown in the download.
 	 * @param array $headers Optional passed headers for download.
 	 * @param bool $delete Whether to delete the file after download (default: false).
-	 * @param string|null $content to download
      * 
      * @return bool Return true on success, false on failure.
 	 */
@@ -287,11 +465,13 @@ class FileSystem
 			$filename = $name ?? basename($file);
 			$mime = mime_content_type($file) ?? 'application/octet-stream';
 			$length = filesize($file);
-		} else {
+		} elseif(!empty($file)) {
 			$length = mb_strlen($file);
 			$filename = $name ?? 'file_download.txt';
 			$mime = 'application/octet-stream';
-		}
+		}else{
+            return false;
+        }
 
 		$extend = array_merge([
 			'Content-Type' => $mime,
@@ -315,56 +495,107 @@ class FileSystem
 			}
 
 			return $read !== false;
-		} else {
-			echo $file;
-			return true;
 		}
+
+        echo $file;
+
+        return true;
 	}
 
     /**
-	 * Deletes files and folders.
+	 * Deletes files and folders recursively.
 	 *
-	 * @param string $dir   Directory to delete files.
-	 * @param bool   $delete_base  Remove the base directory once done (default is false).
+	 * @param string $location  Directory or file to delete.
+	 * @param bool $delete_base  Remove the base directory once done (default is false).
+     * @param int &$deleted Reference to a variable to store the number of deleted items.
      * 
 	 * @return int Returns count of deleted files.
 	 */
-	public static function remove(string $dir, bool $delete_base = false): int 
+	public static function remove(string $location, bool $delete_base = false, int &$deleted = 0): int 
 	{
-		$count = 0;
-
-		if (!file_exists($dir)) {
-			return $count;
+		if (!file_exists($location)) {
+			return $deleted;
 		}
 		
-		$files = is_dir($dir) ? 
-			glob(rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR. '*', GLOB_MARK) : 
-			glob($dir . '*');
-		//$files = glob(rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '*', GLOB_MARK);
+		$files = is_dir($location) ? 
+			glob(rtrim($location, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR. '*', GLOB_MARK) : 
+			glob($location . '*');
+		//$files = glob(rtrim($location, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '*', GLOB_MARK);
 
 		foreach ($files as $file) {
 			if (is_dir($file)) {
-				static::remove($file, true);
+				static::remove($file, true, $deleted);
 			} else {
 				unlink($file);
-				$count++;
+				$deleted++;
 			}
 		}
 
-		if ($delete_base) {
-			$count++;
-			rmdir($dir);
-		}
+        if($delete_base && is_dir($location) &&  rmdir($location)){
+            $deleted++;
+        }
 
-		return $count;
+		return $deleted;
 	}
+
+    /**
+     * Create a symlink to a target file or directory.
+     *
+     * @param string $target The targe file or directory to link from.
+     * @param string  $link The location of the link.
+     * 
+     * @return bool Return true if the link was successfully created false otherwise.
+    */
+    public static function symbolic(string $target, string $link): bool
+    {
+        $linkpath = dirname($link);
+        if (!file_exists($target)) {
+            logger('alert', 'The symlink target file does not exist');
+            return false;
+        }
+
+        if(!file_exists($linkpath) && !make_dir($linkpath, 0755)){
+            logger('alert', 'Unable to create symlink destination directory');
+            return false;
+        }
+
+        if(file_exists($link) || is_link($link)){
+            unlink($link);
+        }
+       
+        error_clear_last();
+
+        if (is_platform('windows')) {
+            $mode = is_dir($target) ? 'D' : 'H';
+            exec("mklink /{$mode} " . escapeshellarg($link) . ' ' . escapeshellarg($target), $output, $result);
+
+            if($result === 1){
+                logger('alert', 'Symlink creation failed:',[$output]);
+            }
+
+            return $result === 0;
+        }
+        
+        if (symlink($target, $link) === false) {
+            $error = error_get_last();
+            if ($error !== null) {
+                logger('alert', 'Symlink creation failed: ' . $error['message'] ?? '');
+            } else {
+                logger('alert', 'Unknown error occurred while creating symlink.');
+            }
+
+            return false;
+        }
+
+        return true;
+    }
 
     /**
      * Get path properties in compatible based on os return from application root.
      * 
      * @param string $name File property name.
      * 
-     * @return string $path Return os compatible path
+     * @return string Return compatible path based on operating system.
     */
     public function getCompatible(string $name): string 
     {
@@ -380,9 +611,10 @@ class FileSystem
      * 
      * @param string $path File path
      * 
-     * @return string $path Return os compatible path
+     * @return string Return compatible path based on operating system.
+     * @ignore
     */
-    public static function tocompatible(string $path): string 
+    public static function toCompatible(string $path): string 
     {
         return str_replace('/', DIRECTORY_SEPARATOR, $path);
     } 
@@ -392,7 +624,8 @@ class FileSystem
      * 
      * @param string $key
      * 
-     * @return string $path 
+     * @return string Return compatible path based on operating system.
+     * @ignore
     */
     public function __get(string $key): string 
     {

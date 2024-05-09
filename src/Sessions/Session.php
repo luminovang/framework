@@ -9,7 +9,7 @@
  */
 namespace Luminova\Sessions;
 
-use \Luminova\Interface\SessionInterface;
+use \Luminova\Interface\SessionManagerInterface;
 use \App\Controllers\Config\Session as SessionConfig;
 use \Luminova\Sessions\SessionManager;
 
@@ -18,43 +18,35 @@ class Session
     /**
      * session interface
      * 
-     * @var SessionInterface $manager
+     * @var SessionManagerInterface $manager
     */
-    protected ?SessionInterface $manager = null;
+    private ?SessionManagerInterface $manager = null;
 
     /**
      * static class instance
      * 
      * @var Session $instance 
     */
-    protected static ?Session $instance = null;
-
-    /**
-     * session config instance
-     * 
-     * @var null|string $config 
-    */
-    protected static ?string $config = null;
+    private static ?Session $instance = null;
 
     /**
      * Initializes session constructor
      *
-     * @param SessionInterface|null $manager The session manager.
+     * @param SessionManagerInterface|null $manager The session manager.
     */
-    public function __construct(?SessionInterface $manager = null)
+    public function __construct(?SessionManagerInterface $manager = null)
     {
-        static::$config = SessionConfig::class;
         $this->manager = $manager ?? new SessionManager();
     } 
 
     /**
      * Get an instance of the Session class.
      *
-     * @param SessionInterface|null $manager The session manager.
+     * @param SessionManagerInterface|null $manager The session manager.
      * 
      * @return static self instance
     */
-    public static function getInstance(?SessionInterface $manager = null): static
+    public static function getInstance(?SessionManagerInterface $manager = null): static
     {
         if (static::$instance === null) {
             static::$instance = new static($manager);
@@ -102,21 +94,21 @@ class Session
     /**
      * Sets the session manager.
      *
-     * @param SessionInterface $manager The session manager to set.
+     * @param SessionManagerInterface $manager The session manager to set.
      * 
      * @return void
     */
-    public function setManager(SessionInterface $manager): void
+    public function setManager(SessionManagerInterface $manager): void
     {
         $this->manager = $manager;
     }
 
     /**
-     * Retrieves the session storage manager instance (`CookieManager` or `SessionManager`).
+     * Retrieves the session storage manager instance (`CookieStorage` or `SessionManager`).
      *
-     * @return SessionInterface|null The storage manager instance.
+     * @return SessionManagerInterface|null The storage manager instance.
     */
-    public function getManager(): ?SessionInterface
+    public function getManager(): ?SessionManagerInterface
     {
         return $this->manager;
     }
@@ -323,21 +315,21 @@ class Session
             }
 
             if (session_status() === PHP_SESSION_ACTIVE) {
-                $this->ipChangeListener();
-                //logger('warning', 'Session: Sessions is enabled, and one exists. Please don\'t $session->start();');
+                $this->ipListener();
+                logger('warning', 'Session: Sessions is enabled, and one exists. don\'t $session->start() again.');
                 return;
             }
 
             if (session_status() === PHP_SESSION_NONE) {
                 $this->sessionConfigure();
                 session_start();
-                $this->ipChangeListener();
+                $this->ipListener();
             }
             return;
         }
         
         $this->sessionConfigure();
-        $this->ipChangeListener();
+        $this->ipListener();
     }
 
     /**
@@ -354,7 +346,7 @@ class Session
         $this->set('_session_online_id', uniqid('ssid'));
         $this->set('_session_online_datetime', date('c'));
 
-        if(static::$config::$strictSessionIp && $ip = ip_address()){
+        if(SessionConfig::$strictSessionIp && $ip = ip_address()){
             $this->set('_session_online_ip', $ip);
         }
  
@@ -369,19 +361,16 @@ class Session
      * 
      * @return void
     */
-    public function ipChangeListener(string $storage = ''): void
+    private function ipListener(string $storage = ''): void
     {
         $default = $this->getStorage();
 
-        if(static::$config::$strictSessionIp && $this->ipChanged($storage)){
+        if(SessionConfig::$strictSessionIp && $this->ipChanged($storage)){
             
             if($storage !== '' && $storage !== $default){
                 $this->setStorage($storage);
             }
 
-            //$this->remove('_session_online');
-            //$this->remove('_session_online_ip');
-            //$this->remove('_session_online_id');
             $this->clear();
 
             if($storage !== '' && $storage !== $default){
@@ -428,29 +417,28 @@ class Session
     private function sessionConfigure(): void
     {
         $cookieParams = [
-            'lifetime' => time() + static::$config::$expiration,
-            'path'     => static::$config::$sessionPath,
-            'domain'   => static::$config::$sessionDomain,
+            'lifetime' => time() + SessionConfig::$expiration,
+            'path'     => SessionConfig::$sessionPath,
+            'domain'   => SessionConfig::$sessionDomain,
             'secure'   => true,
             'httponly' => true,
-            'samesite' => static::$config::$sameSite,
+            'samesite' => SessionConfig::$sameSite,
         ];
-        ini_set('session.name', static::$config::$cookieName);
-        ini_set('session.cookie_samesite', static::$config::$sameSite);
+        ini_set('session.name', SessionConfig::$cookieName);
+        ini_set('session.cookie_samesite', SessionConfig::$sameSite);
         session_set_cookie_params($cookieParams);
 
-        if (static::$config::$expiration > 0) {
+        if (SessionConfig::$expiration > 0) {
             ini_set('session.gc_maxlifetime', (string) $cookieParams['lifetime']);
         }
 
-        if (static::$config::$savePath !== '') {
-            ini_set('session.save_path', static::$config::$savePath);
+        if (SessionConfig::$savePath !== '') {
+            ini_set('session.save_path', SessionConfig::$savePath);
         }
 
         ini_set('session.use_trans_sid', '0');
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_cookies', '1');
         ini_set('session.use_only_cookies', '1');
-        $this->manager->setConfig(static::$config);
     }
 }

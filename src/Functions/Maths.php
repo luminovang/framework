@@ -93,12 +93,12 @@ class Maths
     }
 
     /**
-     * Calculate the average from individual ratings.
+     * Calculate the average of a giving numbers.
      *
-     * @param int|float ...$ratings Individual ratings.
+     * @param int|float ...$numbers Input arguments integers or float values to calculate the average
      *      - @example average(10, 20, 30, 40, 50) - return 30 as the average.
      * 
-     * @return float|null The average rating, or null if no ratings are provided.
+     * @return float|null The average of the passed numbers.
     */
     public static function average(int|float ...$numbers): ?float 
     {
@@ -156,6 +156,7 @@ class Maths
      * 
      * @param float $number The number to format.
      * @param string $code The currency code (optional).
+     * @param string|null $locale TOptional pass locale name to use in currency formatting.
      * 
      * @return string|false The formatted currency string, or false if unable to format.
      */
@@ -172,7 +173,7 @@ class Maths
      * Convert a number to cryptocurrency.
      *
      * @param int|float|string $amount The amount to convert.
-     * @param string $crypto The cryptocurrency code (e.g., 'BTC', 'ETH', 'LTC').
+     * @param string $network The cryptocurrency code (e.g., 'BTC', 'ETH', 'LTC').
      * 
      * @return float|false The equivalent amount in cryptocurrency.
     */
@@ -232,7 +233,7 @@ class Maths
 	 * Format a number with optional rounding.
 	 *
 	 * @param float|int|string $number The number you want to format.
-	 * @param int|null $decimalPlaces The number of decimal places (null for no rounding).
+	 * @param int|null $decimals The number of decimal places (null for no rounding).
 	 * 
 	 * @return string The formatted number.
 	 */

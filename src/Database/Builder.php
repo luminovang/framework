@@ -19,14 +19,14 @@ use \Luminova\Time\Time;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \DateTimeInterface;
 
-class QueryBuilder extends Connection 
+class Builder extends Connection 
 {  
     /**
      * Class instance
      * 
-     * @var QueryBuilder|null $instance 
+     * @var Builder|null $instance 
     */
-    private static ?QueryBuilder $instance = null;
+    private static ?Builder $instance = null;
 
     /**
      * Table name to query
@@ -1004,9 +1004,34 @@ class QueryBuilder extends Connection
      * 
      * @param string $column column to index counting (default: *) 
      * 
-     * @return int returns total counts of records.
+     * @return int|bool returns total counts of records.
     */
-    public function total(string $column = '*'): int 
+    public function total(string $column = '*'): int|bool 
+    {
+        return $this->executeTotalOrSum("SELECT COUNT({$column})");
+    }
+
+    /**
+     * Select total sum of records from table, column
+     * 
+     * @param string $column column to index sum.
+     * 
+     * @return int|float|bool Returns total sum of records.
+    */
+    public function sum(string $column): int|float|bool
+    {
+        return $this->executeTotalOrSum("SELECT SUM({$column}) AS totalSum", true);
+    }
+
+    /**
+     * Return total sum or count of records from table, column.
+     * 
+     * @param string $query Method query.
+     * @param bool $sum whether to return total sum or count of records.
+     * 
+     * @return int|float|bool returns total sum or count of records.
+    */
+    private function executeTotalOrSum(string $query, bool $sum = false): float|int|bool 
     {
         static::$handler = null;
         if($this->returnType !== 'stmt' && $this->cache !== null && $this->hasCache){
@@ -1018,8 +1043,8 @@ class QueryBuilder extends Connection
                 return $response??0;
             }
         }
-           
-        $totalQuery = "SELECT COUNT({$column}) FROM {$this->databaseTable} {$this->tableAlias}";
+
+        $totalQuery = "{$query} FROM {$this->databaseTable} {$this->tableAlias}";
         
         if ($this->joinTable !== '') {
             $totalQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
@@ -1035,11 +1060,11 @@ class QueryBuilder extends Connection
     
         try {
             if($this->returnType === 'stmt' || $this->cache === null){
-                return $this->returnTotal($totalQuery);
+                return $this->returnTotalOrSum($totalQuery, $sum);
             }
 
-            return $this->cache->onExpired($this->cacheKey, function() use($totalQuery) {
-                return $this->returnTotal($totalQuery);
+            return $this->cache->onExpired($this->cacheKey, function() use($totalQuery, $sum) {
+                return $this->returnTotalOrSum($totalQuery, $sum);
             });
         } catch (DatabaseException $e) {
             $e->handle();
@@ -1052,10 +1077,11 @@ class QueryBuilder extends Connection
      * Return total number of rows in table
      * 
      * @param string $totalQuery query
+     * @param bool $sum Return sum or total
      * 
-     * @return int|bool returns selected row.
+     * @return int|float|bool  returns selected row.
     */
-    private function returnTotal(string $totalQuery): int|bool 
+    private function returnTotalOrSum(string $totalQuery, bool $sum = false): int|float|bool 
     {
         if ($this->whereCondition === []) {
             static::$handler = $this->db->query($totalQuery);
@@ -1071,6 +1097,8 @@ class QueryBuilder extends Connection
         if(static::$handler->ok()){
             if($this->returnType === 'stmt'){
                 $response = true;
+            }elseif($sum){
+                $response = static::$handler->getNext()?->totalSum ?? 0;
             }else{
                 $response = static::$handler->getCount();
             }
@@ -1083,12 +1111,14 @@ class QueryBuilder extends Connection
         return $response;
     }
 
+
     /**
      * Update table with columns and values
      * 
      * @param array<string, mixed> $setValues associative array of columns and values to update
      * 
      * @return int|bool returns affected row counts or false on failure.
+     * @throws DatabaseException Throw if error occurred while updating.
      */
     public function update(?array $setValues = []): int|bool 
     {
@@ -1096,13 +1126,11 @@ class QueryBuilder extends Connection
         static::$handler = null;
 
         if ($columns === []) {
-            static::error("Update operation without SET values is not allowed.");
-            return 0;
+            throw new DatabaseException('Update operation without SET values is not allowed.');
         }
 
         if ($this->whereCondition === []) {
-            static::error("Update operation without a WHERE condition is not allowed.");
-            return 0;
+            throw new DatabaseException('Update operation without a WHERE condition is not allowed.');
         }
 
         $updateColumns = static::buildPlaceholder($columns, true);
@@ -1147,15 +1175,14 @@ class QueryBuilder extends Connection
      * Delete record from table
      * 
      * @return int|bool returns number of affected rows or false on failure.
+     * @throws DatabaseException Throw if error occurs.
     */
     public function delete(): int|bool
     {
         static::$handler = null;
 
         if ($this->whereCondition === []) {
-            static::error('Delete operation without a WHERE condition is not allowed.');
-
-            return false;
+            throw new DatabaseException('Delete operation without a WHERE condition is not allowed.');
         }
 
         $deleteQuery = "DELETE FROM {$this->databaseTable}";
@@ -1554,18 +1581,6 @@ class QueryBuilder extends Connection
     public function backup(?string $filename = null): bool 
     {
         return $this->manager()->backup($filename);
-    }
-
-    /**
-     * Throw an exception 
-     * 
-     * @param string $message
-     * 
-     * @throws DatabaseException
-    */
-    private static function error(string $message): void
-    {
-        DatabaseException::throwException($message);
     }
 
     /**

@@ -96,7 +96,12 @@ class StorageAdapters
             case 'local':
                 $visibility = isset($config['visibility']) ? UnixVisibility::fromArray($config['visibility']): null;
                 $disallow = $config['disallow_links'] ? LocalAdapter::DISALLOW_LINKS : LocalAdapter::SKIP_LINKS;
-                return new LocalAdapter($basePath, $visibility, $config['lock_flags'] ?? LOCK_EX, $disallow);
+                return new LocalAdapter(
+                    $basePath, 
+                    $visibility, 
+                    $config['lock_flags'] ?? LOCK_EX, 
+                    $disallow
+                );
             case 'ftp':
                 return new FtpAdapter(FtpConnectionOptions::fromArray($config));
             case 'memory':
@@ -104,10 +109,20 @@ class StorageAdapters
                 return $config['readonly'] ? new ReadOnlyAdapter($adapter) : $adapter;
             case 'aws-s3':
                 static::$client = new S3Client($config['configuration']);
-                return new AwsS3V3Adapter(static::$client, $config['bucket'] ?? '', $basePath, new AwsVisibility($config['visibility'] ?? 'public'));
+                return new AwsS3V3Adapter(
+                    static::$client, 
+                    $config['bucket'] ?? '', 
+                    $basePath, 
+                    new AwsVisibility($config['visibility'] ?? 'public')
+                );
             case 'aws-async-s3':
                 static::$client = new S3AsyncClient($config['configuration']);
-                return new AsyncAwsS3Adapter(static::$client, $config['bucket'] ?? '', $basePath, new AwsVisibility($config['visibility'] ?? 'public'));
+                return new AsyncAwsS3Adapter(
+                    static::$client, 
+                    $config['bucket'] ?? '', 
+                    $basePath, 
+                    new AwsVisibility($config['visibility'] ?? 'public')
+                );
             case 'azure-blob':
                 static::$client = BlobRestProxy::createBlobService($config['dns'] ?? '');
                 return new AzureBlobAdapter(static::$client, $config['container'] ?? '', $basePath);
@@ -115,7 +130,11 @@ class StorageAdapters
                 static::$client = new GoggleClient($config['configuration']);
                 return new GoogleCloudAdapter(static::$client->bucket($config['bucket']), $basePath);
             case 'web-dev':
-                static::$client = new Client(['baseUri' => $config['baseurl'],'userName' => $config['username'],'password' => $config['password']]);
+                static::$client = new Client([
+                    'baseUri' => $config['baseurl'],
+                    'userName' => $config['username'],
+                    'password' => $config['password']
+                ]);
                 return new WebDAVAdapter(static::$client);
             case 'sftp-v3':
                 $visibility = isset($config['visibility']) ? UnixVisibility::fromArray($config['visibility']): null;

@@ -1,4 +1,4 @@
-<?php
+<?php 
 /**
  * Luminova Framework
  *
@@ -7,12 +7,9 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Exceptions;
-use Luminova\Exceptions\AppException;
+namespace Luminova\Interface;
 
-class DateTimeException extends AppException
+interface ConnInterface 
 {
-    /**
-     * ErrorException: 
-    */
+
 }

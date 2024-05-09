@@ -9,20 +9,17 @@
  */
 namespace Luminova\Sessions;
 
-use \Luminova\Interface\SessionInterface;
+use \Luminova\Interface\SessionManagerInterface;
 use \App\Controllers\Config\Session as CookieConfig;
+use \Luminova\Exceptions\JsonException;
+use \Throwable;
 
-class CookieManager implements SessionInterface 
+class CookieManager implements SessionManagerInterface 
 { 
     /**
      * @var string $storage Session storage name 
     */
-    protected string $storage;
-
-    /**
-     * @var ?string $config Session cookie configuration
-    */
-    private static ?string $config = null;
+    private string $storage = '';
 
     /**
      * {@inheritdoc}
@@ -30,14 +27,6 @@ class CookieManager implements SessionInterface
     public function __construct(string $storage = 'global') 
     {
         $this->storage = $storage;
-    }
-
-    /** 
-     * {@inheritdoc}
-    */
-    public function setConfig(string $config): void 
-    {
-        static::$config = $config;
     }
 
     /**
@@ -93,7 +82,7 @@ class CookieManager implements SessionInterface
 
         if($storage !== '' && isset($_COOKIE[$storage])) {
             if($index === '' || $index === null){
-                $this->saveContent('',  $storage, time() - static::$config::$expiration);
+                $this->saveContent('',  $storage, time() - CookieConfig::$expiration);
                 $_COOKIE[$storage] = '';
             }else{
                 $data = $this->getItems($storage);
@@ -144,7 +133,13 @@ class CookieManager implements SessionInterface
             return (array) $result;
         }
 
-        return (object) json_decode(json_encode($result));
+        try {
+            $result = json_encode($result, JSON_THROW_ON_ERROR);
+
+            return (object) json_decode($result);
+        }catch(Throwable $e){
+            throw new JsonException($e->getMessage(), $e->getCode(), $e);
+        };
     }
 
     /** 
@@ -166,7 +161,13 @@ class CookieManager implements SessionInterface
             return (array) $result;
         }
 
-        return (object) json_decode(json_encode($result));
+        try {
+            $result = json_encode($result, JSON_THROW_ON_ERROR);
+
+            return (object) json_decode($result);
+        }catch(Throwable $e){
+            throw new JsonException($e->getMessage(), $e->getCode(), $e);
+        }
     }
 
     /** 
@@ -214,17 +215,15 @@ class CookieManager implements SessionInterface
     */
     private function saveContent(string $value, string $storage, ?int $expiry = null): void
     {
-
-        static::$config ??= CookieConfig::class;
-        $expiration = $expiry === null ? time() + static::$config::$expiration : $expiry;
+        $expiration = $expiry === null ? time() + CookieConfig::$expiration : $expiry;
 
         setcookie($storage, $value, [
             'expires' => $expiration,
-            'path' => static::$config::$sessionPath,
-            'domain' => static::$config::$sessionDomain,
+            'path' => CookieConfig::$sessionPath,
+            'domain' => CookieConfig::$sessionDomain,
             'secure' => true,
             'httponly' => true,
-            'samesite' => static::$config::$sameSite 
+            'samesite' => CookieConfig::$sameSite 
         ]);
     }
 }

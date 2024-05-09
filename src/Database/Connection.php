@@ -7,22 +7,20 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Database;
 
 use \Luminova\Database\Drivers\MySqliDriver;
 use \Luminova\Database\Drivers\PdoDriver;
 use \Luminova\Interface\DatabaseInterface;
-use \Luminova\Config\Database;
+use \Luminova\Base\BaseDatabase;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Exceptions\DatabaseLimitException;
-use \Luminova\Exceptions\InvalidArgumentException;
-use \App\Controllers\Config\Servers;
+use \App\Controllers\Config\Database;
 use \Exception;
 
 class Connection
 {
-  /** 
+  /**
    * Database connection instance 
    * 
    * @var DatabaseInterface|null $db
@@ -30,8 +28,8 @@ class Connection
   protected ?DatabaseInterface $db = null;
 
   /** 
-   * @var ?Connection $instance
-   */
+   * @var ?self $instance
+  */
   private static ?self $instance = null;
 
   /**
@@ -63,7 +61,7 @@ class Connection
    * 
    * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
    * @throws DatabaseLimitException When the maximum connection limit is reached.
-   * @throws InvalidArgumentException If an invalid connection configuration or driver is passed.
+   * @throws DatabaseException If an invalid connection configuration or driver is passed.
    */
   public final function __construct()
   {
@@ -97,24 +95,24 @@ class Connection
    * Retrieves the database driver connection instance.
    * 
    * @return DatabaseInterface|null Return driver connection instance..
-   */
+  */
   public function database(): DatabaseInterface|null
   {
-      return $this->db;
+    return $this->db;
   }
 
   /**
    * Retrieves the shared singleton instance of the Connection class.
    *
-   * @return self Connection class instance.
+   * @return static Connection class instance.
    * 
    * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
    * @throws DatabaseLimitException When the maximum connection limit is reached.
-   * @throws InvalidArgumentException If an invalid connection configuration or driver is passed.
-   */
-  public static function getInstance(): self 
+   * @throws DatabaseException If an invalid connection configuration or driver is passed.
+  */
+  public static function getInstance(): static 
   {
-      return static::$instance ??= new static();
+    return static::$instance ??= new static();
   }
 
   /**
@@ -122,33 +120,32 @@ class Connection
    * 
    * If no configuration is provided, the default configuration will be used.
    * 
-   * @param Database|null $config Database configuration (default: null).
+   * @param BaseDatabase|null $config Database configuration (default: null).
    *
    * @return DatabaseInterface|null Database driver instance.
    * 
    * @throws DatabaseException If all retry attempts fail, an error occurs during connection, or an invalid driver interface is detected.
    * @throws DatabaseLimitException When the maximum connection limit is reached.
-   * @throws InvalidArgumentException If an invalid database driver is provided.
+   * @throws DatabaseException If an invalid database driver is provided.
   */
-  public static function newInstance(Database|null $config = null): DatabaseInterface|null
+  public static function newInstance(BaseDatabase|null $config = null): DatabaseInterface|null
   {
-    $config ??= static::getConfig();
-
+    $config ??= static::getDefultConfig();
     $drivers = [
       'mysqli' => MySqliDriver::class,
       'pdo' => PdoDriver::class
     ];
 
-    $driverClass = $drivers[$config->connection] ?? null;
+    $driver = $drivers[$config->connection] ?? null;
 
-    if($driverClass === null){
-      throw new InvalidArgumentException("Invalid database connection driver: '{$config->connection}', use [mysql or pdo].");
+    if($driver === null){
+      throw new DatabaseException("Invalid database connection driver: '{$config->connection}', use [mysql or pdo].");
     }
 
-    $connection = new $driverClass($config);
+    $connection = new $driver($config);
 
     if (!$connection instanceof DatabaseInterface) {
-      throw new DatabaseException("Driver class '{$driverClass}' does not implement DatabaseInterface.");
+      throw new DatabaseException("Driver class '{$driver}' does not implement DatabaseInterface.");
     }
     
     $connection->setDebug(!PRODUCTION);
@@ -165,7 +162,7 @@ class Connection
    * @return DatabaseInterface|null Database driver instance (either MySqliDriver or PdoDriver).
    * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
    * @throws DatabaseLimitException When the maximum connection limit is reached.
-   * @throws InvalidArgumentException If an invalid connection configuration or driver is passed.
+   * @throws DatabaseException If an invalid connection configuration or driver is passed.
   */
   public function connect(): ?DatabaseInterface
   {
@@ -193,7 +190,7 @@ class Connection
    * 
    * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
    * @throws DatabaseLimitException When the maximum connection limit is reached.
-   * @throws InvalidArgumentException If an invalid connection configuration or driver is passed.
+   * @throws DatabaseException If an invalid connection configuration or driver is passed.
   */
   public function retry(int|null $retry = 1): DatabaseInterface|null
   {
@@ -220,26 +217,28 @@ class Connection
     $connection = null;
 
     if ($retry === null) {
-      $servers = Servers::getDatabaseServers();
+      $servers = Database::getBackups();
 
       foreach ($servers as $config) {
-          try {
-            $connection = static::newInstance(new Database($config));
-          } catch (DatabaseException | Exception $e) {
-            logger('error', 'Failed to connect to backup database: ' . $e->getMessage(), [
-                'host' => $config['host'],
-                'port' => $config['port'],
-                'database' => $config['database']
-            ]);
+        try {
+          $connection = static::newInstance(static::newConfig($config));
+        } catch (DatabaseException | Exception $e) {
+          logger('error', 'Failed to connect to backup database: ' . $e->getMessage(), [
+            'host' => $config['host'],
+            'port' => $config['port'],
+            'database' => $config['database']
+          ]);
+        }
+
+        if (isset($connection) && $connection->isConnected()) {
+          if($this->pool){
+            $this->release($connection);
           }
 
-          if (isset($connection) && $connection->isConnected()) {
-            if($this->pool){
-              $this->release($connection);
-            }
+          logger('info', 'Successfully connected to backup database: (' . $config['database'] . ')');
 
-            return $connection;
-          }
+          return $connection;
+        }
       }
 
       return $connection;
@@ -248,19 +247,19 @@ class Connection
     $maxAttempts = max(1, $retry);
       
     for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-        try {
-            $connection = static::newInstance();
-        } catch (DatabaseException | Exception $e) {
-          logger('error', 'Attempt (' . $attempt . '), failed to connect to database: ' . $e->getMessage());
+      try {
+          $connection = static::newInstance();
+      } catch (DatabaseException | Exception $e) {
+        logger('error', 'Attempt (' . $attempt . '), failed to connect to database: ' . $e->getMessage());
+      }
+
+      if (isset($connection) && $connection->isConnected()) {
+        if($this->pool){
+          $this->release($connection);
         }
 
-        if (isset($connection) && $connection->isConnected()) {
-          if($this->pool){
-            $this->release($connection);
-          }
-
-          return $connection;
-        }
+        return $connection;
+      }
     }
 
     return $connection;
@@ -275,18 +274,17 @@ class Connection
    * @param DatabaseInterface|null $connection The connection to release.
    * 
    * @return void
-   */
+  */
   public function release(DatabaseInterface|null $connection): void
   {
     if (count($this->pools) < $this->maxConnections) {
-        $this->pools[] = $connection;
-        return;
+      $this->pools[] = $connection;
+      return;
     }
     
     $connection?->close();
     $connection = null;
   }
-
 
   /**
    * Purges all stacked pool connections and optionally closes the database connection.
@@ -296,7 +294,7 @@ class Connection
    * @param bool $conn If true, close the database connection. Default is false.
    * 
    * @return void 
-   */
+  */
   public function purge(bool $conn = false): void
   {
     foreach ($this->pools as $connection) {
@@ -314,17 +312,15 @@ class Connection
   /**
     * Get the database configuration based on environment and settings.
     *
-    * @return Database Database configuration object.
+    * @return BaseDatabase Database configuration object.
   */
-  private static function getConfig(): Database
+  private static function getDefultConfig(): BaseDatabase
   {
-    $var = PRODUCTION ? 'database' : 'database.development';
+    $var = (PRODUCTION ? 'database' : 'database.development');
     $sqlite = env("{$var}.sqlite.path", '');
-    if($sqlite !== ''){
-      $sqlite = APP_ROOT . DIRECTORY_SEPARATOR . trim($sqlite, DIRECTORY_SEPARATOR);
-    }
-
-    return new Database([
+    $sqlite = ($sqlite !== '') ? APP_ROOT . DIRECTORY_SEPARATOR . trim($sqlite, DIRECTORY_SEPARATOR) : null;
+ 
+    return static::newConfig([
       'port' => env('database.port'),
       'host' => env('database.hostname'),
       'pdo_driver' => env('database.pdo.driver'),
@@ -341,5 +337,20 @@ class Connection
       'database' => env("{$var}.name")
     ]);
   }
+
+  /**
+   * Anonymizes class to extend base database.
+   * 
+   * @param array<string,mixed> $config Database configuration.
+   * 
+   * @return BaseDatabase Return based database instance with setted configuration
+  */
+  private static function newConfig(array $config): BaseDatabase
+  {
+    return new class($config) extends BaseDatabase { 
+      public function __construct(array $config) {
+        parent::__construct($config);
+      }
+    };
+  }
 }
- 

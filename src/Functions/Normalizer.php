@@ -9,7 +9,7 @@
  */
 namespace Luminova\Functions;
 
-trait NormalizerTrait
+class Normalizer
 {
 	/**
 	 * Format text before display by matching links, email, phone, hashtags and mentions with a link representation and replace multiple new lines.
@@ -17,9 +17,8 @@ trait NormalizerTrait
 	 * @param string $text Text to be formatted
 	 * @param string $target Link target attribute in HTML anchor name.
 	 * 	-	@example [_blank, _self, _top, _window, _parent or frame name]
-	 * @param bool $no_html Determines whether to remove all HTML tags or only allow certain tags like <p> by default, it's set to true.
-	 * 
 	 * @param string $blocked Replace blocked word with
+	 * @param bool $no_html Determines whether to remove all HTML tags or only allow certain tags like <p> by default, it's set to true.
 	 * 
 	 * @return string $text
 	*/
@@ -112,8 +111,8 @@ trait NormalizerTrait
 	/** 
 	 * Create a random integer based on minimum and maximum
 	 * 
-	 * @param int $min Minimun number
-	 * @param int $max Maximun number
+	 * @param int $min Minimum number.
+	 * @param int $max Maximin number.
 	 * 
 	 * @return string String representation of big integer.
 	*/
@@ -336,30 +335,38 @@ trait NormalizerTrait
 	 * 
 	 * @return string The main domain extracted from the URL.
 	 */
-	public static function maindomain(string $url): string
+	public static function mainDomain(string $url): string
 	{
-		$host = strtolower(trim($url));
-		$count = substr_count($host, '.');
+		$count = substr_count($url, '.');
 
 		if ($count === 2) {
-			$parts = explode('.', $host);
+			$parts = explode('.', $url);
 
 			if (strlen($parts[1]) > 3) {
-				$host = explode('.', $host, 2)[1];
+				$url = explode('.', $url, 2)[1];
 			}
 		} elseif ($count > 2) {
-			$host = static::maindomain(explode('.', $host, 2)[1]);
+			$url = static::mainDomain(explode('.', $url, 2)[1]);
 		}
 
-		return $host;
+		if (!preg_match('~^(?:f|ht)tps?://~i', $url)) {
+            $url = 'http://' . $url;
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+   
+		return  $host ?? $url;
 	}
 
 	/**
-	 * Remove main domain from a URL and return only the subdomain name.
+	 * Remove main domain from a URL and return only the first subdomain name.
 	 *
 	 * @param string $url The input URL from which the domain should be extracted.
 	 * 
 	 * @return string The extracted domain or an empty string if no domain is found.
+	 * 
+	 * > Note: `www` is considered as none subdomain.
+	 * > And only the first level of subdomain will be returned if the url contains multiple levels of subdomain.
 	 */
 	public static function subdomain(string $url): string
 	{

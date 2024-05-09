@@ -102,9 +102,9 @@ abstract class BaseApplication extends Foundation
     */
     public function __get(string $key): mixed
     {
-        $value = self::attrGetter($key);
+        $value = static::attrGetter($key);
 
-        if($value === self::KEY_NOT_FOUND) {
+        if($value === static::KEY_NOT_FOUND) {
             return $this->{$key} ?? null;
         }
 

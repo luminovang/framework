@@ -9,10 +9,11 @@
  */
 namespace Luminova\Database\Drivers;
 
-use \Luminova\Config\Database;
+use \Luminova\Base\BaseDatabase;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Interface\DatabaseInterface;
-use \PDO;
+use \Luminova\Database\Conn\pdoConn as PDO;
+use \Luminova\Interface\ConnInterface;
 use \PDOStatement;
 use \PDOException;
 
@@ -43,9 +44,9 @@ class PdoDriver implements DatabaseInterface
     private bool $connected = false;
 
     /**
-     * @var null|Database $config Database configuration
+     * @var BaseDatabase|null $config Database configuration
     */
-    private ?Database $config = null; 
+    private ?BaseDatabase $config = null; 
 
     /**
      * @var bool $parseParams Using bind and param parsing.
@@ -62,7 +63,7 @@ class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function __construct(Database $config) 
+    public function __construct(BaseDatabase $config) 
     {
         $this->config = $config;
        
@@ -71,7 +72,7 @@ class PdoDriver implements DatabaseInterface
             $this->connected = true;
         }catch(PDOException|DatabaseException $e){
             $this->connected = false;
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e->getPrevious());
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -108,7 +109,8 @@ class PdoDriver implements DatabaseInterface
 
         $username = $password = null;
 
-        if (!in_array($driver, ['pgsql', 'sqlite'], true)) {
+        //if (!in_array($driver, ['pgsql', 'sqlite'], true)) {
+        if ($driver !== 'sqlite' && $driver !== 'pgsql') {
             $username = $this->config->username;
             $password = $this->config->password;
         }
@@ -177,7 +179,7 @@ class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function raw(): PDO|null 
+    public function raw(): ConnInterface|null 
     {
         return  $this->connection;
     }
@@ -362,7 +364,7 @@ class PdoDriver implements DatabaseInterface
            $this->executed = $this->stmt->execute(($this->parseParams ? null : $params));
            $this->parseParams = false;
         } catch (PDOException $e) {
-            DatabaseException::throwException($e->getMessage());
+            DatabaseException::throwException($e->getMessage(), $e->getCode(). $e);
         }
 
         return $this->executed;

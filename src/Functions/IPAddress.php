@@ -36,14 +36,20 @@ class IPAddress
       'REMOTE_ADDR',
    ];
 
-    /**
+   /**
+    * Initializes IPAddress
+   */
+   public function __construct(){
+
+   }
+
+   /**
 	 * Get the client's IP address.
 	 *
 	 * @return string The client's IP address or '0.0.0.0' if not found.
 	*/
-  public static function get(): string 
+   public static function get(): string 
    {
-
       if (isset($_SERVER[static::$cf])) {
          $_SERVER['REMOTE_ADDR'] = $_SERVER[static::$cf];
          $_SERVER['HTTP_CLIENT_IP'] = $_SERVER[static::$cf];
@@ -71,7 +77,7 @@ class IPAddress
     * Get IP address information from third party API 
     * 
     * @param string|null $ip Ip address to lookup if null it will use current ip address
-    * @param array $option additional option to store / return
+    * @param array $options Optional information to store user ip address with.
     *
     * @return null|object $ipInfo
    */
@@ -203,7 +209,7 @@ class IPAddress
   /**
    * Check if an IP address is valid.
    *
-   * @param string $address The IP address to validate.
+   * @param string|null $address The IP address to validate.
    * @param int    $version   The IP version to validate (4 for IPv4, 6 for IPv6).
    *
    * @return bool True if the IP address is valid, false otherwise.
@@ -222,7 +228,7 @@ class IPAddress
   /**
    * Convert an IP address to its numeric representation (IPv4 or IPv6).
    *
-   * @param string $address The IP address to convert.
+   * @param string|null $address The IP address to convert.
    *
    * @return int|string Numeric IP address or empty string on error.
    */

@@ -9,21 +9,22 @@
  */
 namespace Luminova\Email\Clients;
 
-use \Luminova\Interface\MailClientInterface;
+use \Luminova\Interface\MailerInterface;
 use \PHPMailer\PHPMailer\PHPMailer as MailerClient;
 
-class PHPMailer extends MailerClient implements MailClientInterface
+class PHPMailer extends MailerClient implements MailerInterface
 {
     /**
-     * Constructor.
-     *
-     * @param bool $exceptions Should we throw external exceptions?
-     */
+     * {@inheritdoc}
+    */
     public function __construct(bool $exceptions = false)
     {
         parent::__construct($exceptions);
     }
 
+    /**
+     * {@inheritdoc}
+    */
     public function initialize(): void
     {
     }

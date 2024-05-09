@@ -16,7 +16,7 @@ use \Luminova\Routing\Bootstrap;
 use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseApplication;
 use \Luminova\Base\BaseViewController;
-use \Luminova\Routing\RouterException;
+use \Luminova\Exceptions\RouterException;
 use \ReflectionMethod;
 use \ReflectionFunction;
 use \ReflectionNamedType;
@@ -98,6 +98,7 @@ final class Router
      * @param Closure|string $callback Callback function to execute
      * 
      * @return void
+     * @throws RouterException Throws when called in wrong context.
     */
     public function middleware(string $methods, string $pattern, Closure|string $callback): void
     {
@@ -122,6 +123,7 @@ final class Router
      * @param array $options Optional options
      * 
      * @return void
+     * @throws RouterException Throws when called in wrong context.
     */
     public function before(Closure|string $pattern, Closure|string $callback = null, array $options = []): void
     {
@@ -245,7 +247,7 @@ final class Router
             $default = $this->routeBase;
             $this->routeBase .= $group;
 
-            $callback();
+            $callback($this, static::$application);
 
             $this->routeBase = $default;
             return;
@@ -439,16 +441,15 @@ final class Router
      * if method matches view  or command name.
      * 
      * @return void
-     * @throws RouterException Encounter error while executing controller callback
+     * @throws RouterException Throw if encountered error while executing controller callback
     */
     public function run(): void
     {
-        $status = static::$method === 'CLI' ? static::runAsCommand() : $this->runAsHttp();
+        $status = static::$method === 'CLI' ? $this->runAsCommand() : $this->runAsHttp();
 
         if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] == 'HEAD') {
             ob_end_clean();
         }
-
         exit($status === true ? STATUS_SUCCESS : STATUS_ERROR);
     }
 
@@ -479,7 +480,6 @@ final class Router
     public function triggerError(int $status = 404): void
     {
         $result = false;
-  
         foreach (static::$controllers['errors'] as $pattern => $callable) {
             if (static::uriCapture($pattern, $this->getUriSegments(), $matches)) {
                 $result = static::call($callable, [], true);
@@ -551,7 +551,6 @@ final class Router
         return $this->base;
     }
 
-
     /**
      * Get the current segment relative URI.
      * 
@@ -586,7 +585,6 @@ final class Router
     {
         return new Segments($this->getSegments());
     }
-
 
     /**
      * Is bootstrap a web instance
@@ -650,7 +648,7 @@ final class Router
      * @return bool
      * @throws RouterException
     */
-    private static function runAsCommand(): bool
+    private function runAsCommand(): bool
     {
         $command = static::getArgument(2);
         $group = static::getArgument();
@@ -672,7 +670,7 @@ final class Router
             $groups = static::$groups[$group];
 
             foreach($groups as $register){
-                $register();
+                $register($this, static::$application);
             }
 
             $routes = static::$controllers['cli_routes'][static::$method] ?? null;
@@ -736,7 +734,6 @@ final class Router
     private static function handleWebsite(array $routes, string $uri): bool
     {
         $error = false;
-
         foreach ($routes as $route) {
             if (static::uriCapture($route['pattern'], $uri, $matches)) {
                 $error = static::call($route['callback'], static::matchesToArray($matches));
@@ -746,7 +743,7 @@ final class Router
                 }
             }
         }
-
+       
         return $error;
     }
 
@@ -933,7 +930,7 @@ final class Router
                 $class->isSubclassOf(BaseViewController::class) ||
                 $isErrorClass ||
                 $class->isSubclassOf(BaseApplication::class)))) {
-                RouterException::throwWith('invalid_controller', 0, null, $className);
+                RouterException::throwWith('invalid_controller', 1, null, $className);
             }
 
             $caller = $class->getMethod($method);
@@ -956,9 +953,13 @@ final class Router
                 return status_code($result, false);
             }
 
-            RouterException::throwWith('invalid_method');
+            RouterException::throwWith('invalid_method', 1, null, $method);
         } catch (ReflectionException $e) {
             if ($throw) {
+                if($e->getCode() === 1){
+                    throw $e;
+                }
+
                 RouterException::throwException($e->getMessage(), $e->getCode(), $e);
             }
         }

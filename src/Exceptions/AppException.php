@@ -9,54 +9,44 @@
  */
 namespace Luminova\Exceptions;
 
+use \Luminova\Interface\ExceptionInterface;
 use \Exception;
 use \Throwable;
 
-class AppException extends Exception
+abstract class AppException extends Exception implements ExceptionInterface
 {
     /**
-     * Constructor for AppException.
-     *
-     * @param string message   The exception message (default: 'Database error').
-     * @param int $code  The exception code (default: 500).
-     * @param Throwable $previous  The previous exception if applicable (default: null).
+      * {@inheritdoc}
     */
     public function __construct(string $message, int $code = 0, Throwable $previous = null)
     {
-        if($caller = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2) && isset($caller[1])){
-            $message .= isset($caller[1]['file']) ? ' File: ' .  filter_paths($caller[1]['file']) : '';
-            $message .= isset($caller[1]['line']) ? ' Line: ' . $caller[1]['line'] : '';
-        }
-        
         parent::__construct($message, $code, $previous);
     }
 
     /**
-     * Get a string representation of the exception.
-     *
-     * @return string A formatted error message.
+      * {@inheritdoc}
     */
     public function __toString(): string
     {
-        return "Exception: ({$this->code}) {$this->message}";
+        return "Exception: ({$this->code}) {$this->message} File: {$this->file}, Line: {$this->line}";
     }
 
     /**
-     * Handle the exception based on the production environment.
-     * 
-     * @throws $this Exception
+      * {@inheritdoc}
     */
     public function handle(): void
     {
         if(is_command()){
-            $path = path('views') . 'system_errors' . DIRECTORY_SEPARATOR . 'cli.php';
-            $exception = $this;
-            include_once $path;
-            exit(STATUS_ERROR);
+            $display = function($exception): int {
+                include_once path('views') . 'system_errors' . DIRECTORY_SEPARATOR . 'cli.php';
+                return STATUS_ERROR;
+            };
+
+            exit($display($this));
         }
 
-        if (PRODUCTION) {
-            $this->logMessage();
+        if (PRODUCTION && !static::isFatal($this->code)) {
+            $this->log();
             return;
         }
 
@@ -64,30 +54,30 @@ class AppException extends Exception
     }
 
     /**
-     * Logs an exception
-     *
-     * 
-     * @return void
-    */
-    public function logMessage(): void
-    {
-        logger('exception', "Exception: {$this->getMessage()}");
-    }
-
-    /**
-     * Create and handle a Exception.
-     *
-     * @param string $message he exception message.
-     * @param int $code The exception code (default: 500).
-     * @param Throwable $previous  The previous exception if applicable (default: null).
-     * 
-     * @return void 
-     * @throws $this Exception
+      * {@inheritdoc}
     */
     public static function throwException(string $message, int $code = 0, Throwable $previous = null): void
     {
-        $throw = new static($message, $code, $previous);
+        (new static($message, $code, $previous))->handle();
+    }
 
-        $throw->handle();
+    /**
+      * {@inheritdoc}
+    */
+    public function log(string $level = 'exception'): void
+    {
+        logger($level, $this->__toString());
+    }
+
+    /**
+     * Check if exception code is fatal error.
+     * 
+     * @param int $errno Error code
+     * 
+     * @return bool Return true if is fatal, otherwise false
+    */
+    protected static function isFatal(int $errno): bool 
+    {
+        return in_array($errno, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR]);
     }
 }

@@ -9,23 +9,27 @@
  */
 namespace Luminova\Arrays;
 use \Countable;
-class ArrayCountable implements Countable {
+
+class ArrayCountable implements Countable 
+{
     /**
-     * @var array
+     * @var array $array
     */
-    private $array = [];
+    private array $array = [];
 
     /**
     * @param array $array
     */
-    public function __construct(array $array) {
+    public function __construct(array $array) 
+    {
         $this->array = $array;
     }
 
     /**
     * @return int array count
     */
-    public function count(): int {
+    public function count(): int 
+    {
         return count($this->array);
     }
 
@@ -36,6 +40,10 @@ class ArrayCountable implements Countable {
     */
     public function isNested(): bool 
     {
-        return count($this->array) > 0 && is_array($this->array[0]);
+        foreach ($this->array as $value) {
+            if (is_array($value)) return true;
+        }
+
+        return false;
     }
 }

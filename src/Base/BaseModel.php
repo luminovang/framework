@@ -10,9 +10,9 @@
 
 namespace Luminova\Base;
 
-use \Luminova\Database\QueryBuilder;
+use \Luminova\Database\Builder;
 use \Luminova\Security\InputValidator;
-use \Peterujah\NanoBlock\SearchController;
+use \Peterujah\NanoBlock\SearchController as Searchable;
 use \Luminova\Exceptions\RuntimeException;
 
 abstract class BaseModel
@@ -83,9 +83,9 @@ abstract class BaseModel
     /**
      * Database query builder class instance.
      * 
-     * @var QueryBuilder $builder
+     * @var Builder $builder
     */
-    protected ?QueryBuilder $builder = null;
+    protected ?Builder $builder = null;
 
     /**
      * Input validation class instance.
@@ -97,20 +97,20 @@ abstract class BaseModel
     /**
      * Search database controller instance.
      * 
-     * @var SearchController $searchInstance
+     * @var Searchable $searchInstance
     */
-    private static ?SearchController $searchInstance = null;
+    private static ?Searchable $searchInstance = null;
 
     /**
      * Constructor for the Model class.
      * If null is passed fromework will insitalize builder lass instance.
      * 
-     * @var null|QueryBuilder $builder Query builder class instance.
+     * @var null|Builder $builder Query builder class instance.
      * 
     */
-    public function __construct(?QueryBuilder $builder = null)
+    public function __construct(?Builder $builder = null)
     {
-        $this->builder ??= ($builder ?? QueryBuilder::getInstance());
+        $this->builder ??= ($builder ?? Builder::getInstance());
         $this->validation ??= new InputValidator();
 
         if($this->rules !== []){
@@ -242,28 +242,28 @@ abstract class BaseModel
      * 
      * @param string $flag Search matching flag.
      * 
-     * @return SearchController Search controller instance.
+     * @return Searchable Search controller instance.
      * @throws RuntimeException If the third pary search controller class is not installed.
     */
-    protected function searchInstance(string $flag): SearchController
+    protected function searchInstance(string $flag): Searchable
     {
-        if(!class_uses('\Peterujah\NanoBlock\SearchController')){
+        if(!class_uses(Searchable::class)){
             throw new RuntimeException('The search controller library is not installed. Please run the composer command "composer require peterujah/php-search-controller" to install it.');
         }
 
         $flags = [
-            'start' => SearchController::START_WITH_QUERY,
-            'end' => SearchController::END_WITH_QUERY,
-            'any' => SearchController::HAVE_ANY_QUERY,
-            'second' => SearchController::HAVE_SECOND_QUERY,
-            'length2' => SearchController::START_WITH_QUERY_2LENGTH,
-            'length3' => SearchController::START_WITH_QUERY_3LENGTH,
-            'startend' => SearchController::START_END_WITH_QUERY,
+            'start' => Searchable::START_WITH_QUERY,
+            'end' => Searchable::END_WITH_QUERY,
+            'any' => Searchable::HAVE_ANY_QUERY,
+            'second' => Searchable::HAVE_SECOND_QUERY,
+            'length2' => Searchable::START_WITH_QUERY_2LENGTH,
+            'length3' => Searchable::START_WITH_QUERY_3LENGTH,
+            'startend' => Searchable::START_END_WITH_QUERY,
         ];
 
-        $flag = $flags[$flag] ?? SearchController::HAVE_ANY_QUERY;
+        $flag = $flags[$flag] ?? Searchable::HAVE_ANY_QUERY;
 
-        static::$searchInstance ??= new SearchController();
+        static::$searchInstance ??= new Searchable();
         static::$searchInstance->setOperators($flag);
         static::$searchInstance->setParameter($this->searchables);
 

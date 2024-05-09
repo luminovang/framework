@@ -7,10 +7,10 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Http\Exceptions;
+namespace Luminova\Exceptions\Http;
 
 use \Luminova\Exceptions\AppException;
 
-class ConnectException extends AppException
+class RequestException extends AppException
 {
 }

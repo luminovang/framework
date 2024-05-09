@@ -159,11 +159,24 @@ abstract class BaseViewController
      * @param string $view view name
      * @param array $options Optional options to be passed to view template.
      * 
-     * @return int STATUS_SUCCESS
+     * @return int Return STATUS_SUCCESS on success, otherwise STATUS_ERROR failure.
     */
     protected function view(string $view, array $options = []): int
     {
         return $this->app->view($view)->render($options);
+    }
+
+    /**
+     * Shorthand to respond view contents in controller class.
+     *
+     * @param string $view view name
+     * @param array $options Optional options to be passed to view template.
+     * 
+     * @return string Return view contents which is ready to be rendered.
+    */
+    protected function respond(string $view, array $options = []): string
+    {
+        return $this->app->view($view)->respond($options);
     }
 
     /**

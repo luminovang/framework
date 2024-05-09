@@ -521,22 +521,19 @@ class Terminal
     }
 
     /**
-     * Get input from the shell, using readline or the standard STDIN
+     * Get user input from the shell, after requesting for user to type or select an option.
      *
-     * Named options must be in the following formats:
-     * php index.php user -v --v -name=Peter --name=Peter
-     *
-     * @param string|null $prefix You may specify a string with which to prompt the user.
+     * @param string|null $prompt You may specify a string to prompt the user after they have typed.
      * 
      * @return string User input string.
     */
-    protected static function input(?string $prefix = null): string
+    protected static function input(?string $prompt = null): string
     {
         if (static::$isReadline && ENVIRONMENT !== 'testing') {
-            return @readline($prefix);
+            return @readline($prompt);
         }
 
-        echo $prefix;
+        echo $prompt;
 
         return fgets(fopen('php://stdin', 'rb'));
     }

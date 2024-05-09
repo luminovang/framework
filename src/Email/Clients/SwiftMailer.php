@@ -10,16 +10,18 @@
 namespace Luminova\Email\Clients;
 
 use \Luminova\Email\Helpers\Helper;
-use \Luminova\Interface\MailClientInterface;
-use \Luminova\Email\Exceptions\MailerException;
+use \Luminova\Interface\MailerInterface;
+use \Luminova\Exceptions\MailerException;
 use \Swift_SmtpTransport;
 use \Swift_Mailer;
 use \Swift_Message;
 use \Swift_Attachment;
 
-class SwiftMailer implements MailClientInterface
+class SwiftMailer implements MailerInterface
 {
-
+    /**
+     * @var array $addresses
+    */
     private array $addresses = [];
 
     /**
@@ -112,12 +114,9 @@ class SwiftMailer implements MailClientInterface
     */
     private ?Swift_Mailer $mailer = null;
 
-
     /**
-     * Constructor.
-     *
-     * @param bool $exceptions Should we throw external exceptions?
-     */
+     * {@inheritdoc}
+    */
     public function __construct(bool $exceptions = false)
     {
         if(!class_exists('\Swift_Mailer')){
@@ -125,6 +124,9 @@ class SwiftMailer implements MailClientInterface
         }
     }
 
+    /**
+     * {@inheritdoc}
+    */
     public function initialize(): void
     {
         $this->transport = new Swift_SmtpTransport($this->Host, $this->Port);
@@ -135,15 +137,9 @@ class SwiftMailer implements MailClientInterface
         $this->mailer = new Swift_Mailer($this->transport);
     }
 
-     /**
-     * Set the email sender's address.
-     *
-     * @param string $address The email address.
-     * @param string $name    The sender's name (optional).
-     * @param bool   $auto    Whether to automatically add the sender's name (optional).
-     *
-     * @return bool True if the sender's address was set successfully, false otherwise.
-     */
+    /**
+     * {@inheritdoc}
+    */
     public function setFrom(string $address, string $name = '', bool $auto = true): bool
     {
         if($name === ''){
@@ -155,14 +151,9 @@ class SwiftMailer implements MailClientInterface
         return true;
     }
 
-      /**
-     * Add an email address to the recipient list.
-     *
-     * @param string $address The email address.
-     * @param string $name    The recipient's name (optional).
-     *
-     * @return bool True if the address was added successfully, false otherwise.
-     */
+    /**
+     * {@inheritdoc}
+    */
     public function addCC(string $address, string $name = ''): bool
     {
         if($name === ''){
@@ -174,14 +165,9 @@ class SwiftMailer implements MailClientInterface
         return true;
     }
 
-     /**
-     * Add an email address to the recipient list.
-     *
-     * @param string $address The email address.
-     * @param string $name    The recipient's name (optional).
-     *
-     * @return bool True if the address was added successfully, false otherwise.
-     */
+    /**
+     * {@inheritdoc}
+    */
     public function addBCC(string $address, string $name = ''): bool
     {
         if($name === ''){
@@ -194,13 +180,8 @@ class SwiftMailer implements MailClientInterface
     }
 
     /**
-     * Add an email address to the recipient list.
-     *
-     * @param string $address The email address.
-     * @param string $name    The recipient's name (optional).
-     *
-     * @return bool True if the address was added successfully, false otherwise.
-     */
+     * {@inheritdoc}
+    */
     public function addAddress(string $address, string $name = ''): bool
     {
         if($name === ''){
@@ -211,23 +192,17 @@ class SwiftMailer implements MailClientInterface
         return true;
     }
 
-     /**
-     * Add an attachment from a path on the filesystem.
-     * Never use a user-supplied path to a file!
-     * Returns false if the file could not be found or read.
-     * Explicitly *does not* support passing URLs; PHPMailer is not an HTTP client.
-     * If you need to do that, fetch the resource yourself and pass it in via a local file or string.
-     *
-     * @param string $path        Path to the attachment
-     * @param string $name        Overrides the attachment name
-     * @param string $encoding    File encoding (see $Encoding)
-     * @param string $type        MIME type, e.g. `image/jpeg`; determined automatically from $path if not specified
-     * @param string $disposition Disposition to use
-     *
-     * @throws Exception
-     *
-     * @return bool
-     */
+    /**
+     * {@inheritdoc}
+    */
+    public function addReplyTo(string $address, string $name = ''): bool 
+    {
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
     public function addAttachment(
         string $path, 
         string $name = '', 
@@ -263,15 +238,14 @@ class SwiftMailer implements MailClientInterface
     }
 
     /**
-     * Send the email.
-     *
-     * @return bool True if the email was sent successfully, false otherwise.
+     * {@inheritdoc}
     */
-    private function send(): bool
+    public function send(): bool
     {
         $message = new Swift_Message($this->Subject);
         $message->setFrom($this->addresses['from']);
         $message->setTo($this->addresses['to']);
+
         if(isset($this->addresses['cc'])){
             $message->setCc($this->addresses['cc']);
         }
@@ -296,33 +270,25 @@ class SwiftMailer implements MailClientInterface
         return $result > 0;
     }
 
-     /**
-     * Send messages using SMTP.
-     * 
-     * @return void
-     */
+    /**
+     * {@inheritdoc}
+    */
     public function isSMTP(): void 
     {
         $this->sendWith = 'smtp';
     }
 
     /**
-     * Send messages using PHP's mail() function.
-     * 
-     * @return void
-     */
+     * {@inheritdoc}
+    */
     public function isMail(): void 
     {
         $this->sendWith = 'mail';
     }
 
     /**
-     * Sets message type to HTML or plain.
-     *
-     * @param bool $isHtml True for HTML mode
-     * 
-     * @return void
-     */
+     * {@inheritdoc}
+    */
     public function isHTML(bool $isHtml = true): void 
     {
        

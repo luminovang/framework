@@ -42,7 +42,7 @@ class Translator
      * 
      * @return $this
      */
-    public function setLocale(string $locale)
+    public function setLocale(string $locale): self
     {
         $this->locale = $locale;
 
@@ -133,10 +133,15 @@ class Translator
      * 
      * @return string 
     */
-    private static function replacePlaceholders(string $message, array $array): string 
+    private static function replacePlaceholders(string $message, array $placeholders): string 
     {
-        if (array_values($array) === $array) {
-            return vsprintf($message, $array);
+        if (array_is_list($placeholders)) {
+            return vsprintf($message, $placeholders);
+        }
+
+        $array = [];
+        foreach ($placeholders as $key => $value) {
+            $array['{' . $key . '}'] = $value;
         }
 
         return strtr($message, $array);

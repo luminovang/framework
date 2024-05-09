@@ -10,22 +10,22 @@
 
 namespace Luminova\Http\Client;
 
+use JsonException;
 use \Luminova\Http\Message\Response;
 use \Luminova\Interface\HttpClientInterface;
-use \Luminova\Http\Exceptions\RequestException;
-use \Luminova\Http\Exceptions\ConnectException;
-use \Luminova\Http\Exceptions\ClientException;
-use \Luminova\Http\Exceptions\ServerException;
- 
+use \Luminova\Exceptions\Http\RequestException;
+use \Luminova\Exceptions\Http\ConnectException;
+use \Luminova\Exceptions\Http\ClientException;
+use \Luminova\Exceptions\Http\ServerException;
+use Throwable;
+
 class Curl implements HttpClientInterface
 {
     /**
      * {@inheritdoc}
      * 
     */
-    public function __construct(array $config = []){
-        
-     }
+    public function __construct(array $config = []){}
     
     /**
       * {@inheritdoc}
@@ -48,17 +48,20 @@ class Curl implements HttpClientInterface
 
         if ($method === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
-
-            if ($data !== []) {
-                $data = json_encode($data);
-                $headers['Content-Type'] = 'application/json';
+            try{
+                if ($data !== []) {
+                    $data = json_encode($data, JSON_THROW_ON_ERROR);
+                    $headers['Content-Type'] = 'application/json';
+                }
+            }catch(JsonException|Throwable $e){
+                throw new ClientException($e->getMessage(), $e->getCode(), $e);
             }
 
             curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
         }
 
         if ($headers !== []) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $this->toRequestHeaders($headers));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, static::toRequestHeaders($headers));
         }
 
         $response = curl_exec($ch);
@@ -92,17 +95,12 @@ class Curl implements HttpClientInterface
         $info = curl_getinfo($ch);
         $statusCode = (int) $info['http_code'] ?? 0;
         $headerSize = $info['header_size'] ?? 0;
-
-        /*if($statusCode !== 200){
-            throw new RequestException(sprintf("Request to %s ended in %d", $url, $statusCode));
-        }*/
-
         $responseHeaders = substr($response, 0, strpos($response, "\r\n\r\n"));
         $contents = substr($response, $headerSize);
-        $responseHeaders = $this->headerToArray($responseHeaders, $statusCode);
+        $responseHeaders = static::headerToArray($responseHeaders, $statusCode);
         curl_close($ch);
 
-        return new Response($statusCode, $responseHeaders, $response, $contents);
+        return new Response($statusCode, $responseHeaders, $response, $contents, $info);
     }
  
     /**
@@ -110,9 +108,9 @@ class Curl implements HttpClientInterface
       *
       * @param array $headers
       *
-      * @return array
+      * @return array<int,string> Return request headers as array.
     */
-    private function toRequestHeaders(array $headers): array
+    private static function toRequestHeaders(array $headers): array
     {
         $headerLines = [];
         foreach ($headers as $key => $value) {
@@ -124,12 +122,12 @@ class Curl implements HttpClientInterface
     /**
       * Convert a raw header string to an associative array.
       *
-      * @param string $header
-      * @param int $code
+      * @param string $header Header string.
+      * @param int $code Status code
       *
-      * @return array
+      * @return array<string,mixed> Return array of headers.
     */
-    private function headerToArray(string $header, int $code): array
+    private static function headerToArray(string $header, int $code): array
     {
         $headers = ['statusCode' => $code];
         foreach (explode("\r\n", $header) as $i => $line) {

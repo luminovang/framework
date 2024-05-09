@@ -14,5 +14,5 @@ class NotFoundException extends AppException
 {
     /**
      * NotFoundException: 
-     */
+    */
 }

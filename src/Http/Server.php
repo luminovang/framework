@@ -73,9 +73,9 @@ class Server
     }
 
     /**
-     * Attempt to find a key in HTTP request headers.
+     * Attempt to find a key in HTTP server headers.
      *
-     * This method searches for a key in the request headers, including normalized and stripped versions.
+     * This method searches for a key in the request server headers, including normalized and stripped versions.
      *
      * @param string $key The key to search for.
      * 

@@ -269,6 +269,7 @@ class File
      *        - `allowed_types`:  (string) Allowed file types separated by '|'.
      *        - `chunk_length`:   (int) Length of chunk in bytes (default: 5242880).
      *        - `if_existed`:     (string) How to handle existing files [overwrite or retain] (default: overwrite).
+     *        - `symlink`:        (string) Specify a valid path to create a symlink after upload was completed (e.g /public/assets/).
      * 
      * @return self Return instance of self.
      */
@@ -298,6 +299,10 @@ class File
 
         if(isset($config['if_existed'])){
             $this->config->ifExisted = $config['if_existed'];
+        }
+
+        if(isset($config['symlink'])){
+            $this->config->symlink = $config['symlink'];
         }
 
         return $this;

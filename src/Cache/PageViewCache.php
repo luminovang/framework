@@ -210,17 +210,20 @@ class PageViewCache
     */
     public function read(): bool
     {
-        $headers = [];
+        $headers = [
+            'default_headers' => true
+        ];
         $metadta = $this->getLocation() . 'pagecache.lock';
 
         if (file_exists($metadta)) {
             $items = json_decode(file_get_contents($metadta), true);
 
             if(isset($items[$this->key])){
-                $headers = Header::getSystemHeaders();
                 $item = $items[$this->key];
-                $headers['Content-Type'] = $item['Content-Type'];
-                $headers['Content-Encoding'] = $item['Content-Encoding'];
+                $headers['Content-Type'] = ($item['Content-Type'] ?? Header::getContentTypes($item['viewType']));
+                if(isset($item['Content-Encoding'])){
+                    $headers['Content-Encoding'] = $item['Content-Encoding'];
+                }
                 $headers['Expires'] = gmdate("D, d M Y H:i:s",  $item['Expiry']) . ' GMT';
                 $headers['Cache-Control'] = 'max-age=' . $item['MaxAge'] . ', public';
                 $headers['ETag'] =  '"' . $item['ETag'] . '"';
@@ -242,33 +245,50 @@ class PageViewCache
     }
 
     /**
+     * Get the content from the cache filet.
+     * 
+     * @return string|null Return cached contents, null otherwise.
+    */
+    public function get(): ?string
+    {
+        $contents = @file_get_contents($this->getFilename());
+        
+        if ($contents === false) {
+            return null;
+        }
+        
+        return $contents;
+    }
+
+    /**
      * Save the content to the cache file.
      *
      * @param string $content The content to be saved to the cache file.
-     * @param array|null $metadata Cache information
+     * @param array|null $headers Cache headers.
+     * @param string $type Cache content type.
      *
      * @return bool True if saving was successful; false otherwise.
      */
-    public function saveCache(string $content, ?array $metadata = null): bool
+    public function saveCache(string $content, ?array $headers = null, string $type = 'html'): bool
     {
         $location = $this->getLocation();
-        $filename = $this->getFilename();
-
         make_dir($location);     
 
+        $filename = $this->getFilename();
         if(write_content($filename, $content)){
-            $metadata = ($metadata === null) ? [] : $metadata;
+            $headers ??= [];
 
+            $headers['viewType'] = $type;
             $lockFile = $location . 'pagecache.lock';
             $locks = file_get_contents($lockFile);
     
             $locks = ($locks === false) ? [] : json_decode($locks, true);
     
-            $metadata['MaxAge'] = $this->expiration;
-            $metadata['Expiry'] = time() + $this->expiration;
-            $metadata['Date'] = date("D, d M Y H:i:s");
-            $metadata['ETag'] = md5_file($filename);
-            $locks[$this->key] = $metadata;
+            $headers['MaxAge'] = $this->expiration;
+            $headers['Expiry'] = time() + $this->expiration;
+            $headers['Date'] = date("D, d M Y H:i:s");
+            $headers['ETag'] = md5_file($filename);
+            $locks[$this->key] = $headers;
 
             if(!write_content($lockFile, json_encode($locks, JSON_PRETTY_PRINT))){
                 unlink($filename);

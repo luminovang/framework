@@ -10,10 +10,10 @@
 namespace Luminova\Email\Clients;
 
 use \Luminova\Email\Helpers\Helper;
-use \Luminova\Interface\MailClientInterface;
-use \Luminova\Email\Exceptions\MailerException;
+use \Luminova\Interface\MailerInterface;
+use \Luminova\Exceptions\MailerException;
 
-class NovaMailer implements MailClientInterface
+class NovaMailer implements MailerInterface
 {
     public const CONTENT_TYPE_PLAINTEXT = 'text/plain';
     public const CONTENT_TYPE_TEXT_CALENDAR = 'text/calendar';
@@ -133,45 +133,40 @@ class NovaMailer implements MailClientInterface
     */
     public string $SMTPSecure = 'tls';
 
-     /**
-     * Constructor.
-     *
-     * @param bool $exceptions Should we throw external exceptions?
-     */
+    /**
+     * @var mixed $connection
+    */
+    private mixed $connection = false;
+
+    /**
+     * {@inheritdoc}
+    */
     public function __construct(bool $exceptions = false)
     {
         $this->exceptions = $exceptions;
     }
 
+    /**
+     * {@inheritdoc}
+    */
     public function initialize(): void
     {
+
     }
+
     /**
-     * Add an email address to the recipient list.
-     *
-     * @param string $address The email address.
-     * @param string $name    The recipient's name (optional).
-     *
-     * @return bool True if the address was added successfully, false otherwise.
-     */
+     * {@inheritdoc}
+    */
     public function addAddress(string $address, string $name = ''): bool
     {
-        //$name = trim(preg_replace('/[\r\n]+/', '', $name));
-        //$recipient = ($name !== '') ? "$name <$address>" : $address;
-
         $this->to = $address;
 
         return true;
     }
 
     /**
-     * Add an email address to the recipient list.
-     *
-     * @param string $address The email address.
-     * @param string $name    The recipient's name (optional).
-     *
-     * @return bool True if the address was added successfully, false otherwise.
-     */
+     * {@inheritdoc}
+    */
     public function addCC(string $address, string $name = ''): bool
     {
         $name = trim(preg_replace('/[\r\n]+/', '', $name));
@@ -182,14 +177,9 @@ class NovaMailer implements MailClientInterface
         return true;
     }
 
-     /**
-     * Add an email address to the recipient list.
-     *
-     * @param string $address The email address.
-     * @param string $name    The recipient's name (optional).
-     *
-     * @return bool True if the address was added successfully, false otherwise.
-     */
+    /**
+     * {@inheritdoc}
+    */
     public function addBCC(string $address, string $name = ''): bool
     {
         $name = trim(preg_replace('/[\r\n]+/', '', $name));
@@ -201,33 +191,8 @@ class NovaMailer implements MailClientInterface
     }
 
     /**
-     * Add a reply-to address.
-     *
-     * @param string $address The email address.
-     * @param string $name    The recipient's name (optional).
-     *
-     * @return bool True if the reply-to address was added successfully, false otherwise.
-     */
-    public function addReplyTo($address, $name = ''): bool 
-    {
-        $name = trim(preg_replace('/[\r\n]+/', '', $name));
-        $recipient = ($name !== '') ? "$name <$address>" : $address;
-    
-
-        $this->replyTo = "Reply-To: {$recipient}\r\n";
-
-        return true;
-    }
-
-    /**
-     * Set the email sender's address.
-     *
-     * @param string $address The email address.
-     * @param string $name    The sender's name (optional).
-     * @param bool   $auto    Whether to automatically add the sender's name (optional).
-     *
-     * @return bool True if the sender's address was set successfully, false otherwise.
-     */
+     * {@inheritdoc}
+    */
     public function setFrom(string $address, string $name = '', bool $auto = true): bool 
     {
         $name = trim(preg_replace('/[\r\n]+/', '', $name));
@@ -238,23 +203,9 @@ class NovaMailer implements MailClientInterface
         return true;
     }
 
-     /**
-     * Add an attachment from a path on the filesystem.
-     * Never use a user-supplied path to a file!
-     * Returns false if the file could not be found or read.
-     * Explicitly *does not* support passing URLs; PHPMailer is not an HTTP client.
-     * If you need to do that, fetch the resource yourself and pass it in via a local file or string.
-     *
-     * @param string $path        Path to the attachment
-     * @param string $name        Overrides the attachment name
-     * @param string $encoding    File encoding (see $Encoding)
-     * @param string $type        MIME type, e.g. `image/jpeg`; determined automatically from $path if not specified
-     * @param string $disposition Disposition to use
-     *
-     * @throws Exception
-     *
-     * @return bool
-     */
+    /**
+     * {@inheritdoc}
+    */
     public function addAttachment(
         string $path, 
         string $name = '', 
@@ -282,6 +233,7 @@ class NovaMailer implements MailClientInterface
             if ($this->exceptions) {
                 throw MailerException::throwWith($e->getMessage());
             }
+            logger('exception', $e->getMessage());
 
             return false;
         }
@@ -290,12 +242,25 @@ class NovaMailer implements MailClientInterface
     }
 
     /**
-     * Send the email.
-     *
-     * @return bool True if the email was sent successfully, false otherwise.
+     * {@inheritdoc}
+    */
+    public function addReplyTo(string $address, string $name = ''): bool 
+    {
+        $name = trim(preg_replace('/[\r\n]+/', '', $name));
+        $recipient = ($name !== '') ? "$name <$address>" : $address;
+    
+
+        $this->replyTo = "Reply-To: {$recipient}\r\n";
+
+        return true;
+    }
+
+    /**
+     * {@inheritdoc}
     */
     public function send(): bool 
     {
+        error_clear_last();
         if($this->attachments === []){
             $result = $this->sendWithOutAttachment();
         }else{
@@ -306,95 +271,53 @@ class NovaMailer implements MailClientInterface
             $success = $this->smtp_mail($result);
         }else{
             $success = mail($this->to, $this->Subject, $result['body'], $result['headers']);
+        }
 
-            if (!$success && $this->exceptions) {
-                $error = error_get_last()['message'];
-                throw new MailerException($error);
+        if (!$success) {
+            $error = error_get_last();
+            if($error !== null){
+                throw new MailerException($error['message']);
             }
+
+            return false;
         }
-        return $success;
-    }
-
-    /**
-     * Send email using smtp details 
-     * 
-     * @return bool
-     * @throws MailerException
-    */
-    private function smtp_mail(array $result): bool
-    {
-        $from = $this->from ?? $this->Username;
-
-        $smtpConnection = fsockopen($this->Host, $this->Port, $errno, $errstr, 30);
-
-        if (!$smtpConnection) {
-            throw new MailerException("Failed to connect to SMTP server: $errstr ($errno)", $errno);
-        }
-
-        $this->smtpGet($smtpConnection);
-
-        fputs($smtpConnection, "EHLO " . $_SERVER['SERVER_NAME'] . "\r\n");
-        $this->smtpGet($smtpConnection);
-
-        if($this->SMTPAuth){
-            fputs($smtpConnection, "AUTH LOGIN\r\n");
-            $this->smtpGet($smtpConnection);
-            
-            fputs($smtpConnection, base64_encode($this->Username) . "\r\n");
-            $this->smtpGet($smtpConnection);
-
-            fputs($smtpConnection, base64_encode($this->Password) . "\r\n");
-            $this->smtpGet($smtpConnection);
-        }
-
-        fputs($smtpConnection, "MAIL FROM: <{$from}>\r\n");
-        $this->smtpGet($smtpConnection);
-
-        fputs($smtpConnection, "RCPT TO: <{$this->to}>\r\n");
-        $this->smtpGet($smtpConnection);
-
-        fputs($smtpConnection, "DATA\r\n");
-        $this->smtpGet($smtpConnection);
-
-        if($this->attachments === []){
-            fputs($smtpConnection, $result['headers'] . $result['body'] . "\r\n.\r\n");
-        }else{
-            fputs($smtpConnection, $result['headers'] . $result['body'] . ".\r\n");
-        }
-        $this->smtpGet($smtpConnection);
-
-        fputs($smtpConnection, "QUIT\r\n");
-        fclose($smtpConnection);
 
         return true;
     }
 
     /**
-     * @param resource $stream
-     * 
-     * @return void 
-     * @throws MailerException
+     * {@inheritdoc}
     */
-    private function smtpGet($connection, string $name = ''):void 
+    public function isSMTP(): void 
     {
-        while ($str = fgets($connection, 515)) {
-            logger('debug', (string) $str);
-            if (substr($str, 3, 1) == " ") {
-                break;
-            }
+        $this->sendWith = 'smtp';
+    }
 
-            if ($str === false) {
-                throw new MailerException("Failed to read from SMTP connection {$name}");
-            }
+    /**
+     * {@inheritdoc}
+    */
+    public function isMail(): void 
+    {
+        $this->sendWith = 'mail';
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function isHTML(bool $isHtml = true): void 
+    {
+        if ($isHtml) {
+            $this->contentType = self::CONTENT_TYPE_TEXT_HTML;
+        } else {
+            $this->contentType = self::CONTENT_TYPE_PLAINTEXT;
         }
     }
-    
 
     /**
      * Get initial headers.
      *
      * @return string
-     */
+    */
     private function getHeaders(): string 
     {
         $XMailer = trim($this->XMailer);
@@ -416,11 +339,11 @@ class NovaMailer implements MailClientInterface
         return $headers;
     }
 
-     /**
+    /**
      * Send the email.
      *
      * @return array
-     */
+    */
     private function sendWithOutAttachment(): array 
     {
         $headers = $this->getHeaders();
@@ -431,11 +354,11 @@ class NovaMailer implements MailClientInterface
         ];
     }
 
-     /**
+    /**
      * Send the email.
      * 
      * @return array
-     */
+    */
     private function sendWithAttachment(): array 
     {
         $boundary = uniqid('np');
@@ -467,39 +390,156 @@ class NovaMailer implements MailClientInterface
         ];
     }
 
-     /**
-     * Send messages using SMTP.
+    /**
+     * Send email using smtp details 
      * 
-     * @return void
-     */
-    public function isSMTP(): void 
+     * @param array $result Email content information.
+     * 
+     * @return bool Return true if successful, otherwise false.
+     * @throws MailerException
+    */
+    private function smtp_mail(array $result): bool
     {
-        $this->sendWith = 'smtp';
+        $from = $this->from ?? $this->Username;
+        $options = [
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ]
+        ];
+
+        $this->connection = $this->connection($options);
+        $this->smtpGet();
+
+        fputs($this->connection, "EHLO " . APP_HOSTNAME . "\r\n");
+       // fputs($this->connection, "EHLO " . $_SERVER['SERVER_NAME'] . "\r\n");
+        $this->smtpGet();
+
+        if($this->SMTPAuth){
+            fputs($this->connection, "AUTH LOGIN\r\n");
+            $this->smtpGet();
+            
+            fputs($this->connection, base64_encode($this->Username) . "\r\n");
+            $this->smtpGet();
+
+            fputs($this->connection, base64_encode($this->Password) . "\r\n");
+            $this->smtpGet();
+        }
+
+        fputs($this->connection, "MAIL FROM: <{$from}>\r\n");
+        $this->smtpGet();
+
+        fputs($this->connection, "RCPT TO: <{$this->to}>\r\n");
+        $this->smtpGet();
+
+        fputs($this->connection, "DATA\r\n");
+        $this->smtpGet();
+
+        $end = ($this->attachments === []) ? "\r\n.\r\n" : ".\r\n";
+        fputs($this->connection, $result['headers'] . $result['body'] . $end);
+        $this->smtpGet();
+
+        fputs($this->connection, "QUIT\r\n");
+
+        return true;
     }
 
     /**
-     * Send messages using PHP's mail() function.
+     * Open socket connection
      * 
-     * @return void
-     */
-    public function isMail(): void 
+     * @param array $options
+     * 
+     * @return mixed Return resource.
+    */
+    public function connection(array $options = []): mixed
     {
-        $this->sendWith = 'mail';
+        if ($this->connected()) {
+            return $this->connection;
+        }
+
+        $transport = $this->SMTPSecure . '://' . $this->Host;
+
+        if(function_exists('stream_socket_client')){
+            $transport .= ':' . $this->Port;
+        
+            $context = stream_context_create($options);
+            $conn = stream_socket_client(
+                $transport,
+                $errno,
+                $errstr,
+                30,
+                STREAM_CLIENT_CONNECT,
+                $context
+            );
+        }else{
+            $conn = fsockopen($transport, $this->Port, $errno, $errstr, 30);
+        }
+
+        if (!is_resource($conn)) {
+            throw new MailerException("Failed to connect to SMTP server: $errstr ($errno)", $errno);
+        }
+
+        return $conn;
     }
 
     /**
-     * Sets message type to HTML or plain.
+     * Check socket already connected.
      *
-     * @param bool $isHtml True for HTML mode
-     * 
-     * @return void
-     */
-    public function isHTML(bool $isHtml = true): void 
+     * @return bool Return true if connected
+    */
+    public function connected(): bool
     {
-        if ($isHtml) {
-            $this->contentType = static::CONTENT_TYPE_TEXT_HTML;
-        } else {
-            $this->contentType = static::CONTENT_TYPE_PLAINTEXT;
+        if (is_resource($this->connection)) {
+            $status = stream_get_meta_data($this->connection);
+            if ($status['eof']) {
+                logger('debug', 'SMTP NOTICE: EOF caught while checking if connected');
+                $this->close();
+
+                return false;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Close the socket connection.
+     */
+    public function close(): void
+    {
+        if (is_resource($this->connection)) {
+            fclose($this->connection);
+            $this->connection = null;
+            logger('debug', 'Connection: closed');
+        }
+    }
+
+    /**
+     * Read SMTP connection.
+     * 
+     * @param resource $connection SMPT connection. 
+     * @param string $name Read smtp connection name
+     * 
+     * @return void 
+     * @throws MailerException
+    */
+    private function smtpGet(string $name = ''): void 
+    {
+        while ($str = fgets($this->connection, 515)) {
+            if (substr($str, 3, 1) == " ") {
+                break;
+            }
+
+            if ($str === false) {
+                $error = "Failed to read from SMTP connection {$name}";
+                if($this->exceptions){
+                    throw new MailerException($error);
+                }
+
+                logger('debug', $error);
+            }
         }
     }
 }

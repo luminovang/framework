@@ -14,8 +14,8 @@ use \Luminova\Interface\HttpClientInterface;
 use \Luminova\Http\Message\Response;
 use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
 use \GuzzleHttp\Exception\GuzzleException;
-use \Luminova\Http\Exceptions\RequestException;
-use \Luminova\Http\Exceptions\ConnectException;
+use \Luminova\Exceptions\Http\RequestException;
+use \Luminova\Exceptions\Http\ConnectException;
 
 class Guzzle implements HttpClientInterface
 {

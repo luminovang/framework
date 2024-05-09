@@ -12,7 +12,6 @@ namespace Luminova\Template;
 
 use \Luminova\Cache\PageMinifier;
 use \Luminova\Cache\PageViewCache;
-use \App\Controllers\Config\Template as TemplateConfig;
 use \DateTimeInterface;
 
 class Helper 
@@ -34,33 +33,25 @@ class Helper
      * @param bool $ignore
      * @param bool $copy 
      *
-     * @return PageMinifier $compress
+     * @return PageMinifier Return minifier instance.
     */
     public static function getMinifier(
         mixed $contents, 
         string $type = 'html', 
         bool $ignore = true, 
-        bool $copy = false
-    ): PageMinifier 
+        bool $copy = false,
+        bool $minify = true,
+        bool $encode = true
+    ): PageMinifier
     {
         if(static::$minifier === null){
             static::$minifier = new PageMinifier();
         }
 
-        static::$minifier->minifyCodeblock($ignore);
-        static::$minifier->allowCopyCodeblock($copy);
+        static::$minifier->codeblocks($ignore);
+        static::$minifier->copiable($copy);
 
-        $methods = [
-            'json' => 'json',
-            'text' => 'text',
-            'html' => 'html',
-            'xml' => 'xml',
-        ];
-        
-        $method = $methods[$type] ?? 'run';
-        static::$minifier->$method($contents);        
-
-        return static::$minifier;
+        return static::$minifier->compress($contents, $type, $minify, $encode);
     }
 
     /** 
@@ -72,7 +63,11 @@ class Helper
      *
      * @return PageViewCache Return page view cache instance.
     */
-    public static function getCacheInstance(string $direcory, DateTimeInterface|int|null $expiry = 0, null|string $key = null): PageViewCache
+    public static function getCache(
+        string $direcory, 
+        DateTimeInterface|int|null $expiry = 0, 
+        string|null $key = null
+    ): PageViewCache
     {
         $key ??= static::cachekey();
 
@@ -131,37 +126,5 @@ class Helper
     public static function bothtrim(string $path): string 
     {
         return  trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-    }
-
-    /** 
-     * Get output headers
-     * 
-     * @return array<string, mixed> $info
-    */
-    public static function requestInfo(): array
-    {
-        $responseHeaders = headers_list();
-        $info = [];
-
-        foreach ($responseHeaders as $header) {
-            [$name, $value] = explode(':', $header, 2);
-
-            $name = trim($name);
-            $value = trim($value);
-
-            switch ($name) {
-                case 'Content-Type':
-                    $info['Content-Type'] = $value;
-                    break;
-                case 'Content-Length':
-                    $info['Content-Length'] = (int) $value;
-                    break;
-                case 'Content-Encoding':
-                    $info['Content-Encoding'] = $value;
-                    break;
-            }
-        }
-
-        return $info;
     }
 }

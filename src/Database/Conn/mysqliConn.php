@@ -1,4 +1,4 @@
-<?php
+<?php 
 /**
  * Luminova Framework
  *
@@ -7,10 +7,12 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Interface;
+namespace Luminova\Database\Conn;
 
+use \Luminova\Interface\ConnInterface;
+use \mysqli;
 
-interface MailClientInterface
+class mysqliConn extends mysqli implements ConnInterface
 {
-    public function initialize(): void;
+
 }

@@ -7,10 +7,13 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
+namespace Luminova\Base;
 
- namespace Luminova\Controllers;
+use \Luminova\Exceptions\ExceptionInterface;
+use \Exception;
+use \Throwable;
 
- abstract class Controller
- {
-
- }
+abstract class BaseException extends ExceptionInterface
+{
+   
+}
