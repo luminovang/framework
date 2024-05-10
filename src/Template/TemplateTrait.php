@@ -12,7 +12,6 @@ namespace Luminova\Template;
 use \Luminova\Application\FileSystem;
 use \Luminova\Template\Smarty;
 use \Luminova\Template\Twig;
-use \Luminova\Base\BaseConfig;
 use \Luminova\Http\Header;
 use \Luminova\Exceptions\AppException; 
 use \Luminova\Interface\ExceptionInterface; 
@@ -615,8 +614,7 @@ trait TemplateTrait
 
         FileSystem::permission('rw');
         http_response_code($status);
-        ob_start(BaseConfig::getEnv('script.ob.handler', null, 'nullable'));
-
+        
         return true;
     }
 
@@ -651,7 +649,8 @@ trait TemplateTrait
             $instance->setPath($templateDir);
             $instance->minify(static::$minifyContent, [
                 'codeblock' => $minify,
-                'copyable' => $copy
+                'copyable' => $copy,
+                'encode' => false,
             ]);
             $instance->caching($caching, $cacheExpiry);
 
@@ -704,7 +703,8 @@ trait TemplateTrait
             $instance->setPath($templateDir);
             $instance->minify(static::$minifyContent, [
                 'codeblock' => $minify,
-                'copyable' => $copy
+                'copyable' => $copy,
+                'encode' => false,
             ]);
             $instance->assignClasses(static::$publicClasses);
 
@@ -736,6 +736,7 @@ trait TemplateTrait
 
         include_once $this->templateFile;
         $__contents = ob_get_clean();
+        /*if(preg_match("(error</b>:)(.+) in <b>(.+)</b> on line <b>(.+)</b>", $__contents, $regs)) { }*/
 
         [$__headers, $__contents] = static::assertMinifyAndSaveCache(
             $__contents,
@@ -750,12 +751,7 @@ trait TemplateTrait
         }
 
         Header::parseHeaders($__headers);
-
         echo $__contents;
-
-        if (ob_get_length() > 0) {
-            ob_end_flush();
-        }
 
         return true;
     }
@@ -836,12 +832,7 @@ trait TemplateTrait
         }
 
         Header::parseHeaders($__headers);
-
         echo $__contents;
-
-        if (ob_get_length() > 0) {
-            ob_end_flush();
-        }
 
         return true;
     }

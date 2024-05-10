@@ -16,7 +16,7 @@ class Encoder
      *
      * @param string $content The content to encode.
      *
-     * @return array<int, mixed> An array containing the encoding type and the compressed content.
+     * @return array<int,mixed> An array containing the encoding type and the compressed content.
      *               The encoding type will be 'gzip' or 'deflate' if compression is successful,
      *               otherwise, it will be false. The compressed content is the encoded content
      *               or the original content if compression fails.
@@ -24,29 +24,36 @@ class Encoder
     public static function encode(string $content): array
     {
         $encoding = env('compression.encoding', false);
-
-        if ($encoding !== false && isset($_SERVER['HTTP_ACCEPT_ENCODING'])) {
-            $compression = min(9, (int) env('compression.level', 6));
-            $encoding = strtolower($encoding);
-            $handler = null;
-
-            switch ($encoding) {
-                case 'gzip':
-                case 'x-gzip':
-                    $handler = 'gzencode';
-                break;
-                case 'deflate':
-                    $handler = 'gzdeflate';
-                break;
-                case 'compress':
-                    $handler = 'gzcompress';
-                break;
+        if ($encoding !== false ) {
+    
+            if (isset($_SERVER['HTTP_CONTENT_ENCODING'])) {
+                return [$_SERVER['HTTP_CONTENT_ENCODING'], $content];
             }
+        
+            if (isset($_SERVER['HTTP_ACCEPT_ENCODING'])) {
+                $encoding = strtolower($encoding);
+                $compression = min(9, (int) env('compression.level', 6));
+                $handler = null;
 
-            if ($handler !== null && function_exists($handler) && strpos($_SERVER['HTTP_ACCEPT_ENCODING'], $encoding) !== false) {
-                $compressed = $handler($content, $compression);
-                if ($compressed !== false) {
-                    return [$encoding, $compressed];
+                switch ($encoding) {
+                    case 'gzip':
+                    case 'x-gzip':
+                        $handler = 'gzencode';
+                    break;
+                    case 'deflate':
+                        $handler = 'gzdeflate';
+                    break;
+                    case 'compress':
+                        $handler = 'gzcompress';
+                    break;
+                }
+
+                if ($handler !== null && function_exists($handler) && strpos($_SERVER['HTTP_ACCEPT_ENCODING'], $encoding) !== false) {
+                
+                    $compressed = $handler($content, $compression);
+                    if ($compressed !== false) {
+                        return [$encoding, $compressed];
+                    }
                 }
             }
         }

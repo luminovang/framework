@@ -188,9 +188,7 @@ class FileCache
      */
     public static function hashStorage(string $name): string 
     {
-        $result = preg_replace('/[^a-zA-Z0-9]/', '', $name);
-
-        return md5($result);
+        return md5(preg_replace('/[^a-zA-Z0-9]/', '', $name));
     }
 
      /**
@@ -331,7 +329,7 @@ class FileCache
 
         if ($this->hasExpired($key)){
             $content = $callback();
-            if($content !== null && $content !== ''){
+            if(!empty($content)){
                 $this->setItem($key, $content, $this->expiration, $this->expireAfter, $this->lock);
             }
 
@@ -369,7 +367,7 @@ class FileCache
             return false;
         }
 
-        if($content !== null && $content !== ''){
+        if(!empty($content)){
             return $this->setItem($key, $content, $expiration, $expireAfter, $lock);
         }
 
@@ -386,12 +384,11 @@ class FileCache
      */
     public function getItem(string $key, bool $onlyContent = true): mixed
     {
-    
         if($this->canDeleteExpired){
             $this->deleteIfExpired();
         }
 
-        if ($this->hasExpired($key) || !$this->hasItem($key)){
+        if ($this->hasExpired($key)){
             if($onlyContent){
                 return null;
             }
@@ -406,8 +403,9 @@ class FileCache
         }
  
         $data = $this->cacheInstance[$key];
+        
         $content = unserialize($this->encode ? base64_decode($data["data"]) : $data["data"]);
-
+       
         if($onlyContent){
             return $content;
         }
@@ -511,14 +509,14 @@ class FileCache
     /**
      * Deletes data associated array of keys
      * 
-     * @param iterable $array cache keys
+     * @param iterable $iterable cache keys
      * 
      * @return Generator
      * @throws ErrorException if the file cannot be saved
     */
-    public function removeList(iterable $array): Generator 
+    public function removeList(iterable $iterable): Generator 
     {
-        foreach($array as $key){
+        foreach($iterable as $key){
             yield $this->deleteItem($key);
         }
     }
@@ -596,11 +594,9 @@ class FileCache
     */
     private function fetch(): mixed 
     {
-    
         $filepath = $this->getPath();
 
         if (is_readable( $filepath )) {
-
             $file = file_get_contents($filepath);
          
             if ($file === false) {
@@ -735,7 +731,6 @@ class FileCache
      */
      private function commit(): bool 
      {
-
         make_dir($this->storagePath);     
     
         $cache = $this->cacheInstance;

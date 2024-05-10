@@ -197,6 +197,7 @@ class PageMinifier
         $this->headers['Content-Length'] = string_length($content);
         $this->headers['Content-Type'] = $contentType;
         $this->headers['Content-Encoding'] = $encoding;
+        
         $this->contents = $content;
 
         return $this;
@@ -242,10 +243,6 @@ class PageMinifier
         Header::parseHeaders($this->headers);
 
         echo $this->contents;
-
-        if (ob_get_length() > 0) {
-            ob_end_flush();
-        }
     }
     
     /**
@@ -314,7 +311,7 @@ class PageMinifier
     */
     public function startMinify(): void 
     {
-        ob_start(['self', $this->codeblocks ? 'minifyIgnore' : 'minify']);
+        ob_start(['static', $this->codeblocks ? 'minifyIgnore' : 'minify']);
     }
     
     /**
@@ -337,37 +334,29 @@ class PageMinifier
      * Ignore html <code></code> block
      * 
      * @param string $content The content to minify.
-     * @param bool $allowCopy Allow copying codeblock (default: false).
+     * @param bool $button Allow copying codeblock (default: false).
      * 
      * @return string Return minified content.
     */
-    public static function minifyIgnore(string $content, bool $allowCopy = false): string 
+    public static function minifyIgnore(string $content, bool $button = false): string 
     {
         $ignores = [];
         $pattern = '/<pre[^>]*>\s*<code[^>]*>[\s\S]*?<\/code>\s*<\/pre>/i';
-        $ignorePatten = '###IGNORED_CODE_BLOCK###';
+        $ignorePattern = '###IGNORED_CODE_BLOCK###';
 
-        $content = preg_replace_callback($pattern, function ($matches) use (&$ignores, $ignorePatten) {
+        $content = preg_replace_callback($pattern, function ($matches) use (&$ignores, $ignorePattern) {
             $ignores[] = $matches[0];
-            
-            return $ignorePatten;
+            return $ignorePattern;
         }, $content);
-        
-        $content = static::minify($content);
 
         // Restore the code blocks back to its original state
-        $content = preg_replace_callback('/' . $ignorePatten . '/', function () use (&$ignores, $allowCopy) {
-            $codeBlock =  array_shift($ignores);
-            $copyButton = $allowCopy ? '<button type="button" class="copy-snippet">copy</button>' : '';
-        
-            $modifiedCodeBlock = preg_replace(
+        $content = preg_replace_callback('/' . $ignorePattern . '/', function () use (&$ignores, $button) {
+            return preg_replace(
                 '/<pre([^>]*)class="([^"]*)"([^>]*)>/i', 
-                '<pre$1class="$2 pre-codeblock"$3>' . $copyButton,
-                $codeBlock
+                '<pre$1class="$2 pre-codeblock"$3>' . ($button ? '<button type="button" class="copy-snippet">copy</button>' : ''),
+                array_shift($ignores)
             );
-
-            return $modifiedCodeBlock;
-        }, $content);
+        }, static::minify($content));
 
         return $content;
     }

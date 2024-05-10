@@ -16,6 +16,7 @@ use \Luminova\Routing\Bootstrap;
 use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseApplication;
 use \Luminova\Base\BaseViewController;
+use \Luminova\Base\BaseConfig;
 use \Luminova\Exceptions\RouterException;
 use \ReflectionMethod;
 use \ReflectionFunction;
@@ -55,7 +56,7 @@ final class Router
      * 
      * @var ?string $base
     */
-    private string|null $base = null;
+    private static string|null $base = null;
 
     /**
      * Application registered controllers namespace
@@ -445,12 +446,48 @@ final class Router
     */
     public function run(): void
     {
-        $status = static::$method === 'CLI' ? $this->runAsCommand() : $this->runAsHttp();
+        if(static::$method === 'CLI'){
+            exit(static::runAsCommand($this));
+        }
 
-        if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] == 'HEAD') {
+        static::outputEncoding($_SERVER['HTTP_ACCEPT_ENCODING'] ?? null);
+        static::runAsHttp();
+
+        if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'HEAD') {
             ob_end_clean();
         }
-        exit($status === true ? STATUS_SUCCESS : STATUS_ERROR);
+
+        exit(0);
+    }
+
+    /**
+     * Enable encoding of response.
+     * 
+     * @param string|null $encoding
+     * 
+     * @return bool
+    */
+    private static function outputEncoding(?string $encoding = null): bool
+    {
+        ob_end_clean();
+
+        if ($encoding === null || $encoding === '') {
+            return ob_start();
+        }
+
+        if (strpos($encoding, 'x-gzip') !== false || strpos($encoding, 'gzip') !== false) {
+            if (!ob_start('ob_gzhandler')) {
+                return ob_start();
+            }
+
+            return true;
+        }
+
+        if (!ob_start(BaseConfig::getEnv('script.output.handler', null, 'nullable'))) {
+            return ob_start();
+        }
+
+        return true;
     }
 
     /**
@@ -477,11 +514,11 @@ final class Router
      * 
      * @return void
     */
-    public function triggerError(int $status = 404): void
+    public static function triggerError(int $status = 404): void
     {
         $result = false;
         foreach (static::$controllers['errors'] as $pattern => $callable) {
-            if (static::uriCapture($pattern, $this->getUriSegments(), $matches)) {
+            if (static::uriCapture($pattern, static::getUriSegments(), $matches)) {
                 $result = static::call($callable, [], true);
                 break;
             }
@@ -532,23 +569,22 @@ final class Router
      *
      * @return string Application router base path
     */
-    public function getBase(): string
+    public static function getBase(): string
     {
-        if ($this->base === null) {
+        if (static::$base === null) {
             if (isset($_SERVER['SCRIPT_NAME'])) {
                 $script = $_SERVER['SCRIPT_NAME'];
 
                 if (($last = strrpos($script, '/')) !== false && $last > 0) {
-                    $this->base = substr($script, 0, $last) . '/';
-
-                    return $this->base;
+                    static::$base = substr($script, 0, $last) . '/';
+                    return static::$base;
                 }
             }
 
-            $this->base = '/';
+            static::$base = '/';
         }
 
-        return $this->base;
+        return static::$base;
     }
 
     /**
@@ -556,11 +592,11 @@ final class Router
      * 
      * @return string Relative paths
     */
-    public function getUriSegments(): string
+    public static function getUriSegments(): string
     {
         if (isset($_SERVER['REQUEST_URI'])) {
             $uri = rawurldecode($_SERVER['REQUEST_URI']);
-            $uri = substr($uri, mb_strlen($this->getBase()));
+            $uri = substr($uri, mb_strlen(static::getBase()));
 
             if (false !== ($pos = strpos($uri, '?'))) {
                 $uri = substr($uri, 0, $pos);
@@ -602,11 +638,15 @@ final class Router
     /**
      * Get terminal instance 
      * 
-     * @return Terminal
+     * @return Terminal Return instance of Terminal class.
     */
     private static function terminal(): Terminal
     {
-        return static::$terminal ??= new Terminal();
+        if(static::$terminal === null){
+            static::$terminal = new Terminal();
+        }
+
+        return static::$terminal;
     }
 
     /**
@@ -642,13 +682,14 @@ final class Router
     }
 
     /**
-     * Run the CLI router and application: 
-     * Loop all defined CLI routes
+     * Run the CLI router and application, Loop all defined CLI routes
      *
-     * @return bool
+     * @param self $self
+     * 
+     * @return int
      * @throws RouterException
     */
-    private function runAsCommand(): bool
+    private static function runAsCommand(self $self): int
     {
         $command = static::getArgument(2);
         $group = static::getArgument();
@@ -670,7 +711,7 @@ final class Router
             $groups = static::$groups[$group];
 
             foreach($groups as $register){
-                $register($this, static::$application);
+                $register($self, static::$application);
             }
 
             $routes = static::$controllers['cli_routes'][static::$method] ?? null;
@@ -684,7 +725,7 @@ final class Router
             static::terminal()->error('Unknown command ' . static::terminal()->color("'{$command}'", 'red') . ' not found', null);
         }
 
-        return $result;
+        return $result ? STATUS_SUCCESS : STATUS_ERROR;
     }
 
     /**
@@ -694,10 +735,10 @@ final class Router
      * @return bool
      * @throws RouterException
     */
-    private function runAsHttp(): bool
+    private static function runAsHttp(): bool
     {
         $result = true;
-        $uri = $this->getUriSegments();
+        $uri = static::getUriSegments();
 
         if (isset(static::$controllers['routes_middleware'][static::$method])) {
             $result = static::handleWebsite(static::$controllers['routes_middleware'][static::$method], $uri);
@@ -715,7 +756,7 @@ final class Router
             }
 
             if(!$result){
-                $this->triggerError();
+                static::triggerError();
             }
         }
 
@@ -1107,14 +1148,14 @@ final class Router
         static::$groups = [];
     }
 
-     /**
+    /**
      * Get the current view segments as array.
      * 
      * @return array<int, string> Array list of url segments
     */
     private function getSegments(): array
     {
-        $segments = explode('/', trim($this->getUriSegments(), '/'));
+        $segments = explode('/', trim(static::getUriSegments(), '/'));
         $public = array_search('public', $segments);
 
         if ($public !== false) {

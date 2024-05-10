@@ -258,7 +258,9 @@ class Smarty
                     $content, 
                     $this->viewType, 
                     $this->minifyOptions['codeblock'], 
-                    $this->minifyOptions['copyable']
+                    $this->minifyOptions['copyable'],
+                    true,
+                    $this->minifyOptions['encode']
                 )->getContent();
             }
 
@@ -267,10 +269,7 @@ class Smarty
             }
 
             echo $content;
-
-            if (ob_get_length() > 0) {
-                ob_end_flush();
-            }
+            ob_end_flush();
 
             return true;
         }catch(Exception | SmartyException $e){

@@ -176,7 +176,9 @@ class Twig
                     $content, 
                     $options['viewType'], 
                     $this->minifyOptions['codeblock'], 
-                    $this->minifyOptions['copyable']
+                    $this->minifyOptions['copyable'],
+                    true,
+                    $this->minifyOptions['encode']
                 )->getContent();
             }
 
@@ -185,10 +187,7 @@ class Twig
             }
 
             echo $content;
-
-            if (ob_get_length() > 0) {
-                ob_end_flush();
-            }
+            ob_end_flush();
 
             return true;
         }catch(RuntimeError | SyntaxError $e){

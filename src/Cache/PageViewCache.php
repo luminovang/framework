@@ -182,9 +182,7 @@ class PageViewCache
 
             if(isset($lock[$this->key])){
                 unset($lock[$this->key]);
-
-                $lockInfo = json_encode($lock, JSON_PRETTY_PRINT);
-                write_content($lockFile, $lockInfo);
+                write_content($lockFile, json_encode($lock, JSON_PRETTY_PRINT));
             }
         }
 
@@ -198,9 +196,7 @@ class PageViewCache
     */
     public function clear(): int 
     {
-        $location = $this->getLocation();
-
-        return FileSystem::remove($location);
+        return FileSystem::remove($this->getLocation());
     }
 
     /**
@@ -236,10 +232,6 @@ class PageViewCache
 
         Header::parseHeaders($headers);
         $bytesRead = @readfile($this->getFilename());
-        
-        if (ob_get_length() > 0) {
-            ob_end_flush();
-        }
         
         return $bytesRead !== false;
     }
