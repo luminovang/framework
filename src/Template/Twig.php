@@ -142,7 +142,7 @@ class Twig
     }
 
     /**
-     * Minify template ouput
+     * Minify template output
      * 
      * @param bool $minify Should the template be minified.
      * @param array $options Minification options.

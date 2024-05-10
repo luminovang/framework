@@ -18,7 +18,7 @@ use \Luminova\Application\FileSystem;
 use \Luminova\Http\Request;
 use \App\Controllers\Config\Services;
 use \Luminova\Template\ViewResponse;
-use \Luminova\Logger\NovaLogger;
+use \Luminova\Logger\Logger;
 use \Luminova\Security\InputValidator;
 use \Luminova\Exceptions\RuntimeException;
 use \Exception;
@@ -35,7 +35,7 @@ use \ReflectionMethod;
  * @method static Task                task(...$params, bool $shared = true)                 @return Task
  * @method static Modules             import(...$params, bool $shared = true)               @return Modules
  * @method static Translator          language($locale, bool $shared = true)                @return Translator
- * @method static NovaLogger          logger(string $extension = '.log', $shared = true)    @return NovaLogger
+ * @method static Logger              logger(string $extension = '.log', $shared = true)    @return Logger
  * @method static FileSystem          files($shared = true)                                 @return FileSystem
  * @method static InputValidator      validate($shared = true)                              @return InputValidator
  * @method static Services            services($shared = true)                              @return Services
@@ -68,7 +68,7 @@ class Factory
             'functions' => Functions::class,
             'modules' => Modules::class,
             'language' => Translator::class,
-            'logger' => NovaLogger::class,
+            'logger' => Logger::class,
             'files' => FileSystem::class,
             'validate' => InputValidator::class,
             'response' => ViewResponse::class,
@@ -82,7 +82,7 @@ class Factory
     /**
      * Dynamically create an instance of the specified factory method class.
      *
-     * @param string $aliases The class contect aliases
+     * @param string $aliases The class name aliases
      * @param array ...$arguments Parameters to pass to the factory constructor.
      *      - The Last parameter to pass to the factory constructor indicate if it should return a shared instance
      * 
@@ -115,7 +115,7 @@ class Factory
      *
      * @param string $aliases Identifier of the entry to look for.
      *
-     * @throws RuntimeException No method was found foridentifier.
+     * @throws RuntimeException No method was found for identifier.
      * @throws RuntimeException Error while instantiating the method class.
      *
      * @return mixed Instance of called method.

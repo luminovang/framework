@@ -163,7 +163,7 @@ final class Error
         }
 
         // Additional check for custom project structure like '/my-project/api'
-        if (basename(root(__DIR__)) === $segments[0] && isset($segments[2]) && $segments[2] === 'api') {
+        if (basename(root()) === $segments[0] && isset($segments[2]) && $segments[2] === 'api') {
             return true;
         }
 

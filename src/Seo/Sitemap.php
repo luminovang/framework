@@ -126,7 +126,7 @@ class Sitemap
 
         $xml .= '</urlset>';
 
-        $index = root(__DIR__, '/public/');
+        $index = root('public');
 
         if(write_content($index . 'sitemap.xml', $xml)){
             static::$cli?->writeln();
@@ -246,7 +246,7 @@ class Sitemap
         $url = str_replace(['../', './'], '', $url);
         $url = trim($url, '/');
         //$root = trim(SitemapConfig::$projectDirName, '/') . '/public';
-        $root = trim(basename(root(__DIR__)), '/') . '/public';
+        $root = trim(basename(root()), '/') . '/public';
 
         if (str_starts_with($url, $root)) {
             return str_replace($root, rtrim(static::startUrl(), '/'), $url);

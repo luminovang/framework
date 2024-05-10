@@ -103,7 +103,7 @@ class Context extends BaseConsole
         $camelcase = camel_case('on' . $name) . 'Error';
         $controller = ucfirst($name) . 'Controller::index';
         $onError = ($noError ? '' : ', ' . "[ViewErrors::class, '$camelcase']");
-        $index = root(__DIR__, '/public/') . 'index.php';
+        $index = root('public') . 'index.php';
         $indexContent = file_get_contents($index);
 
         $handler = <<<PHP
@@ -133,7 +133,7 @@ class Context extends BaseConsole
 
             if($input == 0){
                 if(write_content($index, $content)){
-                    write_content(root(__DIR__, '/routes/') . $name . '.php', $handler);
+                    write_content(root('routes') . $name . '.php', $handler);
                     $this->writeln("Route context installed: {$name}", 'green');
 
                     return STATUS_SUCCESS;
@@ -145,7 +145,7 @@ class Context extends BaseConsole
             return STATUS_ERROR;
         }else{
             if(write_content($index, $content)){
-                write_content(root(__DIR__, '/routes/') . $name . '.php', $handler);
+                write_content(root('routes') . $name . '.php', $handler);
                 $this->writeln("Route context installed: {$name}", 'green');
 
                 return STATUS_SUCCESS;

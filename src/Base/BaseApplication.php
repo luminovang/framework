@@ -47,7 +47,7 @@ abstract class BaseApplication extends Foundation
         $this->router->addNamespace('\App\Controllers');
 
         // Initialize the template engine
-        $this->initialize(__DIR__);
+        $this->initialize();
 
         // Initialize onCreate method
         $this->onCreate();
@@ -105,7 +105,7 @@ abstract class BaseApplication extends Foundation
         $value = static::attrGetter($key);
 
         if($value === static::KEY_NOT_FOUND) {
-            return $this->{$key} ?? null;
+            return null;
         }
 
         return $value;

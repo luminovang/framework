@@ -12,16 +12,31 @@ namespace Luminova\Logger;
 use \Psr\Log\LoggerInterface;
 use \Psr\Log\LoggerAwareInterface;
 use \Psr\Log\LoggerAwareTrait;
-use \Psr\Log\LogLevel;
+use \Luminova\Logger\LogLevel;
 use \Luminova\Logger\NovaLogger;
 use \App\Controllers\Config\Preference;
 use \Luminova\Exceptions\InvalidArgumentException;
 
 class LoggerAware implements LoggerInterface, LoggerAwareInterface
 {
+    /**
+     * @var LoggerInterface $logger
+    */
+    protected static ?LoggerInterface $logger = null;
+
     use LoggerAwareTrait;
 
-    private ?LoggerInterface $logger = null;
+    /**
+     * Initialize NovaLogger
+     * 
+     * @param LoggerInterface $logger The logger instance.
+    */
+    public function __construct(?LoggerInterface $logger = null)
+    {
+        if($logger !== null){
+            static::$logger = $logger;
+        }
+    }
 
     /**
      * Set a logger instance on the object.
@@ -30,7 +45,7 @@ class LoggerAware implements LoggerInterface, LoggerAwareInterface
     */
     public function setLogger(LoggerInterface $logger)
     {
-        $this->logger = $logger;
+        static::$logger = $logger;
     }
 
    /**
@@ -122,6 +137,28 @@ class LoggerAware implements LoggerInterface, LoggerAwareInterface
     }
 
     /**
+     * Log an exception message.
+     *
+     * @param string $message The EXCEPTION message to log.
+     * @param array $context Additional context data (optional).
+     */
+    public function exception($message, array $context = []): void
+    {
+        $this->log(LogLevel::EXCEPTION, $message, $context);
+    }
+
+    /**
+     * Log an php message.
+     *
+     * @param string $message The php message to log.
+     * @param array $context Additional context data (optional).
+     */
+    public function php($message, array $context = []): void
+    {
+        $this->log(LogLevel::PHP, $message, $context);
+    }
+
+    /**
      * Log a message at a specified log level.
      *
      * @param string $level The log level (e.g., "emergency," "error," "info").
@@ -133,12 +170,12 @@ class LoggerAware implements LoggerInterface, LoggerAwareInterface
      */
     public function log($level, $message, array $context = []): void
     {
-        if($this->logger === null){
-            $this->logger = (Preference::getLogger() ?? new NovaLogger());
+        if(static::$logger === null){
+            static::$logger = (Preference::getLogger() ?? new NovaLogger());
         }
 
-        if ($this->logger instanceof LoggerInterface) {
-            $this->logger->log($level, $message, $context);
+        if (static::$logger instanceof LoggerInterface) {
+            static::$logger->log($level, $message, $context);
             return;
         }
 

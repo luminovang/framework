@@ -121,7 +121,7 @@ class System extends BaseConsole
             return STATUS_ERROR;
         }
 
-        $envFile = root(__DIR__) . '.env';
+        $envFile = root() . '.env';
         $envContents = file_get_contents($envFile);
         
         if($envContents === false){

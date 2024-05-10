@@ -148,7 +148,7 @@ class Header
             return true;
         }
 
-        if (basename(root(__DIR__)) === $segments[0] && isset($segments[2]) && $segments[2] === 'api') {
+        if (basename(root()) === $segments[0] && isset($segments[2]) && $segments[2] === 'api') {
             return true;
         }
 

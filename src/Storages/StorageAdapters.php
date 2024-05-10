@@ -127,6 +127,12 @@ class StorageAdapters
                 static::$client = BlobRestProxy::createBlobService($config['dns'] ?? '');
                 return new AzureBlobAdapter(static::$client, $config['container'] ?? '', $basePath);
             case 'google-cloud':
+                if ($authCache = ($config['configuration']['authCache'] ?? false)) {
+                    if (is_string($authCache)) {
+                        $config['configuration']['authCache'] = new $authCache('google_file_auth', 'credentials/authCache');
+                    }
+                }                
+
                 static::$client = new GoggleClient($config['configuration']);
                 return new GoogleCloudAdapter(static::$client->bucket($config['bucket']), $basePath);
             case 'web-dev':
@@ -166,7 +172,7 @@ class StorageAdapters
     
         foreach ($classes as $class) {
             if (!class_exists($class)) {
-                throw new StorageException('Class not found "' . $class . '", install required dependancy first.' );
+                throw new StorageException('Class not found "' . $class . '", install required dependency first.' );
             }
         }
     } 

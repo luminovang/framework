@@ -116,7 +116,7 @@ class FileSystem
      */
     public static function permission(string $permission = 'rw', ?string $file = null, bool $quiet = false): bool
     {
-        $file ??= root(__DIR__, 'writeable' . DIRECTORY_SEPARATOR);
+        $file ??= root('writeable');
 
         if ($permission === 'rw' && (!is_readable($file) || !is_writable($file))) {
             $error = "Read and Write permission denied for '%s, please grant 'read' and 'write' permission.";
@@ -476,7 +476,7 @@ class FileSystem
 		$extend = array_merge([
 			'Content-Type' => $mime,
 			'Content-Disposition' => 'attachment; filename="' . $filename,
-			'ontent-Transfer-Encoding' => 'binary',
+			'Content-Transfer-Encoding' => 'binary',
 			'Expires' => 0,
 			'Cache-Control' => 'must-revalidate',
 			'Pragma' => 'public',
@@ -548,12 +548,12 @@ class FileSystem
     */
     public static function symbolic(string $target, string $link): bool
     {
-        $linkpath = dirname($link);
         if (!file_exists($target)) {
             logger('alert', 'The symlink target file does not exist');
             return false;
         }
 
+        $linkpath = dirname($link);
         if(!file_exists($linkpath) && !make_dir($linkpath, 0755)){
             logger('alert', 'Unable to create symlink destination directory');
             return false;
@@ -596,11 +596,12 @@ class FileSystem
      * @param string $name File property name.
      * 
      * @return string Return compatible path based on operating system.
+     * @ignore
     */
     public function getCompatible(string $name): string 
     {
         if (property_exists($this, $name)) {
-            return root(__DIR__, str_replace('/', DIRECTORY_SEPARATOR, $this->{$name}));
+            return root($this->{$name});
         }
     
         return '';

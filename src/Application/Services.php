@@ -80,7 +80,7 @@ class Services
      *
      * @param string $aliases Identifier of the entry to look for.
      *
-     * @throws RuntimeException No method was found foridentifier.
+     * @throws RuntimeException No method was found for identifier.
      * @throws RuntimeException Error while instantiating the method class.
      *
      * @return mixed Instance of called method.

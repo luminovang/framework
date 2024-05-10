@@ -10,7 +10,7 @@
 namespace Luminova\Logger;
 
 use \Psr\Log\LoggerInterface;
-use \Psr\Log\LogLevel;
+use \Luminova\Logger\LogLevel;
 use \Luminova\Logger\NovaLogger;
 use \App\Controllers\Config\Preference;
 use \Luminova\Exceptions\InvalidArgumentException;
@@ -20,20 +20,16 @@ class Logger implements LoggerInterface
     /**
      * @var LoggerInterface $logger
     */
-    private ?LoggerInterface $logger = null;
+    protected static ?LoggerInterface $logger = null;
 
     /**
-     * Set a logger instance on the object.
-     *
-     * @param LoggerInterface $logger The logger instance.
-     * 
-     * @return self 
+     * Initialize logger instance 
     */
-    public function setLogger(LoggerInterface $logger): self
+    public function __construct()
     {
-        $this->logger = $logger;
-
-        return $this;
+        if(static::$logger === null){
+            static::$logger = (Preference::getLogger() ?? new NovaLogger());
+        }
     }
     
     /**
@@ -141,6 +137,28 @@ class Logger implements LoggerInterface
     }
 
     /**
+     * Log an exception message.
+     *
+     * @param string $message The EXCEPTION message to log.
+     * @param array $context Additional context data (optional).
+     */
+    public function exception($message, array $context = []): void
+    {
+        $this->log(LogLevel::EXCEPTION, $message, $context);
+    }
+
+    /**
+     * Log an php message.
+     *
+     * @param string $message The php message to log.
+     * @param array $context Additional context data (optional).
+     */
+    public function php($message, array $context = []): void
+    {
+        $this->log(LogLevel::PHP, $message, $context);
+    }
+
+    /**
      * Log a message at a specified log level.
      *
      * @param string $level The log level (e.g., "emergency," "error," "info").
@@ -152,12 +170,8 @@ class Logger implements LoggerInterface
      */
     public function log($level, $message, array $context = []): void
     {
-        if($this->logger === null){
-            $this->logger = (Preference::getLogger() ?? new NovaLogger());
-        }
-
-        if ($this->logger instanceof LoggerInterface) {
-            $this->logger->log($level, $message, $context);
+        if (static::$logger instanceof LoggerInterface) {
+            static::$logger->log($level, $message, $context);
             return;
         }
 

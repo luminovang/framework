@@ -9,42 +9,28 @@
  */
 namespace Luminova\Logger;
 
-use \Psr\Log\LogLevel;
+use \Luminova\Logger\LogLevel;
 use \Psr\Log\AbstractLogger;
 use \Luminova\Time\Time;
 
 class NovaLogger extends AbstractLogger
 {
     /**
-     * Excption log level
-     * 
-     * @var string EXCEPTION
-    */
-    public const EXCEPTION = 'exception';
-
-    /**
-     * PHP log level
-     * 
-     * @var string PHP
-    */
-    public const PHP = 'php_errors';
-
-    /**
      * @var string $path log path
     */
-    private string $path = '';
+    protected string $path = '';
 
     /**
      * @var string $extension log file dot file extension
     */
-    private string $extension = '.log';
+    protected string $extension = '.log';
 
     /**
      * Error log levels
      * 
      * @var array<string, string> $levels
     */
-    private array $levels = [
+    protected static array $levels = [
         'emergency' => LogLevel::EMERGENCY,
         'alert' => LogLevel::ALERT,
         'critical' => LogLevel::CRITICAL,
@@ -53,8 +39,8 @@ class NovaLogger extends AbstractLogger
         'notice' => LogLevel::NOTICE,
         'info' => LogLevel::INFO,
         'debug' => LogLevel::DEBUG,
-        'exception' => self::EXCEPTION,
-        'php_errors' => self::PHP,
+        'exception' => LogLevel::EXCEPTION,
+        'php_errors' => LogLevel::PHP,
     ];
 
     /**
@@ -69,28 +55,6 @@ class NovaLogger extends AbstractLogger
     }
 
     /**
-     * Log an exception message.
-     *
-     * @param string $message The EXCEPTION message to log.
-     * @param array $context Additional context data (optional).
-     */
-    public function exception($message, array $context = []): void
-    {
-        $this->log(self::EXCEPTION, $message, $context);
-    }
-
-    /**
-     * Log an php message.
-     *
-     * @param string $message The php message to log.
-     * @param array $context Additional context data (optional).
-     */
-    public function php($message, array $context = []): void
-    {
-        $this->log(self::PHP, $message, $context);
-    }
-
-    /**
      * Log a message at the given level.
      *
      * @param string $level The log level (e.g., "emergency," "error," "info").
@@ -101,7 +65,7 @@ class NovaLogger extends AbstractLogger
      */
     public function log($level, $message, array $context = [])
     {
-        $level = $this->levels[$level] ?? LogLevel::INFO;
+        $level = static::$levels[$level] ?? LogLevel::INFO;
         $filepath = $this->path . "{$level}{$this->extension}";
         $time = Time::now()->format('Y-m-d\TH:i:sP');
 
@@ -113,7 +77,6 @@ class NovaLogger extends AbstractLogger
             $message .= " Context: " . print_r($context, true);
         }
 
-        $message .= PHP_EOL;
-        write_content($filepath, $message, FILE_APPEND);
+        write_content($filepath, $message . PHP_EOL, FILE_APPEND);
     }
 }

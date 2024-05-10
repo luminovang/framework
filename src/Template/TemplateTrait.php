@@ -169,14 +169,12 @@ trait TemplateTrait
     /** 
      * Initialize template
      *
-     * @param string $dir template base directory
-     *
      * @return void
      * @internal 
     */
-    protected function initialize(string $dir =__DIR__): void
+    protected function initialize(): void
     {
-        static::$documentRoot = root($dir);
+        static::$documentRoot = root();
         static::$minifyContent = (bool) env('page.minification', false);
         static::$encodeContent = (bool) env('enable.encoding', true);
         static::$cacheView = (bool) env('page.caching', false);
@@ -232,7 +230,7 @@ trait TemplateTrait
     }
 
     /** 
-     * Get template engine file extention.
+     * Get template engine file extension.
      *
      * @return string Returns extension type.
     */
@@ -360,10 +358,10 @@ trait TemplateTrait
     }
 
     /**
-     * Check if option keys is a valid PHP virable key.
+     * Check if option keys is a valid PHP variable key.
      * 
      * @param string $key key name to check.
-     * @throws RuntimeException Throws if key is not a valid PHP virable key.
+     * @throws RuntimeException Throws if key is not a valid PHP variable key.
     */
     private static function assertValidKey(string $key): void 
     {
@@ -838,7 +836,7 @@ trait TemplateTrait
     }
 
     /**
-     * Minifiy content if possible and store cache if cachable.
+     * Minify content if possible and store cache if cacheable.
      * 
      * @param string|false $content
      * @param string $type
@@ -971,7 +969,7 @@ trait TemplateTrait
     */
     public function viewInfo(): array 
     {
-        $viewPath = root(__DIR__, static::$viewFolder) . $this->activeView . static::dot();
+        $viewPath = root(static::$viewFolder) . $this->activeView . static::dot();
         clearstatcache(true, $viewPath);
         $info = [
             'location' => $viewPath,
