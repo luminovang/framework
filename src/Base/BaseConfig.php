@@ -25,7 +25,11 @@ abstract class BaseConfig
     public static function getEnv(string $key, mixed $default = null, ?string $return = null): mixed 
     {
         $value = env($key, $default);
-    
+        
+        if($return === null){
+            return $value;
+        }
+
         switch (strtolower($return)) {
             case 'bool':
                 return (bool) $value;
