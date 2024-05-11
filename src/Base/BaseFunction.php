@@ -12,7 +12,7 @@ namespace Luminova\Base;
 
 use \Luminova\Functions\Escaper;
 use \Luminova\Functions\IPAddress;
-use \Luminova\Application\FileSystem;
+use \Luminova\Storages\FileManager;
 use \Luminova\Functions\TorDetector;
 use \Luminova\Functions\Maths;
 use \Luminova\Functions\Normalizer;
@@ -30,7 +30,7 @@ abstract class BaseFunction extends Normalizer
      *
      * @return IPAddress Returns a ip address class instance
     */
-    public static function ip(): IPAddress
+    public static final function ip(): IPAddress
     {
         return static::$instances['ip'] ??= new IPAddress();
     }
@@ -38,11 +38,11 @@ abstract class BaseFunction extends Normalizer
     /**
      * Initalize or return a shared an instance of the Files class.
      *
-     * @return FileSystem Returns a file class instance
+     * @return FileManager Returns a file class instance
     */
-    public static function files(): FileSystem
+    public static final function files(): FileManager
     {
-        return static::$instances['files'] ??= new FileSystem();
+        return static::$instances['files'] ??= new FileManager();
     }
 
     /**
@@ -50,7 +50,7 @@ abstract class BaseFunction extends Normalizer
      *
      * @return TorDetector Returns a tor detector class instance
     */
-    public static function tor(): TorDetector
+    public static final function tor(): TorDetector
     {
         return static::$instances['tor'] ??= new TorDetector();
     }
@@ -60,7 +60,7 @@ abstract class BaseFunction extends Normalizer
      *
      * @return Maths Returns a math class instance
     */
-    public static function math(): Maths
+    public static final function math(): Maths
     {
         return static::$instances['math'] ??= new Maths();
     }
@@ -80,7 +80,7 @@ abstract class BaseFunction extends Normalizer
      * @throws BadMethodCallException When the called method does not exist.
      * @throws RuntimeException When the string is not valid UTF-8 or cannot be converted.
      */
-    public static function escape(string|array $input, string $context = 'html', ?string $encoding = null): array|string
+    public static final function escape(string|array $input, string $context = 'html', ?string $encoding = null): array|string
     {
         if (is_array($input)) {
             array_walk_recursive($input, function (&$value, $key) use ($context, $encoding) {

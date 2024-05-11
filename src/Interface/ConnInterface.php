@@ -9,7 +9,6 @@
  */
 namespace Luminova\Interface;
 
-interface ConnInterface 
+interface ConnInterface
 {
-
 }

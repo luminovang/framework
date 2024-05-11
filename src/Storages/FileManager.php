@@ -7,11 +7,11 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Application;
+namespace Luminova\Storages;
 
 use \Luminova\Exceptions\FileException;
 
-class FileSystem
+class FileManager
 {
     /**
      * Path to the system framework codes.

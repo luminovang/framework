@@ -210,7 +210,7 @@ abstract class BaseModel
      * @return mixed $results results.  
      * @throws RuntimeException If the third pary search controller class is not installed.
     */
-    public function doSearch(string $query, array $fields = ['*'], int $limit = 100, int $offset = 0, string $flag = 'any'): mixed 
+    public final function doSearch(string $query, array $fields = ['*'], int $limit = 100, int $offset = 0, string $flag = 'any'): mixed 
     {
         if ($limit < 0 || $offset < 0 || empty($query)) {
             return false;

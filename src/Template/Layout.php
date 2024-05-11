@@ -46,9 +46,9 @@ class Layout
     /**
      * Get the singleton instance of Layout.
      * 
-     * @return self Return the instance of Layout class.
+     * @return static Return the instance of Layout class.
      */
-    public static function getInstance(): self 
+    public static function getInstance(): static 
     {
         if (static::$instance === null) {
             static::$instance = new static();
@@ -63,14 +63,11 @@ class Layout
      * @param string $layout File name without extension (.php)
      * @example import(foo) or import(foo/bar).
      * 
-     * @return self Return the instance of Layout class.
+     * @return static Return the instance of Layout class.
      */
-    protected static function import(string $layout): self 
+    protected static function import(string $layout): static 
     {
-        $instance = new static();
-        $instance->layout($layout);
-
-        return $instance;
+        return (new static())->layout($layout);;
     }
 
     /**
@@ -143,7 +140,7 @@ class Layout
         $name = $name ?? $this->current;
 
         if ($name === null) {
-            throw new RuntimeException('No active section to stop');
+            throw new RuntimeException('No active section to end');
         }
 
         $content = ob_get_clean();
@@ -165,7 +162,7 @@ class Layout
      * @param string|null $section Section name to extend or pass null to load all sections.
      * @example extend('foo') or nested extend extend('foo.bar').
      * 
-     * @return string
+     * @return string Return the extended or inherited layout contents.
      */
     public function extend(?string $section = null): string
     {
@@ -185,7 +182,7 @@ class Layout
     /**
      * Get the layout sections contents without processing.
      *
-     * @return void
+     * @return string Return the inherited layout contents.
     */
     public function get(): string
     {

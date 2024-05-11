@@ -127,4 +127,71 @@ class Helper
     {
         return  trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
     }
+
+      /** 
+     * Fixes the broken css,image & links when added additional slash(/) at the router link
+     * The function will add the appropriate relative base based on how many invalid link detected.
+     *
+     * @param int $level the directory level from base directory controller/foo(1) controller/foo/bar(2)
+     *
+     * @return string relative path 
+    */
+    public static function relativeLevel(int $level = 0): string 
+    {
+        if ($level === 0) {
+            $uri = static::getViewUri();
+
+            if (($pos = strpos($uri, '/public')) !== false) {
+                $uri = substr($uri, $pos + 7);
+            }
+
+            $level = substr_count($uri, '/');
+        }
+
+        return str_repeat(($level >= 1 ? '../' : './'), $level);
+    }
+
+    /** 
+     * Get template base view segments
+     *
+     * @return string template view segments
+    */
+    private static function getViewUri(): string
+    {
+        if(isset($_SERVER['REQUEST_URI'])){
+            $basePath = isset($_SERVER['SCRIPT_NAME']) ? dirname($_SERVER['SCRIPT_NAME']) : '';
+
+            $url = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen($basePath));
+
+            if (($pos = strpos($url, '?')) !== false) {
+                $url = substr($url, 0, $pos);
+            }
+
+            return '/' . trim($url, '/');
+        }
+
+        return '/';
+    }
+
+     /**
+     * Convert view name to title and add suffix if specified
+     *
+     * @param string $view    View name
+     * @param bool   $suffix  Whether to add suffix
+     *
+     * @return string View title
+    */
+    public static function toTitle(string $view, bool $suffix = false): string 
+    {
+        $view = str_replace(['_', '-', ','], [' ', ' ', ''], $view);
+        $view = ucwords($view);
+
+        if ($suffix) {
+            if (!str_contains($view, '- ' . APP_NAME)) {
+                $view .= ' - ' . APP_NAME;
+            }
+        }
+
+        return trim($view);
+    }
 }

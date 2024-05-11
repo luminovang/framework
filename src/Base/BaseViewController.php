@@ -96,7 +96,7 @@ abstract class BaseViewController
      * 
      * @return Request $request http request object 
     */
-    protected function request(): Request
+    protected final function request(): Request
     {
         if($this->request === null){
             $this->request = new Request();
@@ -112,7 +112,7 @@ abstract class BaseViewController
      * 
      * @return InputValidator $validate input validation object 
     */
-    protected function validate(): InputValidator
+    protected final function validate(): InputValidator
     {
         if($this->validate === null){
             $this->validate = new InputValidator();
@@ -128,7 +128,7 @@ abstract class BaseViewController
      * 
      * @return Application $app Application instance
     */
-    protected function app(): Application
+    protected final function app(): Application
     {
         if($this->app === null){
             $this->app = Application::getInstance();
@@ -144,7 +144,7 @@ abstract class BaseViewController
      * 
      * @return Importer $app Application instance
     */
-    protected function library(): Importer
+    protected final function library(): Importer
     {
         if($this->library === null){
             $this->library = new Importer();
@@ -161,7 +161,7 @@ abstract class BaseViewController
      * 
      * @return int Return STATUS_SUCCESS on success, otherwise STATUS_ERROR failure.
     */
-    protected function view(string $view, array $options = []): int
+    protected final function view(string $view, array $options = []): int
     {
         return $this->app->view($view)->render($options);
     }
@@ -174,7 +174,7 @@ abstract class BaseViewController
      * 
      * @return string Return view contents which is ready to be rendered.
     */
-    protected function respond(string $view, array $options = []): string
+    protected final function respond(string $view, array $options = []): string
     {
         return $this->app->view($view)->respond($options);
     }

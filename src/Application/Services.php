@@ -10,7 +10,7 @@
 
 namespace Luminova\Application;
 
-use \Luminova\Application\FileSystem;
+use \Luminova\Storages\FileManager;
 use \Luminova\Exceptions\RuntimeException;
 use \Throwable;
 use \Exception;
@@ -185,7 +185,7 @@ class Services
 
         static::$instances = [];
 
-        return is_dir($servicePath) ? FileSystem::remove($servicePath) : false;
+        return is_dir($servicePath) ? FileManager::remove($servicePath) : false;
     }
 
     /**

@@ -10,7 +10,7 @@
 namespace Luminova\Storages;
 
 use \Luminova\Http\File;
-use \Luminova\Application\FileSystem;
+use \Luminova\Storages\FileManager;
 use \Luminova\Exceptions\StorageException;
 
 final class Uploader
@@ -39,7 +39,7 @@ final class Uploader
         if (static::execute($temp, $file->getTemp(), $chunk) && rename($temp, $destination)) {
             $file->free();
             if($symlink !== null){
-                FileSystem::symbolic($destination, $symlink);
+                FileManager::symbolic($destination, $symlink);
             }
             return true;
         }
@@ -68,7 +68,7 @@ final class Uploader
         if (move_uploaded_file($file->getTemp(),  $destination)) {
             $file->free();
             if($symlink !== null){
-                FileSystem::symbolic($destination, $symlink);
+                FileManager::symbolic($destination, $symlink);
             }
             return true;
         }
@@ -124,7 +124,7 @@ final class Uploader
         if ($chunks !== 1 || $chunk === $chunks) {
             if (rename($temp, $destination)) {
                 if($symlink !== null){
-                    FileSystem::symbolic($destination, $symlink);
+                    FileManager::symbolic($destination, $symlink);
                 }
                 return true;
             }

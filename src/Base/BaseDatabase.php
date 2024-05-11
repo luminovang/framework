@@ -168,7 +168,7 @@ abstract class BaseDatabase
      * @return array<int,mixed> Return database backups.
      * @internal 
      */
-    public static function getBackups(): array
+    public static final function getBackups(): array
     {
         return static::$databaseBackups;
     }
@@ -180,7 +180,7 @@ abstract class BaseDatabase
      * 
      * @return void 
     */
-    private function configure(array $config): void 
+    private final function configure(array $config): void 
     {
         $this->port = $config['port'] ?? 3306;
         $this->host = $config['host'] ?? 'localhost';

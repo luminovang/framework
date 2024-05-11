@@ -14,7 +14,7 @@ use \Luminova\Application\Functions;
 use \Luminova\Sessions\Session;
 use \Luminova\Library\Modules;
 use \Luminova\Languages\Translator;
-use \Luminova\Application\FileSystem;
+use \Luminova\Storages\FileManager;
 use \Luminova\Http\Request;
 use \App\Controllers\Config\Services;
 use \Luminova\Template\ViewResponse;
@@ -36,7 +36,7 @@ use \ReflectionMethod;
  * @method static Modules             import(...$params, bool $shared = true)               @return Modules
  * @method static Translator          language($locale, bool $shared = true)                @return Translator
  * @method static Logger              logger(string $extension = '.log', $shared = true)    @return Logger
- * @method static FileSystem          files($shared = true)                                 @return FileSystem
+ * @method static FileManager          files($shared = true)                                @return FileManager
  * @method static InputValidator      validate($shared = true)                              @return InputValidator
  * @method static Services            services($shared = true)                              @return Services
  * @method static ViewResponse        response(int $status, $shared = true)                 @return ViewResponse
@@ -69,7 +69,7 @@ class Factory
             'modules' => Modules::class,
             'language' => Translator::class,
             'logger' => Logger::class,
-            'files' => FileSystem::class,
+            'files' => FileManager::class,
             'validate' => InputValidator::class,
             'response' => ViewResponse::class,
             'services' => Services::class,

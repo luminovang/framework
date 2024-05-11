@@ -77,7 +77,7 @@ abstract class BaseApplication extends Foundation
      *
      * @return string URI of the current request 
      */
-    public function getView(): string 
+    public final function getView(): string 
     {
         return $this->router->getUriSegments();
     }
@@ -87,7 +87,7 @@ abstract class BaseApplication extends Foundation
      *
      * @return string
      */
-    public function getBase(): string 
+    public final function getBase(): string 
     {
         return $this->router->getBase();
     }

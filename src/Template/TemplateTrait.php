@@ -9,7 +9,7 @@
  */
 namespace Luminova\Template;
 
-use \Luminova\Application\FileSystem;
+use \Luminova\Storages\FileManager;
 use \Luminova\Template\Smarty;
 use \Luminova\Template\Twig;
 use \Luminova\Http\Header;
@@ -326,115 +326,6 @@ trait TemplateTrait
         throw new RuntimeException('Failed to instantiate class ' . $aliases);
     }
 
-    /**
-     * Sets project template options.
-     * 
-     * @param  array<string, mixed> $attributes
-     * 
-     * @return int Number of registered options
-     * @throws RuntimeException If there is an error setting the attributes.
-    */
-    private static function extract(array $attributes): void
-    {
-        if (TemplateConfig::$variablePrefixing === null) {
-            return;
-        }
-
-        $prefix = (TemplateConfig::$variablePrefixing ? '_' : '');
-        foreach ($attributes as $name => $value) {
-            static::assertValidKey($name);           
-
-            $key = is_integer($name) ? '_' . $name : $prefix . $name;
-            if ($key === '_' || $key === '') {
-                throw new RuntimeException("Invalid option key: '{$key}'. View option key must be non-empty strings.");
-            }
-
-            if (isset(static::$publicClasses[$key])) {
-                throw new RuntimeException("Class with the same option name: '{$key}' already exists. Use a different name or enable variable prefixing to retain the name.");
-            }
-
-            static::$publicOptions[$key] = $value;
-        }
-    }
-
-    /**
-     * Check if option keys is a valid PHP variable key.
-     * 
-     * @param string $key key name to check.
-     * @throws RuntimeException Throws if key is not a valid PHP variable key.
-    */
-    private static function assertValidKey(string $key): void 
-    {
-        if (preg_match('/[^a-zA-Z0-9_]/', $key)) {
-            throw new RuntimeException("Invalid option key: '{$key}'. Only letters, numbers, and underscores are allowed in variable names.");
-        }
-    }
-
-    /**
-     * Parse user template options
-     * 
-     * @param array<string,mixed> $options The template options.
-     * 
-     * @return array<string,mixed> The parsed options.
-    */
-    private function parseOptions(array $options = []): array 
-    {
-        $options['viewType'] = $this->viewType;
-        $options['href'] = static::link();
-        $options['asset'] = $options['href'] . 'assets/';
-        $options['active'] = $this->activeView;
-        
-        if(isset($options['nocache']) && !$options['nocache']){
-            $this->cacheIgnores[] = $this->activeView;
-        }
-
-        if(!isset($options['title'])){
-            $options['title'] = static::toTitle($options['active'], true);
-        }
-
-        if(!isset($options['subtitle'])){
-            $options['subtitle'] = static::toTitle($options['active']);
-        }
-
-        return $options;
-    }
-
-    /** 
-     * Get base view file directory
-     *
-     * @param string path
-     *
-     * @return string path
-    */
-    private static function trimDir(string $path): string 
-    {
-        return  rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-    }
-
-    /** 
-     * Get base view file directory
-     *
-     * @param string path
-     *
-     * @return string path
-    */
-    private static function withViewFolder(string $path): string 
-    {
-        return static::viewRoot() . trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-    }
-
-    /** 
-     * Get error file from directory
-     *
-     * @param string $filename file name
-     *
-     * @return string path
-    */
-    private static function getErrorFolder(string $filename): string 
-    {
-        return static::withViewFolder(static::$viewFolder) . 'system_errors' . DIRECTORY_SEPARATOR . $filename . '.php';
-    }
-
     /** 
      * Cache and store response to reuse on next request to same content.
      * 
@@ -610,7 +501,7 @@ trait TemplateTrait
             ), 404);
         } 
 
-        FileSystem::permission('rw');
+        FileManager::permission('rw');
         http_response_code($status);
         
         return true;
@@ -718,14 +609,14 @@ trait TemplateTrait
      * Render without smarty using default .php template engine.
      * 
      * @param array $options View options
-     * @param PageViewCache|null $__cache Cache instance if should cache page contents
-     * @param bool $__return Should return view contents.
+     * @param PageViewCache|null $_lmv_cache Cache instance if should cache page contents
+     * @param bool $_lmv_return Should return view contents.
      * 
      * @return bool|string Return true on success, false on failure.
     */
-    private function renderDefault(array $options, ?PageViewCache $__cache = null, bool $__return = false): bool|string
+    private function renderDefault(array $options, ?PageViewCache $_lmv_cache = null, bool $_lmv_return = false): bool|string
     {
-        $__viewType = $options['viewType'];
+        $_lmv_viewtype = $options['viewType'];
 
         if(TemplateConfig::$variablePrefixing !== null){
             static::extract($options);
@@ -733,23 +624,23 @@ trait TemplateTrait
         }
 
         include_once $this->templateFile;
-        $__contents = ob_get_clean();
-        /*if(preg_match("(error</b>:)(.+) in <b>(.+)</b> on line <b>(.+)</b>", $__contents, $regs)) { }*/
+        $_lmv_contents = ob_get_clean();
+        /*if(preg_match("(error</b>:)(.+) in <b>(.+)</b> on line <b>(.+)</b>", $_lmv_contents, $regs)) { }*/
 
-        [$__headers, $__contents] = static::assertMinifyAndSaveCache(
-            $__contents,
-            $__viewType,
+        [$_lmv_headers, $_lmv_contents] = static::assertMinifyAndSaveCache(
+            $_lmv_contents,
+            $_lmv_viewtype,
             $this->minifyCodeblocks, 
             $this->codeblockButton,
-            $__cache
+            $_lmv_cache
         );
 
-        if($__return){
-            return $__contents;
+        if($_lmv_return){
+            return $_lmv_contents;
         }
 
-        Header::parseHeaders($__headers);
-        echo $__contents;
+        Header::parseHeaders($_lmv_headers);
+        echo $_lmv_contents;
 
         return true;
     }
@@ -757,22 +648,22 @@ trait TemplateTrait
     /**
      * Render without in isolation mode
      * 
-     * @param string $__templateFile View template file 
+     * @param string $_lmv_viewfile View template file 
      * @param array $options View options
-     * @param PageViewCache|null $__cache Cache instance if should cache page contents
-     * @param bool $__ignore Ignore html codeblock during minimizing
-     * @param bool $__copy Allow copy on html code tag or not
-     * @param bool $__return Should return view contents.
+     * @param PageViewCache|null $_lmv_cache Cache instance if should cache page contents
+     * @param bool $_lmv_ignore Ignore html codeblock during minimizing
+     * @param bool $_lmv_copy Allow copy on html code tag or not
+     * @param bool $_lmv_return Should return view contents.
      * 
      * @return bool|string Return true on success, false on failure.
     */
     private static function renderIsolation(
-        string $__templateFile, 
+        string $_lmv_viewfile, 
         array $options,
-        ?PageViewCache $__cache = null,
-        bool $__ignore = true, 
-        bool $__copy = false,
-        bool $__return = false
+        ?PageViewCache $_lmv_cache = null,
+        bool $_lmv_ignore = true, 
+        bool $_lmv_copy = false,
+        bool $_lmv_return = false
     ): bool|string
     {
         $self = new class(static::$publicClasses) {
@@ -800,37 +691,37 @@ trait TemplateTrait
         };
 
         static::$publicClasses = [];
-        $__viewType = $options['viewType'];
-        if(($__prefix = TemplateConfig::$variablePrefixing) && $__prefix !== null){
-            $__prefix = ($__prefix ? '_' : '');
+        $_lmv_viewtype = $options['viewType'];
+        if(($_lmv_prefix = TemplateConfig::$variablePrefixing) && $_lmv_prefix !== null){
+            $_lmv_prefix = ($_lmv_prefix ? '_' : '');
 
-            foreach ($options as $__k => $__v) {
-                static::assertValidKey($__k);   
-                $__prefix = is_integer($__k) ? '_' . $__k : $__prefix . $__k; 
-                ${$__prefix} = $__v;
+            foreach ($options as $_lmv_k => $_lmv_v) {
+                static::assertValidKey($_lmv_k);   
+                $_lmv_prefix = is_integer($_lmv_k) ? '_' . $_lmv_k : $_lmv_prefix . $_lmv_k; 
+                ${$_lmv_prefix} = $_lmv_v;
             }
-            $__k = null;
-            $__v = null;
-            $__prefix = null;
+            $_lmv_k = null;
+            $_lmv_v = null;
+            $_lmv_prefix = null;
             $options = null;
         }
 
-        include_once $__templateFile;
-        $__contents = ob_get_clean();
-        [$__headers, $__contents] = static::assertMinifyAndSaveCache(
-            $__contents,
-            $__viewType,
-            $__ignore, 
-            $__copy,
-            $__cache
+        include_once $_lmv_viewfile;
+        $_lmv_contents = ob_get_clean();
+        [$_lmv_headers, $_lmv_contents] = static::assertMinifyAndSaveCache(
+            $_lmv_contents,
+            $_lmv_viewtype,
+            $_lmv_ignore, 
+            $_lmv_copy,
+            $_lmv_cache
         );
 
-        if($__return){
-            return $__contents;
+        if($_lmv_return){
+            return $_lmv_contents;
         }
 
-        Header::parseHeaders($__headers);
-        echo $__contents;
+        Header::parseHeaders($_lmv_headers);
+        echo $_lmv_contents;
 
         return true;
     }
@@ -1007,7 +898,7 @@ trait TemplateTrait
     */
     public static function link(string $filename = ''): string 
     {
-        $path = PRODUCTION ? '/' : static::calculateLevel(0);
+        $path = PRODUCTION ? '/' : Helper::relativeLevel();
         $root = (NOVAKIT_ENV === null && !PRODUCTION) ? 'public' : '';
         $base = rtrim($path . $root, '/') . '/';
 
@@ -1066,51 +957,6 @@ trait TemplateTrait
     }
 
     /** 
-     * Fixes the broken css,image & links when added additional slash(/) at the router link
-     * The function will add the appropriate relative base based on how many invalid link detected.
-     *
-     * @param int $level the directory level from base directory controller/foo(1) controller/foo/bar(2)
-     *
-     * @return string relative path 
-    */
-    private static function calculateLevel(int $level = 0): string 
-    {
-        if ($level === 0) {
-            $uri = static::getViewUri();
-
-            if (($pos = strpos($uri, '/public')) !== false) {
-                $uri = substr($uri, $pos + 7);
-            }
-
-            $level = substr_count($uri, '/');
-        }
-
-        return str_repeat(($level >= 1 ? '../' : './'), $level);
-    }
-
-    /** 
-     * Get template base view segments
-     *
-     * @return string template view segments
-    */
-    private static function getViewUri(): string
-    {
-        if(isset($_SERVER['REQUEST_URI'])){
-            $basePath = isset($_SERVER['SCRIPT_NAME']) ? dirname($_SERVER['SCRIPT_NAME']) : '';
-
-            $url = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen($basePath));
-
-            if (($pos = strpos($url, '?')) !== false) {
-                $url = substr($url, 0, $pos);
-            }
-
-            return '/' . trim($url, '/');
-        }
-
-        return '/';
-    }
-
-    /** 
      * Handle exceptions
      *
      * @param ExceptionInterface $exception
@@ -1132,24 +978,111 @@ trait TemplateTrait
     }
 
     /**
-     * Convert view name to title and add suffix if specified
-     *
-     * @param string $view    View name
-     * @param bool   $suffix  Whether to add suffix
-     *
-     * @return string View title
+     * Sets project template options.
+     * 
+     * @param  array<string, mixed> $attributes
+     * 
+     * @return int Number of registered options
+     * @throws RuntimeException If there is an error setting the attributes.
     */
-    private static function toTitle(string $view, bool $suffix = false): string 
+    private static function extract(array $attributes): void
     {
-        $view = str_replace(['_', '-', ','], [' ', ' ', ''], $view);
-        $view = ucwords($view);
-
-        if ($suffix) {
-            if (!str_contains($view, '- ' . APP_NAME)) {
-                $view .= ' - ' . APP_NAME;
-            }
+        if (TemplateConfig::$variablePrefixing === null) {
+            return;
         }
 
-        return trim($view);
+        $prefix = (TemplateConfig::$variablePrefixing ? '_' : '');
+        foreach ($attributes as $name => $value) {
+            static::assertValidKey($name);           
+
+            $key = is_integer($name) ? '_' . $name : $prefix . $name;
+            if ($key === '_' || $key === '') {
+                throw new RuntimeException("Invalid option key: '{$key}'. View option key must be non-empty strings.");
+            }
+
+            if (isset(static::$publicClasses[$key])) {
+                throw new RuntimeException("Class with the same option name: '{$key}' already exists. Use a different name or enable variable prefixing to retain the name.");
+            }
+
+            static::$publicOptions[$key] = $value;
+        }
+    }
+
+    /**
+     * Check if option keys is a valid PHP variable key.
+     * 
+     * @param string $key key name to check.
+     * @throws RuntimeException Throws if key is not a valid PHP variable key.
+    */
+    private static function assertValidKey(string $key): void 
+    {
+        if (preg_match('/[^a-zA-Z0-9_]/', $key)) {
+            throw new RuntimeException("Invalid option key: '{$key}'. Only letters, numbers, and underscores are allowed in variable names.");
+        }
+    }
+
+    /**
+     * Parse user template options
+     * 
+     * @param array<string,mixed> $options The template options.
+     * 
+     * @return array<string,mixed> The parsed options.
+    */
+    private function parseOptions(array $options = []): array 
+    {
+        $options['viewType'] = $this->viewType;
+        $options['href'] = static::link();
+        $options['asset'] = $options['href'] . 'assets/';
+        $options['active'] = $this->activeView;
+        
+        if(isset($options['nocache']) && !$options['nocache']){
+            $this->cacheIgnores[] = $this->activeView;
+        }
+
+        if(!isset($options['title'])){
+            $options['title'] = Helper::toTitle($options['active'], true);
+        }
+
+        if(!isset($options['subtitle'])){
+            $options['subtitle'] = Helper::toTitle($options['active']);
+        }
+
+        return $options;
+    }
+
+    /** 
+     * Get base view file directory
+     *
+     * @param string path
+     *
+     * @return string path
+    */
+    private static function trimDir(string $path): string 
+    {
+        return  rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    }
+
+    /** 
+     * Get base view file directory
+     *
+     * @param string path
+     *
+     * @return string path
+    */
+    private static function withViewFolder(string $path): string 
+    {
+        return static::viewRoot() . trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    }
+
+    /** 
+     * Get error file from directory
+     *
+     * @param string $filename file name
+     *
+     * @return string path
+    */
+    private static function getErrorFolder(string $filename): string 
+    {
+        return static::withViewFolder(static::$viewFolder) . 'system_errors' . DIRECTORY_SEPARATOR . $filename . '.php';
     }
 }

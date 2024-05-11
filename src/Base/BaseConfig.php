@@ -22,7 +22,7 @@ abstract class BaseConfig
      * 
      * @return mixed
     */
-    public static function getEnv(string $key, mixed $default = null, ?string $return = null): mixed 
+    public static final function getEnv(string $key, mixed $default = null, ?string $return = null): mixed 
     {
         $value = env($key, $default);
         

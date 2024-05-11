@@ -9,8 +9,8 @@
  */
 namespace Luminova\Storages;
 
-use \Luminova\Storages\StorageAdapters;
-use \Luminova\Application\FileSystem as Files;
+use \Luminova\Storages\Adapters\Adapters;
+use \Luminova\Storages\FileManager;
 use \League\Flysystem\Filesystem;
 use \League\Flysystem\FileAttributes;
 use \League\Flysystem\DirectoryAttributes;
@@ -19,7 +19,7 @@ use \Luminova\Time\Time;
 use \Luminova\Exceptions\StorageException;
 use \Exception;
 
-class Storage extends StorageAdapters
+class Storage extends Adapters
 {
     /**
       * The filesystem instance.
@@ -194,7 +194,7 @@ class Storage extends StorageAdapters
         $target = $this->config['base'] . ltrim($this->getDisk($target), DIRECTORY_SEPARATOR);
         $link = rtrim($this->config['assets'], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($link, DIRECTORY_SEPARATOR);
 
-        return Files::symbolic($target, $link);
+        return FileManager::symbolic($target, $link);
     }
 
     /**
@@ -340,7 +340,7 @@ class Storage extends StorageAdapters
             $name ??= basename($filename);
             $content = $this->read($filename, $steam);
 
-            return Files::download($content, $name, $headers);
+            return FileManager::download($content, $name, $headers);
             
         } catch (Exception $e) {
             StorageException::throwException($e->getMessage(), $e->getCode(), $e);

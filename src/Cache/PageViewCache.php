@@ -11,7 +11,7 @@ namespace Luminova\Cache;
 
 use \Luminova\Http\Header;
 use \Luminova\Time\Timestamp;
-use \Luminova\Application\FileSystem;
+use \Luminova\Storages\FileManager;
 use \DateTimeInterface;
 
 class PageViewCache
@@ -196,7 +196,7 @@ class PageViewCache
     */
     public function clear(): int 
     {
-        return FileSystem::remove($this->getLocation());
+        return FileManager::remove($this->getLocation());
     }
 
     /**

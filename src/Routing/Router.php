@@ -9,7 +9,6 @@
  */
 namespace Luminova\Routing;
 
-use \App\Controllers\Config\ViewErrors;
 use \Luminova\Http\Header;
 use \Luminova\Command\Terminal;
 use \Luminova\Routing\Bootstrap;
@@ -18,6 +17,7 @@ use \Luminova\Base\BaseApplication;
 use \Luminova\Base\BaseViewController;
 use \Luminova\Base\BaseConfig;
 use \Luminova\Exceptions\RouterException;
+use \Luminova\Interface\ErrorHandlerInterface;
 use \ReflectionMethod;
 use \ReflectionFunction;
 use \ReflectionNamedType;
@@ -964,19 +964,17 @@ final class Router
 
         try {
             $class = new ReflectionClass($className);
-            $isErrorClass = ($class->getName() === ViewErrors::class);
-
+ 
             if (!($class->isInstantiable() && (
                 $class->isSubclassOf(Terminal::class) || 
                 $class->isSubclassOf(BaseViewController::class) ||
-                $isErrorClass ||
                 $class->isSubclassOf(BaseApplication::class)))) {
                 RouterException::throwWith('invalid_controller', 1, null, $className);
             }
 
             $caller = $class->getMethod($method);
 
-            if ($caller->isPublic() && !$caller->isAbstract() && (!$caller->isStatic() || $isErrorClass)) {
+            if ($caller->isPublic() && !$caller->isAbstract() && (!$caller->isStatic() || $class->isSubclassOf(ErrorHandlerInterface::class))) {
                 if (isset($arguments['command']) && is_command()) {
                     $instance = new $className();
                     if(isset($instance->group) && $instance->group === static::getArgument(1)) {

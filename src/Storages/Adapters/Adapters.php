@@ -7,7 +7,7 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Storages;
+namespace Luminova\Storages\Adapters;
 
 use \Luminova\Exceptions\StorageException;
 use \League\Flysystem\FilesystemAdapter;
@@ -44,7 +44,7 @@ use \Sabre\DAV\Client as WebDevClient;
 use \League\Flysystem\ZipArchive\ZipArchiveAdapter as ZipAdapter;
 use \League\Flysystem\ZipArchive\FilesystemZipArchiveProvider as ZipClient;
 
-class StorageAdapters
+class Adapters
 {
     /** 
      * @var mixed|null $client Client instance 

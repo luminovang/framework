@@ -7,12 +7,8 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Database\Conn;
+namespace Luminova\Interface;
 
-use \Luminova\Interface\ConnInterface;
-use \PDO;
-
-class pdoConn extends PDO implements ConnInterface
+interface ErrorHandlerInterface
 {
-
 }

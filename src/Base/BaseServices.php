@@ -39,7 +39,7 @@ abstract class BaseServices extends Services implements ServicesInterface
      * @return true Return true service was added, otherwise throw an excption.
      * @throws RuntimeException If service already exist or unable to initiate class
      */
-    protected static function addService(string|object $classOrInstance, mixed ...$arguments): true 
+    protected static final function addService(string|object $classOrInstance, mixed ...$arguments): true 
     {
         $name = get_class_name($classOrInstance);
 
@@ -61,7 +61,7 @@ abstract class BaseServices extends Services implements ServicesInterface
      * @return array<string, mixed>
      * @internal 
     */
-    public static function getServices(): array 
+    public static final function getServices(): array 
     {
         return static::$serviceQueue;
     }

@@ -76,7 +76,7 @@ abstract class AppException extends Exception implements ExceptionInterface
      * 
      * @return bool Return true if is fatal, otherwise false
     */
-    protected static function isFatal(int $errno): bool 
+    protected static final function isFatal(int $errno): bool 
     {
         return in_array($errno, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR]);
     }

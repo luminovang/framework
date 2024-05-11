@@ -9,7 +9,7 @@
 */
 namespace Luminova\Template;
 
-use \Luminova\Application\FileSystem;
+use \Luminova\Storages\FileManager;
 use \Luminova\Cache\PageMinifier;
 use \Luminova\Http\Header;
 use \Luminova\Exceptions\JsonException;
@@ -223,7 +223,7 @@ class ViewResponse
      */
     public function download(string $fileOrContent, ?string $name = null, array $headers = []): bool 
     {
-        return FileSystem::download($fileOrContent, $name, $headers);
+        return FileManager::download($fileOrContent, $name, $headers);
     }
 
     /** 

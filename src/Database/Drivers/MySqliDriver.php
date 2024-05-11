@@ -21,6 +21,7 @@ use \stdClass;
 use \mysqli_sql_exception;
 use \TypeError;
 use \Exception;
+use mysqli;
 use \ReflectionClass;
 use \ReflectionException;
 
