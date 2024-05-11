@@ -9,46 +9,57 @@
  */
 namespace Luminova\Base;
 
-use \Luminova\Application\Services;
 use \Luminova\Interface\ServicesInterface;
 use \Luminova\Exceptions\RuntimeException;
 
-abstract class BaseServices extends Services implements ServicesInterface
+abstract class BaseServices implements ServicesInterface
 {
     /**
-     * @var array<string, mixed> $serviceQueue;
+     * @var array<string,array> $serviceQueue;
     */
     private static array $serviceQueue = [];
 
     /**
-     * Add instance or class name to service shared instance
-     * The last 2 argument should be boolean value to indicate whether shared instance or serialized cached 
+     * Add a service class to the service autoloading.
      *
-     * Usages:
-     * @example static::addService(Configuration::class) as $config = service('Configuration')
-     * @example static::addService('\Luminova\Config\Configuration') as $config = service('Configuration')
-     * @example static::addService(Configuration::class) as $config = service('Configuration')
-     * @example static::addService(new Configuration()) as $config = service('Configuration')
-     * @example Services::Configuration()
-     * 
-     * @param string|object $classOrInstance Class name or instance of a class
-     * @param mixed|arguments ...$arguments Arguments to initialize class with.
-     * @param bool $shared — Whether the instance should be shared (cached) or not, default true
-     * @param bool $serialize Whether the instance should be serialized and (cached) or not, default false.
-     * 
-     * @return true Return true service was added, otherwise throw an excption.
-     * @throws RuntimeException If service already exist or unable to initiate class
+     * Usage:
+     *     - static::newService(Configuration::class) as $config = service('Configuration')
+     *     - static::newService('\Luminova\Config\Configuration') as $config = service('Configuration')
+     *     - static::newService(Configuration:class, 'config') as $config = service('config')
+     *     - Services::Configuration()
+     *     - Services::config()
+     *
+     * @param class-string $class The class name to add to service.
+     * @param string|null $alias Service class name alias. Defaults to class name.
+     * @param bool $shared Whether the instance should be shared. Defaults to true.
+     * @param bool $serialize Whether the instance should be serialized and stored in cache. Defaults to false.
+     * @param array<int,mixed> $arguments Optional arguments to initialize the class with.
+     *
+     * @return bool Returns true if the service was added successfully, otherwise throws an exception.
+     * @throws RuntimeException If the service already exists or class argument is not an array list.
      */
-    protected static final function addService(string|object $classOrInstance, mixed ...$arguments): true 
+    protected static final function newService(
+        string $class, 
+        ?string $alias = null, 
+        bool $shared = true, 
+        bool $serialize = false, 
+        array $arguments = []
+    ): true 
     {
-        $name = get_class_name($classOrInstance);
+        $alias ??= get_class_name($class);
 
-        if(isset(static::$serviceQueue[$name])){
-            throw new RuntimeException('Error: service is already queued with same name "' . $name . '"');
+        if(isset(static::$serviceQueue[$alias])){
+            throw new RuntimeException(sprintf('Error: Service "%s" is already queued with the same name alias "%s"', $class, $alias));
         }
 
-        static::$serviceQueue[$name] = [
-            'service' => $classOrInstance,
+        if($arguments !== [] && !array_is_list($arguments)){
+            throw new RuntimeException('Invlaid argument, class arguments expected array to be list.');
+        }
+
+        static::$serviceQueue[$alias] = [
+            'service' => $class,
+            'shared' => $shared,
+            'serialize' => $serialize,
             'arguments' => $arguments
         ];
 
@@ -56,9 +67,9 @@ abstract class BaseServices extends Services implements ServicesInterface
     }
 
     /**
-     * Get queued services 
+     * Get queued services.
      * 
-     * @return array<string, mixed>
+     * @return array<string,array> Return queued services.
      * @internal 
     */
     public static final function getServices(): array 

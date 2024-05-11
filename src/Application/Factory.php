@@ -12,37 +12,35 @@ namespace Luminova\Application;
 use \Luminova\Time\Task;
 use \Luminova\Application\Functions;
 use \Luminova\Sessions\Session;
+use \Luminova\Cookies\Cookie;
 use \Luminova\Library\Modules;
 use \Luminova\Languages\Translator;
 use \Luminova\Storages\FileManager;
 use \Luminova\Http\Request;
-use \App\Controllers\Config\Services;
+use \Luminova\Application\Services;
+use \App\Controllers\Config\Services as BootServices;
 use \Luminova\Template\ViewResponse;
 use \Luminova\Logger\Logger;
 use \Luminova\Security\InputValidator;
 use \Luminova\Exceptions\RuntimeException;
 use \Exception;
 use \Throwable;
-use \ReflectionClass;
-use \ReflectionException;
-use \ReflectionMethod;
 
 /**
  * Factory methods classes.
  *
  * @method static Functions           functions(bool $shared = true)                        @return Functions
  * @method static Session             session(...$params, bool $shared = true)              @return Session
+ * @method static Cookie              cookie(...$params, bool $shared = true)               @return Cookie
  * @method static Task                task(...$params, bool $shared = true)                 @return Task
  * @method static Modules             import(...$params, bool $shared = true)               @return Modules
  * @method static Translator          language($locale, bool $shared = true)                @return Translator
  * @method static Logger              logger(string $extension = '.log', $shared = true)    @return Logger
  * @method static FileManager          files($shared = true)                                @return FileManager
  * @method static InputValidator      validate($shared = true)                              @return InputValidator
- * @method static Services            services($shared = true)                              @return Services
  * @method static ViewResponse        response(int $status, $shared = true)                 @return ViewResponse
  * @method static Request             request($shared = true)                               @return Request
 */
-
 class Factory 
 {
     /**
@@ -53,150 +51,91 @@ class Factory
     private static array $instances = [];
 
     /**
-     * Get the fully qualified class name of the factory based on the provided context.
+     * Available factory classes.
      *
-     * @param string $aliases The class name aliases
-     * 
-     * @return string|null The fully qualified class name
-    */
-    private static function locator(string $aliases): ?string
-    {
-        $aliases = strtolower($aliases);
-        $classes = [
-            'task' => Task::class,
-            'session' => Session::class,
-            'functions' => Functions::class,
-            'modules' => Modules::class,
-            'language' => Translator::class,
-            'logger' => Logger::class,
-            'files' => FileManager::class,
-            'validate' => InputValidator::class,
-            'response' => ViewResponse::class,
-            'services' => Services::class,
-            'request' => Request::class
-        ];
+     * @var array<string,class-string> $classes
+     */
+    private static array $classes = [
+        'task'       => Task::class,
+        'session'    => Session::class,
+        'cookie'     => Cookie::class,
+        'functions'  => Functions::class,
+        'modules'    => Modules::class,
+        'language'   => Translator::class,
+        'logger'     => Logger::class,
+        'files'      => FileManager::class,
+        'validate'   => InputValidator::class,
+        'response'   => ViewResponse::class,
+        'request'    => Request::class
+    ];
 
-        return $classes[$aliases] ?? null;
+    /**
+     * Dynamically create an instance of the specified factory method class.
+     *
+     * @param class-string|string $factory The class name or class name alias.
+     * @param array $arguments Arguments to pass to the factory constructor.
+     * @param bool $shared The last parameter to pass to the factory constructor indicate if it should return a shared instance.
+     * 
+     * @example Factory::method('foo', 'bar', false)
+     * @example Factory::method(false)
+     * 
+     * @return class-object|null An instance of the factory class, or null if not found.
+     * @throws RuntimeException If failed to instantiate the factory.
+     * 
+     * @ignore 
+     */
+    public static function __callStatic(string $factory, array $arguments): ?object
+    {
+        return static::call($factory, $arguments);
     }
 
     /**
      * Dynamically create an instance of the specified factory method class.
      *
-     * @param string $aliases The class name aliases
-     * @param array ...$arguments Parameters to pass to the factory constructor.
-     *      - The Last parameter to pass to the factory constructor indicate if it should return a shared instance
+     * @param class-string|string $factory The class name or class name alias.
+     * @param array $arguments Arguments to pass to the factory constructor.
+     * @param bool $shared The last parameter to pass to the factory constructor indicate if it should return a shared instance.
      * 
      * @example Factory::method('foo', 'bar', false)
      * @example Factory::method(false)
      * 
-     * @return object|null An instance of the factory class, or null if not found.
+     * @return class-object|null An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
      * 
      * @ignore 
      */
-    public static function __callStatic(string $aliases, $arguments): ?object
+    public function __call(string $factory, array $arguments): ?object
     {
-        $shared = true; 
-        $class = static::locator($aliases);
-
-        if ($class === null) {
-            throw new RuntimeException("Factory with method name '$aliases' does not exist.");
-        }
-
-        if (isset($arguments[count($arguments) - 1]) && is_bool($arguments[count($arguments) - 1])) {
-            $shared = array_pop($arguments);
-        }
-
-        return static::create($class, $shared, ...$arguments);
-    }
-
-    /**
-     * Finds and call an entry of the container by its identifier.
-     *
-     * @param string $aliases Identifier of the entry to look for.
-     *
-     * @throws RuntimeException No method was found for identifier.
-     * @throws RuntimeException Error while instantiating the method class.
-     *
-     * @return mixed Instance of called method.
-    */
-    public static function call(string $aliases): mixed 
-    {
-        $class = static::locator($aliases);
-
-        if ($class === null) {
-            throw new RuntimeException("Factory with method name '$aliases' does not exist.");
-        }
-
-        return static::create($class);
-    }
-
-    /**
-     * Create an instance of the specified factory class.
-     *
-     * @param string $class The class class
-     * @param bool $shared Whether the instance should be shared or not.
-     * @param mixed ...$arguments Parameters to pass to the factory constructor.
-     * 
-     * @return object|null An instance of the factory class, or null if not found.
-     * @throws RuntimeException If failed to instantiate the factory.
-     */
-    private static function create(string $class, bool $shared = true, ...$arguments): ?object
-    {
-        $aliases = strtolower($class);
-
-        if ($shared && isset(static::$instances[$aliases])) {
-            return static::$instances[$aliases];
-        }
-  
-        $instance = null;
-
-        try {
-            $instance = new $class(...$arguments);
-
-            if ($shared) {
-                static::$instances[$aliases] = $instance;
-            }
-        } catch (Throwable | Exception $e) {
-            throw new RuntimeException("Failed to instantiate factory method '$class', " . $e->getMessage(), $e->getCode(), $e);
-        }
-
-        return $instance;
+        return static::call($factory, $arguments);
     }
 
     /**
      * Check if class is available in factories
      *
-     * @param string $aliases The context or class name.
+     * @param class-string|string $alias The class name or alias.
      * 
-     * @return bool 
+     * @return bool Return true if class is available in factories, false otherwise.
      */
-    public static function has(string $aliases): bool
+    public static function has(string $alias): bool
     {
-        $aliases = get_class_name($aliases);
-
-        return static::locator($aliases) !== null;
+        return static::locator($alias)[0] !== null;
     }
 
     /**
-     * Get all classes that extends a base class 
+     * Return shared service class instance.
      * 
-     * @param string $baseClass The base class to check 
+     * @param bool $shared Shared instance or not (default: true).
      * 
-     * @return array 
+     * @return Services Return instance of service class
     */
-    public static function extenders(string $baseClass): array 
+    public static function service(): Services
     {
-        $subClasses = [];
-        $allClasses = get_declared_classes();
-
-        foreach ($allClasses as $name) {
-            if (is_subclass_of($name, $baseClass)) {
-                $subClasses[] = $name;
-            }
+        if(isset(static::$instances['services'])){
+            return static::$instances['services'];
         }
-
-        return $subClasses;
+   
+        static::$instances['services'] = new Services();
+        return static::$instances['services'];
     }
 
     /**
@@ -207,62 +146,88 @@ class Factory
     */
     public static function register(): void 
     {
-        $instance = static::create(Services::class);
+        try{
+            static $boot = null;
 
-        $instance->bootstrap();
-        $queues = $instance->getServices();
-     
-        foreach($queues as $name => $service){
-            try{
-                $added = $instance->addInstance($service['service'], true, ...$service['arguments']);
-                if($added === false){
-                    logger('critical', 'Unable to register service "' . $name . '"');
-                }
-            }catch(RuntimeException $e){
-                logger('critical', 'Error occurred while registering service "' . $name . '". Exception: ' . $e->getMessage());
+            if($boot === null){
+                $boot = new BootServices();
             }
+            
+            $boot->bootstrap();
+            $instance = static::service();
+            $instance->queuService($boot->getServices());
+            static::$instances['services'] = $instance;
+        }catch(RuntimeException $e){
+            logger('critical', 'Error occurred while registering service, Exception: ' . $e->getMessage());
         }
     }
 
     /**
-     * Call all public methods within a given class.
+     * Dynamically create an instance of the specified factory method class.
+     *
+     * @param class-string|string $factory The class name or class name alias.
+     * @param array $arguments Argument to pass to the factory constructor.
      * 
-     * @param string|object $classInstance class name or instance of a class.
-     * @param bool $return return type.
-     * 
-     * @return int|array<string, mixed> 
-     * @throws RuntimeException If failed to instantiate class.
-    */
-    public static function callAll(string|object $classInstance, bool $return = false): int|array
+     * @return class-object|null An instance of the factory class, or null if not found.
+     * @throws RuntimeException If failed to instantiate the factory.
+     */
+    private static function call(string $factory, array $arguments): ?object
     {
-        try{
-            $reflectionClass = new ReflectionClass($classInstance);
-            $methods = $reflectionClass->getMethods(ReflectionMethod::IS_PUBLIC);
-        
-            $calls = [];
-            $count = 0;
+        $shared = true; 
+        [$class, $alias] = static::locator($factory);
 
-            foreach ($methods as $method) {
-                if ($method->class === get_class($classInstance)) {
-                    $name = $method->name;
-                    if($return){
-                        $calls[$name] = $classInstance->$name();
-                    }else{
-                        $classInstance->$name();
-                        $count++;
-                    }
-                }
-            }
-
-            if($return){
-                return $calls;
-            }
-
-            return $count;
-        }catch(RuntimeException | ReflectionException $e){
-            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+        if ($class === null) {
+            throw new RuntimeException("Factory with method name '$factory' does not exist.");
         }
 
-        return 0;
+        if (isset($arguments[count($arguments) - 1]) && is_bool($arguments[count($arguments) - 1])) {
+            $shared = array_pop($arguments);
+        }
+
+        if ($shared && isset(static::$instances[$alias])) {
+            return static::$instances[$alias];
+        }
+
+        return static::create($class, $alias, $shared, ...$arguments);
+    }
+
+    /**
+     * Create an instance of the specified factory class.
+     *
+     * @param class-string $class The class name.
+     * @param string|null $alias The alias of the factory class.
+     * @param bool $shared Whether the instance should be shared or not.
+     * @param mixed ...$arguments Parameters to pass to the factory constructor.
+     * 
+     * @return class-object|null An instance of the factory class, or null if not found.
+     * @throws RuntimeException If failed to instantiate the factory.
+     */
+    private static function create(string $class, ?string $alias = null, bool $shared = true, ...$arguments): ?object
+    {
+        $instance = null;
+        try {
+            $instance = new $class(...$arguments);
+
+            if ($shared && $alias) {
+                static::$instances[$alias] = $instance;
+            }
+        } catch (Throwable|Exception $e) {
+            throw new RuntimeException("Failed to instantiate factory method '$class', " . $e->getMessage(), $e->getCode(), $e);
+        }
+
+        return $instance;
+    }
+
+    /**
+     * Get the fully qualified class name of the factory based on the provided context.
+     *
+     * @param class-string|string $class The class name or alias.
+     * 
+     * @return array<int,mixed> Return the fully qualified class name and alias.
+    */
+    private static function locator(string $class): array
+    {
+        $class = strtolower(get_class_name($class) ?? '');
+        return [static::$classes[$class] ?? null, $class];
     }
 }

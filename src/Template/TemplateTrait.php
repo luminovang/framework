@@ -294,36 +294,33 @@ trait TemplateTrait
     /**
      * Export / Register a class instance to make it accessible within the view template.
      *
-     * @param string|object $classOrInstance The class name or instance to register.
-     * @param string|null $aliases Optional class aliases
+     * @param class-string|class-object $class The class name or instance to register.
+     * @param string|null $alias Optional class alias.
      * 
      * @return bool true on success, false on failure
      * @throws RuntimeException If the class does not exist or failed.
      * @throws RuntimeException If there is an error during registration.
     */
-    public function export(string|object $classOrInstance, ?string $aliases = null): bool 
+    public function export(string|object $class, ?string $alias = null): bool 
     {
-        if ($classOrInstance === '' || $aliases === '') {
+        if ($class === '' || $alias === '') {
             throw new RuntimeException('Invalid arguments provided, arguments expected a non-blank string.');
         }
 
-        $aliases ??= get_class_name($classOrInstance);
+        $alias ??= get_class_name($class);
 
-        if (isset(static::$publicClasses[$aliases])) {
-            throw new RuntimeException("Class with the same name: '{$aliases}' already exists.");
+        if (isset(static::$publicClasses[$alias])) {
+            throw new RuntimeException("Class with the same name: '{$alias}' already exists.");
         }
 
-        if (is_string($classOrInstance)) {
-            static::$publicClasses[$aliases] = new $classOrInstance();
+        if (is_string($class)) {
+            static::$publicClasses[$alias] = new $class();
             return true;
         }
         
-        if (is_object($classOrInstance)) {
-            static::$publicClasses[$aliases] = $classOrInstance;
-            return true;
-        }
+        static::$publicClasses[$alias] = $class;
 
-        throw new RuntimeException('Failed to instantiate class ' . $aliases);
+        return true;
     }
 
     /** 

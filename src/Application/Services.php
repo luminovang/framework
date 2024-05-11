@@ -13,7 +13,6 @@ namespace Luminova\Application;
 use \Luminova\Storages\FileManager;
 use \Luminova\Exceptions\RuntimeException;
 use \Throwable;
-use \Exception;
 use \ReflectionClass;
 use \ReflectionException;
 
@@ -27,9 +26,16 @@ class Services
     private static string $suffix = '.class.txt';
     
     /**
+     * Autoload services.
+     *
+     * @var array<string,array> $services
+    */
+    private static array $services = [];
+
+    /**
      * Cached instances of service classes.
      *
-     * @var array $instances
+     * @var array<array,object> $instances
     */
     private static array $instances = [];
 
@@ -37,86 +43,253 @@ class Services
      * Dynamically create an instance of the specified service class.
      * Get shared instance or re-imitate stored instance with a new parameters 
      *
-     * @param string $service The context or name of the service.
+     * @param class-string|string $service The class name or class name alias of the service.
      * @param array $arguments Param arguments to instigate class with 
      * @param bool $shared Whether the instance should be shared (cached) or not.
      * @param bool $serialize Whether the instance should be serialized and (cached) or not.
-     *      - defaults false
      * 
      * @example Services::method('foo')
      * 
-     * @return object|null An instance of the service class, or null if not found.
+     * @return class-object|null An instance of the service class, or null if not found.
      * @throws RuntimeException If failed to instantiate the service.
      * @ignore 
     */
-    public static function __callStatic(string $service, $arguments): ?object
+    public static function __callStatic(string $service, array $arguments): ?object
     {
-        $cloneArgument = $arguments;
-        $shared = static::isShared($arguments);
-        $serialize = static::isSerialize($arguments);
-
-        if (empty($arguments)) {
-            $name = get_class_name($service);
-            $shared = $serialize && !$shared ? true : $shared;
-
-            if($shared || $serialize){
-                $instance = static::getInstance($name);
-            }
-           
-            if($instance === null){
-                throw new RuntimeException("Failed to instantiate service '$name'. Service not found ");
-            }
-
-            return $instance;
-        }
-
-        $newInstance = static::newInstance($service, ...$cloneArgument);
-
-        return $newInstance;;
+        return static::call($service, $arguments, $arguments);
     }
 
     /**
-     * Finds and call an entry of the container by its identifier.
+     * Dynamically create an instance of the specified service class.
+     * Get shared instance or re-imitate stored instance with a new parameters 
      *
-     * @param string $aliases Identifier of the entry to look for.
-     *
-     * @throws RuntimeException No method was found for identifier.
-     * @throws RuntimeException Error while instantiating the method class.
-     *
-     * @return mixed Instance of called method.
+     * @param class-string|string $service The class name or class name alias of the service.
+     * @param array $arguments Param arguments to instigate class with 
+     * @param bool $shared Whether the instance should be shared (cached) or not.
+     * @param bool $serialize Whether the instance should be serialized and (cached) or not.
+     * 
+     * @example Services::method('foo')
+     * 
+     * @return class-object|null An instance of the service class, or null if not found.
+     * @throws RuntimeException If failed to instantiate the service.
+     * @ignore 
     */
-    public static function call(string $aliases): mixed 
+    public function __call(string $service, array $arguments): ?object
     {
-        $instance = static::getInstance($aliases);
-        
-        if($instance === null){
-            throw new RuntimeException("Failed to instantiate service '$aliases'. Service not found ");
-        }
-
-        return $instance;
+        return static::call($service, $arguments, $arguments);
     }
 
     /**
      * Check if service has a cached instance of class
      *
-     * @param string $service The service context or name of the service.
+     * @param class-string|string $service The service class name or class name alias.
      * 
-     * @return bool 
+     * @return bool Return true if service class exists, false otherwise.
     */
     public static function has(string $service): bool
     {
-        $name = get_class_name($service);
-        $path = path('services') . $name . static::$suffix;
+        $alias = get_class_name($service);
 
-        return file_exists($path) || isset(static::$instances[$name]);
+        if(isset(static::$services[$alias]) || isset(static::$instances[$alias])){
+            return true;
+        }
+
+        $path = path('services') . $alias . static::$suffix;
+        return file_exists($path);
+    }
+
+    /**
+     * Delete a service and it cached instances
+     *
+     * @param class-string|string $service The ervice class name or alias.
+     * 
+     * @return bool Return true if cached service was deleted, false otherwise.
+    */
+    public static function delete(string $service): bool
+    {
+        $alias = get_class_name($service);
+
+        if(isset(static::$instances[$alias])){
+            unset(static::$instances[$alias]);
+        }
+
+        if(isset(static::$services[$alias])){
+            unset(static::$services[$alias]);
+        }
+
+
+        $path = path('services') . $alias . static::$suffix;
+        return file_exists($path) ? unlink($path) : false;
+    }
+
+    /**
+     * Clear all service and cached instance.
+     * 
+     * @return bool Return true if cached services was cleared, false otherwise.
+    */
+    public static function clear(): bool
+    {
+        $path = path('services');
+        static::$instances = [];
+        static::$services = [];
+
+        return is_dir($path) ? FileManager::remove($path) : false;
+    }
+
+    /**
+     * Get method instance 
+     * 
+     * @param string $alias The service class name alias.
+     * 
+     * @return class-object|null $instance Instance or null
+    */
+    public static function getInstance(string $alias): ?object
+    {
+        if(isset(static::$instances[$alias])){
+            return static::$instances[$alias];
+        }
+
+        return static::getCachedInstance($alias);
+    }
+
+    /**
+     * Add service instance.
+     *
+     * @param class-string|class-object $service Class name or instance of a class.
+     * @example \Namespace\Utils\MyClass, MyClass::class or new MyClass()
+     * @param arguments ...$arguments Arguments to initialize class with.
+     *  -   The last 2 argument should be boolean values to indicate whether to shared instance or cached.
+     * @param bool $shared Whether the instance should be shared (default: true).
+     * @param bool $serialize Whether the instance should be serialized and (default: false).
+     * 
+     * @return class-object|bool Return object instance service class, false otherwise.
+     * @throws RuntimeException If service already exist or unable to initiate class.
+    */
+    public static function add(string|object $service, mixed ...$arguments): object|bool
+    {
+        $alias = get_class_name($service);
+   
+        if (static::has($alias)) {
+            throw new RuntimeException("Failed to add service, service with '$alias'. already exist remove service before adding it again");
+        }
+
+        try{
+            $shared = static::isShared($arguments);
+            $serialize = static::isSerialize($arguments);
+            $shared = ($serialize && !$shared) ? true : $shared;
+
+            if (empty($arguments)) {
+                $instance = is_string($service) ? new $service() : $service;
+            } else {
+                $instance = (new ReflectionClass($service))->newInstance(...$arguments);
+            }
+
+            if($shared || $serialize){
+                static::prepareInstance($alias, $instance, $shared, $serialize);
+            }
+
+            return $instance;
+        } catch (ReflectionException | Throwable $e) {
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+        }
+
+        return false;
+    }
+
+    /**
+     * Reinstate instance with new contractor arguments
+     *
+     * @param class-string|string $service The class name or class name alias of the service.
+     * @example \Namespace\Utils\MyClass, MyClass::class or MyClass
+     * @param mixed ...$arguments Arguments to initialize class with
+     * The last param argument should be boolean value to indicate whether shared cached or not
+     * @param bool $shared Whether the instance should be shared (cached) or not.
+     * @param bool $serialize Whether the instance should be serialized and (cached) or not.
+     *      - defaults false
+     * 
+     * @return class-object Return updated class instance.
+     * @throws RuntimeException If service does not exist or unable to initiate class.
+     */
+    public static function renew(string $service, mixed ...$arguments): object
+    { 
+        $alias = get_class_name($service);
+        $instance = static::getInstance($alias);
+            
+        if($instance === null){
+            throw new RuntimeException("Service not found '$service'. only existing service can be reinstated");
+        }
+
+        $shared = static::isShared($arguments);
+        $serialize = static::isSerialize($arguments);
+        $shared = ($serialize && !$shared) ? true : $shared;
+
+        if (!empty($arguments)) {
+            try{
+                $reflection = new ReflectionClass($instance);
+                $instance = $reflection->newInstance(...$arguments);
+            } catch (ReflectionException|Throwable $e) {
+                throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        static::prepareInstance($alias, $instance, $shared, $serialize);
+
+        return $instance;
+    }
+
+    /**
+     * Autoload application services.
+     * 
+     * @param array $services Queued services.
+     * 
+     * @return true Return true.
+     * @internal
+    */
+    public static function queuService(array $services): true
+    {
+        static::$services = $services;
+
+        return true;
+    }
+
+    /**
+     * Call class instance.
+     *
+     * @param class-string|string $service The class name or class name alias of the service.
+     * @param array $arguments Arguments to instigate class with.
+     * @param array $clone Clone a copy of arguments to instigate class with.
+     * 
+     * @return class-object|null An instance of the service class, or null if not found.
+     * @throws RuntimeException If failed to instantiate the service.
+    */
+    private static function call(string $service, array $arguments, array $clone = []): ?object
+    {
+        $shared = static::isShared($arguments);
+        $serialize = static::isSerialize($arguments);
+
+        if (empty($arguments)) {
+            $shared = ($serialize && !$shared) ? true : $shared;
+
+            if($shared || $serialize){
+                $instance = static::getInstance(get_class_name($service));
+            }
+           
+            if($instance === null){
+                throw new RuntimeException("Failed to instantiate service '$service'. Service not found ");
+            }
+
+            return $instance;
+        }
+
+        return static::renew($service, ...$clone);
     }
 
     /**
      * Is shared instance 
      * 
-     * @param array $arguments
+     * @param array $arguments Class arguments.
      * 
-     * @return bool
+     * @return bool  Return true if instance should be shared, false otherwise.
     */
     private static function isShared(array &$arguments): bool
     {
@@ -135,9 +308,9 @@ class Services
     /**
      * Is shared instance should be serialize
      * 
-     * @param array $arguments
+     * @param array $arguments Class arguments.
      * 
-     * @return bool
+     * @return bool Return true if instance should be serialized, false otherwise.
     */
     private static function isSerialize(array &$arguments): bool
     {
@@ -154,258 +327,10 @@ class Services
     }
 
     /**
-     * Delete a service and it cached instances
-     *
-     * @param string $service Your service public name 
-     * 
-     * @return bool
-    */
-    public static function delete(string $service): bool
-    {
-        $name = get_class_name($service);
-        $path = path('services') . $name . static::$suffix;
-
-        if(isset(static::$instances[$name])){
-            unset(static::$instances[$name]);
-        }
-
-        return file_exists($path) ? unlink($path) : false;
-    }
-
-    /**
-     * Clear all service and cached instance
-     *
-     * @param string $service Your service public name 
-     * 
-     * @return bool
-    */
-    public static function clear(): bool
-    {
-        $servicePath = path('services');
-
-        static::$instances = [];
-
-        return is_dir($servicePath) ? FileManager::remove($servicePath) : false;
-    }
-
-    /**
-     * Get shared cached instance from stored file 
-     *
-     * @param string $name The context name
-     * 
-     * @return mixed 
-    */
-    private static function getCachedInstance(string $name): mixed
-    {
-        $path = path('services') . $name . static::$suffix;
-
-        if (file_exists($path)) {
-            $stringInstance = file_get_contents($path);
-
-            if ($stringInstance !== false) {
-                return unserialize($stringInstance);
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Get method instance 
-     * 
-     * @param string $name
-     * 
-     * @return ?object $instance Instance or null
-    */
-    public static function getInstance(string $name): ?object
-    {
-        if(isset(static::$instances[$name])){
-            $instance = static::$instances[$name];
-        }else{
-            $instance = static::getCachedInstance($name);
-        }
-
-        return $instance;
-    }
-
-    /**
-     * Get shared instance 
-     * 
-     * @param string $name
-     * 
-     * @return ?object $instance Instance or null
-    */
-    public static function getSharedInstance(string $name): ?object
-    {
-        if(isset(static::$instances[$name])){
-            return  static::$instances[$name];
-        }
-
-        return null;
-    }
-
-    /**
-     * Add service instance.
-     *
-     * @param string|object $service Class name or instance of a class 
-     * @example \Namespace\Utils\MyClass, MyClass::class or new MyClass()
-     * @param arguments ...$arguments Arguments to initialize class with
-     * The last param argument should be boolean value to indicate whether shared cached or not
-     * @param bool $shared Whether the instance should be shared (cached) or not.
-     * @param bool $serialize Whether the instance should be serialized and (cached) or not.
-     *      - defaults false
-     * 
-     * @return object|false Return object instance if shared, false otherwise
-     * @throws RuntimeException If service already exist or unable to initiate class 
-    */
-    public static function add(string|object $service, ...$arguments): object|false
-    {
-        return static::addInstance($service, false, ...$arguments);
-    }
-
-    /**
-     * Reinstate instance with new contractor arguments
-     *
-     * @param string $service Service name or class namespace
-     *      -   @example \Namespace\Utils\MyClass, MyClass or MyClass::class
-     * @param arguments ...$arguments Arguments to initialize class with
-     * The last param argument should be boolean value to indicate whether shared cached or not
-     * @param bool $serialize Whether the instance should be serialized and (cached) or not.
-     *      - defaults false
-     * @param bool $shared Whether the instance should be shared (cached) or not.
-     * 
-     * @return object Return updated class instance
-     * @throws RuntimeException If service does not exist or unable to initiate class
-     */
-    public static function config(string $service, ...$arguments): object
-    {
-        $shared = static::isShared($arguments);
-        $serialize = static::isSerialize($arguments);
-        $name = get_class_name($service);
-        $instance = null;
-
-        if (empty($arguments)) {
-            $shared = $serialize && !$shared ? true : $shared;
-
-            if($shared || $serialize){
-                $instance = static::getInstance($name);
-            }
-           
-        }
-
-        try{
-            if($instance === null){
-                $instance = new $service(...$arguments);
-
-                if($shared || $serialize){
-                    static::prepareInstance($name, $instance, $shared, $serialize);
-                }
-            }
-        }catch(Exception|Throwable $e){
-            throw new RuntimeException("Failed to instantiate service '$name'. Service not found ", $e->getCode(), $e);
-        }
-
-        return $instance;;
-    }
-
-    /**
-     * Reinstate instance with new contractor arguments
-     *
-     * @param string $service Service name or class namespace
-     * @example \Namespace\Utils\MyClass, MyClass or MyClass::class
-     * @param arguments ...$arguments Arguments to initialize class with
-     * The last param argument should be boolean value to indicate whether shared cached or not
-     * @param bool $shared Whether the instance should be shared (cached) or not.
-     * @param bool $serialize Whether the instance should be serialized and (cached) or not.
-     *      - defaults false
-     * 
-     * @return object Return updated class instance
-     * @throws RuntimeException If service does not exist or unable to initiate class.
-     */
-    public static function newInstance(string $service, ...$arguments): object
-    { 
-        $name = get_class_name($service);
-        $instance = static::has($name) ? static::getInstance($name) : null;
-            
-        if($instance === null){
-            throw new RuntimeException("Service not found '$service'. only existing service can be reinstated");
-        }
-
-        $shared = static::isShared($arguments);
-        $serialize = static::isSerialize($arguments);
-        $shared = $serialize && !$shared ? true : $shared;
-
-        if (!empty($arguments)) {
-            try{
-                $reflection = new ReflectionClass($instance);
-                $instance = $reflection->newInstance(...$arguments);
-            } catch (ReflectionException|Throwable $e) {
-                throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-            }
-        }
-
-        static::prepareInstance($name, $instance, $shared, $serialize);
-
-        return $instance;
-    }
-
-    /**
-     * Update service instance
-     *
-     * @param string|object $service Class name or instance of a class 
-     * @example \Namespace\Utils\MyClass, MyClass::class or new MyClass()
-     * @param bool $initializing Don't throw exception if service already exist
-     * @param arguments ...$arguments Arguments to initialize class with
-     * The last param argument should be boolean value to indicate whether shared cached or not
-     * @param bool $shared Whether the instance should be shared (cached) or not.
-     * @param bool $serialize Whether the instance should be serialized and (cached) or not.
-     *      - defaults false
-     * 
-     * @return object|bool Return object instance if shared, false otherwise
-     * @throws RuntimeException If service already exist or unable to initiate class 
-    */
-    public static function addInstance(string|object $service, bool $initializing = false, ...$arguments): object|bool
-    {
-        $name = get_class_name($service);
-   
-        if (static::has($name)) {
-            if($initializing){
-                return true;
-            }
-            
-            throw new RuntimeException("Failed to add service, service with '$name'. already exist remove service before adding it again");
-
-            return false;
-        }
-
-        try{
-            $shared = static::isShared($arguments);
-            $serialize = static::isSerialize($arguments);
-            $shared = $serialize && !$shared ? true : $shared;
-
-            if (empty($arguments)) {
-                $instance = is_string($service) ? new $service() : $service;
-            } else {
-                $reflection = new ReflectionClass($service);
-                $instance = $reflection->newInstance(...$arguments);
-                //$instance = $reflection->newInstanceArgs(...$arguments);
-            }
-
-            static::prepareInstance($name, $instance, $shared, $serialize);
-
-            return $instance;
-        } catch (ReflectionException|Throwable $e) {
-            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-        }
-
-        return false;
-    }
-
-    /**
      * Prepare Instance to save on serialized object or shared instance 
      * 
-     * @param string $name service name 
-     * @param object $instance object instance 
+     * @param string $name Service class name  alias.
+     * @param class-object|null $instance object instance 
      * @param bool $shared Should share instance 
      * @param bool $serialize Should serialize instance 
      * 
@@ -413,18 +338,22 @@ class Services
      * @throws Throwable
     */
     private static function prepareInstance(
-        string $name, 
-        object $instance, 
+        string $alias, 
+        ?object $instance = null, 
         bool $shared = true, 
         bool $serialize = false
     ): void 
     {
-        if($shared){
-            static::$instances[$name] = $instance;
+        if($instance === null){
+            return;
+        }
+
+        if($shared || $serialize){
+            static::$instances[$alias] = $instance;
         }
 
         if($serialize){
-            static::cacheInstance($name, $instance);
+            static::cacheInstance($alias, $instance);
         }
     }
 
@@ -456,5 +385,38 @@ class Services
         }
 
         return false;
+    }
+
+    /**
+     * Get shared cached instance from stored file 
+     *
+     * @param string $name The class name alias.
+     * 
+     * @return class-object|null Return class object or null.
+    */
+    private static function getCachedInstance(string $alias): mixed
+    {
+        $path = path('services') . $alias . static::$suffix;
+
+        if (file_exists($path)) {
+            $content = file_get_contents($path);
+
+            if ($content !== false) {
+                return unserialize($content);
+            }
+        }
+
+        if(isset(static::$services[$alias])){
+            $service = static::$services[$alias];
+            $instance = new $service['service'](...$service['arguments']);
+
+            if($service['shared'] || $service['serialize']){
+                static::prepareInstance($alias, $instance, $service['shared'], $service['serialize']);
+            }
+
+            return $instance;
+        }
+
+        return null;
     }
 }

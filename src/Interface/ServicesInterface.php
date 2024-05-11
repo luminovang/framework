@@ -9,17 +9,23 @@
  */
 namespace Luminova\Interface;
 
+use \Luminova\Exceptions\RuntimeException;
 
 interface ServicesInterface
 {
     /**
-     * Bootstrap all your application services 
-     * Add each service in a new line within the bootstrap method 
+     * Register bootstrap autoload all your application services.
+     * Add each service in a new line within the bootstrap method.
      * 
-     * @example static::addService(ServiceTest::class, "Test Argument");
-     * @example static::addService(ServiceTest::class, "Test Argument", true, false);
+     * Usage:
+     *     - static::newService(Configuration::class) as $config = service('Configuration')
+     *     - static::newService('\Luminova\Config\Configuration') as $config = service('Configuration')
+     *     - static::newService(Configuration:class, 'config') as $config = service('config')
+     *     - Services::Configuration()
+     *     - Services::config()
      * 
-     * @return void 
+     * @return void
+     * @throws RuntimeException Throws If the service already exists causing duplicate service or invalid class arguments.
     */
-    public static function bootstrap(): void;
+    public function bootstrap(): void;
 }
