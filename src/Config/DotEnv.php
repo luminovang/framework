@@ -12,7 +12,7 @@ namespace Luminova\Config;
 use \Luminova\Exceptions\FileException;
 use \SplFileObject;
 
-class DotEnv
+final class DotEnv
 {
     /**
      * Register environment variables from a .env file.

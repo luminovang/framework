@@ -9,7 +9,7 @@
 */
 namespace Luminova\Http;
 
-class Encoder
+final class Encoder
 {
     /**
      * Encode the content using specified compression algorithm if supported by the client.

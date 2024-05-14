@@ -9,7 +9,7 @@
 */
 namespace Luminova\Command\Novakit;
 
-class Commands 
+final class Commands 
 {
     /**
      * List of available commands

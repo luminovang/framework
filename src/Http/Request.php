@@ -41,7 +41,7 @@ use \Luminova\Exceptions\SecurityException;
  * @param mixed $default  (optional) The default value to return if the key is not found.
  * @return mixed Response from HTTP request method body key value.
  */
-class Request
+final class Request
 {
     /**
      * Http request method and body.

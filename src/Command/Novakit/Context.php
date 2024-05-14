@@ -115,10 +115,10 @@ class Context extends BaseConsole
         PHP;
 
         $newContext = <<<PHP
-            new Bootstrap('$name' $onError)
+            new Context('$name' $onError)
         PHP;
 
-        $postion = strpos($indexContent, '->bootstraps($app,') + strlen('->bootstraps($app,');
+        $postion = strpos($indexContent, 'app()->context(') + strlen('app()->context(');
         $content = substr_replace($indexContent, "\n$newContext,", $postion, 0);
 
         if (strpos($name, ' ') !== false) {

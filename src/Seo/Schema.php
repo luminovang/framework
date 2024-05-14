@@ -11,7 +11,7 @@ namespace Luminova\Seo;
 
 use \Luminova\Time\Time;
 
-class Schema
+final class Schema
 {
     /**
      * @var string $link application view link.

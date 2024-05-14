@@ -12,7 +12,7 @@ namespace Luminova\Languages;
 
 use \Luminova\Exceptions\NotFoundException;
 
-class Translator
+final class Translator
 {
     /**
      * The current language/locale to work with.

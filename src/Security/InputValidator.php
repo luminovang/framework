@@ -13,7 +13,7 @@ namespace Luminova\Security;
 use \Luminova\Interface\ValidationInterface;
 use \JsonException;
 
-class InputValidator implements ValidationInterface
+final class InputValidator implements ValidationInterface
 {
     /**
      * @var array $failures validated errors messages.

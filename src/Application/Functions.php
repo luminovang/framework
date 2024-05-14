@@ -20,4 +20,4 @@ use Luminova\Base\BaseFunction;
  * @method static Math                math()      @return Math
 */
 
-class Functions extends BaseFunction{}
+final class Functions extends BaseFunction{}

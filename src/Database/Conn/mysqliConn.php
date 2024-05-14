@@ -12,7 +12,7 @@ namespace Luminova\Database\Conn;
 use \Luminova\Interface\ConnInterface;
 use \mysqli;
 
-class mysqliConn extends mysqli implements ConnInterface
+final class mysqliConn extends mysqli implements ConnInterface
 {
 
 }

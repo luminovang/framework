@@ -9,7 +9,7 @@
  */
 namespace Luminova\Command;
 
-class TextUtils 
+final class TextUtils 
 {
     /**
      * ansi character reset flag.

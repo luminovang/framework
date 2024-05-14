@@ -14,7 +14,7 @@ use \ReflectionClass;
 use \ReflectionException;
 use \ReflectionMethod;
 
-class Caller 
+final class Caller 
 {
       /**
      * Get all classes that extends a base class 

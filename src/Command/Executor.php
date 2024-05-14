@@ -20,7 +20,7 @@ use \Luminova\Command\Novakit\Builder;
 use \Luminova\Command\Novakit\Context;
 use \Luminova\Command\Novakit\Commands;
 
-class Executor
+final class Executor
 {
     /**
      * Run console command
@@ -33,8 +33,7 @@ class Executor
     public static function call(Terminal $terminal, array $options): int
     {
         $command = trim($terminal->getCommand());
-   
-        $newCommand = match($command){
+        $newCommand = (string) match($command){
             '-help', '--help' => Help::class,
             'create:controller','create:view','create:class', => Generators::class,
             'list' => Lists::class,
@@ -43,18 +42,16 @@ class Executor
             'generate:key','generate:sitemap','env:add','env:remove' => System::class,
             'build:project' => Builder::class,
             'context' => Context::class,
-            default => null
+            default => ''
         };
 
-        if ($newCommand === null) {
+        if ($newCommand === '') {
             $terminal::error('Unknown command ' . $terminal::color("'$command'", 'red') . ' not found', null);
 
             return STATUS_ERROR;
         } 
 
-        $instance = new $newCommand();
- 
-        return (int) $instance->run($options);
+        return (int) (new $newCommand())->run($options);
     }
 
     /**

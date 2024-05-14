@@ -16,7 +16,7 @@ use \Luminova\Application\Functions;
 use \Luminova\Exceptions\RuntimeException;
 use \DOMDocument;
 
-class Sitemap
+final class Sitemap
 {
     /**
      * Visited links 
@@ -115,6 +115,10 @@ class Sitemap
 
         foreach ($urls as $page) {
             $link = str_replace(rtrim($url, '/') . '/', APP_URL . '/', $page['link']);
+            if($link === APP_URL . '/public'){
+                $link = APP_URL;
+            }
+
             $lastmod = ($page['lastmod'] === null) ? static::getLastmodified($link, $app) : $page['lastmod'];
 
             $xml .= '   <url>' . PHP_EOL;
@@ -164,7 +168,7 @@ class Sitemap
             }
         }
         
-        return $lastmod ?? date('Y-m-d\TH:i:sP');
+        return date('Y-m-d\TH:i:sP', strtotime($lastmod ?? date('Y-m-d H:i:s')));
     }
 
     /**

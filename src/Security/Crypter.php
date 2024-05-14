@@ -17,7 +17,7 @@ use \App\Controllers\Config\Encryption;
 /**
  * The Crypter class provides methods for encrypting and decrypting data using encryption algorithms in OpenSSL or Sodium.
 */
-class Crypter 
+final class Crypter 
 {
     /**
      * The supported cipher algorithms and their properties.

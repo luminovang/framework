@@ -19,7 +19,7 @@ use \Luminova\Time\Time;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \DateTimeInterface;
 
-class Builder extends Connection 
+final class Builder extends Connection 
 {  
     /**
      * Class instance

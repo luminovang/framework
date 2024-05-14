@@ -11,7 +11,7 @@ namespace Luminova\Command;
 
 use \Luminova\Command\TextUtils;
 
-class Colors 
+final class Colors 
 {
     /**
      * Text Foreground color list

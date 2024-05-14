@@ -11,7 +11,7 @@ namespace Luminova\Library;
 
 use \Luminova\Exceptions\RuntimeException;
 
-class Modules
+final class Modules
 {
     /**
      * Register the autoloader with PHP's SPL autoload stack.

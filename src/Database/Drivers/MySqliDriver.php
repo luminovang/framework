@@ -21,11 +21,10 @@ use \stdClass;
 use \mysqli_sql_exception;
 use \TypeError;
 use \Exception;
-use mysqli;
 use \ReflectionClass;
 use \ReflectionException;
 
-class MySqliDriver implements DatabaseInterface 
+final class MySqliDriver implements DatabaseInterface 
 {
     /**
      * Mysqli Database connection instance
@@ -125,7 +124,7 @@ class MySqliDriver implements DatabaseInterface
         try{
             $socket = null;
             if (is_command() || NOVAKIT_ENV !== null || $this->config->socket) {
-                $socket = (empty($this->config->socket_path) ? ini_get('mysqli.default_socket') : $this->config->socket_path);
+                $socket = (($this->config->socket_path === '' || $this->config->socket_path === null) ? ini_get('mysqli.default_socket') : $this->config->socket_path);
             }
          
             $this->connection = new mysqliConn(

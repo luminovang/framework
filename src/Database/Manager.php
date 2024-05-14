@@ -13,7 +13,7 @@ use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Storages\FileManager;
 
-class Manager 
+final class Manager 
 {
     /**
      * @var null|DatabaseInterface $db 

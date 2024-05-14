@@ -12,7 +12,7 @@ namespace Luminova\Database\Conn;
 use \Luminova\Interface\ConnInterface;
 use \PDO;
 
-class pdoConn extends PDO implements ConnInterface
+final class pdoConn extends PDO implements ConnInterface
 {
 
 }

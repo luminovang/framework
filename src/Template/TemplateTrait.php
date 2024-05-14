@@ -172,7 +172,7 @@ trait TemplateTrait
      * @return void
      * @internal 
     */
-    protected function initialize(): void
+    protected final function initialize(): void
     {
         static::$documentRoot = root();
         static::$minifyContent = (bool) env('page.minification', false);
@@ -187,10 +187,10 @@ trait TemplateTrait
      *
      * @param string $key property name 
      *
-     * @return mixed 
+     * @return mixed Return option or class object.
      * @internal 
     */
-    protected static function attrGetter(string $key): mixed 
+    protected static final function attrGetter(string $key): mixed 
     {
         if (array_key_exists($key, static::$publicOptions)) {
             return static::$publicOptions[$key];
@@ -207,14 +207,307 @@ trait TemplateTrait
      *
      * @return self $this
     */
-    public function codeblock(bool $minify, bool $button = false): self 
+    public final function codeblock(bool $minify, bool $button = false): self 
     {
         $this->minifyCodeblocks = $minify;
         $this->codeblockButton = $button;
 
         return $this;
     }
-   
+
+    /** 
+     * Set sub view folder name to look for template file within the `resources/views/`.
+     *
+     * @param string $path folder name to search for view.
+     *
+     * @return self $this Instance of self.
+    */
+    public final function setFolder(string $path): self
+    {
+        $this->subViewFolder = trim($path, DIRECTORY_SEPARATOR);
+
+        return $this;
+    }
+
+    /** 
+     * Add a view to page cache ignore list.
+     *
+     * @param string|array<int, string> $viewName view name or array of view names.
+     *
+     * @return self $this Instance of self.
+    */
+    public final function noCaching(array|string $viewName): self
+    {
+        if(is_string($viewName)){
+            $this->cacheIgnores[] = $viewName;
+        }else{
+            $this->cacheIgnores = $viewName;
+        }
+        
+        return $this;
+    }
+
+    /**
+     * Export / Register a class instance to make it accessible within the view template.
+     *
+     * @param class-string|class-object $class The class name or instance of a class to register.
+     * @param string|null $alias Optional class alias.
+     * 
+     * @return bool true on success, false on failure
+     * @throws RuntimeException If the class does not exist or failed.
+     * @throws RuntimeException If there is an error during registration.
+    */
+    public final function export(string|object $class, ?string $alias = null): bool 
+    {
+        if ($class === '' || $alias === '') {
+            throw new RuntimeException('Invalid arguments provided, arguments expected a non-blank string.');
+        }
+
+        $alias ??= get_class_name($class);
+
+        if (isset(static::$publicClasses[$alias])) {
+            throw new RuntimeException("Class with the same name: '{$alias}' already exists.");
+        }
+
+        if (is_string($class)) {
+            static::$publicClasses[$alias] = new $class();
+            return true;
+        }
+        
+        static::$publicClasses[$alias] = $class;
+
+        return true;
+    }
+
+    /** 
+     * Cache and store response to reuse on next request to same content.
+     * 
+     * @param DateTimeInterface|int|null $expire Cache expiration default, set to null to use default expiration from .env file.
+     * 
+     * @example Usage example with cache 
+     * ```
+     * $cache = $this-app->cache(60); 
+     * //Check if already cached before caching again.
+     * if($cache->expired()){
+     *      $heavy = $db->doHeavyProcess();
+     *      $cache->view('foo')->render(['data' => $heavy]);
+     * }else{
+     *      $cache->reuse();
+     * }```
+     * @return self $this Instance of self.
+    */
+    public final function cache(DateTimeInterface|int|null $expiry = null): self 
+    {
+        $this->forceCache = true;
+
+        if($expiry !== null){
+            $this->cacheExpiry = $expiry;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Check if page cache has expired 
+     * 
+     * @return bool Returns true if cache doesn't exist or expired.
+    */
+    public final function expired(): bool
+    {
+        return Helper::expired(static::$cacheFolder);
+    }
+
+    /**
+     * Render cached content if cache exist.
+     * 
+     * @return int Returns status code success if cache exist and rendered else return error.
+     * @throws RuntimeException Throws if called without calling `cache` method or if cache file os not found.
+    */
+    public final function reuse(): int
+    {
+        if (!$this->forceCache) {
+            throw new RuntimeException('Cannot call reuse method with first calling cache method');
+        }
+
+        $this->forceCache = false;
+        $cache = Helper::getCache(static::$cacheFolder, $this->cacheExpiry);
+
+        if ($cache->read()) {
+            return STATUS_SUCCESS;
+        }
+
+        throw new RuntimeException('Cache not found');
+    }
+
+    /** 
+     * Redirect to view url
+     *
+     * @param string $view view name
+     * @param int $response_code response status code
+     *
+     * @return void
+    */
+    public final function redirect(string $view, int $response_code = 0): void 
+    {
+        $to = APP_URL;
+
+        if ($view !== '' && $view !== '/') {
+            $to .= '/' . $view;
+        }
+
+        header("Location: $to", true, $response_code);
+        exit(STATUS_SUCCESS);
+    }
+
+     /** 
+     * render render template view
+     *
+     * @param string $viewName view name
+     * @param string $viewType Type of content not same as header Content-Type
+     * - html
+     * - json
+     * - text
+     * - xml
+     *
+     * @return self $this
+    */
+    public final function view(string $viewName, string $viewType = 'html'): self 
+    {
+        $viewName = trim($viewName, '/');
+        $viewType = strtolower($viewType);
+    
+        if(!in_array($viewType, ['html', 'json', 'text', 'xml'])){
+            throw new RuntimeException(sprintf('Invalid argument, "%s" required types (html, json, text or xml). To render other formats use helper function `response()->render()`', $viewType));
+        }
+
+        $this->templateDir = static::withViewFolder(static::$viewFolder);
+
+        if($this->subViewFolder !== ''){
+            $this->templateDir .= $this->subViewFolder . DIRECTORY_SEPARATOR;
+        }
+
+        $this->templateFile = $this->templateDir . $viewName . static::dot();
+
+        if (!file_exists($this->templateFile) && PRODUCTION) {
+            $viewName = '404';
+            $this->templateFile = $this->templateDir . $viewName . static::dot();
+        }
+
+        $this->viewType = $viewType;
+        $this->activeView = $viewName;
+
+        return $this;
+    }
+
+    /**
+     * Render view content with additional options available as globals within the template view.
+     *
+     * @param array<string, mixed> $options Additional parameters to pass in the template file.
+     * @param int $status HTTP status code (default: 200 OK).
+     * 
+     * @example `$this->app->view('name')->render([])` Display your template view with options.
+     * 
+     * @return int The HTTP status code.
+     * @throws RuntimeException If the view rendering fails.
+     */
+    public final function render(array $options = [], int $status = 200): int 
+    {
+        return ($this->call($options, $status) ? STATUS_SUCCESS : STATUS_ERROR);
+    }
+
+    /**
+     * Get the rendered contents of a view.
+     *
+     * @param array<string, mixed> $options Additional parameters to pass in the template file.
+     * @param int $status HTTP status code (default: 200 OK).
+     * 
+     * @example `$content = $this->app->view('name')->respond([])` Display your template view or send as an email.
+     * 
+     * @return string The rendered view contents.
+     * @throws RuntimeException If the view rendering fails.
+     */
+    public final function respond(array $options = [], int $status = 200): string
+    {
+        return $this->call($options, $status, true);
+    }
+
+    /**
+     * Retrieves information about a view file.
+     *
+     * @return array An associative array containing information about the view file:
+     *    -  'location': The full path to the view file.
+     *    -  'engine': The template engine.
+     *    -  'size': The size of the view file in bytes.
+     *    -  'timestamp': The last modified timestamp of the view file.
+     *    -  'modified': The last modified date and time of the view file (formatted as 'Y-m-d H:i:s').
+     *    -  'dirname': The directory name of the view file.
+     *    -  'extension': The extension of the view file.
+     *    -  'filename': The filename (without extension) of the view file.
+    */
+    public final function viewInfo(): array 
+    {
+        $viewPath = root(static::$viewFolder) . $this->activeView . static::dot();
+        clearstatcache(true, $viewPath);
+        $info = [
+            'location' => $viewPath,
+            'engine' => static::engine(),
+            'size' => 0,
+            'timestamp' => 0,
+            'modified' => '',
+            'dirname' => null,
+            'extension' => null,
+            'filename' => null,
+        ];
+
+        if (is_file($viewPath)) {
+            $info['size'] = filesize($viewPath);
+
+            $timestamp = filemtime($viewPath);
+            $info['timestamp'] = $timestamp;
+            $info['modified'] = Time::fromTimestamp((int) $timestamp)->format('Y-m-d H:i:s');
+
+            $pathInfo = pathinfo($viewPath);
+            $info['dirname'] = $pathInfo['dirname'] ?? null;
+            $info['extension'] = $pathInfo['extension'] ?? null;
+            $info['filename'] = $pathInfo['filename'] ?? null;
+        }
+
+        return $info;
+    }
+
+    /**
+     * Create a public link to of a file, directory, or a view.
+     * 
+     * @param string $filename Filename to prepend to base.
+     * 
+     * @return string Return a public url of file.
+    */
+    public static final function link(string $filename = ''): string 
+    {
+        $base = PRODUCTION ? '/' : Helper::relativeLevel() . ((NOVAKIT_ENV === null) ? 'public/' : '/');
+        
+        if($filename === ''){
+            return $base;
+        }
+
+        return $base . ltrim($filename, '/');
+    }
+
+    /** 
+     * Set if view base context should be cached.
+     * Useful in api context to manually handle caching.
+     *
+     * @param bool $allow true or false
+     *
+     * @return self $this
+    */
+    public final function cacheable(bool $allow): self
+    {
+        $this->contextCaching = $allow;
+
+        return $this;
+    }
+
     /** 
      * Get view root folder
      *
@@ -257,150 +550,6 @@ trait TemplateTrait
     private static function engine(): string 
     {
         return strtolower(TemplateConfig::$templateEngine ?? 'default');
-    }
-
-    /** 
-     * Set sub view folder name to look for template file within the `resources/views/`.
-     *
-     * @param string $path folder name to search for view.
-     *
-     * @return self $this Instance of self.
-    */
-    public function setFolder(string $path): self
-    {
-        $this->subViewFolder = trim($path, DIRECTORY_SEPARATOR);
-
-        return $this;
-    }
-
-    /** 
-     * Add a view to page cache ignore list.
-     *
-     * @param string|array<int, string> $viewName view name or array of view names.
-     *
-     * @return self $this Instance of self.
-    */
-    public function noCaching(array|string $viewName): self
-    {
-        if(is_string($viewName)){
-            $this->cacheIgnores[] = $viewName;
-        }else{
-            $this->cacheIgnores = $viewName;
-        }
-        
-        return $this;
-    }
-
-    /**
-     * Export / Register a class instance to make it accessible within the view template.
-     *
-     * @param class-string|class-object $class The class name or instance to register.
-     * @param string|null $alias Optional class alias.
-     * 
-     * @return bool true on success, false on failure
-     * @throws RuntimeException If the class does not exist or failed.
-     * @throws RuntimeException If there is an error during registration.
-    */
-    public function export(string|object $class, ?string $alias = null): bool 
-    {
-        if ($class === '' || $alias === '') {
-            throw new RuntimeException('Invalid arguments provided, arguments expected a non-blank string.');
-        }
-
-        $alias ??= get_class_name($class);
-
-        if (isset(static::$publicClasses[$alias])) {
-            throw new RuntimeException("Class with the same name: '{$alias}' already exists.");
-        }
-
-        if (is_string($class)) {
-            static::$publicClasses[$alias] = new $class();
-            return true;
-        }
-        
-        static::$publicClasses[$alias] = $class;
-
-        return true;
-    }
-
-    /** 
-     * Cache and store response to reuse on next request to same content.
-     * 
-     * @param DateTimeInterface|int|null $expire Cache expiration default, set to null to use default expiration from .env file.
-     * 
-     * @example Usage example with cache 
-     * ```
-     * $cache = $this-app->cache(60); 
-     * //Check if already cached before caching again.
-     * if($cache->expired()){
-     *      $heavy = $db->doHeavyProcess();
-     *      $cache->view('foo')->render(['data' => $heavy]);
-     * }else{
-     *      $cache->reuse();
-     * }```
-     * @return self $this Instance of self.
-    */
-    public function cache(DateTimeInterface|int|null $expiry = null): self 
-    {
-        $this->forceCache = true;
-
-        if($expiry !== null){
-            $this->cacheExpiry = $expiry;
-        }
-
-        return $this;
-    }
-
-    /**
-     * Check if page cache has expired 
-     * 
-     * @return bool Returns true if cache doesn't exist or expired.
-    */
-    public function expired(): bool
-    {
-        return Helper::expired(static::$cacheFolder);
-    }
-
-    /**
-     * Render cached content if cache exist.
-     * 
-     * @return int Returns status code success if cache exist and rendered else return error.
-     * @throws RuntimeException Throws if called without calling `cache` method or if cache file os not found.
-    */
-    public function reuse(): int
-    {
-        if (!$this->forceCache) {
-            throw new RuntimeException('Cannot call reuse method with first calling cache method');
-        }
-
-        $this->forceCache = false;
-        $cache = Helper::getCache(static::$cacheFolder, $this->cacheExpiry);
-
-        if ($cache->read()) {
-            return STATUS_SUCCESS;
-        }
-
-        throw new RuntimeException('Cache not found');
-    }
-
-    /** 
-     * Redirect to view url
-     *
-     * @param string $view view name
-     * @param int $response_code response status code
-     *
-     * @return void
-    */
-    public function redirect(string $view, int $response_code = 0): void 
-    {
-        $to = APP_URL;
-
-        if ($view !== '' && $view !== '/') {
-            $to .= '/' . $view;
-        }
-
-        header("Location: $to", true, $response_code);
-        exit(STATUS_SUCCESS);
     }
 
     /** 
@@ -692,13 +841,13 @@ trait TemplateTrait
         if(($_lmv_prefix = TemplateConfig::$variablePrefixing) && $_lmv_prefix !== null){
             $_lmv_prefix = ($_lmv_prefix ? '_' : '');
 
-            foreach ($options as $_lmv_k => $_lmv_v) {
-                static::assertValidKey($_lmv_k);   
-                $_lmv_prefix = is_integer($_lmv_k) ? '_' . $_lmv_k : $_lmv_prefix . $_lmv_k; 
-                ${$_lmv_prefix} = $_lmv_v;
+            foreach ($options as $_lmv_key => $_lmv_value) {
+                static::assertValidKey($_lmv_key);   
+                $_lmv_prefix = is_integer($_lmv_key) ? '_' . $_lmv_key : $_lmv_prefix . $_lmv_key; 
+                ${$_lmv_prefix} = $_lmv_value;
             }
-            $_lmv_k = null;
-            $_lmv_v = null;
+            $_lmv_key = null;
+            $_lmv_value = null;
             $_lmv_prefix = null;
             $options = null;
         }
@@ -768,157 +917,6 @@ trait TemplateTrait
         $headers['default_headers'] = true;
 
         return [$headers, $content];
-    }
-
-    /** 
-     * render render template view
-     *
-     * @param string $viewName view name
-     * @param string $viewType Type of content not same as header Content-Type
-     * - html
-     * - json
-     * - text
-     * - xml
-     *
-     * @return self $this
-    */
-    public function view(string $viewName, string $viewType = 'html'): self 
-    {
-        $viewName = trim($viewName, '/');
-        $viewType = strtolower($viewType);
-    
-        if(!in_array($viewType, ['html', 'json', 'text', 'xml'])){
-            throw new RuntimeException(sprintf('Invalid argument, "%s" required types (html, json, text or xml). To render other formats use helper function `response()->render()`', $viewType));
-        }
-
-        $this->templateDir = static::withViewFolder(static::$viewFolder);
-
-        if($this->subViewFolder !== ''){
-            $this->templateDir .= $this->subViewFolder . DIRECTORY_SEPARATOR;
-        }
-
-        $this->templateFile = $this->templateDir . $viewName . static::dot();
-
-        if (!file_exists($this->templateFile) && PRODUCTION) {
-            $viewName = '404';
-            $this->templateFile = $this->templateDir . $viewName . static::dot();
-        }
-
-        $this->viewType = $viewType;
-        $this->activeView = $viewName;
-
-        return $this;
-    }
-
-    /**
-     * Render view content with additional options available as globals within the template view.
-     *
-     * @param array<string, mixed> $options Additional parameters to pass in the template file.
-     * @param int $status HTTP status code (default: 200 OK).
-     * 
-     * @example `$this->app->view('name')->render([])` Display your template view with options.
-     * 
-     * @return int The HTTP status code.
-     * @throws RuntimeException If the view rendering fails.
-     */
-    public function render(array $options = [], int $status = 200): int 
-    {
-        return ($this->call($options, $status) ? STATUS_SUCCESS : STATUS_ERROR);
-    }
-
-    /**
-     * Get the rendered contents of a view.
-     *
-     * @param array<string, mixed> $options Additional parameters to pass in the template file.
-     * @param int $status HTTP status code (default: 200 OK).
-     * 
-     * @example `$content = $this->app->view('name')->respond([])` Display your template view or send as an email.
-     * 
-     * @return string The rendered view contents.
-     * @throws RuntimeException If the view rendering fails.
-     */
-    public function respond(array $options = [], int $status = 200): string
-    {
-        return $this->call($options, $status, true);
-    }
-
-    /**
-     * Retrieves information about a view file.
-     *
-     * @return array An associative array containing information about the view file:
-     *    -  'location': The full path to the view file.
-     *    -  'engine': The template engine.
-     *    -  'size': The size of the view file in bytes.
-     *    -  'timestamp': The last modified timestamp of the view file.
-     *    -  'modified': The last modified date and time of the view file (formatted as 'Y-m-d H:i:s').
-     *    -  'dirname': The directory name of the view file.
-     *    -  'extension': The extension of the view file.
-     *    -  'filename': The filename (without extension) of the view file.
-    */
-    public function viewInfo(): array 
-    {
-        $viewPath = root(static::$viewFolder) . $this->activeView . static::dot();
-        clearstatcache(true, $viewPath);
-        $info = [
-            'location' => $viewPath,
-            'engine' => static::engine(),
-            'size' => 0,
-            'timestamp' => 0,
-            'modified' => '',
-            'dirname' => null,
-            'extension' => null,
-            'filename' => null,
-        ];
-
-        if (is_file($viewPath)) {
-            $info['size'] = filesize($viewPath);
-
-            $timestamp = filemtime($viewPath);
-            $info['timestamp'] = $timestamp;
-            $info['modified'] = Time::fromTimestamp((int) $timestamp)->format('Y-m-d H:i:s');
-
-            $pathInfo = pathinfo($viewPath);
-            $info['dirname'] = $pathInfo['dirname'] ?? null;
-            $info['extension'] = $pathInfo['extension'] ?? null;
-            $info['filename'] = $pathInfo['filename'] ?? null;
-        }
-
-        return $info;
-    }
-
-    /**
-     * Create a public link to of a file, directory, or a view.
-     * 
-     * @param string $filename Filename to prepend to base.
-     * 
-     * @return string Return a public url of file.
-    */
-    public static function link(string $filename = ''): string 
-    {
-        $path = PRODUCTION ? '/' : Helper::relativeLevel();
-        $root = (NOVAKIT_ENV === null && !PRODUCTION) ? 'public' : '';
-        $base = rtrim($path . $root, '/') . '/';
-
-        if($filename === ''){
-            return $base;
-        }
-
-        return $base . ltrim($filename, '/');
-    }
-
-    /** 
-     * Set if view base context should be cached.
-     * Useful in api context to manually handle caching.
-     *
-     * @param bool $allow true or false
-     *
-     * @return self $this
-    */
-    public function cacheable(bool $allow): self
-    {
-        $this->contextCaching = $allow;
-
-        return $this;
     }
 
     /** 

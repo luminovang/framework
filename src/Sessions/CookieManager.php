@@ -14,7 +14,7 @@ use \App\Controllers\Config\Session as CookieConfig;
 use \Luminova\Exceptions\JsonException;
 use \Throwable;
 
-class CookieManager implements SessionManagerInterface 
+final class CookieManager implements SessionManagerInterface 
 { 
     /**
      * @var string $storage Session storage name 

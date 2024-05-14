@@ -13,7 +13,7 @@ use \Luminova\Http\Header;
 use \Luminova\Http\Encoder;
 use \JsonException;
 
-class PageMinifier 
+final class PageMinifier 
 {
     /**
 	* holds json content type

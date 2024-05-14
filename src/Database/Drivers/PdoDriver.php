@@ -17,7 +17,7 @@ use \Luminova\Interface\ConnInterface;
 use \PDOStatement;
 use \PDOException;
 
-class PdoDriver implements DatabaseInterface 
+final class PdoDriver implements DatabaseInterface 
 {
     /**
      * PDO Database connection instance
@@ -66,7 +66,6 @@ class PdoDriver implements DatabaseInterface
     public function __construct(BaseDatabase $config) 
     {
         $this->config = $config;
-       
         try{
             $this->newConnection();
             $this->connected = true;
@@ -160,8 +159,7 @@ class PdoDriver implements DatabaseInterface
     private function mysqlDns(): string
     {
         if (is_command() || NOVAKIT_ENV !== null || $this->config->socket) {
-            $socket = (empty($this->config->socket_path) ? ini_get('pdo_mysql.default_socket') : $this->config->socket_path);
-
+            $socket = (($this->config->socket_path === '' || $this->config->socket_path === null) ? ini_get('pdo_mysql.default_socket') : $this->config->socket_path);
             return "mysql:unix_socket={$socket};dbname={$this->config->database}";
         }
 

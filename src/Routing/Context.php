@@ -12,7 +12,7 @@ namespace Luminova\Routing;
 use \Luminova\Exceptions\RuntimeException;
 use \Closure;
 
-final class Bootstrap 
+final class Context 
 {
     /** 
      * Default WEB controller type
@@ -60,15 +60,15 @@ final class Bootstrap
     private Closure|array|null $onError = null;
 
     /**
-     * @var array $instances
+     * @var array<string,string> $instances
     */
     private static array $instances = [];
 
     /**
      * Initialize Constructor
      * 
-     * @param string  $name  Bootstrap route name
-     * @param Closure|array<int,string>|null $onError Bootstrap Callback function to execute.
+     * @param string $name Route content name
+     * @param Closure|array<int,string>|null $onError Context error handling method.
      *      - string - Method name in [ViewErrors::class, 'methodname']; to handle error.
      * 
      * @throws RuntimeException If invalid error callback was provided.
@@ -77,19 +77,19 @@ final class Bootstrap
     {
         $this->name = $name;
 
-        if($onError !== null && !($onError instanceof Closure) && is_array($onError) && count($onError) !== 2){
-            throw new RuntimeException('Invalid error callback method.');
+        if($onError !== null && !($onError instanceof Closure) && !(is_array($onError) && count($onError) === 2)){
+            throw new RuntimeException('Invalid error handler method. Expected either a Closure or a list array with two elements, where the first element is the class name and the second element is the method to handle the error', E_USER_WARNING);
         }
 
         $this->onError = $onError;
 
         if( $name !== self::WEB){
-            static::$instances[] = $name;
+            static::$instances[$name] = $name;
         }
     }
 
     /**
-     * Get bootstrap route name
+     * Get context route name
      * 
      * @return string $this->name route instance type.
      * @internal
@@ -100,7 +100,7 @@ final class Bootstrap
     }
 
     /**
-     * Get bootstrap controller error callback handler
+     * Get context controller error callback handler
      * 
      * @return null|callable|array<int,string> $this->onError 
      * @internal
@@ -111,9 +111,9 @@ final class Bootstrap
     }
 
     /**
-     * Get bootstrap registered custom instance
+     * Get context registered custom instance
      * 
-     * @return array<int, string> static::$instances 
+     * @return array<string,string> static::$instances 
      * @internal
     */
     public static function getInstances(): array 

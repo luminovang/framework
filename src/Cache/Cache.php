@@ -13,6 +13,7 @@ namespace Luminova\Cache;
 use \Luminova\Cache\FileCache;
 use \Luminova\Cache\MemoryCache;
 use \Luminova\Exceptions\ClassException;
+use \Memcached;
 
 class Cache
 {
@@ -81,7 +82,7 @@ class Cache
     {
         switch ($engine) {
             case self::MEM:
-                if (class_exists('\Memcached')) {
+                if (class_exists(Memcached::class)) {
                     return new MemoryCache();
                 } else {
                     throw new ClassException('Memcached does not exist');

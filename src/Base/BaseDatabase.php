@@ -180,7 +180,7 @@ abstract class BaseDatabase
      * 
      * @return void 
     */
-    private final function configure(array $config): void 
+    private function configure(array $config): void 
     {
         $this->port = $config['port'] ?? 3306;
         $this->host = $config['host'] ?? 'localhost';

@@ -13,7 +13,7 @@ use \Luminova\Application\Foundation;
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Executor;
 
-class Console 
+final class Console 
 {
     /**
      * Static terminal instance

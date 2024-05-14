@@ -41,7 +41,7 @@ abstract class BaseApplication extends Foundation
     public function __construct() 
     {
         // Initialize the router instance
-        $this->router ??= new Router();
+        $this->router ??= new Router($this);
 
         // Set application controller class namespace
         $this->router->addNamespace('\App\Controllers');
@@ -67,7 +67,7 @@ abstract class BaseApplication extends Foundation
      * 
      * @return static Application shared instance
      */
-    public static function getInstance(): static 
+    public static final function getInstance(): static 
     {
         return static::$instance ??= new static();
     }

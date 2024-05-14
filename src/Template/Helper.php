@@ -128,27 +128,26 @@ class Helper
         return  trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
     }
 
-      /** 
+    /** 
      * Fixes the broken css,image & links when added additional slash(/) at the router link
      * The function will add the appropriate relative base based on how many invalid link detected.
      *
-     * @param int $level the directory level from base directory controller/foo(1) controller/foo/bar(2)
-     *
      * @return string relative path 
     */
-    public static function relativeLevel(int $level = 0): string 
+    public static function relativeLevel(): string 
     {
-        if ($level === 0) {
-            $uri = static::getViewUri();
+        /*$uri = static::getViewUri();
+        if (($pos = strpos($uri, '/public')) !== false) {
+            $uri = substr($uri, $pos + 7);
+        }*/
 
-            if (($pos = strpos($uri, '/public')) !== false) {
-                $uri = substr($uri, $pos + 7);
-            }
-
-            $level = substr_count($uri, '/');
+        $level = substr_count(static::getViewUri(), '/');
+        
+        if($level === 0){
+            return './';
         }
 
-        return str_repeat(($level >= 1 ? '../' : './'), $level);
+        return str_repeat('../', $level);
     }
 
     /** 
@@ -159,9 +158,8 @@ class Helper
     private static function getViewUri(): string
     {
         if(isset($_SERVER['REQUEST_URI'])){
-            $basePath = isset($_SERVER['SCRIPT_NAME']) ? dirname($_SERVER['SCRIPT_NAME']) : '';
-
-            $url = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen($basePath));
+            $length = isset($_SERVER['SCRIPT_NAME']) ? strlen(dirname($_SERVER['SCRIPT_NAME'])) : 0;
+            $url = substr(rawurldecode($_SERVER['REQUEST_URI']), $length);
 
             if (($pos = strpos($url, '?')) !== false) {
                 $url = substr($url, 0, $pos);

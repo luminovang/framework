@@ -9,7 +9,7 @@
  */
 namespace Luminova\Database;
 
-class Scheme 
+final class Scheme 
 {
     public const INT = "INT";
     public const VARCHAR = "VARCHAR";

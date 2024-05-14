@@ -13,7 +13,7 @@ namespace Luminova\Security;
 use \Luminova\Exceptions\BadMethodCallException;
 use \App\Controllers\Config\Session as CookieConfig;
 
-class Csrf 
+final class Csrf 
 {
     /**
      * Token session input name
@@ -49,10 +49,10 @@ class Csrf
     public function __call(string $name, array $arguments): mixed
     {
         if (method_exists(static::class, $name)) {
-            return call_user_func_array([static::class, $name], $arguments);
+            return static::{$name}(...$arguments);
         }
         
-        throw new BadMethodCallException("Call to undefined method " . static::class . "::" . $name . "()");
+        throw new BadMethodCallException("Call to undefined or inaccessible method " . static::class . "::" . $name);
     }
 
     /**

@@ -16,7 +16,7 @@ use \Luminova\Command\TextUtils;
 use \Luminova\Security\InputValidator;
 use \Luminova\Command\Novakit\Commands;
 use \Luminova\Exceptions\InvalidArgumentException;
-use Closure;
+use \Closure;
 
 class Terminal 
 {
@@ -99,7 +99,7 @@ class Terminal
      *
      * @return void
      */
-    protected static function waiting(int $seconds, bool $countdown = false): void
+    protected static final function waiting(int $seconds, bool $countdown = false): void
     {
         if ($seconds <= 0) {
             if (!$countdown) {
@@ -138,7 +138,7 @@ class Terminal
      *
      * @return float|int
     */
-    protected static function progress(int|bool $progressLine = 1, ?int $progressCount = 10, bool $beep = true): int|float
+    protected static final function progress(int|bool $progressLine = 1, ?int $progressCount = 10, bool $beep = true): int|float
     {
         if ($progressLine === false || $progressCount === null) {
             if($beep){
@@ -189,7 +189,7 @@ class Terminal
      *
      * @return void
     */
-    protected static function watcher(int $progressCount, ?Closure $onFinish = null, ?Closure $onProgress = null, bool $beep = true): void 
+    protected static final function watcher(int $progressCount, ?Closure $onFinish = null, ?Closure $onProgress = null, bool $beep = true): void 
     {
         $progress = 0;
     
@@ -224,7 +224,7 @@ class Terminal
      *
      * @return void
     */
-    protected static function beeps(int $num = 1): void
+    protected static final function beeps(int $num = 1): void
     {
         echo str_repeat("\x07", $num);
     }
@@ -248,7 +248,7 @@ class Terminal
      *
      * @return string The user input
     */
-    protected static function prompt(string $message, array $options = [], string $validations = null, bool $silent = false): string
+    protected static final function prompt(string $message, array $options = [], string $validations = null, bool $silent = false): string
     {
         $default = '';
         $placeholder = '';
@@ -305,7 +305,7 @@ class Terminal
      * @return array<string|int, mixed> $options The selected array keys and values
      * @throws InvalidArgumentException
     */
-    protected static function chooser(string $text, array $options, bool $required = false): array
+    protected static final function chooser(string $text, array $options, bool $required = false): array
     {
         if ($options == []) {
             throw new InvalidArgumentException('No options to select from were provided');
@@ -358,7 +358,7 @@ class Terminal
      * 
      * @return array|false The output of the command as an array of lines, or false on failure
      */
-    public function execute(string $command): mixed
+    public final function execute(string $command): mixed
     {
         exec($command, $output, $returnCode);
         
@@ -414,7 +414,7 @@ class Terminal
      * 
      * @return string $lines
     */
-    public static function wrap(?string $string = null, int $max = 0, int $leftPadding = 0): string
+    public static final function wrap(?string $string = null, int $max = 0, int $leftPadding = 0): string
     {
         if (empty($string)) {
             return '';
@@ -439,7 +439,7 @@ class Terminal
      * 
      * @return string Return beautiful card text.
     */
-    public static function card(string $text, ?int $padding = null): string 
+    public static final function card(string $text, ?int $padding = null): string 
     {
         $width = static::getWidth() / 2;
         $padding ??= $width;
@@ -467,7 +467,7 @@ class Terminal
      * 
      * @return int static::$width or fallback to default
     */
-    protected static function getWidth(int $default = 80): int
+    protected static final function getWidth(int $default = 80): int
     {
         if (static::$width === null) {
             static::calculateVisibleWindow();
@@ -483,7 +483,7 @@ class Terminal
      * 
      * @return int static::$height or fallback to default
     */
-    protected static function getHeight(int $default = 24): int
+    protected static final function getHeight(int $default = 24): int
     {
         if (static::$height === null) {
             static::calculateVisibleWindow();
@@ -527,7 +527,7 @@ class Terminal
      * 
      * @return string User input string.
     */
-    protected static function input(?string $prompt = null): string
+    protected static final function input(?string $prompt = null): string
     {
         if (static::$isReadline && ENVIRONMENT !== 'testing') {
             return @readline($prompt);
@@ -544,7 +544,7 @@ class Terminal
      * @param string $value Input value
      * @param array $rules Validation rules
     */
-    protected static function validate(string $value, array $rules): bool
+    protected static final function validate(string $value, array $rules): bool
     {
         static $validation = null;
         $validation ??= new InputValidator();
@@ -570,7 +570,7 @@ class Terminal
      * 
      * @return void
     */
-    public static function error(string $text, string|null $foreground = 'white', ?string $background = 'red'): void
+    public static final function error(string $text, string|null $foreground = 'white', ?string $background = 'red'): void
     {
         $stdout = static::$isColored;
         static::$isColored = static::isColorSupported(STDERR);
@@ -593,7 +593,7 @@ class Terminal
      * 
      * @return void
     */
-    public static function success(string $text, string|null $foreground = 'white', ?string $background = 'green'): void
+    public static final function success(string $text, string|null $foreground = 'white', ?string $background = 'green'): void
     {
         $stdout = static::$isColored;
         static::$isColored = static::isColorSupported(STDERR);
@@ -616,7 +616,7 @@ class Terminal
      *
      * @return void
     */
-    public static function writeln(string $text = '', ?string $foreground = null, ?string $background = null)
+    public static final function writeln(string $text = '', ?string $foreground = null, ?string $background = null)
     {
         if ($foreground || $background) {
             $text = static::color($text, $foreground, $background);
@@ -639,7 +639,7 @@ class Terminal
      *
      * @return void
     */
-    public static function write(string $text = '', ?string $foreground = null, ?string $background = null): void
+    public static final function write(string $text = '', ?string $foreground = null, ?string $background = null): void
     {
      
         if ($foreground || $background) {
@@ -659,7 +659,7 @@ class Terminal
      *
      * @return void
     */
-    public static function print(string $text, ?string $foreground = null, ?string $background = null): void
+    public static final function print(string $text, ?string $foreground = null, ?string $background = null): void
     {
         if ($foreground || $background) {
             $text = static::color($text, $foreground, $background);
@@ -676,7 +676,7 @@ class Terminal
      *
      * @return void
     */
-    protected static function fwrite(string $text, $handle = STDOUT): void
+    protected static final function fwrite(string $text, $handle = STDOUT): void
     {
         if (!is_command()) {
             echo $text;
@@ -691,7 +691,7 @@ class Terminal
      *
      * @return void
     */
-    public static function clear(): void
+    public static final function clear(): void
     {
         is_platform('windows') && !static::streamSupports('sapi_windows_vt100_support', STDOUT)
             ? static::newLine(40)
@@ -703,7 +703,7 @@ class Terminal
      *
      * @return void
     */
-    public static function flush(): void
+    public static final function flush(): void
     {
         static::fwrite("\033[1A");
     }
@@ -719,7 +719,7 @@ class Terminal
      *
      * @return string A colored text if color is supported
     */
-    public static function color(string $text, string|null $foreground, ?string $background = null, ?int $format = null): string
+    public static final function color(string $text, string|null $foreground, ?string $background = null, ?int $format = null): string
     {
         if (!static::$isColored) {
             return $text;
@@ -735,7 +735,7 @@ class Terminal
      * 
      * @return void 
     */
-    public static function newLine(int $count = 1): void
+    public static final function newLine(int $count = 1): void
     {
         for ($i = 0; $i < $count; $i++) {
             static::writeln();
@@ -751,7 +751,7 @@ class Terminal
      * 
      * @return bool if the stream resource is supported
     */
-    public static function streamSupports(string $function, $resource): bool
+    public static final function streamSupports(string $function, $resource): bool
     {
         if (ENVIRONMENT === 'testing') {
             return function_exists($function);
@@ -769,7 +769,7 @@ class Terminal
      * @return void
      * @internal
     */
-    public static function explain(array $values): void
+    public static final function explain(array $values): void
     {
         static::$commandsOptions = $values;
     }
@@ -782,7 +782,7 @@ class Terminal
      * @return array<string, mixed>
      * @internal Pass raw command arguments from $_SERVER['argv'].
     */
-    public static function parseCommands(array $arguments, bool $controller = false): array
+    public static final function parseCommands(array $arguments, bool $controller = false): array
     {
         $caller = $arguments[0] ?? '';
         $result = [
@@ -840,7 +840,7 @@ class Terminal
      * @return array<string,array>
      * @internal
     */
-    public static function extract(array $arguments, $controller = false): array
+    public static final function extract(array $arguments, $controller = false): array
     {
         $optionValue = false;
         $result = [
@@ -887,7 +887,7 @@ class Terminal
      * 
      * @return mixed
     */
-    public static function getArgument(int $index): mixed
+    public static final function getArgument(int $index): mixed
     {
         if(isset(static::$commandsOptions['arguments'][$index - 1])){
             return static::$commandsOptions['arguments'][$index - 1];
@@ -901,7 +901,7 @@ class Terminal
      * 
      * @return array
     */
-    public static function getArguments(): array
+    public static final function getArguments(): array
     {
         return static::$commandsOptions['arguments']??[];
     }
@@ -911,7 +911,7 @@ class Terminal
      * 
      * @return string|null
     */
-    public static function getCommand(): ?string
+    public static final function getCommand(): ?string
     {
         return static::$commandsOptions['command'] ?? null;
     }
@@ -922,7 +922,7 @@ class Terminal
      * 
      * @return string|null
     */
-    public static function getCaller(): ?string
+    public static final function getCaller(): ?string
     {
         return static::$commandsOptions['caller'] ?? null;
     }
@@ -936,7 +936,7 @@ class Terminal
      * 
      * @return mixed Option ot default value.
      */
-    public static function getOption(string $key, mixed $default = false): mixed
+    public static final function getOption(string $key, mixed $default = false): mixed
     {
         $options = static::getOptions();
 
@@ -952,7 +952,7 @@ class Terminal
      * 
      * @return string|null The command controller class method or null
     */
-    public static function getMethod(): string|null
+    public static final function getMethod(): string|null
     {
         return static::getQuery('classMethod');
     }
@@ -962,7 +962,7 @@ class Terminal
      * 
      * @return array static::$options['options']
     */
-    public static function getOptions(): array
+    public static final function getOptions(): array
     {
         return static::$commandsOptions['options']??[];
     }
@@ -975,7 +975,7 @@ class Terminal
      * 
      * @return mixed Command option query value.
     */
-    public static function getQuery(string $name): mixed
+    public static final function getQuery(string $name): mixed
     {
         if(isset(static::$commandsOptions[$name])){
             return static::$commandsOptions[$name];
@@ -989,7 +989,7 @@ class Terminal
      * 
      * @return array static::$commandsOptions
     */
-    public static function getQueries(): array
+    public static final function getQueries(): array
     {
         return static::$commandsOptions;
     }
@@ -1001,7 +1001,7 @@ class Terminal
      * 
      * @return bool 
     */
-    public static function isColorSupported($resource = STDOUT): bool
+    public static final function isColorSupported($resource = STDOUT): bool
     {
         if (static::isColorDisabled()) {
             return false;
@@ -1033,7 +1033,7 @@ class Terminal
      *
      * @return bool 
     */
-    public static function isMacTerminal(): bool
+    public static final function isMacTerminal(): bool
     {
         $termProgram = getenv('TERM_PROGRAM');
         return in_array($termProgram, ['Hyper', 'Apple_Terminal']) ||
@@ -1047,7 +1047,7 @@ class Terminal
      * 
      * @return bool 
     */
-    public static function isWindowsTerminal($resource): bool
+    public static final function isWindowsTerminal($resource): bool
     {
         return static::streamSupports('sapi_windows_vt100_support', $resource) ||
             isset($_SERVER['ANSICON']) || getenv('ANSICON') !== false ||
@@ -1062,7 +1062,7 @@ class Terminal
      * 
      * @return bool Return true if command exist, false otherwise.
     */
-    public static function hasCommand(string $command): bool
+    public static final function hasCommand(string $command): bool
     {
         return Executor::has($command);
     }
@@ -1076,7 +1076,7 @@ class Terminal
      * @return bool Return true if command exist, false otherwise.
      * @internal Used in router to execute controller command.
     */
-    public static function call(string $command, array $options): bool
+    public static final function call(string $command, array $options): bool
     {
         static $terminal = null;
 
@@ -1099,7 +1099,7 @@ class Terminal
      * 
      * @return bool Return true if command is help, false otherwise.
     */
-    public static function isHelp(string $command):bool 
+    public static final function isHelp(string $command):bool 
     {
         return preg_match('/^-{1,2}help/', $command);
     }
@@ -1114,7 +1114,7 @@ class Terminal
      * @return void
      * @internal Used in router to print controller help information.
     */
-    public static function helper(array|null $helps, bool $all = false): void
+    public static final function helper(array|null $helps, bool $all = false): void
     {
         if( $helps === null){
             $helps = Commands::getCommands();
@@ -1171,14 +1171,12 @@ class Terminal
         }
     }
 
-
-
     /**
      * Print NovaKit Command line header information
      * 
      * @return void
     */
-    public static function header(): void
+    public static final function header(): void
     {
         static::write(sprintf(
             'PHP Luminova v%s NovaKit Command Line Tool - Server Time: %s UTC%s',

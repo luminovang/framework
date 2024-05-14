@@ -13,7 +13,7 @@ use \Luminova\Interface\SessionManagerInterface;
 use \Luminova\Exceptions\JsonException;
 use \Throwable;
 
-class SessionManager implements SessionManagerInterface 
+final class SessionManager implements SessionManagerInterface 
 {
     /**
      * @var string $storage Session storage name 

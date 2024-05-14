@@ -378,34 +378,4 @@ class Header
 
         return $types[$type][$index] ?? 'text/html';
     }
-
-   /**
-     * Get the request method for routing, considering overrides.
-     *
-     * @return string The request method for routing.
-     * @internal
-     */
-    public static function getRoutingMethod(): string
-    {
-        $method = static::server('REQUEST_METHOD');
-
-        if($method === null && php_sapi_name() === 'cli'){
-            return 'CLI';
-        }
-  
-        if($method === 'HEAD'){
-            ob_start();
-            return 'GET';
-        }
-
-        if($method === 'POST'){
-            $headers = static::getHeaders();
-
-            if (isset($headers['X-HTTP-Method-Override']) && in_array($headers['X-HTTP-Method-Override'], ['PUT', 'DELETE', 'PATCH'])) {
-                $method = $headers['X-HTTP-Method-Override'];
-            }
-        }
-        
-        return $method;
-    }
 }

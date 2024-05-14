@@ -17,7 +17,7 @@ class Foundation
      * 
     * @var string VERSION
     */
-    public const VERSION = '3.1.0';
+    public const VERSION = '3.0.1';
 
     /**
      * Minimum required php version.
@@ -39,7 +39,7 @@ class Foundation
      * @return string Return framework copyright message.
      * @internal
     */
-    public static function copyright(): string
+    public static final function copyright(): string
     {
         return 'PHP Luminova (' . self::VERSION . ')';
     }
@@ -51,7 +51,7 @@ class Foundation
      * 
      * @return string|int Return version name or code.
     */
-    public static function version(bool $integer = false): string|int
+    public static final function version(bool $integer = false): string|int
     {
         return $integer ? (int) strict(self::VERSION, 'int') : self::VERSION;
     }
