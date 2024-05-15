@@ -842,6 +842,7 @@ class Terminal
     */
     public static final function extract(array $arguments, $controller = false): array
     {
+
         $optionValue = false;
         $result = [
             'arguments' => [],
@@ -883,7 +884,7 @@ class Terminal
     /**
      * Get command argument by index number
      * 
-     * @param int $index Index postion
+     * @param int $index Index position
      * 
      * @return mixed
     */
@@ -1123,13 +1124,6 @@ class Terminal
         }
 
         foreach($helps as $name => $help){
-
-            /*$name = is_string($name) ? $name : ($help['name'] ?? null);
-            if($name !== null){
-                static::newLine();
-                static::writeln('[ ' . strtoupper( $name ) . ' HELP COMMANDS ]', 'yellow');
-                static::newLine();
-            }*/
 
             foreach($help as $key => $value){
                 if($key === 'description'){

@@ -27,6 +27,7 @@ use \ReflectionException;
 use \ReflectionClass;
 use \Closure;
 
+
 /**
  * Router shorthand methods for capture, to handle http methods by it name.
  *
@@ -45,12 +46,12 @@ final class Router
      * @var array<string, array> $controllers
     */
     private static array $controllers = [
-        'routes' => [], 
-        'routes_after' => [], 
-        'routes_middleware' => [], 
-        'cli_routes' => [], 
-        'cli_middleware' => [], 
-        'errors' => []
+        'routes' =>             [], 
+        'routes_after' =>       [], 
+        'routes_middleware' =>  [], 
+        'cli_routes' =>         [], 
+        'cli_middleware' =>     [], 
+        'errors' =>             []
     ];
 
     /**
@@ -70,11 +71,11 @@ final class Router
     ];
     
     /**
-     * Current base route, used for (sub)route mounting
+     * Current route base group, used for (sub)route mounting
      * 
-     * @var string $routeBase
+     * @var string $baseGroup
     */
-    private string $routeBase = '';
+    private string $baseGroup = '';
 
     /**
      * HTTP Request Method 
@@ -110,12 +111,17 @@ final class Router
     private static ?Terminal $term = null;
 
     /**
+     * @var bool $isCli 
+    */
+    private static bool $isCli = false;
+
+    /**
      * @var BaseApplication $application 
     */
     private static ?BaseApplication $application = null;
 
     /**
-     * Initalizes router class.
+     * Initialize router class.
      * 
      * @param BaseApplication $application Your application instance.
     */
@@ -140,6 +146,7 @@ final class Router
     public function __call(string $name, array $arguments): mixed
     {
         $method = strtoupper($name);
+
         if ($method !== 'CLI' && isset(static::$httpMethods[$method])) {
             return $this->capture($method, ...$arguments);
         }
@@ -148,48 +155,47 @@ final class Router
     }
 
      /**
-     * Initalize application routing with proper context [web, cli, api, console etc...]
+     * Initialize application routing with proper context [web, cli, api, console etc...]
      * 
-     * @param Context ...$callbacks Routing context callback arguments.
+     * @param Context ...$contexts Arguments containing routing context
      * 
      * @return self Return router instance.
     */
-    public function context(Context ...$callbacks): self 
+    public function context(Context ...$contexts): self 
     {
+        static::$isCli = is_command();
         static::$method  = static::getRoutingMethod();
 
         if (isset(static::$httpMethods[static::$method])) {
             $firstSegment = $this->getFirst();
             $instances = Context::getInstances();
-            $current = $this->routeBase;
+            $current = $this->baseGroup;
 
-            foreach ($callbacks as $context) {
+            foreach ($contexts as $context) {
                 $name = $context->getName();
 
                 if ($name !== '') {
                     static::reset();
 
                     if($firstSegment === $name) {
-                        $eHandler = $context->getErrorHandler();
                         if ($name === Context::CLI){
                             defined('CLI_ENVIRONMENT') || define('CLI_ENVIRONMENT', env('cli.environment.mood', 'testing'));
 
-                            if(!is_command()) {
+                            if(!static::$isCli) {
                                 return $this;
                             }
-                        }elseif($eHandler !== null){
+                        }elseif(($eHandler = $context->getErrorHandler()) !== null){
                             $this->setErrorListener($eHandler);
                         }
                    
                         if (isset($instances[$name])) {  
-                            $this->routeBase .= '/' . $name;
+                            $this->baseGroup .= '/' . $name;
                         }
                     
                         static::bootContext($name, $this, static::$application);
                         break;
                     }elseif(!isset($instances[$firstSegment]) && static::isWeContext($name, $firstSegment)) {
-                        $eHandler = $context->getErrorHandler();
-                        if($eHandler !== null){
+                        if(($eHandler = $context->getErrorHandler()) !== null){
                             $this->setErrorListener($eHandler);
                         }
 
@@ -199,7 +205,7 @@ final class Router
                 }
             }
 
-            $this->routeBase = $current;
+            $this->baseGroup = $current;
         }
 
         return $this;
@@ -219,52 +225,11 @@ final class Router
     */
     public function middleware(string $methods, string $pattern, Closure|string $callback): void
     {
-        if(is_command()){
-            RouterException::throwWith('invalid_middleware');
-        }
-
         if ($methods === '') {
             return;
         }
 
         $this->authentication('routes_middleware', $methods, $pattern, $callback, true);
-    }
-
-    /**
-     * Before CLI middleware, it captures the front controller request method and patterns to handle middleware authentication before executing other routes.
-     * If middleware callback returns "STATUS_ERROR" the execution will be terminated 
-     * resulting the following to be ignored as a result of failed authentication else if it return "STATUS_SUCCESS" the following routes will be executed.
-     *
-     * @param Closure|string $pattern Allowed command pattern, script name or callback function
-     * @param Closure|string $callback Callback function to execute
-     * @param array $options Optional options
-     * 
-     * @return void
-     * @throws RouterException Throws when called in wrong context.
-    */
-    public function before(Closure|string $pattern, Closure|string $callback = null, array $options = []): void
-    {
-        if(!is_command()){
-            RouterException::throwWith('invalid_cli_middleware');
-        }
-
-        if($pattern instanceof Closure) {
-            $callback = $pattern;
-            $parsedPattern = 'before';
-            $isController = false;
-        }else{
-            $build_pattern = static::parsePatternValue($pattern);
-            $isController = ($build_pattern !== false);
-            $parsedPattern = $isController ? $build_pattern : trim($pattern, '/');
-        }
-    
-        static::$controllers['cli_middleware']['CLI'][] = [
-            'callback' => $callback,
-            'pattern' => $parsedPattern,
-            'options' => $options,
-            'controller' => $isController,
-            'middleware' => true
-        ];
     }
 
     /**
@@ -286,6 +251,31 @@ final class Router
     }
 
     /**
+     * Before CLI middleware, it captures the front controller request method and patterns to handle middleware authentication before executing other routes.
+     * If middleware callback returns "STATUS_ERROR" the execution will be terminated 
+     * resulting the following to be ignored as a result of failed authentication else if it return "STATUS_SUCCESS" the following routes will be executed.
+     *
+     * @param string $group Command middleware group name or `any` for global middleware.
+     * @param Closure|string $callback Callback controller handler.
+     * 
+     * @return void
+     * @throws RouterException Throws when called in wrong context.
+    */
+    public function before(string $group, Closure|string $callback = null): void
+    {
+        if(!static::$isCli){
+            RouterException::throwWith('invalid_cli_middleware');
+        }
+
+        $group = trim($group, '/');
+        static::$controllers['cli_middleware']['CLI'][$group][] = [
+            'callback' => $callback,
+            'pattern' => $group,
+            'middleware' => true
+        ];
+    }
+
+    /**
      * Capture front controller request method based on pattern and execute the callback.
      *
      * @param string $methods Allowed methods, can be separated with | pipe symbol
@@ -300,8 +290,8 @@ final class Router
             return;
         }
 
-        $pattern = $this->routeBase . '/' . trim($pattern, '/');
-        $pattern = $this->routeBase ? rtrim($pattern, '/') : $pattern;
+        $pattern = $this->baseGroup . '/' . trim($pattern, '/');
+        $pattern = $this->baseGroup ? rtrim($pattern, '/') : $pattern;
         $pipes = explode('|', $methods);
 
         foreach ($pipes as $method) {
@@ -323,15 +313,9 @@ final class Router
     */
     public function command(string $pattern, Closure|string $callback): void
     {
-        $build_pattern = static::parsePatternValue($pattern);
-        $isController = ($build_pattern !== false);
-        $parsedPattern = $isController ? $build_pattern : trim($pattern, '/');
-       
         static::$controllers['cli_routes']["CLI"][] = [
             'callback' => $callback,
-            'pattern' => $parsedPattern,
-            //'options' => $options,
-            'controller' => $isController,
+            'pattern' => static::parsePatternValue(trim($pattern, '/')),
             'middleware' => false
         ];
     }
@@ -361,12 +345,12 @@ final class Router
     public function bind(string $group, Closure $callback): void
     {
         if ($callback instanceof Closure) {
-            $default = $this->routeBase;
-            $this->routeBase .= $group;
+            $current = $this->baseGroup;
+            $this->baseGroup .= $group;
 
-            $callback($this, static::$application);
+            $callback(...static::noneParamInjection($callback));
 
-            $this->routeBase = $default;
+            $this->baseGroup = $current;
             return;
         }
         
@@ -477,7 +461,7 @@ final class Router
     {
         if(static::$method === 'CLI'){
             static::terminal();
-            exit(static::runAsCommand($this));
+            exit(static::runAsCommand());
         }
 
         static::runAsHttp();
@@ -512,7 +496,6 @@ final class Router
         ob_start($handler === '' ? null : $handler);
     }
 
-
     /**
      * Get the request method for routing, considering overrides.
      *
@@ -523,7 +506,7 @@ final class Router
     {
         $method = ($_SERVER['REQUEST_METHOD'] ?? null);
 
-        if($method === null && php_sapi_name() === 'cli'){
+        if($method === null && static::$isCli){
             return 'CLI';
         }
   
@@ -571,21 +554,19 @@ final class Router
     */
     public static function triggerError(int $status = 404): void
     {
-        $result = false;
         foreach (static::$controllers['errors'] as $pattern => $callable) {
             if (static::uriCapture($pattern, static::getUriSegments(), $matches)) {
-                $result = static::call($callable, [], true);
-                break;
+                if (static::call($callable, $matches, true)) {
+                    return;
+                }
             }
         }
 
-        if (!$result && isset(static::$controllers['errors']['/'])) {
-            $result = static::call(static::$controllers['errors']['/'], [], true);
+        if (($error = static::$controllers['errors']['/'] ?? null) !== null && static::call($error, [], true)) {
+            return;
         }
 
-        if (!$result) {
-            static::printError('Error file not found', null, $status);
-        }
+        static::printError('Error file not found', null, $status);
     }
 
     /**
@@ -659,7 +640,7 @@ final class Router
             return '/' . trim($uri, '/');
         } 
 
-        if (is_command()) {
+        if (static::$isCli) {
             return '/cli';
         }
 
@@ -713,6 +694,7 @@ final class Router
      * @param bool $terminate Terminate if it before middleware.
      * 
      * @return void
+     * @throws RouterException Throws when called in wrong context.
     */
     private function authentication(
         string $to, 
@@ -722,8 +704,12 @@ final class Router
         bool $terminate = false
     ): void
     {
-        $pattern = $this->routeBase . '/' . trim($pattern, '/');
-        $pattern = $this->routeBase ? rtrim($pattern, '/') : $pattern;
+        if(static::$isCli){
+            RouterException::throwWith('invalid_middleware');
+        }
+
+        $pattern = $this->baseGroup . '/' . trim($pattern, '/');
+        $pattern = $this->baseGroup ? rtrim($pattern, '/') : $pattern;
         $pipes = explode('|', $methods);
 
         foreach ($pipes as $method) {
@@ -737,84 +723,76 @@ final class Router
 
     /**
      * Run the CLI router and application, Loop all defined CLI routes
-     *
-     * @param self $self
      * 
-     * @return int
+     * @return int Return status success or failure.
      * @throws RouterException
     */
-    private static function runAsCommand(self $self): int
+    private static function runAsCommand(): int
     {
-        $command = static::getArgument(2);
         $group = static::getArgument();
 
         if(static::$term->isHelp($group)){
             static::$term->helper(null, true);
-
-            return true;
+            return STATUS_SUCCESS;
         }
 
-        if (isset(static::$controllers['cli_middleware'][static::$method])) {
-            if(!static::handleCommand(static::$controllers['cli_middleware'][static::$method], $command)){
-                return false;
+        $command = static::getArgument(2);
+
+        if (($global = static::$controllers['cli_middleware'][static::$method]['any']??null) !== null) {
+            if(!static::handleCommand($global, $command)){
+                return STATUS_ERROR;
             }
         }
 
-        $result = false;
-        if(isset(static::$groups[$group])){
-            $groups = static::$groups[$group];
-
-            foreach($groups as $register){
-                $register($self, static::$application, static::$term);
+        if(($groups = static::$groups[$group] ?? null) !== null){
+            foreach($groups as $groupCallback){
+                $groupCallback(...static::noneParamInjection($groupCallback));
             }
 
+            if (($middleware = static::$controllers['cli_middleware'][static::$method][$group] ?? null) !== null) {
+                if(!static::handleCommand($middleware, $command, $group)){
+                    return STATUS_ERROR;
+                }
+            }
+    
             $routes = static::$controllers['cli_routes'][static::$method] ?? null;
-
-            if ($routes !== null) {
-                $result = static::handleCommand($routes, $command);
+            if ($routes !== null && static::handleCommand($routes, $command, $group)) {
+                return STATUS_SUCCESS;
             }
         }
 
-        if (!$result) {
-            static::$term->error('Unknown command ' . static::$term->color("'{$command}'", 'red') . ' not found', null);
-        }
-
-        return $result ? STATUS_SUCCESS : STATUS_ERROR;
+        static::$term->print('Unknown command ' . static::$term->color("'{$group} {$command}'", 'red') . ' not found', null);
+        return STATUS_ERROR;
     }
 
     /**
      * Run the HTTP router and application: 
      * Loop all defined HTTP request method and view routes
      *
-     * @return bool
+     * @return bool Return true on success, false on failure.
      * @throws RouterException
     */
     private static function runAsHttp(): bool
     {
-        $result = true;
         $uri = static::getUriSegments();
 
-        if (isset(static::$controllers['routes_middleware'][static::$method])) {
-            $result = static::handleWebsite(static::$controllers['routes_middleware'][static::$method], $uri);
+        if (($middleware = static::$controllers['routes_middleware'][static::$method] ?? null) !== null) {
+            if(!static::handleWebsite($middleware, $uri)){
+                return false;
+            }
         }
 
-        if($result){
-            $result = false;
-            $routes = static::$controllers['routes'][static::$method] ?? null;
-
-            if ($routes !== null) {
-                $result = static::handleWebsite($routes, $uri);
-                if($result && isset(static::$controllers['routes_after'][static::$method])) {
-                    static::handleWebsite(static::$controllers['routes_after'][static::$method], $uri);
+        if (($routes = static::$controllers['routes'][static::$method] ?? null) !== null) {
+            if(static::handleWebsite($routes, $uri)) {
+                if(($after = static::$controllers['routes_after'][static::$method]) !== null){
+                    static::handleWebsite($after, $uri);
                 }
-            }
-
-            if(!$result){
-                static::triggerError();
+                return true;
             }
         }
 
-        return $result;
+        static::triggerError();
+        return false;
     }
     
     /**
@@ -828,70 +806,49 @@ final class Router
     */
     private static function handleWebsite(array $routes, string $uri): bool
     {
-        $error = false;
+        $passed = false;
         foreach ($routes as $route) {
             if (static::uriCapture($route['pattern'], $uri, $matches)) {
-                $error = static::call($route['callback'], static::matchesToArray((array) $matches));
+                $passed = static::call($route['callback'], static::matchesToArray((array) $matches));
 
-                if (!$route['middleware'] || (!$error && $route['middleware'])) {
-                    return $error;
+                if (!$route['middleware'] || (!$passed && $route['middleware'])) {
+                    return $passed;
                 }
             }
         }
        
-        return $error;
+        return $passed;
     }
 
     /**
     * Handle C=command router CLI callback class method with the given parameters 
     * using instance callback or reflection class
     *
-    * @param array $routes Command name array values
-    * @param string $command Command string
+    * @param array $routes Command name array values.
     *
-    * @return void $error error status [0 => true, 1 => false]
-    *
+    * @return bool Return true on success or false on failure.
     * @throws RouterException if method is not callable or doesn't exist
     */
-    private static function handleCommand(array $routes, string $command): bool
+    private static function handleCommand(array $routes): bool
     {
-        $passed = false;
         $commands = static::$term->parseCommands($_SERVER['argv'] ?? [], true);
         $queries = static::getArguments();
         $isHelp = static::$term->isHelp(static::getArgument(2));
-
+        
         foreach ($routes as $route) {
-            if($route['controller']) {
-                $isMatch = static::uriCapture($route['pattern'], $queries['view'], $matches);
-
-                if($isMatch || $queries['view'] === $route['pattern']) {
-
-                    if($isMatch){
-                        $commands['params'] = static::matchesToArray((array) $matches);
-                    }
-
-                    $passed = static::call($route['callback'], $commands);
-
-                    if (!$route['middleware'] || (!$passed && $route['middleware'])) {
-                        break;
-                    }
-                }
-            } elseif($command === $route['pattern'] || $route['middleware'] || $isHelp) {
-                $passed = static::call($route['callback'], $commands);
-
-                if (!$route['middleware'] || (!$passed && $route['middleware'])) {
-                    break;
-                }
-            }else{
-                //Call framework command from controller class
-                if(static::$term->call($command, $commands)){
-                   $passed = true;
-                   break;
-                }
+            if($route['middleware']){
+                return static::call($route['callback'], $commands);
+            }
+            
+            if(static::uriCapture($route['pattern'], $queries['view'], $matches)) {
+                $commands['params'] = static::matchesToArray((array) $matches);
+                return static::call($route['callback'], $commands);
+            } elseif($queries['view'] === $route['pattern'] || $isHelp) {
+                return static::call($route['callback'], $commands);
             }
         }
 
-        return $passed;
+        return false;
     }
 
     /**
@@ -934,50 +891,67 @@ final class Router
 
         try {
             $parameters = [];
-            if(!$caller instanceof ReflectionMethod){
-                $caller = new ReflectionFunction($caller);
-            }
+            $caller = (($caller instanceof ReflectionMethod) ? $caller : new ReflectionFunction($caller));
 
+            if ($caller->getNumberOfParameters() === 0 && ($found = count($arguments)) > 0) {
+                $method = ($caller->isClosure() ? $caller->getName() : $caller->getDeclaringClass()->getName() . '->' . $caller->getName());
+                throw new RouterException(sprintf(
+                    "Method '%s()' does not accept any arguments, but %d were provided in router patterns called in %s, line: %d",
+                    $method,
+                    $found,
+                    filter_paths($caller->getFileName()),
+                    $caller->getStartLine()
+                ), E_COMPILE_ERROR);
+            }
+            
             foreach ($caller->getParameters() as $parameter) {
                 $type = $parameter->getType();
 
                 if ($type instanceof ReflectionNamedType) {
                     if($type->isBuiltin()) {
-                        if(empty($arguments)) {
-                            continue;
+                        if(!empty($arguments)) {
+                            $parameters[] = static::typeCasting($type->getName(),  array_shift($arguments));
                         }
-
-                        $parameters[] = static::typeCasting(
-                            $type->getName(), 
-                            array_shift($arguments)
-                        );
                     }else{
                         $parameters[] = static::newInstance($type->getName());
                     }
                 } elseif($type instanceof ReflectionUnionType) {
-
                     $types = static::getUnionTypes($type->getTypes());
 
                     if((isset($types['builtin']))){
-                        if(empty($arguments)) {
-                            continue;
+                        if(!empty($arguments)) {
+                            $parameters[] = static::typeCasting($types['builtin'], array_shift($arguments));
                         }
-
-                        $parameters[] = static::typeCasting(
-                            $types['builtin'], 
-                            array_shift($arguments)
-                        );
                     }else{
                         $parameters[] = static::newInstance($types['inject']);
                     }
                 }
             }
 
-            $caller = null;
             return array_merge($parameters, $arguments);
         } catch (ReflectionException $e) {
             return $arguments;
         }
+    }
+
+    /**
+     * Dependency injection for closures that doesn't expect url parameters.
+     * 
+     * @param Closure $closure A closure to inject.
+     * 
+     * @return array<int,mixed> An array of parameters.
+    */
+    public static function noneParamInjection(Closure $callback): array 
+    {
+        $params = (new ReflectionFunction($callback))->getParameters();
+        $classNames = [];
+        foreach ($params as $param) {
+            $type = $param->getType();
+            if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
+                $classNames[] = static::newInstance($type->getName());
+            }
+        }
+        return $classNames;
     }
 
     /**
@@ -986,11 +960,11 @@ final class Router
      * @param string $class The class name.
      * @return object|null The new instance of the class, or null if the class is not found.
      * 
-     * @throws Exception Throws if the class does not exist or requires arguments to initalize.
+     * @throws Exception Throws if the class does not exist or requires arguments to initialize.
      */
     private static function newInstance(string $class): ?object 
     {
-        if ($class === Application::class) {
+        if ($class === Application::class || $class === BaseApplication::class) {
             return static::$application ?? null;
         }
 
@@ -1085,13 +1059,11 @@ final class Router
     private static function call(Closure|string|array $callback, array $arguments = [], bool $injection = false): bool
     {
         if ($callback instanceof Closure) {
-            if(isset($arguments['command']) && is_command()){
-                $arguments = $arguments['params'] ?? [];
-            }else{
-                $arguments = static::injection($callback, $arguments, $injection);
-            }
-            
-            return status_code(call_user_func_array($callback, $arguments), false);
+            $arguments = ((isset($arguments['command']) && static::$isCli) ?  ($arguments['params'] ?? []) : $arguments);
+            return status_code(call_user_func_array(
+                $callback, 
+                static::injection($callback, $arguments, $injection)
+            ), false);
         }
 
         if (is_array($callback)) {
@@ -1126,8 +1098,6 @@ final class Router
     */
     private static function reflection(string $className, string $method, array $arguments = [], bool $injection = false): bool 
     {
-        $throw = true;
-
         if ($className === '') {
             RouterException::throwWith('invalid_class', -1, null, $className);
             return false;
@@ -1147,18 +1117,15 @@ final class Router
             $caller = $class->getMethod($method);
 
             if ($caller->isPublic() && !$caller->isAbstract() && (!$caller->isStatic() || $class->isSubclassOf(ErrorHandlerInterface::class))) {
-                if (isset($arguments['command']) && is_command()) {
+                $result = false;
+                if (isset($arguments['command']) && static::$isCli) {;
                     $class = new $className();
                     if(isset($class->group) && $class->group === static::getArgument(1)) {
                         $arguments['classMethod'] = $method;
-                        [$throw, $result] = static::invokeCommandArgs($class, $arguments, $className, $caller);
-                    }else{
-                        $class = null;
-                        return false;
+                        $result = static::invokeCommandArgs($class, $arguments, $className, $caller);
                     }
                 } else {
-                    $arguments = static::injection($caller, $arguments, $injection);
-                    $result = $caller->invokeArgs(new $className(), $arguments);
+                    $result = $caller->invokeArgs(new $className(), static::injection($caller, $arguments, $injection));
                 }
 
                 $class = null;
@@ -1169,13 +1136,11 @@ final class Router
 
             RouterException::throwWith('invalid_method', 1, null, $method);
         } catch (ReflectionException $e) {
-            if ($throw) {
-                if($e->getCode() === 1){
-                    throw new RouterException($e->getMessage(), 1, $e);
-                }
-
-                RouterException::throwException($e->getMessage(), $e->getCode(), $e);
+            if($e->getCode() === 1){
+                throw new RouterException($e->getMessage(), 1, $e);
             }
+
+            RouterException::throwException($e->getMessage(), $e->getCode(), $e);
         }
 
         return false;
@@ -1187,16 +1152,16 @@ final class Router
      * @param object $instance Class instance
      * @param array $arguments Pass arguments to reflection method
      * @param string $className Invoking class name
-     * @param ReflectionMethod $method Controller class method
+     * @param ReflectionMethod $caller Controller class method
      *
-     * @return array<int,bool> Return result from command controller method.
+     * @return int Return result from command controller method.
     */
     private static function invokeCommandArgs(
         object $instance, 
         array $arguments, 
         string $className, 
-        ReflectionMethod $method
-    ): array
+        ReflectionMethod $caller
+    ): int
     {
         $id = '_about_' . $instance->name;
         $arguments[$id] = [
@@ -1213,12 +1178,11 @@ final class Router
                 static::$term->helper($arguments[$id]);
             }
 
-            return [false, true];
+            return STATUS_SUCCESS;
         }
 
         $instance->explain($arguments);
-
-        return [true, $method->invokeArgs($instance, $arguments['params']??[])];
+        return $caller->invokeArgs($instance, static::injection($caller, $arguments['params']??[]));
     }
     
     /**
@@ -1226,7 +1190,7 @@ final class Router
     * Convert pattern to a regex pattern  & Checks if there is a routing match
     *
     * @param string $pattern Url router pattern.
-    * @param string $uri Rquest uri.
+    * @param string $uri Request uri.
     * @param mixed &$matches Url matches.
     *
     * @return bool is match true or false
@@ -1241,21 +1205,29 @@ final class Router
      *
      * @param string $input command script pattern
      * 
-     * @return string|bool $output If match return replaced string else return false
+     * @return string $output If match return replaced string.
     */
-    private static function parsePatternValue(string $input): string|false
+    private static function parsePatternValue(string $input): string
     {
-        $input = trim($input, '/');
+        $patterns = [
+            '/\(:value\)/' => '([^/]+)',
+            '/\(:optional\)/' => '?([^/]*)',
+            '/\(:int\)/' => '(\d+)',
+            '/\(:float\)/' => '([+-]?\d+\.\d+)',
+            '/\(:string\)/' => '([a-zA-Z0-9_-]+)',
+            '/\(:alphabet\)/' => '([a-zA-Z]+)',
+            '/\(:path\)/' => '"((.+)\/([^\/]+)+)"',
+        ];
 
-        if (strpos($input, '(:value)') !== false) {
-            return '/' . preg_replace('/\(:value\)/', '([^/]+)', $input);
+        foreach ($patterns as $pattern => $replacement) {
+            $input = preg_replace($pattern, $replacement, $input);
         }
 
-        if (strstr($input, '/')) {
-            return $input;
+        if (strpos($input, '/') !== 0) {
+            $input = '/' . $input;
         }
-        
-        return false;
+
+        return $input;
     }
 
     /**
@@ -1312,7 +1284,7 @@ final class Router
     /**
      * Get the current view segments as array.
      * 
-     * @return array<int, string> Array list of url segments
+     * @return array<int,string> Array list of url segments
     */
     private function getSegments(): array
     {
