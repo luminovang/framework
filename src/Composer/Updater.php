@@ -41,9 +41,9 @@ class Updater
     public static function update(): void 
     {
         if (getenv('LM_DEBUG_MODE') === false) { 
-            if(self::onInstallAndUpdate('bootstrap/', self::$frameworkPath, 'bootstrap/')){
-                self::updateConfigurations(self::$frameworkPath . 'samples/Config/', 'app/Controllers/Config/');
-                self::updateConfigurations(self::$frameworkPath . 'samples/Main/', 'samples/Main/', true);
+            if(self::onInstallAndUpdate('bootstrap/', self::$frameworkPath, 'install/Boot/')){
+                self::updateConfigurations(self::$frameworkPath . 'install/Config/', 'app/Controllers/Config/');
+                self::updateConfigurations(self::$frameworkPath . 'install/Main/', 'samples/Main/', true);
                 self::onInstallAndUpdate('system/', self::$frameworkPath, 'src/', true);
             }
         }
