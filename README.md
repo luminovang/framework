@@ -1,7 +1,5 @@
-# framework
-Luminova Framework
+# Luminova Framework
 
-## Documentation
-To get started see usages documentation for PHP Luminova.
+Simple yet powerful PHP web framework for developers.
 
-[Framework documentation](https://github.com/luminovang/luminova/docs/)
+Explore the source code of the Luminova Framework. To get started with building your application using PHP Luminova, visit our [official documentation](https://luminova.ng/docs) or check out the [GitHub documentation](https://github.com/luminovang/luminova/docs/).
