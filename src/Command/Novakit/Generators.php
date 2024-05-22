@@ -29,7 +29,7 @@ class Generators extends BaseConsole
     /**
      * Options
      *
-     * @var array<string, string>
+     * @var array<string|int,string> $options
      */
     protected array $options = [
         '--extend'    => 'Extend class name',
@@ -41,7 +41,7 @@ class Generators extends BaseConsole
     /**
      * Usages
      *
-     * @var array<string, string>
+     * @var array<string|int,string> $usages
      */
     protected array $usages = [
         'php novakit create:controller "name" -extend "className" -type "view"',
@@ -54,7 +54,7 @@ class Generators extends BaseConsole
     /**
      * Description
      *
-     * @var string
+     * @var string $description
      */
     protected string $description = 'Create controller, view or class';
 
@@ -107,14 +107,15 @@ class Generators extends BaseConsole
     /**
      * Create a controller.
      *
-     * @param string      $name    Controller name
-     * @param string      $tyoe  The type of controller
-     * @param string|null $dir     Directory path
+     * @param string $name  Controller name.
+     * @param string $tyoe  The type of controller.
+     * @param string|null $dir Directory path.
      * 
      * @return void
      */
     private function createController(string $name, string $tyoe = 'view', ?string $dir = null): void 
     {
+        $view = '';
         if($tyoe === 'view'){
             $use = 'use \Luminova\Base\BaseViewController;';
             $extend = 'BaseViewController';
@@ -210,7 +211,7 @@ class Generators extends BaseConsole
      /**
      * Create a view.
      *
-     * @param string      $name View name
+     * @param string  $name View name
      * @param string|null $dir  Directory path
      * 
      * @return void
@@ -262,7 +263,7 @@ class Generators extends BaseConsole
     /**
      * Create a class.
      *
-     * @param string      $name      Class name
+     * @param string $name      Class name
      * @param string|null $extend    Class to extend
      * @param string|null $implement Interface to implement
      * 

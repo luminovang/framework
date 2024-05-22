@@ -15,7 +15,7 @@ use \Luminova\Cache\MemoryCache;
 use \Luminova\Exceptions\ClassException;
 use \Memcached;
 
-class Cache
+final class Cache
 {
     /**
     * Engin type for file cache
@@ -41,9 +41,9 @@ class Cache
     /**
     * Engin static instance
     *
-    * @var Cache $instance
+    * @var self|null $instance
     */
-    private static ?Cache $instance = null;
+    private static ?self $instance = null;
 
     /**
     * Cache constructor.
@@ -52,22 +52,23 @@ class Cache
     */
     public function __construct(string $engine = self::FILE)
     {
-        $this->engine = static::newInstance($engine);
+        $this->engine = self::newInstance($engine);
     }
 
     /**
      * Get an instance of the cache engine.
+     * 
      * @param string $engine The cache engine to use (e.g., self::FILE or self::MEM).
      * 
-     * @return self self::$instance The cache engine instance.
+     * @return static The cache engine instance.
      */
-    public static function getInstance(string $engine = self::FILE): self
+    public static function getInstance(string $engine = self::FILE): static
     {
-        if (static::$instance === null) {
-            static::$instance = new static($engine);
+        if (self::$instance === null) {
+            self::$instance = new static($engine);
         }
 
-        return static::$instance;
+        return self::$instance;
     }
 
     /**
@@ -81,13 +82,13 @@ class Cache
     private static function newInstance(string $engine): object
     {
         switch ($engine) {
-            case self::MEM:
+            case static::MEM:
                 if (class_exists(Memcached::class)) {
                     return new MemoryCache();
                 } else {
                     throw new ClassException('Memcached does not exist');
                 }
-            case self::FILE:
+            case static::FILE:
             default:
                 return new FileCache();
         }

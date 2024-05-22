@@ -17,6 +17,9 @@ use \Luminova\Functions\TorDetector;
 use \Luminova\Functions\Maths;
 use \Luminova\Functions\Normalizer;
 use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Exceptions\BadMethodCallException;
+use \Luminova\Exceptions\RuntimeException;
+use \Exception;
 
 abstract class BaseFunction extends Normalizer
 {
@@ -32,7 +35,7 @@ abstract class BaseFunction extends Normalizer
     */
     public static final function ip(): IPAddress
     {
-        return static::$instances['ip'] ??= new IPAddress();
+        return self::$instances['ip'] ??= new IPAddress();
     }
 
     /**
@@ -42,7 +45,7 @@ abstract class BaseFunction extends Normalizer
     */
     public static final function files(): FileManager
     {
-        return static::$instances['files'] ??= new FileManager();
+        return self::$instances['files'] ??= new FileManager();
     }
 
     /**
@@ -52,7 +55,7 @@ abstract class BaseFunction extends Normalizer
     */
     public static final function tor(): TorDetector
     {
-        return static::$instances['tor'] ??= new TorDetector();
+        return self::$instances['tor'] ??= new TorDetector();
     }
 
      /**
@@ -62,7 +65,7 @@ abstract class BaseFunction extends Normalizer
     */
     public static final function math(): Maths
     {
-        return static::$instances['math'] ??= new Maths();
+        return self::$instances['math'] ??= new Maths();
     }
 
     /**

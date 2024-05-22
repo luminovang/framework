@@ -60,16 +60,17 @@ final class Context
     private Closure|array|null $onError = null;
 
     /**
-     * @var array<string,string> $instances
+     * @var array<string,string> $contexts
     */
-    private static array $instances = [];
+    private static array $contexts = [];
 
     /**
      * Initialize Constructor
      * 
      * @param string $name Route content name
      * @param Closure|array<int,string>|null $onError Context error handling method.
-     *      - string - Method name in [ViewErrors::class, 'methodname']; to handle error.
+     *      - array - Method name in [ViewErrors::class, 'methodname']; to handle error.
+     *      - Closure - Closure(class-typehint ...arguments): int.
      * 
      * @throws RuntimeException If invalid error callback was provided.
      */
@@ -84,7 +85,7 @@ final class Context
         $this->onError = $onError;
 
         if( $name !== self::WEB){
-            static::$instances[$name] = $name;
+            self::$contexts[$name] = $name;
         }
     }
 
@@ -102,7 +103,7 @@ final class Context
     /**
      * Get context controller error callback handler
      * 
-     * @return null|callable|array<int,string> $this->onError 
+     * @return null|callable|array<int,string> Return error handlers.
      * @internal
     */
     public function getErrorHandler(): Closure|array|null
@@ -113,11 +114,11 @@ final class Context
     /**
      * Get context registered custom instance
      * 
-     * @return array<string,string> static::$instances 
+     * @return array<string,string> Return registered context
      * @internal
     */
     public static function getInstances(): array 
     {
-        return static::$instances;
+        return self::$contexts;
     }
 }

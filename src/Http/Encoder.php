@@ -67,7 +67,7 @@ final class Encoder
      * @param string $content    The compressed data to decode.
      * @param int    $max_length Optional. The maximum length of the decoded data. Default is 0 (no limit).
      *
-     * @return arrayarray<int, mixed> An array containing the encoding method and the decoded data, or false if decoding fails.
+     * @return array<int, mixed> An array containing the encoding method and the decoded data, or false if decoding fails.
      */
     public static function decode(string $content, int $max_length = 0): array
     {

@@ -23,10 +23,10 @@ class Csp
     */
     public function getNonce(): string
     {
-        if (static::$nonce === null) {
-            static::$nonce = 'nonce-' . bin2hex(random_bytes(12));
+        if (self::$nonce === null) {
+            self::$nonce = 'nonce-' . bin2hex(random_bytes(12));
         }
 
-        return static::$nonce;
+        return self::$nonce;
     }
 }

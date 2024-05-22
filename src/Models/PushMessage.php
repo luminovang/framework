@@ -10,7 +10,7 @@
 
 namespace Luminova\Models;
 
-class PushMessage
+final class PushMessage
 {
     /**
      * @var string

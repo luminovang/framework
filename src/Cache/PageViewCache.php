@@ -36,9 +36,14 @@ final class PageViewCache
     private string $key;
 
     /**
-     * @var string $type Cache type
-     */
-    private string $type = 'html';
+     * @var array $lockFile Lock files.
+    */
+    private array $lockFile = [];
+
+    /**
+     * @var string $lockFunc Lock function name.
+    */
+    private string $lockFunc = '';
 
     /**
      * Class constructor.
@@ -57,7 +62,7 @@ final class PageViewCache
      *  
      * @param DateTimeInterface|int $expiration Expiry
      * 
-     * @return self 
+     * @return self Return class instance.
     */
     public function setExpiry(DateTimeInterface|int $expiration): self
     {
@@ -67,10 +72,11 @@ final class PageViewCache
     }
 
     /**
-     * Set cache directory
+     * Set cache directory.
+     * 
      * @param string $directory The directory where cached files will be stored (default: 'cache').
      * 
-     * @return self 
+     * @return self Return class instance.
     */
     public function setDirectory(string $directory): self
     {
@@ -80,28 +86,17 @@ final class PageViewCache
     }
 
     /**
-     * Set cache directory
-     * @param string $directory The directory where cached files will be stored (default: 'cache').
-     * 
-     * @return self 
-    */
-    public function setType(string $type): self
-    {
-        $this->type = $type;
-
-        return $this;
-    }
-
-    /**
      * Set the cache key.
      *
      * @param string $key The key to set.
      *
-     * @return void
+     * @return self Return class instance.
      */
-    public function setKey(string $key): void
+    public function setKey(string $key): self
     {
         $this->key = $key;
+        $this->lockFunc = '__lmv_template_cache_lock_' . md5($key . 'cache_lock_function');
+        return $this;
     }
 
     /**
@@ -121,7 +116,7 @@ final class PageViewCache
     */
     public function getFilename(): string
     {
-        return $this->getLocation() . $this->key . '.' . $this->type;
+        return $this->getLocation() . $this->key . '.html.php';
     }
 
     /**
@@ -135,33 +130,35 @@ final class PageViewCache
     }
 
     /**
-     * Check if the cached file is still valid based on its expiration time.
+     * Check if file was cached.
      *
      * @return bool True if the cache is still valid; false otherwise.
      */
     public function has(): bool
     {
-        $location = $this->getFilename();
-
-        return file_exists($location) && !$this->expired($this->key, $this->directory);
+        return file_exists($this->getFilename());
     }
 
     /**
      * Check if the cached has expired.
      * 
-     * @param string $key Cache key
-     * 
      * @return bool True if the cache is still valid; false otherwise.
     */
-    public static function expired(string $key, string $directory): bool
+    public function expired(): bool
     {
-        $metaLocation = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'pagecache.lock';
-      
-        if(file_exists($metaLocation)){
-            $info = json_decode(file_get_contents($metaLocation), true);
+        $location = $this->getFilename();
+        $this->lockFile = [];
 
-            if(isset($info[$key])){
-                return time() >= (int) ($info[$key]['Expiry'] ?? 0);
+        if(file_exists($location)){
+            include_once $location;
+            $func = $this->lockFunc;
+            if(function_exists($func) && ($lock = $func($this->key)) !== false){
+                if(time() >= (int) ($lock['Expiry'] ?? 0)){
+                    return true;
+                }
+
+                $this->lockFile = $lock;
+                return false;
             }
         }
 
@@ -175,17 +172,6 @@ final class PageViewCache
     */
     public function delete(): bool 
     {
-        $lockFile = $this->getLocation() . 'pagecache.lock';
-
-        if (file_exists($lockFile)) {
-            $lock = json_decode(file_get_contents($lockFile), true);
-
-            if(isset($lock[$this->key])){
-                unset($lock[$this->key]);
-                write_content($lockFile, json_encode($lock, JSON_PRETTY_PRINT));
-            }
-        }
-
         return unlink($this->getFilename());
     }
 
@@ -206,34 +192,41 @@ final class PageViewCache
     */
     public function read(): bool
     {
-        $headers = [
-            'default_headers' => true
-        ];
-        $metadta = $this->getLocation() . 'pagecache.lock';
-
-        if (file_exists($metadta)) {
-            $items = json_decode(file_get_contents($metadta), true);
-
-            if(isset($items[$this->key])){
-                $item = $items[$this->key];
-                $headers['Content-Type'] = ($item['Content-Type'] ?? Header::getContentTypes($item['viewType']));
-                if(isset($item['Content-Encoding'])){
-                    $headers['Content-Encoding'] = $item['Content-Encoding'];
-                }
-                $headers['Expires'] = gmdate("D, d M Y H:i:s",  $item['Expiry']) . ' GMT';
-                $headers['Cache-Control'] = 'max-age=' . $item['MaxAge'] . ', public';
-                $headers['ETag'] =  '"' . $item['ETag'] . '"';
-            }else{
-                return false;
+        $headers = ['default_headers' => true];
+    
+        if (isset($this->lockFile['Func']) && function_exists($this->lockFile['Func'])) {
+            $headers['ETag'] =  '"' . $this->lockFile['ETag'] . '"';
+            $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T',  $this->lockFile['Expiry']);
+            $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T',  $this->lockFile['Modify']);
+            $headers['Cache-Control'] = 'public, max-age=' . $this->lockFile['MaxAge'];
+            $headers['ETag'] =  '"' . $this->lockFile['ETag'] . '"';
+    
+            $ifNoneMatch = trim($_SERVER['HTTP_IF_NONE_MATCH']??'');
+            // Check if the ETag matches the client's If-None-Match header
+            if ($ifNoneMatch !== '' && $ifNoneMatch === $headers['ETag']) {
+                Header::parseHeaders($headers, 304);
+                return true;
             }
-        }else{
-            return false;
+
+            if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) && ($modify = $this->lockFile['Modify']) !== false) {
+                if (strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) >= $modify) {
+                    Header::parseHeaders($headers, 304);
+                    return true;
+                }
+            }
+
+            $headers['Content-Type'] = ($this->lockFile['Content-Type'] ?? Header::getContentTypes($this->lockFile['viewType']));
+            if(isset($this->lockFile['Content-Encoding'])){
+                $headers['Content-Encoding'] = $this->lockFile['Content-Encoding'];
+            }
+
+            Header::parseHeaders($headers);
+            echo $this->lockFile['Func']();
+            return true;
         }
 
-        Header::parseHeaders($headers);
-        $bytesRead = @readfile($this->getFilename());
-        
-        return $bytesRead !== false;
+        Header::headerNoCache(404);
+        return false;
     }
 
     /**
@@ -243,54 +236,76 @@ final class PageViewCache
     */
     public function get(): ?string
     {
-        $contents = @file_get_contents($this->getFilename());
-        
-        if ($contents === false) {
-            return null;
+        if (isset($this->lockFile['Func']) && function_exists($this->lockFile['Func'])) {
+            ob_start();
+            echo $this->lockFile['Func']();
+            return ob_get_clean();
         }
         
-        return $contents;
+        return null;
     }
 
     /**
      * Save the content to the cache file.
      *
      * @param string $content The content to be saved to the cache file.
-     * @param array|null $headers Cache headers.
+     * @param array $headers Cache headers.
      * @param string $type Cache content type.
      *
      * @return bool True if saving was successful; false otherwise.
      */
-    public function saveCache(string $content, ?array $headers = null, string $type = 'html'): bool
+    public function saveCache(string $content, array $headers = [], string $type = 'html'): bool
     {
-        $location = $this->getLocation();
-        make_dir($location);     
+        make_dir($this->getLocation());     
 
-        $filename = $this->getFilename();
-        if(write_content($filename, $content)){
-            $headers ??= [];
+        $headers['Content-Encoding'] =  static::whichEncode();
+        $headers['viewType'] = $type;
+        $headers['MaxAge'] = $this->expiration;
+        $headers['Expiry'] = time() + $this->expiration;
+        $headers['Date'] = date('D, d M Y H:i:s \G\M\T');
+        $headers['Modify'] = time();
+        $headers['ETag'] = md5($content);
+        $headers['Func'] = '__lmv_template_content_' . $this->key;
 
-            $headers['viewType'] = $type;
-            $lockFile = $location . 'pagecache.lock';
-            $locks = file_get_contents($lockFile);
-    
-            $locks = ($locks === false) ? [] : json_decode($locks, true);
-    
-            $headers['MaxAge'] = $this->expiration;
-            $headers['Expiry'] = time() + $this->expiration;
-            $headers['Date'] = date("D, d M Y H:i:s");
-            $headers['ETag'] = md5_file($filename);
-            $locks[$this->key] = $headers;
+        $locks = [];
+        $locks[$this->key] = $headers;
 
-            if(!write_content($lockFile, json_encode($locks, JSON_PRETTY_PRINT))){
-                unlink($filename);
+        $pageContent = "<?php function {$this->lockFunc}(string \$key): array|false {\n";
+        $pageContent .= "    \$lock = " . var_export($locks, true) . ";\n";
+        $pageContent .= "    return \$lock[\$key]??false;\n";
+        $pageContent .= "}?>\n";
+        $pageContent .= "<?php function __lmv_template_content_{$this->key}():void { ?>\n";
+        $pageContent .= $content;
+        $pageContent .= "<?php }?>\n";
 
-                return false;
-            }
-
-            return true;
+        if(!write_content($this->getFilename(), $pageContent)){
+            return false;
         }
 
+        return true;
+    }
+
+    /**
+     * Determin the content encoding
+     * 
+     * @return string|false Return the content encoding handler, otherwise false.
+    */
+    private static function whichEncode(): string|false
+    {
+        $encoding = env('compression.encoding', false);
+        if ($encoding !== false) {
+            if (isset($_SERVER['HTTP_CONTENT_ENCODING'])) {
+                return $_SERVER['HTTP_CONTENT_ENCODING'];
+            }
+            
+            if (isset($_SERVER['HTTP_ACCEPT_ENCODING'])) {
+                $encoding = strtolower($encoding);
+                if (strpos($_SERVER['HTTP_ACCEPT_ENCODING'], $encoding) !== false) {
+                    return $encoding;
+                }
+            }
+        }
+        
         return false;
     }
 }

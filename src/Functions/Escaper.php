@@ -106,9 +106,9 @@ class Escaper
         if ($this->escaper === null) {
             if (method_exists($this, $name)) {
                 return $this->{$name}(...$arguments);
-            } else {
-                throw new BadMethodCallException('Method ' . $name . ' does not exist, to use ' . $name . ', you need to install a third-party library first. Run "composer require laminas/laminas-escaper"');
             }
+
+            throw new BadMethodCallException('Method ' . $name . ' does not exist, to use ' . $name . ', you need to install a third-party library first. Run "composer require laminas/laminas-escaper"');
         }
 
         return $this->escaper->{$name}(...$arguments);
@@ -202,9 +202,7 @@ class Escaper
      */
     protected function fromUtf8(string $string): string
     {
-        $result = $this->encoding === 'utf-8' ? $string : $this->convertEncoding($string, $this->encoding, 'UTF-8');
-
-        return $result;
+        return ($this->encoding === 'utf-8') ? $string : $this->convertEncoding($string, $this->encoding, 'UTF-8');
     }
 
     /**

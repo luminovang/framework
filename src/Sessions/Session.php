@@ -48,11 +48,11 @@ class Session
     */
     public static function getInstance(?SessionManagerInterface $manager = null): static
     {
-        if (static::$instance === null) {
-            static::$instance = new static($manager);
+        if (self::$instance === null) {
+            self::$instance = new static($manager);
         }
 
-        return static::$instance;
+        return self::$instance;
     }
 
     /** 
@@ -196,12 +196,7 @@ class Session
     public function online(string $storage = ''): bool
     {
         $data = $this->manager->getItems($storage);
-
-        if((isset($data['_session_online']) && $data['_session_online'] === 'YES')){
-            return true;
-        }
-
-        return false;
+        return isset($data['_session_online']) && $data['_session_online'] === 'on';
     }
 
     /** 
@@ -342,7 +337,7 @@ class Session
     */
     public function synchronize(string $ip = ''): self
     {
-        $this->set('_session_online', 'YES');
+        $this->set('_session_online', 'on');
         $this->set('_session_online_id', uniqid('ssid'));
         $this->set('_session_online_datetime', date('c'));
 
@@ -397,7 +392,7 @@ class Session
         if($this->online()){
             $last = $this->get("_online_session_id", '');
 
-            if(!empty($last) & $last != ip_address()){
+            if(!empty($last) && $last != ip_address()){
                 return true;
             }
         }

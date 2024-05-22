@@ -10,11 +10,10 @@
 
 namespace Luminova\Base;
 
-use \Luminova\Application\Foundation;
 use \Luminova\Routing\Router;
 use \Luminova\Template\TemplateTrait;
 
-abstract class BaseApplication extends Foundation
+abstract class BaseApplication
 {
     /**
      * Adds helper class for handling view template rendering and response.
@@ -26,7 +25,7 @@ abstract class BaseApplication extends Foundation
     /**
      * Base Application instance
      *
-     * @var ?self $instance
+     * @var static|null $instance
     */
     private static ?self $instance = null;
 
@@ -69,7 +68,7 @@ abstract class BaseApplication extends Foundation
      */
     public static final function getInstance(): static 
     {
-        return static::$instance ??= new static();
+        return self::$instance ??= new static();
     }
 
     /**
@@ -82,16 +81,6 @@ abstract class BaseApplication extends Foundation
         return $this->router->getUriSegments();
     }
 
-    /**
-     * Get application base path from router.
-     *
-     * @return string
-     */
-    public final function getBase(): string 
-    {
-        return $this->router->getBase();
-    }
-    
     /**
      * Get protected property from template class static::$publicOptions or static::$publicClasses
      *

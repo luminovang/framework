@@ -48,11 +48,11 @@ final class Csrf
     */
     public function __call(string $name, array $arguments): mixed
     {
-        if (method_exists(static::class, $name)) {
+        if (method_exists(self::class, $name)) {
             return static::{$name}(...$arguments);
         }
         
-        throw new BadMethodCallException("Call to undefined or inaccessible method " . static::class . "::" . $name);
+        throw new BadMethodCallException("Call to undefined or inaccessible method " . self::class . "::" . $name);
     }
 
     /**
@@ -214,9 +214,8 @@ final class Csrf
         $storage = static::tokenStorage();
 
         if($storage === 'cookie'){
-            $expiration = $expiry === null ? time() + static::$config::$expiration : $expiry;
             setcookie(static::$token, $token, [
-                'expires' => $expiration,
+                'expires' => ($expiry ?? time() + static::$config::$expiration),
                 'path' => static::$config::$sessionPath,
                 'domain' => static::$config::$sessionDomain,
                 'secure' => true,

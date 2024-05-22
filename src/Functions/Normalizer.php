@@ -72,7 +72,7 @@ class Normalizer
 	 *
 	 * @param int $length The length of the random value.
 	 * @param string $type The type of random value (e.g., character, alphabet, int, password).
-	 * @param bool $upper Whether to make the value uppercase if it's a string.
+	 * @param bool $uppercase Whether to make the value uppercase if it's a string.
 	 * 
 	 * @return string The generated random value.
 	*/
@@ -118,10 +118,10 @@ class Normalizer
 	*/
 	public static function bigInteger(int $min, int $max): string 
 	{
-		$difference = bcadd(bcsub($max,$min),1);
-		$rand_percent = bcdiv(mt_rand(), mt_getrandmax(), 8);
-		
-		return bcadd($min, bcmul($difference, $rand_percent, 8), 0);
+		$difference = (string) bcadd(bcsub((string) $max, (string) $min), '1');
+		$rand_percent = (string) bcdiv((string) mt_rand(), (string) mt_getrandmax(), 8);
+
+		return bcadd((string) $min, bcmul($difference, $rand_percent, 8), 0);
 	}
 	
 	/** 
@@ -232,15 +232,14 @@ class Normalizer
 	/** 
 	* Formats a phone number as (xxx) xxx-xxxx or xxx-xxxx depending on the length.
 	*
-	* @param mixed $phone phone address to format
+	* @param string $phone phone address to format
 	*
-	* @return string 
+	* @return string Return the formatted phone number.
 	*/
 	public static function formatPhone(string $phone): string 
 	{
 		$phone = preg_replace("/[^0-9]/", '', $phone);
 		$length = strlen($phone);
-	
 		$patterns =[
 			7 => preg_replace("/([0-9]{3})([0-9]{4})/", "$1-$2", $phone),
 			10 => preg_replace("/([0-9]{3})([0-9]{3})([0-9]{4})/", "($1) $2-$3", $phone),
@@ -388,7 +387,7 @@ class Normalizer
 	 *
 	 * @param string $text The string to truncate.
 	 * @param int $length The length to display before truncating.
-	 * @param int $encoding Text encoding type
+	 * @param string $encoding Text encoding type.
 	 * 
 	 * @return string The truncated string.
 	 */
@@ -397,8 +396,6 @@ class Normalizer
 		if(empty($text)){
 			return $text;
 		}
-
-		//$escapedText = htmlspecialchars($text, ENT_QUOTES, $encoding);
 
 		if (mb_strlen($text, $encoding) > $length) {
 			return mb_substr($text, 0, $length, $encoding) . '...';
@@ -449,7 +446,7 @@ class Normalizer
 		$name = implode('@', array_slice($parts, 0, -1));
 		$length = floor(strlen($name) / 2);
 
-		return substr($name, 0, $length) . str_repeat($masker, $length) . "@" . end($parts);
+		return substr($name, 0, (int) $length) . str_repeat($masker, (int) $length) . "@" . end($parts);
 	}
 
 	/**
@@ -474,12 +471,12 @@ class Normalizer
 			return substr($string, 0, ($visibleCount * -1)) . str_repeat($masker, $visibleCount);
 		}
 
-		$hiddenCount = $length - ($visibleCount * 2);
+		$hiddenCount = (int) $length - ($visibleCount * 2);
 
 		if ($position === 'left') {
 			return str_repeat($masker, $visibleCount) . substr($string, $visibleCount, $hiddenCount) . substr($string, ($visibleCount * -1), $visibleCount);
 		}
 
-		return substr($string, 0, $visibleCount) . str_repeat($masker, $hiddenCount) . substr($string, ($visibleCount * -1), $visibleCount);
+		return substr($string, 0, $visibleCount) . str_repeat($masker, $hiddenCount) . substr($string, (int) ($visibleCount * -1), $visibleCount);
 	}
 }

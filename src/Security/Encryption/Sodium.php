@@ -179,7 +179,7 @@ class Sodium implements EncryptionInterface
             if(isset($this->nonce)){
                 sodium_memzero($this->nonce);
             }
-        }catch(SodiumException $e){
+        }catch(SodiumException){
            
         }
     }

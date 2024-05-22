@@ -126,36 +126,6 @@ class Header
     }
 
     /**
-     * Check if the request URL indicates an API endpoint.
-     *
-     * This method checks if the URL path starts with '/api' or 'public/api'.
-     *
-     * @param string|null $url The request URL to check.
-     * 
-     * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
-     */
-    public static function isApi(?string $url = null): bool
-    {
-        $url ??= static::server('REQUEST_URI');
-
-        if($url === null){
-            return false;
-        }
-
-        $segments = explode('/', trim($url, '/'));
-
-        if (!empty($segments) && ($segments[0] === 'api' || ($segments[0] === 'public' && isset($segments[1]) && $segments[1] === 'api'))) {
-            return true;
-        }
-
-        if (basename(root()) === $segments[0] && isset($segments[2]) && $segments[2] === 'api') {
-            return true;
-        }
-
-        return false;
-    }
-
-   /**
      * Get all request headers.
      *
      * @return array<string,string> The request headers.
@@ -245,13 +215,13 @@ class Header
      * @return void 
      * @internal Used in router and template.
      */
-    public static function headerNoCache(int $status = 200): void 
+    public static function headerNoCache(int $status = 200, string|false|null $contentType = null): void 
     {
         static::parseHeaders([
             'X-Powered-By' => Foundation::copyright(),
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
             'Expires' => '0',
-            'Content-Type' => 'text/html'
+            'Content-Type' => $contentType ?? 'text/html'
         ], $status);
     }
 
@@ -278,7 +248,7 @@ class Header
             $headers = array_replace(static::getSystemHeaders(), $headers);
         }
 
-        if (static::isApi()) {
+        if (Foundation::isApiContext()) {
             $origin = static::server('HTTP_ORIGIN');
             if($origin){
                 if (!isset($headers['Access-Control-Allow-Origin']) && !empty(Apis::$allowOrigins)) {
@@ -295,15 +265,15 @@ class Header
                     }
 
                     if ($allowed === null) {
-                        header("HTTP/1.1 403 Forbidden");
-                        exit();
+                        http_response_code(403);
+                        exit('Origin Forbidden');
                     }
 
                     header('Access-Control-Allow-Origin: ' . $allowed);
                 }
             }elseif(!$origin && Apis::$forbidEmptyOrigin){
-                header("HTTP/1.1 400 Bad Request");
-                exit();
+                http_response_code(400);
+                exit('Bad Origin Request');
             }
 
             if (!isset($headers['Access-Control-Allow-Headers']) && Apis::$allowHeaders !== []) {
@@ -346,13 +316,14 @@ class Header
     {
         $charset ??= env('app.charset', 'utf-8');
 
-        return static::contentTypes($extension, 0) . ($charset === '' ?: '; charset=' . $charset);
+        return static::getContentTypes($extension, 0) . ($charset === '' ?: '; charset=' . $charset);
     }
 
     /**
      * Get content types by name 
      * 
      * @param string $type Type of content types to retrieve.
+     * @param int|null $index The index of content type to return.
      * 
      * @return array<int,array>|string|null Return array, string of content types or null if not found.
     */

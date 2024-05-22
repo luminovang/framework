@@ -31,8 +31,8 @@ class Task
      */
     public static function isOpen(string $openDatetime, string $closeDatetime, null|DateTimeZone|string $timezone = 'UTC'): bool
     {
-        $opening = static::format($openDatetime, $timezone);
-        $closing = static::format($closeDatetime, $timezone);
+        $opening = self::format($openDatetime, $timezone);
+        $closing = self::format($closeDatetime, $timezone);
         $nowTime = Time::now($timezone);
 
         if ($closing <= $opening) {
@@ -79,7 +79,7 @@ class Task
         }
 
         $nowTime = Time::now($timezone);
-        $expires = static::format($datetime,  $timezone);
+        $expires = self::format($datetime,  $timezone);
         $threshold = $expires->modify("-{$days} days");
 
         return ($nowTime >= $threshold);

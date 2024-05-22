@@ -122,13 +122,13 @@ class ViewResponse
         $encoding = false;
 
         if($encode || $minify){
-            if(static::$minifier === null){
-                static::$minifier = new PageMinifier();
-                static::$minifier->codeblocks(false);
-                static::$minifier->copiable(false);
+            if(self::$minifier === null){
+                self::$minifier = new PageMinifier();
+                self::$minifier->codeblocks(false);
+                self::$minifier->copiable(false);
             }
 
-            $instance = static::$minifier->compress($content, $headers['Content-Type'], $minify, $encode);
+            $instance = self::$minifier->compress($content, $headers['Content-Type'], $minify, $encode);
             $content = $instance->getContent();
             $encoding = $instance->getEncoding();
             $length = $instance->getLength();
@@ -162,12 +162,14 @@ class ViewResponse
             $content = (array) $content;
         }
         try {
-            $body = json_encode($content, JSON_THROW_ON_ERROR);
+            $content = json_encode($content, JSON_THROW_ON_ERROR);
 
-            return static::render($body, $this->status, [], $this->encode, $this->minify);
+            return static::render($content, $this->status, [], $this->encode, $this->minify);
         }catch(Exception $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
+
+        return STATUS_ERROR;
     }
 
     /**

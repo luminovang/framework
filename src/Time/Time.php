@@ -16,7 +16,7 @@ use \IntlDateFormatter;
 use \DateTimeInterface;
 use \DateInterval;
 use \Exception;
-use \Luminova\Exceptions\DatetimeException;
+use \Luminova\Exceptions\DateTimeException;
 
 class Time extends DateTimeImmutable
 {
@@ -61,7 +61,7 @@ class Time extends DateTimeImmutable
      * @param string|null $datetime Optional datetime string.
      * @param DateTimeZone|string|null $timezone Optional timezone.
      *
-     * @throws DatetimeException Throws if error occurs during DateTimeImmutable object construction.
+     * @throws DateTimeException Throws if error occurs during DateTimeImmutable object construction.
     */
     public function __construct(?string $datetime = null, DateTimeZone|string|null $timezone = null)
     {
@@ -76,7 +76,7 @@ class Time extends DateTimeImmutable
         try {
             parent::__construct($datetime, $this->timezone);
         } catch (Exception $e) {
-            throw new DatetimeException('Error occurred while constructing DateTimeImmutable object: ' . $e->getMessage(), $e->getCode(), $e);
+            throw new DateTimeException('Error occurred while constructing DateTimeImmutable object: ' . $e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -98,7 +98,7 @@ class Time extends DateTimeImmutable
      * @param DateTimeZone|string|null $timezone Optional timezone.
      *
      * @return self New DateTimeImmutable object.
-     * @throws DatetimeException Throws if any error occurs.
+     * @throws DateTimeException Throws if any error occurs.
      */
     public static function now(DateTimeZone|string|null $timezone = null): self
     {
@@ -112,7 +112,7 @@ class Time extends DateTimeImmutable
      * @param DateTimeZone|string|null $timezone Optional timezone.
      *
      * @return self New DateTimeImmutable object.
-     * @throws DatetimeException Throws if any error occurs.
+     * @throws DateTimeException Throws if any error occurs.
      *
      * @example `$time = Time::parse('first day of December 2020');`
      */
@@ -125,11 +125,10 @@ class Time extends DateTimeImmutable
      * Return a new time with the time set to midnight.
      *
      * @param DateTimeZone|string|null $timezone
-     * @param ?string $local 
      *
      * @return self Return new DateTimeImmutable object.
      *
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
      */
     public static function today(DateTimeZone|string|null $timezone = null): self
     {
@@ -140,11 +139,10 @@ class Time extends DateTimeImmutable
      * Returns an instance set to midnight yesterday morning.
      *
      * @param DateTimeZone|string|null $timezone
-     * @param ?string $local 
      *
      * @return self Return new DateTimeImmutable object.
      *
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
      */
     public static function yesterday(DateTimeZone|string|null $timezone = null): self
     {
@@ -157,7 +155,7 @@ class Time extends DateTimeImmutable
      * @param DateTimeZone|string $timezone Timezone to set.
      *
      * @return self Return new DateTimeImmutable object.
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
     */
     public function setTimezone(DateTimeZone|string $timezone): self
     {
@@ -284,7 +282,7 @@ class Time extends DateTimeImmutable
     */
     public static function datetime(DateTimeZone|string|null $timezone = 'UTC'): string
     {
-        return static::now($timezone)->format(static::$defaultFormat);
+        return static::now($timezone)->format(self::$defaultFormat);
     }
 
     /**
@@ -304,9 +302,7 @@ class Time extends DateTimeImmutable
     */
     public function isSystemTimezone(): bool
     {
-        $local = date_default_timezone_get();
-
-        return $local === $this->timezone->getName();
+        return date_default_timezone_get() === $this->timezone->getName();
     }
 
     /**
@@ -335,7 +331,7 @@ class Time extends DateTimeImmutable
      * @param DateTimeInterface|Time|string $datetime Datetime object or string
      *
      * @return DateTime Return new datetime instance of UTC timezone.
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
      */
     public function getInstanceUtc(DateTimeInterface|Time|string $datetime, ?string $timezone = null):  DateTime
     {
@@ -381,7 +377,7 @@ class Time extends DateTimeImmutable
      * Converts the current instance to a mutable DateTime object.
      * 
      * @return DateTime Return new datetime object.
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
      */
     public function toDatetime(): DateTime
     {
@@ -397,7 +393,7 @@ class Time extends DateTimeImmutable
      * @param DateTimeInterface $datetime An instance of DateTimeInterface.
      * 
      * @return self Return new DateTimeImmutable object.
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
      */
     public static function fromInstance(DateTimeInterface $datetime): self
     {
@@ -415,7 +411,7 @@ class Time extends DateTimeImmutable
      *
      * @return self Return new DateTimeImmutable object.
      *
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
      */
     public static function fromTimestamp(int $timestamp, DateTimeZone|string|null $timezone = null): self
     {
@@ -436,7 +432,7 @@ class Time extends DateTimeImmutable
      *
      * @return self Return new DateTimeImmutable object.
      *
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
      */
     public static function fromDate(
         ?int $year = null, 
@@ -457,7 +453,7 @@ class Time extends DateTimeImmutable
      * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      *
      * @return self Return new DateTimeImmutable object.
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
      */
     public static function fromTime(
         ?int $hour = null, 
@@ -476,7 +472,7 @@ class Time extends DateTimeImmutable
      * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      *
      * @return string Return formatted DateTime string.
-     * @throws DatetimeException Throws if invalid relative time format was passed.
+     * @throws DateTimeException Throws if invalid relative time format was passed.
      */
     public static function fromRelative(string $datetime, DateTimeZone|string|null $timezone = null): string
     {
@@ -488,7 +484,7 @@ class Time extends DateTimeImmutable
         }else{
             $now = new DateTime('now', $timezone);
             if($now->modify($datetime) === false){
-                throw new DatetimeException('Error Invalid relative time "' . $datetime . '" passed');
+                throw new DateTimeException('Error Invalid relative time "' . $datetime . '" passed');
             }
         }
 
@@ -509,7 +505,7 @@ class Time extends DateTimeImmutable
      * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      *
      * @return self Return new DateTimeImmutable object.
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
      */
     public static function createFrom(
         ?int $year = null, 
@@ -537,7 +533,7 @@ class Time extends DateTimeImmutable
      * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      *
      * @return self Return new DateTimeImmutable object.
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
      */
     public static function tomorrow(DateTimeZone|string|null $timezone = null): self
     {
@@ -552,7 +548,7 @@ class Time extends DateTimeImmutable
      * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      *
      * @return DateTimeImmutable|false  Returns new DateTimeImmutable false otherwise
-     * @throws DatetimeException Throws if any error occurred.
+     * @throws DateTimeException Throws if any error occurred.
     */
     public static function fromFormat(
         string $format, 
@@ -707,14 +703,18 @@ class Time extends DateTimeImmutable
      * @param bool $full Return full relative time (e.g. 1 hour, 3 minutes, 5 seconds ago) default is false.
      * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      *
-     * @return string A string representing the time elapsed since the given datetime, in human-readable format.
+     * @return string|false A string representing the time elapsed since the given datetime, in human-readable format.
      *
      * > If a string is provided, it must be a valid datetime string or time string.
     */
-    public static function ago(string|int|Time|DateTimeImmutable $datetime, bool $full = false, DateTimeZone|string|null $timezone = null): string
+    public static function ago(string|int|Time|DateTimeImmutable $datetime, bool $full = false, DateTimeZone|string|null $timezone = null): string|false
     {
         if (is_string($datetime)) {
             $datetime = new static($datetime, $timezone);
+        }
+
+        if (is_numeric($datetime)) {
+            $datetime = static::parse("@$datetime", $timezone)->format(self::$stringFormat);
         }
 
         if (!$datetime instanceof Time && !$datetime instanceof DateTime && !$datetime instanceof DateTimeImmutable) {
@@ -723,11 +723,9 @@ class Time extends DateTimeImmutable
 
         $now = static::now($timezone);
         $elapsed = $now->diff($datetime);
-        $week = floor($elapsed->d / 7);
+        $week = (int) floor($elapsed->d / 7);
         $elapsed->d -= $week * 7;
-
-         // Calculate decades
-        $decades = floor($elapsed->y / 10);
+        $decades = (int) floor($elapsed->y / 10);
         $elapsed->y -= $decades * 10;
 
         $formats = [
@@ -829,7 +827,7 @@ class Time extends DateTimeImmutable
 
             $datetime = static::parse("@$datetime", $timezone);
         } elseif(!($datetime instanceof Time || $datetime instanceof DateTime || $datetime instanceof DateTimeImmutable)) {
-            $datetime = static::fromFormat(static::$defaultFormat, $datetime, $timezone);
+            $datetime = static::fromFormat(self::$defaultFormat, $datetime, $timezone);
         }
 
         $timestamp = $datetime->getTimestamp();
@@ -882,7 +880,7 @@ class Time extends DateTimeImmutable
     */
     public static function isRelative(string $datetime): bool
     {
-        return preg_match(static::$relativePattern, $datetime) === 1;
+        return preg_match(self::$relativePattern, $datetime) === 1;
     }
 
     /**
@@ -894,7 +892,7 @@ class Time extends DateTimeImmutable
     */
     public static function isAgo(string $datetime): bool
     {
-        return preg_match(static::$agoRelativePattern, $datetime) === 1;
+        return preg_match(self::$agoRelativePattern, $datetime) === 1;
     }
 
     /**
@@ -918,9 +916,7 @@ class Time extends DateTimeImmutable
     */
     public function __wakeup(): void
     {
-        $timezone = (string) $this->timezone;
-
-        $this->timezone = new DateTimeZone($timezone);
+        $this->timezone = new DateTimeZone((string) $this->timezone);
         parent::__construct('now', $this->timezone);
     }
 
@@ -929,7 +925,7 @@ class Time extends DateTimeImmutable
     */
     public function __toString(): string
     {
-        return static::now()->format(static::$stringFormat);
+        return static::now()->format(self::$stringFormat);
     }
 
     /**

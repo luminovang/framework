@@ -21,27 +21,21 @@ class Database extends BaseConsole
     /**
      * @var string $name command name
     */
-    protected string $name = 'help';
+    protected string $name = 'db';
 
     /**
      * Options
      *
-     * @var array<string, string>
+     * @var array<string,string> $options
     */
-    protected array $options = [
-        '--php'  => 'The PHP Binary [default: "PHP_BINARY"]',
-        '--host' => 'The HTTP Host [default: "localhost"]',
-        '--port' => 'The HTTP Host Port [default: "8080"]',
-    ];
-
-    //php novakit server --host localhost --port 3030
+    protected array $options = [];
 
     /**
      * @param array $options terminal options
      * 
      * @return int 
     */
-    public function run(?array $params = []): int
+    public function run(?array $options = []): int
     {
         $result = match(true){
             'db:create' => function () {

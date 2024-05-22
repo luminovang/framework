@@ -112,7 +112,7 @@ class Connection
   */
   public static function getInstance(): static 
   {
-    return static::$instance ??= new static();
+    return self::$instance ??= new static();
   }
 
   /**
@@ -130,7 +130,7 @@ class Connection
   */
   public static function newInstance(BaseDatabase|null $config = null): DatabaseInterface|null
   {
-    $config ??= static::getDefultConfig();
+    $config ??= self::getDefultConfig();
     $drivers = [
       'mysqli' => MySqliDriver::class,
       'pdo' => PdoDriver::class
@@ -221,7 +221,7 @@ class Connection
 
       foreach ($servers as $config) {
         try {
-          $connection = static::newInstance(static::newConfig($config));
+          $connection = static::newInstance(self::newConfig($config));
         } catch (DatabaseException | Exception $e) {
           logger('error', 'Failed to connect to backup database: ' . $e->getMessage(), [
             'host' => $config['host'],
@@ -320,7 +320,7 @@ class Connection
     $sqlite = env("{$var}.sqlite.path", '');
     $sqlite = ($sqlite !== '') ? APP_ROOT . DIRECTORY_SEPARATOR . trim($sqlite, DIRECTORY_SEPARATOR) : null;
  
-    return static::newConfig([
+    return self::newConfig([
       'port' => env('database.port'),
       'host' => env('database.hostname'),
       'pdo_driver' => env('database.pdo.driver'),

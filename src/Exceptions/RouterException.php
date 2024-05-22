@@ -27,53 +27,37 @@ class RouterException extends AppException
         'invalid_class' => 'Class "%s" does not exist in the App\Controllers namespace.',
         'invalid_method' => 'Invalid method "%s" in controller. Only public non-static methods are allowed.',
         'invalid_cli_middleware' => 'The before middleware is not used in cli context, use middleware() instead',
-        'invalid_middleware' => 'The middleware method is not used in web context, use before() for cli instead'
+        'invalid_middleware' => 'The middleware method is not used in web context, use before() for cli instead',
+        'bad_method' => 'Method "%s()" does not accept any arguments, but %d were provided in router patterns called in %s, line: %d',
+        'no_method' => 'Call to undefined or inaccessible method %s::%s'
     ];
 
     /**
      * Thrown router exception.
      *
      * @param string $type The type of error.
-     * @param int $code Exception code 
-     * @param mixed ...$values Message placeholders
+     * @param int $code Exception code.
+     * @param array $values Message placeholders.
      * 
      * @return void
-     * @throws self
+     * @throws static Exception message.
     */
-    public static function throwWith(string $type, int $code = 0, ?Throwable $previous = null, mixed ...$values): void
+    public static function throwWith(string $type, int $code = 0, array $values = []): void
     {
-        throw new static(static::withMessage($type, ...$values), $code, $previous);
-    }
-
-    /**
-     * Handle router exception.
-     *
-     * @param string $type The type of error.
-     * @param int $code Exception code 
-     * @param mixed ...$values Message placeholders
-     * 
-     * @return void
-     * @throws self
-    */
-    public static function handleWith(string $type, int $code = 0, ?Throwable $previous = null, mixed ...$values): void
-    {
-        static::throwException(static::withMessage($type, ...$values), $code, $previous);
-        if($type === 'invalid_context'){
-            logger('critical', static::withMessage('invalid_context_log', $values));
-        }
+        throw new static(static::withMessage($type, ...$values), $code);
     }
 
     /**
      * Get formatted message 
      *
      * @param string $type The type of error.
-     * @param mixed ...$values Message placeholders
+     * @param mixed ...$values Message placeholders.
      * 
-     * @return string $finalMessage
+     * @return string Return formatted message.
     */
     public static function withMessage(string $type, mixed ...$values): string
     {
-        $message = static::$types[$type] ?? 'Unknown error occurred while creating route';
+        $message = self::$types[$type] ?? 'Unknown error occurred while creating route';
         return empty($values) ? $message : sprintf($message, ...$values);
     }
 }

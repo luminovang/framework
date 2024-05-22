@@ -103,7 +103,7 @@ class Terminal
     {
         if ($seconds <= 0) {
             if (!$countdown) {
-                static::writeln(static::$waitMessage);
+                static::writeln(self::$waitMessage);
                 static::input();
             }
             return;
@@ -112,10 +112,10 @@ class Terminal
         if ($countdown) {
             for ($time = $seconds; $time > 0; $time--) {
                 static::fwrite("Waiting... ($time seconds) "  . PHP_EOL);
-                static::wipeout();
+                static::clear();
                 sleep(1);
             }
-            static::wipeout();
+            static::clear();
             static::writeln("Waiting... (0 seconds)"  . PHP_EOL);
         } else {
             sleep($seconds);
@@ -165,7 +165,7 @@ class Terminal
         static::fwrite("\033[32m" . $progressBar . "\033[0m" . $progressText . PHP_EOL);
 
         if ($progressLine <= $progressCount) {
-            static::wipeout();
+            static::clear();
         }
 
         return $percent;
@@ -182,20 +182,20 @@ class Terminal
      * 
      * @example $this->watcher(100, Closure, Closure, true) Show 100 lines of progress bar with a callbacks and beep on finish
      * 
-     * @param int $progressCount Total count of progress bar to show
-     * @param Closure|null $onFinish Execute callback when progress finished
-     * @param Closure|null $onProgress Execute callback on each progress step
-     * @param bool $beep Beep when progress is completed, default is true
+     * @param int $limit Total count of progress bar to show.
+     * @param Closure|null $onFinish(): void Execute callback when progress finished.
+     * @param Closure|null $onProgress(int $progress):void Execute callback on each progress step.
+     * @param bool $beep Beep when progress is completed, default is true.
      *
      * @return void
     */
-    protected static final function watcher(int $progressCount, ?Closure $onFinish = null, ?Closure $onProgress = null, bool $beep = true): void 
+    protected static final function watcher(int $limit, ?Closure $onFinish = null, ?Closure $onProgress = null, bool $beep = true): void 
     {
         $progress = 0;
     
-        for ($step = 1; $step <= $progressCount; $step++) {
+        for ($step = 1; $step <= $limit; $step++) {
             if ($progress < 100) {
-                $progress = static::progress($step, $progressCount);
+                $progress = static::progress($step, $limit);
                 if ($onProgress instanceof Closure) {
                     $onProgress($progress);
                 }
@@ -230,9 +230,8 @@ class Terminal
     }
 
     /**
-     * Prompt for user for input.
-     * Pass options as an array ["YES", "NO]
-     * You can make a colored options by use the array key for color name ["green" => "YES","red" => "NO"]
+     * Prompt for user for to input a text, pass options as an array ["YES", "NO"].
+     * Optionally, you can make a colored options by use the array key for color name ["green" => "YES","red" => "NO"]
      *
      * Examples
      *
@@ -241,18 +240,17 @@ class Terminal
      * @example $color = $this->prompt('What is your gender?', ['male','female']); Prompt user to select their gender, no colored text will be used
      * @example $email = $this->prompt('Are you sure you want to continue?', ["YES", "NO], 'required|in_array(YES,NO)'); Prompt user to choose any option and pass a validation
      *
-     * @param string $message Prompt message
+     * @param string $message Prompt message.
      * @param array $options  Options to prompt selection, 
-     * @param string|null $validations Validation rules
-     * @param bool $silent Print validation failure message parameter is true (default: false);
+     * @param string|null $validations Validation rules.
+     * @param bool $silent Print validation failure message parameter is true (default: false).
      *
-     * @return string The user input
+     * @return string Return The user input.
     */
-    protected static final function prompt(string $message, array $options = [], string $validations = null, bool $silent = false): string
+    protected static final function prompt(string $message, array $options = [], ?string $validations = null, bool $silent = false): string
     {
         $default = '';
         $placeholder = '';
-        $validationRules = false;
         $textOptions = [];
         
         if($options !== []){
@@ -264,7 +262,7 @@ class Terminal
             $default = $textOptions[0];
         }
 
-        $validationRules = $validations ?? $textOptions ?? false;
+        $validationRules = $validations ?? $textOptions;
         $validationRules = ($validations === 'none' 
             ? false : (is_array($validationRules) && $validationRules !== []
             ? "in_array('" .  implode("', '", $validationRules) . "')" : $validationRules));
@@ -331,7 +329,7 @@ class Terminal
         $lastIndex = (string) $lastIndex;
 
         static::writeln($text);
-        static::writeOptions($optionValues, strlen($lastIndex));
+        self::writeOptions($optionValues, strlen($lastIndex));
         static::writeln($placeholder);
 
         do {
@@ -346,7 +344,7 @@ class Terminal
         } while (!static::validate($input, ['input' => $validationRules]));
 
         $inputArray = list_to_array($input);
-        $input = static::getInputValues($inputArray, $optionValues);
+        $input = self::getInputValues($inputArray, $optionValues);
 
         return $input;
     }
@@ -354,29 +352,29 @@ class Terminal
     /**
      * Execute a system command.
      * 
-     * @param string $command The command to execute
+     * @param string $command The command to execute.
      * 
-     * @return array|false The output of the command as an array of lines, or false on failure
+     * @return array|int The output of the command as an array of lines, or false on failure
      */
-    public final function execute(string $command): mixed
+    public final function execute(string $command): array|int
     {
         exec($command, $output, $returnCode);
         
         if ($returnCode === STATUS_SUCCESS) {
             return $output;
-        } else {
-            return STATUS_ERROR;
         }
+
+        return STATUS_ERROR;
     }
 
     /**
      * Return user selected options
      * Get Input Array Values
      * 
-     * @param array $input user input as array
-     * @param array $options options 
+     * @param array $input user input as array.
+     * @param array $options options .
      * 
-     * @return array<string|int, mixed> $options The selected array keys and values
+     * @return array<string|int,mixed> $options The selected array keys and values
     */
     private static function getInputValues(array $input, array $options): array
     {
@@ -392,7 +390,8 @@ class Terminal
     /**
      * Display select options with key index as an identifier
      * 
-     * @param array<string, array<string, mixed>> $options options 
+     * @param array<string,mixed> $options options.
+     * @param int $max Paddend end max.
      * 
      * @return void 
     */
@@ -463,14 +462,14 @@ class Terminal
     /**
      * Attempts to determine the width of the viewable CLI window.
      * 
-     * @param int $width Optional default width (default: 80)
+     * @param int $default Optional default width (default: 80)
      * 
-     * @return int static::$width or fallback to default
+     * @return int Return terminal window width or default.
     */
     protected static final function getWidth(int $default = 80): int
     {
         if (static::$width === null) {
-            static::calculateVisibleWindow();
+            self::calculateVisibleWindow();
         }
 
         return static::$width ?: $default;
@@ -479,14 +478,14 @@ class Terminal
     /**
      * Attempts to determine the height of the viewable CLI window.
      * 
-     * @param int $width Optional default height (default: 24)
+     * @param int $default Optional default height (default: 24)
      * 
-     * @return int static::$height or fallback to default
+     * @return int Return terminal window height or default.
     */
     protected static final function getHeight(int $default = 24): int
     {
         if (static::$height === null) {
-            static::calculateVisibleWindow();
+            self::calculateVisibleWindow();
         }
 
         return static::$height ?: $default;
@@ -693,7 +692,7 @@ class Terminal
     */
     public static final function clear(): void
     {
-        is_platform('windows') && !static::streamSupports('sapi_windows_vt100_support', STDOUT)
+        (is_platform('windows') && !static::streamSupports('sapi_windows_vt100_support', STDOUT))
             ? static::newLine(40)
             : static::fwrite("\033[H\033[2J");
     }
@@ -747,11 +746,11 @@ class Terminal
      * refers to a valid terminal type device.
      *
      * @param string $function Function name to check
-     * @param resource $resource Resource to handle STDIN/STDOUT
+     * @param resource|string $resource Resource to handle STDIN/STDOUT
      * 
      * @return bool if the stream resource is supported
     */
-    public static final function streamSupports(string $function, $resource): bool
+    public static final function streamSupports(string $function, mixed $resource): bool
     {
         if (ENVIRONMENT === 'testing') {
             return function_exists($function);
@@ -933,7 +932,7 @@ class Terminal
      * If option flag is passed with an empty value true will be return else default or false
      * 
      * @param string $key Option key to retrieve
-     * @param string $default Default value to return (default: false)
+     * @param mixed $default Default value to return (default: false)
      * 
      * @return mixed Option ot default value.
      */
@@ -998,13 +997,13 @@ class Terminal
     /**
      * Check if the stream resource supports colors.
      *
-     * @param resource $resource STDIN/STDOUT
+     * @param resource|string $resource STDIN/STDOUT
      * 
-     * @return bool 
+     * @return bool Return true if the resource supports colors.
     */
-    public static final function isColorSupported($resource = STDOUT): bool
+    public static final function isColorSupported(mixed $resource = STDOUT): bool
     {
-        if (static::isColorDisabled()) {
+        if (self::isColorDisabled()) {
             return false;
         }
 
@@ -1044,11 +1043,11 @@ class Terminal
     /**
      * Checks whether the stream resource on windows is terminal
      *
-     * @param resource $resource STDIN/STDOUT
+     * @param resource|string $resource STDIN/STDOUT
      * 
-     * @return bool 
+     * @return bool return true if is windows terminal, false otherwise.
     */
-    public static final function isWindowsTerminal($resource): bool
+    public static final function isWindowsTerminal(mixed $resource): bool
     {
         return static::streamSupports('sapi_windows_vt100_support', $resource) ||
             isset($_SERVER['ANSICON']) || getenv('ANSICON') !== false ||
@@ -1108,7 +1107,7 @@ class Terminal
     /**
      * Print help
      *
-     * @param array $help Pass the command protected properties as an array.
+     * @param array|null $helps Pass the command protected properties as an array.
      * @param bool $all Indicate whether you are printing all help commands or not
      *      - Used by system only
      * 

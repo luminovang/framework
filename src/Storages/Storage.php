@@ -72,7 +72,7 @@ class Storage extends Adapters
     public function __construct(string $adapter)
     {
         $this->adapter = strtolower($adapter);
-        $this->config = static::getConfigs($this->adapter);
+        $this->config = self::getConfigs($this->adapter);
 
         if($this->filesystem === null){
             parent::isInstalled($this->adapter);
@@ -278,16 +278,21 @@ class Storage extends Adapters
         } catch (Exception $e) {
             StorageException::throwException($e->getMessage(), $e->getCode(), $e);
         }
+
+        return false;
     }
 
     /**
      * Get the checksum for a file.
      *
-     * @return string|false
+     * @param string $path The path to the file.
+     * @return array $options Optional file optionss.
+     * 
+     * @return string|false Return file checksum, otherwise false.
      *
      * @throws StorageException If an error occurs during the write operation.
     */
-    public function checksum(string $path, array $options = []): string
+    public function checksum(string $path, array $options = []): string|false
     {
         try {
             return $this->filesystem->checksum($path, $options);
@@ -306,10 +311,11 @@ class Storage extends Adapters
      * @param bool $steam The type of read operation (default: false).
      *  - Passed true when reading large files.
      * 
-     * @return mixed The file contents.
+     * @return resource|string|false The file contents.
      * @throws StorageException If an error occurs during the read operation.
      */
-    public function read(string $filename, bool $steam = false){
+    public function read(string $filename, bool $steam = false): mixed
+    {
         try {
             $filename = $this->getDisk($filename);
 
@@ -321,6 +327,8 @@ class Storage extends Adapters
         } catch (Exception $e) {
             StorageException::throwException($e->getMessage(), $e->getCode(), $e);
         }
+
+        return false;
     }
 
     /**
@@ -332,19 +340,21 @@ class Storage extends Adapters
      *  - Passed true when downloading large files.
      * @param array $headers Optional download headers.
      * 
-     * @return mixed The file contents.
+     * @return bool Return true if download was successful, otherwise false.
      * @throws StorageException If an error occurs during the read operation.
     */
-    public function download(string $filename, string $name = null, bool $steam = false, array $headers = []){
+    public function download(string $filename, string $name = null, bool $steam = false, array $headers = []): bool
+    {
         try {
             $name ??= basename($filename);
-            $content = $this->read($filename, $steam);
 
-            return FileManager::download($content, $name, $headers);
+            return FileManager::download($this->read($filename, $steam), $name, $headers);
             
         } catch (Exception $e) {
             StorageException::throwException($e->getMessage(), $e->getCode(), $e);
         }
+
+        return false;
     }
 
     /**
@@ -395,14 +405,12 @@ class Storage extends Adapters
             $listing = $this->filesystem->listContents($directory, $recursive);
 
             foreach ($listing as $item) {
-                if($return === 'all'){
+                if ($return === 'all'){
                     $files[] = $item->jsonSerialize();
-                }else{
-                    if ($return === 'files' && $item instanceof FileAttributes) {
-                        $files[] = $item->jsonSerialize();
-                    } elseif ($return === 'dirs' && $item instanceof DirectoryAttributes) {
-                        $files[] = $item->jsonSerialize();
-                    }
+                } elseif ($return === 'files' && $item instanceof FileAttributes) {
+                    $files[] = $item->jsonSerialize();
+                } elseif ($return === 'dirs' && $item instanceof DirectoryAttributes) {
+                    $files[] = $item->jsonSerialize();
                 }
             }
         } catch (Exception $e) {
@@ -600,7 +608,7 @@ class Storage extends Adapters
         $path ??= '';
         try {
             $path = $this->getDisk($path);
-            $this->filesystem->createDirectory($path, static::$configs['default']);
+            $this->filesystem->createDirectory($path, self::$configs['default']);
         } catch (Exception $e) {
             StorageException::throwException($e->getMessage(), $e->getCode(), $e);
         }              
@@ -618,7 +626,7 @@ class Storage extends Adapters
     {
         try {
             $source = $this->getDisk($source);
-            $this->filesystem->move($source, $destination, static::$configs['default']);
+            $this->filesystem->move($source, $destination, self::$configs['default']);
         } catch (Exception $e) {
             StorageException::throwException($e->getMessage(), $e->getCode(), $e);
         }
@@ -636,7 +644,7 @@ class Storage extends Adapters
     {
         try {
             $source = $this->getDisk($source);
-            $this->filesystem->copy($source, $destination, static::$configs['default']);
+            $this->filesystem->copy($source, $destination, self::$configs['default']);
         } catch (Exception $e) {
             StorageException::throwException($e->getMessage(), $e->getCode(), $e);
         }
@@ -651,15 +659,15 @@ class Storage extends Adapters
     */
     private static function getConfigs(string $context = 'local'): array 
     {
-        if(static::$configs === []){
+        if(self::$configs === []){
             $path = path('controllers') . 'Config' . DIRECTORY_SEPARATOR . 'Storage.php';
 
             if (file_exists($path)) {
-                static::$configs = require_once $path;
+                self::$configs = require_once $path;
             }
         }
 
-        return static::$configs[$context] ?? [];
+        return self::$configs[$context] ?? [];
     }
 
     /**

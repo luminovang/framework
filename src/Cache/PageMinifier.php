@@ -10,35 +10,10 @@
 namespace Luminova\Cache;
 
 use \Luminova\Http\Header;
-use \Luminova\Http\Encoder;
 use \JsonException;
 
 final class PageMinifier 
 {
-    /**
-	* holds json content type
-	* @var string JSON
-	*/
-	public const JSON = "application/json;";
-	 
-	/**
-	* holds text content type
-	* @var string TEXT
-	*/
-	public const TEXT = "text/plain;";
-	 
-	/**
-	* holds html content type
-	* @var string HTML
-	*/
-	public const HTML = "text/html;";
-
-    /**
-	* holds xml content type
-	* @var string XML
-	*/
-	public const XML = 'application/xml';
-
     /** 
      * Ignore html code block tag <code></code>
      * @var bool $codeblocks
@@ -68,11 +43,11 @@ final class PageMinifier
      * Regular expression patterns for content stripping
      * @var array $patterns
     */
-    private const PATTERNS = [
+    private static array $patterns = [
         "find" => [
             '/\>[^\S ]+/s',          // Strip whitespace after HTML tags
             '/[^\S ]+\</s',          // Strip whitespace before HTML tags
-            '/\s+/', //'/(\s)+/s',   // Strip excessive whitespace
+            '/\s+/',                 // Strip excessive whitespace
             '/<!--(.*)-->/Uis',      // Strip HTML comments
             '/[[:blank:]]+/'         // Strip blank spaces
         ],
@@ -94,7 +69,9 @@ final class PageMinifier
      * Class constructor.
      * Initializes default settings for the response headers and cache control.
      */
-    public function __construct() {}
+    public function __construct() {
+        
+    }
     
     /**
      * sets ignore minifying code block
@@ -136,9 +113,9 @@ final class PageMinifier
     /**
      * Get content encoding
      * 
-     * @return string|null Return minified content encoding.
+     * @return string|null|false Return minified content encoding.
      */
-    public function getEncoding(): ?string 
+    public function getEncoding(): string|null|false
     {
 		return $this->headers['Content-Encoding']??false;
     }
@@ -146,7 +123,7 @@ final class PageMinifier
      /**
      * Get content encoding
      * 
-     * @return string|null Return minified content encoding.
+     * @return int Return content length.
      */
     public function getLength(): int 
     {
@@ -168,36 +145,28 @@ final class PageMinifier
      *
      * @param string|array|object $data The content to compress (can be an array or object for JSON response).
      * @param string $contentType The expected content type for the response.
-     * @param bool $minify Minify contents.
-     * @param bool $encode Compress and encode contents.
      * 
      * @return self Returns minifier class instance.
      */
     public function compress(
         string|array|object $data,
-        string $contentType,
-        bool $minify = true,
-        bool $encode = true
+        string $contentType
     ): self {
+       
+        // Convert data to string if not already
+        $content = is_string($data) ? $data : static::toJsonString($data);
+
+        // Minify content if required
+        $content = ($this->codeblocks ? static::minify($content) : static::minifyIgnore($content, $this->copiable));
+
         // Resolve content type if it's a shorthand
         if (strpos($contentType, '/') === false) {
             $contentType = Header::getContentTypes($contentType);
         }
 
-        // Convert data to string if not already
-        $content = is_string($data) ? $data : static::toJsonString($data);
-
-        // Minify content if required
-        $content = $minify ? ($this->codeblocks ? static::minify($content) : static::minifyIgnore($content, $this->copiable)) : $content;
-
-        // Encode content if required
-        [$encoding, $content] = $encode ? Encoder::encode($content) : [false, $content];
-
         // Set response headers
         $this->headers['Content-Length'] = string_length($content);
         $this->headers['Content-Type'] = $contentType;
-        $this->headers['Content-Encoding'] = $encoding;
-        
         $this->contents = $content;
 
         return $this;
@@ -218,7 +187,6 @@ final class PageMinifier
 
         try{
             $encoded = json_encode($data, JSON_THROW_ON_ERROR);
-
             if ($encoded !== false) {
                 return $encoded;
             }
@@ -227,93 +195,8 @@ final class PageMinifier
         }
         
         return '';
-    }    
-
-    /**
-     * Sends the response with the specified content type and status code.
-     *
-     * @param string|array|object $body The content body to be sent in the response.
-     * @param string $type The expected content type for the response.
-     * 
-    */
-    private function respond(mixed $body, string $type): void 
-    {
-        $this->compress($body, $type);
-        $this->headers['default_headers'] = true;
-        Header::parseHeaders($this->headers);
-
-        echo $this->contents;
-    }
-    
-    /**
-     * Send the output in HTML format.
-     *
-     * @param string $body The content body to be sent in the response.
-     */
-    public function html(string $body): void 
-    {
-        $this->respond($body, self::HTML);
     }
 
-    /**
-     * Send the output in text format.
-     *
-     * @param string $body The content body to be sent in the response.
-     */
-    public function text(string $body): void 
-    {
-        $this->respond($body, self::TEXT);
-    }
-
-    /**
-     * Send the output in XML format.
-     *
-     * @param string $body The content body to be sent in the response.
-     */
-    public function xml(string $body): void 
-    {
-        $this->respond($body, self::XML);
-    }
-
-     /**
-     * Send the output in JSON format.
-     *
-     * @param string|array|object $body The content body to be sent in the response.
-     */
-    public function json(string|array|object $body): void 
-    {
-        $this->respond($body, self::JSON);
-    }
-
-    /**
-     * Send the output based on the specified content type.
-     *
-     * @param string|array|object $body The content body to be sent in the response.
-     * @param string $type The expected content type for the response.
-     */
-    public function run(mixed $body, string $type = self::HTML): void 
-    {
-        $this->respond($body, $type);
-    }
-
-    /**
-     * End output buffering and send the response.
-     *
-     * @param string $type The expected content type for the response.
-     */
-    public function end(string $type = self::HTML): void 
-    {
-        $this->respond(ob_get_contents(), $type);
-    }
-
-    /** 
-     * Start output buffering and minify the content by removing unwanted tags and whitespace.
-    */
-    public function startMinify(): void 
-    {
-        ob_start(['static', $this->codeblocks ? 'minifyIgnore' : 'minify']);
-    }
-    
     /**
      * Minify the given content by removing unwanted tags and whitespace.
      *
@@ -323,8 +206,11 @@ final class PageMinifier
      */
     public static function minify(string $content): string 
     {
-        $content = str_replace(self::PATTERNS["line"], '', $content);
-        $content = preg_replace(self::PATTERNS["find"], self::PATTERNS["replace"], $content);
+        $content = preg_replace(
+            static::$patterns["find"], 
+            static::$patterns["replace"], 
+            str_replace(static::$patterns["line"], '', $content)
+        );
 
         return trim($content);
     }

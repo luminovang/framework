@@ -1,5 +1,16 @@
 <?php 
-class ArrayObject {
+/**
+ * Luminova Framework
+ *
+ * @package Luminova
+ * @author Ujah Chigozie Peter
+ * @copyright (c) Nanoblock Technology Ltd
+ * @license See LICENSE file
+ */
+namespace Luminova\Arrays;
+
+class ArrayObject 
+{
 
     public static function getColumns(string $property, array|object $values): array 
     {
@@ -11,5 +22,4 @@ class ArrayObject {
             return $object->$property;
         }, (array) $values);
     }
-
 }

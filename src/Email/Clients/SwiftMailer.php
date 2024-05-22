@@ -259,10 +259,8 @@ class SwiftMailer implements MailerInterface
             $message->addPart($this->AltBody, 'text/html');
         }
         $message->setBody($this->Body);
-        if($this->attachments !== []){
-            foreach($this->attachments as $attach){
-                $message->attach(Swift_Attachment::fromPath($attach['path']));
-            }
+        foreach($this->attachments as $attach){
+            $message->attach(Swift_Attachment::fromPath($attach['path']));
         }
 
         $result = $this->mailer->send($message);

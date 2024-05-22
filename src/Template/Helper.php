@@ -40,18 +40,16 @@ class Helper
         string $type = 'html', 
         bool $ignore = true, 
         bool $copy = false,
-        bool $minify = true,
-        bool $encode = true
     ): PageMinifier
     {
-        if(static::$minifier === null){
-            static::$minifier = new PageMinifier();
+        if(self::$minifier === null){
+            self::$minifier = new PageMinifier();
         }
 
-        static::$minifier->codeblocks($ignore);
-        static::$minifier->copiable($copy);
+        self::$minifier->codeblocks($ignore);
+        self::$minifier->copiable($copy);
 
-        return static::$minifier->compress($contents, $type, $minify, $encode);
+        return self::$minifier->compress($contents, $type);
     }
 
     /** 
@@ -71,15 +69,15 @@ class Helper
     {
         $key ??= static::cachekey();
 
-        if(static::$viewCache === null){
-            static::$viewCache = new PageViewCache();
+        if(self::$viewCache === null){
+            self::$viewCache = new PageViewCache();
         }
 
-        static::$viewCache->setExpiry($expiry);
-        static::$viewCache->setDirectory($direcory);
-        static::$viewCache->setKey($key);
+        self::$viewCache->setExpiry($expiry);
+        self::$viewCache->setDirectory($direcory);
+        self::$viewCache->setKey($key);
 
-        return static::$viewCache;
+        return self::$viewCache;
     }
 
     /**
@@ -136,12 +134,7 @@ class Helper
     */
     public static function relativeLevel(): string 
     {
-        /*$uri = static::getViewUri();
-        if (($pos = strpos($uri, '/public')) !== false) {
-            $uri = substr($uri, $pos + 7);
-        }*/
-
-        $level = substr_count(static::getViewUri(), '/');
+        $level = substr_count(self::getViewUri(), '/');
         
         if($level === 0){
             return './';
@@ -184,10 +177,8 @@ class Helper
         $view = str_replace(['_', '-', ','], [' ', ' ', ''], $view);
         $view = ucwords($view);
 
-        if ($suffix) {
-            if (!str_contains($view, '- ' . APP_NAME)) {
-                $view .= ' - ' . APP_NAME;
-            }
+        if ($suffix && !str_contains($view, '- ' . APP_NAME)) {
+            $view .= ' - ' . APP_NAME;
         }
 
         return trim($view);

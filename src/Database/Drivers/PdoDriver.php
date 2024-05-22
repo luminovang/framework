@@ -231,7 +231,7 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function dumpDebug(): bool|null
+    public function dumpDebug(): bool
     {
         if (!$this->onDebug || $this->stmt === null || $this->stmt === false) {
             return false;

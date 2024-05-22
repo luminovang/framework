@@ -21,11 +21,15 @@ use Throwable;
 
 class Curl implements HttpClientInterface
 {
+    private array $config = [];
     /**
      * {@inheritdoc}
      * 
     */
-    public function __construct(array $config = []){}
+    public function __construct(array $config = [])
+    {
+        $this->config = $config;
+    }
     
     /**
       * {@inheritdoc}
@@ -33,8 +37,8 @@ class Curl implements HttpClientInterface
     public function request(string $method, string $url, array $data = [], array $headers = []): Response
     {
         $method = strtoupper($method);
-        if (!in_array($method, ['GET', 'POST'], true)) {
-            throw new ClientException('Invalid request method. Supported methods: GET, POST.');
+        if (!in_array($method, ['GET', 'POST', 'HEAD'], true)) {
+            throw new ClientException('Invalid request method. Supported methods: GET, POST, HEAD.');
         }
 
         $ch = curl_init();
@@ -42,32 +46,43 @@ class Curl implements HttpClientInterface
             throw new ClientException('Failed to initialize cURL');
         }
 
+        if(isset($this->config['headers'])){
+            $headers = array_merge($this->config['headers'], $headers);
+        }
+
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HEADER, true);
+        curl_setopt($ch, CURLOPT_MAXREDIRS, 2);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 0);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        //curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_NONE);
+        //curl_setopt($ch, CURLOPT_ENCODING, '');
 
         if ($method === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
             try{
                 if ($data !== []) {
                     $data = json_encode($data, JSON_THROW_ON_ERROR);
-                    $headers['Content-Type'] = 'application/json';
+                    if(!isset($headers['Content-Type'])){
+                        $headers['Content-Type'] = 'application/json';
+                    }
                 }
             }catch(JsonException|Throwable $e){
                 throw new ClientException($e->getMessage(), $e->getCode(), $e);
             }
 
             curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        }elseif ($method !== 'GET' || $method !== 'HEAD') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         }
 
         if ($headers !== []) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, static::toRequestHeaders($headers));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, self::toRequestHeaders($headers));
         }
 
         $response = curl_exec($ch);
-        $error = curl_error($ch);
-        if ($error || $response === false) {
-           
+        if (($error = curl_error($ch)) !== 0 || $response === false || $response === '') {
             $errorCode = curl_errno($ch);
             curl_close($ch);
 
@@ -93,11 +108,11 @@ class Curl implements HttpClientInterface
         }
 
         $info = curl_getinfo($ch);
-        $statusCode = (int) $info['http_code'] ?? 0;
+        $statusCode = (int) ($info['http_code'] ?? 0);
         $headerSize = $info['header_size'] ?? 0;
         $responseHeaders = substr($response, 0, strpos($response, "\r\n\r\n"));
         $contents = substr($response, $headerSize);
-        $responseHeaders = static::headerToArray($responseHeaders, $statusCode);
+        $responseHeaders = self::headerToArray($responseHeaders, $statusCode);
         curl_close($ch);
 
         return new Response($statusCode, $responseHeaders, $response, $contents, $info);

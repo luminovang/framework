@@ -10,7 +10,8 @@
 namespace Luminova\Errors;
 
 use \Throwable;
-class ErrorStack
+
+final class ErrorStack
 {
     /** 
      * The file where the error occurred.
@@ -22,10 +23,9 @@ class ErrorStack
     /** 
      * The line number where the error occurred.
      * 
-     * @var mixed  
-     * 
+     * @var int  
     */
-    private mixed $line = '';
+    private int $line = 0;
 
     /** 
      * The error message.
@@ -54,7 +54,7 @@ class ErrorStack
      /** 
      * The previous error exception.
      * 
-     * @var object|null $previous
+     * @var Throwable|null $previous
      * 
     */
     private ?Throwable $previous = null;
@@ -63,9 +63,9 @@ class ErrorStack
      * Error constructor.
      * @param string $message The error message.
      * @param int $code The error code (default: 0).
-     * @param object|null $previous Register previous error exception.
+     * @param Throwable|null $previous Register previous error exception.
      */
-    public function __construct(string $message, int $code = 0, Throwable $previous = null)
+    public function __construct(string $message, int $code = 0, ?Throwable $previous = null)
     {
         $this->message = $message;
         $this->code = $code;
@@ -74,6 +74,7 @@ class ErrorStack
 
     /**
      * Sets the file where the error occurred.
+     * 
      * @param string $file The file where the error occurred.
      */
     public function setFile(string $file): void
@@ -83,9 +84,10 @@ class ErrorStack
 
     /**
      * Sets the line number where the error occurred.
-     * @param string $line The line number where the error occurred.
+     * 
+     * @param int $line The line number where the error occurred.
      */
-    public function setLine(string $line): void
+    public function setLine(int $line): void
     {
         $this->line = $line;
     }
@@ -102,6 +104,7 @@ class ErrorStack
 
     /**
      * Gets the error code.
+     * 
      * @return int The error code.
      */
     public function getCode(): int
@@ -111,15 +114,17 @@ class ErrorStack
 
     /**
      * Gets the line number where the error occurred.
-     * @return string The line number where the error occurred.
+     * 
+     * @return int The line number where the error occurred.
      */
-    public function getLine(): string
+    public function getLine(): int
     {
         return $this->line;
     }
 
     /**
      * Gets the file where the error occurred.
+     * 
      * @return string The file where the error occurred.
      */
     public function getFile(): string
@@ -139,6 +144,7 @@ class ErrorStack
 
     /**
      * Gets the error message.
+     * 
      * @return string The error message.
      */
     public function getMessage(): string
@@ -146,6 +152,11 @@ class ErrorStack
         return $this->message;
     }
 
+    /**
+     * Get previous error.
+     * 
+     * @return Throwable
+    */
     public function getPrevious(): ?Throwable 
     {
         return $this->previous;

@@ -8,7 +8,9 @@
  * @license See LICENSE file
  */
 namespace Luminova\Cache;
+
 use \Memcached;
+use \Closure;
 
 class MemoryCache 
 {
@@ -98,11 +100,11 @@ class MemoryCache
      * Retrieve cached data or generate it using a callback if not found.
      *
      * @param string $key Cache key.
-     * @param callable $cacheCallback Callback function to generate the data.
+     * @param Closure $cacheCallback Callback function to generate the data.
      * 
      * @return mixed Cached or generated data.
      */
-    public function onExpired(string $key, callable $cacheCallback): mixed 
+    public function onExpired(string $key, Closure $cacheCallback): mixed 
     {
         return $this->withExpired($key, $cacheCallback, $this->cacheTime);
     }
@@ -111,12 +113,12 @@ class MemoryCache
      * Retrieve cached data or generate it using a callback if not found with a custom expiration time.
      *
      * @param string $key Cache key.
-     * @param callable $cacheCallback Callback function to generate the data.
+     * @param Closure $cacheCallback Callback function to generate the data.
      * @param int $expiration Custom cache expiration time in seconds.
      * 
      * @return mixed Cached or generated data.
      */
-    public function withExpired(string $key, callable $cacheCallback, int $expiration): mixed 
+    public function withExpired(string $key, Closure $cacheCallback, int $expiration): mixed 
     {
         $cachedResponse = $this->memcache->get($key);
 

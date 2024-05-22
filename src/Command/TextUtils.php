@@ -49,11 +49,11 @@ final class TextUtils
     /**
      * Pads string left
      *
-     * @param string $text string to pad
-     * @param int $max maximum padding 
-     * @param string $char Padding character
+     * @param string $text String to pad.
+     * @param int $length Maximum length of padding.
+     * @param string $char Padding character (default: ' ').
      * 
-     * @return string
+     * @return string Return left padded string.
     */
     public static function padStart(string $text, int $length, string $char = ' '): string 
     {
@@ -63,24 +63,22 @@ final class TextUtils
     /**
      * Pads string right
      *
-     * @param string $text string to pad
-     * @param int $max maximum padding 
-     * @param string $char Padding character
+     * @param string $text String to pad.
+     * @param int $length Maximum length of padding.
+     * @param string $char Padding character (default: ' ').
      * 
-     * @return string
+     * @return string Return right padded string.
     */
-    public static function padEnd(string $text, int $max, string $char = ' '): string 
+    public static function padEnd(string $text, int $length, string $char = ' '): string 
     {
-        return static::padding($text, $max, $char, STR_PAD_RIGHT);
+        return static::padding($text, $length, $char, STR_PAD_RIGHT);
     }
 
     /**
      * Create a border around text.
      *
-     * @param string $text string to pad
-     * @param int $max maximum padding 
-     * @param string $char Padding character
-     * @param int $padd Padding location default is both left and reight
+     * @param string $text string to pad.
+     * @param int $padding Padding location default is both left and reight.
      * 
      * @return string Return text with border round.
     */
@@ -96,12 +94,10 @@ final class TextUtils
         $horizontal= '─';
         $vertical = '│';
     
-        $horizontalBorder = $topLeft . str_repeat($horizontal, $padding) . $topRight . PHP_EOL;
-        $bottomBorder = $bottomLeft . str_repeat($horizontal, $padding) . $bottomRight . PHP_EOL;
-    
-        $box = $horizontalBorder . $vertical . $text . $vertical . PHP_EOL . $bottomBorder;
-    
-        return $box;
+        $horizontalBorder = $topLeft . str_repeat($horizontal, (int) $padding) . $topRight . PHP_EOL;
+        $bottomBorder = $bottomLeft . str_repeat($horizontal, (int) $padding) . $bottomRight . PHP_EOL;
+
+        return $horizontalBorder . $vertical . $text . $vertical . PHP_EOL . $bottomBorder;
     }
 
     /**
@@ -119,7 +115,7 @@ final class TextUtils
         $leftPadding = floor($size / 2);
         $rightPadding = ceil($size / 2);
 
-        $centered = str_repeat(' ', $leftPadding) . $text . str_repeat(' ', $rightPadding);
+        $centered = str_repeat(' ', (int) $leftPadding) . $text . str_repeat(' ', (int) $rightPadding);
 
         return $centered;
     }
@@ -127,33 +123,33 @@ final class TextUtils
     /**
      * Pads string both left and right.
      *
-     * @param string $text string to pad
-     * @param int $max maximum padding 
-     * @param string $char Padding character
-     * @param int $padd Padding location default is both left and reight
+     * @param string $text string to pad.
+     * @param int $length Maximum length of padding.
+     * @param string $char Padding character (default: ' ').
+     * @param int $padd Padding location default is both left and reight (default: STR_PAD_BOTH).
      * 
-     * @return string
+     * @return string Return padded string.
     */
-    public static function padding(string $text, int $max, string $char = ' ', int $padd = STR_PAD_BOTH): string 
+    public static function padding(string $text, int $length, string $char = ' ', int $padd = STR_PAD_BOTH): string 
     {
-        return str_pad($text, $max, $char, $padd);
+        return str_pad($text, $length, $char, $padd);
     }
 
     /**
-     * Pads string to fit same length
+     * Pads string to fit same length.
      *
-     * @param string $text string to pad
-     * @param int $max maximum padding 
-     * @param int $extra How many extra spaces to add at the end
-     * @param int $index index of
+     * @param string $text string to pad.
+     * @param int $max maximum padding.
+     * @param int $extra How many extra spaces to add at the end.
+     * @param int $indent Optional indent.
      * 
-     * @return string
+     * @return string Return fitted string.
     */
     public static function fit(string $text, int $max, int $extra = 2, int $indent = 0): string
     {
         $max += $extra + $indent;
 
-        return str_pad(str_repeat(' ', $indent) . $text, $max);
+        return str_pad(str_repeat(' ', $indent) . $text, (int) $max);
     }
 
     /**

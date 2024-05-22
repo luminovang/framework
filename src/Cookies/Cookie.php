@@ -179,7 +179,7 @@ class Cookie implements CookieInterface
         if($finalValue === false){
             throw CookieException::throwWith('invalid_value', $value);
         }
-        $this->saveGlobal($value);
+        $this->saveGlobal(null, $value);
         $this->saveContent($finalValue);
 
         return $this;
@@ -241,7 +241,7 @@ class Cookie implements CookieInterface
             $expiry = $expired;
         }
     
-        $this->saveGlobal($value);
+        $this->saveGlobal(null, $value);
         $this->saveContent($finalValue, $expiry);
 
         return $this;
@@ -724,15 +724,15 @@ class Cookie implements CookieInterface
     /**
      * Save cookie to global variables
      *
-     * @param string $name cookie name
-     * @param string $value contents
+     * @param string $name cookie name.
+     * @param string $value contents.
      * 
      * @return void
     */
-    private function saveGlobal(mixed $value = '', ?string $name = null): void 
+    private function saveGlobal(?string $name = null, mixed $value = ''): void 
     {
         $name ??= $this->name;
-        $_COOKIE[$name] =  $value;
+        $_COOKIE[$name] = $value;
     }
 
     /**

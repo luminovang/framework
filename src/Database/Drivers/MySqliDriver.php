@@ -15,6 +15,7 @@ use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Database\Conn\mysqliConn;
 use \Luminova\Interface\ConnInterface;
+use \PDOStatement;
 use \mysqli_stmt;
 use \mysqli_result;
 use \stdClass;
@@ -139,7 +140,7 @@ final class MySqliDriver implements DatabaseInterface
             if ($this->connection->connect_error) {
                 DatabaseException::throwException($this->connection->connect_error, $this->connection->connect_errno);
             }
-            $this->connection->options(MYSQLI_OPT_INT_AND_FLOAT_NATIVE, $this->config->emulate_preparse);
+            $this->connection->options(MYSQLI_OPT_INT_AND_FLOAT_NATIVE, (int) $this->config->emulate_preparse);
 
             if($this->config->charset !== ''){
                 $this->connection->set_charset($this->config->charset);
@@ -212,14 +213,13 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function dumpDebug(): bool|null 
+    public function dumpDebug(): bool 
     {
         if (!$this->onDebug || $this->stmt === null || $this->stmt === false) {
             return false;
         }
 
         var_dump($this->stmt);
-
         return true;
     }
 
@@ -501,7 +501,7 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function getStatment(): \PDOStatement|mysqli_stmt|mysqli_result|bool|null
+    public function getStatment(): PDOStatement|mysqli_stmt|mysqli_result|bool|null
     {
         return $this->stmt;
     }

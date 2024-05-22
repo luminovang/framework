@@ -11,32 +11,32 @@ namespace Luminova\Template;
 
 use Luminova\Exceptions\RuntimeException;
 
-class Layout
+final class Layout
 {
     /** 
      * @var array<string, string> $sections
     */
-    protected array $sections = [];
+    private array $sections = [];
     
     /** 
      * @var string|null $current
     */
-    protected ?string $current = null;
+    private ?string $current = null;
     
     /** 
      * @var bool $nesting
     */
-    protected bool $nesting = false;
+    private bool $nesting = false;
     
     /** 
      * @var bool $process
     */
-    protected bool $process = true;
+    private bool $process = true;
     
     /** 
      * @var string $file
     */
-    protected static string $file = '';
+    private static string $file = '';
 
     /** 
      * @var self|null $instance
@@ -50,11 +50,11 @@ class Layout
      */
     public static function getInstance(): static 
     {
-        if (static::$instance === null) {
-            static::$instance = new static();
+        if (self::$instance === null) {
+            self::$instance = new self();
         }
         
-        return static::$instance;
+        return self::$instance;
     }
 
     /**
@@ -65,9 +65,9 @@ class Layout
      * 
      * @return static Return the instance of Layout class.
      */
-    protected static function import(string $layout): static 
+    protected static function import(string $layout): self 
     {
-        return (new static())->layout($layout);;
+        return (new self())->layout($layout);;
     }
 
     /**
@@ -81,10 +81,10 @@ class Layout
      */
     public function layout(string $layout): self
     {
-        static::$file = root('/resources/views/layouts/') . trim($layout, '/') . '.php';
+        self::$file = root('/resources/views/layouts/') . trim($layout, '/') . '.php';
 
-        if (!file_exists(static::$file)) {
-            throw new RuntimeException('Layout not found: ' . filter_paths(static::$file));
+        if (!file_exists(self::$file)) {
+            throw new RuntimeException('Layout not found: ' . filter_paths(self::$file));
         }
 
         return $this;
@@ -99,7 +99,7 @@ class Layout
     {
         $this->process = true;
         ob_start();
-        require_once static::$file;
+        require_once self::$file;
         ob_end_clean();
     }
 
@@ -136,9 +136,8 @@ class Layout
         if (!$this->process) {
             return;
         }
-        
-        $name = $name ?? $this->current;
 
+        $name ??= $this->current;
         if ($name === null) {
             throw new RuntimeException('No active section to end');
         }
@@ -170,13 +169,8 @@ class Layout
             return $this->get();;
         }
 
-        $this->include($section);
-
-        if (isset($this->sections[$section])) {
-            return $this->sections[$section];
-        }
-
-        return '';
+        $this->include();
+        return $this->sections[$section] ?? '';
     }
 
     /**
@@ -188,7 +182,7 @@ class Layout
     {
         $this->process = false;
         ob_start();
-        require_once static::$file;
+        require_once self::$file;
         $content = ob_get_clean();
 
         if($content === false){

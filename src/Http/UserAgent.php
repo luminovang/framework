@@ -126,7 +126,7 @@ class UserAgent
     /**
      * Magic method to dynamically access properties.
      *
-     * @param string $name The name of the property.
+     * @param string $property The name of the property.
      * 
      * @return mixed The value of the property if exists, otherwise null.
      * @ignore
@@ -190,12 +190,12 @@ class UserAgent
        
         if (!empty($userAgent)) {
             if (preg_match('/^(.*?)\/([\d.]+) \(([^;]+); ([^;]+); ([^)]+)\) (.+)$/', $userAgent, $matches)) {
-                return static::extract($matches, $return_array, true);
+                return self::extract($matches, $return_array, true);
             }
 
             // Maybe PostMan or other API tools
             if (preg_match('/^([^\/]+)\/([\d.]+)$/i', $userAgent, $matches)) {
-                return static::extract($matches, $return_array);
+                return self::extract($matches, $return_array);
             }
         }
 

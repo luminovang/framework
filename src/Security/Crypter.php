@@ -13,6 +13,8 @@ namespace Luminova\Security;
 use \Luminova\Interface\EncryptionInterface;
 use \Luminova\Exceptions\EncryptionException;
 use \App\Controllers\Config\Encryption;
+use \Luminova\Security\Encryption\OpenSSL;
+use \Luminova\Security\Encryption\Sodium;
 
 /**
  * The Crypter class provides methods for encrypting and decrypting data using encryption algorithms in OpenSSL or Sodium.
@@ -57,7 +59,7 @@ final class Crypter
     /**
      * Get an instance of OpenSSL or Sodium encryption.
      * 
-     * @return EncryptionInterface An instance of the encryption class.
+     * @return class-object<EncryptionInterface> An instance of the encryption class.
      * 
      * @throws EncryptionException Throws when an empty encryption key is passed.
      * @throws EncryptionException Throws when invalid handler is specified or handler extention not loaded.
@@ -81,13 +83,12 @@ final class Crypter
         }
 
         $handlers = [
-            'openssl' => '\Luminova\Security\Encryption\OpenSSL',
-            'sodium' => '\Luminova\Security\Encryption\Sodium'
+            'openssl' => '\\' . OpenSSL::class,
+            'sodium' => '\\' . Sodium::class
         ];
 
         $method = strtoupper(Encryption::$method);
         $size = static::$ciphers[$method]['size'] ?? 16;
-
         $encryption = $handlers[$handler];
 
         return new $encryption($key, $method, $size);
@@ -143,7 +144,6 @@ final class Crypter
      * @param string $data The data to decrypt.
      * 
      * @return string|null The decrypted data, or null if decryption fails.
-     * 
      * @throws EncryptionException Throws when invalid encryption data is passed.
      */
     public static function decrypt(string $data): string|null|bool
@@ -176,7 +176,7 @@ final class Crypter
 	*/
 	public static function password(string $password, array|null $options = null): string|bool
 	{
-		if(empty($password)){
+		if($password === ''){
 			return false;
 		}
 
@@ -198,7 +198,7 @@ final class Crypter
 	*/
 	public static function verify(string $password, string $hash): bool 
 	{
-		if(empty($password) || empty($hash)){
+		if($password === '' || $hash === ''){
 			return false;
 		}
 

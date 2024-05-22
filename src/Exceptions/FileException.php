@@ -15,10 +15,10 @@ class FileException extends AppException
     /**
      * Handle file excption.
      * 
-     * @param string $path 
-     * @param string $message
+     * @param string $file Filename. 
+     * @param string $message Exception message.
      * 
-     * @throws self
+     * @throws static Throws exception.
     */
     public static function handleFile(string $file, string $message = ''): void 
     {
@@ -28,10 +28,10 @@ class FileException extends AppException
     /**
      * Handle directory excption.
      * 
-     * @param string $path 
-     * @param string $message
+     * @param string $path File path.
+     * @param string $message Exception message.
      * 
-     * @throws self
+     * @throws static Throws exception.
     */
     public static function handleDirectory(string $path, string $message = ''): void 
     {
@@ -41,10 +41,10 @@ class FileException extends AppException
     /**
      * Handle file permission excption.
      * 
-     * @param string $path 
-     * @param string $message
+     * @param string $path File path.
+     * @param string $message Exception message.
      * 
-     * @throws self
+     * @throws static Throws exception
     */
     public static function handlePermission(string $path, string $message = ''): void 
     {

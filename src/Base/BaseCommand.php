@@ -24,13 +24,14 @@ abstract class BaseCommand extends Terminal
     protected string $name = '';
 
     /**
-     * @var string|array<string,string> $usage command usages.
      * Use the array key for command usage and the value for description.
+     * 
+     * @var string|array<string|int,string> $usage command usages.
     */
     protected string|array $usage = '';
 
     /**
-     * @var array<string,string> $options command options
+     * @var array<string|int,string> $options command options
     */
     protected array $options = [];
 
@@ -50,16 +51,16 @@ abstract class BaseCommand extends Terminal
     /**
      * Allow access to protected static methods
      *
-     * @param string $method method name to call
-     * @param array $arguments arguments to pass to method
+     * @param string $method method name to call.
+     * @param array $arguments arguments to pass to method.
      * 
-     * @return mixed
+     * @return mixed Return value of method.
      * @ignore 
     */
     public static function __callStatic(string $method, array $arguments): mixed
     {
         if (method_exists(static::class, $method)) {
-            return static::$method(...$arguments);
+            return static::{$method}(...$arguments);
         }
 
         return null;

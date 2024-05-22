@@ -19,9 +19,11 @@ use \Exception;
 class IPAddress
 {
    /**
-    * @var array $cf
+    * CloudFlare heder.
+    *
+    * @var string $cloudFlare
    */
-   private static string $cf = 'HTTP_CF_CONNECTING_IP';
+   private static string $cloudFlare = 'HTTP_CF_CONNECTING_IP';
 
    /**
     * @var array $ipHeaders
@@ -39,9 +41,7 @@ class IPAddress
    /**
     * Initializes IPAddress
    */
-   public function __construct(){
-
-   }
+   public function __construct(){}
 
    /**
 	 * Get the client's IP address.
@@ -50,14 +50,14 @@ class IPAddress
 	*/
    public static function get(): string 
    {
-      if (isset($_SERVER[static::$cf])) {
-         $_SERVER['REMOTE_ADDR'] = $_SERVER[static::$cf];
-         $_SERVER['HTTP_CLIENT_IP'] = $_SERVER[static::$cf];
+      if (isset($_SERVER[self::$cloudFlare])) {
+         $_SERVER['REMOTE_ADDR'] = $_SERVER[self::$cloudFlare];
+         $_SERVER['HTTP_CLIENT_IP'] = $_SERVER[self::$cloudFlare];
          
-         return $_SERVER[static::$cf];
+         return $_SERVER[self::$cloudFlare];
       }
 
-      foreach (static::$ipHeaders as $header) {
+      foreach (self::$ipHeaders as $header) {
          $ips = isset($_SERVER[$header]) ? $_SERVER[$header] : getenv($header);
          
          if ($ips !== false) {
@@ -97,9 +97,6 @@ class IPAddress
          return $result;
       }
 
-      static $network = null;
-
-      $network = new Network();
       $headers = [];
 
       if (IPConfig::$apiProvider === 'ipapi') {
@@ -108,22 +105,22 @@ class IPAddress
          $url = 'http://' . IPConfig::$ipHubVersion . '.api.iphub.info/ip/' . $ip;
          $headers = (IPConfig::$apiKey === [] ? [] : ['X-Key' => IPConfig::$apiKey]);
       }else{
-         return static::ipInfoError('Invalid ip address info api provider ' . IPConfig::$apiProvider , 700);
+         return self::ipInfoError('Invalid ip address info api provider ' . IPConfig::$apiProvider , 700);
       }
 
       try {
-         $response = $network->get($url, [], $headers);
+         $response = (new Network())->get($url, [], $headers);
          $statusCode = $response->getStatusCode();
          $content = $response->getContents();
 
          if($content === null){
-            return static::ipInfoError('No ip info available', $statusCode);
+            return self::ipInfoError('No ip info available', $statusCode);
          }
 
          $result = json_decode($content, true);
 
          if (isset($result['error'])) {
-            return static::ipInfoError($result['info'] ?? $result['reason'], $result['code'] ?? $statusCode);
+            return self::ipInfoError($result['info'] ?? $result['reason'], $result['code'] ?? $statusCode);
          }
 
          $ipInfo = [
@@ -138,7 +135,7 @@ class IPAddress
 
          return (object) $ipInfo;
       } catch (AppException | Exception $e) {
-         return static::ipInfoError($e->getMessage(), $e->getCode());
+         return self::ipInfoError($e->getMessage(), $e->getCode());
       }
 
       return null;
@@ -164,7 +161,7 @@ class IPAddress
       }
 
       foreach (IPConfig::$trustedProxies as $proxy) {
-         if (strpos($proxy, '/') !== false) {
+         if (strpos($proxy, '/')) {
                [$subnet, $mask] = explode('/', $proxy);
                $subnet = ip2long($subnet);
                $mask = ~((1 << (32 - $mask)) - 1);
@@ -172,10 +169,8 @@ class IPAddress
                if ((ip2long($ip) & $mask) === ($subnet & $mask)) {
                   return true;
                }
-         } else {
-            if ($ip === $proxy) {
-               return true;
-            }
+         } elseif ($ip === $proxy) {
+            return true;
          }
       }
 
@@ -185,7 +180,7 @@ class IPAddress
    /**
     * Return error information
     * @param string $message error message 
-    * @param string $status Error status code 
+    * @param int $status Error status code 
     *
     * @return object $error
    */
@@ -210,7 +205,7 @@ class IPAddress
    * Check if an IP address is valid.
    *
    * @param string|null $address The IP address to validate.
-   * @param int    $version   The IP version to validate (4 for IPv4, 6 for IPv6).
+   * @param int $version The IP version to validate (4 for IPv4, 6 for IPv6).
    *
    * @return bool True if the IP address is valid, false otherwise.
    */

@@ -24,28 +24,28 @@ class Twig
     /**
      * @var Environment $twig
     */
-    public ?Environment $twig = null;
+    private ?Environment $twig = null;
 
     /**
      * Static instance.
      * 
      * @var self $instance
     */
-    public static ?self $instance = null;
+    private static ?self $instance = null;
 
     /**
      * Framework root directory
      * 
      * @var string $root
     */
-    public static string $root = '';
+    private static string $root = '';
 
      /**
       * Minification options.
 
      * @var array $minifyOptions
     */
-    public array $minifyOptions = [];
+    private array $minifyOptions = [];
 
     /**
      * Minification flag 
@@ -65,7 +65,7 @@ class Twig
     */
     public function __construct(string $root, string $viewPath, array $configs = [])
     {
-        static::$root = $root;
+        self::$root = $root;
 
         if($configs['caching']){
             $sufix = DIRECTORY_SEPARATOR . 'twig';
@@ -94,11 +94,11 @@ class Twig
     */
     public static function getInstance(string $root, string $viewPath, array $configs = []): static
     {
-        if(static::$instance === null){
-            static::$instance = new static($root, $viewPath, $configs);
+        if(self::$instance === null){
+            self::$instance = new static($root, $viewPath, $configs);
         }
 
-        return static::$instance;
+        return self::$instance;
     }
 
      /**
@@ -176,9 +176,7 @@ class Twig
                     $content, 
                     $options['viewType'], 
                     $this->minifyOptions['codeblock'], 
-                    $this->minifyOptions['copyable'],
-                    true,
-                    $this->minifyOptions['encode']
+                    $this->minifyOptions['copyable']
                 )->getContent();
             }
 
@@ -187,7 +185,7 @@ class Twig
             }
 
             echo $content;
-            ob_end_flush();
+            //ob_end_flush();
 
             return true;
         }catch(RuntimeError | SyntaxError $e){

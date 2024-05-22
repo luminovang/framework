@@ -77,7 +77,7 @@ class Adapters
      */
     public function getClient(): mixed
     {
-        return static::$client;
+        return self::$client;
     }
 
     /**
@@ -108,24 +108,24 @@ class Adapters
                 $adapter = new MemoryAdapter();
                 return $config['readonly'] ? new ReadOnlyAdapter($adapter) : $adapter;
             case 'aws-s3':
-                static::$client = new S3Client($config['configuration']);
+                self::$client = new S3Client($config['configuration']);
                 return new AwsS3V3Adapter(
-                    static::$client, 
+                    self::$client, 
                     $config['bucket'] ?? '', 
                     $basePath, 
                     new AwsVisibility($config['visibility'] ?? 'public')
                 );
             case 'aws-async-s3':
-                static::$client = new S3AsyncClient($config['configuration']);
+                self::$client = new S3AsyncClient($config['configuration']);
                 return new AsyncAwsS3Adapter(
-                    static::$client, 
+                    self::$client, 
                     $config['bucket'] ?? '', 
                     $basePath, 
                     new AwsVisibility($config['visibility'] ?? 'public')
                 );
             case 'azure-blob':
-                static::$client = BlobRestProxy::createBlobService($config['dns'] ?? '');
-                return new AzureBlobAdapter(static::$client, $config['container'] ?? '', $basePath);
+                self::$client = BlobRestProxy::createBlobService($config['dns'] ?? '');
+                return new AzureBlobAdapter(self::$client, $config['container'] ?? '', $basePath);
             case 'google-cloud':
                 if ($authCache = ($config['configuration']['authCache'] ?? false)) {
                     if (is_string($authCache)) {
@@ -133,15 +133,15 @@ class Adapters
                     }
                 }                
 
-                static::$client = new GoggleClient($config['configuration']);
-                return new GoogleCloudAdapter(static::$client->bucket($config['bucket']), $basePath);
+                self::$client = new GoggleClient($config['configuration']);
+                return new GoogleCloudAdapter(self::$client->bucket($config['bucket']), $basePath);
             case 'web-dev':
-                static::$client = new Client([
+                self::$client = new Client([
                     'baseUri' => $config['baseurl'],
                     'userName' => $config['username'],
                     'password' => $config['password']
                 ]);
-                return new WebDAVAdapter(static::$client);
+                return new WebDAVAdapter(self::$client);
             case 'sftp-v3':
                 $visibility = isset($config['visibility']) ? UnixVisibility::fromArray($config['visibility']): null;
                 return new SftpV3Adapter(static::newSftpProvider(3, $config), $config['root'], $visibility); 
@@ -149,8 +149,8 @@ class Adapters
                 $visibility = isset($config['visibility']) ? UnixVisibility::fromArray($config['visibility']): null;
                 return new SftpV2Adapter(static::newSftpProvider(2, $config), $config['root'], $visibility); */
             case 'zip-archive':
-                static::$client = new ZipClient($config['path']);
-                return new ZipAdapter(static::$client);
+                self::$client = new ZipClient($config['path']);
+                return new ZipAdapter(self::$client);
             default:
                 return null;
         }
@@ -188,7 +188,7 @@ class Adapters
     private static function newSftpProvider(int $version, array $config): SftpV3Client|SftpV2Client
     {
         $sftpClass = ($version === 3) ? SftpV3Client::class : SftpV2Client::class;
-        static::$client = new $sftpClass(
+        self::$client = new $sftpClass(
             $config['host'],
             $config['username'], 
             $config['password'] ?? null,
@@ -202,6 +202,6 @@ class Adapters
             null
         );
 
-        return static::$client;
+        return self::$client;
     }
 }

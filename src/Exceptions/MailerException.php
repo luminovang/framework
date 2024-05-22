@@ -28,11 +28,13 @@ class MailerException extends AppException
      *
      * @param string $type The type of error.
      * @param mixed|null $name The cookie name associated with the error (if applicable).
-     * @return static
+     * @param int $code Exception code.
+     * 
+     * @return static Return new static exception class.
      */
     public static function throwWith(string $type, mixed $name = null, int $code = 0): static
     {
-        $message = static::$types[$type] ?? 'Unknown error occurred while creating email';
+        $message = self::$types[$type] ?? 'Unknown error occurred while creating email';
         return new static($name === null ? $message : sprintf($message, $name), $code);
     }
 }

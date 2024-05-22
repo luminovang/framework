@@ -8,6 +8,7 @@
  * @license See LICENSE file
  */
 namespace Luminova\Arrays;
+
 class Arrays
 {
     private array $array = [];
@@ -29,7 +30,6 @@ class Arrays
     */
     public function isNested(): bool 
     {
-        //return count($this->array) > 0 && is_array($this->array[0]);
-        return count($this->array) > 0 && is_array($this->array[0]) && array_values($this->array) === $this->array;
+        return is_nested($this->array);
     }
 }

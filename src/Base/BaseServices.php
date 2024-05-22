@@ -35,7 +35,7 @@ abstract class BaseServices implements ServicesInterface
      * @param bool $serialize Whether the instance should be serialized and stored in cache. Defaults to false.
      * @param array<int,mixed> $arguments Optional arguments to initialize the class with.
      *
-     * @return bool Returns true if the service was added successfully, otherwise throws an exception.
+     * @return true Returns true if the service was added successfully, otherwise throws an exception.
      * @throws RuntimeException If the service already exists or class argument is not an array list.
      */
     protected static final function newService(
@@ -48,7 +48,7 @@ abstract class BaseServices implements ServicesInterface
     {
         $alias ??= get_class_name($class);
 
-        if(isset(static::$serviceQueue[$alias])){
+        if(isset(self::$serviceQueue[$alias])){
             throw new RuntimeException(sprintf('Error: Service "%s" is already queued with the same name alias "%s"', $class, $alias));
         }
 
@@ -56,7 +56,7 @@ abstract class BaseServices implements ServicesInterface
             throw new RuntimeException('Invlaid argument, class arguments expected array to be list.');
         }
 
-        static::$serviceQueue[$alias] = [
+        self::$serviceQueue[$alias] = [
             'service' => $class,
             'shared' => $shared,
             'serialize' => $serialize,
@@ -74,6 +74,6 @@ abstract class BaseServices implements ServicesInterface
     */
     public static final function getServices(): array 
     {
-        return static::$serviceQueue;
+        return self::$serviceQueue;
     }
 }

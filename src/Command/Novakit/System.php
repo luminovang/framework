@@ -85,7 +85,7 @@ class System extends BaseConsole
      * Add environment variable.
      * 
      * @param string $key Environment variable name. 
-     * @param mixed $value Environment variable value.
+     * @param string $value Environment variable value.
      * 
      * @return int Status code.
      */

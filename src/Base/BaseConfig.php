@@ -29,22 +29,15 @@ abstract class BaseConfig
         if($return === null){
             return $value;
         }
-
-        switch (strtolower($return)) {
-            case 'bool':
-                return (bool) $value;
-            case 'int':
-                return (int) $value;
-            case 'float':
-                return (float) $value;
-            case 'double':
-                return (double) $value;
-            case 'nullable':
-                return $value === '' ? null : $value;
-            case 'string':
-                return (string) $value;
-            default:
-                return $value;
-        }
+        
+        return match (strtolower($return)) {
+            'bool' => (bool) $value,
+            'int' => (int) $value,
+            'float' => (float) $value,
+            'double' => (double) $value,
+            'nullable' => ($value === '') ? null : $value,
+            'string' => (string) $value,
+            default => $value
+        };
     }
 }

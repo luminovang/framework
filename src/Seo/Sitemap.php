@@ -10,9 +10,10 @@
 namespace Luminova\Seo;  
 
 use \App\Controllers\Config\Sitemap as SitemapConfig;
+use \Luminova\Base\BaseApplication;
 use \Luminova\Base\BaseConsole;
 use \Luminova\Command\TextUtils;
-use \Luminova\Application\Functions;
+use \Luminova\Functions\Maths;
 use \Luminova\Exceptions\RuntimeException;
 use \DOMDocument;
 
@@ -76,7 +77,6 @@ final class Sitemap
 
         if (!is_command()) {
             throw new RuntimeException('Sitemap generator should be run in cli mode.');
-            return false;
         }
 
         if ($totalMemory === '-1') {
@@ -94,8 +94,8 @@ final class Sitemap
        
         if($url === '' || $url === '/'){
             throw new RuntimeException(sprintf('Invalid start url: "%s", set start url in .env file "dev.app.start.url".', $url));
-            return false;
         }
+
         static::$cli = $cli;
         static::$visited = [];
         static::$faied = [];
@@ -104,7 +104,7 @@ final class Sitemap
         static::$skipped = 0;
 
         // Start memory usage tracking
-        static::$memoryThreshold = round(Functions::math()->toBytes($totalMemory) * 0.7);
+        static::$memoryThreshold = round(Maths::toBytes($totalMemory) * 0.7);
         //static::$memoryThreshold = (int) memory_get_usage(true) * 0.7;
 
         $urls = self::getUrls($url);
@@ -119,11 +119,9 @@ final class Sitemap
                 $link = APP_URL;
             }
 
-            $lastmod = ($page['lastmod'] === null) ? static::getLastmodified($link, $app) : $page['lastmod'];
-
             $xml .= '   <url>' . PHP_EOL;
             $xml .= '       <loc>' . htmlspecialchars($link) . '</loc>' . PHP_EOL;
-            $xml .= '       <lastmod>'. $lastmod .'</lastmod>' . PHP_EOL;
+            $xml .= '       <lastmod>'. ($page['lastmod'] ?? static::getLastmodified($link, $app)) .'</lastmod>' . PHP_EOL;
             $xml .= '       <priority>' . ($url === $page['link'] ? '1.00' : '0.8' ) . '</priority>' . PHP_EOL;
             $xml .= '   </url>' . PHP_EOL;
         }
@@ -150,10 +148,11 @@ final class Sitemap
      * Get the last modified timestamp for a given URL based on view patterns.
      *
      * @param string $url The URL to check for last modified timestamp.
-     * @param Application $app The application instance or relevant context.
+     * @param BaseApplication $app The application instance or relevant context.
+     * 
      * @return string The last modified timestamp in ISO 8601 format, or current timestamp if not found.
      */
-    private static function getLastModified(string $url, ?object $app = null): string
+    private static function getLastModified(string $url, ?BaseApplication $app = null): string
     {
         $url = str_replace(APP_URL, '', $url);
         $lastmod = null;
@@ -192,7 +191,7 @@ final class Sitemap
     */
     private static function isAcceptable(string $href): bool
     {
-        if(empty($href) || str_starts_with($href, '#')){
+        if($href === '' || str_starts_with($href, '#')){
             return false;
         }
 
@@ -243,7 +242,8 @@ final class Sitemap
     */
     private static function replaceUrls(string $url): string 
     {
-        if (strpos($url, 'http') === 0) {
+        if (str_starts_with($url, 'http')) {
+        //if (strpos($url, 'http') === 0) {
             return $url;
         }
 
@@ -256,7 +256,8 @@ final class Sitemap
             return str_replace($root, rtrim(static::startUrl(), '/'), $url);
         }
 
-        if (strpos($url, 'public/') === 0) {
+        if (str_starts_with($url, 'public/')) {
+        //if (strpos($url, 'public/') === 0) {
             return str_replace('public/', static::startUrl(), $url);
         }
 
@@ -328,16 +329,14 @@ final class Sitemap
             if (static::isAcceptable($href)) {
                 $href = rtrim(static::replaceUrls($href), '/');
 
-                if (str_starts_with($href, static::startUrl()) && filter_var($href, FILTER_VALIDATE_URL)) {
-                    if (!isset(static::$urls[$href])) {
-                        static::$counts++;
-                        $found++;
-                        $deepscans[$href] = $href;
-                        static::$urls[$href] = [
-                            'link' => $href,
-                            'lastmod' => $html['lastmod'],
-                        ];
-                    }
+                if (str_starts_with($href, static::startUrl()) && filter_var($href, FILTER_VALIDATE_URL) && !isset(static::$urls[$href])) {
+                    static::$counts++;
+                    $found++;
+                    $deepscans[$href] = $href;
+                    static::$urls[$href] = [
+                        'link' => $href,
+                        'lastmod' => $html['lastmod'],
+                    ];
                 }
             }
         }
@@ -384,30 +383,24 @@ final class Sitemap
         $document = curl_exec($ch);
         $info = curl_getinfo($ch);
 
-        if (curl_errno($ch)) {
+        if (curl_errno($ch) !== 0) {
             static::$cli?->writeln('[Error] ' . curl_error($ch), 'red');
             return false;
         }
 
         curl_close($ch);
 
-        if (empty($document)) {
+        if ($document === false || $document === '') {
             static::$cli?->writeln('[Empty] ' . $url, 'red');
             return false;
         }
 
         static::$visited[] = $url;
-        $timestamp = $info['filetime'] ?? -1;
-
-        if ($timestamp != -1) {
-            $lastmod = date("Y-m-d\TH:i:sP", $timestamp);
-        }else{
-            $lastmod = null;
-        }
+        $lastmod = $info['filetime'] ?? -1;
 
         return [
             'document' => $document, 
-            'lastmod' => $lastmod
+            'lastmod' => ($lastmod != -1 ? date("Y-m-d\TH:i:sP", $lastmod) : null)
         ];
     }
 }

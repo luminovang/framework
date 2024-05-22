@@ -123,20 +123,12 @@ final class CookieManager implements SessionManagerInterface
     */
     public function getResult(string $type = 'array'): array|object
     {
-        $result = [];
-
-        if (isset($_COOKIE)) {
-            $result = $_COOKIE;
-        }
-
         if($type === 'array'){
-            return (array) $result;
+            return (array) $_COOKIE;
         }
 
         try {
-            $result = json_encode($result, JSON_THROW_ON_ERROR);
-
-            return (object) json_decode($result);
+            return (object) json_decode(json_encode($_COOKIE, JSON_THROW_ON_ERROR));
         }catch(Throwable $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         };
@@ -211,14 +203,13 @@ final class CookieManager implements SessionManagerInterface
      * @param string $storage cookie storage context
      * @param ?int $expiry cookie expiration time
      * 
-     * @return self $this
+     * @return void
     */
     private function saveContent(string $value, string $storage, ?int $expiry = null): void
     {
-        $expiration = $expiry === null ? time() + CookieConfig::$expiration : $expiry;
-
+        $expiry ??= time() + CookieConfig::$expiration;
         setcookie($storage, $value, [
-            'expires' => $expiration,
+            'expires' => $expiry,
             'path' => CookieConfig::$sessionPath,
             'domain' => CookieConfig::$sessionDomain,
             'secure' => true,

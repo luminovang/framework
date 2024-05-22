@@ -115,7 +115,7 @@ final class InputValidator implements ValidationInterface
                     }
                 }
             }else{
-                $this->addError($field, '*', 'Form input field [' . $field . '] is missing', null);
+                $this->addError($field, '*', 'Form input field [' . $field . '] is missing');
             }
         }
 
@@ -271,10 +271,10 @@ final class InputValidator implements ValidationInterface
                     'true' => is_string($value) && is_readable($value),
                     default => is_string($value) && preg_match("#^[a-zA-Z]:[\\\/]{1,2}#", $value)
                 },
-                'scheme' => strpos($value, rtrim($param, '://')) === 0,
+                'scheme' => str_starts_with($value, rtrim($param, '://')),
                 default => true,
             };
-        } catch (JsonException $e) {
+        } catch (JsonException) {
             return false;
         }
     }
@@ -318,8 +318,6 @@ final class InputValidator implements ValidationInterface
             return $message;
         }
 
-        $replaced = str_replace(['{field}', '{rule}', '{value}'], $placeholders, $message);
-
-        return $replaced;
+        return str_replace(['{field}', '{rule}', '{value}'], $placeholders, $message);
     }
 }

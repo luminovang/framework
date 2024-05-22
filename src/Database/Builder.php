@@ -185,7 +185,7 @@ final class Builder extends Connection
      * 
      * @return DatabaseInterface|null 
     */
-    public function db(): DatabaseInterface
+    public function db(): ?DatabaseInterface
     {
         return $this->db;
     }
@@ -384,9 +384,9 @@ final class Builder extends Connection
     /**
      * Set query where
      * 
-     * @param string $column column name
-     * @param mixed $operator Comparison Operator
-     * @param mixed $key column key value
+     * @param string $column column name.
+     * @param string $operator Comparison Operator.
+     * @param mixed $value Where condition value.
      * 
      * @return self class instance.
     */
@@ -595,7 +595,7 @@ final class Builder extends Connection
     /**
      * Enable or disabled all caching 
      *
-     * @param string $enable Status action
+     * @param bool $enable Status action.
      * 
      * @return self $this class instance.
     */
@@ -1039,8 +1039,7 @@ final class Builder extends Connection
             if($response !== null){
                 $this->cacheKey = '';
                 $this->reset();
-
-                return $response??0;
+                return $response;
             }
         }
 

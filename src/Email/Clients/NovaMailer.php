@@ -109,9 +109,9 @@ class NovaMailer implements MailerInterface
     public string $Host = '';
 
     /**
-     * @var string $Port 
+     * @var int $Port 
     */
-    public string $Port = '';
+    public int $Port = -1;
 
     /**
      * @var bool $SMTPAuth 
@@ -334,9 +334,8 @@ class NovaMailer implements MailerInterface
 
         $headers .= "X-Mailer: {$XMailer}\r\n";
         $headers .= "Date: ".date("r (T)")."\r\n";
-        $headers .= "Message-ID: <". md5(uniqid(time())) . "@" . $_SERVER['SERVER_NAME'].">\r\n";
-
-        return $headers;
+    
+        return $headers . ("Message-ID: <". md5(uniqid((string) time())) . "@" . $_SERVER['SERVER_NAME'].">\r\n");
     }
 
     /**
@@ -411,35 +410,35 @@ class NovaMailer implements MailerInterface
         $this->connection = $this->connection($options);
         $this->smtpGet();
 
-        fputs($this->connection, "EHLO " . APP_HOSTNAME . "\r\n");
-       // fputs($this->connection, "EHLO " . $_SERVER['SERVER_NAME'] . "\r\n");
+        fwrite($this->connection, "EHLO " . APP_HOSTNAME . "\r\n");
+       // fwrite($this->connection, "EHLO " . $_SERVER['SERVER_NAME'] . "\r\n");
         $this->smtpGet();
 
         if($this->SMTPAuth){
-            fputs($this->connection, "AUTH LOGIN\r\n");
+            fwrite($this->connection, "AUTH LOGIN\r\n");
             $this->smtpGet();
             
-            fputs($this->connection, base64_encode($this->Username) . "\r\n");
+            fwrite($this->connection, base64_encode($this->Username) . "\r\n");
             $this->smtpGet();
 
-            fputs($this->connection, base64_encode($this->Password) . "\r\n");
+            fwrite($this->connection, base64_encode($this->Password) . "\r\n");
             $this->smtpGet();
         }
 
-        fputs($this->connection, "MAIL FROM: <{$from}>\r\n");
+        fwrite($this->connection, "MAIL FROM: <{$from}>\r\n");
         $this->smtpGet();
 
-        fputs($this->connection, "RCPT TO: <{$this->to}>\r\n");
+        fwrite($this->connection, "RCPT TO: <{$this->to}>\r\n");
         $this->smtpGet();
 
-        fputs($this->connection, "DATA\r\n");
+        fwrite($this->connection, "DATA\r\n");
         $this->smtpGet();
 
         $end = ($this->attachments === []) ? "\r\n.\r\n" : ".\r\n";
-        fputs($this->connection, $result['headers'] . $result['body'] . $end);
+        fwrite($this->connection, $result['headers'] . $result['body'] . $end);
         $this->smtpGet();
 
-        fputs($this->connection, "QUIT\r\n");
+        fwrite($this->connection, "QUIT\r\n");
 
         return true;
     }
@@ -519,7 +518,6 @@ class NovaMailer implements MailerInterface
     /**
      * Read SMTP connection.
      * 
-     * @param resource $connection SMPT connection. 
      * @param string $name Read smtp connection name
      * 
      * @return void 

@@ -13,6 +13,10 @@ use \Luminova\Http\Message\Response;
 use \Luminova\Interface\HttpClientInterface;
 use \GuzzleHttp\Promise\PromiseInterface;
 use \GuzzleHttp\Psr7\Request;
+use \Luminova\Exceptions\Http\RequestException;
+use \Luminova\Exceptions\Http\ConnectException;
+use \Luminova\Exceptions\Http\ClientException;
+use \Luminova\Exceptions\Http\ServerException;
 
 interface NetworkInterface 
 {

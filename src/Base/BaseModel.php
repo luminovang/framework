@@ -105,7 +105,7 @@ abstract class BaseModel
      * Constructor for the Model class.
      * If null is passed fromework will insitalize builder lass instance.
      * 
-     * @var null|Builder $builder Query builder class instance.
+     * @param Builder|null $builder Query builder class instance.
      * 
     */
     public function __construct(?Builder $builder = null)
@@ -127,7 +127,7 @@ abstract class BaseModel
     /**
      * Insert a new record into the current database.
      *
-     * @param array<string, mixed> $values nested array of values to insert into table.
+     * @param array<string,mixed> $values nested array of values to insert into table.
      * 
      * @return int Return the number of records inserted.
     */
@@ -136,8 +136,8 @@ abstract class BaseModel
     /**
      * Update current record in the database.
      *
-     * @param string|array<int, mixed> $key The key?s to update its record
-     * @param array<string, mixed> $setValues associative array of columns and values to update.
+     * @param string|array<int,mixed> $key The key?s to update its record
+     * @param array<string,mixed> $data associative array of columns and values to update.
      * 
      * @return int Return the number of records updated.
     */
@@ -146,8 +146,8 @@ abstract class BaseModel
     /**
      * Fine next or a single record from the database table.
      *
-     * @param string|array<int, mixed> $key The key?s to find its record
-     * @param array<int, string> $fields The fields to retrieve (default is all).
+     * @param string|array<int,mixed> $key The key?s to find its record
+     * @param array<int,string> $fields The fields to retrieve (default is all).
      * 
      * @return mixed Return selected records or false on failure.
     */
@@ -156,8 +156,8 @@ abstract class BaseModel
     /**
      * Select records from the database table.
      *
-     * @param string|array<int, mixed> $key The key?s to select its record, if null all recoard in table will be selected.
-     * @param array<int, string> $fields The fields to retrieve (default is all).
+     * @param string|array<int,mixed> $key The key?s to select its record, if null all recoard in table will be selected.
+     * @param array<int,string> $fields The fields to retrieve (default is all).
      * 
      * @return mixed Return selected records or false on failure.
     */
@@ -167,7 +167,7 @@ abstract class BaseModel
      * Select records from the database.
      *
      * @param string $query Search query string, escape string before passing.
-     * @param array<int, string> $fields The fields to retrieve (default is all).
+     * @param array<int,string> $fields The fields to retrieve (default is all).
      * 
      * @return mixed Return found records or false on failure.
     */
@@ -176,7 +176,7 @@ abstract class BaseModel
     /**
      * Delete a record from the database.
      * 
-     * @param string|array<int, mixed> $key The keys to delete, if null all recoard in table will be deleted.
+     * @param string|array<int,mixed> $key The keys to delete, if null all recoard in table will be deleted.
      * 
      * @return bool Return true if the record was successfully deleted otherwise false.
     */
@@ -192,9 +192,9 @@ abstract class BaseModel
     /**
      * Get total number of records in the database based on the keys.
      * 
-     * @param string|array<int, mixed> $key The key?s to find total number of matched.
+     * @param string|array<int,mixed> $key The key?s to find total number of matched.
      * 
-     * @return bool Return the number of records.
+     * @return int Return the number of records.
     */
     abstract protected function count(string|array $key): int;
 
@@ -202,12 +202,12 @@ abstract class BaseModel
      * Run a search in database table of current model. 
      * 
      * @param string $query search query string, escape string before passing.
-     * @param array<int, string> $fields The fields to retrieve (default is all).
+     * @param array<int,string> $fields The fields to retrieve (default is all).
      * @param int $limit search limit default is 100.
-     * @param string $offset search limit offset default is 0.
+     * @param int $offset search limit offset default is 0.
      * @param string $flag Search matching flag, default is (any) any matching keyword.
      * 
-     * @return mixed $results results.  
+     * @return mixed Return search results.  
      * @throws RuntimeException If the third pary search controller class is not installed.
     */
     public final function doSearch(string $query, array $fields = ['*'], int $limit = 100, int $offset = 0, string $flag = 'any'): mixed 
@@ -216,7 +216,7 @@ abstract class BaseModel
             return false;
         }
 
-        $search = $this->searchInstance($query, $flag);
+        $search = $this->searchInstance($flag);
         $search->setQuery($query)->split();
         $sqls = $search->getQuery();
 
@@ -263,11 +263,11 @@ abstract class BaseModel
 
         $flag = $flags[$flag] ?? Searchable::HAVE_ANY_QUERY;
 
-        static::$searchInstance ??= new Searchable();
-        static::$searchInstance->setOperators($flag);
-        static::$searchInstance->setParameter($this->searchables);
+        self::$searchInstance ??= new Searchable();
+        self::$searchInstance->setOperators($flag);
+        self::$searchInstance->setParameter($this->searchables);
 
-        return static::$searchInstance;
+        return self::$searchInstance;
     }
 
     /**

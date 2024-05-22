@@ -38,7 +38,7 @@ class Guzzle implements HttpClientInterface
      */
     public function request(string $method, string $url, array $data = [], array $headers = []): Response
     {
-        $options = ['headers' => $headers];
+        $options = ($headers === [] ? [] : ['headers' => $headers]);
 
         if ($method === 'POST') {
             $options['form_params'] = $data;

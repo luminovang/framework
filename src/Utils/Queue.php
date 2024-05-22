@@ -27,9 +27,9 @@ class Queue
      * 
      * @param array|null $jobs Array of jobs to initialize the queue.
      */
-    public function __construct(array $jobs = null)
+    public function __construct(array $jobs = [])
     {
-        if ($jobs !== null) {
+        if ($jobs !== []) {
             $this->jobs = $jobs;
         }
     }

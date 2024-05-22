@@ -323,8 +323,6 @@ class File
 
     /**
      * Checks if the file is valid according to the specified configuration.
-     *
-     * @param array $config Optional file configuration array.
      * 
      * @return bool True if the file is valid, false otherwise.
     */

@@ -13,44 +13,36 @@ namespace Luminova\Base;
 use \App\Controllers\Application;
 use \Luminova\Http\Request;
 use \Luminova\Security\InputValidator;
-use \Luminova\Library\Importer;
 
 abstract class BaseViewController
 {
     /**
      * HTTP request object 
      * 
-     * @var Request $request 
+     * @var Request|null $request 
     */
     protected ?Request $request = null;
  
     /**
      * Input validation object 
      * 
-     * @var InputValidator $validate
+     * @var InputValidator|null $validate
     */
     protected ?InputValidator $validate = null;
  
     /**
      * Application instance
      * 
-     * @var Application $app 
+     * @var Application|null $app 
     */
     protected ?Application $app = null;
- 
-    /**
-     * Importer instance
-     * 
-     * @var Importer $library 
-    */
-    protected ?Importer $library = null;
 
     /**
      * Initialize BaseViewController class instance and make $this->app available to controller classes.
     */
     public function __construct()
     {
-        $this->app = $this->app();
+        $this->app();
         $this->onCreate();
     }
 
@@ -94,7 +86,7 @@ abstract class BaseViewController
      * 
      * @overridable #[\Override]
      * 
-     * @return Request $request http request object 
+     * @return Request Return http request instance. 
     */
     protected final function request(): Request
     {
@@ -110,7 +102,7 @@ abstract class BaseViewController
      * 
      * @overridable #[\Override]
      * 
-     * @return InputValidator $validate input validation object 
+     * @return InputValidator Return input validation instance.
     */
     protected final function validate(): InputValidator
     {
@@ -126,7 +118,7 @@ abstract class BaseViewController
      * 
      * @overridable #[\Override]
      * 
-     * @return Application $app Application instance
+     * @return Application Return application instance.
     */
     protected final function app(): Application
     {
@@ -135,22 +127,6 @@ abstract class BaseViewController
         }
         
         return $this->app;
-    }
-
-    /**
-     * Initializes the application class instance.
-     * 
-     * @overridable #[\Override]
-     * 
-     * @return Importer $app Application instance
-    */
-    protected final function library(): Importer
-    {
-        if($this->library === null){
-            $this->library = new Importer();
-        }
-        
-        return $this->library;
     }
 
     /**

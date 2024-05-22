@@ -23,23 +23,23 @@ class Smarty
     /**
      * @var SmartyTemplate $smarty
     */
-    public ?SmartyTemplate $smarty = null;
+    private ?SmartyTemplate $smarty = null;
 
     /**
      * @var self $instance static instance 
     */
-    public static ?self $instance = null;
+    private static ?self $instance = null;
 
     /**
      * @var string $root framework root directory
     */
-    public static string $root = '';
+    private static string $root = '';
 
     /**
       * Minification options.
       * @var array $minifyOptions
     */
-    public array $minifyOptions = [];
+    private array $minifyOptions = [];
 
     /**
      * Minification flag 
@@ -64,11 +64,11 @@ class Smarty
     */
     public function __construct(string $root, array $configs = [])
     {
-        static::$root = $root;
+        self::$root = $root;
 
         if(class_exists(SmartyTemplate::class)){
             $this->smarty = new SmartyTemplate();
-            static::makedirs();
+            self::makedirs();
         }else{
             throw new RuntimeException('Smarty is not available, run composer command "composer require smarty/smarty" if you want to use smarty template', 1991);
         }
@@ -96,11 +96,11 @@ class Smarty
     */
     public static function getInstance(string $root, array $configs = []): static
     {
-        if(static::$instance === null){
-            static::$instance = new static($root, $configs);
+        if(self::$instance === null){
+            self::$instance = new static($root, $configs);
         }
 
-        return static::$instance;
+        return self::$instance;
     }
 
     /**
@@ -154,16 +154,23 @@ class Smarty
     */
     public function assignClasses(array $classes = []): self
     {
-        $getClasses = (new Classes())->getClass();
+        $instance = new Classes();
 
-        if($getClasses !== []){
-            $classes = array_merge($classes, $getClasses);
+        if(($_classes = $instance->registerObjects()) !== []){
+            $classes = array_merge($classes, $_classes);
         }
 
         foreach ($classes as $aliases => $class) {
             $this->smarty->registerObject($aliases, $class);
         }
 
+        if(($objects = $instance->registerClasses()) !== []){
+            foreach ($objects as $aliases => $classString) {
+                $this->smarty->registerClass($aliases, $classString);
+            }
+        }
+
+        $instance = null;
         return $this;
     }
 
@@ -178,7 +185,6 @@ class Smarty
     public function caching(bool $cache, int $expiry): void 
     {
         if($cache){
-            //ACHING_LIFETIME_SAVED
             $this->smarty->setCaching(SmartyTemplate::CACHING_LIFETIME_CURRENT);
             $this->smarty->setCacheLifetime($expiry);
             return;
@@ -258,9 +264,7 @@ class Smarty
                     $content, 
                     $this->viewType, 
                     $this->minifyOptions['codeblock'], 
-                    $this->minifyOptions['copyable'],
-                    true,
-                    $this->minifyOptions['encode']
+                    $this->minifyOptions['copyable']
                 )->getContent();
             }
 
@@ -269,7 +273,7 @@ class Smarty
             }
 
             echo $content;
-            ob_end_flush();
+            //ob_end_flush();
 
             return true;
         }catch(Exception | SmartyException $e){
@@ -290,12 +294,10 @@ class Smarty
             TemplateConfig::$cacheFolder
         ];
 
-        $notFounds = array_filter($dirs, function ($dir) {
-            return !file_exists(static::$root .  Helper::bothtrim($dir) . DIRECTORY_SEPARATOR . 'smarty'); 
-        });
+        $notFounds = array_filter($dirs, fn($dir) => !file_exists(self::$root .  Helper::bothtrim($dir) . DIRECTORY_SEPARATOR . 'smarty'));
 
         foreach ($notFounds as $dir) {
-            make_dir(static::$root . $dir);
+            make_dir(self::$root . $dir);
         }
     }
 }

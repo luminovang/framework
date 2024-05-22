@@ -33,7 +33,7 @@ final class Uploader
         }
 
         $config = $file->getConfig();
-        $chunk = (isset($config->chunkLength) ? (int) $config->chunkLength : 5242880);
+        $chunk = (isset($config->chunkLength) ? (int) $config->chunkLength : 5_242_880);
         $temp = $destination . '.part';
 
         if (static::execute($temp, $file->getTemp(), $chunk) && rename($temp, $destination)) {
@@ -98,7 +98,7 @@ final class Uploader
         }
         
         $config = $file->getConfig();
-        $length = (isset($config->chunkLength) ? (int) $config->chunkLength : 5242880);
+        $length = (isset($config->chunkLength) ? (int) $config->chunkLength : 5_242_880);
         $temp = $destination . '.part';
         $out = fopen($temp, $chunk === 1 ? 'wb' : 'ab');
 
@@ -169,7 +169,7 @@ final class Uploader
      * 
      * @return bool True on success, false on failure.
     */
-    private static function execute(string $destination, string $temp, int $chunk = 5242880): bool
+    private static function execute(string $destination, string $temp, int $chunk = 5_242_880): bool
     {
         $in = fopen($temp, 'rb');
         

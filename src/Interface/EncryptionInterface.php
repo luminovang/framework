@@ -9,6 +9,9 @@
  */
 namespace Luminova\Interface;
 
+use \Luminova\Exceptions\InvalidException;   
+use \Luminova\Exceptions\EncryptionException;
+
 /**
  * Interface for encryption and decryption operations.
  */

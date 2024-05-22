@@ -9,7 +9,7 @@
  */
 namespace Luminova\Functions;
 
-class TorDetector 
+final class TorDetector 
 {
     /**
      * @var string $torExitNodeListUrl
@@ -29,14 +29,14 @@ class TorDetector
     private static function fetchTorExitNodeList(): string|bool
     {
         $currentTime = time();
-        if (file_exists(static::getPth()) && ($currentTime - filemtime(static::getPth()) < static::$cacheExpiry)) {
-            return file_get_contents(static::getPth());
+        if (file_exists(self::getPth()) && ($currentTime - filemtime(self::getPth()) < self::$cacheExpiry)) {
+            return file_get_contents(self::getPth());
         }
 
-        $result = file_get_contents(static::$torExitNodeListUrl);
+        $result = file_get_contents(self::$torExitNodeListUrl);
 
         if($result !== false){
-            write_content(static::getPth(), $result);
+            write_content(self::getPth(), $result);
         }
 
         return $result;
@@ -51,7 +51,7 @@ class TorDetector
     */
     public static function isTor(string $ip): bool 
     {
-        $result = static::fetchTorExitNodeList();
+        $result = self::fetchTorExitNodeList();
         
         if( $result === false){
             return false;
@@ -63,17 +63,13 @@ class TorDetector
     /**
      * Get storage file path
      * 
-     * @return string 
+     * @return string Return storage path.
     */
     private static function getPth(): string 
     {
-        $path = path('caches');
-        $path .= 'tor' . DIRECTORY_SEPARATOR;
+        $path = path('caches') . 'tor' . DIRECTORY_SEPARATOR;
 
         make_dir($path);
-        
-        $file = $path . 'torbulkexitlist.txt';
-
-        return $file;
+        return $path . 'torbulkexitlist.txt';
     }
 }

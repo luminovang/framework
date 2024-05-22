@@ -11,6 +11,7 @@ namespace Luminova\Interface;
 
 use \Luminova\Base\BaseDatabase;
 use \Luminova\Interface\ConnInterface;
+use \Luminova\Exceptions\DatabaseException;
 use \PDOStatement;
 use \mysqli_stmt;
 use \mysqli_result;
@@ -76,9 +77,9 @@ interface DatabaseInterface
     /**
      * Debug dumps statement information for the last statement execution.
      *
-     * @return bool|null True on success, false on failure, or null if debug mode is disabled.
+     * @return bool Dumped statement or false if no prepered statement or debug mode is disabled.
      */
-    public function dumpDebug(): bool|null;
+    public function dumpDebug(): bool;
 
     /**
      * Returns information about the last statement execution.
@@ -255,8 +256,8 @@ interface DatabaseInterface
     /**
      * Get prepared statement
      *
-     * @return object|bool 
-     */
+     * @return PDOStatement|mysqli_stmt|mysqli_result|bool|null
+    */
     public function getStatment(): PDOStatement|mysqli_stmt|mysqli_result|bool|null;
 
     /**

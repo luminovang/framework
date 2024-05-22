@@ -9,6 +9,7 @@
  */
 namespace Luminova\Http;
 
+use \Luminova\Application\Foundation;
 use \Luminova\Http\Header;
 use \Luminova\Http\Server;
 use \Luminova\Http\File;
@@ -119,8 +120,8 @@ final class Request
     /**
      * Get a value from the HTTP request.
      *
-     * @param string $key     HTTP request body key.
-     * @param mixed $default Default value (default: blank string).
+     * @param string $key HTTP request body key.
+     * @param array $arguments Arguments as the default value (default: blank string).
      * 
      * @return mixed Return value from the HTTP request if is set otherwise return null.
      * @internal
@@ -331,14 +332,12 @@ final class Request
      * Check if the request URL indicates an API endpoint.
      *
      * This method checks if the URL path starts with '/api' or 'public/api'.
-     *
-     * @param string|null $url The request URL to check.
      * 
      * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
      */
-    public function isApi(?string $url = null): bool
+    public function isApi(): bool
     {
-        return Header::isApi($url);
+        return Foundation::isApiContext();
     }
     
     /**
@@ -799,7 +798,7 @@ final class Request
         }
 
         $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $mime = mime_content_type($file['tmp_name']);
+        $mime = get_mime($file['tmp_name']);
 
         if($extension === '' && $mime !== false){
             [, $extension] = explode('/', $mime);
@@ -811,8 +810,8 @@ final class Request
             $file['name'] ?? null,
             $file['type'] ?? null,
             (int) ($file['size'] ?? 0),
-            $mime ?? null,
-            strtolower($extension ?? ''),
+            ($mime === false ? null : $mime),
+            (empty($extension) ? '' : strtolower($extension)),
             $file['tmp_name'] ?? null,
             $file['error'] ?? 0
         );

@@ -9,6 +9,8 @@
  */
 namespace Luminova\Interface;
 
+use \Luminova\Exceptions\MailerException;
+
 interface MailerInterface
 {
     /**

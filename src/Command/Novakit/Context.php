@@ -26,7 +26,7 @@ class Context extends BaseConsole
     /**
      * Options
      *
-     * @var array<string, string>
+     * @var array<string,string>
      */
     protected array $options = [
         '--no-error' => 'Ignore adding error handler'
@@ -35,7 +35,7 @@ class Context extends BaseConsole
     /**
      * Usages
      *
-     * @var array<string, string>
+     * @var array<string,string>
      */
     protected array $usages = [
         'php novakit context "test"',

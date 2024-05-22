@@ -130,7 +130,7 @@ final class Manager
             return false;
         }
 
-        $var = PRODUCTION ? 'database' : 'database.development';
+        $var = (PRODUCTION ? 'database' : 'database.development');
         $databse = env("{$var}.name");
         $filepath = $directory . $filename . '-' . date('d-m-Y-h-i-sa') . '-db.sql';
         $handle = fopen($filepath, 'w');

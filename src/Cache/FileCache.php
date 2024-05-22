@@ -11,12 +11,14 @@ namespace Luminova\Cache;
 
 use \Luminova\Exceptions\ErrorException;
 use \Luminova\Storages\FileManager;
+use \Closure;
 use \Generator;
 use \DateTimeInterface;
 use \DateInterval;
 use \Luminova\Time\Timestamp;
+use SebastianBergmann\Type\CallableType;
 
-class FileCache 
+final class FileCache 
 {
      /**
      * Cache expiry time 7 days
@@ -113,15 +115,16 @@ class FileCache
     private bool $lock = false;
 
     /**
-     * Hold the static cache instance Singleton
-     * @var static $instance
+     * Hold the cache instance Singleton.
+     * 
+     * @var static|null $instance
      */
-    private static $instance = null;
+    private static ?self $instance = null;
 
     /**
      * Constructor.
      * 
-     * @param string|null $filename cache storage filename to hash
+     * @param string|null $storage cache storage filename to hash.
      * @param string $folder cache storage sub folder.
      */
     public function __construct(?string $storage = null, string $folder = '')
@@ -141,7 +144,7 @@ class FileCache
      * @param string|null $storage cache storage filename to hash
      * @param string $folder cache storage sub folder.
      * 
-     * @param static $instance Instance
+     * @param static Return new class instance
      */
     public static function getInstance(?string $storage = null, string $folder = ''): static 
     {
@@ -156,7 +159,7 @@ class FileCache
      * Set the new cache directory path
      * @param string $path cache directory must end with 
      * 
-     * @return self $this
+     * @return self Return class instance.
      */
     public function setPath(string $path): self 
     {
@@ -168,9 +171,9 @@ class FileCache
      /**
      * Sets the new cache file name.
      * 
-     * @param string $name cache filename hash value
+     * @param string $storage cache storage filename,
      * 
-     * @return self $this
+     * @return self Return class instance.
      */
     public function setStorage(string $storage): self
     {
@@ -196,7 +199,7 @@ class FileCache
      * 
      * @param string $extension 
      * 
-     * @return self $this
+     * @return self Return class instance.
      */
     public function setExtension(string $extension): self
     {
@@ -243,7 +246,7 @@ class FileCache
      * 
      * @param bool $lock lock catch to avoid deletion even when cache time expire
      * 
-     * @return self $this
+     * @return self Return class instance.
      */
     public function setLock(bool $lock): self 
     {
@@ -257,7 +260,7 @@ class FileCache
      * 
      * @param bool $encode true or false
      * 
-     * @return self $this
+     * @return self Return class instance.
      */
     public function enableBase64(bool $encode): self 
     {
@@ -271,7 +274,7 @@ class FileCache
      * 
      * @param bool $allow true or false
      * 
-     * @return self $this
+     * @return self Return class instance.
      */
     public function enableDeleteExpired(bool $allow): self 
     {
@@ -289,7 +292,7 @@ class FileCache
      * 
      * @param bool $secure true or false
      * 
-     * @return self $this
+     * @return self Return class instance.
     */
     public function enableSecureAccess(bool $secure): self 
     {
@@ -311,13 +314,14 @@ class FileCache
     /**
      * Loads, create, update and delete cache with fewer options
      * 
-     * @param string $key cache key
-     * @param callable $callback Callback called when data needs to be refreshed.
+     * @param string $key cache key.
+     * @param Closure $callback(): mixed Callback called when data needs to be refreshed.
+     *      -   Return content to be cached.
      * 
      * @return mixed Data currently stored under key
      * @throws ErrorException if the file cannot be saved
      */
-    public function onExpired(string $key, callable $callback): mixed 
+    public function onExpired(string $key, Closure $callback): mixed 
     {
         if($key === '') {
             throw new ErrorException('Invalid argument, cache $key cannot be empty');
@@ -342,10 +346,10 @@ class FileCache
      /**
      * Loads, create, update and delete cache with full options
      * 
-     * @param string $key cache key
-     * @param callable $callback Callback called when data needs to be refreshed.
-     * @param int $expiration cache expiry time
-     * @param int $expireAfter cache expiry time after
+     * @param string $key cache key.
+     * @param mixed $content New content to update.
+     * @param int $expiration cache expiry time.
+     * @param int $expireAfter cache expiry time after.
      * @param bool $lock lock catch to avoid deletion even when cache time expire
      * 
      * @return bool
@@ -378,10 +382,11 @@ class FileCache
      * Get cache content from disk
      * 
      * @param string $key cache key
+     * @param bool $onlyContent Weather to return only cache content or with metadata (default: true).
      * 
-     * @return mixed  returns data if $key is valid and not expired, NULL otherwise
+     * @return mixed Returns data if key is valid and not expired, NULL otherwise
      * @throws ErrorException if the file cannot be saved
-     */
+    */
     public function getItem(string $key, bool $onlyContent = true): mixed
     {
         if($this->canDeleteExpired){
@@ -403,7 +408,6 @@ class FileCache
         }
  
         $data = $this->cacheInstance[$key];
-        
         $content = unserialize($this->encode ? base64_decode($data["data"]) : $data["data"]);
        
         if($onlyContent){
@@ -411,14 +415,13 @@ class FileCache
         }
 
         $data["data"] = $content;
-
         return $data;
     }
 
     /**
      * Creates, Reloads and retrieve cache once class is created
      * 
-     * @return self $this
+     * @return self Return class instance.
      * @throws ErrorException if there is a problem loading the cache
     */
     public function create(): self 
@@ -603,7 +606,7 @@ class FileCache
                 throw new ErrorException("Cannot load cache file! ({$this->storageHashed})");
             }
 
-            $data = unserialize(static::unlock($file));
+            $data = unserialize(self::unlock($file));
 
             if ($data === null) {
                 unlink($filepath);
@@ -675,30 +678,21 @@ class FileCache
     {
 		$fileCache = $this->getPath();
 
-		if(file_exists($fileCache)){
-			return unlink($fileCache);
-		}
-
-		return false;
+		return file_exists($fileCache) && unlink($fileCache);
     }
 
     /**
      * Remove cached storage file from disk with full path.
      * This will use the current storage path
      * 
-     * @param string $path Storage cache full path /
      * @param string $storage cache storage names
      * @param string $extension cache file extension type
      * 
-     * @return bool
+     * @return bool Return true on success, false on failure.
     */
     public function delete(string $storage, string $extension = self::JSON): bool 
     {
-        if(static::deleteDisk($this->storagePath, $storage, $extension)){
-           return true;
-        }
-
-        return false;
+        return static::deleteDisk($this->storagePath, $storage, $extension);
     }
 
     /**
@@ -713,15 +707,9 @@ class FileCache
     public static function deleteDisk(string $path, string $storage, string $extension = self::JSON): bool 
     {
         $path = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-        $extension = trim($extension, '.');
+        $path = $path . static::hashStorage($storage) . '.' . trim($extension, '.');
 
-        if(file_exists($cacheDisk = $path . static::hashStorage($storage) . '.' . $extension)){
-            if (unlink($cacheDisk)) {
-                return true;
-            }
-        }
-
-        return false;
+        return file_exists($path) && unlink($path);
     }
 
     /**

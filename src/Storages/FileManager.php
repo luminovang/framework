@@ -10,6 +10,7 @@
 namespace Luminova\Storages;
 
 use \Luminova\Exceptions\FileException;
+use \Luminova\Exceptions\RuntimeException;
 
 class FileManager
 {
@@ -167,25 +168,25 @@ class FileManager
         $symbolic = '';
 
         // Owner permissions
-        $symbolic .= ($permission & 0x0100) ? 'r' : '-';
-        $symbolic .= ($permission & 0x0080) ? 'w' : '-';
-        $symbolic .= ($permission & 0x0040) ?
-            (($permission & 0x0800) ? 's' : 'x') :
-            (($permission & 0x0800) ? 'S' : '-');
+        $symbolic .= (($permission & 0x0100) !== 0) ? 'r' : '-';
+        $symbolic .= (($permission & 0x0080) !== 0) ? 'w' : '-';
+        $symbolic .= (($permission & 0x0040) !== 0) ?
+            ((($permission & 0x0800) !== 0) ? 's' : 'x') :
+            ((($permission & 0x0800) !== 0) ? 'S' : '-');
 
         // Group permissions
-        $symbolic .= ($permission & 0x0020) ? 'r' : '-';
-        $symbolic .= ($permission & 0x0010) ? 'w' : '-';
-        $symbolic .= ($permission & 0x0008) ?
-            (($permission & 0x0400) ? 's' : 'x') :
-            (($permission & 0x0400) ? 'S' : '-');
+        $symbolic .= (($permission & 0x0020) !== 0) ? 'r' : '-';
+        $symbolic .= (($permission & 0x0010) !== 0) ? 'w' : '-';
+        $symbolic .= (($permission & 0x0008) !== 0) ?
+            ((($permission & 0x0400) !== 0) ? 's' : 'x') :
+            ((($permission & 0x0400) !== 0) ? 'S' : '-');
 
         // Other permissions
-        $symbolic .= ($permission & 0x0004) ? 'r' : '-';
-        $symbolic .= ($permission & 0x0002) ? 'w' : '-';
-        $symbolic .= ($permission & 0x0001) ?
-            (($permission & 0x0200) ? 't' : 'x') :
-            (($permission & 0x0200) ? 'T' : '-');
+        $symbolic .= (($permission & 0x0004) !== 0) ? 'r' : '-';
+        $symbolic .= (($permission & 0x0002) !== 0) ? 'w' : '-';
+        $symbolic .= (($permission & 0x0001) !== 0) ?
+            ((($permission & 0x0200) !== 0) ? 't' : 'x') :
+            ((($permission & 0x0200) !== 0) ? 'T' : '-');
 
         return $symbolic;
     }
@@ -248,9 +249,8 @@ class FileManager
         $handler = false;
         $lock = $flags & (LOCK_EX | LOCK_NB | LOCK_SH | LOCK_UN);
         if(!$lock){
-            $include = $flags & FILE_USE_INCLUDE_PATH;
-            $mode = $flags & FILE_APPEND ? 'a' : 'w';
-            $handler = @fopen($filename, $mode, $include, $context);
+            $mode = (($flags & FILE_APPEND) !== 0) ? 'a' : 'w';
+            $handler = @fopen($filename, $mode, ($flags & FILE_USE_INCLUDE_PATH), $context);
         }
         
         if ($handler === false) {
@@ -446,61 +446,68 @@ class FileManager
         return $moved > 0;
     }
 
-	/**
-	 * Download a file to the user's browser.
-	 *
-	 * @param string $file The full file path or content to to download.
-	 * @param string|null $name The filename as it will be shown in the download.
-	 * @param array $headers Optional passed headers for download.
-	 * @param bool $delete Whether to delete the file after download (default: false).
+    /**
+     * Download a file to the user's browser.
+     *
+     * @param mixed $content The full file path, resource, or string to download.
+     *      File path - Download content from path specified.
+     *      Resource - Download content from resource specified.
+     *      String - Download content from string specified.
+     * @param string|null $filename The filename as it will be shown in the download.
+     * @param array $headers Optional headers for download.
+     * @param bool $delete Whether to delete the file after download (default: false).
      * 
      * @return bool Return true on success, false on failure.
-	 */
-	public static function download(string $file, ?string $name = null, array $headers = [], bool $delete = false): bool
-	{
-		$isFile = false;
-
-		if (file_exists($file) && is_readable($file)) {
-			$isFile = true;
-			$filename = $name ?? basename($file);
-			$mime = mime_content_type($file) ?? 'application/octet-stream';
-			$length = filesize($file);
-		} elseif(!empty($file)) {
-			$length = mb_strlen($file);
-			$filename = $name ?? 'file_download.txt';
-			$mime = 'application/octet-stream';
-		}else{
+     */
+    public static function download(mixed $content, ?string $filename = null, array $headers = [], bool $delete = false): bool
+    {
+        if (is_resource($content)) {
+            $typeOf = 'resource';
+            $stat = fstat($content);
+            $length = $stat['size'];
+        } elseif (is_string($content) && file_exists($content) && is_readable($content)) {
+            $typeOf = 'file';
+            $filename ??= basename($content);
+            $mime = get_mime($content) ?: 'application/octet-stream';
+            $length = filesize($content);
+        } elseif (is_string($content)) {
+            $typeOf = 'string';
+            $length = strlen($content);
+        } else {
             return false;
         }
 
-		$extend = array_merge([
-			'Content-Type' => $mime,
-			'Content-Disposition' => 'attachment; filename="' . $filename,
-			'Content-Transfer-Encoding' => 'binary',
-			'Expires' => 0,
-			'Cache-Control' => 'must-revalidate',
-			'Pragma' => 'public',
-			'Content-Length' => $length,
-		], $headers);
+        $filename ??= 'file_download';
+        $mime ??= 'application/octet-stream';
+        $headers = array_merge([
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Transfer-Encoding' => 'binary',
+            'Expires' => 0,
+            'Cache-Control' => 'must-revalidate',
+            'Pragma' => 'public',
+            'Content-Length' => $length,
+        ], $headers);
 
-		foreach($extend as $key => $value) {
-			header("{$key}: {$value}");
-		}
+        foreach ($headers as $key => $value) {
+            header("{$key}: {$value}");
+        }
 
-		if ($isFile) {
-			$read = readfile($file);
+        if ($typeOf === 'file') {
+            $read = readfile($content);
+            if ($delete && $read !== false) {
+                unlink($content);
+            }
+            return $read !== false;
+        }
 
-			if ($delete && $read !== false) {
-				unlink($file);
-			}
+        if ($typeOf === 'resource') {
+            return fpassthru($content) !== false;
+        }
 
-			return $read !== false;
-		}
-
-        echo $file;
-
+        echo $content;
         return true;
-	}
+    }
 
     /**
 	 * Deletes files and folders recursively.
@@ -518,9 +525,8 @@ class FileManager
 		}
 		
 		$files = is_dir($location) ? 
-			glob(rtrim($location, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR. '*', GLOB_MARK) : 
+			glob(rtrim($location, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '*', GLOB_MARK) : 
 			glob($location . '*');
-		//$files = glob(rtrim($location, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '*', GLOB_MARK);
 
 		foreach ($files as $file) {
 			if (is_dir($file)) {

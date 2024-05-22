@@ -40,7 +40,7 @@ final class Caller
     /**
      * Call all public methods within a given class.
      * 
-     * @param class-string|class-object $class class name or instance of a class.
+     * @param class-string<T>|class-object<T> $class class name or instance of a class.
      * @param bool $return return type.
      * 
      * @return int|array<string,string>  Return all called methods in the given and their response.

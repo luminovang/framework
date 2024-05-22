@@ -97,11 +97,7 @@ final class Schema
      */
     public function setTitle(string $title): void
     {
-        if (strpos($title, "| " . APP_NAME) === false) {
-            static::$defaultConfig["title"] = "{$title} | " . APP_NAME;
-        } else {
-            static::$defaultConfig["title"] = $title;
-        }
+        static::$defaultConfig["title"] = str_contains($title, '| ' . APP_NAME) ? $title : "{$title} | " . APP_NAME;
     }
 
     /**
@@ -147,18 +143,18 @@ final class Schema
      */
     private static function toDate(string $date): string
     {
-        $dateTime = Time::parse($date)->format('Y-m-d\TH:i:sP');
-
-        return $dateTime;
+        return Time::parse($date)->format('Y-m-d\TH:i:sP');
     }
 
     /**
      * Retrieves a configuration value by key and appends a query string if necessary.
      *
      * @param string $key The key of the configuration value.
+     * @param mixed $default Default value.
+     * 
      * @return mixed The configured value with an optional query string.
      */
-    private static function getConfig(string $key): mixed
+    private static function getConfig(string $key, mixed $default = null): mixed
     {
         $config = array_replace(static::$defaultConfig, array_filter(static::$extendedConfig));
         $param = $config[$key] ?? '';
@@ -173,10 +169,11 @@ final class Schema
             $value = rtrim($param, "/");
         }
     
-        if($key == "image_assets"){
+        if($key == 'image_assets'){
             return "{$value}/";
         }
-        return $value;
+        
+        return $value ?? $default;
     }
 
     /**
@@ -188,7 +185,7 @@ final class Schema
      */
     private static function shouldAddParam(string $key, string $param): bool 
     {
-        return (in_array($key, ["link", "canonical"]) && !static::has_query_parameter($param) && !empty(static::getQuery()));
+        return (in_array($key, ['link', 'canonical']) && !static::has_query_parameter($param) && (static::getQuery() !== null && static::getQuery() !== ''));
     }
 
     /**
@@ -198,9 +195,7 @@ final class Schema
      */
     private static function getQuery(): ?string 
     {
-        $queryString = parse_url($_SERVER['REQUEST_URI'], PHP_URL_QUERY);
-
-        return $queryString;
+        return parse_url($_SERVER['REQUEST_URI'], PHP_URL_QUERY);
     }
 
     /**
@@ -220,8 +215,7 @@ final class Schema
      */
     public function getScript(): string 
     {
-        return '<!-- Schema Script --> 
-            <script type="application/ld+json">' . $this->getGraph() . '</script>';
+        return '<script type="application/ld+json">' . $this->getGraph() . '</script>';
     }
 
     /**
@@ -231,8 +225,7 @@ final class Schema
     */
     public function getMeta(): string 
     {
-        $meta = '<!-- Keywords and description meta tags -->
-            <meta name="keywords" content="' . implode(', ', (array) static::getConfig("keywords")) . '">
+        $meta = '<meta name="keywords" content="' . implode(', ', (array) static::getConfig("keywords")) . '">
             <meta name="description" content="' . static::getConfig("page_description") . '" />';
         
         if (!empty(static::getConfig("canonical"))) {
@@ -241,14 +234,12 @@ final class Schema
         }
 
         if (static::getConfig("isArticle")) {
-            $meta .= '<!-- Article meta tags -->
-                <meta property="article:publisher" content="' . static::getConfig("company_name") . '" />
+            $meta .= '<meta property="article:publisher" content="' . static::getConfig("company_name") . '" />
                 <meta property="article:published_time" content="' . static::toDate(static::getConfig("published_date")) . '" />
                 <meta property="article:modified_time" content="' . static::toDate(static::getConfig("modified_date")) . '" />';
         }
 
-        $meta .= '<!-- Open Graph (og) meta tags / Facebook -->
-            <meta property="og:locale" content="' . static::getManifest('locale', 'en') . '" />
+        $meta .= '<meta property="og:locale" content="' . static::getManifest('locale', 'en') . '" />
             <meta property="og:type" content="website" />
             <meta property="og:title" content="' . static::getConfig("title") . '" />
             <meta property="og:description" content="' . static::getConfig("page_description") . '" />
@@ -259,8 +250,7 @@ final class Schema
             <meta property="og:image:height" content="' . static::getConfig("image_height") . '" />
             <meta property="og:image:type" content="' . static::getConfig("image_type") . '" />';
         
-        $meta .= '<!-- Twitter meta tags -->
-            <meta name="twitter:card" content="summary" />
+        $meta .= '<meta name="twitter:card" content="summary" />
             <meta name="twitter:site" content="@' . static::getManifest('twitter_name', '') . '" />
             <meta name="twitter:label1" content="Est. reading time" />
             <meta name="twitter:data1" content="37 minutes" />';
@@ -599,16 +589,15 @@ final class Schema
      */
     private static function has_query_parameter(string $url): bool 
     {
-        if (strpos($url, '?') === false) {
-            return false;
-        }
-        $path_and_query = explode('?', $url);
+        if (str_contains($url, '?')) {
+            $path_and_query = explode('?', $url);
 
-        if ($path_and_query[1] === '') {
-            return false;
+            if ($path_and_query[1] === '') {
+                return false;
+            }
         }
-
-        return true;
+       
+        return false;
     }
 
     /**

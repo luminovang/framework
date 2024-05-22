@@ -23,8 +23,8 @@ final class Scheme
     public const INDEX_FULLTEXT = "FULLTEXT";
     public const INDEX_SPATIAL = "SPATIAL";
 
-    private $columns = [];
-    private $tableName;
+    private array $columns = [];
+    private string $tableName;
 
     public function __construct(string $tableName)
     {

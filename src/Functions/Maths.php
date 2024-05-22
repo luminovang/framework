@@ -56,13 +56,13 @@ class Maths
     {
         $index = 0;
     
-        while ($bytes >= 1024 && $index < count(static::$units) - 1) {
+        while ($bytes >= 1024 && $index < count(self::$units) - 1) {
             $bytes /= 1024;
             $index++;
         }
     
         $formatted = number_format($bytes, 2);
-        $result = $add_name ? $formatted . ' ' . static::$units[$index] : $formatted;
+        $result = $add_name ? $formatted . ' ' . self::$units[$index] : $formatted;
     
         return $result;
     }
@@ -138,7 +138,7 @@ class Maths
 	 * Formats currency with decimal places and comma separation.
 	 *
 	 * @param mixed $amount Amount you want to format.
-	 * @param bool $decimals Decimals places.
+	 * @param int $decimals Decimals places.
 	 * 
 	 * @return string Formatted currency string.
 	*/
@@ -175,9 +175,9 @@ class Maths
      * @param int|float|string $amount The amount to convert.
      * @param string $network The cryptocurrency code (e.g., 'BTC', 'ETH', 'LTC').
      * 
-     * @return float|false The equivalent amount in cryptocurrency.
+     * @return string|false The equivalent amount in cryptocurrency.
     */
-    public static function crypto(int|float|string $amount, string $network = 'BTC'): float|false
+    public static function crypto(int|float|string $amount, string $network = 'BTC'): string|false
     {
         if (!is_numeric($amount)) {
 			return false;
@@ -187,9 +187,7 @@ class Maths
 			return static::money($amount);
 		}
 
-        $decimal = isset(static::$cryptos[$network]) ? static::$cryptos[$network] : 8;
-
-        return number_format((float) $amount, $decimal, '.', '') . ' ' . $network;
+        return number_format((float) $amount, (self::$cryptos[$network] ?? 8), '.', '') . ' ' . $network;
     }
 
     /**
@@ -208,7 +206,7 @@ class Maths
      */
     public static function distance(float|string $olat, float|string $olon, float|string $dlat, float|string $dlon, string $unit = 'km'): float|false 
     {
-        if (!isset(static::$radius[$unit]) || !is_float($olat) || !is_float($olon) || !is_float($dlat) || !is_float($dlon)) {
+        if (!isset(self::$radius[$unit]) || !is_float($olat) || !is_float($olon) || !is_float($dlat) || !is_float($dlon)) {
             return false;
         }
 
@@ -226,7 +224,7 @@ class Maths
 
         $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
 
-        return static::$radius[$unit] * $c;
+        return self::$radius[$unit] * $c;
     }
 
 	/**

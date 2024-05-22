@@ -11,7 +11,7 @@ namespace Luminova\Interface;
 
 use \Throwable;
 
-interface ExceptionInterface
+interface ExceptionInterface extends Throwable
 {
     /***
      * Constructor for BaseException.

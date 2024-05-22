@@ -87,12 +87,12 @@ final class Factory
      * @example Factory::method('foo', 'bar', false)
      * @example Factory::method(false)
      * 
-     * @return class-object|null An instance of the factory class, or null if not found.
+     * @return class-object An instance of the factory class.
      * @throws RuntimeException If failed to instantiate the factory.
      * 
      * @ignore 
      */
-    public static function __callStatic(string $factory, array $arguments): ?object
+    public static function __callStatic(string $factory, array $arguments): object
     {
         return static::call($factory, $arguments);
     }
@@ -107,12 +107,12 @@ final class Factory
      * @example Factory::method('foo', 'bar', false)
      * @example Factory::method(false)
      * 
-     * @return class-object|null An instance of the factory class, or null if not found.
+     * @return class-object An instance of the factory class.
      * @throws RuntimeException If failed to instantiate the factory.
      * 
      * @ignore 
      */
-    public function __call(string $factory, array $arguments): ?object
+    public function __call(string $factory, array $arguments): object
     {
         return static::call($factory, $arguments);
     }
@@ -204,10 +204,10 @@ final class Factory
      * @param string $factory The factory class name.
      * @param array $arguments Argument to pass to the factory constructor.
      * 
-     * @return class-object|null An instance of the factory class, or null if not found.
+     * @return class-object An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
      */
-    private static function call(string $factory, array $arguments): ?object
+    private static function call(string $factory, array $arguments): object
     {
         $shared = true; 
         
@@ -236,23 +236,22 @@ final class Factory
      * @param bool $shared Whether the instance should be shared or not.
      * @param mixed ...$arguments Parameters to pass to the factory constructor.
      * 
-     * @return class-object|null An instance of the factory class, or null if not found.
+     * @return class-object An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
      */
-    private static function create(string $class, ?string $alias = null, bool $shared = true, ...$arguments): ?object
+    private static function create(string $class, ?string $alias = null, bool $shared = true, ...$arguments): object
     {
-        $instance = null;
         try {
             $instance = new $class(...$arguments);
 
             if ($shared && $alias) {
                 static::$instances[$alias] = $instance;
             }
+
+            return $instance;
         } catch (Throwable|Exception $e) {
             throw new RuntimeException("Failed to instantiate factory method '$alias', " . $e->getMessage(), $e->getCode(), $e);
         }
-
-        return $instance;
     }
 
     /**
@@ -260,9 +259,9 @@ final class Factory
      *
      * @param string $factory The factory class name.
      * 
-     * @return class=string Return the fully qualified class name.
+     * @return class-string|null Return the fully qualified class name.
     */
-    private static function locator(string $factory): string
+    private static function locator(string $factory): ?string
     {
         return static::$classes[$factory] ?? null;
     }

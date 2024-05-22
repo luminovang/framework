@@ -89,18 +89,18 @@ class Mailer
      *
      * @param string $address Email address to send email to.
      * 
-     * @return static Return new static mailer class instance.
+     * @return self Return new static mailer class instance.
      * @throws MailerException Throws if error occurred while sending email.
     */
-    public static function to(string $address): static
+    public static function to(string $address): self
     {
-        if (static::$instance === null) {
-            static::$instance = new static();
+        if (self::$instance === null) {
+            self::$instance = new self();
         }
 
-        static::$instance->address($address);
+        self::$instance->address($address);
 
-        return static::$instance;
+        return self::$instance;
     }
 
     /**
@@ -297,8 +297,6 @@ class Mailer
 
             throw new MailerException($e->getMessage(), $e->getCode(), $e);
         }
-
-        return false;
     }
 
     /**
@@ -308,14 +306,14 @@ class Mailer
      */
     private function initialize(): void
     {
-        $this->client->SMTPDebug = static::debugable() ? 3 : 0;
-        $this->client->CharSet = static::getCharset(env('smtp.charset'));
+        $this->client->SMTPDebug = self::debugable() ? 3 : 0;
+        $this->client->CharSet = self::getCharset(env('smtp.charset'));
         $this->client->XMailer = Foundation::copyright();
 
         if ((bool) env('smtp.use.credentials')) {
             $this->client->isSMTP();
             $this->client->Host = env('smtp.host');
-            $this->client->Port = env('smtp.port');
+            $this->client->Port = (int) env('smtp.port', -1);
 
             if ((bool) env('smtp.use.password')) {
                 $this->client->SMTPAuth = true;
@@ -323,7 +321,7 @@ class Mailer
                 $this->client->Password = env('smtp.password');
             }
 
-            $this->client->SMTPSecure = static::getEncryption(env('smtp.encryption'));
+            $this->client->SMTPSecure = self::getEncryption(env('smtp.encryption'));
         } else {
             $this->client->isMail();
         }
@@ -350,7 +348,7 @@ class Mailer
      *
      * @param string $encryption The encryption type.
      *
-     * @return int The encryption type constant.
+     * @return string The encryption type constant.
      */
     private static function getEncryption(string $encryption): string
     {
@@ -367,7 +365,7 @@ class Mailer
      *
      * @param string $charset The character encoding.
      *
-     * @return int The character encoding constant.
+     * @return string The character encoding constant.
      */
     private static function getCharset(string $charset): string
     {

@@ -8,6 +8,7 @@
  * @license See LICENSE file
  */
 namespace Luminova\Arrays;
+
 class ArrayInput
 {
     private array $parameters = [];

@@ -17,9 +17,9 @@ class Segments
     private array $segments = [];
 
     /**
-     * Initializes class
+     * Initializes class.
      * 
-     * @param array<int, string> Array list of url segments
+     * @param array<int,string> Array list of url segments.
     */
     public function __construct(array $segments)
     {
