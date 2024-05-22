@@ -7,6 +7,7 @@ $baseDir = dirname($vendorDir);
 
 return array(
     'Composer\\InstalledVersions' => $vendorDir . '/composer/InstalledVersions.php',
+    'Luminova\\Application\\Caller' => $baseDir . '/src/Application/Caller.php',
     'Luminova\\Application\\Factory' => $baseDir . '/src/Application/Factory.php',
     'Luminova\\Application\\Foundation' => $baseDir . '/src/Application/Foundation.php',
     'Luminova\\Application\\Functions' => $baseDir . '/src/Application/Functions.php',
@@ -136,7 +137,7 @@ return array(
     'Luminova\\Models\\PushMessage' => $baseDir . '/src/Models/PushMessage.php',
     'Luminova\\Notifications\\FirebasePusher' => $baseDir . '/src/Notifications/FirebasePusher.php',
     'Luminova\\Notifications\\FirebaseRealtime' => $baseDir . '/src/Notifications/FirebaseRealtime.php',
-    'Luminova\\Routing\\Bootstrap' => $baseDir . '/src/Routing/Bootstrap.php',
+    'Luminova\\Routing\\Context' => $baseDir . '/src/Routing/Context.php',
     'Luminova\\Routing\\Router' => $baseDir . '/src/Routing/Router.php',
     'Luminova\\Routing\\Segments' => $baseDir . '/src/Routing/Segments.php',
     'Luminova\\Security\\Crypter' => $baseDir . '/src/Security/Crypter.php',

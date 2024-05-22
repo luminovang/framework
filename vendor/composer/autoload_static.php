@@ -22,6 +22,7 @@ class ComposerStaticInit9bbe5f33f53702290b6f40e5fff6e1ff
 
     public static $classMap = array (
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
+        'Luminova\\Application\\Caller' => __DIR__ . '/../..' . '/src/Application/Caller.php',
         'Luminova\\Application\\Factory' => __DIR__ . '/../..' . '/src/Application/Factory.php',
         'Luminova\\Application\\Foundation' => __DIR__ . '/../..' . '/src/Application/Foundation.php',
         'Luminova\\Application\\Functions' => __DIR__ . '/../..' . '/src/Application/Functions.php',
@@ -151,7 +152,7 @@ class ComposerStaticInit9bbe5f33f53702290b6f40e5fff6e1ff
         'Luminova\\Models\\PushMessage' => __DIR__ . '/../..' . '/src/Models/PushMessage.php',
         'Luminova\\Notifications\\FirebasePusher' => __DIR__ . '/../..' . '/src/Notifications/FirebasePusher.php',
         'Luminova\\Notifications\\FirebaseRealtime' => __DIR__ . '/../..' . '/src/Notifications/FirebaseRealtime.php',
-        'Luminova\\Routing\\Bootstrap' => __DIR__ . '/../..' . '/src/Routing/Bootstrap.php',
+        'Luminova\\Routing\\Context' => __DIR__ . '/../..' . '/src/Routing/Context.php',
         'Luminova\\Routing\\Router' => __DIR__ . '/../..' . '/src/Routing/Router.php',
         'Luminova\\Routing\\Segments' => __DIR__ . '/../..' . '/src/Routing/Segments.php',
         'Luminova\\Security\\Crypter' => __DIR__ . '/../..' . '/src/Security/Crypter.php',
