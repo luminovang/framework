@@ -9,9 +9,8 @@
  */
 namespace Luminova\Interface;
 
-/**
- * Interface for managing HTTP cookies.
- */
+use \Luminova\Base\BaseConfig;
+
 interface CookieInterface
 {
   /**
@@ -45,11 +44,11 @@ interface CookieInterface
   /**
    * Set cookie options.
    * 
-   * @param string|array $options An array of cookie options or a class name.
+   * @param class-object<BaseConfig>|array $options An array of cookie options or cookie config class object.
    * 
    * @return CookieInterface This Cookie instance.
    */
-  public function setOptions(string|array $options): self;
+  public function setOptions(BaseConfig|array $options): self;
 
   /**
    * Create a new Cookie instance from a `Set-Cookie` header.

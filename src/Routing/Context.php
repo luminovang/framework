@@ -70,7 +70,7 @@ final class Context
      * @param string $name Route content name
      * @param Closure|array<int,string>|null $onError Context error handling method.
      *      - array - Method name in [ViewErrors::class, 'methodname']; to handle error.
-     *      - Closure - Closure(class-typehint ...arguments): int.
+     *      - Closure - Closure(class-string<\T> $arguments [, mixed $... ]): int.
      * 
      * @throws RuntimeException If invalid error callback was provided.
      */

@@ -57,25 +57,26 @@ class Twig
     /**
      * Initializes the Twig
      * 
-     * @param string $root framework root directory
-     * @param string $viewPath Template view directory
-     * @param array $configs Filesystem loader configuration.
+     * @param TemplateConfig $config Template configuration.
+     * @param string $root framework root directory.
+     * @param string $viewPath Template view directory.
+     * @param array $options Filesystem loader configuration.
      * 
      * @throws RuntimeException
     */
-    public function __construct(string $root, string $viewPath, array $configs = [])
+    public function __construct(TemplateConfig $config, string $root, string $viewPath, array $options = [])
     {
         self::$root = $root;
 
-        if($configs['caching']){
+        if($options['caching']){
             $sufix = DIRECTORY_SEPARATOR . 'twig';
-            $configs['cache'] = $root . Helper::bothtrim(TemplateConfig::$cacheFolder) . $sufix;
+            $options['cache'] = $root . Helper::bothtrim($config->cacheFolder) . $sufix;
         }else{
-            $configs['cache'] = false;
+            $options['cache'] = false;
         }
 
         if(class_exists(Environment::class)){
-            $this->twig = new Environment(new FilesystemLoader($viewPath), $configs);
+            $this->twig = new Environment(new FilesystemLoader($viewPath), $options);
             $this->twig->addExtension(new Extensions());
         }else{
             throw new RuntimeException('Twig is not available, run composer command "composer require "twig/twig:^3.0" if you want to use Twig template', 1991);
@@ -85,17 +86,18 @@ class Twig
     /**
      * Get Twig singleton instance
      * 
-     * @param string $root framework root directory
-     * @param string $viewPath Template view directory
-     * @param array $configs Filesystem loader configuration.
+     * @param TemplateConfig $config Template configuration.
+     * @param string $root framework root directory.
+     * @param string $viewPath Template view directory.
+     * @param array $options Filesystem loader configuration.
      * 
      * @return static static instance 
      * @throws RuntimeException
     */
-    public static function getInstance(string $root, string $viewPath, array $configs = []): static
+    public static function getInstance(TemplateConfig $config, string $root, string $viewPath, array $options = []): static
     {
         if(self::$instance === null){
-            self::$instance = new static($root, $viewPath, $configs);
+            self::$instance = new self($config, $root, $viewPath, $options);
         }
 
         return self::$instance;
@@ -185,7 +187,6 @@ class Twig
             }
 
             echo $content;
-            //ob_end_flush();
 
             return true;
         }catch(RuntimeError | SyntaxError $e){

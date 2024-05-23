@@ -57,6 +57,11 @@ final class Crypter
     ];
 
     /**
+     * @var Encryption $config
+    */
+    private static ?Encryption $config = null;
+
+    /**
      * Get an instance of OpenSSL or Sodium encryption.
      * 
      * @return class-object<EncryptionInterface> An instance of the encryption class.
@@ -66,6 +71,7 @@ final class Crypter
      */
     public static function getInstance(): EncryptionInterface
     {
+        self::initConfig();
         $key = env('app.key', '');
 
         if ($key === '') {
@@ -87,7 +93,7 @@ final class Crypter
             'sodium' => '\\' . Sodium::class
         ];
 
-        $method = strtoupper(Encryption::$method);
+        $method = strtoupper(self::$config->method);
         $size = static::$ciphers[$method]['size'] ?? 16;
         $encryption = $handlers[$handler];
 
@@ -212,7 +218,7 @@ final class Crypter
     */
     private static function handler(): string|false
     {
-        $handler = strtolower(Encryption::$handler);
+        $handler = strtolower(self::$config->handler);
 
         if($handler === 'openssl' && extension_loaded('openssl')) {
             return $handler;
@@ -223,6 +229,14 @@ final class Crypter
         }
         
         return false;
+    }
+
+    /**
+     * Initalize the configuration
+    */
+    private static function initConfig(): void 
+    {
+        self::$config ??= new Encryption();
     }
 
     /**
@@ -240,10 +254,11 @@ final class Crypter
     */
     public static function generate_key(string $type = 'random', array $options = []): array|string|false
     {
+        self::initConfig();
         $handler = static::handler();
 
         if ($type === 'random') {
-            $length = ($options['length'] ?? static::$ciphers[strtoupper(Encryption::$method)]['size'] ?? 16);
+            $length = ($options['length'] ?? static::$ciphers[strtoupper(self::$config->method)]['size'] ?? 16);
 
             if($handler === 'openssl') {
                 $random = openssl_random_pseudo_bytes($length / 2);

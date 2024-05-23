@@ -134,27 +134,29 @@ abstract class BaseController
     /**
      * Shorthand to render view in controller class.
      *
-     * @param string $view view name
+     * @param string $view view name.
      * @param array $options Optional options to be passed to view template.
+     * @param string $type The type of view content you are compiling (default: html).
      * 
      * @return int Return STATUS_SUCCESS on success, otherwise STATUS_ERROR failure.
     */
-    protected final function view(string $view, array $options = []): int
+    protected final function view(string $view, array $options = [], string $type = 'html'): int
     {
-        return $this->app->view($view)->render($options);
+        return $this->app->view($view, $type)->render($options);
     }
 
     /**
      * Shorthand to respond view contents in controller class.
      *
-     * @param string $view view name
+     * @param string $view view name.
      * @param array $options Optional options to be passed to view template.
+     * @param string $type The type of view content you are compiling (default: html).
      * 
      * @return string Return view contents which is ready to be rendered.
     */
-    protected final function respond(string $view, array $options = []): string
+    protected final function respond(string $view, array $options = [], string $type = 'html'): string
     {
-        return $this->app->view($view)->respond($options);
+        return $this->app->view($view, $type)->respond($options);
     }
 
     /**

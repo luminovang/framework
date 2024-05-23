@@ -27,9 +27,7 @@ class Logger implements LoggerInterface
     */
     public function __construct()
     {
-        if(static::$logger === null){
-            static::$logger = (Preference::getLogger() ?? new NovaLogger());
-        }
+        static::$logger ??= ((new Preference())->getLogger() ?? new NovaLogger());
     }
     
     /**

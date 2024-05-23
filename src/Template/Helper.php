@@ -108,10 +108,13 @@ class Helper
     */
     public static function cachekey(?string $url = null): string 
     {
-        $url ??= ($_SERVER['REQUEST_URI'] ?? 'index');
-        $key = preg_replace(['/[\/?&=#]/', '/-+/'], ['-', '-'], $url);
-
-        return md5(trim($key, '-'));
+        if ($url === null) {
+            $url = $_SERVER['REQUEST_METHOD'] ?? 'CLI';
+            $url .= $_SERVER['REQUEST_URI'] ?? 'index';
+        }
+        $url = str_replace(['/', '?', '&', '=', '#'], '-', $url);
+        
+        return md5($url);
     }
 
      /** 

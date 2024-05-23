@@ -130,13 +130,10 @@ class System extends BaseConsole
             return STATUS_ERROR;
         }
         
-        if (strpos($envContents, "$key=") !== false || strpos($envContents, "$key =") !== false) {
-
+        if (str_contains($envContents, "$key=") && str_contains($envContents, "$key =")) {
             $newContents = preg_replace("/\b$key\b.*\n?/", '', $envContents);
             if (write_content($envFile, $newContents) !== false) {
-                unset($_ENV[$key]);
-                unset($_SERVER[$key]);
-
+                unset($_ENV[$key], $_SERVER[$key]);
                 $this->header();
                 $this->success('Variable "' . $key . '" was deleted successfully');
 

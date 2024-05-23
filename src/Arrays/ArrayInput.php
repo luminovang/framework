@@ -11,14 +11,26 @@ namespace Luminova\Arrays;
 
 class ArrayInput
 {
+    /**
+     * @var array $parameters
+    */
     private array $parameters = [];
 
+    /**
+     * @param array $parameters
+    */
     public function __construct(array $parameters = [])
     {
         $this->parameters = $parameters;
     }
 
-    public function getParameterOption(array $values, bool $default = false): mixed
+    /**
+     * @param array $values
+     * @param bool $default
+     * 
+     * @return mixed Return value of default value
+    */
+    public function getParameterOption(array $values, mixed $default = null): mixed
     {
         foreach ($values as $value) {
             if (isset($this->parameters[$value])) {
@@ -29,9 +41,13 @@ class ArrayInput
         return $default;
     }
 
+    /**
+     * @param array $values
+     * 
+     * @return bool Return true if option exisit.
+    */
     public function hasParameterOption(array $values): bool
     {
-
         foreach ($values as $value) {
             if (isset($this->parameters[$value])) {
                 return true;

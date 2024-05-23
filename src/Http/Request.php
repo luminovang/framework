@@ -62,12 +62,12 @@ final class Request
      * Http request methods.
      *
      * @var array<int, string> $methods
-     */
+     */ 
     private array $methods = [
-        'get', 'post', 'put','delete', 'options', 
-        'patch', 'head', 'connect', 'trace', 'propfind', 
-        'mkcol', 'copy', 'move', 'lock', 'unlock'
-    ];    
+        'GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 
+        'PATCH', 'HEAD', 'CONNECT', 'TRACE', 'PROPFIND', 
+        'MKCOL', 'COPY', 'MOVE', 'LOCK', 'UNLOCK'
+    ]; 
 
     /**
      * Http server instance.
@@ -83,12 +83,19 @@ final class Request
     */
     public ?Header $header = null;
 
-     /**
+    /**
      * Browser request user-agent information.
      *
      * @var null|UserAgent $agent
      */
     public ?UserAgent $agent = null;
+
+    /**
+     * Request security configuration.
+     *
+     * @var Security $config
+     */
+    private static ?Security $config = null;
 
     /**
      * Request uri 
@@ -104,17 +111,27 @@ final class Request
     {
         $this->server = new Server((array) $_SERVER);
         $this->header = new Header();
-        $this->httpBody['get'] = $_GET;
-        $this->httpBody['post'] = $_POST;
+        $this->httpBody['GET'] = $_GET;
+        $this->httpBody['POST'] = $_POST;
         $this->uri = null;
 
         foreach ($this->methods as $method) {
-            if( $method !== 'post' && $method !== 'get'){
-                $this->httpBody[$method] = $this->parseRequestBody($method);
+            if( $method === 'POST' || $method === 'GET' ){
+                continue;
             }
+
+            $this->httpBody[$method] = $this->parseRequestBody($method);
         }
         
         $this->body = $this->parseRequestBody();
+    }
+
+    /**
+     * Initializes API configuration.
+    */
+    private static function initConfig(): void
+    {
+        self::$config ??= new Security();
     }
 
     /**
@@ -128,7 +145,7 @@ final class Request
     */
     public function __call(string $key, array $arguments): mixed 
     {
-        $method = strtolower(substr($key, 3));
+        $method = strtoupper(substr($key, 3));
     
         if(in_array($method, $this->methods, true)){
             $default = ($arguments[1] ?? '');
@@ -155,7 +172,7 @@ final class Request
      */
     public function getArray(string $method, string $key, array $default = []): array
     {
-        $method = strtolower($method);
+        $method = strtoupper($method);
         if(in_array($method, $this->methods, true)){
             if(isset($this->httpBody[$method][$key])) {
                 $result = $this->httpBody[$method][$key];
@@ -233,7 +250,7 @@ final class Request
     */
     public function getMethod(): string
     {
-        return strtolower($this->server->get('REQUEST_METHOD', ''));
+        return strtoupper($this->server->get('REQUEST_METHOD', ''));
     }
 
     /**
@@ -243,7 +260,7 @@ final class Request
     */
     public function isGet(): bool
     {
-        return $this->getMethod() === 'get';
+        return $this->getMethod() === 'GET';
     }
 
    /**
@@ -253,7 +270,7 @@ final class Request
      */
     public function isPost(): bool
     {
-        return $this->getMethod() === 'post';
+        return $this->getMethod() === 'POST';
     }
 
     /**
@@ -265,7 +282,7 @@ final class Request
     */
     public function isMethod(string $method): bool
     {
-        return $this->getMethod() === strtolower($method);
+        return $this->getMethod() === strtoupper($method);
     }
 
     /**
@@ -496,12 +513,13 @@ final class Request
     public function getOrigin(): ?string
     {
         $origin = $this->server->get('HTTP_ORIGIN');
+        self::initConfig();
 
         if (!$origin) {
             return null;
         }
 
-        if(Security::$trustedOrigins === []){
+        if(self::$config->trustedOrigins === []){
             return $origin;
         }
 
@@ -638,7 +656,8 @@ final class Request
             return IPAddress::isTrustedProxy($input);
         }
 
-        $trusted = ($context === 'hostname') ? Security::$trustedHostname : Security::$trustedOrigins;
+        self::initConfig();
+        $trusted = ($context === 'hostname') ? self::$config->trustedHostname : self::$config->trustedOrigins;
 
         if($trusted === []){
             return true;
@@ -673,12 +692,13 @@ final class Request
     public function isTrustedOrigin(): bool
     {
         $origin = $this->server->get('HTTP_ORIGIN');
+        self::initConfig();
 
         if (!$origin) {
             return false;
         }
 
-        if(Security::$trustedOrigins === []){
+        if(self::$config->trustedOrigins === []){
             return true;
         }
 
@@ -766,7 +786,6 @@ final class Request
             $input = file_get_contents('php://input');
             $type = $this->getContentType();
             if ($type !== '' && strpos($type, 'multipart/form-data') !== false) {
-
                 $body = array_merge($_FILES, $_POST);
                
                 if ($input !== false) {

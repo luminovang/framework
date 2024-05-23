@@ -11,8 +11,13 @@ namespace Luminova\Arrays;
 
 class ArrayObject 
 {
-
-    public static function getColumns(string $property, array|object $values): array 
+    /**
+     * @param string $property
+     * @param array|object $values
+     * 
+     * @return array
+    */
+    public function getColumns(string $property, array|object $values): array 
     {
         if (is_array($values)) {
             return array_column($values, $property);

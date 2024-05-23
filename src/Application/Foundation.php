@@ -11,7 +11,6 @@
 namespace Luminova\Application;
 
 use \Luminova\Errors\ErrorStack;
-use \Luminova\Exceptions\RuntimeException;
 
 final class Foundation 
 {
@@ -196,7 +195,7 @@ final class Foundation
         return static::$errors;
     }
 
-     /**
+    /**
      * Return server base path.
      *
      * @return string Application router base path
@@ -247,6 +246,7 @@ final class Foundation
     public static function getSegments(): array
     {
         $segments = explode('/', trim(static::getUriSegments(), '/'));
+   
         if (($public = array_search('public', $segments)) !== false) {
             array_splice($segments, $public, 1);
         }
@@ -381,9 +381,7 @@ final class Foundation
             return;
         }
 
-        $time = date('Y-m-d\TH:i:sP');
-        $message = "[{$time}]: {$message}\n";
-
+        $message =  "[" . date('Y-m-d\TH:i:sP') . "]: {$message}\n";
         $log =  APP_ROOT. 'writeable' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR. "{$level}.log";
 
         if (@file_put_contents($log, $message, FILE_APPEND | LOCK_EX) === false) {
@@ -401,30 +399,5 @@ final class Foundation
     public static function isFatal(int $errno): bool 
     {
         return in_array($errno, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR]);
-    }
-
-      /**
-     * Import a custom library into your project 
-     * You must place your external libraries in libraries/libs/ directory
-     * 
-     * @param string $_lmv_library the name of the library
-     * @example Foo/Bar/Baz
-     * @example Foo/Bar/Baz.php
-     * @example Foo.php
-     * @example Foo
-     * 
-     * @return bool true if the library was successfully imported
-     * @throws RuntimeException if library could not be found
-    */
-    public static function import(string $_lmv_library): bool
-    {
-        $_lmv_library = path('library') . rtrim(rtrim($_lmv_library, '.php'), '/') . '.php';
-
-        if (file_exists($_lmv_library)) {
-            require_once $_lmv_library;
-            return true;
-        }
-
-        throw new RuntimeException("Library '$_lmv_library' does not exist.");
     }
 }

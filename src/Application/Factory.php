@@ -59,22 +59,22 @@ final class Factory
     /**
      * Available factory classes.
      *
-     * @var array<string,class-string> $classes
+     * @var array<string,class-string<\T>> $classes
      */
     private static array $classes = [
-        'task'          => Task::class,
-        'session'       => Session::class,
-        'cookie'        => Cookie::class,
-        'functions'     => Functions::class,
-        'modules'       => Modules::class,
-        'language'      => Translator::class,
-        'logger'        => Logger::class,
-        'fileManager'   => FileManager::class,
-        'validate'      => InputValidator::class,
-        'response'      => ViewResponse::class,
-        'request'       => Request::class,
-        'network'       => Network::class,
-        'caller'        => Caller::class
+        'task'          => '\\' . Task::class,
+        'session'       => '\\' . Session::class,
+        'cookie'        => '\\' . Cookie::class,
+        'functions'     => '\\' . Functions::class,
+        'modules'       => '\\' . Modules::class,
+        'language'      => '\\' . Translator::class,
+        'logger'        => '\\' . Logger::class,
+        'fileManager'   => '\\' . FileManager::class,
+        'validate'      => '\\' . InputValidator::class,
+        'response'      => '\\' . ViewResponse::class,
+        'request'       => '\\' . Request::class,
+        'network'       => '\\' . Network::class,
+        'caller'        => '\\' . Caller::class
     ];
 
     /**
@@ -87,14 +87,14 @@ final class Factory
      * @example Factory::method('foo', 'bar', false)
      * @example Factory::method(false)
      * 
-     * @return class-object An instance of the factory class.
+     * @return class-object<\T> An instance of the factory class.
      * @throws RuntimeException If failed to instantiate the factory.
      * 
      * @ignore 
      */
     public static function __callStatic(string $factory, array $arguments): object
     {
-        return static::call($factory, $arguments);
+        return self::call($factory, $arguments);
     }
 
     /**
@@ -107,14 +107,14 @@ final class Factory
      * @example Factory::method('foo', 'bar', false)
      * @example Factory::method(false)
      * 
-     * @return class-object An instance of the factory class.
+     * @return class-object<\T> An instance of the factory class.
      * @throws RuntimeException If failed to instantiate the factory.
      * 
      * @ignore 
      */
     public function __call(string $factory, array $arguments): object
     {
-        return static::call($factory, $arguments);
+        return self::call($factory, $arguments);
     }
 
     /**
@@ -126,7 +126,7 @@ final class Factory
      */
     public static function has(string $factory): bool
     {
-        return static::locator($factory) !== null;
+        return self::locator($factory) !== null;
     }
 
      /**
@@ -138,8 +138,8 @@ final class Factory
     */
     public static function delete(string $factory): bool
     {
-        if(isset(static::$instances[$factory])){
-            unset(static::$instances[$factory]);
+        if(isset(self::$instances[$factory])){
+            unset(self::$instances[$factory]);
 
             return true;
         }
@@ -154,7 +154,7 @@ final class Factory
     */
     public static function clear(): void
     {
-        static::$instances = [];
+        self::$instances = [];
     }
 
     /**
@@ -166,12 +166,12 @@ final class Factory
     */
     public static function service(): Services
     {
-        if(isset(static::$instances['service'])){
-            return static::$instances['service'];
+        if(isset(self::$instances['service'])){
+            return self::$instances['service'];
         }
    
-        static::$instances['service'] = new Services();
-        return static::$instances['service'];
+        self::$instances['service'] = new Services();
+        return self::$instances['service'];
     }
 
     /**
@@ -192,7 +192,7 @@ final class Factory
             $boot->bootstrap();
             $instance = static::service();
             $instance->queuService($boot->getServices());
-            static::$instances['service'] = $instance;
+            self::$instances['service'] = $instance;
         }catch(RuntimeException $e){
             logger('critical', 'Error occurred while registering service, Exception: ' . $e->getMessage());
         }
@@ -204,7 +204,7 @@ final class Factory
      * @param string $factory The factory class name.
      * @param array $arguments Argument to pass to the factory constructor.
      * 
-     * @return class-object An instance of the factory class, or null if not found.
+     * @return class-object<\T> An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
      */
     private static function call(string $factory, array $arguments): object
@@ -215,37 +215,37 @@ final class Factory
             $shared = array_pop($arguments);
         }
 
-        if ($shared && isset(static::$instances[$factory])) {
-            return static::$instances[$factory];
+        if ($shared && isset(self::$instances[$factory])) {
+            return self::$instances[$factory];
         }
 
-        $class = static::locator($factory);
+        $class = self::locator($factory);
 
         if ($class === null) {
             throw new RuntimeException("Factory with method name '$factory' does not exist.");
         }
 
-        return static::create($class, $factory, $shared, ...$arguments);
+        return self::create($class, $factory, $shared, ...$arguments);
     }
 
     /**
      * Create an instance of the specified factory class.
      *
-     * @param class-string $class The class name.
+     * @param class-string<\T> $class The class name.
      * @param string|null $alias The alias of the factory class.
      * @param bool $shared Whether the instance should be shared or not.
-     * @param mixed ...$arguments Parameters to pass to the factory constructor.
-     * 
-     * @return class-object An instance of the factory class, or null if not found.
+     * @param mixed $arguments [, mixed $... ] Parameters to pass to the factory constructor.
+     *  
+     * @return class-object<\T> An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
      */
-    private static function create(string $class, ?string $alias = null, bool $shared = true, ...$arguments): object
+    private static function create(string $class, ?string $alias = null, bool $shared = true, mixed ...$arguments): object
     {
         try {
             $instance = new $class(...$arguments);
-
+ 
             if ($shared && $alias) {
-                static::$instances[$alias] = $instance;
+                self::$instances[$alias] = $instance;
             }
 
             return $instance;
@@ -259,7 +259,7 @@ final class Factory
      *
      * @param string $factory The factory class name.
      * 
-     * @return class-string|null Return the fully qualified class name.
+     * @return class-string<\T>|null Return the fully qualified class name.
     */
     private static function locator(string $factory): ?string
     {

@@ -29,7 +29,8 @@ class RouterException extends AppException
         'invalid_cli_middleware' => 'The before middleware is not used in cli context, use middleware() instead',
         'invalid_middleware' => 'The middleware method is not used in web context, use before() for cli instead',
         'bad_method' => 'Method "%s()" does not accept any arguments, but %d were provided in router patterns called in %s, line: %d',
-        'no_method' => 'Call to undefined or inaccessible method %s::%s'
+        'no_method' => 'Call to undefined or inaccessible method %s::%s',
+        'no_context' => 'No router context was provided. Refer to the documentation for context setup.'
     ];
 
     /**

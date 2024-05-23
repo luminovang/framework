@@ -9,6 +9,7 @@
  */
 namespace Luminova\Sessions;
 
+use \Luminova\Base\BaseConfig;
 use \Luminova\Interface\SessionManagerInterface;
 use \Luminova\Exceptions\JsonException;
 use \Throwable;
@@ -21,11 +22,24 @@ final class SessionManager implements SessionManagerInterface
     private string $storage = '';
 
     /**
+     * @var BaseConfig $config
+    */
+    private ?BaseConfig $config = null;
+
+    /**
      * {@inheritdoc}
     */
     public function __construct(string $storage = 'global') 
     {
         $this->storage = $storage;
+    }
+
+     /**
+     * {@inheritdoc}
+    */
+    public function setConfig(BaseConfig $config): void
+    {
+        $this->config = $config;
     }
 
     /**

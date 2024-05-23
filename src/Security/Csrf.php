@@ -32,9 +32,9 @@ final class Csrf
     /**
      * Cookie config
      *
-     * @var string $config CookieConfig::class name
+     * @var CookieConfig $config
     */
-    private static string $config = CookieConfig::class;
+    private static ?CookieConfig $config = null;
 
     /**
      * Call static method as none static 
@@ -49,10 +49,18 @@ final class Csrf
     public function __call(string $name, array $arguments): mixed
     {
         if (method_exists(self::class, $name)) {
-            return static::{$name}(...$arguments);
+            return self::{$name}(...$arguments);
         }
         
         throw new BadMethodCallException("Call to undefined or inaccessible method " . self::class . "::" . $name);
+    }
+
+    /**
+     * Initalize the session configuration.
+    */
+    private static function intConfig(): void 
+    {
+        self::$config ??= new CookieConfig();
     }
 
     /**
@@ -62,18 +70,18 @@ final class Csrf
      */
     public static function getToken(): string 
     {
-        if (static::hasToken()) {
-            $storage = static::tokenStorage();
+        if (self::hasToken()) {
+            $storage = self::tokenStorage();
 
             if($storage === 'cookie'){
-                return $_COOKIE[static::$token];
+                return $_COOKIE[self::$token];
             }
 
-            return $_SESSION[static::$token];
+            return $_SESSION[self::$token];
         }
 
-        $token = static::generateToken();
-        static::saveToken($token);
+        $token = self::generateToken();
+        self::saveToken($token);
 
         return $token;
     }
@@ -86,8 +94,8 @@ final class Csrf
     */
     public static function refresh(): string 
     {
-        $token = static::generateToken();
-        static::saveToken($token);
+        $token = self::generateToken();
+        self::saveToken($token);
         return $token;
     }
 
@@ -98,14 +106,15 @@ final class Csrf
      */
     public static function delete(): void 
     {
-        $storage = static::tokenStorage();
+        self::intConfig();
+        $storage = self::tokenStorage();
 
         if($storage === 'cookie'){
-            static::saveToken('', time() - static::$config::$expiration);
+            self::saveToken('', time() - self::$config->expiration);
             return;
         }
 
-        unset($_SESSION[static::$token]);
+        unset($_SESSION[self::$token]);
     }
 
     /**
@@ -115,7 +124,7 @@ final class Csrf
     */
     public static function inputToken(): void 
     {
-        echo '<input type="hidden" name="' . static::$tokenName . '" value="' . static::getToken() . '">';
+        echo '<input type="hidden" name="' . self::$tokenName . '" value="' . self::getToken() . '">';
     }
 
     /**
@@ -125,7 +134,7 @@ final class Csrf
      */
     public static function metaToken(): void 
     {
-        echo '<meta name="' . static::$tokenName . '" content="' . static::getToken() . '">';
+        echo '<meta name="' . self::$tokenName . '" content="' . self::getToken() . '">';
     }
 
     /**
@@ -137,13 +146,14 @@ final class Csrf
      */
     public static function validate(string $token): bool 
     {
-        $storage = static::tokenStorage();
+        self::intConfig();
+        $storage = self::tokenStorage();
         $tokenHash = '';
 
-        if ($storage === 'cookie' && static::hasCookie()) {
-            $tokenHash = $_COOKIE[static::$token];
-        } elseif(isset($_SESSION[static::$token])) {
-            $tokenHash = $_SESSION[static::$token];
+        if ($storage === 'cookie' && self::hasCookie()) {
+            $tokenHash = $_COOKIE[self::$token];
+        } elseif(isset($_SESSION[self::$token])) {
+            $tokenHash = $_SESSION[self::$token];
         }
 
         if (empty($tokenHash)) {
@@ -151,7 +161,7 @@ final class Csrf
         }
 
         if (hash_equals($tokenHash, $token)) {
-            static::delete();
+            self::delete();
             return true;
         }
 
@@ -165,13 +175,13 @@ final class Csrf
     */
     public static function hasToken(): bool 
     {
-        $storage = static::tokenStorage();
+        $storage = self::tokenStorage();
 
-        if ($storage === 'cookie' && static::hasCookie()) {
+        if ($storage === 'cookie' && self::hasCookie()) {
             return true;
         }
 
-        return isset($_SESSION[static::$token]);
+        return isset($_SESSION[self::$token]);
     }
 
 
@@ -194,7 +204,8 @@ final class Csrf
     */
     private static function tokenStorage(): string 
     {
-        if (static::$config::$csrfStorage === 'cookie' || session_status() === PHP_SESSION_NONE) {
+        self::intConfig();
+        if (self::$config->csrfStorage === 'cookie' || session_status() === PHP_SESSION_NONE) {
             return 'cookie';
         }
 
@@ -211,22 +222,23 @@ final class Csrf
     */
     private static function saveToken(string $token, ?int $expiry = null): void 
     {
-        $storage = static::tokenStorage();
+        self::intConfig();
+        $storage = self::tokenStorage();
 
         if($storage === 'cookie'){
-            setcookie(static::$token, $token, [
-                'expires' => ($expiry ?? time() + static::$config::$expiration),
-                'path' => static::$config::$sessionPath,
-                'domain' => static::$config::$sessionDomain,
+            setcookie(self::$token, $token, [
+                'expires' => ($expiry ?? time() + self::$config->expiration),
+                'path' => self::$config->sessionPath,
+                'domain' => self::$config->sessionDomain,
                 'secure' => true,
                 'httponly' => true,
-                'samesite' => static::$config::$sameSite 
+                'samesite' => self::$config->sameSite 
             ]);
-            $_COOKIE[static::$token] = $token;
+            $_COOKIE[self::$token] = $token;
             return;
         }
 
-        $_SESSION[static::$token] = $token;
+        $_SESSION[self::$token] = $token;
     }
 
     /**
@@ -236,6 +248,6 @@ final class Csrf
     */
     private static function hasCookie(): bool 
     {
-        return isset($_COOKIE[static::$token]) && !empty($_COOKIE[static::$token]);
+        return isset($_COOKIE[self::$token]) && !empty($_COOKIE[self::$token]);
     }
 }

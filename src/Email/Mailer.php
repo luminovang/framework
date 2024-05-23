@@ -56,7 +56,7 @@ class Mailer
      */
     private function __construct(MailerInterface|string|null $interface = null)
     {
-        $interface ??= Preference::getMailer();
+        $interface ??= (new Preference())->getMailer();
 
         if(is_string($interface) && class_exists($interface)) {
             $interface = new $interface(!PRODUCTION);

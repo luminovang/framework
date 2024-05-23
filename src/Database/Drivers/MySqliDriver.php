@@ -605,7 +605,7 @@ final class MySqliDriver implements DatabaseInterface
         }
 
         if ($class === null || $class === 'stdClass') {
-            return $objects;
+            return (object) $objects;
         }
 
         try {

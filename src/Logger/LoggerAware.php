@@ -170,9 +170,7 @@ class LoggerAware implements LoggerInterface, LoggerAwareInterface
      */
     public function log($level, $message, array $context = []): void
     {
-        if(static::$logger === null){
-            static::$logger = (Preference::getLogger() ?? new NovaLogger());
-        }
+        static::$logger ??= ((new Preference())->getLogger() ?? new NovaLogger());
 
         if (static::$logger instanceof LoggerInterface) {
             static::$logger->log($level, $message, $context);

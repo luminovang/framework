@@ -26,6 +26,13 @@ class IPAddress
    private static string $cloudFlare = 'HTTP_CF_CONNECTING_IP';
 
    /**
+    * Ip configuration.
+    *
+    * @var IPConfig $config
+   */
+   private static ?IPConfig $config = null;
+
+   /**
     * @var array $ipHeaders
    */
    private static array $ipHeaders = [
@@ -42,6 +49,14 @@ class IPAddress
     * Initializes IPAddress
    */
    public function __construct(){}
+
+   /**
+     * Initializes API configuration.
+    */
+    private static function initConfig(): void
+    {
+      self::$config ??= new IPConfig();
+    }
 
    /**
 	 * Get the client's IP address.
@@ -98,14 +113,15 @@ class IPAddress
       }
 
       $headers = [];
+      self::initConfig();
 
-      if (IPConfig::$apiProvider === 'ipapi') {
-         $url = "https://ipapi.co/$ip/json/" . (IPConfig::$apiKey === '' ?: '?key=' . IPConfig::$apiKey);
-      } elseif (IPConfig::$apiProvider === 'iphub') {
-         $url = 'http://' . IPConfig::$ipHubVersion . '.api.iphub.info/ip/' . $ip;
-         $headers = (IPConfig::$apiKey === [] ? [] : ['X-Key' => IPConfig::$apiKey]);
+      if (self::$config->apiProvider === 'ipapi') {
+         $url = "https://ipapi.co/$ip/json/" . (self::$config->apiKey === '' ?: '?key=' . self::$config->apiKey);
+      } elseif (self::$config->apiProvider === 'iphub') {
+         $url = 'http://' . self::$config->ipHubVersion . '.api.iphub.info/ip/' . $ip;
+         $headers = (self::$config->apiKey === [] ? [] : ['X-Key' => self::$config->apiKey]);
       }else{
-         return self::ipInfoError('Invalid ip address info api provider ' . IPConfig::$apiProvider , 700);
+         return self::ipInfoError('Invalid ip address info api provider ' . self::$config->apiProvider , 700);
       }
 
       try {
@@ -125,7 +141,7 @@ class IPAddress
 
          $ipInfo = [
             'success' => true,
-            'provider' => IPConfig::$apiProvider,
+            'provider' => self::$config->apiProvider,
             'datetime' => Time::now()->format('Y-m-d H:i:s'),
             'ipInfo' => $result,
             'options' => $options,
@@ -150,7 +166,8 @@ class IPAddress
      */
     public static function isTrustedProxy(?string $ip = null): bool
     {
-      if(IPConfig::$trustedProxies === []){
+      self::initConfig();
+      if(self::$config->trustedProxies === []){
          return false;
       }
 
@@ -160,7 +177,7 @@ class IPAddress
          return false;
       }
 
-      foreach (IPConfig::$trustedProxies as $proxy) {
+      foreach (self::$config->trustedProxies as $proxy) {
          if (strpos($proxy, '/')) {
                [$subnet, $mask] = explode('/', $proxy);
                $subnet = ip2long($subnet);

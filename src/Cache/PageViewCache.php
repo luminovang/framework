@@ -116,7 +116,7 @@ final class PageViewCache
     */
     public function getFilename(): string
     {
-        return $this->getLocation() . $this->key . '.html.php';
+        return $this->getLocation() . $this->key . '.lmv.php';
     }
 
     /**

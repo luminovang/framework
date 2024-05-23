@@ -51,11 +51,19 @@ class OpenSSL implements EncryptionInterface
     private string $digest = 'SHA512';
 
     /**
+     * Configuration.
+     *
+     * @var Encryption $config
+     */
+    private static ?Encryption $config = null;
+
+    /**
      * {@inheritdoc}
     */
     public function __construct(?string $key = null, ?string $method = null, int $size = 16)
     {
-        $this->digest = Encryption::$digest;
+        self::$config ??= new Encryption();
+        $this->digest = self::$config->digest;
         
         if($method !== null){
             $this->setMethod($method, $size);
@@ -79,7 +87,7 @@ class OpenSSL implements EncryptionInterface
     */
     public function setKey(string $key): void
     {
-        $this->key = hash_hkdf($this->digest, $key, 0, Encryption::$keyInfo);
+        $this->key = hash_hkdf($this->digest, $key, 0, self::$config->keyInfo);
     }
 
     /**

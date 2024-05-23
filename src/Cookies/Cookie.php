@@ -9,12 +9,13 @@
  */
 namespace Luminova\Cookies;
 
-use \Luminova\Interface\CookieInterface;
-use \Luminova\Exceptions\CookieException;
-use \Luminova\Exceptions\JsonException;
+use \Luminova\Base\BaseConfig;
 use \App\Controllers\Config\Cookie as CookieConfig;
 use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
+use \Luminova\Interface\CookieInterface;
+use \Luminova\Exceptions\CookieException;
+use \Luminova\Exceptions\JsonException;
 use \Throwable;
 
 class Cookie implements CookieInterface
@@ -98,6 +99,13 @@ class Cookie implements CookieInterface
     private string $reservedCharsList = "=,; \t\r\n\v\f()<>@:\\\"/[]?{}";
 
     /**
+     * Cookie configuration.
+     * 
+     * @var ?CookieConfig $config
+    */
+    private static ?CookieConfig $config = null;
+
+    /**
      * Cookie constructor.
      * 
      * @param string $name Cookie name 
@@ -109,10 +117,11 @@ class Cookie implements CookieInterface
     final public function __construct(string $name, mixed $value = '', array $options = []) 
     {
         if( $options === []){
-            $options = CookieConfig::class;
+            self::$config ??= new CookieConfig();
+            $this->setOptions(self::$config);
+        }else{
+            $this->setOptions($options);
         }
-
-        $this->setOptions($options);
 
         $this->name = $name;
         $this->value = $value;
@@ -137,25 +146,21 @@ class Cookie implements CookieInterface
     /**
      * {@inheritdoc}
     */
-    public function setOptions(string|array $options): self
+    public function setOptions(BaseConfig|array $options): self
     {
-        // Convert $options to an array if it's an instance of CookieConfig
-        if ($options === CookieConfig::class) {
+        if ($options instanceof BaseConfig) {
             $options = [
-                'expires'  => $options::$expiration,
-                'path'     => $options::$cookiePath,
-                'domain'   => $options::$cookieDomain,
-                'secure'   => $options::$secure,
-                'httponly' => $options::$httpOnly,
-                'samesite' => $options::$sameSite,
-                'raw'      => $options::$cookieRaw,
+                'expires'  => $options->expiration,
+                'path'     => $options->cookiePath,
+                'domain'   => $options->cookieDomain,
+                'secure'   => $options->secure,
+                'httponly' => $options->httpOnly,
+                'samesite' => $options->sameSite,
+                'raw'      => $options->cookieRaw,
             ];
         }
 
         $options['expires'] = Timestamp::ttlTimestamp($options['expires']);
-
-        
-        // Merge the new options with the old options
         $this->options = array_merge($this->default, $options);
 
         return $this;

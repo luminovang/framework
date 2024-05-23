@@ -26,6 +26,11 @@ class Smarty
     private ?SmartyTemplate $smarty = null;
 
     /**
+     * @var TemplateConfig $config
+    */
+    private static TemplateConfig $config;
+
+    /**
      * @var self $instance static instance 
     */
     private static ?self $instance = null;
@@ -58,13 +63,16 @@ class Smarty
     /**
      * Initializes the Smarty
      * 
-     * @param string $root framework root directory
+     * @param TemplateConfig $config Template configuration.
+     * @param string $root framework root directory.
+     * @param array $options Filesystem loader configuration.
      * 
      * @throws RuntimeException
     */
-    public function __construct(string $root, array $configs = [])
+    public function __construct(TemplateConfig $config, string $root, array $options = [])
     {
         self::$root = $root;
+        self::$config = $config;
 
         if(class_exists(SmartyTemplate::class)){
             $this->smarty = new SmartyTemplate();
@@ -75,9 +83,9 @@ class Smarty
 
         $sufix = DIRECTORY_SEPARATOR . 'smarty';
 
-        $this->smarty->setCompileDir($root . Helper::bothtrim(TemplateConfig::$compileFolder) . $sufix);
-        $this->smarty->setConfigDir($root . Helper::bothtrim(TemplateConfig::$configFolder) . $sufix);
-        $this->smarty->setCacheDir($root . Helper::bothtrim(TemplateConfig::$cacheFolder) . $sufix);
+        $this->smarty->setCompileDir($root . Helper::bothtrim(self::$config->compileFolder) . $sufix);
+        $this->smarty->setConfigDir($root . Helper::bothtrim(self::$config->configFolder) . $sufix);
+        $this->smarty->setCacheDir($root . Helper::bothtrim(self::$config->cacheFolder) . $sufix);
         $this->smarty->addExtension(new Modifiers());
 
         if(PRODUCTION){
@@ -88,16 +96,17 @@ class Smarty
     /**
      * Get smarty singleton instance
      * 
-     * @param string $root framework root directory
-     * @param array $configs Filesystem loader configuration.
+     * @param TemplateConfig $config Template configuration.
+     * @param string $root framework root directory.
+     * @param array $options Filesystem loader configuration.
      * 
      * @return static static instance 
      * @throws RuntimeException
     */
-    public static function getInstance(string $root, array $configs = []): static
+    public static function getInstance(TemplateConfig $config, string $root, array $options = []): static
     {
         if(self::$instance === null){
-            self::$instance = new static($root, $configs);
+            self::$instance = new static($config, $root, $options);
         }
 
         return self::$instance;
@@ -161,7 +170,11 @@ class Smarty
         }
 
         foreach ($classes as $aliases => $class) {
-            $this->smarty->registerObject($aliases, $class);
+            if(is_string($class)){
+                $this->smarty->registerClass($aliases, $class);
+            }else{
+                $this->smarty->registerObject($aliases, $class);
+            }
         }
 
         if(($objects = $instance->registerClasses()) !== []){
@@ -289,9 +302,9 @@ class Smarty
     private static function makedirs(): void 
     {
         $dirs = [
-            TemplateConfig::$compileFolder, 
-            TemplateConfig::$configFolder, 
-            TemplateConfig::$cacheFolder
+            self::$config->compileFolder, 
+            self::$config->configFolder, 
+            self::$config->cacheFolder
         ];
 
         $notFounds = array_filter($dirs, fn($dir) => !file_exists(self::$root .  Helper::bothtrim($dir) . DIRECTORY_SEPARATOR . 'smarty'));

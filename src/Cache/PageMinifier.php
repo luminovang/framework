@@ -190,7 +190,7 @@ final class PageMinifier
             if ($encoded !== false) {
                 return $encoded;
             }
-        } catch (JsonException $e) {
+        } catch (JsonException) {
             return '';
         }
         

@@ -10,7 +10,7 @@
 namespace Luminova\Sessions;
 
 use \Luminova\Interface\SessionManagerInterface;
-use \App\Controllers\Config\Session as CookieConfig;
+use \Luminova\Base\BaseConfig;
 use \Luminova\Exceptions\JsonException;
 use \Throwable;
 
@@ -22,11 +22,24 @@ final class CookieManager implements SessionManagerInterface
     private string $storage = '';
 
     /**
+     * @var BaseConfig $config
+    */
+    private ?BaseConfig $config = null;
+
+    /**
      * {@inheritdoc}
     */
     public function __construct(string $storage = 'global') 
     {
         $this->storage = $storage;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function setConfig(BaseConfig $config): void
+    {
+        $this->config = $config;
     }
 
     /**
@@ -82,7 +95,7 @@ final class CookieManager implements SessionManagerInterface
 
         if($storage !== '' && isset($_COOKIE[$storage])) {
             if($index === '' || $index === null){
-                $this->saveContent('',  $storage, time() - CookieConfig::$expiration);
+                $this->saveContent('',  $storage, time() - $this->config->expiration);
                 $_COOKIE[$storage] = '';
             }else{
                 $data = $this->getItems($storage);
@@ -207,14 +220,14 @@ final class CookieManager implements SessionManagerInterface
     */
     private function saveContent(string $value, string $storage, ?int $expiry = null): void
     {
-        $expiry ??= time() + CookieConfig::$expiration;
+        $expiry ??= time() + $this->config->expiration;
         setcookie($storage, $value, [
             'expires' => $expiry,
-            'path' => CookieConfig::$sessionPath,
-            'domain' => CookieConfig::$sessionDomain,
+            'path' => $this->config->sessionPath,
+            'domain' => $this->config->sessionDomain,
             'secure' => true,
             'httponly' => true,
-            'samesite' => CookieConfig::$sameSite 
+            'samesite' => $this->config->sameSite 
         ]);
     }
 }

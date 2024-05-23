@@ -56,6 +56,13 @@ final class Sitemap
     private static ?BaseConsole $cli = null;
 
     /**
+     * Sitemap configuration.
+     * 
+     * @var SitemapConfig $config  
+    */
+    private static ?SitemapConfig $config = null;
+
+    /**
      * Set maximum memory usage threshold (in bytes)
      * @var int $memoryThreshold  
     */
@@ -80,7 +87,7 @@ final class Sitemap
         }
 
         if ($totalMemory === '-1') {
-            static::$cli?->error('No memory limit is enforced');
+            self::$cli?->error('No memory limit is enforced');
             return false;
         }
 
@@ -90,22 +97,22 @@ final class Sitemap
         xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 
         http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">' . PHP_EOL;
 
-        $url = ($url === null) ? static::startUrl() : static::toUrl($url);
+        self::$config ??= new SitemapConfig();
+        $url = ($url === null) ? self::startUrl() : self::toUrl($url);
        
         if($url === '' || $url === '/'){
             throw new RuntimeException(sprintf('Invalid start url: "%s", set start url in .env file "dev.app.start.url".', $url));
         }
 
-        static::$cli = $cli;
-        static::$visited = [];
-        static::$faied = [];
-        static::$urls = [];
-        static::$counts = 0;
-        static::$skipped = 0;
+        self::$cli = $cli;
+        self::$visited = [];
+        self::$faied = [];
+        self::$urls = [];
+        self::$counts = 0;
+        self::$skipped = 0;
 
         // Start memory usage tracking
-        static::$memoryThreshold = round(Maths::toBytes($totalMemory) * 0.7);
-        //static::$memoryThreshold = (int) memory_get_usage(true) * 0.7;
+        self::$memoryThreshold = round(Maths::toBytes($totalMemory) * 0.7);
 
         $urls = self::getUrls($url);
         $app = app();
@@ -121,7 +128,7 @@ final class Sitemap
 
             $xml .= '   <url>' . PHP_EOL;
             $xml .= '       <loc>' . htmlspecialchars($link) . '</loc>' . PHP_EOL;
-            $xml .= '       <lastmod>'. ($page['lastmod'] ?? static::getLastmodified($link, $app)) .'</lastmod>' . PHP_EOL;
+            $xml .= '       <lastmod>'. ($page['lastmod'] ?? self::getLastmodified($link, $app)) .'</lastmod>' . PHP_EOL;
             $xml .= '       <priority>' . ($url === $page['link'] ? '1.00' : '0.8' ) . '</priority>' . PHP_EOL;
             $xml .= '   </url>' . PHP_EOL;
         }
@@ -131,12 +138,12 @@ final class Sitemap
         $index = root('public');
 
         if(write_content($index . 'sitemap.xml', $xml)){
-            static::$cli?->writeln();
-            static::$cli?->header();
-            static::$cli?->writeln(TextUtils::border('Your sitemap was completed succefully'), 'green');
-            static::$cli?->writeln(TextUtils::padEnd('Extracted:', 20) . static::$cli?->color('[' .static::$counts  . ']', 'green'));
-            static::$cli?->writeln(TextUtils::padEnd('Skipped:', 20) . static::$cli?->color('[' .static::$skipped  . ']', 'yellow'));
-            static::$cli?->writeln(TextUtils::padEnd('Failed:', 20) . static::$cli?->color('[' . count(static::$faied) . ']', 'red'));
+            self::$cli?->writeln();
+            self::$cli?->header();
+            self::$cli?->writeln(TextUtils::border('Your sitemap was completed succefully'), 'green');
+            self::$cli?->writeln(TextUtils::padEnd('Extracted:', 20) . self::$cli?->color('[' .self::$counts  . ']', 'green'));
+            self::$cli?->writeln(TextUtils::padEnd('Skipped:', 20) . self::$cli?->color('[' .self::$skipped  . ']', 'yellow'));
+            self::$cli?->writeln(TextUtils::padEnd('Failed:', 20) . self::$cli?->color('[' . count(self::$faied) . ']', 'red'));
 
             return true;
         }
@@ -157,7 +164,7 @@ final class Sitemap
         $url = str_replace(APP_URL, '', $url);
         $lastmod = null;
         
-        foreach (SitemapConfig::$viewUrlPatterns as $view => $pattern) {
+        foreach (self::$config->viewUrlPatterns as $view => $pattern) {
             $regex = '#^' . preg_replace('/\/{(.*?)}/', '/(.*?)', $pattern) . '$#';
 
             if (preg_match($regex, rtrim($url)) === 1) {
@@ -195,7 +202,7 @@ final class Sitemap
             return false;
         }
 
-        if(static::matchesIgnore($href)){
+        if(self::matchesIgnore($href)){
             return false;
         }
 
@@ -211,7 +218,7 @@ final class Sitemap
     */
     private static function matchesIgnore(string $url): bool 
     {
-        foreach (SitemapConfig::$ignoreUrls as $line) {
+        foreach (self::$config->ignoreUrls as $line) {
             $pattern = str_replace('/', '\/', $line);
             $pattern = str_replace('*', '.+?', $pattern);
 
@@ -230,7 +237,7 @@ final class Sitemap
     */
     private static function startUrl(): string 
     {
-        return static::toUrl(env('dev.app.start.url', ''));
+        return self::toUrl(env('dev.app.start.url', ''));
     }
 
     /**
@@ -243,25 +250,22 @@ final class Sitemap
     private static function replaceUrls(string $url): string 
     {
         if (str_starts_with($url, 'http')) {
-        //if (strpos($url, 'http') === 0) {
             return $url;
         }
 
         $url = str_replace(['../', './'], '', $url);
         $url = trim($url, '/');
-        //$root = trim(SitemapConfig::$projectDirName, '/') . '/public';
         $root = trim(basename(root()), '/') . '/public';
 
         if (str_starts_with($url, $root)) {
-            return str_replace($root, rtrim(static::startUrl(), '/'), $url);
+            return str_replace($root, rtrim(self::startUrl(), '/'), $url);
         }
 
         if (str_starts_with($url, 'public/')) {
-        //if (strpos($url, 'public/') === 0) {
-            return str_replace('public/', static::startUrl(), $url);
+            return str_replace('public/', self::startUrl(), $url);
         }
 
-        return static::startUrl() . $url;
+        return self::startUrl() . $url;
     }
 
     /**
@@ -274,66 +278,66 @@ final class Sitemap
     */
     private static function getUrls(string $url, bool $deep = false): array|bool
     {
-        if (SitemapConfig::$maxScan !== 0 && static::$counts >= SitemapConfig::$maxScan) {
-            return static::$urls;
+        if (self::$config->maxScan !== 0 && self::$counts >= self::$config->maxScan) {
+            return self::$urls;
         }
 
-        if (memory_get_usage() >= static::$memoryThreshold) {
-            static::$cli?->error('Memory usage exceeded limit. Stopping extraction.');
-            static::$cli?->newLine();
+        if (memory_get_usage() >= self::$memoryThreshold) {
+            self::$cli?->error('Memory usage exceeded limit. Stopping extraction.');
+            self::$cli?->newLine();
 
-            return static::$urls;
+            return self::$urls;
         }
 
-        $url = static::replaceUrls($url);
+        $url = self::replaceUrls($url);
         $found = 0;
         $deepscans = [];
     
-        static::$cli?->writeln('[Progress] ' . $url);
-        $html = static::connection($url);
-        static::$cli?->flush();
+        self::$cli?->writeln('[Progress] ' . $url);
+        $html = self::connection($url);
+        self::$cli?->flush();
     
         if ($html === false) {
-            static::$faied[] = $url;
-            static::$cli?->writeln('[Failed] ' . $url);
+            self::$faied[] = $url;
+            self::$cli?->writeln('[Failed] ' . $url);
 
             if($deep){
                 return false;
             }
 
-            return static::$urls;
+            return self::$urls;
         }
     
-        static::$cli?->writeln('[Done] ' . $url);
+        self::$cli?->writeln('[Done] ' . $url);
     
         $dom = new DOMDocument();
-        @$dom->loadHTML($html['document']);
+        $dom->loadHTML($html['document']);
         $links = $dom->getElementsByTagName('a');
         $length = $links->count(); 
     
         $subUrls = [];
         foreach ($links as $link) {
-            if (memory_get_usage() >= static::$memoryThreshold) {
-                static::$skipped += $length;
-                static::$cli?->error('Memory usage exceeded limit. Stopping extraction.');
-                return static::$urls;
+            if (memory_get_usage() >= self::$memoryThreshold) {
+                self::$skipped += $length;
+                self::$cli?->error('Memory usage exceeded limit. Stopping extraction.');
+                return self::$urls;
             }
     
-            if (SitemapConfig::$maxScan !== 0 && static::$counts >= SitemapConfig::$maxScan) {
-                static::$skipped += $length;
-                return static::$urls;
+            if (self::$config->maxScan !== 0 && self::$counts >= self::$config->maxScan) {
+                self::$skipped += $length;
+                return self::$urls;
             }
     
             $href = $link->getAttribute('href');
 
-            if (static::isAcceptable($href)) {
-                $href = rtrim(static::replaceUrls($href), '/');
+            if (self::isAcceptable($href)) {
+                $href = rtrim(self::replaceUrls($href), '/');
 
-                if (str_starts_with($href, static::startUrl()) && filter_var($href, FILTER_VALIDATE_URL) && !isset(static::$urls[$href])) {
-                    static::$counts++;
+                if (str_starts_with($href, self::startUrl()) && filter_var($href, FILTER_VALIDATE_URL) && !isset(self::$urls[$href])) {
+                    self::$counts++;
                     $found++;
                     $deepscans[$href] = $href;
-                    static::$urls[$href] = [
+                    self::$urls[$href] = [
                         'link' => $href,
                         'lastmod' => $html['lastmod'],
                     ];
@@ -341,25 +345,25 @@ final class Sitemap
             }
         }
     
-        static::$skipped += ($length - $found);
+        self::$skipped += ($length - $found);
 
         foreach ($deepscans as $scan) {
-            if (SitemapConfig::$maxScan !== 0 && static::$counts >= SitemapConfig::$maxScan) {
-                return static::$urls;
+            if (self::$config->maxScan !== 0 && self::$counts >= self::$config->maxScan) {
+                return self::$urls;
             }
             
-            $link = static::toUrl($scan);
+            $link = self::toUrl($scan);
 
-            if(!in_array($link, static::$visited) && str_starts_with($link, static::startUrl())){
+            if(!in_array($link, self::$visited) && str_starts_with($link, self::startUrl())){
                 $subUrls = self::getUrls($link, true);
 
                 if($subUrls !== false){
-                    static::$urls = array_merge(static::$urls, $subUrls);
+                    self::$urls = array_merge(self::$urls, $subUrls);
                 }
             }
         }
     
-        return static::$urls;
+        return self::$urls;
     }
 
     /**
@@ -371,7 +375,7 @@ final class Sitemap
     */
     private static function connection(string $url): array|bool 
     {
-        $url = static::toUrl($url);
+        $url = self::toUrl($url);
         $ch = curl_init();
 
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -384,18 +388,18 @@ final class Sitemap
         $info = curl_getinfo($ch);
 
         if (curl_errno($ch) !== 0) {
-            static::$cli?->writeln('[Error] ' . curl_error($ch), 'red');
+            self::$cli?->writeln('[Error] ' . curl_error($ch), 'red');
             return false;
         }
 
         curl_close($ch);
 
         if ($document === false || $document === '') {
-            static::$cli?->writeln('[Empty] ' . $url, 'red');
+            self::$cli?->writeln('[Empty] ' . $url, 'red');
             return false;
         }
 
-        static::$visited[] = $url;
+        self::$visited[] = $url;
         $lastmod = $info['filetime'] ?? -1;
 
         return [

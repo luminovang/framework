@@ -23,9 +23,17 @@ use \Luminova\Template\Helper;
 use \Luminova\Cache\PageViewCache;
 use \App\Controllers\Config\Template as TemplateConfig;
 use \DateTimeInterface;
+use \Luminova\Debugger\Performance;
 
-trait TemplateTrait
+trait TemplateView
 { 
+    /**
+     * Template configuration.
+     * 
+     * @var TemplateConfig $config
+    */
+    private static ?TemplateConfig $config = null;
+
     /**
      * Flag for key not found.
      * 
@@ -167,10 +175,11 @@ trait TemplateTrait
     */
     protected final function initialize(): void
     {
+        self::$config = new TemplateConfig();
         self::$documentRoot = root();
         self::$minifyContent = (bool) env('page.minification', false);
         self::$cacheView = (bool) env('page.caching', false);
-        self::$cacheFolder = self::withViewFolder(self::trimDir(TemplateConfig::$cacheFolder) . 'default');
+        self::$cacheFolder = self::withViewFolder(self::trimDir(self::$config->cacheFolder) . 'default');
         $this->cacheExpiry = (int) env('page.cache.expiry', 0);
     }
 
@@ -242,14 +251,15 @@ trait TemplateTrait
     /**
      * Export / Register a class instance to make it accessible within the view template.
      *
-     * @param class-string|class-object $class The class name or instance of a class to register.
+     * @param class-string<\T>|class-object<\T> $class The class name or instance of a class to register.
      * @param string|null $alias Optional class alias.
+     * @param bool $initialize Whether to initialize class-string or leave it as static class (default: true).
      * 
-     * @return bool true on success, false on failure
+     * @return true true on success, false on failure
      * @throws RuntimeException If the class does not exist or failed.
      * @throws RuntimeException If there is an error during registration.
     */
-    public final function export(string|object $class, ?string $alias = null): bool 
+    public final function export(string|object $class, ?string $alias = null, bool $initialize = true): true 
     {
         if ($class === '' || $alias === '') {
             throw new RuntimeException('Invalid arguments provided, arguments expected a non-blank string.');
@@ -261,7 +271,7 @@ trait TemplateTrait
             throw new RuntimeException("Class with the same name: '{$alias}' already exists.");
         }
 
-        if (is_string($class)) {
+        if (is_string($class) && $initialize) {
             self::$publicClasses[$alias] = new $class();
             return true;
         }
@@ -274,7 +284,7 @@ trait TemplateTrait
     /** 
      * Cache and store response to reuse on next request to same content.
      * 
-     * @param DateTimeInterface|int|null $expire Cache expiration default, set to null to use default expiration from .env file.
+     * @param DateTimeInterface|int|null $expiry Cache expiration default, set to null to use default expiration from .env file.
      * 
      * @example Usage example with cache 
      * ```
@@ -342,35 +352,39 @@ trait TemplateTrait
     */
     public final function redirect(string $view, int $response_code = 0): void 
     {
-        $to = APP_URL;
-
-        if ($view !== '' && $view !== '/') {
-            $to .= '/' . $view;
-        }
-
-        header("Location: $to", true, $response_code);
+        $view = start_url($view);
+        header("Location: $view", true, $response_code);
         exit(STATUS_SUCCESS);
     }
 
-     /** 
+    /** 
      * render render template view
      *
      * @param string $viewName view name
      * @param string $viewType Type of content not same as header Content-Type
-     * - html
-     * - json
-     * - text
-     * - xml
+     * - html Html content.
+     * - json Json content.
+     * - text Plain text content.
+     * - xml  Xml content.
+     * - js   JavaScript content.
+     * - css  CSS content.
+     * - rdf  RDF content.
+     * - atom Atom content.
+     * - rss  RSS feed content.
      *
      * @return self $this
     */
     public final function view(string $viewName, string $viewType = 'html'): self 
     {
+        if(!PRODUCTION && (bool) env('debug.show.performance.profiling', false)){
+            Performance::start();
+        }
+
         $viewName = trim($viewName, '/');
         $viewType = strtolower($viewType);
     
-        if(!in_array($viewType, ['html', 'json', 'text', 'xml'])){
-            throw new RuntimeException(sprintf('Invalid argument, "%s" required types (html, json, text or xml). To render other formats use helper function `response()->render()`', $viewType));
+        if(!in_array($viewType, ['html', 'json', 'text', 'xml', 'js', 'css', 'rdf', 'atom', 'rss'])){
+            throw new RuntimeException(sprintf('Invalid argument, "%s" required types (html, json, text, xml, js, css, rdf, atom, rss). To render other formats use helper function `response()->render()`', $viewType));
         }
 
         $this->templateDir = self::withViewFolder(self::$viewFolder);
@@ -542,7 +556,7 @@ trait TemplateTrait
     */
     private static function engine(): string 
     {
-        return strtolower(TemplateConfig::$templateEngine ?? 'default');
+        return strtolower(self::$config->templateEngine ?? 'default');
     }
 
     /** 
@@ -559,7 +573,7 @@ trait TemplateTrait
         $options = $this->parseOptions($options);
         try {
             if($this->assertSetup($status)){
-                $cachable = $this->shouldCache();
+                $cacheable = $this->shouldCache();
                 $engine = self::engine();
 
                 if ($engine === 'smarty' || $engine === 'twig') {
@@ -567,7 +581,7 @@ trait TemplateTrait
                         $this->activeView . self::dot(), 
                         $this->templateDir, 
                         $options, 
-                        $cachable,
+                        $cacheable,
                         Timestamp::ttlToSeconds($this->cacheExpiry),
                         $this->minifyCodeblocks, 
                         $this->codeblockButton,
@@ -577,14 +591,14 @@ trait TemplateTrait
 
                 $cache = null;
 
-                if ($cachable) {
+                if ($cacheable) {
                     $cache = Helper::getCache(self::$cacheFolder, $this->cacheExpiry);
                     if (!$cache->expired()) {
                         return $return ? $cache->get() : $cache->read();
                     }
                 }
 
-                if(TemplateConfig::$templateIsolation){
+                if(self::$config->templateIsolation){
                     return self::renderIsolation(
                         $this->templateFile, 
                         $options,
@@ -663,7 +677,7 @@ trait TemplateTrait
         static $instance = null;
 
         if($instance === null){
-            $instance = Smarty::getInstance(self::viewRoot());
+            $instance = Smarty::getInstance(self::$config, self::viewRoot());
         }
 
         try{
@@ -712,7 +726,7 @@ trait TemplateTrait
         static $instance = null;
 
         if($instance === null){
-            $instance = Twig::getInstance(self::viewRoot(), $templateDir, [
+            $instance = Twig::getInstance(self::$config, self::viewRoot(), $templateDir, [
                 'caching' => $shouldCache,
                 'charset' => env('app.charset', 'utf-8'),
                 'strict_variables' => true,
@@ -748,7 +762,7 @@ trait TemplateTrait
     */
     private function renderDefault(array $options, ?PageViewCache $_lmv_cache = null, bool $_lmv_return = false): bool|string
     {
-        if(TemplateConfig::$variablePrefixing !== null){
+        if(self::$config->variablePrefixing !== null){
             self::extract($options);
         }
 
@@ -770,7 +784,9 @@ trait TemplateTrait
 
         Header::parseHeaders($_lmv_headers);
         echo $_lmv_contents;
-
+       if(!PRODUCTION && (bool) env('debug.show.performance.profiling', false)){
+            Performance::stop();
+        }
         return true;
     }
 
@@ -795,32 +811,10 @@ trait TemplateTrait
         bool $_lmv_return = false
     ): bool|string
     {
-        $self = new class(self::$publicClasses) {
-            /**
-             * @var array<string,mixed> $classes
-            */
-            private static array $classes = [];
-
-            /**
-             * @var array<string,mixed> $classes
-            */
-            public function __construct(array $classes = [])
-            {
-                self::$classes = $classes;
-            }
-
-            /**
-             * @var string $class
-             * @return object|string|null
-            */
-            public function __get(string $class): mixed 
-            {
-                return self::$classes[$class] ?? null;
-            }
-        };
-
+        $self = self::newSelfInstance();
         self::$publicClasses = [];
-        if(($_lmv_prefix = TemplateConfig::$variablePrefixing) !== null){
+
+        if(($_lmv_prefix = self::$config->variablePrefixing) !== null){
             if($_lmv_prefix && isset($options['self'])){
                 throw new RuntimeException('Reserved Error: The "self" keyword is not allowed in your view options without variable prefixing.', E_ERROR);
             }
@@ -850,12 +844,44 @@ trait TemplateTrait
     }
 
     /**
+     * Initalize self class keyword.
+     * 
+     * @return object self classes.
+    */
+    private static function newSelfInstance(): object 
+    {
+        return new class(self::$publicClasses) {
+            /**
+             * @var array<string,mixed> $classes
+            */
+            private static array $classes = [];
+
+            /**
+             * @var array<string,mixed> $classes
+            */
+            public function __construct(array $classes = [])
+            {
+                self::$classes = $classes;
+            }
+
+            /**
+             * @var string $class
+             * @return object|string|null
+            */
+            public function __get(string $class): mixed 
+            {
+                return self::$classes[$class] ?? null;
+            }
+        };
+    }
+
+    /**
      * Minify content if possible and store cache if cacheable.
      * 
-     * @param string|false $content
-     * @param string $type
-     * @param bool $ignor Ignore codeblocks 
-     * @param bool $copy Add copy button to codeblocks 
+     * @param string|false $content View contents.
+     * @param string $type The view content type.
+     * @param bool $ignor Ignore codeblocks.
+     * @param bool $copy Add copy button to codeblocks.
      * @param PageViewCache|null $cache Cache instance.
      * 
      * @return array<int,mixed> Return contents.
@@ -868,7 +894,7 @@ trait TemplateTrait
         ?PageViewCache $cache = null
     ): array 
     {
-        if (!empty($content)) {
+        if ($content !== false && $content !== '') {
             $headers = null;
             if (self::$minifyContent) {
                 $minifier = Helper::getMinifier(
@@ -879,6 +905,8 @@ trait TemplateTrait
                 );
                 $content = $minifier->getContent();
                 $headers = $minifier->getHeaders();
+            }else{
+                $headers = ['Content-Type' => Header::getContentTypes($type)];
             }
 
             $headers ??= Header::requestHeaders();
@@ -954,11 +982,11 @@ trait TemplateTrait
     */
     private static function extract(array $attributes): void
     {
-        if (TemplateConfig::$variablePrefixing === null) {
+        if (self::$config->variablePrefixing === null) {
             return;
         }
 
-        $prefix = (TemplateConfig::$variablePrefixing ? '_' : '');
+        $prefix = (self::$config->variablePrefixing ? '_' : '');
         foreach ($attributes as $name => $value) {
             self::assertValidKey($name);           
             $key = is_int($name) ? '_' . $name : $prefix . $name;
@@ -992,14 +1020,14 @@ trait TemplateTrait
      *
      * This method checks for inline PHP errors within the provided content
      * and throws a RuntimeException if an error is detected. Error detection
-     * is disabled in production or if 'debug.capture.inline.errors' is set to false.
+     * is disabled in production or if 'debug.catch.inline.errors' is set to false.
      *
      * @param string $contents The content to check for inline PHP errors.
      * @throws RuntimeException if an inline PHP error is detected.
      */
     private static function inlineErrors(string $contents): void
     {
-        if (PRODUCTION || !(bool) env('debug.capture.inline.errors', false)) {
+        if (PRODUCTION || !(bool) env('debug.catch.inline.errors', false)) {
             return;
         }
 

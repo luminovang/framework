@@ -11,7 +11,7 @@
 namespace Luminova\Base;
 
 use \Luminova\Routing\Router;
-use \Luminova\Template\TemplateTrait;
+use \Luminova\Template\TemplateView;
 
 abstract class BaseApplication
 {
@@ -20,7 +20,7 @@ abstract class BaseApplication
      *
      * @see https://luminova.ng/docs/0.0.0/templates/views
     */
-    use TemplateTrait;
+    use TemplateView;
 
     /**
      * Base Application instance

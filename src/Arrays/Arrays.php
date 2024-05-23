@@ -11,13 +11,24 @@ namespace Luminova\Arrays;
 
 class Arrays
 {
+    /**
+     * @var array $array
+    */
     private array $array = [];
 
+    /**
+     * Constructor.
+     * 
+     * @param array $array
+    */
     public function __construct(array $array = [])
     {
         $this->array = $array;
     }
 
+    /**
+     * @return array 
+    */
     public function get(): array 
     {
         return $this->array;

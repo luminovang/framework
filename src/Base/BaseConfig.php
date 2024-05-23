@@ -13,6 +13,11 @@ namespace Luminova\Base;
 abstract class BaseConfig
 {
     /**
+     * Initalizer
+    */
+    public function __construct(){}
+
+    /**
      * Get environment configuration variables with a specific allowed return type.
      *
      * @param string $key The key to retrieve.
@@ -26,11 +31,11 @@ abstract class BaseConfig
     {
         $value = env($key, $default);
         
-        if($return === null){
+        if($return === null || !is_string($value)){
             return $value;
         }
-        
-        return match (strtolower($return)) {
+
+        return match (strtolower($return ?? '')) {
             'bool' => (bool) $value,
             'int' => (int) $value,
             'float' => (float) $value,

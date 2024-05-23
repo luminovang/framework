@@ -65,18 +65,18 @@ class NovaLogger extends AbstractLogger
      */
     public function log($level, $message, array $context = [])
     {
+        make_dir($this->path);
+        
         $level = static::$levels[$level] ?? LogLevel::INFO;
         $filepath = $this->path . "{$level}{$this->extension}";
         $time = Time::now()->format('Y-m-d\TH:i:sP');
 
-        make_dir($this->path);
-
         $message = "[{$level}] [{$time}]: {$message}";
         
         if ($context !== []) {
-            $message .= " Context: " . print_r($context, true);
+            $message .= ' Context: ' . print_r($context, true);
         }
 
-        write_content($filepath, $message . PHP_EOL, FILE_APPEND);
+        write_content($filepath, $message . PHP_EOL, FILE_APPEND | LOCK_EX);
     }
 }

@@ -15,7 +15,6 @@ use \Exception;
 
 class Generators extends BaseConsole 
 {
-   
     /**
      * @var string $group command group
      */
@@ -59,6 +58,11 @@ class Generators extends BaseConsole
     protected string $description = 'Create controller, view or class';
 
     /**
+     * @var string|null $engine
+    */
+    private static ?string $engine = null;
+
+    /**
      * Run the generator command.
      *
      * @param array|null $options Terminal options
@@ -83,6 +87,7 @@ class Generators extends BaseConsole
         $extend = $this->getOption('extend', null);
         $implement = $this->getOption('implement', null);
         $dir = $this->getOption('dir', '');
+        self::$engine ??= (new Template())->templateEngine;
 
         $runCommand = match($command){
             'create:controller' => $this->createController($name, $type, $dir),
@@ -218,16 +223,15 @@ class Generators extends BaseConsole
      */
     private function createView(string $name, ?string $dir = null): void 
     {
-        
         $name = strtolower($name);
-        $type = (Template::$templateEngine === 'smarty') ? '.tpl' : '.php';
+        $type = (self::$engine === 'smarty') ? '.tpl' : '.php';
         $path = "/resources/views/";
 
         if ($dir !== null) {
             $path .= trim($dir, '/') . '/';
         }
 
-        if(Template::$templateEngine === 'smarty'){
+        if(self::$engine === 'smarty'){
             $classContent = <<<HTML
             <!DOCTYPE html>
             <html lang="{locale}">

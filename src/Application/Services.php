@@ -43,14 +43,14 @@ final class Services
      * Dynamically create an instance of the specified service class.
      * Get shared instance or re-imitate stored instance with a new parameters 
      *
-     * @param class-string|string $service The class name or class name alias of the service.
+     * @param class-string<\T>|string $service The class name or class name alias of the service.
      * @param array $arguments Param arguments to instigate class with 
      * @param bool $shared Whether the instance should be shared (cached) or not.
      * @param bool $serialize Whether the instance should be serialized and (cached) or not.
      * 
      * @example Services::method('foo')
      * 
-     * @return class-object|null An instance of the service class, or null if not found.
+     * @return class-object<\T>|null An instance of the service class, or null if not found.
      * @throws RuntimeException If failed to instantiate the service.
      * @ignore 
     */
@@ -63,14 +63,14 @@ final class Services
      * Dynamically create an instance of the specified service class.
      * Get shared instance or re-imitate stored instance with a new parameters 
      *
-     * @param class-string|string $service The class name or class name alias of the service.
+     * @param class-string<\T>|string $service The class name or class name alias of the service.
      * @param array $arguments Param arguments to instigate class with 
      * @param bool $shared Whether the instance should be shared (cached) or not.
      * @param bool $serialize Whether the instance should be serialized and (cached) or not.
      * 
      * @example Services::method('foo')
      * 
-     * @return class-object|null An instance of the service class, or null if not found.
+     * @return class-object<\T>|null An instance of the service class, or null if not found.
      * @throws RuntimeException If failed to instantiate the service.
      * @ignore 
     */
@@ -82,7 +82,7 @@ final class Services
     /**
      * Check if service has a cached instance of class
      *
-     * @param class-string|string $service The service class name or class name alias.
+     * @param class-string<\T>|string $service The service class name or class name alias.
      * 
      * @return bool Return true if service class exists, false otherwise.
     */
@@ -101,7 +101,7 @@ final class Services
     /**
      * Delete a service and it cached instances
      *
-     * @param class-string|string $service The ervice class name or alias.
+     * @param class-string<\T>|string $service The ervice class name or alias.
      * 
      * @return bool Return true if cached service was deleted, false otherwise.
     */
@@ -141,7 +141,7 @@ final class Services
      * 
      * @param string $alias The service class name alias.
      * 
-     * @return class-object|null $instance Instance or null
+     * @return class-object<\T>|null $instance Instance or null
     */
     private static function getInstance(string $alias): ?object
     {
@@ -159,14 +159,14 @@ final class Services
     /**
      * Add service instance.
      *
-     * @param class-string|class-object $service Class name or instance of a class.
+     * @param class-string<\T>|class-object<\T> $service Class name or instance of a class.
      * @example \Namespace\Utils\MyClass, MyClass::class or new MyClass()
-     * @param mixed ...$arguments Arguments to initialize class with.
+     * @param mixed $arguments [, mixed $... ] Arguments to initialize class with.
      *  -   The last 2 argument should be boolean values to indicate whether to shared instance or cached.
      * @param bool $shared Whether the instance should be shared (default: true).
      * @param bool $serialize Whether the instance should be serialized and (default: false).
      * 
-     * @return class-object Return object instance service class, null otherwise.
+     * @return class-object<\T> Return object instance service class, null otherwise.
      * @throws RuntimeException If service already exist or unable to initiate class.
     */
     public static function add(string|object $service, mixed ...$arguments): object
@@ -201,10 +201,10 @@ final class Services
     /**
      * Call class instance.
      *
-     * @param class-string|string $service The class name or class name alias of the service.
+     * @param class-string<\T>|string $service The class name or class name alias of the service.
      * @param array $arguments Arguments to instigate class with.
      * 
-     * @return class-object|null An instance of the service class, or null if not found.
+     * @return class-object<\T>|null An instance of the service class, or null if not found.
      * @throws RuntimeException If failed to instantiate the service.
     */
     private static function call(string $service, array $arguments): object
@@ -292,7 +292,7 @@ final class Services
      * Prepare Instance to save on serialized object or shared instance 
      * 
      * @param string $alias Service class name  alias.
-     * @param class-object|null $instance object instance 
+     * @param class-object<\T>|null $instance object instance 
      * @param bool $shared Should share instance 
      * @param bool $serialize Should serialize instance 
      * 
@@ -335,7 +335,7 @@ final class Services
      *
      * @param string $alias The class name alias.
      * 
-     * @return class-object|null Return class object or null.
+     * @return class-object<\T>|null Return class object or null.
     */
     private static function getCachedInstance(string $alias): ?object
     {

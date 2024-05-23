@@ -10,6 +10,7 @@
 namespace Luminova\Interface;
 
 use \Luminova\Exceptions\JsonException;
+use \Luminova\Base\BaseConfig;
 
 interface SessionManagerInterface 
 {
@@ -19,6 +20,13 @@ interface SessionManagerInterface
    * @param string $storage The session storage instance name. Default is 'global'.
    */
   public function __construct(string $storage = 'global');
+
+  /**
+   * Set session configuration object.
+   *
+   * @param BaseConfig $config Session configuration.
+   */
+  public function setConfig(BaseConfig $config): void;
 
   /**
    * Sets the session storage instance name where all session items will be stored.

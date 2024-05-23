@@ -9,8 +9,6 @@
  */
 namespace Luminova\Library;
 
-use \Luminova\Exceptions\RuntimeException;
-
 final class Modules
 {
     /**
@@ -49,37 +47,5 @@ final class Modules
                 }
             }
         }
-    }
-
-    /**
-     * Import a custom library into your project 
-     * You must place your external libraries in libraries/libs/ directory
-     * 
-     * @param string $library the name of the library
-     * @example Foo/Bar/Baz
-     * @example Foo/Bar/Baz.php
-     * @example Foo.php
-     * @example Foo
-     * 
-     * @return bool true if the library was successfully imported
-     * @throws RuntimeException if library could not be found
-    */
-    public static function import(string $library): bool
-    {
-        //$library = str_replace('\\', '/', $library);
-        $file = rtrim($library, '/');
-
-        if (!str_ends_with($file, '.php')) {
-            $file .= '.php';
-        }
-
-        $filePath = path('library') . $file;
-
-        if (file_exists($filePath)) {
-            require_once $filePath;
-            return true;
-        }
-
-        throw new RuntimeException("Library '$library' does not exist.");
     }
 }

@@ -30,13 +30,22 @@ class Session
     private static ?Session $instance = null;
 
     /**
+     * Sessioon configuration.
+     * 
+     * @var SessionConfig $config 
+    */
+    private static ?SessionConfig $config = null;
+
+    /**
      * Initializes session constructor
      *
      * @param SessionManagerInterface|null $manager The session manager.
     */
     public function __construct(?SessionManagerInterface $manager = null)
     {
+        self::$config ??= new SessionConfig();
         $this->manager = $manager ?? new SessionManager();
+        $this->manager->setConfig(self::$config);
     } 
 
     /**
@@ -49,7 +58,7 @@ class Session
     public static function getInstance(?SessionManagerInterface $manager = null): static
     {
         if (self::$instance === null) {
-            self::$instance = new static($manager);
+            self::$instance = new self($manager);
         }
 
         return self::$instance;
@@ -341,7 +350,7 @@ class Session
         $this->set('_session_online_id', uniqid('ssid'));
         $this->set('_session_online_datetime', date('c'));
 
-        if(SessionConfig::$strictSessionIp && $ip = ip_address()){
+        if(self::$config->strictSessionIp && $ip = ip_address()){
             $this->set('_session_online_ip', $ip);
         }
  
@@ -360,7 +369,7 @@ class Session
     {
         $default = $this->getStorage();
 
-        if(SessionConfig::$strictSessionIp && $this->ipChanged($storage)){
+        if(self::$config->strictSessionIp && $this->ipChanged($storage)){
             
             if($storage !== '' && $storage !== $default){
                 $this->setStorage($storage);
@@ -412,23 +421,23 @@ class Session
     private function sessionConfigure(): void
     {
         $cookieParams = [
-            'lifetime' => time() + SessionConfig::$expiration,
-            'path'     => SessionConfig::$sessionPath,
-            'domain'   => SessionConfig::$sessionDomain,
+            'lifetime' => time() + self::$config->expiration,
+            'path'     => self::$config->sessionPath,
+            'domain'   => self::$config->sessionDomain,
             'secure'   => true,
             'httponly' => true,
-            'samesite' => SessionConfig::$sameSite,
+            'samesite' => self::$config->sameSite,
         ];
-        ini_set('session.name', SessionConfig::$cookieName);
-        ini_set('session.cookie_samesite', SessionConfig::$sameSite);
+        ini_set('session.name', self::$config->cookieName);
+        ini_set('session.cookie_samesite', self::$config->sameSite);
         session_set_cookie_params($cookieParams);
 
-        if (SessionConfig::$expiration > 0) {
+        if (self::$config->expiration > 0) {
             ini_set('session.gc_maxlifetime', (string) $cookieParams['lifetime']);
         }
 
-        if (SessionConfig::$savePath !== '') {
-            ini_set('session.save_path', SessionConfig::$savePath);
+        if (self::$config->savePath !== '') {
+            ini_set('session.save_path', self::$config->savePath);
         }
 
         ini_set('session.use_trans_sid', '0');

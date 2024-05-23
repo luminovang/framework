@@ -110,6 +110,13 @@ class UserAgent
     protected bool $isReferrer = false;
 
     /**
+     * API configuration.
+     * 
+     * @var Browser $config
+    */
+    private static ?Browser $config = null;
+
+    /**
      * Constructor
      *
      * Sets the User Agent and runs the compilation routine.
@@ -119,6 +126,7 @@ class UserAgent
     public function __construct(?string $useragent = null)
     {
         $useragent ??= trim($_SERVER['HTTP_USER_AGENT']??'');
+        self::$config ??= new Browser();
         $this->replace($useragent);
         $this->isReferral();
     }
@@ -257,14 +265,14 @@ class UserAgent
      * Check if the user agent string is from a known robot.
      * 
      * @param string|null $keyword Optional robot name, keyword or pattern.
-     * - Pass `NULL` to check if robot is in array of robot keywards `Browser::$robotPatterns`.
+     * - Pass `NULL` to check if robot is in array of robot keywards `self::$config->robotPatterns`.
      * 
      * @return bool True if the user agent is from known robot, false otherwise.
     */
     public function isRobot(?string $keyword = null): bool 
     {
         if($keyword === null){
-            foreach (Browser::$robotPatterns as $pattern => $name) {
+            foreach (self::$config->robotPatterns as $pattern => $name) {
                 if($this->is($pattern)){
                     $this->isRobot = true;
                     $this->robot = $name;
@@ -290,14 +298,14 @@ class UserAgent
      * Check if the user agent string represents a mobile device.
      * 
      * @param string|null $keyword Optional mobile device name, keyword or pattern.
-     *  - Pass `NULL` to check if mobile is in array of mobile devices `Browser::$mobileKeywords`.
+     *  - Pass `NULL` to check if mobile is in array of mobile devices `self::$config->mobileKeywords`.
      * 
      * @return bool True if the user agent represents a mobile device, false otherwise.
     */
     public function isMobile(?string $keyword = null): bool 
     {
         if($keyword === null){
-            foreach (Browser::$mobileKeywords as $pattern => $name) {
+            foreach (self::$config->mobileKeywords as $pattern => $name) {
                 if (stripos($this->useragent, $pattern) !== false) {
                     $this->isMobile = true;
                     $this->mobile = $name;
@@ -354,15 +362,15 @@ class UserAgent
             return false;
         }
 
-        if (Browser::$browsers === []) {
+        if (self::$config->browsers === []) {
             return true;
         }
 
-        if(isset(Browser::$browsers[$this->browser])){
+        if(isset(self::$config->browsers[$this->browser])){
             return true;
         }
 
-        foreach(Browser::$browsers as $agent){
+        foreach(self::$config->browsers as $agent){
             if($this->is($agent)){
                 return true;
             }

@@ -11,12 +11,11 @@ namespace Luminova\Cache;
 
 use \Luminova\Exceptions\ErrorException;
 use \Luminova\Storages\FileManager;
+use \Luminova\Time\Timestamp;
 use \Closure;
 use \Generator;
 use \DateTimeInterface;
 use \DateInterval;
-use \Luminova\Time\Timestamp;
-use SebastianBergmann\Type\CallableType;
 
 final class FileCache 
 {

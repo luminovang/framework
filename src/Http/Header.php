@@ -31,6 +31,13 @@ class Header
     protected array $variables = [];
 
     /**
+     * API configuration.
+     * 
+     * @var Apis $config
+    */
+    private static ?Apis $config = null;
+
+    /**
      * Initializes the header constructor.
      * 
      * @param array<string, mixed> $variables.
@@ -38,8 +45,15 @@ class Header
     public function __construct(?array $variables = null)
     {
         $variables ??= static::getHeaders();
-
         $this->variables = $variables;
+    }
+
+    /**
+     * Initializes API configuration.
+    */
+    private static function initConfig(): void
+    {
+        self::$config ??= new Apis();
     }
 
    /**
@@ -249,15 +263,16 @@ class Header
         }
 
         if (Foundation::isApiContext()) {
+            self::initConfig();
             $origin = static::server('HTTP_ORIGIN');
             if($origin){
-                if (!isset($headers['Access-Control-Allow-Origin']) && !empty(Apis::$allowOrigins)) {
+                if (!isset($headers['Access-Control-Allow-Origin']) && !empty(self::$config->allowOrigins)) {
                     $allowed = null;
-                    if (Apis::$allowOrigins === '*' || Apis::$allowOrigins === 'null') {
+                    if (self::$config->allowOrigins === '*' || self::$config->allowOrigins === 'null') {
                         $allowed = '*';
                     } else {
                         foreach ([$origin, Normalizer::mainDomain($origin)] as $value) {
-                            if (in_array($value, (array) Apis::$allowOrigins)) {
+                            if (in_array($value, (array) self::$config->allowOrigins)) {
                                 $allowed = $value;
                                 break;
                             }
@@ -271,17 +286,17 @@ class Header
 
                     header('Access-Control-Allow-Origin: ' . $allowed);
                 }
-            }elseif(!$origin && Apis::$forbidEmptyOrigin){
+            }elseif(!$origin && self::$config->forbidEmptyOrigin){
                 http_response_code(400);
                 exit('Bad Origin Request');
             }
 
-            if (!isset($headers['Access-Control-Allow-Headers']) && Apis::$allowHeaders !== []) {
-                header('Access-Control-Allow-Headers: ' . implode(', ', Apis::$allowHeaders));
+            if (!isset($headers['Access-Control-Allow-Headers']) && self::$config->allowHeaders !== []) {
+                header('Access-Control-Allow-Headers: ' . implode(', ', self::$config->allowHeaders));
             }
 
             if (!isset($headers['Access-Control-Allow-Credentials'])) {
-                header('Access-Control-Allow-Credentials: ' . (Apis::$allowCredentials ? 'true' : 'false'));
+                header('Access-Control-Allow-Credentials: ' . (self::$config->allowCredentials ? 'true' : 'false'));
             }
         }
 

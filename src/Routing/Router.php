@@ -148,51 +148,55 @@ final class Router
         ]);
     }
 
-     /**
-     * Initialize application routing with proper context [web, cli, api, console etc...]
+    /**
+     * Initialize application routing with proper context web, cli, api, console etc...
      * 
-     * @param Context ...$contexts Arguments containing routing context
+     * Define URI prefixes and error handlers for specific URI prefix names.
+     * Ensures only required routes for handling requests are loaded based on the URI prefix.
      * 
-     * @return self Return router instance.
-    */
-    public function context(Context ...$contexts): self 
+     * @param Context|array<string,mixed> $contexts [, Context $... ] Arguments containing routing context.
+     * 
+     * @return self Returns the router instance.
+     */
+    public function context(Context|array ...$contexts): self 
     {
+        if($contexts === []){
+            RouterException::throwWith('no_context', E_ERROR);
+        }
+
         self::$isCli = is_command();
         self::$method  = self::getRoutingMethod();
 
         if (isset(self::$httpMethods[self::$method])) {
-            $firstSegment = self::getFirst();
-            $instances = Context::getInstances();
+            $first = self::getFirst();
             $current = $this->baseGroup;
+            $fromArray = true;
+
+            if($contexts[0] instanceof Context) {
+                $fromArray = false;
+                $instances = Context::getInstances();
+            }else{
+                $instances = array_reduce($contexts, function($result, $item) {
+                    if ($item['prefix'] !== Context::WEB) {
+                        $result[$item['prefix']] = $item['prefix'];
+                    }
+                    return $result;
+                }, []);
+            }
 
             foreach ($contexts as $context) {
-                $name = $context->getName();
+                $name = $fromArray ? ($context['prefix'] ?? '') : $context->getName();
+                $eHandler = $fromArray ? ($context['error'] ?? null) : $context->getErrorHandler();
 
-                if ($name !== '') {
+                if($name !== ''){
                     self::reset();
+                    $install = $this->installContext($name, $eHandler, $first, $instances);
 
-                    if($firstSegment === $name) {
-                        if ($name === Context::CLI){
-                            if(!self::$isCli) {
-                                return $this;
-                            }
-                            
-                            defined('CLI_ENVIRONMENT') || define('CLI_ENVIRONMENT', env('cli.environment.mood', 'testing'));
-                        }elseif(($eHandler = $context->getErrorHandler()) !== null){
-                            $this->setErrorListener($eHandler);
-                        }
-                   
-                        if (isset($instances[$name])) {  
-                            $this->baseGroup .= '/' . $name;
-                        }
-                    
-                        self::bootContext($name, $this, self::$application);
-                        break;
-                    }elseif(!isset($instances[$firstSegment]) && self::isWeContext($name, $firstSegment)) {
-                        if(($eHandler = $context->getErrorHandler()) !== null){
-                            $this->setErrorListener($eHandler);
-                        }
+                    if($install === 2){
+                        return $this;
+                    }
 
+                    if($install){
                         self::bootContext($name, $this, self::$application);
                         break;
                     }
@@ -203,6 +207,52 @@ final class Router
         }
 
         return $this;
+    }
+
+    /**
+     * Install the apropriete context.
+     * 
+     * @param string $name The context prefix name.
+     * @param Closure|array|null $eHandler Context error handler.
+     * @param string $first The request URI first segment.
+     * @param array<string,string> $instances List of context prefix names without web context as web is default.
+     * 
+     * @return bool|int<2> Return bool if context match was found or 2 if in cli  but not in clic mode, otherwise false.
+    */
+    private function installContext(
+        string $name, 
+        Closure|array|null $eHandler, 
+        string $first, 
+        array $instances
+    ): bool 
+    {
+        if($first === $name) {
+            if ($name === Context::CLI){
+                if(!self::$isCli) {
+                    return 2;
+                }
+                
+                defined('CLI_ENVIRONMENT') || define('CLI_ENVIRONMENT', env('cli.environment.mood', 'testing'));
+            }elseif($eHandler !== null){
+                $this->setErrorListener($eHandler);
+            }
+        
+            if (isset($instances[$name])) {  
+                $this->baseGroup .= '/' . $name;
+            }
+
+            return true;
+        }
+        
+        if(!isset($instances[$first]) && self::isWeContext($name, $first)) {
+            if($eHandler !== null){
+                $this->setErrorListener($eHandler);
+            }
+
+            return true;
+        }
+        
+        return false;
     }
 
     /**
