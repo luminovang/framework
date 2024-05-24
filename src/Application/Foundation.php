@@ -395,11 +395,15 @@ final class Foundation
             }
         }
 
+        $message = '';
         foreach (static::$errors as $err) {
-            if(!static::isFatal($err->getCode())){
-                $message = "[{$err->getName()} ({$err->getCode()})] {$err->getMessage()} File: {$err->getFile()} Line: {$err->getLine()}";
-                static::log(static::getLevel($err->getCode()), $message);
+            if(!static::isFatal($err->getCode()) || PRODUCTION){
+                $message .= "[{$err->getName()} ({$err->getCode()})] {$err->getMessage()} File: {$err->getFile()} Line: {$err->getLine()}\n";
             }
+        }
+
+        if($message !== ''){
+            static::log(static::getLevel($err->getCode()), $message);
         }
     }
 
