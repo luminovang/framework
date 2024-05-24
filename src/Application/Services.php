@@ -101,7 +101,7 @@ final class Services
     /**
      * Delete a service and it cached instances
      *
-     * @param class-string<\T>|string $service The ervice class name or alias.
+     * @param class-string<\T>|string $service The service class name or alias.
      * 
      * @return bool Return true if cached service was deleted, false otherwise.
     */
@@ -241,7 +241,7 @@ final class Services
      * @return true Return true.
      * @internal
     */
-    public static function queuService(array $services): true
+    public static function queService(array $services): true
     {
         static::$services = $services;
 

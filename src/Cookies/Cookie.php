@@ -184,6 +184,7 @@ class Cookie implements CookieInterface
         if($finalValue === false){
             throw CookieException::throwWith('invalid_value', $value);
         }
+        
         $this->saveGlobal(null, $value);
         $this->saveContent($finalValue);
 
@@ -201,7 +202,7 @@ class Cookie implements CookieInterface
             return $value ?? null;
         }
 
-        if($key !== null && $key !== '' && is_array($value)){
+        if($key && is_array($value)){
             return $value[$key] ?? null;
         }
 
@@ -221,7 +222,6 @@ class Cookie implements CookieInterface
 
         $expired = time() - $this->options['expires'];
     
-        // If $key is null or empty, delete the entire cookie
         if ($key === null || $key === '') {
             $this->saveGlobal();
             $this->saveContent('', $expired);
@@ -230,8 +230,7 @@ class Cookie implements CookieInterface
         }
     
         $value = $this->getContents();
-    
-        // If the value is not an array or the key doesn't exist, nothing to delete
+
         if (!is_array($value) || !isset($value[$key])) {
             return $this;
         }
@@ -341,7 +340,7 @@ class Cookie implements CookieInterface
      */
     public function getMaxAge(): int
     {
-        $maxAge = $this->expires - Time::now()->getTimestamp();
+        $maxAge = ($this->expires - Time::now()->getTimestamp());
 
         return $maxAge >= 0 ? $maxAge : 0;
     }
@@ -454,7 +453,7 @@ class Cookie implements CookieInterface
 
             $options[strtolower($attr)] = $val;
         }
-
+        
         return new self($name, $value, $options);
     }
 
@@ -640,7 +639,6 @@ class Cookie implements CookieInterface
         }
 
         $option = $this->default[$key];
-
         $this->options[$key] = $option;
 
         return $option;
@@ -656,19 +654,16 @@ class Cookie implements CookieInterface
         $name = $this->getName();
 
         if (isset($_COOKIE[$name])) {
-            $content = [];
 
             if(is_array($_COOKIE[$name])){
                 return $_COOKIE[$name];
             }
 
             if ($this->isJson($_COOKIE[$name])) {
-                $content = json_decode($_COOKIE[$name], true) ?? [];
-            } else {
-                $content = $_COOKIE[$name];
+               return json_decode($_COOKIE[$name], true) ?? [];
             }
 
-            return $content;
+            return $_COOKIE[$name];
         }
 
         return null;
@@ -703,14 +698,12 @@ class Cookie implements CookieInterface
     */
     private function saveContent(string $value = '', ?int $expiry = null, array $options = []): void
     {
-        
         $name = $this->getName();
 
         if($options === []){
-            //$expiration = $expiry === null ? time() + $this->options['expires'] : $expiry;
-            $expiration = $expiry === null ? $this->options['expires'] : $expiry;
             $options = $this->options;
-            $options['expires'] = $expiration;
+            //$options['expires'] = (($expiry === null) ? time() + $this->options['expires'] : $expiry);
+            $options['expires'] = (($expiry === null) ? $this->options['expires'] : $expiry);
         }else{
             $options = $this->options;
         }
@@ -738,6 +731,7 @@ class Cookie implements CookieInterface
     {
         $name ??= $this->name;
         $_COOKIE[$name] = $value;
+        $this->value = $value;
     }
 
     /**

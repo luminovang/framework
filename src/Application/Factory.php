@@ -62,19 +62,19 @@ final class Factory
      * @var array<string,class-string<\T>> $classes
      */
     private static array $classes = [
-        'task'          => '\\' . Task::class,
-        'session'       => '\\' . Session::class,
-        'cookie'        => '\\' . Cookie::class,
-        'functions'     => '\\' . Functions::class,
-        'modules'       => '\\' . Modules::class,
-        'language'      => '\\' . Translator::class,
-        'logger'        => '\\' . Logger::class,
-        'fileManager'   => '\\' . FileManager::class,
-        'validate'      => '\\' . InputValidator::class,
-        'response'      => '\\' . ViewResponse::class,
-        'request'       => '\\' . Request::class,
-        'network'       => '\\' . Network::class,
-        'caller'        => '\\' . Caller::class
+        'task'          => Task::class,
+        'session'       => Session::class,
+        'cookie'        => Cookie::class,
+        'functions'     => Functions::class,
+        'modules'       => Modules::class,
+        'language'      => Translator::class,
+        'logger'        => Logger::class,
+        'fileManager'   => FileManager::class,
+        'validate'      => InputValidator::class,
+        'response'      => ViewResponse::class,
+        'request'       => Request::class,
+        'network'       => Network::class,
+        'caller'        => Caller::class
     ];
 
     /**
@@ -191,7 +191,7 @@ final class Factory
             
             $boot->bootstrap();
             $instance = static::service();
-            $instance->queuService($boot->getServices());
+            $instance->queService($boot->getServices());
             self::$instances['service'] = $instance;
         }catch(RuntimeException $e){
             logger('critical', 'Error occurred while registering service, Exception: ' . $e->getMessage());
