@@ -143,11 +143,11 @@ interface AiInterface
    *                       - `response_format` (string): The format of the converted file (default: `mp3`).
    *                       - `symlink` (string): Optional symbolic link destination.
    *
-   * @return bool True on success, false on failure.
+   * @return string|false Return file url on success, false on failure.
    * @throws RuntimeException If an error is encountered during the network request.
    * @throws JsonException If an error is encountered during JSON decoding.
    */
-  public function speech(string $text, array $options = []): bool;
+  public function speech(string $text, array $options = []): string|false;
 
   /**
    * Translates audio to text.

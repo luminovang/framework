@@ -323,7 +323,7 @@ class OpenAI implements AiInterface
     /**
       * {@inheritdoc}
     */
-    public function speech(string $text, array $options = []): bool
+    public function speech(string $text, array $options = []): string|false
     {
         $url = self::getUrl('speech');
         try {
@@ -347,9 +347,11 @@ class OpenAI implements AiInterface
                 if(isset($options['symlink'])){
                     $symlink = rtrim($options['symlink'], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
                     FileManager::symbolic($destination, $symlink);
+
+                    return absolute_url($symlink);
                 }
 
-                return true;
+                return absolute_url($destination);
             }
 
             return false;

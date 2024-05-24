@@ -202,20 +202,57 @@ final class Foundation
     */
     public static function getBase(): string
     {
-        if (static::$base === null) {
-            if (isset($_SERVER['SCRIPT_NAME'])) {
-                $script = $_SERVER['SCRIPT_NAME'];
-
-                if (($last = strrpos($script, '/')) !== false && $last > 0) {
-                    static::$base = substr($script, 0, $last) . '/';
-                    return static::$base;
-                }
-            }
-
-            static::$base = '/';
+        if (static::$base !== null) {
+            return static::$base;
         }
 
+        if (isset($_SERVER['SCRIPT_NAME'])) {
+            $script = $_SERVER['SCRIPT_NAME'];
+
+            if (($last = strrpos($script, '/')) !== false && $last > 0) {
+                static::$base = substr($script, 0, $last) . '/';
+                return static::$base;
+            }
+        }
+
+        static::$base = '/';
         return static::$base;
+    }
+
+    /**
+     * Convert relative path to absolute url.
+     *
+     * @param string $path Path to convert to absolute url.
+     * 
+     * @return string Return full url without system path.
+    */
+    public static function toAbsoluteUrl(string $path): string
+    {
+        $base = rtrim(static::getBase(), 'public/');
+        
+        if (($basePos = strpos($path, $base)) !== false) {
+            $path = trim(substr($path, $basePos + strlen($base)), '/');
+        }
+
+        if(str_starts_with($path, 'public/')){
+            $path = ltrim($path, 'public/');
+        }
+  
+        if(PRODUCTION){
+            return APP_URL . '/' . $path;
+        }
+
+        $hostname = $_SERVER['HTTP_HOST'] 
+            ?? $_SERVER['HOST'] 
+            ?? $_SERVER['SERVER_NAME'] 
+            ?? $_SERVER['SERVER_ADDR'] 
+            ?? '';
+
+        if (!str_contains($hostname, ':')) {
+            $hostname .= PROJECT_ID;
+        }
+
+        return URL_SCHEME . '://' . $hostname . '/' . $path;
     }
 
     /**
