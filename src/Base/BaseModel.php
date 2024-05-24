@@ -14,6 +14,7 @@ use \Luminova\Database\Builder;
 use \Luminova\Security\InputValidator;
 use \Peterujah\NanoBlock\SearchController as Searchable;
 use \Luminova\Exceptions\RuntimeException;
+use \Override;
 
 abstract class BaseModel
 {
@@ -245,6 +246,7 @@ abstract class BaseModel
      * @return Searchable Search controller instance.
      * @throws RuntimeException If the third pary search controller class is not installed.
     */
+    #[Override]
     protected function searchInstance(string $flag): Searchable
     {
         if(!class_uses(Searchable::class)){

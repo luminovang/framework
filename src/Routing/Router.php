@@ -426,9 +426,9 @@ final class Router
     */
     private static function bootContext(string $context, Router $router, BaseApplication $app): void 
     {
-        $app_context_file = APP_ROOT . DIRECTORY_SEPARATOR . 'routes' . DIRECTORY_SEPARATOR . $context . '.php';
-        if (file_exists($app_context_file)) {
-            require_once $app_context_file;
+        if (file_exists($__lmv_context = APP_ROOT . DIRECTORY_SEPARATOR . 'routes' . DIRECTORY_SEPARATOR . $context . '.php')) {
+            require_once $__lmv_context;
+            self::$application->__on('onContextInstalled', $context);
             return;
         }
 
@@ -501,16 +501,17 @@ final class Router
     {
         if(self::$method === 'CLI'){
             self::terminal();
-            exit(self::runAsCommand());
+            $exitCode = self::runAsCommand();
+        }else{
+            $exitCode = self::runAsHttp();
+
+            if (self::$method === 'HEAD') {
+                ob_end_clean();
+            }
         }
 
-        self::runAsHttp();
-
-        if (self::$method === 'HEAD') {
-            ob_end_clean();
-        }
-
-        exit(0);
+        self::$application->__on('onFinish');
+        exit($exitCode);
     }
 
     /**
@@ -778,6 +779,7 @@ final class Router
             
             $routes = self::$controllers['cli_commands'][self::$method] ?? null;
             if ($routes !== null && self::handleCommand($routes)) {
+                self::$application->__on('onCommandPresent', self::getArguments());
                 return STATUS_SUCCESS;
             }
         }
@@ -790,16 +792,16 @@ final class Router
      * Run the HTTP router and application: 
      * Loop all defined HTTP request method and view routes
      *
-     * @return bool Return true on success, false on failure.
+     * @return int Return status success, status error on failure.
      * @throws RouterException
     */
-    private static function runAsHttp(): bool
+    private static function runAsHttp(): int
     {
         $uri = static::getUriSegments();
        
         $middleware = (self::$controllers['routes_middleware'][self::$method] ?? null);
         if ($middleware !== null && !self::handleWebsite($middleware, $uri)) {
-            return false;
+            return STATUS_ERROR;
         }
 
         $routes = (self::$controllers['routes'][self::$method] ?? null);
@@ -809,11 +811,13 @@ final class Router
                 self::handleWebsite($after, $uri);
             }
 
-            return true;
+            self::$application->__on('onViewPresent', $uri);
+
+            return STATUS_SUCCESS;
         }
 
         static::triggerError();
-        return false;
+        return STATUS_ERROR;
     }
     
     /**

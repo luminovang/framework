@@ -12,6 +12,7 @@ namespace Luminova\Base;
 
 use \Luminova\Routing\Router;
 use \Luminova\Template\TemplateView;
+use \Override;
 
 abstract class BaseApplication
 {
@@ -52,14 +53,71 @@ abstract class BaseApplication
         $this->onCreate();
     }
 
-     /**
+    /**
+     * Trigger application events listeners.
+     * 
+     * @param $event Event method to trigger.
+     * @param mixed $arguments [mixed ...$] The event arguments.
+     * 
+     * @return void
+     * @internal
+    */
+    public final function __on(string $event, mixed ...$arguments): void 
+    {
+        $this->{$event}(...$arguments);
+    }
+
+    /**
      * Application on create method, an alternative method to __construct()
      * 
-     * @overridable #[\Override]
+     * @overridable
+     * @return void 
+    */
+    #[Override]
+    protected function onCreate(): void {}
+
+    /**
+     * Application on finish even, which triggers once application router has finished handling request.
+     * This trigger weather error occurs or not.
+     * 
+     * @overridable
+     * @return void 
+    */
+    #[Override]
+    protected function onFinish(): void {}
+
+    /**
+     * Application on context installed, which triggers once application route context has successfully registered request context.
+     * 
+     * @overridable 
+     * @param string $context The context name that was registered.
      * 
      * @return void 
     */
-    protected function onCreate(): void {}
+    #[Override]
+    protected function onContextInstalled(string $context): void {}
+
+    /**
+     * Application on view presented event, which is triggered after view controller method was called.
+     * 
+     * @param string $uri The view URI that was presented.
+     * 
+     * @overridable
+     * @return void 
+    */
+    #[Override]
+    protected function onViewPresent(string $uri): void {}
+
+    /**
+     * Application on command presented event, which is triggered after command controller was called.
+     * 
+     * @param array $options The command options that was presented.
+     * 
+     * @overridable
+     * @return void 
+    */
+    #[Override]
+    protected function onCommandPresent(array $options): void {}
 
     /**
      * Get the base application instance shared singleton class instance.
