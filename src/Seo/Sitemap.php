@@ -311,7 +311,7 @@ final class Sitemap
         self::$cli?->writeln('[Done] ' . $url);
     
         $dom = new DOMDocument();
-        $dom->loadHTML($html['document']);
+        @$dom->loadHTML($html['document']);
         $links = $dom->getElementsByTagName('a');
         $length = $links->count(); 
     
