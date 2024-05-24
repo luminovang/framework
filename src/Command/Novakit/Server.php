@@ -48,7 +48,7 @@ class Server extends BaseConsole
      /**
      * Usages
      *
-     * @var array<string, string>
+     * @var array<string, string> $usages
      */
     protected array $usages = [
         'php novakit server',
@@ -67,9 +67,10 @@ class Server extends BaseConsole
         $php = escapeshellarg($this->getOption('php', PHP_BINARY));
         $host = $this->getOption('host', 'localhost');
         $port = (int) $this->getOption('port', 8080) + $this->offset;
-        $root = escapeshellarg(DOCUMENT_ROOT);
+        $root = escapeshellarg(FRONT_CONTROLLER);
 
-        $this->writeln('NovaKit/' . Foundation::NOVAKIT_VERSION . ' (Luminova) PHP/' . PHP_VERSION. ' (Development Server)');
+        $this->header();
+        $this->writeln('Server Software Information: NovaKit/' . Foundation::NOVAKIT_VERSION . ' (Luminova) PHP/' . PHP_VERSION. ' (Development Server)', 'yellow');
         $this->newLine();
         $this->writeln('Listening on http://' . $host . ':' . $port, 'green');
         $this->writeln('Document root is ' . $root, 'green');
@@ -79,8 +80,6 @@ class Server extends BaseConsole
 
         // Apache's mod_rewrite functionality with settings.
         $rewrite = escapeshellarg(__DIR__ . '/mod_rewrite.php');
-
-        // Call PHP's built-in webserver, making sure to set our
         passthru($php . ' -S ' . $host . ':' . $port . ' -t ' . $root . ' ' . $rewrite, $status);
 
         if ($status && $this->offset < $this->tries) {
@@ -92,6 +91,13 @@ class Server extends BaseConsole
         return STATUS_SUCCESS;
     }
 
+    /**
+     * Run helper command.
+     * 
+     * @param array $helps Help information.
+     * 
+     * @return int status code.
+    */
     public function help(array $helps): int
     {
         return STATUS_ERROR;

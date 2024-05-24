@@ -222,22 +222,26 @@ final class Foundation
     /**
      * Convert relative path to absolute url.
      *
-     * @param string $path Path to convert to absolute url.
+     * @param string $path Path to convertto absolute url.
      * 
      * @return string Return full url without system path.
     */
     public static function toAbsoluteUrl(string $path): string
     {
-        $base = rtrim(static::getBase(), 'public/');
-        
-        if (($basePos = strpos($path, $base)) !== false) {
-            $path = trim(substr($path, $basePos + strlen($base)), '/');
+        if(NOVAKIT_ENV === null && !PRODUCTION){
+            $base = rtrim(static::getBase(), 'public/');
+            
+            if (($basePos = strpos($path, $base)) !== false) {
+                $path = trim(substr($path, $basePos + strlen($base)), '/');
+            }
+        }else{
+            $path = trim(static::filterPath($path), '/');
         }
 
         if(str_starts_with($path, 'public/')){
             $path = ltrim($path, 'public/');
         }
-  
+ 
         if(PRODUCTION){
             return APP_URL . '/' . $path;
         }
@@ -247,10 +251,6 @@ final class Foundation
             ?? $_SERVER['SERVER_NAME'] 
             ?? $_SERVER['SERVER_ADDR'] 
             ?? '';
-
-        if (!str_contains($hostname, ':')) {
-            $hostname .= PROJECT_ID;
-        }
 
         return URL_SCHEME . '://' . $hostname . '/' . $path;
     }

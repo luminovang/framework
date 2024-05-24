@@ -13,7 +13,6 @@ namespace Luminova\Base;
 use \App\Controllers\Application;
 use \Luminova\Http\Request;
 use \Luminova\Security\InputValidator;
-use \Override;
 
 abstract class BaseController
 {
@@ -87,8 +86,6 @@ abstract class BaseController
     /**
      * Initializes the http request class instance
      * 
-     * @overridable #[\Override]
-     * 
      * @return Request Return http request instance. 
     */
     protected final function request(): Request
@@ -103,8 +100,6 @@ abstract class BaseController
     /**
      * Initializes the input validator class instance.
      * 
-     * @overridable #[\Override]
-     * 
      * @return InputValidator Return input validation instance.
     */
     protected final function validate(): InputValidator
@@ -118,8 +113,6 @@ abstract class BaseController
 
     /**
      * Initializes the application class instance.
-     * 
-     * @overridable #[\Override]
      * 
      * @return Application Return application instance.
     */
@@ -163,18 +156,14 @@ abstract class BaseController
     /**
      * Controller onCreate method an alternative to __construct
      * 
-     * @overridable
      * @return void 
     */
-    #[Override]
     protected function onCreate(): void {}
 
     /**
      * Controller onDestroy method an alternative to __distruct 
      * 
-     * @overridable
      * @return void 
     */
-    #[Override]
     protected function onDestroy(): void {}
 }

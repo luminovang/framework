@@ -12,7 +12,6 @@ namespace Luminova\Base;
 
 use \Luminova\Routing\Router;
 use \Luminova\Template\TemplateView;
-use \Override;
 
 abstract class BaseApplication
 {
@@ -70,31 +69,25 @@ abstract class BaseApplication
     /**
      * Application on create method, an alternative method to __construct()
      * 
-     * @overridable
      * @return void 
     */
-    #[Override]
     protected function onCreate(): void {}
 
     /**
      * Application on finish even, which triggers once application router has finished handling request.
      * This trigger weather error occurs or not.
      * 
-     * @overridable
      * @return void 
     */
-    #[Override]
     protected function onFinish(): void {}
 
     /**
      * Application on context installed, which triggers once application route context has successfully registered request context.
-     * 
-     * @overridable 
+     *  
      * @param string $context The context name that was registered.
      * 
      * @return void 
     */
-    #[Override]
     protected function onContextInstalled(string $context): void {}
 
     /**
@@ -102,10 +95,8 @@ abstract class BaseApplication
      * 
      * @param string $uri The view URI that was presented.
      * 
-     * @overridable
      * @return void 
     */
-    #[Override]
     protected function onViewPresent(string $uri): void {}
 
     /**
@@ -113,10 +104,8 @@ abstract class BaseApplication
      * 
      * @param array $options The command options that was presented.
      * 
-     * @overridable
      * @return void 
     */
-    #[Override]
     protected function onCommandPresent(array $options): void {}
 
     /**
