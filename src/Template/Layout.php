@@ -139,7 +139,7 @@ final class Layout
 
         $name ??= $this->current;
         if ($name === null) {
-            throw new RuntimeException('No active section to end');
+            throw new RuntimeException('No active layout section to end');
         }
 
         $content = ob_get_clean();
