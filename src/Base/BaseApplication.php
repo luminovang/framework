@@ -141,7 +141,7 @@ abstract class BaseApplication
         $value = static::attrGetter($key);
 
         if($value === static::$KEY_NOT_FOUND) {
-            return null;
+            return $this->{$key} ?? null;
         }
 
         return $value;

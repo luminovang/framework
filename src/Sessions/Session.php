@@ -45,6 +45,8 @@ class Session
     {
         self::$config ??= new SessionConfig();
         $this->manager = $manager ?? new SessionManager();
+        
+        $this->manager->setTable(self::$config->tableIndex);
         $this->manager->setConfig(self::$config);
     } 
 
@@ -334,6 +336,17 @@ class Session
         
         $this->sessionConfigure();
         $this->ipListener();
+    }
+
+    /**
+     * Empty all data stored in session table.
+     * This method doesn't behave same way as PHP `session_destroy`.
+     *
+     * @return bool Return true if storage was data was deleted successfully otherwise false.
+    */
+    public function destroy(): bool 
+    {
+        return $this->manager->destroyItem();
     }
 
     /**

@@ -27,6 +27,13 @@ final class CookieManager implements SessionManagerInterface
     private ?BaseConfig $config = null;
 
     /**
+     * The session storage index name.
+     * 
+     * @var string $table
+    */
+    private static string $table = 'default';
+
+    /**
      * {@inheritdoc}
     */
     public function __construct(string $storage = 'global') 
@@ -54,6 +61,15 @@ final class CookieManager implements SessionManagerInterface
     /**
      * {@inheritdoc}
     */
+    public function setTable(string $table): self 
+    {
+        self::$table = $table;
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
     public function getStorage(): string 
     {
         return $this->storage;
@@ -64,8 +80,9 @@ final class CookieManager implements SessionManagerInterface
     */
     public function setItem(string $index, mixed $value, string $storage = ''): self
     {
-        $storage = ($storage === '') ? $this->storage : $storage;
+        $storage = $this->getKey($storage);
         $data = $this->getItems($storage);
+
         $data[$index] = $value;
         $this->updateItems($data, $storage);
 
@@ -80,7 +97,12 @@ final class CookieManager implements SessionManagerInterface
         $result = $this->getItems();
 
         if($result === []){
-            return $default;
+            $storage = $this->getKey();
+            if(isset($_COOKIE[self::$table][$storage])){
+                $result = $_COOKIE[self::$table][$storage];
+            }else{
+                return $default;
+            }
         }
 
         return $result[$index] ?? $default;
@@ -91,22 +113,39 @@ final class CookieManager implements SessionManagerInterface
     */
     public function deleteItem(?string $index = null, string $storage = ''): self
     {
-        $storage = ($storage === '') ? $this->storage : $storage;
+        $storage = $this->getKey($storage);
 
-        if($storage !== '' && isset($_COOKIE[$storage])) {
+        if(isset($_COOKIE[self::$table][$storage])) {
             if($index === '' || $index === null){
-                $this->saveContent('',  $storage, time() - $this->config->expiration);
-                $_COOKIE[$storage] = '';
+                $this->updateItems([], $storage);
             }else{
                 $data = $this->getItems($storage);
+                $data = $data !== []?:$_COOKIE[self::$table][$storage]; 
+
                 if (isset($data[$index])) {
                     unset($data[$index]);
-                    $this->updateItems($data, $storage);
                 }
+
+                $this->updateItems($data, $storage);
             }
         }
 
         return $this;
+    }
+
+    /** 
+     * {@inheritdoc}
+    */
+    public function destroyItem(): bool
+    {
+        if(isset($_COOKIE[self::$table])) {
+            $this->saveContent('', time() - $this->config->expiration);
+            $_COOKIE[self::$table] = [];
+
+            return true;
+        }
+
+        return false;
     }
 
     /** 
@@ -128,7 +167,7 @@ final class CookieManager implements SessionManagerInterface
     */
     public function hasStorage(string $storage): bool
     {
-        return isset($_COOKIE[$storage]);
+        return isset($_COOKIE[self::$table][$storage]);
     }
 
     /** 
@@ -137,14 +176,14 @@ final class CookieManager implements SessionManagerInterface
     public function getResult(string $type = 'array'): array|object
     {
         if($type === 'array'){
-            return (array) $_COOKIE;
+            return (array) $_COOKIE[self::$table] ?? [];
         }
 
         try {
-            return (object) json_decode(json_encode($_COOKIE, JSON_THROW_ON_ERROR));
+            return (object) json_decode(json_encode($_COOKIE[self::$table]??[], JSON_THROW_ON_ERROR));
         }catch(Throwable $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
-        };
+        }
     }
 
     /** 
@@ -180,17 +219,40 @@ final class CookieManager implements SessionManagerInterface
     */
     public function getItems(string $storage = ''): array
     {
-        $storage = ($storage === '') ? $this->storage : $storage;
+        $storage = $this->getKey($storage);
+        $contents = null;
 
-        if (isset($_COOKIE[$storage])) {
-            if(is_string($_COOKIE[$storage])){
-                return json_decode($_COOKIE[$storage], true) ?? [];
+        if(isset($_COOKIE[self::$table])) {
+            if(isset($_COOKIE[self::$table][$storage])){
+                $contents = $_COOKIE[self::$table][$storage];
+            }else{
+                $contents = $_COOKIE[self::$table];
+            }
+        }
+
+        if($contents !== null){
+            
+            if(is_string($contents)){
+                $contents = json_decode($contents, true) ?? [];
+                return ($contents[$storage] ?? $contents);
             }
 
-            return (array) $_COOKIE[$storage];
+            return (array) ($contents[$storage] ?? $contents);
         }
 
         return [];
+    }
+
+    /**
+     * Get storage name.
+     * 
+     * @param string $storage Optional storage name.
+     * 
+     * @return string Storage name.
+    */
+    private function getKey(string $storage = ''): string 
+    {
+        return ($storage === '') ? $this->storage : $storage;
     }
 
     /**
@@ -202,26 +264,25 @@ final class CookieManager implements SessionManagerInterface
     */
     private function updateItems(array $data, string $storage = ''): void
     {
-        $storage = ($storage === '') ? $this->storage : $storage;
-        $cookieValue = json_encode($data);
+        $storage = $this->getKey($storage);
+        $data[$storage] = $data;
+        $_COOKIE[self::$table] = $data;
 
-        $this->saveContent($cookieValue, $storage);
-        $_COOKIE[$storage] =  $data;
+        $this->saveContent(json_encode($data));
     }
 
     /**
      * Save delete data from cookie storage.
      *
      * @param array $value contents
-     * @param string $storage cookie storage context
      * @param ?int $expiry cookie expiration time
      * 
      * @return void
     */
-    private function saveContent(string $value, string $storage, ?int $expiry = null): void
+    private function saveContent(string $value, ?int $expiry = null): void
     {
         $expiry ??= time() + $this->config->expiration;
-        setcookie($storage, $value, [
+        setcookie(self::$table, $value, [
             'expires' => $expiry,
             'path' => $this->config->sessionPath,
             'domain' => $this->config->sessionDomain,

@@ -26,6 +26,13 @@ final class SessionManager implements SessionManagerInterface
     */
     private ?BaseConfig $config = null;
 
+     /**
+     * The session storage index name.
+     * 
+     * @var string $table
+    */
+    private static string $table = 'default';
+
     /**
      * {@inheritdoc}
     */
@@ -49,6 +56,15 @@ final class SessionManager implements SessionManagerInterface
     {
         $this->storage = $storage;
 
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function setTable(string $table): self 
+    {
+        self::$table = $table;
         return $this;
     }
 
@@ -81,7 +97,7 @@ final class SessionManager implements SessionManagerInterface
     {
         $storage = ($storage === '') ? $this->storage : $storage;
 
-        $_SESSION[$storage][$index] = $data;
+        $_SESSION[self::$table][$storage][$index] = $data;
 
         return $this;
     }
@@ -93,11 +109,11 @@ final class SessionManager implements SessionManagerInterface
     {
         $storage = ($storage === '') ? $this->storage : $storage;
 
-        if($storage !== '' && isset($_SESSION[$storage])){
+        if($storage !== '' && isset($_SESSION[self::$table][$storage])){
             if($index === '' || $index === null){
-                unset($_SESSION[$storage]);
+                unset($_SESSION[self::$table][$storage]);
             }else{
-                unset($_SESSION[$storage][$index]);
+                unset($_SESSION[self::$table][$storage][$index]);
             }
         }
 
@@ -107,10 +123,24 @@ final class SessionManager implements SessionManagerInterface
     /** 
      * {@inheritdoc}
     */
+    public function destroyItem(): bool
+    {
+        if(isset($_SESSION[self::$table])) {
+            $_SESSION[self::$table] = [];
+            unset($_SESSION[self::$table]);
+            return true;
+        }
+
+        return false;
+    }
+
+    /** 
+     * {@inheritdoc}
+    */
     public function hasItem(string $key): bool
     {
-        if(isset($_SESSION[$this->storage])){
-            return isset($_SESSION[$this->storage][$key]);
+        if(isset($_SESSION[self::$table][$this->storage])){
+            return isset($_SESSION[self::$table][$this->storage][$key]);
         }
 
         return false;
@@ -121,7 +151,7 @@ final class SessionManager implements SessionManagerInterface
     */
     public function hasStorage(string $storage): bool
     {
-        return isset($_SESSION[$storage]);
+        return isset($_SESSION[self::$table][$storage]);
     }
 
     /** 
@@ -131,8 +161,8 @@ final class SessionManager implements SessionManagerInterface
     {
         $result = [];
         
-        if (isset($_SESSION)) {
-            $result = $_SESSION;
+        if (isset($_SESSION[self::$table])) {
+            $result = $_SESSION[self::$table];
         }
 
         if($type === 'array'){
@@ -183,8 +213,8 @@ final class SessionManager implements SessionManagerInterface
     {
         $storage = ($storage === '') ? $this->storage : $storage;
 
-        if (isset($_SESSION[$storage])) {
-            return (array) $_SESSION[$storage];
+        if (isset($_SESSION[self::$table][$storage])) {
+            return (array) $_SESSION[self::$table][$storage];
         }
 
         return [];
