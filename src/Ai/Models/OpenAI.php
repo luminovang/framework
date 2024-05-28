@@ -239,7 +239,7 @@ class OpenAI implements AiInterface
     /**
       * {@inheritdoc}
     */
-    public function image(string $prompt, array $options = []): array|false
+    public function image(string $prompt, array $options = []): array|bool
     {
         $url = self::getUrl('images');
         try {
@@ -267,7 +267,7 @@ class OpenAI implements AiInterface
     /**
       * {@inheritdoc}
     */
-    public function imageEdit(string $prompt, array $options): array|false
+    public function imageEdit(string $prompt, array $options): array|bool
     {
         if (!file_exists($options['image'])) {
             self::error("Image: {$options['image']} does not exist", 204);
@@ -323,7 +323,7 @@ class OpenAI implements AiInterface
     /**
       * {@inheritdoc}
     */
-    public function speech(string $text, array $options = []): string|false
+    public function speech(string $text, array $options = []): string|bool
     {
         $url = self::getUrl('speech');
         try {
@@ -365,7 +365,7 @@ class OpenAI implements AiInterface
     /**
       * {@inheritdoc}
     */
-    public function audio(string $filename, array $options = []): string|false
+    public function audio(string $filename, array $options = []): string|bool
     {
         if(!file_exists($filename)){
             self::error('File: '  . $filename . ' does not exist', 204);

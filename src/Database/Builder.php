@@ -1450,7 +1450,7 @@ final class Builder extends Connection
     /**
      * Bind query where conditions
      * 
-     * @param DatabaseInterface $handler Pass handlet by reference
+     * @param DatabaseInterface $handler Pass handler by reference
     */
     private function bindConditions(DatabaseInterface &$handler): void 
     {

@@ -19,7 +19,7 @@ final class Foundation
      * 
     * @var string VERSION
     */
-    public const VERSION = '3.0.2';
+    public const VERSION = '3.0.3';
 
     /**
      * Minimum required php version.
@@ -222,7 +222,7 @@ final class Foundation
     /**
      * Convert relative path to absolute url.
      *
-     * @param string $path Path to convertto absolute url.
+     * @param string $path Path to convert to absolute url.
      * 
      * @return string Return full url without system path.
     */

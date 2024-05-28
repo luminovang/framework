@@ -192,7 +192,7 @@ class UserAgent
      * 
      * @return array|object|false Returns an array or object containing the parsed browser information.
      */
-    public static function parse(?string $userAgent = null, bool $return_array = false): array|object|false
+    public static function parse(?string $userAgent = null, bool $return_array = false): array|object|bool
     {
         $userAgent ??= trim($_SERVER['HTTP_USER_AGENT']??'');
        

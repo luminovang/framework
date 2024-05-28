@@ -96,7 +96,7 @@ class Connection
    * 
    * @return DatabaseInterface|null Return driver connection instance..
   */
-  public function database(): DatabaseInterface|null
+  public function database(): ?DatabaseInterface
   {
     return $this->db;
   }
@@ -128,9 +128,9 @@ class Connection
    * @throws DatabaseLimitException When the maximum connection limit is reached.
    * @throws DatabaseException If an invalid database driver is provided.
   */
-  public static function newInstance(BaseDatabase|null $config = null): DatabaseInterface|null
+  public static function newInstance(BaseDatabase|null $config = null): ?DatabaseInterface
   {
-    $config ??= self::getDefultConfig();
+    $config ??= self::getDefaultConfig();
     $drivers = [
       'mysqli' => MySqliDriver::class,
       'pdo' => PdoDriver::class
@@ -192,7 +192,7 @@ class Connection
    * @throws DatabaseLimitException When the maximum connection limit is reached.
    * @throws DatabaseException If an invalid connection configuration or driver is passed.
   */
-  public function retry(int|null $retry = 1): DatabaseInterface|null
+  public function retry(int|null $retry = 1): ?DatabaseInterface
   {
     if(isset($this->db) && $this->db->isConnected()){
       return $this->db;
@@ -314,7 +314,7 @@ class Connection
     *
     * @return BaseDatabase Database configuration object.
   */
-  private static function getDefultConfig(): BaseDatabase
+  private static function getDefaultConfig(): BaseDatabase
   {
     $var = (PRODUCTION ? 'database' : 'database.development');
     $sqlite = env("{$var}.sqlite.path", '');
@@ -343,7 +343,7 @@ class Connection
    * 
    * @param array<string,mixed> $config Database configuration.
    * 
-   * @return BaseDatabase Return based database instance with setted configuration
+   * @return BaseDatabase Return based database instance with loaded configuration
   */
   private static function newConfig(array $config): BaseDatabase
   {

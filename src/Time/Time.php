@@ -356,7 +356,7 @@ class Time extends DateTimeImmutable
      * 
      * @return false|string Formatted datetime string otherwise false.
     */
-    public function toFormat(?string $format = null): false|string
+    public function toFormat(?string $format = null): bool|string
     {
         $format ??= $this->stringFormat;
 
@@ -368,7 +368,7 @@ class Time extends DateTimeImmutable
      *
      * @return string Formatted time string otherwise false.
     */
-    public function toTime(): false|string
+    public function toTime(): bool|string
     {
         return $this->toFormat('HH:mm:ss');
     }
@@ -554,7 +554,7 @@ class Time extends DateTimeImmutable
         string $format, 
         string $datetime, 
         DateTimeZone|string|null $timezone = null
-    ): DateTimeImmutable|false
+    ): DateTimeImmutable|bool
     {
         return parent::createFromFormat($format, $datetime, $timezone);
     }
@@ -707,7 +707,7 @@ class Time extends DateTimeImmutable
      *
      * > If a string is provided, it must be a valid datetime string or time string.
     */
-    public static function ago(string|int|Time|DateTimeImmutable $datetime, bool $full = false, DateTimeZone|string|null $timezone = null): string|false
+    public static function ago(string|int|Time|DateTimeImmutable $datetime, bool $full = false, DateTimeZone|string|null $timezone = null): string|bool
     {
         if (is_string($datetime)) {
             $datetime = new static($datetime, $timezone);

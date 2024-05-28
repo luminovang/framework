@@ -160,7 +160,7 @@ class Maths
      * 
      * @return string|false The formatted currency string, or false if unable to format.
      */
-    public static function currency(float $number, string $code = 'USD', ?string $locale = null): string|false
+    public static function currency(float $number, string $code = 'USD', ?string $locale = null): string|bool
     {
         $locale ??= env('app.locale', 'en-US');
 
@@ -177,7 +177,7 @@ class Maths
      * 
      * @return string|false The equivalent amount in cryptocurrency.
     */
-    public static function crypto(int|float|string $amount, string $network = 'BTC'): string|false
+    public static function crypto(int|float|string $amount, string $network = 'BTC'): string|bool
     {
         if (!is_numeric($amount)) {
 			return false;
@@ -204,7 +204,7 @@ class Maths
      * 
      * > If you are passing a string, make sure its a float string.
      */
-    public static function distance(float|string $olat, float|string $olon, float|string $dlat, float|string $dlon, string $unit = 'km'): float|false 
+    public static function distance(float|string $olat, float|string $olon, float|string $dlat, float|string $dlon, string $unit = 'km'): float|bool 
     {
         if (!isset(self::$radius[$unit]) || !is_float($olat) || !is_float($olon) || !is_float($dlat) || !is_float($dlon)) {
             return false;

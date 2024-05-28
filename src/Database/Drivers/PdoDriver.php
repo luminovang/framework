@@ -177,7 +177,7 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function raw(): ConnInterface|null 
+    public function raw(): ?ConnInterface 
     {
         return  $this->connection;
     }
@@ -520,7 +520,7 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */ 
-    public function fetchObject(string|null $class = "stdClass", array $arguments = []): object|false 
+    public function fetchObject(string|null $class = "stdClass", array $arguments = []): object|bool 
     {
         return $this->stmt->fetchObject($class, $arguments);
     }

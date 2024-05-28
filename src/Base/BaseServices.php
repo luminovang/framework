@@ -44,7 +44,7 @@ abstract class BaseServices implements ServicesInterface
         bool $shared = true, 
         bool $serialize = false, 
         array $arguments = []
-    ): true 
+    ): bool 
     {
         $alias ??= get_class_name($class);
 

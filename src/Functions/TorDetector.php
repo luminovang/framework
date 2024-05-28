@@ -24,7 +24,7 @@ final class TorDetector
     /**
      * Function to fetch and cache the Tor exit node list
      * 
-     * @return string|false 
+     * @return string|bool 
     */
     private static function fetchTorExitNodeList(): string|bool
     {

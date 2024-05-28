@@ -144,7 +144,7 @@ class Storage extends Adapters
      * 
      * @return string|null Return remote url to file otherwise null.
     */
-    public function url(string $file): string|null
+    public function url(string $file): ?string
     {
         $filename = $this->getDisk($file);
         try {
@@ -164,7 +164,7 @@ class Storage extends Adapters
      * 
      * @return string|null Return remote url to file otherwise null.
     */
-    public function tempUrl(string $file, int $minutes = 1): string|null 
+    public function tempUrl(string $file, int $minutes = 1): ?string 
     {
         $filename = $this->getDisk($file);
      
@@ -206,7 +206,7 @@ class Storage extends Adapters
      * 
      * > Also it shpuld only be called after method `write` has been called otherwise it will return false.
     */
-    public function toLink(): string|false
+    public function toLink(): string|bool
     {
         if($this->filename === '' || $this->adapter !== 'local'){
             return false;
@@ -292,7 +292,7 @@ class Storage extends Adapters
      *
      * @throws StorageException If an error occurs during the write operation.
     */
-    public function checksum(string $path, array $options = []): string|false
+    public function checksum(string $path, array $options = []): string|bool
     {
         try {
             return $this->filesystem->checksum($path, $options);
@@ -572,7 +572,7 @@ class Storage extends Adapters
      *                    Otherwise returns false if operation failed.
      * @throws StorageException If an error occurs during the operation.
      */
-    public function visibility(string $filename, ?string $visibility = null): false|string 
+    public function visibility(string $filename, ?string $visibility = null): bool|string 
     {
         if($visibility === ''){
             return false;

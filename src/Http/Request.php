@@ -215,7 +215,7 @@ final class Request
      * 
      * @return File|false Uploaded file information or false if file not found.
      */
-    public function getFile(string $name): File|false
+    public function getFile(string $name): File|bool
     {
         if (isset($_FILES[$name])) {
             return $this->parseFile($_FILES[$name]);
@@ -229,7 +229,7 @@ final class Request
      *
      * @return false|array<int,File> Uploaded files information or false if no files found.
     */
-    public function getFiles(): array|false
+    public function getFiles(): array|bool
     {
         $files = [];
         foreach ($_FILES as $index => $fileInfo) {
@@ -300,7 +300,7 @@ final class Request
      * 
      * @return string|null Return the authorization header value or null if no authorization header was sent.
      */
-    public function getAuth(): string|null
+    public function getAuth(): ?string
     {
         if(!$auth = $this->header->get('Authorization')){
             if(!$auth = $this->server->get('HTTP_AUTHORIZATION')){
@@ -453,7 +453,7 @@ final class Request
      * @return string Return hostname.
      * @throws SecurityException If host is invalid or not allowed.
     */
-    public function getHost(bool $extension = false): string|null
+    public function getHost(bool $extension = false): ?string
     {
         return $this->getHostname($extension, false);
     }
@@ -468,7 +468,7 @@ final class Request
      * @return string Return hostname.
      * @throws SecurityException If host is invalid or not allowed.
     */
-    public function getHostname(bool $extension = false, bool $port = true): string|null
+    public function getHostname(bool $extension = false, bool $port = true): ?string
     {
         if (!$hostname = $this->server->get('HTTP_HOST')) {
             if (!$hostname = $this->header->get('HOST')) {
@@ -810,7 +810,7 @@ final class Request
      * 
      * @return File|false Return parsed file information or false if no file found.
      */
-    protected function parseFile(array $file, int $index = 0): File|false
+    protected function parseFile(array $file, int $index = 0): File|bool
     {
         if(empty($file)){
             return false;

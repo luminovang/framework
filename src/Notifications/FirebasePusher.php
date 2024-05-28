@@ -39,7 +39,7 @@ class FirebasePusher
      */
     public function __construct(string $filename = "ServiceAccount.json", string $dir = __DIR__)
     {
-        $serviceAccount = Configuration::getRootDirectory($dir) . "/writeable/credentials/{$filename}";
+        $serviceAccount = root('/writeable/credentials/') . $filename;
 
         if (file_exists($serviceAccount)) {
             $this->factory = (new Factory)->withServiceAccount($serviceAccount);

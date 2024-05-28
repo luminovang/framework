@@ -84,7 +84,7 @@ interface AiInterface
    * @throws RuntimeException If an error is encountered during the network request.
    * @throws JsonException If an error is encountered during JSON decoding.
    */
-  public function image(string $prompt, array $options = []): array|false;
+  public function image(string $prompt, array $options = []): array|bool;
 
   /**
    * Edit or swap areas of an image with another image.
@@ -101,7 +101,7 @@ interface AiInterface
    * @throws RuntimeException If an error is encountered during the network request.
    * @throws JsonException If an error is encountered during JSON decoding.
    */
-  public function imageEdit(string $prompt, array $options): array|false;
+  public function imageEdit(string $prompt, array $options): array|bool;
 
   /**
    * Create additional training on how ChatGPT should behave based on your training examples.
@@ -147,7 +147,7 @@ interface AiInterface
    * @throws RuntimeException If an error is encountered during the network request.
    * @throws JsonException If an error is encountered during JSON decoding.
    */
-  public function speech(string $text, array $options = []): string|false;
+  public function speech(string $text, array $options = []): string|bool;
 
   /**
    * Translates audio to text.
@@ -162,7 +162,7 @@ interface AiInterface
    * @throws RuntimeException If an error is encountered during the network request.
    * @throws JsonException If an error is encountered during JSON decoding.
    */
-  public function audio(string $filename, array $options = []): string|false;
+  public function audio(string $filename, array $options = []): string|bool;
 
   /**
    * Retrieve a list of available models.

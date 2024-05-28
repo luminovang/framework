@@ -140,7 +140,7 @@ abstract class BaseApplication
     {
         $value = static::attrGetter($key);
 
-        if($value === static::KEY_NOT_FOUND) {
+        if($value === static::$KEY_NOT_FOUND) {
             return null;
         }
 

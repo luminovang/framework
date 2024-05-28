@@ -251,7 +251,7 @@ interface DatabaseInterface
      * 
      * @return object|false Returns the fetched object or false if no more rows are available or an error occurs.
      */
-    public function fetchObject(string|null $class = 'stdClass', array $arguments = []): object|false;
+    public function fetchObject(string|null $class = 'stdClass', array $arguments = []): object|bool;
 
     /**
      * Get prepared statement

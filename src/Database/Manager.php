@@ -26,7 +26,7 @@ final class Manager
     private ?string $table = null;
     
     /**
-     * Initializes contructor 
+     * Initializes contractor 
      * 
      * @param DatabaseInterface $db
      * @param null|string $table
@@ -38,7 +38,7 @@ final class Manager
     }
 
     /**
-     * Set the databse table to backup.
+     * Set the database table to backup.
      * 
      * @param string $table
      * @return void 
@@ -51,7 +51,7 @@ final class Manager
     /**
      * Export database table and download it to browser as JSON or CSV format.
      * 
-     * @param string $as Expirt as csv or json format.
+     * @param string $as Export as csv or json format.
      * @param string $filename Filename to download it as.
      * @param array $columns Table columns to export (default: all)
      * 
@@ -131,7 +131,7 @@ final class Manager
         }
 
         $var = (PRODUCTION ? 'database' : 'database.development');
-        $databse = env("{$var}.name");
+        $database = env("{$var}.name");
         $filepath = $directory . $filename . '-' . date('d-m-Y-h-i-sa') . '-db.sql';
         $handle = fopen($filepath, 'w');
 
@@ -139,7 +139,7 @@ final class Manager
             throw new DatabaseException("Failed to open file for writing backup: $filepath");
         }
 
-        $structure = $this->db->query("SHOW CREATE DATABASE {$databse}")->fetch('next', FETCH_ASSOC)['Create Database'];
+        $structure = $this->db->query("SHOW CREATE DATABASE {$database}")->fetch('next', FETCH_ASSOC)['Create Database'];
 
         fwrite($handle, "-- Database structure\n\n");
         fwrite($handle, "$structure;\n\n");

@@ -615,7 +615,7 @@ class Terminal
      *
      * @return void
     */
-    public static final function writeln(string $text = '', ?string $foreground = null, ?string $background = null)
+    public static final function writeln(string $text = '', ?string $foreground = null, ?string $background = null): void
     {
         if ($foreground || $background) {
             $text = static::color($text, $foreground, $background);
@@ -1099,7 +1099,7 @@ class Terminal
      * 
      * @return bool Return true if command is help, false otherwise.
     */
-    public static final function isHelp(string $command):bool 
+    public static final function isHelp(string $command): bool 
     {
         return preg_match('/^-{1,2}help/', $command);
     }

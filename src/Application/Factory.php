@@ -35,11 +35,11 @@ use \Throwable;
  * @method static Session             session(?SessionManagerInterface $manager = null, bool $shared = true)                   Server-side user session class.
  * @method static Cookie              cookie(string $name, mixed $value = '', array $options = [], bool $shared = true)                    Client-side cookie class
  * @method static Task                task(bool $shared = true)                      Time task utility class.
- * @method static Modules             modules(bool $shared = true)                               PSR-4 Modluel autloader and file importer class.
+ * @method static Modules             modules(bool $shared = true)                               PSR-4 Module autoloader and file importer class.
  * @method static Translator          language(?string $locale = null, bool $shared = true)      Application translation class.
  * @method static Logger              logger(bool $shared = true)                                PSR logger class.
  * @method static FileManager         fileManager(bool $shared = true)                           File manager class.
- * @method static InputValidator      validate(bool $shared = true)                              Input valdidation class.
+ * @method static InputValidator      validate(bool $shared = true)                              Input validation class.
  * @method static ViewResponse        response(int $status = 200, bool $shared = true)           Render response class.
  * @method static Request             request(bool $shared = true)                               HTTP Request class.
  * @method static Network             network(?HttpClientInterface $client = null, bool $shared = true)                               HTTP Network request class.

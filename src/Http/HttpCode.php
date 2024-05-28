@@ -74,7 +74,7 @@ final class HttpCode
      * 
      * @return string|null|array Status code title or array of status codes.
     */
-    public static function get(int|null $code = null): string|null|array
+    public static function get(int|null $code = null): string|array|null
     {
         if($code === null){
             return static::$codes;
@@ -93,7 +93,7 @@ final class HttpCode
      * 
      * @return string|null Status code title.
     */
-    public static function __callStatic(string $name, array $arguments): string|null
+    public static function __callStatic(string $name, array $arguments): ?string
     {
         if (preg_match('/^status(\d+)$/', $name, $matches)) {
             $statusCode = (int) $matches[1];

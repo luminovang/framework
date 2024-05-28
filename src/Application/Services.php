@@ -241,7 +241,7 @@ final class Services
      * @return true Return true.
      * @internal
     */
-    public static function queService(array $services): true
+    public static function queService(array $services): bool
     {
         static::$services = $services;
 

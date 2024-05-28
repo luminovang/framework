@@ -115,7 +115,7 @@ final class PageMinifier
      * 
      * @return string|null|false Return minified content encoding.
      */
-    public function getEncoding(): string|null|false
+    public function getEncoding(): mixed
     {
 		return $this->headers['Content-Encoding']??false;
     }

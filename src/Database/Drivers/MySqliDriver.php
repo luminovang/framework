@@ -591,7 +591,7 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */ 
-    public function fetchObject(string|null $class = "stdClass", array $arguments = []): object|false 
+    public function fetchObject(string|null $class = "stdClass", array $arguments = []): object|bool 
     {
         $response = $this->fetch('all', FETCH_ASSOC);
         $objects = [];

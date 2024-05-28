@@ -216,7 +216,7 @@ final class Crypter
      * 
      * @return string|false Handler name or false if not found.
     */
-    private static function handler(): string|false
+    private static function handler(): string|bool
     {
         $handler = strtolower(self::$config->handler);
 
@@ -252,7 +252,7 @@ final class Crypter
      * 
      * @return string|array|false The generated key(s), an array of private and public key, or false on failure. 
     */
-    public static function generate_key(string $type = 'random', array $options = []): array|string|false
+    public static function generate_key(string $type = 'random', array $options = []): array|string|bool
     {
         self::initConfig();
         $handler = static::handler();

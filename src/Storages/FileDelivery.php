@@ -135,7 +135,7 @@ final class FileDelivery
      * 
      * @return string|false Return based64 encrypted url, otherwise false.
     */
-    public function url(string $basename, int $expiry = 3600): string|false
+    public function url(string $basename, int $expiry = 3600): string|bool
     {
         $filename = static::$filepath . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
   
@@ -158,7 +158,7 @@ final class FileDelivery
      * 
      * @return false
      */
-    private static function expiredHeader(int $statusCode, array $headers = []): false
+    private static function expiredHeader(int $statusCode, array $headers = []): bool
     {
         http_response_code($statusCode);
         $headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
@@ -176,7 +176,7 @@ final class FileDelivery
      * 
      * @return true
      */
-    private static function notModifiedHeader(int $expiry, array $headers = []): true
+    private static function notModifiedHeader(int $expiry, array $headers = []): bool
     {
         http_response_code(304);
         if($expiry > 0){

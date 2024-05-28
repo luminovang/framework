@@ -203,7 +203,7 @@ final class Uploader
      * @return string|false Return upload destination or false on failure.
      * @throws StorageException If upload path is not specified in configuration.
     */
-    private static function beforeUpload(File $file, ?string $path = null, ?string &$symlink = null): string|false
+    private static function beforeUpload(File $file, ?string $path = null, ?string &$symlink = null): string|bool
     {
         if ($file === false) {
             return false;

@@ -39,7 +39,7 @@ trait TemplateView
      * 
      * @var string KEY_NOT_FOUND
     */
-    protected const KEY_NOT_FOUND = '__nothing__';
+    protected static string $KEY_NOT_FOUND = '__nothing__';
 
     /** 
      * Holds the project document root
@@ -197,7 +197,7 @@ trait TemplateView
             return self::$publicOptions[$key];
         }
 
-        return self::$publicClasses[$key] ?? static::KEY_NOT_FOUND;
+        return self::$publicClasses[$key] ?? static::$KEY_NOT_FOUND;
     }
 
     /** 
@@ -259,7 +259,7 @@ trait TemplateView
      * @throws RuntimeException If the class does not exist or failed.
      * @throws RuntimeException If there is an error during registration.
     */
-    public final function export(string|object $class, ?string $alias = null, bool $initialize = true): true 
+    public final function export(string|object $class, ?string $alias = null, bool $initialize = true): bool 
     {
         if ($class === '' || $alias === '') {
             throw new RuntimeException('Invalid arguments provided, arguments expected a non-blank string.');

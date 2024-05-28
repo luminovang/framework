@@ -290,7 +290,7 @@ final class PageViewCache
      * 
      * @return string|false Return the content encoding handler, otherwise false.
     */
-    private static function whichEncode(): string|false
+    private static function whichEncode(): string|bool
     {
         $encoding = env('compression.encoding', false);
         if ($encoding !== false) {

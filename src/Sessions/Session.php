@@ -225,7 +225,7 @@ class Session
      * 
      * @return string|null Returns the session login datetime or null if not logged in.
     */
-    public function ssdate(): string|null
+    public function ssdate(): ?string
     {
         return $this->manager->getItem('_session_online_datetime', null);
     }
