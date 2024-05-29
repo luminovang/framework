@@ -497,8 +497,8 @@ final class Builder extends Connection
     /**
      * Set query where IN () expression
      * 
-     * @param string $column column name
-     * @param array $lists of values
+     * @param string $column column name.
+     * @param array $lists of values.
      * 
      * @return self class instance.
     */

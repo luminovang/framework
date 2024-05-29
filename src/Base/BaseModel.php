@@ -14,39 +14,47 @@ use \Luminova\Database\Builder;
 use \Luminova\Security\InputValidator;
 use \Peterujah\NanoBlock\SearchController as Searchable;
 use \Luminova\Exceptions\RuntimeException;
+use \DateTimeInterface;
 
 abstract class BaseModel
 {
    /**
-     * Model table name name.
+     * The name of the model's table.
      * 
      * @var string $table
     */
     protected string $table = ''; 
 
     /**
-     *  Default primary key column.
+     * The default primary key column.
      * 
      * @var string $primaryKey
     */
     protected string $primaryKey = ''; 
 
     /**
-     * Serachable table column names.
+     * Searchable table column names.
      * 
      * @var array<int, string> $searchables
     */
     protected array $searchables = [];
 
     /**
-     *  Enable databse caching for query builder
+     *  Enable database caching for query builder.
      * 
      * @var bool $cachable
     */
     protected bool $cachable = true; 
 
     /**
-     * Specify whether model table is updatable, deletable and insertable.
+     * Database cache expiration time in seconds.
+     * 
+     * @var DateTimeInterface|int $expiry
+    */
+    protected DateTimeInterface|int $expiry = 7 * 24 * 60 * 60;
+
+    /**
+     * Specify whether the model's table is updatable, deletable, and insertable.
      * 
      * @var bool $readOnly
     */
@@ -55,7 +63,7 @@ abstract class BaseModel
     /**
      * Fields that can be inserted.
      * 
-     * @var array $insertables
+     * @var array<int,string> $insertables
     */
     protected array $insertables = []; 
 
@@ -69,14 +77,14 @@ abstract class BaseModel
     /**
      * Input validation rules.
      * 
-     * @var array $rules
+     * @var array<string,string> $rules
     */
     protected array $rules = [];
 
     /**
-     * Input validation errors messages for rules.
+     * Input validation error messages for rules.
      * 
-     * @var array $messages
+     * @var array<string,array> $messages.
     */
     protected array $messages = [];
 
@@ -92,7 +100,7 @@ abstract class BaseModel
      * 
      * @var InputValidator $validation
     */
-    protected ?InputValidator $validation = null;
+    protected static ?InputValidator $validation = null;
 
     /**
      * Search database controller instance.
@@ -103,7 +111,7 @@ abstract class BaseModel
 
     /**
      * Constructor for the Model class.
-     * If null is passed fromework will insitalize builder lass instance.
+     * If null is passed framework will initialize builder lass instance.
      * 
      * @param Builder|null $builder Query builder class instance.
      * 
@@ -111,15 +119,6 @@ abstract class BaseModel
     public function __construct(?Builder $builder = null)
     {
         $this->builder ??= ($builder ?? Builder::getInstance());
-        $this->validation ??= new InputValidator();
-
-        if($this->rules !== []){
-            $this->validation->rules = $this->rules;
-        }
-        if($this->messages !== []){
-            $this->validation->messages = $this->messages;
-        }
-
         $this->builder->caching($this->cachable);
         $this->builder->table($this->table);
     }
@@ -130,18 +129,44 @@ abstract class BaseModel
      * @param array<string,mixed> $values nested array of values to insert into table.
      * 
      * @return int Return the number of records inserted.
+     * @throws RuntimeException Throws if columns contains unallowed key.
     */
-    abstract protected function insert(array $values): int;
+    public function insert(array $values): int 
+    {
+        if($this->readOnly){
+            return 0;
+        }
+
+        $this->assertIsAllowed($this->insertables, $values);
+        return $this->builder->table($this->table)->insert($values);
+    }
 
     /**
      * Update current record in the database.
      *
      * @param string|array<int,mixed> $key The key?s to update its record
      * @param array<string,mixed> $data associative array of columns and values to update.
+     * @param int $max The maximum number of records to update.
      * 
      * @return int Return the number of records updated.
+     * @throws RuntimeException Throws if columns contains unallowed key.
     */
-    abstract protected function update(string|array $key, array $data): int;
+    public function update(string|array $key, array $data, int $max = 1): int 
+    {
+        if($this->readOnly){
+            return 0;
+        }
+
+        $this->assertIsAllowed($this->updatables, $data);
+        $tbl = $this->builder->table($this->table);
+        $tbl->max($max);
+
+        if(is_array($key)){
+            return $tbl->in($this->primaryKey, $key)->update($data);
+        }
+        
+        return $tbl->where($this->primaryKey, '=', $key)->update($data);
+    }
 
     /**
      * Fine next or a single record from the database table.
@@ -151,43 +176,85 @@ abstract class BaseModel
      * 
      * @return mixed Return selected records or false on failure.
     */
-    abstract protected function find(string|array $key, array $fields = ['*']): mixed;
+    public function find(string|array $key, array $fields = ['*']): mixed 
+    {
+        $tbl = $this->builder->table($this->table);
+
+        if(is_array($key)){
+            $tbl->in($this->primaryKey, $key);
+        }else{
+            $tbl->where($this->primaryKey, '=', $key);
+        }
+
+        $tbl->cache('find', $this->table, $this->expiry);
+        return $tbl->find($fields);
+    }
 
     /**
      * Select records from the database table.
      *
-     * @param string|array<int,mixed> $key The key?s to select its record, if null all recoard in table will be selected.
+     * @param string|array<int,mixed> $key The key?s to select its record, if null all record in table will be selected.
      * @param array<int,string> $fields The fields to retrieve (default is all).
+     * @param int $limit Select result limit (default: 100).
+     * @param int $offset Select limit offset (default: 0).
      * 
      * @return mixed Return selected records or false on failure.
     */
-    abstract protected function select(string|array $key = null, array $fields = ['*']): mixed;
+    public function select(string|array $key = null, array $fields = ['*'],  int $limit = 100, int $offset = 0): mixed 
+    {
+        $tbl = $this->builder->table($this->table);
+        if($key !== null){
+            if(is_array($key)){
+                $tbl->in($this->primaryKey, $key);
+            }else{
+                $tbl->where($this->primaryKey, '=', $key);
+            }
+        }
 
-    /**
-     * Select records from the database.
-     *
-     * @param string $query Search query string, escape string before passing.
-     * @param array<int,string> $fields The fields to retrieve (default is all).
-     * 
-     * @return mixed Return found records or false on failure.
-    */
-    abstract protected function search(string $query, array $fields = ['*']): mixed;
+        $tbl->limit($limit, $offset);
+        $tbl->cache('select', $this->table, $this->expiry);
+        return $tbl->select($fields);
+    }
 
     /**
      * Delete a record from the database.
      * 
-     * @param string|array<int,mixed> $key The keys to delete, if null all recoard in table will be deleted.
+     * @param string|array<int,mixed> $key The keys to delete, if null all record in table will be deleted.
+     * @param int $max The maximum number of records to delete.
      * 
      * @return bool Return true if the record was successfully deleted otherwise false.
     */
-    abstract protected function delete(string|array $key = null): bool;
+    public function delete(string|array $key = null, int $max = 1): bool
+    {
+        if($this->readOnly){
+            return false;
+        }
+
+        $tbl = $this->builder->table($this->table);
+        $tbl->max($max);
+
+        if($key === null){
+            return $tbl->delete() > 0;
+        }
+
+        if(is_array($key)){
+            return $tbl->in($this->primaryKey, $key)->delete() > 0;
+        }
+
+        return $tbl->where($this->primaryKey, '=', $key)->delete() > 0;
+    }
 
     /**
      * Get total number of records in the database.
      * 
      * @return int Return the number of records.
     */
-    abstract protected function total(): int;
+    public function total(): int
+    {
+        return $this->builder->table($this->table)
+            ->cache('total', $this->table, $this->expiry)
+            ->total();
+    }
 
     /**
      * Get total number of records in the database based on the keys.
@@ -196,23 +263,68 @@ abstract class BaseModel
      * 
      * @return int Return the number of records.
     */
-    abstract protected function count(string|array $key): int;
+    public function count(string|array $key): int
+    {
+        $tbl = $this->builder->table($this->table);
+
+        if(is_array($key)){
+            $tbl->in($this->primaryKey, $key);
+        }else{
+            $tbl->where($this->primaryKey, '=', $key);
+        }
+
+        $tbl->cache('count', $this->table, $this->expiry);
+        return $tbl->total();
+    }
+
+     /**
+     * Select records from the database.
+     *
+     * @param string $query Search query string, escape string before passing.
+     * @param array<int,string> $fields The fields to retrieve (default is all).
+     * @param int $limit Search result limit (default: 100).
+     * @param int $offset Search limit offset (default: 0).
+     * 
+     * @return mixed Return found records or false on failure.
+    */
+    public function search(string $query, array $fields = ['*'], int $limit = 100, int $offset = 0): mixed
+    {
+        if($query === ''){
+            return false;
+        }
+
+        $query = strtolower($query);
+        $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
+        $columns = 'WHERE';
+
+        foreach($this->searchables as $column){
+            $columns .= " LOWER({$column}) LIKE :keyword OR";
+        }
+
+        $columns = rtrim($columns, ' OR');
+ 
+        return $this->builder->query("SELECT {$fields} FROM {$this->table} {$columns} LIMIT {$offset}, {$limit}")
+            ->cache('search', md5($this->table . $query), $this->expiry)
+            ->execute([
+                'keyword' => "%{$query}%"
+            ]);
+    }
 
     /**
      * Run a search in database table of current model. 
      * 
      * @param string $query search query string, escape string before passing.
      * @param array<int,string> $fields The fields to retrieve (default is all).
-     * @param int $limit search limit default is 100.
-     * @param int $offset search limit offset default is 0.
+     * @param int $limit Search result limit (default: 100).
+     * @param int $offset Search limit offset (default: 0).
      * @param string $flag Search matching flag, default is (any) any matching keyword.
      * 
      * @return mixed Return search results.  
-     * @throws RuntimeException If the third pary search controller class is not installed.
+     * @throws RuntimeException If the third party search controller class is not installed.
     */
     public final function doSearch(string $query, array $fields = ['*'], int $limit = 100, int $offset = 0, string $flag = 'any'): mixed 
     {
-        if ($limit < 0 || $offset < 0 || empty($query)) {
+        if ($limit < 0 || $offset < 0 || $query === '') {
             return false;
         }
 
@@ -224,10 +336,11 @@ abstract class BaseModel
             return false;
         }
 
-        $sql = 'SELECT ' . implode(',', $fields) . ' FROM ' . $this->table . ' ' . $sqls . ' LIMIT ' . $offset . ', ' . $limit;
+        $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
+        $sql = "SELECT {$fields} FROM {$this->table} {$sqls} LIMIT {$offset}, {$limit}";
 
         $tbl = $this->builder->query($sql);
-        $tbl->cache('SEARCH', md5($this->table . $query));
+        $tbl->cache('doSearch', md5($this->table . $query), $this->expiry);
         $result = $tbl->execute();
 
         if(empty($result)){
@@ -243,7 +356,7 @@ abstract class BaseModel
      * @param string $flag Search matching flag.
      * 
      * @return Searchable Search controller instance.
-     * @throws RuntimeException If the third pary search controller class is not installed.
+     * @throws RuntimeException If the third party search controller class is not installed.
     */
     protected function searchInstance(string $flag): Searchable
     {
@@ -268,6 +381,52 @@ abstract class BaseModel
         self::$searchInstance->setParameter($this->searchables);
 
         return self::$searchInstance;
+    }
+
+    /**
+     * Initialize and ser validation class object.
+     *
+     * @return InputValidator Validation class instance.
+     * > After first initialization you can then use `static::$validation` to access the object.
+    */
+    protected function validation(): InputValidator
+    {
+        static::$validation ??= new InputValidator();
+
+        if($this->rules !== []){
+            static::$validation->rules = $this->rules;
+        }
+        if($this->messages !== []){
+            static::$validation->messages = $this->messages;
+        }
+
+        return static::$validation;
+    }
+
+    /**
+     * Check if insert, update or select columns are in allowed list.
+     * 
+     * @param array<int,string> $allowed The allowed list of columns.
+     * @param array<string,mixed> $columns The column keys and value to check.
+     * 
+     * @return void 
+     * @throws RuntimeException Throws if columns contains unallowed key.
+    */
+    protected function assertIsAllowed(array $allowed, array $columns): void 
+    {
+        if ($allowed === []) {
+            return;
+        }
+
+        $columns = array_keys($columns);
+        $unallowed = array_diff($columns, $allowed);
+
+        if($unallowed === []){
+            return;
+        }
+
+        $unallowed = implode(', ', $unallowed);
+        throw new RuntimeException("The data contains unallowed columns: $unallowed");
     }
 
     /**
@@ -308,32 +467,5 @@ abstract class BaseModel
     public function isReadOnly(): bool
     {
         return $this->readOnly;
-    }
-
-    /**
-     * Magic method getter
-     *
-     * @param string $key property key
-     * 
-     * @return ?mixed return property else null
-     * @ignore
-    */
-    public function __get(string $key): mixed
-    {
-        return $this->{$key} ?? null;
-    }
-    
-    /**
-     * Magic method isset
-     * Check if property is set
-     *
-     * @param string $key property key
-     * 
-     * @return bool 
-     * @ignore
-    */
-    public function __isset(string $key): bool
-    {
-        return isset($this->{$key});
     }
 }

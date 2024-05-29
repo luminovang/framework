@@ -95,7 +95,7 @@ final class MySqliDriver implements DatabaseInterface
             $this->connected = true;
         }catch(Exception|DatabaseException $e){
             $this->connected = false;
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            DatabaseException::throwException($e->getMessage(), 0, $e);
         }
     }
 
@@ -146,7 +146,7 @@ final class MySqliDriver implements DatabaseInterface
                 $this->connection->set_charset($this->config->charset);
             }
         }catch(Exception|mysqli_sql_exception $e){
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            DatabaseException::throwException($e->getMessage(), 0, $e);
         }
     }
 
@@ -253,9 +253,7 @@ final class MySqliDriver implements DatabaseInterface
                 $this->rowCount = $this->connection->affected_rows;
             }
         }
-
-        //$this->rowCount = ($affected === 0) ? 1 : $affected;
-
+        
         return $this;
     }
 
@@ -392,7 +390,7 @@ final class MySqliDriver implements DatabaseInterface
             $this->executed = true;
             $this->rowCount = $this->isSelect ? $this->stmt->num_rows : $this->stmt->affected_rows;
         } catch (mysqli_sql_exception | TypeError $e) {
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            DatabaseException::throwException($e->getMessage(), 0, $e);
         }
         
         $this->bindParams = [];

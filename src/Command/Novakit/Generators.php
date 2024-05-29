@@ -48,6 +48,7 @@ class Generators extends BaseConsole
         'php novakit create:class "name" -extend "className" -implement "myInterface"',
         'php novakit create:view "name"',
         'php novakit create:class "name"',
+        'php novakit create:model "name"',
     ];
    
     /**
@@ -72,12 +73,11 @@ class Generators extends BaseConsole
     public function run(?array $options = []): int
     {
         $this->explain($options);
-
         $command = trim($this->getCommand());
         $name = $this->getArgument(1);
 
         if(empty($name)){
-            $this->error('Generator name is required');
+            $this->writeln('Generator name is required', 'red');
             $this->beeps();
 
             return STATUS_ERROR;
@@ -87,23 +87,30 @@ class Generators extends BaseConsole
         $extend = $this->getOption('extend', null);
         $implement = $this->getOption('implement', null);
         $dir = $this->getOption('dir', '');
-        self::$engine ??= (new Template())->templateEngine;
 
         $runCommand = match($command){
             'create:controller' => $this->createController($name, $type, $dir),
             'create:view'       => $this->createView($name, $dir),
-            'create:class'      => $this->createClass($name, $extend, $implement),
+            'create:class'      => $this->createUtilClass($name, $extend, $implement),
+            'create:model'      => $this->createModel($name, $implement),
             default             => 'unknown'
         };
 
         if ($runCommand === 'unknown') {
-            $this->error('Unknown command ' . $this->color("'$command'", 'red') . ' not found', null);
+            $this->writeln('Unknown command ' . $this->color("'$command'", 'red') . ' not found', null);
             return STATUS_ERROR;
         } 
             
         return (int) $runCommand;
     }
 
+    /**
+     * Command helper method.
+     * 
+     * @param array $helps Help information.
+     * 
+     * @return int
+    */
     public function help(array $helps): int
     {
         return STATUS_ERROR;
@@ -144,7 +151,10 @@ class Generators extends BaseConsole
             {
                 public function __construct()
                 {
-                    // Constructor logic goes here
+                    /**
+                     * Constructor logic goes here.
+                     * parent::__construct();
+                    */
                 }
 
             PHP;
@@ -156,9 +166,7 @@ class Generators extends BaseConsole
                     // Class methods goes here
                     public function main(): int
                     {
-                        return \$this->view('$view', [
-
-                        ]);
+                        return \$this->view('$view', []);
                     }
 
                 PHP;
@@ -173,30 +181,31 @@ class Generators extends BaseConsole
             class $name extends $extend
             {
                 /**
-                 * Override the default help implementation
+                 * Override the default help implementation.
                  *
-                 * @param array \$helps Helps information
+                 * @param array \$helps Helps information.
                  * 
                  * @return int return STATUS_SUCCESS if you implemented your own help else return STATUS_ERROR.
                 */
                 public function help(array \$helps): int
                 {
-                    // Your help logic goes here
-                    // return STATUS_SUCCESS;
-
                     return STATUS_ERROR;
                 }
 
+                /**
+                 * Run text command.
+                 * 
+                 * @return int Return status code.
+                */
                 public function runTest(): int
                 {
                     \$this->header();
-
                     return STATUS_SUCCESS;
                 }
 
             PHP;
         }else{
-            $this->error("Invalid controller --type flag: {$tyoe}, use 'api, view or command'");
+            $this->writeln("Invalid controller --type flag: {$tyoe}, use 'api, view or command'", 'red');
             return;
         }
 
@@ -209,7 +218,7 @@ class Generators extends BaseConsole
                 $this->createView($view, $dir);
             }
         }else{
-            $this->error("Unable to create class {$name}");
+            $this->writeln("Unable to create class {$name}", 'red');
         }
     }
     
@@ -223,6 +232,7 @@ class Generators extends BaseConsole
      */
     private function createView(string $name, ?string $dir = null): void 
     {
+        self::$engine ??= (new Template())->templateEngine;
         $name = strtolower($name);
         $type = (self::$engine === 'smarty') ? '.tpl' : '.php';
         $path = "/resources/views/";
@@ -260,7 +270,111 @@ class Generators extends BaseConsole
         }
 
         if (!$this->saveFile($classContent, $path, $name . $type)) {
-            $this->error("Unable to create view {$name}");
+            $this->writeln("Unable to create view {$name}", 'red');
+        }
+    }
+
+     /**
+     * Create a model class.
+     *
+     * @param string  $name Model name.
+     * @param string|null $implement  Model implement interface.
+     * 
+     * @return void
+     */
+    private function createModel(string $name, ?string $implement = null): void 
+    {
+        $namespace = ($implement !== null) ? "\nuse \\$implement;" : '';
+        $extends = " extends BaseModel";
+        $implement = ($implement !== null) ? " implements $implement" : '';
+        $name = ucfirst($name);
+        $table = strtolower($name) . '_table';
+
+        $modelContent = <<<PHP
+        <?php
+        namespace App\Controllers\Models;
+
+        use \Luminova\Base\BaseModel;
+        use \DateTimeInterface;
+        $namespace
+        class $name$extends$implement
+        {
+            /**
+             * The name of the model's table.
+             * 
+             * @var string \$table
+            */
+            protected string \$table = '$table'; 
+        
+            /**
+             * The default primary key column.
+             * 
+             * @var string \$primaryKey
+            */
+            protected string \$primaryKey = ''; 
+        
+            /**
+             * Searchable table column names.
+             * 
+             * @var array<int, string> \$searchables
+            */
+            protected array \$searchables = [];
+        
+            /**
+             *  Enable database caching for query builder.
+             * 
+             * @var bool \$cachable
+            */
+            protected bool \$cachable = true; 
+        
+            /**
+             * Database cache expiration time in seconds.
+             * 
+             * @var DateTimeInterface|int \$expiry
+            */
+            protected DateTimeInterface|int \$expiry = 7 * 24 * 60 * 60;
+        
+            /**
+             * Specify whether the model's table is updatable, deletable, and insertable.
+             * 
+             * @var bool \$readOnly
+            */
+            protected bool \$readOnly = false; 
+        
+            /**
+             * Fields that can be inserted.
+             * 
+             * @var array<int,string> \$insertables
+            */
+            protected array \$insertables = []; 
+        
+            /**
+             * Fields that can be updated.
+             * 
+             * @var array \$updatables
+            */
+            protected array \$updatables = []; 
+        
+            /**
+             * Input validation rules.
+             * 
+             * @var array<string,string> \$rules
+            */
+            protected array \$rules = [];
+        
+            /**
+             * Input validation error messages for rules.
+             * 
+             * @var array<string,array> \$messages.
+            */
+            protected array \$messages = [];
+        }
+        PHP;
+
+        $path = "/app/Controllers/Models/";
+        
+        if (!$this->saveFile($modelContent, $path, "{$name}.php")) {
+            $this->writeln("Unable to create model {$name}", 'red');
         }
     }
 
@@ -273,7 +387,7 @@ class Generators extends BaseConsole
      * 
      * @return void
      */
-    private function createClass(string $name, ?string $extend = null, ?string $implement = null): void 
+    private function createUtilClass(string $name, ?string $extend = null, ?string $implement = null): void 
     {
         $use = '';
         if ($extend) {
@@ -307,7 +421,7 @@ class Generators extends BaseConsole
         $path = "/app/Controllers/Utils/";
         
         if (!$this->saveFile($classContent, $path, "{$name}.php")) {
-            $this->error("Unable to create class {$name}");
+            $this->writeln("Unable to create class {$name}", 'red');
         }
     }
 
@@ -332,11 +446,12 @@ class Generators extends BaseConsole
         if($continue === 'yes'){
             try {
                 if(write_content($filepath, $content)){
-                    $this->success("Completed succefully location: {$filepath}");
+                    $filepath = filter_paths($filepath);
+                    $this->writeln("Completed succefully location: /{$filepath}", 'green');
                     return true;
                 }
             } catch(Exception $e) {
-                $this->error($e->getMessage());
+                $this->writeln($e->getMessage(), 'red');
             }
         }
 

@@ -30,7 +30,7 @@ class Session
     private static ?Session $instance = null;
 
     /**
-     * Sessioon configuration.
+     * Session configuration.
      * 
      * @var SessionConfig $config 
     */

@@ -880,7 +880,7 @@ trait TemplateView
      * 
      * @param string|false $content View contents.
      * @param string $type The view content type.
-     * @param bool $ignor Ignore codeblocks.
+     * @param bool $ignore Ignore codeblocks.
      * @param bool $copy Add copy button to codeblocks.
      * @param PageViewCache|null $cache Cache instance.
      * 

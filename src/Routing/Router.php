@@ -258,9 +258,9 @@ final class Router
     /**
      * Before middleware, to handle router middleware authentication.
      * 
-     * @param string  $methods  Allowed methods, can be serrated with | pipe symbol
-     * @param string  $pattern A route pattern or template view name
-     * @param Closure|string $callback Callback function to execute
+     * @param string  $methods  Allowed methods, can be serrated with | pipe symbol.
+     * @param string  $pattern A route pattern or template view name.
+     * @param Closure|string $callback Callback function to execute.
      * 
      * @return void
      * @throws RouterException Throws when called in wrong context or if blank method is passed.
@@ -280,9 +280,9 @@ final class Router
     /**
      * After middleware route, executes the callback function after request was executed successfully.
      *
-     * @param string  $methods  Allowed methods, can be serrated with | pipe symbol
-     * @param string  $pattern A route pattern or template view name
-     * @param Closure|string $callback Callback function to execute
+     * @param string  $methods  Allowed methods, can be serrated with | pipe symbol.
+     * @param string  $pattern A route pattern or template view name.
+     * @param Closure|string $callback Callback function to execute.
      * 
      * @return void
      * @throws RouterException Throws if blank method is passed.
@@ -325,9 +325,9 @@ final class Router
     /**
      * Capture front controller request method based on pattern and execute the callback.
      *
-     * @param string $methods Allowed methods, can be separated with | pipe symbol
-     * @param string $pattern A route pattern or template view name
-     * @param Closure|string $callback Callback function to execute
+     * @param string $methods Allowed methods, can be separated with | pipe symbol.
+     * @param string $pattern A route pattern or template view name.
+     * @param Closure|string $callback Callback function to execute.
      * 
      * @return void
      * @throws RouterException Throws if blank method is passed.
@@ -374,8 +374,8 @@ final class Router
     /**
      * A shorthand for route capture method to handle any type of request method.
      *
-     * @param string $pattern A route pattern or template view name
-     * @param Closure|string $callback Handle callback for router
+     * @param string $pattern A route pattern or template view name.
+     * @param Closure|string $callback Handle callback for router.
      * 
      * @return void
     */
@@ -388,7 +388,7 @@ final class Router
      * Binds a collection of routes segment in a single base route.
      *
      * @param string $group The binding group pattern.
-     * @param Closure $callback Callback group function to handle binds
+     * @param Closure $callback Callback group function to handle binds.
      * 
      * @return void
     */
@@ -405,7 +405,7 @@ final class Router
      * Binds a command route group.
      *
      * @param string $group The binding group name.
-     * @param Closure $callback Callback command function to handle group
+     * @param Closure $callback Callback command function to handle group.
      * 
      * @return void
     */
@@ -418,8 +418,8 @@ final class Router
      * Boot route context.
      *
      * @param string $context Route context name
-     * @param Router $router  Make router instance available in route
-     * @param BaseApplication $app Make application instance available in route
+     * @param Router $router  Make router instance available in route.
+     * @param BaseApplication $app Make application instance available in route.
      * 
      * @return void
      * @throws RouterException
@@ -440,9 +440,9 @@ final class Router
     }
 
     /**
-     * Register a controller class namespace to use across the application routing
+     * Register a controller class namespace to use across the application routing.
      *
-     * @param string $namespace Class namespace string
+     * @param string $namespace Class namespace string.
      * 
      * @return void
      * @throws RouterException If namespace string is empty or contains invalid namespace characters.
@@ -468,8 +468,8 @@ final class Router
     }
 
     /**
-     * If the controller already contains a namespace, use it directly
-     * If not, loop through registered namespaces to find the correct class
+     * If the controller already contains a namespace, use it directly.
+     * If not, loop through registered namespaces to find the correct class.
      * 
      * @param string $controller Controller class base name.
      * 
@@ -572,8 +572,8 @@ final class Router
     /**
      * Set an error listener callback function.
      *
-     * @param Closure|string|array<int,string> $match Matching route pattern
-     * @param Closure|string|array<int,string>|null $callback Optional error callback handler function
+     * @param Closure|string|array<int,string> $match Matching route pattern.
+     * @param Closure|string|array<int,string>|null $callback Optional error callback handler function.
      *  
      * @return void
     */
@@ -587,9 +587,9 @@ final class Router
     }
 
     /**
-     * Cause triggers an error response
+     * Cause triggers an error response.
      *
-     * @param int $status HTTP response status code (default: 404)
+     * @param int $status HTTP response status code (default: 404).
      * 
      * @return void
     */
@@ -630,9 +630,9 @@ final class Router
     }
 
     /**
-     * Get list of registered controller namespaces
+     * Get list of registered controller namespaces.
      *
-     * @return array<int,string> Registered namespaces
+     * @return array<int,string> Registered namespaces.
      * @internal
     */
     public static function getNamespaces(): array
@@ -655,9 +655,9 @@ final class Router
     }
 
     /**
-     * Get segment class instance 
+     * Get segment class instance.
      * 
-     * @return Segments Segments instance
+     * @return Segments Segments instance.
     */
     public function getSegment(): Segments 
     {
@@ -667,7 +667,7 @@ final class Router
     /**
      * Get first segment of current view uri.
      * 
-     * @return string First url segment
+     * @return string First url segment.
     */
     private static function getFirst(): string
     {
@@ -707,12 +707,12 @@ final class Router
     }
 
     /**
-     * Register a middleware authentication
+     * Register a middleware authentication.
      *
-     * @param string  $to group name
-     * @param string  $methods  Allowed methods, can be serrated with | pipe symbol
-     * @param string  $pattern A route pattern or template view name
-     * @param Closure|string $callback Callback function to execute
+     * @param string  $to group name.
+     * @param string  $methods  Allowed methods, can be serrated with | pipe symbol.
+     * @param string  $pattern A route pattern or template view name.
+     * @param Closure|string $callback Callback function to execute.
      * @param bool $terminate Terminate if it before middleware.
      * 
      * @return void
@@ -789,8 +789,8 @@ final class Router
     }
 
     /**
-     * Run the HTTP router and application: 
-     * Loop all defined HTTP request method and view routes
+     * Run the HTTP router and application.
+     * Loop all defined HTTP request method and view routes.
      *
      * @return int Return status success, status error on failure.
      * @throws RouterException
@@ -823,11 +823,11 @@ final class Router
     /**
      * Handle a set of routes: if a match is found, execute the relating handling function.
      *
-     * @param array $routes  Collection of route patterns and their handling functions
-     * @param string $uri  View URI
+     * @param array $routes  Collection of route patterns and their handling functions.
+     * @param string $uri View URI.
      *
-     * @return bool $error error status [0 => true, 1 => false]
-     * @throws RouterException if method is not callable or doesn't exist
+     * @return bool $error error status [0 => true, 1 => false].
+     * @throws RouterException if method is not callable or doesn't exist.
     */
     private static function handleWebsite(array $routes, string $uri): bool
     {
@@ -847,12 +847,12 @@ final class Router
 
     /**
     * Handle C=command router CLI callback class method with the given parameters 
-    * using instance callback or reflection class
+    * using instance callback or reflection class.
     *
     * @param array $routes Command name array values.
     *
     * @return bool Return true on success or false on failure.
-    * @throws RouterException if method is not callable or doesn't exist
+    * @throws RouterException if method is not callable or doesn't exist.
     */
     private static function handleCommand(array $routes): bool
     {
@@ -879,9 +879,9 @@ final class Router
     }
 
     /**
-     * Extract matched parameters from request
+     * Extract matched parameters from request.
      *
-     * @param array<int,array> $array Matched url parameters
+     * @param array<int,array> $array Matched url parameters.
      * 
      * @return array<int,string> Return matched parameters.
     */
@@ -1051,7 +1051,7 @@ final class Router
     /**
     * Execute router HTTP callback class method with the given parameters using instance callback or reflection class
     *
-    * @param Closure|string|array<int,string> $callback Class public callback method eg: UserController:update
+    * @param Closure|string|array<int,string> $callback Class public callback method eg: UserController:update.
     * @param array $arguments Method arguments to pass to callback method.
     * @param bool $injection Force use dependency injection. Default is false.
     *
@@ -1092,11 +1092,11 @@ final class Router
      *
      * @param string $className Controller class name.
      * @param string $method Controller class method name.
-     * @param array $arguments Optional arguments to pass to the method
+     * @param array $arguments Optional arguments to pass to the method.
      * @param bool $injection Force use dependency injection. Default is false.
      *
-     * @return bool If method was called successfully
-     * @throws RouterException if method is not callable or doesn't exist
+     * @return bool If method was called successfully.
+     * @throws RouterException if method is not callable or doesn't exist.
      */
     private static function reflection(
         string $className, 
@@ -1163,11 +1163,11 @@ final class Router
     }
 
     /**
-     * Invoke class using reflection method
+     * Invoke class using reflection method.
      *
-     * @param array $arguments Pass arguments to reflection method
-     * @param string $className Invoking class name
-     * @param ReflectionMethod $caller Controller class method
+     * @param array $arguments Pass arguments to reflection method.
+     * @param string $className Invoking class name.
+     * @param ReflectionMethod $caller Controller class method.
      *
      * @return int Return result from command controller method.
     */
@@ -1205,13 +1205,13 @@ final class Router
     
     /**
     * Replace all curly braces matches {} into word patterns (like Laravel)
-    * Convert pattern to a regex pattern  & Checks if there is a routing match
+    * Convert pattern to a regex pattern  & Checks if there is a routing match.
     *
     * @param string $pattern Url router pattern.
     * @param string $uri Request uri.
     * @param mixed &$matches Url matches.
     *
-    * @return bool is match true or false
+    * @return bool is match true or false.
     */
     private static function uriCapture(string $pattern, string $uri, mixed &$matches): bool
     {
@@ -1219,9 +1219,9 @@ final class Router
     }
 
     /**
-     * Replace command script pattern values match (:value) and replace with (pattern)
+     * Replace command script pattern values match (:value) and replace with (pattern).
      *
-     * @param string $input command script pattern
+     * @param string $input command script pattern.
      * 
      * @return string $output If match return replaced string.
     */
@@ -1247,9 +1247,9 @@ final class Router
     }
 
     /**
-     * Gets request command name
+     * Gets request command name.
      *
-     * @return string
+     * @return string Return command argument index.
     */
     private static function getArgument(int $index = 1): string 
     {
@@ -1263,7 +1263,7 @@ final class Router
     /**
      * Get the current command controller views
      * 
-     * @return array $views
+     * @return array $views Return command arguments as URI.
     */
     public static function getArguments(): array
     {
@@ -1282,7 +1282,7 @@ final class Router
     }
     
     /**
-     * Reset register routes to avoid conflicts
+     * Reset register routes to avoid conflicts.
      * 
      * @return void
     */

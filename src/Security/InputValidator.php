@@ -16,17 +16,17 @@ use \JsonException;
 final class InputValidator implements ValidationInterface
 {
     /**
-     * @var array $failures validated errors messages.
+     * @var array<string,mixed> $failures validated errors messages.
     */
     private array $failures = [];
 
     /**
-     * @var array $rules validation rules.
+     * @var array<string,string> $rules validation rules.
     */
     public array $rules = [];
 
     /**
-     * @var array $messages validation error messages.
+     * @var array<string,array> $messages validation error messages.
     */
     public array $messages = [];
 

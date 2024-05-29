@@ -71,7 +71,7 @@ final class PdoDriver implements DatabaseInterface
             $this->connected = true;
         }catch(PDOException|DatabaseException $e){
             $this->connected = false;
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            DatabaseException::throwException($e->getMessage(), 0, $e);
         }
     }
 
@@ -108,7 +108,6 @@ final class PdoDriver implements DatabaseInterface
 
         $username = $password = null;
 
-        //if (!in_array($driver, ['pgsql', 'sqlite'], true)) {
         if ($driver !== 'sqlite' && $driver !== 'pgsql') {
             $username = $this->config->username;
             $password = $this->config->password;
@@ -362,7 +361,7 @@ final class PdoDriver implements DatabaseInterface
            $this->executed = $this->stmt->execute(($this->parseParams ? null : $params));
            $this->parseParams = false;
         } catch (PDOException $e) {
-            DatabaseException::throwException($e->getMessage(), $e->getCode(). $e);
+            DatabaseException::throwException($e->getMessage(), 0, $e);
         }
 
         return $this->executed;

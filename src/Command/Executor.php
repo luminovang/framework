@@ -34,14 +34,14 @@ final class Executor
     {
         $command = trim($terminal->getCommand());
         $newCommand = (string) match($command){
-            '-help', '--help' => '\\' . Help::class,
-            'create:controller','create:view','create:class', => '\\' . Generators::class,
-            'list' => '\\' . Lists::class,
-            'db:create','db:update','db:insert','db:delete','db:drop','db:truncate','db:select' => '\\' . Database::class,
-            'server', 'serve' => '\\' . Server::class,
-            'generate:key','generate:sitemap','env:add','env:remove' => '\\' . System::class,
-            'build:project' => '\\' . Builder::class,
-            'context' => '\\' . Context::class,
+            '-help', '--help' => Help::class,
+            'create:controller','create:view','create:class', 'create:model', => Generators::class,
+            'list' => Lists::class,
+            'db:create','db:update','db:insert','db:delete','db:drop','db:truncate','db:select' => Database::class,
+            'server', 'serve' => Server::class,
+            'generate:key','generate:sitemap','env:add','env:remove' => System::class,
+            'build:project' => Builder::class,
+            'context' => Context::class,
             default => ''
         };
 

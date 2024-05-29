@@ -33,12 +33,12 @@ final class Commands
                 'foo -help' => 'Show help related to foo command',
                 'create:controller userController --extend Controller' => 'Create user controller specifying class and class to extend.',
                 'create:controller userController' => 'Create user controller.',
-                'create:model userModel -extend userController' => 'Create user model and extend userController.',
+                'create:model myModel' => 'Create a model and extend BaseModel.',
                 'create:view user' => 'Create user view',
                 'create:view user --dir users' => 'Create user view in users directory.',
-                'create:class myClass' => 'Create class.',
-                'create:class myClass --extend otherClass' => 'Create class specifying class other class to extend.',
-                'create:class myClass --extend otherClass --dir myPath' => 'Create class specifying class other class to extend and directory to class.',
+                'create:class FooClass' => 'Create class.',
+                'create:class FooClass --extend otherClass' => 'Create class specifying class other class to extend.',
+                'create:class FooClass --extend otherClass --dir myPath' => 'Create class specifying class other class to extend and directory to class.',
                 'myControllerClass segment --name Peter --id 1' => 'Query your controller class, pass method as segment and parameter key followed by value.',
             ]
         ],
@@ -133,9 +133,22 @@ final class Commands
                 '<command> <option> <argument> <option>'
             ],
             'options' => [
-                'myClass' => 'Create a new class.',
-                'myClass -extend otherClass' => 'Create a new class and extend otherClass.',
-                'myClass -extend otherClass -directory myPath' => 'Create a new class and extend otherClass, save in myPath directory.',
+                'FooClass' => 'Create a new class.',
+                'FooClass -extend BarClass' => 'Create a new class and extend another class.',
+                'FooClass -extend BarClass -directory path-name' => 'Create a new class, extend another class and save in specific directory.',
+            ]
+        ],
+        'create:model' => [
+            'name' => 'create:model',
+            'group' => 'Generators',
+            'description' => "Create a new model class",
+            'usages' => [
+                '<command> <option>',
+                '<command> <option> <argument> <option>'
+            ],
+            'options' => [
+                'FooModel' => 'Create a new model class.',
+                'FooModel -implement ClassInterface' => 'Create a new model class and implement a class interface.'
             ]
         ],
         'list' => [
