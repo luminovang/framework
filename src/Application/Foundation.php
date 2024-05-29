@@ -396,13 +396,18 @@ final class Foundation
         }
 
         $message = '';
+        $logDatetime = defined('IS_UP') ? null : date('Y-m-d\TH:i:sP');
         foreach (static::$errors as $err) {
             if(!static::isFatal($err->getCode()) || PRODUCTION){
+                if($logDatetime !== null){
+                    $message .=  "[{$logDatetime}]: ";
+                }
                 $message .= "[{$err->getName()} ({$err->getCode()})] {$err->getMessage()} File: {$err->getFile()} Line: {$err->getLine()}\n";
             }
         }
 
         if($message !== ''){
+            $message = rtrim($message, "\n");
             static::log(static::getLevel($err->getCode()), $message);
         }
     }
@@ -422,7 +427,6 @@ final class Foundation
             return;
         }
 
-        $message =  "[" . date('Y-m-d\TH:i:sP') . "]: {$message}\n";
         $log =  APP_ROOT. 'writeable' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR. "{$level}.log";
 
         if (@file_put_contents($log, $message, FILE_APPEND | LOCK_EX) === false) {

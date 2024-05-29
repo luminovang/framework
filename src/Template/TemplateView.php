@@ -961,7 +961,7 @@ trait TemplateView
     */
     private static function handleException(ExceptionInterface $exception, array $options = []): void 
     {
-        $view = self::getErrorFolder('exceptions');
+        $view = self::getErrorFolder('view.error');
         $trace = SHOW_DEBUG_BACKTRACE ? debug_backtrace() : [];
   
         extract($options);
