@@ -19,7 +19,7 @@ final class Foundation
      * 
     * @var string VERSION
     */
-    public const VERSION = '3.0.3';
+    public const VERSION = '3.0.4';
 
     /**
      * Minimum required php version.

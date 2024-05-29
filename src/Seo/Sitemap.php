@@ -29,7 +29,7 @@ final class Sitemap
      * Failed connections 
      * @var array $failed  
     */
-    private static array $faied = [];
+    private static array $failed = [];
 
     /**
      * Extracted urls  
@@ -106,7 +106,7 @@ final class Sitemap
 
         self::$cli = $cli;
         self::$visited = [];
-        self::$faied = [];
+        self::$failed = [];
         self::$urls = [];
         self::$counts = 0;
         self::$skipped = 0;
@@ -128,7 +128,7 @@ final class Sitemap
 
             $xml .= '   <url>' . PHP_EOL;
             $xml .= '       <loc>' . htmlspecialchars($link) . '</loc>' . PHP_EOL;
-            $xml .= '       <lastmod>'. ($page['lastmod'] ?? self::getLastmodified($link, $app)) .'</lastmod>' . PHP_EOL;
+            $xml .= '       <lastmod>'. ($page['lastmod'] ?? self::getLastModified($link, $app)) .'</lastmod>' . PHP_EOL;
             $xml .= '       <priority>' . ($url === $page['link'] ? '1.00' : '0.8' ) . '</priority>' . PHP_EOL;
             $xml .= '   </url>' . PHP_EOL;
         }
@@ -140,10 +140,10 @@ final class Sitemap
         if(write_content($index . 'sitemap.xml', $xml)){
             self::$cli?->writeln();
             self::$cli?->header();
-            self::$cli?->writeln(TextUtils::border('Your sitemap was completed succefully'), 'green');
+            self::$cli?->writeln(TextUtils::border('Your sitemap was completed successfully'), 'green');
             self::$cli?->writeln(TextUtils::padEnd('Extracted:', 20) . self::$cli?->color('[' .self::$counts  . ']', 'green'));
             self::$cli?->writeln(TextUtils::padEnd('Skipped:', 20) . self::$cli?->color('[' .self::$skipped  . ']', 'yellow'));
-            self::$cli?->writeln(TextUtils::padEnd('Failed:', 20) . self::$cli?->color('[' . count(self::$faied) . ']', 'red'));
+            self::$cli?->writeln(TextUtils::padEnd('Failed:', 20) . self::$cli?->color('[' . count(self::$failed) . ']', 'red'));
 
             return true;
         }
@@ -291,14 +291,14 @@ final class Sitemap
 
         $url = self::replaceUrls($url);
         $found = 0;
-        $deepscans = [];
+        $deepScans = [];
     
         self::$cli?->writeln('[Progress] ' . $url);
         $html = self::connection($url);
         self::$cli?->flush();
     
         if ($html === false) {
-            self::$faied[] = $url;
+            self::$failed[] = $url;
             self::$cli?->writeln('[Failed] ' . $url);
 
             if($deep){
@@ -336,7 +336,7 @@ final class Sitemap
                 if (str_starts_with($href, self::startUrl()) && filter_var($href, FILTER_VALIDATE_URL) && !isset(self::$urls[$href])) {
                     self::$counts++;
                     $found++;
-                    $deepscans[$href] = $href;
+                    $deepScans[$href] = $href;
                     self::$urls[$href] = [
                         'link' => $href,
                         'lastmod' => $html['lastmod'],
@@ -347,7 +347,7 @@ final class Sitemap
     
         self::$skipped += ($length - $found);
 
-        foreach ($deepscans as $scan) {
+        foreach ($deepScans as $scan) {
             if (self::$config->maxScan !== 0 && self::$counts >= self::$config->maxScan) {
                 return self::$urls;
             }
@@ -367,7 +367,7 @@ final class Sitemap
     }
 
     /**
-     * Open a connection to url and extract document body and filetime if header is set
+     * Open a connection to url and extract document body and file-time if header is set
      * 
      * @param string $url url to load
      * 

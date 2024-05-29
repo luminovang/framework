@@ -39,7 +39,7 @@ final class Schema
     private static ?Schema $instance = null;
 
     /**
-     * Initialize class constructor and load configuartions.
+     * Initialize class constructor and load configurations.
      * @see /app/Controllers/Config/Meta.php
     */
     public function __construct()

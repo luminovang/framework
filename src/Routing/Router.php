@@ -210,14 +210,14 @@ final class Router
     }
 
     /**
-     * Install the apropriete context.
+     * Install the appropriate context.
      * 
      * @param string $name The context prefix name.
      * @param Closure|array|null $eHandler Context error handler.
      * @param string $first The request URI first segment.
      * @param array<string,string> $instances List of context prefix names without web context as web is default.
      * 
-     * @return bool|int<2> Return bool if context match was found or 2 if in cli  but not in clic mode, otherwise false.
+     * @return bool|int<2> Return bool if context match was found or 2 if in cli but not in cli mode, otherwise false.
     */
     private function installContext(
         string $name, 
@@ -986,23 +986,14 @@ final class Router
      */
     private static function newInstance(string $class): ?object 
     {
-        if ($class === Application::class) {
-            return self::$application ?? null;
-        }
-
-        if ($class === self::class) {
-            return self::$application?->router ?? null;
-        }
-
-        if ($class === Factory::class) {
-            return factory();
-        }
-
-        if('Closure' === $class){
-            return fn(mixed ...$arguments):mixed => null;
-        }
-
-        return new $class();
+        return match ($class) {
+            Application::class => self::$application ?? null,
+            self::class => self::$application?->router ?? null,
+            Terminal::class => self::$term ?? self::terminal(),
+            Factory::class => factory(),
+            'Closure' => fn(mixed ...$arguments): mixed => null,
+            default => new $class()
+        };
     }
 
     /**
