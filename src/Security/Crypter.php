@@ -67,7 +67,7 @@ final class Crypter
      * @return class-object<EncryptionInterface> An instance of the encryption class.
      * 
      * @throws EncryptionException Throws when an empty encryption key is passed.
-     * @throws EncryptionException Throws when invalid handler is specified or handler extention not loaded.
+     * @throws EncryptionException Throws when invalid handler is specified or handler extension not loaded.
      */
     public static function getInstance(): EncryptionInterface
     {
@@ -232,7 +232,7 @@ final class Crypter
     }
 
     /**
-     * Initalize the configuration
+     * Initialize the configuration
     */
     private static function initConfig(): void 
     {

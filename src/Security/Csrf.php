@@ -118,7 +118,7 @@ final class Csrf
     }
 
     /**
-     * Generates and display an HTML hiiden input field for the CSRF token.
+     * Generates and display an HTML hidden input field for the CSRF token.
      * 
      * @return void 
     */

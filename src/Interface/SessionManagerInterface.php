@@ -37,12 +37,29 @@ interface SessionManagerInterface
    */
   public function setStorage(string $storage): self;
 
+   /**
+   * Sets the session storage table index name to separate user session from other sessions and cookies.
+   *
+   * @param string $table The session storage table index.
+   * 
+   * @return self
+  */
+  public function setTable(string $table): self;
+
   /**
    * Gets the current session storage instance name.
    * 
    * @return string The session storage name.
   */
   public function getStorage(): string;
+
+  /**
+   * Empty all data stored in session table.
+   * This method doesn't behave same way as PHP `session_destroy`.
+   *
+   * @return bool Return true if storage was data was deleted successfully otherwise false.
+  */
+  public function destroyItem(): bool;
 
   /** 
    * Retrieves an item from the session storage.
@@ -91,7 +108,7 @@ interface SessionManagerInterface
    * @param string $type Return type of 'array' or 'object'. Default is 'array'.
    * 
    * @return array|object All stored session data.
-   * @throws JsonException Throwd if json error occurs.
+   * @throws JsonException Throws if json error occurs.
   */
   public function getResult(string $type = 'array'): array|object;
 
@@ -120,7 +137,7 @@ interface SessionManagerInterface
    * @param string $index Optional key to retrieve.
    * 
    * @return object|array|null The retrieved data or null if key index not found.
-   * @throws JsonException Throwd if json error occurs.
+   * @throws JsonException Throws if json error occurs.
   */
   public function toAs(string $type = 'array', ?string $index = null): object|array|null;
 }

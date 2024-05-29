@@ -241,7 +241,7 @@ final class Sitemap
     }
 
     /**
-     * Replace url and remove exessive dots.
+     * Replace url and remove excessive dots.
      * 
      * @param string $url URL to replace.
      * 
