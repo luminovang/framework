@@ -612,14 +612,21 @@ final class Builder extends Connection
      * @param string $key The storage cache key
      * @param string $storage Private storage name hash name (optional): but is recommended to void storing large data in one file.
      * @param DateTimeInterface|int $expiry The cache expiry time in seconds (default: 7 days).
+     * @param string|null $folder Optionally set a folder name to store caches.
      * 
      * @return self $this class instance.
     */
-    public function cache(string $key, string $storage = null, DateTimeInterface|int $expiry = 7 * 24 * 60 * 60): self
+    public function cache(
+        string $key, 
+        string $storage = null, 
+        DateTimeInterface|int $expiry = 7 * 24 * 60 * 60, 
+        ?string $folder = null
+    ): self
     {
         if($this->caching){
             $storage ??=  'database_' . ($this->databaseTable ?? 'capture');
-            $this->cache = FileCache::getInstance(null, 'database');
+            $folder = ($folder === null) ? '' : DIRECTORY_SEPARATOR . trim($folder, DIRECTORY_SEPARATOR);
+            $this->cache = FileCache::getInstance(null, 'database' . $folder);
             $this->cache->setStorage($storage);
             $this->cache->setExpire($expiry);
             $this->cache->create();

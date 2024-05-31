@@ -11,6 +11,10 @@ namespace Luminova\Storages;
 
 use \Luminova\Application\Foundation;
 use \Luminova\Security\Crypter;
+use \Peterujah\NanoBlock\NanoImage;
+use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\StorageException;
+use \Exception;
 
 final class FileDelivery
 {
@@ -66,6 +70,132 @@ final class FileDelivery
      */
     public function output(string $basename, int $expiry = 0, array $headers = []): bool
     {
+        $filename = $this->assertOutputHead($basename, $expiry, $headers);
+
+        static::cacheHeaders($headers, $basename, $filename, $expiry);
+
+        if ($fp = fopen($filename, 'rb')) {
+            return fpassthru($fp) !== false;
+        }
+        return false;
+    }
+
+
+    /**
+     * Outputs the file content with appropriate headers.
+     *
+     * @param string $basename The file name (e.g: image.png).
+     * @param int $expiry Expiry time in seconds for cache control (default: 0), indicating no cache.
+     * @param array<string,mixed> $options Image filter options.
+     *  -    width (int)  -   New output width.
+     *  -    height (int) -  New output height.
+     *  -    ratio (bool) -  Use aspect ratio while resizing image.
+     *  -    quality (int) - Image quality.
+     * @param array<string,mixed> $headers An associative array for additional headers to set.
+     * 
+     * @return bool Returns true if file output is successfully, false otherwise.
+     * @throws RuntimeException Throws if NanoImage image is not installed.
+     * @throws StorageException Throws if error ocurred during image processing.
+     * 
+     * > By default `304`, `404` and `500` headers will be set based file status and cache control.
+     */
+    public function outputImage(string $basename, int $expiry = 0, array $options = [], array $headers = []): bool
+    {
+        if(!class_exists(NanoImage::class)){
+            throw new RuntimeException('To use this method you need to install "NanoImage" by running command "composer require peterujah/nano-image"' );
+        }
+
+        $filename = $this->assertOutputHead($basename, $expiry, $headers);
+        if($filename === false){
+            return false;
+        }
+
+        try{
+            $img = new NanoImage();
+         
+            $img->open($filename);
+            $img->resize(
+                $options['width'] ?? 200, 
+                $options['height'] ?? 200, 
+                $options['ratio'] ?? true
+            );
+
+            static::cacheHeaders($headers, $basename, null, $expiry);
+            $image = $img->get($options['quality']??100);
+            if(is_string($image)){
+                echo $image;
+            }
+
+            $img->free();
+        }catch(Exception $e){
+            throw new StorageException($e->getMessage(), $e->getCode(), $e);
+        }
+
+        return true;
+    }
+
+    /**
+     * Processes a temporal URL and outputs the file if valid and not expired.
+     *
+     * @param string $url_hash The encrypted URL hash.
+     * @param array $headers Additional headers to set.
+     * 
+     * @return bool True if file output is successful, false otherwise.
+     * @throws EncryptionException Throws if decryption failed.
+    */
+    public function temporal(string $url_hash, array $headers = []): bool
+    {
+        $data = Crypter::decrypt($url_hash);
+
+        if ($data !== false && $data !== null) {
+            [$basename, $expiry, $then] = explode('|', $data);
+            $expiration = (int) $then + (int) $expiry;
+
+            if (time() > $expiration) {
+                return static::expiredHeader(404);
+            }
+
+            return $this->output($basename, ($expiration - time()), $headers);
+        }
+
+        return static::expiredHeader(404);
+    }
+
+    /**
+     * Generates temporal URL with an expiration time for given filename.
+     *
+     * @param string $basename The name of the file.
+     * @param int $expiry The expiration time in seconds (default: 1hour).
+     * 
+     * @return string|false Return based64 encrypted url, otherwise false.
+     * @throws EncryptionException Throws if encryption failed.
+    */
+    public function url(string $basename, int $expiry = 3600): string|bool
+    {
+        $filename = static::$filepath . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
+  
+        if (!file_exists($filename)) {
+            return false;
+        }
+
+        if ($expiry > 0) {
+            return Crypter::encrypt("{$basename}|{$expiry}|" . time());
+        }
+
+        return false;
+    }
+
+    /**
+     * Set Output head.
+     *
+     * @param string $basename The file name (e.g: image.png).
+     * @param int $expiry Expiry time in seconds for cache control (default: 0), indicating no cache.
+     * @param array<string,mixed> $headers An associative array for additional headers passed by reference.
+     * 
+     * @return string|bool Filename or false.
+     */
+    private function assertOutputHead(string $basename, int $expiry, array &$headers): string|bool
+    {
         $filename = static::$filepath . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
   
         if (!file_exists($filename)) {
@@ -93,61 +223,7 @@ final class FileDelivery
             return static::expiredHeader(500);
         }
 
-        static::cacheHeaders($headers, $basename, $filename, $expiry);
-
-        if ($fp = fopen($filename, 'rb')) {
-            return fpassthru($fp) !== false;
-        }
-        return false;
-    }
-
-    /**
-     * Processes a temporal URL and outputs the file if valid and not expired.
-     *
-     * @param string $url_hash The encrypted URL hash.
-     * @param array $headers Additional headers to set.
-     * 
-     * @return bool True if file output is successful, false otherwise.
-    */
-    public function temporal(string $url_hash, array $headers = []): bool
-    {
-        $data = Crypter::decrypt($url_hash);
-
-        if ($data !== false && $data !== null) {
-            [$basename, $expiry, $then] = explode('|', $data);
-            $expiration = (int) $then + (int) $expiry;
-
-            if (time() > $expiration) {
-                return static::expiredHeader(404);
-            }
-
-            return $this->output($basename, ($expiration - time()), $headers);
-        }
-
-        return static::expiredHeader(404);
-    }
-
-    /**
-     * Generates temporal URL with an expiration time for given filename.
-     *
-     * @param string $basename The name of the file.
-     * @param int $expiry The expiration time in seconds (default: 1hour).
-     * 
-     * @return string|false Return based64 encrypted url, otherwise false.
-    */
-    public function url(string $basename, int $expiry = 3600): string|bool
-    {
-        $filename = static::$filepath . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
-  
-        if (!file_exists($filename)) {
-            return false;
-        }
-
-        if ($expiry > 0) {
-            return Crypter::encrypt("{$basename}|{$expiry}|" . time());
-        }
-
-        return false;
+        return $filename;
     }
 
     /**
@@ -192,10 +268,10 @@ final class FileDelivery
      *
      * @param array $headers The headers array.
      * @param string $basename The name of the file.
-     * @param string $filename The full file path.
+     * @param string|null $filename The full file path.
      * @param int $expiry The expiration time in seconds.
     */
-    private static function cacheHeaders(array $headers, string $basename, string $filename, int $expiry): void
+    private static function cacheHeaders(array $headers, string $basename, string|null $filename, int $expiry): void
     {
         if (!isset($headers['Expires'])) {
             if ($expiry > 0) {
@@ -211,7 +287,9 @@ final class FileDelivery
         }
 
         $headers['Content-Disposition'] = 'inline; filename="' . $basename . '"';
-        $headers['Content-Length'] = filesize($filename);
+        if($filename !== null){
+            $headers['Content-Length'] = filesize($filename);
+        }
 
         static::headers($headers);
     }

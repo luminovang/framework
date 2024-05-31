@@ -11,6 +11,8 @@ namespace Luminova\Storages;
 
 use \Luminova\Exceptions\FileException;
 use \Luminova\Exceptions\RuntimeException;
+use \RecursiveIteratorIterator;
+use \RecursiveDirectoryIterator;
 
 class FileManager
 {
@@ -594,6 +596,39 @@ class FileManager
         }
 
         return true;
+    }
+
+    /**
+     * Calculate the size of a given file or directory.
+     *
+     * This method calculates the size of a given file or recursively calculates the
+     * total size of all files within a directory. If the path does not exist, it
+     * throws a FileException.
+     *
+     * @param string $path The path to the file or directory.
+     * 
+     * @return int The size in bytes.
+     * @throws FileException If the path does not exist.
+     */
+    public static function size(string $path): int 
+    {
+        if (!file_exists($path)) {
+            throw new FileException("The file does not exist: $path");
+        }
+    
+        $size = 0;
+        if(is_dir($path)){
+            $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS));
+        
+            foreach ($files as $file) {
+                $size += $file->getSize();
+            }
+
+            return $size;
+        }
+
+        $size = filesize($path);
+        return $size !== false ? $size : 0;
     }
 
     /**

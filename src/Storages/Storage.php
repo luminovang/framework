@@ -217,7 +217,6 @@ class Storage extends Adapters
 
         if($this->symbolic($target, $link)){
             try {
-                //public_url
                 return $this->url($target);
             } catch (Exception $e) {
                 return false;
@@ -286,7 +285,7 @@ class Storage extends Adapters
      * Get the checksum for a file.
      *
      * @param string $path The path to the file.
-     * @return array $options Optional file optionss.
+     * @return array $options Optional file options.
      * 
      * @return string|false Return file checksum, otherwise false.
      *

@@ -12,6 +12,7 @@ namespace Luminova\Base;
 
 use \Luminova\Database\Builder;
 use \Luminova\Security\InputValidator;
+use \Luminova\Storages\FileManager;
 use \Peterujah\NanoBlock\SearchController as Searchable;
 use \Luminova\Exceptions\RuntimeException;
 use \DateTimeInterface;
@@ -52,6 +53,13 @@ abstract class BaseModel
      * @var DateTimeInterface|int $expiry
     */
     protected DateTimeInterface|int $expiry = 7 * 24 * 60 * 60;
+
+    /**
+     * Custom folder for model caches.
+     * 
+     * @var string $cacheFolder
+    */
+    protected static string $cacheFolder = '';
 
     /**
      * Specify whether the model's table is updatable, deletable, and insertable.
@@ -121,6 +129,10 @@ abstract class BaseModel
         $this->builder ??= ($builder ?? Builder::getInstance());
         $this->builder->caching($this->cachable);
         $this->builder->table($this->table);
+
+        if($this->cachable && static::$cacheFolder === ''){
+            static::$cacheFolder = get_class_name(static::class);
+        }
     }
 
     /**
@@ -182,11 +194,13 @@ abstract class BaseModel
 
         if(is_array($key)){
             $tbl->in($this->primaryKey, $key);
+            $cache_key = md5(json_encode($key));
         }else{
             $tbl->where($this->primaryKey, '=', $key);
+            $cache_key = $key;
         }
 
-        $tbl->cache('find', $this->table, $this->expiry);
+        $tbl->cache($cache_key, $this->table . '_find', $this->expiry, static::$cacheFolder);
         return $tbl->find($fields);
     }
 
@@ -200,9 +214,15 @@ abstract class BaseModel
      * 
      * @return mixed Return selected records or false on failure.
     */
-    public function select(string|array $key = null, array $fields = ['*'],  int $limit = 100, int $offset = 0): mixed 
+    public function select(
+        string|array $key = null, 
+        array $fields = ['*'],  
+        int $limit = 100, 
+        int $offset = 0
+    ): mixed 
     {
         $tbl = $this->builder->table($this->table);
+        $cache_key = 'select';
         if($key !== null){
             if(is_array($key)){
                 $tbl->in($this->primaryKey, $key);
@@ -210,9 +230,10 @@ abstract class BaseModel
                 $tbl->where($this->primaryKey, '=', $key);
             }
         }
-
+        
+        $cache_key = static::cacheKey($key, $fields);
         $tbl->limit($limit, $offset);
-        $tbl->cache('select', $this->table, $this->expiry);
+        $tbl->cache($cache_key, $this->table . '_select', $this->expiry, static::$cacheFolder);
         return $tbl->select($fields);
     }
 
@@ -252,7 +273,7 @@ abstract class BaseModel
     public function total(): int
     {
         return $this->builder->table($this->table)
-            ->cache('total', $this->table, $this->expiry)
+            ->cache('total', $this->table . '_total', $this->expiry, static::$cacheFolder)
             ->total();
     }
 
@@ -273,7 +294,8 @@ abstract class BaseModel
             $tbl->where($this->primaryKey, '=', $key);
         }
 
-        $tbl->cache('count', $this->table, $this->expiry);
+        $cache_key = static::cacheKey($key);
+        $tbl->cache('count_' . $cache_key, $this->table . '_total', $this->expiry, static::$cacheFolder);
         return $tbl->total();
     }
 
@@ -294,6 +316,7 @@ abstract class BaseModel
         }
 
         $query = strtolower($query);
+        $cache_key = static::cacheKey($query, $fields);
         $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
         $columns = 'WHERE';
 
@@ -302,9 +325,9 @@ abstract class BaseModel
         }
 
         $columns = rtrim($columns, ' OR');
- 
+        
         return $this->builder->query("SELECT {$fields} FROM {$this->table} {$columns} LIMIT {$offset}, {$limit}")
-            ->cache('search', md5($this->table . $query), $this->expiry)
+            ->cache($cache_key, $this->table . '_search', $this->expiry, static::$cacheFolder)
             ->execute([
                 'keyword' => "%{$query}%"
             ]);
@@ -336,11 +359,12 @@ abstract class BaseModel
             return false;
         }
 
+        $cache_key = static::cacheKey($query, $fields);
         $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
         $sql = "SELECT {$fields} FROM {$this->table} {$sqls} LIMIT {$offset}, {$limit}";
 
         $tbl = $this->builder->query($sql);
-        $tbl->cache('doSearch', md5($this->table . $query), $this->expiry);
+        $tbl->cache($cache_key, $this->table . '_doSearch', $this->expiry, static::$cacheFolder);
         $result = $tbl->execute();
 
         if(empty($result)){
@@ -348,6 +372,29 @@ abstract class BaseModel
         }
 
         return $result;
+    }
+
+    /**
+     * Extract cache key from query key(s) and return fields.
+     * This ensures that the cache key is unique based on select statement return columns and primary key or keys.
+     * 
+     * @param string|array $key The query lookup key or keys to extract from.
+     * @param array $fields The optional query fields to extract from.
+     * 
+     * @return string Hashed cache key.
+     */
+    protected static function cacheKey(string|array $key, array $fields = []): string 
+    {
+        $key = is_array($key) ? $key : [$key];
+
+        sort($key);
+        sort($fields);
+
+        $fields = ($fields === ['*'] || $fields === []) ? '*' : implode(', ', $fields);
+        $keyString = implode(', ', $key);
+        $combined = $fields . '|' . $keyString;
+
+        return md5($combined);
     }
 
     /**
@@ -381,6 +428,21 @@ abstract class BaseModel
         self::$searchInstance->setParameter($this->searchables);
 
         return self::$searchInstance;
+    }
+
+    /**
+     * Delete all model database caches.
+     * 
+     * @return bool Return true if all caches are deleted, false otherwise.
+    */
+    public function purge(): bool 
+    {
+        if(static::$cacheFolder === ''){
+            return false;
+        }
+
+        $path = root('writeable/caches/database/' . static::$cacheFolder);
+        return FileManager::remove($path) > 0;
     }
 
     /**

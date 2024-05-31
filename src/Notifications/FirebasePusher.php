@@ -13,8 +13,8 @@ namespace Luminova\Notifications;
 use \Kreait\Firebase\Factory;
 use \Kreait\Firebase\Messaging\CloudMessage;
 use \Kreait\Firebase\Messaging\Notification;
-use \Luminova\Config\Configuration;
 use \Luminova\Exceptions\ErrorException;
+use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Models\PushMessage;
 use \Exception;
 
@@ -25,26 +25,53 @@ use \Exception;
  */
 class FirebasePusher
 {
-    protected $factory;
+    /**
+     * Notification factory.
+     * 
+     * @var Factory $factory 
+    */
+    protected ?Factory $factory = null;
 
+    /**
+     * Flag for notification to id.
+     * 
+     * @var string TO_ID
+    */
     public const TO_ID = "id";
+
+    /**
+     * Flag for notification to ids.
+     * 
+     * @var string TO_IDS
+    */
     public const TO_IDS = "ids";
+
+    /**
+     * Flag for notification to topic.
+     * 
+     * @var string TO_TOPIC
+    */
     public const TO_TOPIC = "topic";
 
     /**
      * Constructor
      *
      * @param string $filename The filename of the service account JSON file.
-     * @param string $dir      The directory where the service account file is located.
      */
-    public function __construct(string $filename = "ServiceAccount.json", string $dir = __DIR__)
+    public function __construct(string $filename = 'ServiceAccount.json')
     {
-        $serviceAccount = root('/writeable/credentials/') . $filename;
+        if(!class_exists(Factory::class)){
+            throw new RuntimeException('Package: ' .  Factory::class . ', not found, you need to install first before using firebase module.');
+        }
+       
+        if($this->factory === null){
+            $serviceAccount = root('/writeable/credentials/') . $filename;
 
-        if (file_exists($serviceAccount)) {
-            $this->factory = (new Factory)->withServiceAccount($serviceAccount);
-        } else {
-            ErrorException::throwException("Firebase notification service account not found at [{$serviceAccount}]");
+            if (file_exists($serviceAccount)) {
+                $this->factory = (new Factory)->withServiceAccount($serviceAccount);
+            } else {
+                throw new RuntimeException("Firebase notification service account could not be found in '{$serviceAccount}'");
+            }
         }
     }
 
@@ -168,7 +195,6 @@ class FirebasePusher
                         'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
                     ],
                 ])
-                //->withApnsConfig([])
             );
         }catch (Exception $e) {
             ErrorException::throwException($e->getMessage());
@@ -177,9 +203,7 @@ class FirebasePusher
 
     public function subscribe(string $token, string $topic): array 
     {
-        $result = $this->messaging()->subscribeToTopic($topic, $token);
-        //$result = $this->messaging()->subscribeToTopics($topics, $registrationTokenOrTokens);
-        return $result;
+        return $this->messaging()->subscribeToTopic($topic, $token);
     }
 
     /**
