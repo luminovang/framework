@@ -11,6 +11,7 @@ namespace Luminova\Storages;
 
 use \Luminova\Application\Foundation;
 use \Luminova\Security\Crypter;
+use \Luminova\Storages\FileManager;
 use \Peterujah\NanoBlock\NanoImage;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\StorageException;
@@ -72,14 +73,19 @@ final class FileDelivery
     {
         $filename = $this->assertOutputHead($basename, $expiry, $headers);
 
-        static::cacheHeaders($headers, $basename, $filename, $expiry);
-
-        if ($fp = fopen($filename, 'rb')) {
-            return fpassthru($fp) !== false;
+        if($filename === true){
+            return true;
         }
-        return false;
-    }
 
+        $read = false;
+
+        if ($handler = fopen($filename, 'rb')) {
+            $filesize = static::cacheHeaders($headers, $basename, $filename, $expiry);
+            $read = FileManager::read($handler, $filesize, $headers['Content-Type']);
+        }
+ 
+        return $read ? true : static::expiredHeader(500);
+    }
 
     /**
      * Outputs the file content with appropriate headers.
@@ -90,22 +96,27 @@ final class FileDelivery
      *  -    width (int)  -   New output width.
      *  -    height (int) -  New output height.
      *  -    ratio (bool) -  Use aspect ratio while resizing image.
-     *  -    quality (int) - Image quality.
+     *  -    qaulity (int) - Image quality.
      * @param array<string,mixed> $headers An associative array for additional headers to set.
      * 
      * @return bool Returns true if file output is successfully, false otherwise.
      * @throws RuntimeException Throws if NanoImage image is not installed.
-     * @throws StorageException Throws if error ocurred during image processing.
+     * @throws StorageException Throws if error cuured during image processing.
      * 
      * > By default `304`, `404` and `500` headers will be set based file status and cache control.
      */
     public function outputImage(string $basename, int $expiry = 0, array $options = [], array $headers = []): bool
     {
         if(!class_exists(NanoImage::class)){
-            throw new RuntimeException('To use this method you need to install "NanoImage" by running command "composer require peterujah/nano-image"' );
+            throw new RuntimeException('To use this method you need to install "NanoImage" by runing command "composer require peterujah/nano-image"' );
         }
 
         $filename = $this->assertOutputHead($basename, $expiry, $headers);
+
+        if($filename === true){
+            return true;
+        }
+
         if($filename === false){
             return false;
         }
@@ -121,7 +132,7 @@ final class FileDelivery
             );
 
             static::cacheHeaders($headers, $basename, null, $expiry);
-            $image = $img->get($options['quality']??100);
+            $image = $img->get($options['qaulity']??100);
             if(is_string($image)){
                 echo $image;
             }
@@ -141,7 +152,7 @@ final class FileDelivery
      * @param array $headers Additional headers to set.
      * 
      * @return bool True if file output is successful, false otherwise.
-     * @throws EncryptionException Throws if decryption failed.
+     * @throws EncryptionException Throws if decription failed.
     */
     public function temporal(string $url_hash, array $headers = []): bool
     {
@@ -207,19 +218,22 @@ final class FileDelivery
             $headers['ETag'] = $etag;
 
             if ($expiry > 0) {
+                $filemtime = filemtime($filename);
                 $ifNoneMatch = trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '');
                 if ($ifNoneMatch === $etag) {
-                    return static::notModifiedHeader($expiry);
+                    return static::notModifiedHeader($expiry, $filemtime);
                 }
 
-                if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) && ($modify = filemtime($filename)) !== false && strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) >= $modify) {
-                   return static::notModifiedHeader($expiry);
+                if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) && ($modify = $filemtime) !== false && strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) >= $modify) {
+                   return static::notModifiedHeader($expiry, $filemtime);
                 }
+
+                $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T', $filemtime);
             }
         }
 
         $headers['Content-Type'] ??= get_mime($filename);
-        if (!$headers['Content-Type']) {
+        if (!isset($headers['Content-Type'])) {
             return static::expiredHeader(500);
         }
 
@@ -236,10 +250,10 @@ final class FileDelivery
      */
     private static function expiredHeader(int $statusCode, array $headers = []): bool
     {
-        http_response_code($statusCode);
         $headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
         $headers['Expires'] = '0';
-        static::headers($headers);
+        $headers['Pragma'] = 'no-cache';
+        static::headers($headers, $statusCode);
 
         return false;
     }
@@ -252,13 +266,14 @@ final class FileDelivery
      * 
      * @return true
      */
-    private static function notModifiedHeader(int $expiry, array $headers = []): bool
+    private static function notModifiedHeader(int $expiry, $filemtime, array $headers = []): bool
     {
-        http_response_code(304);
         if($expiry > 0){
             $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T', time() + $expiry);
+            $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T', $filemtime);
         }
-        static::headers($headers);
+
+        static::headers($headers, 304, ($expiry > 0));
 
         return true;
     }
@@ -270,8 +285,10 @@ final class FileDelivery
      * @param string $basename The name of the file.
      * @param string|null $filename The full file path.
      * @param int $expiry The expiration time in seconds.
+     * 
+     * @return int Filesize.
     */
-    private static function cacheHeaders(array $headers, string $basename, string|null $filename, int $expiry): void
+    private static function cacheHeaders(array $headers, string $basename, string|null $filename, int $expiry): int
     {
         if (!isset($headers['Expires'])) {
             if ($expiry > 0) {
@@ -291,19 +308,31 @@ final class FileDelivery
             $headers['Content-Length'] = filesize($filename);
         }
 
-        static::headers($headers);
+        static::headers($headers, 200, ($expiry > 0));
+
+        return $headers['Content-Length'] ?? 0;
     }
 
     /**
      * Sets HTTP headers.
      *
      * @param array $headers The headers to set.
+     * @param int $status HTTP status code.
+     * @param bool $cache Allow caching if true remove pragma header.
     */
-    private static function headers(array $headers): void 
+    private static function headers(array $headers, int $status = 200, bool $cache = false): void 
     {
+        if (headers_sent()) {
+            header_remove();
+        }
+        http_response_code($status);
         $headers['X-Powered-By'] = Foundation::copyright();
         foreach ($headers as $key => $value) {
             header("$key: $value");
+        }
+
+        if($cache){
+            header_remove("Pragma");
         }
     }
 }

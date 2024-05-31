@@ -204,7 +204,7 @@ class Storage extends Adapters
      * 
      * > This method is only available on local filesystem.
      * 
-     * > Also it shpuld only be called after method `write` has been called otherwise it will return false.
+     * > Also it should only be called after method `write` has been called otherwise it will return false.
     */
     public function toLink(): string|bool
     {
@@ -648,7 +648,6 @@ class Storage extends Adapters
             StorageException::throwException($e->getMessage(), $e->getCode(), $e);
         }
     }
-
 
     /**
      * Retrieves the configurations for the specified context.

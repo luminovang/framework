@@ -632,6 +632,115 @@ class FileManager
     }
 
     /**
+     * Reads binary files in chunks.
+     * 
+     * @param resource $handler The file handler.
+     * @param int $length The length of each chunk (default: 2MB in bytes).
+     * 
+     * @return bool True if the file was successfully read, false otherwise.
+     */
+    public static function readBinary($handler, int $length = (1 << 21)): bool
+    {
+        while (!feof($handler)) {
+            $chunk = fread($handler, $length);
+
+            if ($chunk === false) {
+                fclose($handler);
+                return false;
+            }
+
+            echo $chunk;
+            flush();
+
+            if (connection_status() != CONNECTION_NORMAL) {
+                break;
+            }
+        }
+
+        fclose($handler);
+        return true;
+    }
+
+    /**
+     * Reads text-based files in chunks while preserving line endings.
+     * 
+     * @param resource $handler The file handler.
+     * @param int $filesize The size of the file.
+     * @param int $length The length of each chunk (default: 2MB in bytes).
+     * 
+     * @return bool True if the file was successfully read, false otherwise.
+     */
+    public static function readText($handler, int $filesize, int $length = (1 << 21)): bool
+    {
+        if($filesize === 0){
+            fclose($handler);
+            return false;
+        }
+
+        $position = 0;
+        while (!feof($handler)) {
+            fseek($handler, $position);
+            $chunk = fread($handler, $length);
+
+            if ($chunk === false) {
+                fclose($handler);
+                return false;
+            }
+
+            $last = strrpos($chunk, "\n");
+            if ($last === false) {
+                $last = mb_strlen($chunk);
+            }
+
+            echo mb_substr($chunk, 0, $last);
+            flush();
+
+            $position += $last;
+
+            if (($position + $length) > $filesize) {
+                $length = $filesize - $position;
+            }
+
+            if (connection_status() != CONNECTION_NORMAL) {
+                break;
+            }
+        }
+
+        fclose($handler);
+        return true;
+    }
+
+    /**
+     * Reads a file in chunks, optimizing for efficiency and type-specific handling.
+     * 
+     * @param resource $handler The file handler.
+     * @param int $filesize The size of the file.
+     * @param string $mime The MIME type of the file.
+     * @param int $length The length of each chunk (default: 2MB).
+     * 
+     * @return bool Return true if the file was successfully read, false otherwise.
+     */
+    public static function read($handler, int $filesize, string $mime, int $length = (1 << 21)): bool
+    {
+        if ($filesize === 0) {
+            fclose($handler);
+            return false;
+        }
+
+        if ($filesize > 5 * 1024 * 1024) {
+            if (preg_match('/^(text\/.*|application\/json|application\/xml)$/i', $mime)) {
+                return self::readText($handler, $filesize, $length);
+            } else {
+                return self::readBinary($handler, $length);
+            }
+        }
+
+        $read = fpassthru($handler);
+        fclose($handler);
+        return $read > 0;
+    }
+
+    /**
      * Get path properties in compatible based on os return from application root.
      * 
      * @param string $name File property name.

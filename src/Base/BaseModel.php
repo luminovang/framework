@@ -160,10 +160,10 @@ abstract class BaseModel
      * @param array<string,mixed> $data associative array of columns and values to update.
      * @param int $max The maximum number of records to update.
      * 
-     * @return int Return the number of records updated.
+     * @return int|bool  Return the number of records updated.
      * @throws RuntimeException Throws if columns contains unallowed key.
     */
-    public function update(string|array $key, array $data, int $max = 1): int 
+    public function update(string|array $key, array $data, int $max = 1): int|bool  
     {
         if($this->readOnly){
             return 0;
@@ -243,9 +243,9 @@ abstract class BaseModel
      * @param string|array<int,mixed> $key The keys to delete, if null all record in table will be deleted.
      * @param int $max The maximum number of records to delete.
      * 
-     * @return bool Return true if the record was successfully deleted otherwise false.
+     * @return int|bool  Return true if the record was successfully deleted otherwise false.
     */
-    public function delete(string|array $key = null, int $max = 1): bool
+    public function delete(string|array $key = null, int $max = 1): int|bool 
     {
         if($this->readOnly){
             return false;
@@ -268,9 +268,9 @@ abstract class BaseModel
     /**
      * Get total number of records in the database.
      * 
-     * @return int Return the number of records.
+     * @return int|bool  Return the number of records.
     */
-    public function total(): int
+    public function total(): int|bool 
     {
         return $this->builder->table($this->table)
             ->cache('total', $this->table . '_total', $this->expiry, static::$cacheFolder)
@@ -282,9 +282,9 @@ abstract class BaseModel
      * 
      * @param string|array<int,mixed> $key The key?s to find total number of matched.
      * 
-     * @return int Return the number of records.
+     * @return int|bool  Return the number of records.
     */
-    public function count(string|array $key): int
+    public function count(string|array $key): int|bool 
     {
         $tbl = $this->builder->table($this->table);
 
@@ -345,7 +345,13 @@ abstract class BaseModel
      * @return mixed Return search results.  
      * @throws RuntimeException If the third party search controller class is not installed.
     */
-    public final function doSearch(string $query, array $fields = ['*'], int $limit = 100, int $offset = 0, string $flag = 'any'): mixed 
+    public final function doSearch(
+        string $query, 
+        array $fields = ['*'], 
+        int $limit = 100, 
+        int $offset = 0, 
+        string $flag = 'any'
+    ): mixed 
     {
         if ($limit < 0 || $offset < 0 || $query === '') {
             return false;
