@@ -140,17 +140,17 @@ abstract class BaseModel
      *
      * @param array<string,mixed> $values nested array of values to insert into table.
      * 
-     * @return int Return the number of records inserted.
+     * @return bool Return true if records was inserted, otherwise false.
      * @throws RuntimeException Throws if columns contains unallowed key.
     */
-    public function insert(array $values): int 
+    public function insert(array $values): bool 
     {
         if($this->readOnly){
             return 0;
         }
 
         $this->assertIsAllowed($this->insertables, $values);
-        return $this->builder->table($this->table)->insert($values);
+        return $this->builder->table($this->table)->insert($values) > 0;
     }
 
     /**
@@ -160,10 +160,10 @@ abstract class BaseModel
      * @param array<string,mixed> $data associative array of columns and values to update.
      * @param int $max The maximum number of records to update.
      * 
-     * @return int|bool  Return the number of records updated.
+     * @return bool Return true if records was updated, otherwise false.
      * @throws RuntimeException Throws if columns contains unallowed key.
     */
-    public function update(string|array $key, array $data, int $max = 1): int|bool  
+    public function update(string|array $key, array $data, int $max = 1): bool  
     {
         if($this->readOnly){
             return 0;
@@ -174,10 +174,10 @@ abstract class BaseModel
         $tbl->max($max);
 
         if(is_array($key)){
-            return $tbl->in($this->primaryKey, $key)->update($data);
+            return $tbl->in($this->primaryKey, $key)->update($data) > 0;
         }
         
-        return $tbl->where($this->primaryKey, '=', $key)->update($data);
+        return $tbl->where($this->primaryKey, '=', $key)->update($data) > 0;
     }
 
     /**
@@ -243,9 +243,9 @@ abstract class BaseModel
      * @param string|array<int,mixed> $key The keys to delete, if null all record in table will be deleted.
      * @param int $max The maximum number of records to delete.
      * 
-     * @return int|bool  Return true if the record was successfully deleted otherwise false.
+     * @return bool Return true if the record was successfully deleted otherwise false.
     */
-    public function delete(string|array $key = null, int $max = 1): int|bool 
+    public function delete(string|array $key = null, int $max = 1): bool 
     {
         if($this->readOnly){
             return false;
