@@ -407,8 +407,7 @@ final class Foundation
         }
 
         if($message !== ''){
-            $message = rtrim($message, "\n");
-            static::log(static::getLevel($err->getCode()), $message);
+            static::log(static::getLevel($err->getCode()), rtrim($message, "\n"));
         }
     }
 
