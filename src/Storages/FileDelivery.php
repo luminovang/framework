@@ -88,7 +88,7 @@ final class FileDelivery
     }
 
     /**
-     * Outputs the file content with appropriate headers.
+     * Outputs the image content with appropriate headers.
      *
      * @param string $basename The file name (e.g: image.png).
      * @param int $expiry Expiry time in seconds for cache control (default: 0), indicating no cache.
@@ -96,19 +96,19 @@ final class FileDelivery
      *  -    width (int)  -   New output width.
      *  -    height (int) -  New output height.
      *  -    ratio (bool) -  Use aspect ratio while resizing image.
-     *  -    qaulity (int) - Image quality.
+     *  -    quality (int) - Image quality.
      * @param array<string,mixed> $headers An associative array for additional headers to set.
      * 
      * @return bool Returns true if file output is successfully, false otherwise.
      * @throws RuntimeException Throws if NanoImage image is not installed.
-     * @throws StorageException Throws if error cuured during image processing.
+     * @throws StorageException Throws if error occurred during image processing.
      * 
      * > By default `304`, `404` and `500` headers will be set based file status and cache control.
      */
     public function outputImage(string $basename, int $expiry = 0, array $options = [], array $headers = []): bool
     {
         if(!class_exists(NanoImage::class)){
-            throw new RuntimeException('To use this method you need to install "NanoImage" by runing command "composer require peterujah/nano-image"' );
+            throw new RuntimeException('To use this method you need to install "NanoImage" by running command "composer require peterujah/nano-image"' );
         }
 
         $filename = $this->assertOutputHead($basename, $expiry, $headers);
@@ -132,7 +132,7 @@ final class FileDelivery
             );
 
             static::cacheHeaders($headers, $basename, null, $expiry);
-            $image = $img->get($options['qaulity']??100);
+            $image = $img->get($options['quality']??100);
             if(is_string($image)){
                 echo $image;
             }
@@ -152,7 +152,7 @@ final class FileDelivery
      * @param array $headers Additional headers to set.
      * 
      * @return bool True if file output is successful, false otherwise.
-     * @throws EncryptionException Throws if decription failed.
+     * @throws EncryptionException Throws if decryption failed.
     */
     public function temporal(string $url_hash, array $headers = []): bool
     {
