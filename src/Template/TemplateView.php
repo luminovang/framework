@@ -22,8 +22,8 @@ use \Luminova\Time\Timestamp;
 use \Luminova\Template\Helper;
 use \Luminova\Cache\PageViewCache;
 use \App\Controllers\Config\Template as TemplateConfig;
-use \DateTimeInterface;
 use \Luminova\Debugger\Performance;
+use \DateTimeInterface;
 
 trait TemplateView
 { 
