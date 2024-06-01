@@ -966,10 +966,10 @@ trait TemplateView
         }else{
             $view = self::getErrorFolder('view.error');
             $trace = SHOW_DEBUG_BACKTRACE ? debug_backtrace() : [];
-    
-            extract($options);
-            unset($options);
         }
+
+        extract($options);
+        unset($options);
 
         include_once $view;
         $exception->log();
