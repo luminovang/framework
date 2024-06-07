@@ -298,7 +298,7 @@ class Time extends DateTimeImmutable
     /**
      * Check whether the passed timezone is the same as the application timezone.
      * 
-     * @return bool true if the passed timezone is the same as the local timezone false otherswise.
+     * @return bool true if the passed timezone is the same as the local timezone false otherwise.
     */
     public function isSystemTimezone(): bool
     {
