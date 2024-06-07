@@ -347,7 +347,7 @@ final class Builder extends Connection
     */
     public function max(int $limit): self
     {
-        $this->maxLimit = max(1, $limit);
+        $this->maxLimit = max(0, $limit);
 
         return $this;
     }
@@ -508,7 +508,7 @@ final class Builder extends Connection
             return $this;
         }
 
-        $values = static::quotedValues($lists);
+        $values = static::quotedValues($lists, true, true);
 
         $this->andConditions[] = [
             'type' => 'IN', 
@@ -548,9 +548,10 @@ final class Builder extends Connection
     /**
      * Set return type  mode.
      * 
-     * @param string $type Return type 'stmt', 'object' or 'array'
+     * @param string $type Return type 'stmt', 'object' or 'array'.
      * 
      * @return self class instance.
+     * @throws InvalidArgumentException Throws if an invalid type is provided.
     */
     public function returns(string $type): self
     {
@@ -579,14 +580,7 @@ final class Builder extends Connection
      */
     public static function datetime(string $format = 'datetime', ?int $timestamp = null): string
     {
-        if($format === 'time'){
-            $format = 'H:i:s';
-        }elseif($format === 'date'){
-            $format = 'Y-m-d';
-        }else{
-            $format = 'Y-m-d H:i:s';
-        }
-
+        $format = ($format === 'time') ? 'H:i:s' : (($format === 'date') ? 'Y-m-d' : 'Y-m-d H:i:s');
         $time = ($timestamp === null) ? Time::now() : Time::fromTimestamp($timestamp);
 
         return $time->format($format);
@@ -660,7 +654,7 @@ final class Builder extends Connection
             return 0;
         }
 
-        if (!is_nested($values)) {
+        if (!isset($values[0])) {
             $values = [$values];
         }
         
@@ -706,8 +700,9 @@ final class Builder extends Connection
             $selectQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
             if ($this->joinConditions !== []) {
                 $selectQuery .= " ON {$this->joinConditions[0]}";
-                if(count($this->joinConditions) > 1){
-                    for ($i = 1; $i < count($this->joinConditions); $i++) {
+
+                if(($joins = count($this->joinConditions)) > 1){
+                    for ($i = 1; $i < $joins; $i++) {
                         $selectQuery .= " AND {$this->joinConditions[$i]}";
                     }
                 }
@@ -730,22 +725,24 @@ final class Builder extends Connection
     }
 
     /**
-     * Return select result from table
+     * Return select result from table.
      * 
-     * @param string $selectQuery query
+     * @param string $selectQuery query.
      * 
      * @return mixed
     */
-    private function returnSelect(string &$selectQuery): mixed 
+    private function returnSelect(string $selectQuery): mixed 
     {
         $isBided = false;
 
         if ($this->whereCondition === []) {
-            $this->buildSearchConditions($selectQuery);
+            // When using IN as WHERE and it has other ANDs ORs as binding.
+            $isBided = $this->andConditions !== [];
+            $this->buildSearchConditions($selectQuery, $isBided);
         }else{
             $isBided = true;
             $selectQuery .= $this->whereCondition['query'];
-            $this->buildWhereConditions($selectQuery);
+            $this->buildWhereConditions($selectQuery, $isBided);
         }
 
         if($this->queryGroup !== []){
@@ -762,26 +759,20 @@ final class Builder extends Connection
 
         if($isBided){
             static::$handler = $this->db->prepare($selectQuery);
-            static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            if ($this->whereCondition !== []) {
+                static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            }
             $this->bindConditions(static::$handler);
             static::$handler->execute();
         }else{
             static::$handler = $this->db->query($selectQuery);
         }
 
-        if(static::$handler->ok()){
-            if($this->returnType === 'stmt'){
-                $result = true;
-            }else{
-                $result = static::$handler->getAll($this->returnType);
-            }
-        }else{
-            $result = false;
-        }
-
+        $response = (static::$handler->ok() ? 
+            (($this->returnType === 'stmt') ? true : static::$handler->getAll($this->returnType)) : false);
         $this->reset();
 
-        return $result;
+        return $response;
     }
 
     /**
@@ -840,10 +831,11 @@ final class Builder extends Connection
      * @param int $mode Return type [RETURN_ALL, RETURN_NEXT, RETURN_2D_NUM, RETURN_ID, RETURN_INT]
      * 
      * @return PDOStatement|mysqli_stmt|mysqli_result|bool|object|array|int|null Return result or prepared statement.
-     * @throws DatabaseException 
+     * @throws DatabaseException Throws if call executed without query conditions.
     */
     public function execute(?array $placeholder = null, int $mode = RETURN_ALL): mixed 
     {
+        $placeholder ??= [];
         static::$handler = null;
 
         if($this->returnType !== 'stmt' && $this->cache !== null && $this->hasCache){
@@ -860,7 +852,7 @@ final class Builder extends Connection
             throw new DatabaseException("Execute operation without a query condition is not allowed. call query() before execute()");
         }
 
-        $this->bindValues = (empty($placeholder) ? [] : $placeholder);
+        $this->bindValues = $placeholder;
 
         try {
             if($this->returnType === 'stmt' || $this->cache === null){
@@ -901,17 +893,9 @@ final class Builder extends Connection
             } 
             static::$handler->execute();
         }
-        
-        if(static::$handler->ok()){
-            if($this->returnType === 'stmt'){
-                $response = true;
-            }else{
-                $response = static::$handler->getItem($mode, $this->returnType);
-            }
-        }else{
-            $response = false;
-        }
-    
+
+        $response = (static::$handler->ok() ? 
+            (($this->returnType === 'stmt') ? true : static::$handler->getItem($mode, $this->returnType)) : false);
         $this->reset();
 
         return $response;
@@ -948,9 +932,8 @@ final class Builder extends Connection
             $findQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
             if ($this->joinConditions !== []) {
                 $findQuery .= " ON {$this->joinConditions[0]}";
-                //$countable = new ArrayCountable($this->joinConditions);
-                if(count($this->joinConditions) > 1){
-                    for ($i = 1; $i < count($this->joinConditions); $i++) {
+                if(($joins = count($this->joinConditions)) > 1){
+                    for ($i = 1; $i < $joins; $i++) {
                         $findQuery .= " AND {$this->joinConditions[$i]}";
                     }
                 }
@@ -990,17 +973,8 @@ final class Builder extends Connection
         $this->bindConditions(static::$handler);
         static::$handler->execute();
 
-
-        if(static::$handler->ok()){
-            if($this->returnType === 'stmt'){
-                $response = true;
-            }else{
-                $response = static::$handler->getNext($this->returnType);
-            }
-        }else{
-            $response = false;
-        }
-
+        $response = (static::$handler->ok() ? 
+            (($this->returnType === 'stmt') ? true : static::$handler->getNext($this->returnType)) : false);
         $this->reset();
 
         return $response;
@@ -1100,17 +1074,10 @@ final class Builder extends Connection
             static::$handler->execute();
         }
 
-        if(static::$handler->ok()){
-            if($this->returnType === 'stmt'){
-                $response = true;
-            }elseif($sum){
-                $response = static::$handler->getNext()?->totalSum ?? 0;
-            }else{
-                $response = static::$handler->getCount();
-            }
-        }else{
-            $response = false;
-        }
+        $response = static::$handler->ok() ? 
+            ($this->returnType === 'stmt' ? true : 
+            ($sum ? static::$handler->getNext()->totalSum ?? 0 : static::$handler->rowCount())) 
+            : false;
         
         $this->reset();
 
@@ -1128,7 +1095,7 @@ final class Builder extends Connection
      */
     public function update(?array $setValues = []): int|bool 
     {
-        $columns = $setValues === [] ? $this->querySetValues : $setValues;
+        $columns = ($setValues === []) ? $this->querySetValues : $setValues;
         static::$handler = null;
 
         if ($columns === []) {
@@ -1151,22 +1118,15 @@ final class Builder extends Connection
         try {
             static::$handler = $this->db->prepare($updateQuery);
             foreach($columns as $key => $value){
+                $value = is_string($value) ? $value : json_encode($value);
                 static::$handler->bind(static::trimPlaceholder($key), $value);
             }
             static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
             $this->bindConditions(static::$handler);
             static::$handler->execute();
 
-            if(static::$handler->ok()){
-                if($this->returnType === 'stmt'){
-                    $response = true;
-                }else{
-                    $response = static::$handler->rowCount();
-                }
-            }else{
-                $response = false;
-            }
-
+            $response = (static::$handler->ok() ? 
+                (($this->returnType === 'stmt') ? true : static::$handler->rowCount()) : false);
             $this->reset();
 
             return $response;
@@ -1205,16 +1165,8 @@ final class Builder extends Connection
             $this->bindConditions(static::$handler);
             static::$handler->execute();
 
-            if(static::$handler->ok()){
-                if($this->returnType === 'stmt'){
-                    $response = true;
-                }else{
-                    $response = static::$handler->rowCount();
-                }
-            }else{
-                $response = false;
-            }
-
+            $response = (static::$handler->ok() ? 
+                (($this->returnType === 'stmt') ? true : static::$handler->rowCount()) : false);
             $this->reset();
 
             return $response;
@@ -1386,28 +1338,19 @@ final class Builder extends Connection
     */
     private function executeInsertQuery(array $columns, array $values): int|bool 
     {
-        $inserts = [];
-    
+        $inserts = '';
         foreach ($values as $row) {
-            $inserts[] = "(" . static::quotedValues($row) . ")";
+            $inserts .= "(" . static::quotedValues($row) . "), ";
         }
 
         $keys = implode(', ', $columns);
-        $value = implode(', ', $inserts);
-
-        $insertQuery = "INSERT INTO {$this->databaseTable} ({$keys}) VALUES {$value}";
-
+        $inserts = rtrim($inserts, ', ');
+        $insertQuery = "INSERT INTO {$this->databaseTable} ({$keys}) VALUES {$inserts}";
+        
         static::$handler = $this->db->query($insertQuery);
-
-        if(static::$handler->ok()){
-            if($this->returnType === 'stmt'){
-                $response = true;
-            }else{
-                $response = static::$handler->rowCount();
-            }
-        }else{
-            $response = false;
-        }
+        $response = (static::$handler->ok() ? 
+            (($this->returnType === 'stmt') ? true : static::$handler->rowCount()) : 
+                false);
 
         $this->reset();
 
@@ -1422,17 +1365,15 @@ final class Builder extends Connection
     */
     private function executeInsertPrepared(array $columns, array $values): int|bool 
     {
-        $column = array_map(function ($col) {return ":$col";}, $columns);
-        $placeholders = implode(', ', $column);
-        $inserts = implode(', ', $columns);
         $count = 0;
-    
+        [$placeholders, $inserts] = self::mapParams($columns);
         $insertQuery = "INSERT INTO {$this->databaseTable} ({$inserts}) VALUES ($placeholders)";
-    
+       
         static::$handler = $this->db->prepare($insertQuery);
     
         foreach ($values as $row) {
             foreach ($row as $key => $value) {
+                $value = is_string($value) ? $value : json_encode($value);
                 static::$handler->bind(static::trimPlaceholder($key), $value);
             }
 
@@ -1443,12 +1384,7 @@ final class Builder extends Connection
             }
         }
 
-        if($this->returnType === 'stmt'){
-            $response = $count > 0;
-        }else{
-            $response = $count;
-        }
-
+        $response = ($this->returnType === 'stmt') ? $count > 0 : $count;
         $this->reset();
 
         return $response;
@@ -1482,8 +1418,9 @@ final class Builder extends Connection
      * Build query conditions.
      *
      * @param string $query The SQL query string to which conditions are added.
+     * @param bool $isBided Wether the param is bind params (default: true).
     */
-    private function buildWhereConditions(string &$query): void
+    private function buildWhereConditions(string &$query, bool $isBided = true): void
     {
         if ($this->andConditions !== []) {
             foreach ($this->andConditions as $condition) {
@@ -1511,21 +1448,27 @@ final class Builder extends Connection
      * Build query search conditions.
      *
      * @param string $query The SQL query string to which search conditions are added.
+     * @param bool $isBided Wether the param is bind params (default: true).
     */
-    private function buildSearchConditions(string &$query): void
+    private function buildSearchConditions(string &$query, bool $isBided = true): void
     {
         if ($this->andConditions !== []) {
             $query .= ' WHERE';
             $firstCondition = true;
+
             foreach ($this->andConditions as $condition) {
                 $operator = $condition['operator'] ?? '=';
+                $column = $condition['column'];
+                $placeholder = $isBided ? static::trimPlaceholder($column) : addslashes($condition['value']);
+                $type = $condition['type'];
 
                 if (!$firstCondition) {
-                    $query .= ' AND';
+                    $query .= ($type === 'OR') ? ' OR' : ' AND';
                 }
 
-                $query .= match ($condition['type']) {
-                    'IN' => " {$condition['column']} IN ({$condition['values']})",
+                $query .= match ($type) {
+                    'IN' => " {$column} IN ({$condition['values']})",
+                    'AND', 'OR' => " $column $operator $placeholder",
                     'IN_SET' => ($operator === '>') ?
                         " FIND_IN_SET('{$condition['search']}', '{$condition['list']}') > 0" :
                         " FIND_IN_SET('{$condition['search']}', '{$condition['list']}')",
@@ -1603,15 +1546,29 @@ final class Builder extends Connection
         }
     
         $lastDotPosition = strrpos($input, '.');
-        if ($lastDotPosition !== false) {
-            $placeholder = substr($input, $lastDotPosition + 1);
-        } else {
-            $placeholder = $input;
-        }
-
+        $placeholder = ($lastDotPosition === false) ? $input : substr($input, $lastDotPosition + 1);
+  
         return ":$placeholder";
     }
     
+    /**
+     * Build insert params.
+     * 
+     * @var array $columns Array of column names.
+     * 
+     * @return array<int,string> Array of insert params and placeholderss.
+    */
+    private static function mapParams(array $columns): array 
+    {
+        $placeholders = '';
+        $inserts = '';
+        foreach($columns as $col){
+            $placeholders .= ":$col, ";
+            $inserts .= "$col, ";
+        }
+
+        return [rtrim($placeholders, ', '), rtrim($inserts, ', ')];
+    }
 
     /**
      * Convert array keys to placeholders key = :key
@@ -1639,18 +1596,23 @@ final class Builder extends Connection
      * Quote array values int = int, string = 'string'
      * 
      * @param array $columns columns
+     * @param bool $implode should implode or just return the array.
      * @param bool $implode should implode or just return the array
      * 
-     * @return array|string 
+     * @return array|string Return array or string of column values.
     */
-    private static function quotedValues(array $columns, bool $implode = true): array|string
+    private static function quotedValues(array $columns, bool $implode = true, bool $quote = false): array|string
     {
         $quoted = [];
-        foreach ($columns as &$item) {
-            $quoted[] = is_string($item) ? addslashes($item) : $item;
+        foreach ($columns as $item) {
+            $quoted[] = is_string($item) ? addslashes($item) : json_encode($item);
         }
 
         if($implode){
+            if($quote){
+                return "'" . implode("','",  $quoted) . "'";
+            }
+
             return implode(', ', $quoted);
         }
 

@@ -762,6 +762,7 @@ trait TemplateView
     */
     private function renderDefault(array $options, ?PageViewCache $_lmv_cache = null, bool $_lmv_return = false): bool|string
     {
+        $lmv_view_type = $options['viewType']??'html';
         if(self::$config->variablePrefixing !== null){
             self::extract($options);
         }
@@ -772,7 +773,7 @@ trait TemplateView
 
         [$_lmv_headers, $_lmv_contents] = self::assertMinifyAndSaveCache(
             $_lmv_contents,
-            $options['viewType'],
+            $lmv_view_type,
             $this->minifyCodeblocks, 
             $this->codeblockButton,
             $_lmv_cache
@@ -813,7 +814,7 @@ trait TemplateView
     {
         $self = self::newSelfInstance();
         self::$publicClasses = [];
-
+        $lmv_view_type = $options['viewType']??'html';
         if(($_lmv_prefix = self::$config->variablePrefixing) !== null){
             if($_lmv_prefix && isset($options['self'])){
                 throw new RuntimeException('Reserved Error: The "self" keyword is not allowed in your view options without variable prefixing.', E_ERROR);
@@ -827,7 +828,7 @@ trait TemplateView
 
         [$_lmv_headers, $_lmv_contents] = self::assertMinifyAndSaveCache(
             $_lmv_contents,
-            $options['viewType'],
+            $lmv_view_type,
             $_lmv_ignore, 
             $_lmv_copy,
             $_lmv_cache

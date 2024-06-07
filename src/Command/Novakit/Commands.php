@@ -236,6 +236,30 @@ final class Commands
                 '--port' => 'The HTTP Host Port [default: "8080"]',
             ]
         ],
+
+        'cron:create' => [
+            'name' => 'cron:create',
+            'group' => 'Cron',
+            'description' => "Create a cron tasks and lock them in cron lock file",
+            'usages' => [
+                'php novakit cron:create',
+                'php novakit cron:create --force'
+            ],
+            'options' => [
+                '--force'  => 'To force update tasks with new changes, if already created before.',
+            ]
+        ],
+
+        'cron:run' => [
+            'name' => 'cron:run',
+            'group' => 'Cron',
+            'description' => "Run cron jobs which was locked in cron lock file.",
+            'usages' => [
+                'php novakit cron:run'
+            ],
+            'options' => []
+        ],
+  
         'cache' => [
             'name' => 'cache',
             'group' => 'Cache',
@@ -260,7 +284,6 @@ final class Commands
     public static function getCommands(): array 
     {
         asort(self::$commands);
-        
         return self::$commands;
     }
 

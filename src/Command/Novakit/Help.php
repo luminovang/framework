@@ -50,8 +50,7 @@ class Help extends BaseConsole
         }
 
         if($helps === []){
-            $this->error('Unknown command ' . $this->color("'$command'", 'red') . ' not found', null);
-            return STATUS_ERROR;
+            return $this->oops($command);
         }
 
         $this->helper($helps, $all);

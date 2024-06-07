@@ -77,9 +77,7 @@ class Context extends BaseConsole
         };
 
         if ($runCommand === null) {
-            $this->error('Unknown command ' . $this->color("'$command'", 'red') . ' not found', null);
-
-            return STATUS_ERROR;
+            return $this->oops($command);
         } 
             
         return (int) $runCommand;

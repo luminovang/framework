@@ -9,6 +9,7 @@
  */
 namespace Luminova\Time;
 
+use \Luminova\Exceptions\DateTimeException;
 use \DateTimeImmutable;
 use \DateTimeZone;
 use \DateTime;
@@ -16,7 +17,6 @@ use \IntlDateFormatter;
 use \DateTimeInterface;
 use \DateInterval;
 use \Exception;
-use \Luminova\Exceptions\DateTimeException;
 
 class Time extends DateTimeImmutable
 {
@@ -68,9 +68,9 @@ class Time extends DateTimeImmutable
         $datetime ??= '';
         $timezone ??= date_default_timezone_get();
         $this->timezone = static::timezone($timezone);
-            
+       
         if ($datetime !== '' && !static::isAbsolute($datetime)) {
-            $datetime = static::fromRelative($datetime);
+           $datetime = static::fromRelative($datetime, $this->timezone);
         }
 
         try {
@@ -476,19 +476,26 @@ class Time extends DateTimeImmutable
      */
     public static function fromRelative(string $datetime, DateTimeZone|string|null $timezone = null): string
     {
+        $timezone = is_string($timezone) ? static::timezone($timezone): $timezone;
         if(static::isAgo($datetime)){
             $now = static::agoToDatetime($datetime, $timezone);
-        }elseif(static::isRelative($datetime)){
-            $now = new DateTime('now', $timezone);
-            $now->modify($datetime);
         }else{
-            $now = new DateTime('now', $timezone);
-            if($now->modify($datetime) === false){
-                throw new DateTimeException('Error Invalid relative time "' . $datetime . '" passed');
+            if(self::isRelative($datetime)){
+                $now = new DateTime('now');
+                if($now->modify($datetime) === false){
+                    throw new DateTimeException('Error Invalid relative time "' . $datetime . '" passed');
+                }
+            }else{
+                $now = new DateTime($datetime);
+            }
+
+            if($timezone  !== null){
+                $now = $now->setTimezone($timezone);
             }
         }
 
-        $datetime = $now->format(self::$defaultFormat);
+       // $datetime = $now->format(self::$defaultFormat);
+        $datetime = $now->format('Y-m-d H:i:s.u');
 
         return $datetime;
     }
@@ -773,7 +780,7 @@ class Time extends DateTimeImmutable
         $timezone = static::timezone($timezone);
 
         if ($ago === 'just now') {
-            return new DateTime('now', $timezone);
+            return (new DateTime('now', $timezone))->setTimezone($timezone);
         }
 
         $parts = explode(' ', $ago, 3);

@@ -19,6 +19,7 @@ use \Luminova\Command\Novakit\System;
 use \Luminova\Command\Novakit\Builder;
 use \Luminova\Command\Novakit\Context;
 use \Luminova\Command\Novakit\Commands;
+use \Luminova\Command\Novakit\CronJobs;
 
 final class Executor
 {
@@ -42,13 +43,12 @@ final class Executor
             'generate:key','generate:sitemap','env:add','env:remove' => System::class,
             'build:project' => Builder::class,
             'context' => Context::class,
+            'cron:create', 'cron:run' => CronJobs::class,
             default => ''
         };
 
         if ($newCommand === '') {
-            $terminal::error('Unknown command ' . $terminal::color("'$command'", 'red') . ' not found', null);
-
-            return STATUS_ERROR;
+            return $terminal::oops($command);
         } 
 
         return (int) (new $newCommand())->run($options);

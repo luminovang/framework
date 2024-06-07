@@ -97,8 +97,7 @@ class Generators extends BaseConsole
         };
 
         if ($runCommand === 'unknown') {
-            $this->writeln('Unknown command ' . $this->color("'$command'", 'red') . ' not found', null);
-            return STATUS_ERROR;
+            return $this->oops($command);
         } 
             
         return (int) $runCommand;

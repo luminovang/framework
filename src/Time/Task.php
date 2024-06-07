@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Luminova Framework
  *
@@ -57,7 +56,25 @@ class Task
         $now = Time::now($timezone);
         $expiration = Time::parse($datetime, $timezone);
 
-        return $now >= $expiration;
+        return $now > $expiration;
+    }
+
+    /**
+     * Check if a given datetime string has reached or passed. 
+     *
+     * @param string $datetime The starting date and time (e.g., '2023-09-25 08:00AM').
+     * @param null|DateTimeZone|string $timezone Optional timezone string.
+     *
+     * @return bool Returns true if the date has passed, expired or is the current day, false otherwise if still in future.
+     * 
+     * > Useful for checking if a deal or promo code has started.
+     */
+    public static function started(string $datetime, null|DateTimeZone|string $timezone = 'UTC'): bool
+    {
+        $now = Time::now($timezone);
+        $starting = Time::parse($datetime, $timezone);
+        
+        return $now >= $starting;
     }
 
     /**

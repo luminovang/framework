@@ -193,12 +193,12 @@ final class CookieManager implements SessionManagerInterface
     {
         $result = $this->getItems();
 
-        if($index !== null) {
-            if(isset($result[$index])) {
-                $result = $result[$index];
-            }else{
-                return null;
-            }
+        if($index !== null && $index !== '') {
+            $result = $result[$index]??null;
+        }
+
+        if($result === null){
+            return null;
         }
     
         if($type === 'array'){

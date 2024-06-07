@@ -742,6 +742,21 @@ class Terminal
     }
 
     /**
+     * Oops! Show an error message for unknow command.
+     *
+     * @param string $command The executed command.
+     * @param string|null $color Text color for the command.
+     * 
+     * @return int Return status code for.
+    */
+    public static function oops(string $command, string|null $color = 'red'): int 
+    {
+       static::writeln('Unknown command ' . static::color("'$command'", $color) . ' not found', null);
+
+       return STATUS_ERROR;
+    }
+
+    /**
      * Checks whether the current stream resource supports or
      * refers to a valid terminal type device.
      *
