@@ -729,7 +729,6 @@ if (!function_exists('is_associative')) {
     
         return true;
     }
-    
 }
 
 if (!function_exists('array_is_list')) {

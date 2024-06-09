@@ -29,11 +29,11 @@ final class Builder extends Connection
     private static ?Builder $instance = null;
 
     /**
-     * Table name to query
+     * Database table name to query.
      * 
-     * @var string $databaseTable 
+     * @var string $tableName 
     */
-    private string $databaseTable = '';
+    private string $tableName = '';
 
     /**
      * Table name to join query
@@ -57,108 +57,146 @@ final class Builder extends Connection
     private array $joinConditions = [];
 
     /**
-     * Table query order limit offset and count query 
+     * Table query limit and offset for select method. 
      * 
-     * @var string $queryLimit 
+     * @var string $selectLimit 
     */
-    private string $queryLimit = '';
+    private string $selectLimit = '';
 
     /**
-     * Table query updatem delete limit
+     * Table query max limit for update and delete methods.
      * 
-     * @var int $queryLimit 
+     * @var int $maxLimit 
     */
     private int $maxLimit = 1;
 
     /**
-     * Table query order rows 
+     * Table query order rows.
      * 
-     * @var array<int, string> $queryOrder 
+     * @var array<int,string> $queryOrder 
     */
     private array $queryOrder = [];
 
     /**
+     * Table query match against order rows.
+     * 
+     * @var array<int,string> $queryMatchOrder 
+    */
+    private array $queryMatchOrder = [];
+
+    /**
      * Table query group column by
      * 
-     * @var array<int, string> $queryGroup 
+     * @var array<int,string> $queryGroup 
     */
     private array $queryGroup = [];
 
     /**
-     * Table query where column
+     * Table query where column.
      * 
-     * @var array $whereCondition 
+     * @var array<int,mixed> $whereCondition 
     */
     private array $whereCondition = [];
 
     /**
      * Table query and query column
      * 
-     * @var array $andConditions 
+     * @var array<int,mixed>  $andConditions 
     */
     private array $andConditions = [];
 
     /**
-     * able query update set values
+     * Table query update set values
      * 
-     * @var array $querySetValues 
+     * @var array<int,mixed>  $querySetValues 
     */
     private array $querySetValues = [];
 
     /**
-     * Has Cache flag
+     * Match against modes.
+     * 
+     * @var array<string,mixed>  $matchModes
+    */
+    private static array $matchModes = [
+        'NATURAL_LANGUAGE' => 'IN NATURAL LANGUAGE MODE',
+        'BOOLEAN' => 'IN BOOLEAN MODE',
+        'NATURAL_LANGUAGE_WITH_QUERY_EXPANSION' => 'IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION',
+        'WITH_QUERY_EXPANSION' => 'WITH QUERY EXPANSION'
+    ];
+
+    /**
+     * Has Cache flag.
      * 
      * @var bool $hasCache 
     */
     private bool $hasCache = false;
 
     /**
-     * Caching status flag
+     * Caching status flag.
      * 
      * @var bool $caching 
     */
     private bool $caching = true;
 
     /**
-     * Cache class instance
+     * Print query string.
+     * 
+     * @var bool $printQuery 
+    */
+    private bool $printQuery = false;
+
+    /**
+     * The debug query.
+     * 
+     * @var array<string,mixed> $debugQuery 
+    */
+    private array $debugQuery = [];
+
+    /**
+     * Cache class instance.
      * 
      * @var FileCache $cache 
     */
     private ?FileCache $cache = null;
 
     /**
-     * Result return type
+     * Result return type.
      * 
      * @var string $returnType 
     */
     private string $returnType = 'object';
 
     /**
-     * Cache key
+     * Cache key.
+     * 
      * @var string $cacheKey 
     */
     private string $cacheKey = "default";
 
     /**
-     * Table alias
+     * Table alias.
+     * 
      * @var string $tableAlias 
     */
     private string $tableAlias = '';
 
     /**
-     * Join table alias
+     * Join table alias.
+     * 
      * @var string $jointTableAlias 
     */
     private string $jointTableAlias = '';
 
     /**
-     * Bind values 
+     * Bind values.
+     * 
      * @var array $bindValues 
     */
     private array $bindValues = [];
 
     /**
-     * Query builder 
+     * Query builder.
+     * 
      * @var string $buildQuery 
     */
     private string $buildQuery = '';
@@ -191,19 +229,9 @@ final class Builder extends Connection
     }
 
     /**
-     * Returns last prepared statement.
-     * 
-     * @return DatabaseInterface
-    */
-    public function stmt(): DatabaseInterface
-    {
-        return static::$handler;
-    }
-
-    /**
      * Class shared singleton class instance
      *
-     * @return static object $instance
+     * @return static object $instance.
      * @throws DatabaseException If the database connection fails.
     */
     public static function getInstance(): static 
@@ -214,14 +242,14 @@ final class Builder extends Connection
     /**
      * Sets database table name to query.
      *
-     * @param string $table The table name
-     * @param string $alias table alias
+     * @param string $table The table name.
+     * @param string $alias table alias.
      * 
      * @return self $this Class instance.
     */
     public function table(string $table, string $alias = ''): self
     {
-        $this->databaseTable = $table;
+        $this->tableName = $table;
 
         if($alias !== ''){
             $this->tableAlias = $alias;
@@ -269,10 +297,10 @@ final class Builder extends Connection
     }
 
     /**
-     * Sets join table inner
+     * Sets join table inner.
      * 
-     * @param string $table The table name
-     * @param string $alias join table alias
+     * @param string $table The table name.
+     * @param string $alias join table alias.
      * 
      * @return self $this Class instance.
     */
@@ -295,10 +323,10 @@ final class Builder extends Connection
     }
 
     /**
-     * Sets join table right
+     * Sets join table right.
      * 
-     * @param string $table The table name
-     * @param string $alias join table alias
+     * @param string $table The table name.
+     * @param string $alias join table alias.
      * 
      * @return self $this Class instance.
     */
@@ -308,10 +336,10 @@ final class Builder extends Connection
     }
 
     /**
-     * Sets join table cross
+     * Sets join table cross.
      * 
-     * @param string $table The table name
-     * @param string $alias join table alias
+     * @param string $table The table name.
+     * @param string $alias join table alias.
      * 
      * @return self $this Class instance.
     */
@@ -321,18 +349,18 @@ final class Builder extends Connection
     }
 
     /**
-     * Set query limit
+     * Set query limit for select, update.
      * 
-     * @param int $limit limit threshold 
+     * @param int $limit limit threshold.
      * @param int $offset start offset query limit
      * 
-     * @return self class instance.
+     * @return self Return instance of builder class.
     */
-    public function limit(int $limit = 0, int $offset = 0): self
+    public function limit(int $limit, int $offset = 0): self
     {
         if($limit > 0){
             $offset = max(0, $offset);
-            $this->queryLimit = " LIMIT {$offset},{$limit}";
+            $this->selectLimit = " LIMIT {$offset},{$limit}";
         }
 
         return $this;
@@ -343,7 +371,7 @@ final class Builder extends Connection
      * 
      * @param int $limit number of records to update or delete 
      * 
-     * @return self class instance.
+     * @return self Return instance of builder class.
     */
     public function max(int $limit): self
     {
@@ -353,9 +381,9 @@ final class Builder extends Connection
     }
 
     /**
-     * Set the order for the query results in a select statement (e.g., "id ASC", "date DESC").
+     * Set result return order for query selection (e.g., "id ASC", "date DESC").
      * 
-     * @param string $column The column name to set the order for.
+     * @param string $column The column name to index order.
      * @param string $order The order algorithm to use (either "ASC" or "DESC").
      * 
      * @return self Returns an instance of the class.
@@ -364,6 +392,37 @@ final class Builder extends Connection
     {
         $this->queryOrder[] = "{$column} {$order}";
 
+        return $this;
+    }
+
+    /**
+     * Set the result ordering for method match against.
+     * 
+     * @param array $columns The column names to index match order.
+     * @param string|int|float $value The value to match against in order.
+     * @param string $mode The comparison match mode operator.
+     *      Optionally you can choose any of these modes or pass your own mode.
+     *          - NATURAL_LANGUAGE
+     *          - BOOLEAN
+     *          - NATURAL_LANGUAGE_WITH_QUERY_EXPANSION
+     *          - WITH_QUERY_EXPANSION
+     * @param string $order The order algorithm to use (either "ASC" or "DESC").
+     * 
+     * @return self Returns an instance of the class.
+    */
+    public function orderByMatch(
+        array $columns, 
+        string|int|float $value, 
+        string $mode = 'NATURAL_LANGUAGE', 
+        string $order = 'ASC'
+    ): self 
+    {
+        $this->queryMatchOrder[] = [
+            'mode' => self::$matchModes[$mode] ?? $mode,
+            'column' => implode(", ", $columns),
+            'value' => $value,
+            'order' => $order,
+        ];
         return $this;
     }
 
@@ -388,7 +447,7 @@ final class Builder extends Connection
      * @param string $operator Comparison Operator.
      * @param mixed $value Where condition value.
      * 
-     * @return self class instance.
+     * @return self Return instance of builder class.
     */
     public function where(string $column, string $operator, mixed $value): self
     {
@@ -398,6 +457,7 @@ final class Builder extends Connection
             'type' => 'WHERE', 
             'query' => " WHERE {$column} {$operator} {$placeholder}",
             'value' => $value,
+            'column' => $column,
             'placeholder' => $placeholder
         ];
         
@@ -411,7 +471,7 @@ final class Builder extends Connection
      * @param string $operator Comparison operator
      * @param mixed $value column key value
      * 
-     * @return self class instance.
+     * @return self Return instance of builder class.
     */
     public function and(string $column, string $operator, mixed $value): self
     {
@@ -426,12 +486,39 @@ final class Builder extends Connection
     }
 
     /**
+     * Set query match columns and mode.
+     * 
+     * @param array $columns The column names to match against.
+     * @param string $mode The comparison match mode operator.
+     *      Optionally you can choose any of these modes or pass your own mode.
+     *          - NATURAL_LANGUAGE
+     *          - BOOLEAN
+     *          - NATURAL_LANGUAGE_WITH_QUERY_EXPANSION
+     *          - WITH_QUERY_EXPANSION
+     * 
+     * @param mixed $value The value to match against.
+     * 
+     * @return self Return instance of builder class.
+    */
+    public function against(array $columns, string $mode, mixed $value): self
+    {
+        $this->andConditions[] = [
+            'type' => 'AGAINST', 
+            'column' => implode(", ", $columns), 
+            'value' => $value,
+            'operator' => self::$matchModes[$mode] ?? $mode
+        ];
+
+        return $this;
+    }
+
+    /**
      * Set update columns and values
      * 
      * @param string $column column name
      * @param mixed $value column key value
      * 
-     * @return self class instance.
+     * @return self Return instance of builder class.
     */
     public function set(string $column, mixed $value): self
     {
@@ -447,7 +534,7 @@ final class Builder extends Connection
      * @param string $operator Comparison operator
      * @param mixed $value column key value
      * 
-     * @return self class instance.
+     * @return self Return instance of builder class.
     */
     public function or(string $column, string $operator, mixed $value): self
     {
@@ -460,8 +547,8 @@ final class Builder extends Connection
         return $this;
     }
     
-     /**
-     * Set query AND (? OR ?)
+    /**
+     * Set query condition for OR grouping (e.g (? OR ?)).
      * 
      * @param string $column column name
      * @param string $operator Comparison operator
@@ -470,7 +557,8 @@ final class Builder extends Connection
      * @param string $orOperator Comparison operator
      * @param mixed $orValue column or key value
      * 
-     * @return self class instance.
+     * @return self Return instance of builder class.
+     * @deprecated This method is deprecated and will be removed in a future release, use `orGroup` instead.
     */
     public function andor(
         string $column, 
@@ -481,14 +569,100 @@ final class Builder extends Connection
         mixed $orValue
     ): self
     {
-        $this->andConditions[] = [
-            'type' => 'AND_OR', 
-            'column' => $column, 
-            'value' => $value,
+        $conditions = [];
+        $conditions[][$column] = [
             'operator' => $operator,
-            'orColumn' => $orColumn, 
-            'orValue' => $orValue,
-            'orOperator' => $orOperator,
+            'value' => $value,
+        ];
+        $conditions[][$orColumn] = [
+            'operator' => $orOperator,
+            'value' => $orValue,
+        ];
+
+        return $this->orGroup($conditions);
+    }
+
+    /**
+     * Adds a group of conditions combined with OR to the query.
+     *
+     * @example 'WHERE (foo = 1 OR bar = 2)'.
+     * 
+     * @param array $conditions Array of conditions to be grouped with OR.
+     * 
+     * @return self Return instance of builder class.
+     */
+    public function orGroup(array $conditions): self
+    {
+        $this->andConditions[] = [
+            'type' => 'GROUP_OR',
+            'conditions' => $conditions
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Adds two groups of conditions combined with OR to the query.
+     *
+     * @example 'WHERE ((foo = 1 OR bar = 2) OR (baz = 3 AND bra = 4))'.
+     * 
+     * @param array $group1 First group of conditions.
+     * @param array $group2 Second group of conditions.
+     * @param string $bind The type of logical operator to use in binding groups (default: 'OR').
+     *      - `AND` or `OR`.
+     * 
+     * @return self Return instance of builder class.
+     */
+    public function orBind(array $group1, array $group2, string $bind = 'OR'): self
+    {
+        $this->andConditions[] = [
+            'type' => 'BIND_OR',
+            'bind' => $bind,
+            'X' => $group1,
+            'Y' => $group2
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Adds a group of conditions combined with AND to the query.
+     *
+     * @example 'WHERE (foo = 1 AND bar = 2)'.
+     * 
+     * @param array $conditions Array of conditions to be grouped with AND.
+     * 
+     * @return self Return instance of builder class.
+     */
+    public function andGroup(array $conditions): self
+    {
+        $this->andConditions[] = [
+            'type' => 'GROUP_AND',
+            'conditions' => $conditions
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Adds two groups of conditions combined with AND condition.
+     * 
+     * @example 'WHERE ((foo = 1 AND bar = 2) AND (baz = 3 AND bra = 4))'.
+     * 
+     * @param array $group1 First group of conditions.
+     * @param array $group2 Second group of conditions.
+     * @param string $bind The type of logical operator to use in binding groups (default: 'AND').
+     *      - `AND` or `OR`.
+     * 
+     * @return self Return instance of builder class.
+     */
+    public function andBind(array $group1, array $group2, string $bind = 'AND'): self
+    {
+        $this->andConditions[] = [
+            'type' => 'BIND_AND',
+            'bind' => $bind,
+            'X' => $group1,
+            'Y' => $group2
         ];
 
         return $this;
@@ -500,7 +674,7 @@ final class Builder extends Connection
      * @param string $column column name.
      * @param array $lists of values.
      * 
-     * @return self class instance.
+     * @return self Return instance of builder class.
     */
     public function in(string $column, array $lists = []): self
     {
@@ -508,7 +682,7 @@ final class Builder extends Connection
             return $this;
         }
 
-        $values = static::quotedValues($lists, true, true);
+        $values = static::quotedValues($lists);
 
         $this->andConditions[] = [
             'type' => 'IN', 
@@ -526,7 +700,7 @@ final class Builder extends Connection
      * @param string $operator allow specifying the operator for matching (e.g., > or =)
      * @param array $list of values
      * 
-     * @return self class instance.
+     * @return self Return instance of builder class.
     */
     public function inset(string $search, string $operator = '=', array $list = []): self
     {
@@ -534,10 +708,9 @@ final class Builder extends Connection
             return $this;
         }
 
-        $values = implode(',', $list);
         $this->andConditions[] = [
             'type' => 'IN_SET', 
-            'list' => $values, 
+            'list' => implode(',', $list), 
             'search' => $search, 
             'operator' => $operator
         ];
@@ -546,34 +719,60 @@ final class Builder extends Connection
     }
 
     /**
-     * Set return type  mode.
+     * Set result return type type, object or array (default: object).
      * 
-     * @param string $type Return type 'stmt', 'object' or 'array'.
+     * @param string $type Return type 'object' or 'array'.
      * 
-     * @return self class instance.
+     * @return self Return instance of builder class.
      * @throws InvalidArgumentException Throws if an invalid type is provided.
     */
     public function returns(string $type): self
     {
         $type = strtolower($type);
 
-        if(!in_array($type, ['object', 'array', 'stmt'])){
-            throw new InvalidArgumentException('Invalid return type "' . $type . '", expected stmt, array or object');
+        if($type === 'object' || $type === 'array'){
+            $this->returnType = $type;
+            
+            return $this;
         }
 
-        $this->returnType = $type;
+        throw new InvalidArgumentException('Invalid return type "' . $type . '", expected array or object');
+    }
 
+    /**
+     * Enable query string debugging, the read and update methods will return false.
+     * 
+     * If this method is invoked in a production environment, 
+     * the query string will be logged using the `debug` level, 
+     * 
+     * @return self Return instance of builder class.
+     */
+    public function debug(): self 
+    {
+        $this->debugQuery = [];
+        $this->printQuery = true;
+        
         return $this;
+    }
+
+    /**
+     * Get the debug query information.
+     * 
+     * @return array<string,mixed> Return array containing query information.
+     */
+    public function printDebug(): array 
+    {
+        return $this->debugQuery;
     }
 
     /**
      * Get date/time format for storing SQL.
      *
      * @param string $format Format to return default is `datetime`.
-     *  Available time formats.
-     *  - 'time'     - Return time format from timestamp
-     *  - 'datetime' - Return SQL datetime format
-     *  - 'date'     - Return SQL date format.
+     *          Available time formats.
+     *              - time     - Return time format from timestamp
+     *              - datetime - Return SQL datetime format
+     *              - date     - Return SQL date format.
      * @param null|int $timestamp Optional timestamp
      *
      * @return string Formatted date/time/timestamp.
@@ -591,7 +790,7 @@ final class Builder extends Connection
      *
      * @param bool $enable Status action.
      * 
-     * @return self $this class instance.
+     * @return self Return instance of builder class.
     */
     public function caching(bool $enable): self
     {
@@ -608,7 +807,7 @@ final class Builder extends Connection
      * @param DateTimeInterface|int $expiry The cache expiry time in seconds (default: 7 days).
      * @param string|null $folder Optionally set a folder name to store caches.
      * 
-     * @return self $this class instance.
+     * @return self Return instance of builder class.
     */
     public function cache(
         string $key, 
@@ -618,7 +817,7 @@ final class Builder extends Connection
     ): self
     {
         if($this->caching){
-            $storage ??=  'database_' . ($this->databaseTable ?? 'capture');
+            $storage ??=  'database_' . ($this->tableName ?? 'capture');
             $folder = ($folder === null) ? '' : DIRECTORY_SEPARATOR . trim($folder, DIRECTORY_SEPARATOR);
             $this->cache = FileCache::getInstance(null, 'database' . $folder);
             $this->cache->setStorage($storage);
@@ -642,14 +841,13 @@ final class Builder extends Connection
     /**
      * Insert records into table.
      * 
-     * @param array<string, mixed> $values array of values to insert into table
-     * @param bool $prepare Use bind values and execute prepare statement instead of query
+     * @param array<string, mixed> $values array of values to insert into table.
+     * @param bool $prepare Use bind values and execute prepare statement instead of query.
      * 
-     * @return int returns affected row counts.
+     * @return int Return number of affected rows.
     */
-    public function insert(array $values, bool $prepare = true): int 
+    public function insert(array $values, bool $prepare = true): int
     {
-        static::$handler = null;
         if ($values === []) {
             return 0;
         }
@@ -661,8 +859,10 @@ final class Builder extends Connection
         if (!is_associative($values[0])) {
             return 0;
         }
-    
+
+        static::$handler = null;
         $columns = array_keys($values[0]);
+
         try {
             if($prepare){
                 return $this->executeInsertPrepared($columns, $values);
@@ -675,129 +875,15 @@ final class Builder extends Connection
     }
 
     /**
-     * Select records from table.
+     * Build a custom SQL query string to execute when calling the execute method.
+     * This method also supports caching and uses prepared statements if array values are passed to the execute method.
+     * Otherwise, it uses query execution to execute the query, so ensure that values passed directly to the query are escaped.
      * 
-     * @param array<int, string> $columns select columns.
+     * @param string $query The SQL query string.
      * 
-     * @return object|null|array|int|bool returns selected rows.
-    */
-    public function select(array $columns = ['*']): mixed 
-    {
-        static::$handler = null;
-        if($this->cache !== null && $this->hasCache){
-            $response = $this->cache->getItem($this->cacheKey);
-            if($response !== null){
-                $this->cacheKey = '';
-                $this->reset();
-
-                return $response;
-            }
-        }
-
-        $columns = ($columns === ['*'])  ? '*' : implode(", ", $columns);
-        $selectQuery = "SELECT {$columns} FROM {$this->databaseTable} {$this->tableAlias}";
-        if ($this->joinTable !== '') {
-            $selectQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
-            if ($this->joinConditions !== []) {
-                $selectQuery .= " ON {$this->joinConditions[0]}";
-
-                if(($joins = count($this->joinConditions)) > 1){
-                    for ($i = 1; $i < $joins; $i++) {
-                        $selectQuery .= " AND {$this->joinConditions[$i]}";
-                    }
-                }
-            } 
-        }
-
-        try {
-            if($this->cache === null){
-                return $this->returnSelect($selectQuery);
-            }
-
-            return $this->cache->onExpired($this->cacheKey, function() use($selectQuery) {
-                return $this->returnSelect($selectQuery);
-            });
-        } catch (DatabaseException $e) {
-            $e->handle();
-        }
-        
-        return null;
-    }
-
-    /**
-     * Return select result from table.
-     * 
-     * @param string $selectQuery query.
-     * 
-     * @return mixed
-    */
-    private function returnSelect(string $selectQuery): mixed 
-    {
-        $isBided = false;
-
-        if ($this->whereCondition === []) {
-            // When using IN as WHERE and it has other ANDs ORs as binding.
-            $isBided = $this->andConditions !== [];
-            $this->buildSearchConditions($selectQuery, $isBided);
-        }else{
-            $isBided = true;
-            $selectQuery .= $this->whereCondition['query'];
-            $this->buildWhereConditions($selectQuery, $isBided);
-        }
-
-        if($this->queryGroup !== []){
-            $selectQuery .= ' GROUP BY ';
-            $selectQuery .= rtrim(implode(', ', $this->queryGroup), ', ');
-        }
-
-        if($this->queryOrder !== []){
-            $selectQuery .= ' ORDER BY ';
-            $selectQuery .= rtrim(implode(', ', $this->queryOrder), ', ');
-        }
-
-        $selectQuery .= $this->queryLimit;
-
-        if($isBided){
-            static::$handler = $this->db->prepare($selectQuery);
-            if ($this->whereCondition !== []) {
-                static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
-            }
-            $this->bindConditions(static::$handler);
-            static::$handler->execute();
-        }else{
-            static::$handler = $this->db->query($selectQuery);
-        }
-
-        $response = (static::$handler->ok() ? 
-            (($this->returnType === 'stmt') ? true : static::$handler->getAll($this->returnType)) : false);
-        $this->reset();
-
-        return $response;
-    }
-
-    /**
-     * Bind placeholder values to builder
-     * 
-     * @param array $values
-     * @deprecated Don't use this method anymore use execute() instead
-     * @return self
-     * @ignore
-    */
-    public function binds(array $values): self 
-    {
-        $this->bindValues = $values;
-
-        return $this;
-    }
-
-    /**
-     * Select on record from table using cache
-     * 
-     * @param string $query database query string
-     * 
-     * @return self $this 
-     * @throws DatabaseException when query is empty
-    */
+     * @return self Returns an instance of the builder class.
+     * @throws DatabaseException When the query is empty.
+     */
     public function query(string $query): self 
     {
         if (empty($query)) {
@@ -810,35 +896,26 @@ final class Builder extends Connection
     }
 
     /**
-     * Bind placeholder values to builder
+     * Executes an SQL query string that was previously prepared in the `query()` method.
      * 
-     * @param string $query SQL query string
+     * @param array<string,mixed>|null $placeholder Binds placeholder and value to the query.
+     * @param int $mode Result return mode RETURN_* (default: RETURN_ALL).
+     *                - RETURN_ALL: Returns all rows (default).
+     *                - RETURN_NEXT: Returns the single/next row from the result set.
+     *                - RETURN_2D_NUM: Returns a 2D array with numerical indices.
+     *                - RETURN_ID: Returns the last inserted ID.
+     *                - RETURN_INT: Returns an integer count of records.
+     *                - RETURN_STMT: Returns an prepared statement object.
      * 
-     * @deprecated Don't use this method anymore use query instead
-     * @return self
-     * @throws DatabaseException when query is empty
-     * @ignore
-    */
-    public function builder(string $query): self 
-    {
-        return $this->query($query);
-    }
-
-    /**
-     * Executes SQL query from `query()` method.
-     * 
-     * @param array<string, mixed> $placeholder binds placeholder and value to query.
-     * @param int $mode Return type [RETURN_ALL, RETURN_NEXT, RETURN_2D_NUM, RETURN_ID, RETURN_INT]
-     * 
-     * @return PDOStatement|mysqli_stmt|mysqli_result|bool|object|array|int|null Return result or prepared statement.
-     * @throws DatabaseException Throws if call executed without query conditions.
-    */
+     * @return mixed|DatabaseInterface Returns the query result, prepared statement object, otherwise false on failure.
+     * @throws DatabaseException Throws if called executed without query conditions.
+     */
     public function execute(?array $placeholder = null, int $mode = RETURN_ALL): mixed 
     {
         $placeholder ??= [];
         static::$handler = null;
 
-        if($this->returnType !== 'stmt' && $this->cache !== null && $this->hasCache){
+        if($mode !== RETURN_STMT && $this->cache !== null && $this->hasCache){
             $response = $this->cache->getItem($this->cacheKey);
             if($response !== null){
                 $this->cacheKey = '';
@@ -855,7 +932,7 @@ final class Builder extends Connection
         $this->bindValues = $placeholder;
 
         try {
-            if($this->returnType === 'stmt' || $this->cache === null){
+            if($mode === RETURN_STMT || $this->cache === null){
                 return $this->returnExecute($this->buildQuery, $mode);
             }
 
@@ -870,16 +947,380 @@ final class Builder extends Connection
     }
 
     /**
+     * Calculate the total number of records table,
+     * 
+     * @param string $column The column to index calculation (default: *).
+     * 
+     * @return int|bool Return total number of records in table, otherwise false if execution failed.
+    */
+    public function total(string $column = '*'): int|bool 
+    {
+        return $this->createQueryExecution("SELECT COUNT({$column})");
+    }
+
+    /**
+     * Calculate the total sum of a numeric column in the table.
+     * 
+     * @param string $column The column to calculate the sum.
+     * 
+     * @return int|float|bool Return total sum columns, otherwise false if execution failed.
+    */
+    public function sum(string $column): int|float|bool
+    {
+        return $this->createQueryExecution("SELECT SUM({$column}) AS totalCalc", 'sum');
+    }
+
+    /**
+     * Calculate the average value of a numeric column in the table.
+     * 
+     * @param string $column The column to calculate the average.
+     * 
+     * @return int|float|bool Return total average of columns, otherwise false if execution failed.
+     */
+    public function average(string $column): int|float|bool
+    {
+        return $this->createQueryExecution("SELECT AVG({$column}) AS totalCalc", 'average');
+    }
+
+     /**
+     * Select multiple records from table.
+     * 
+     * @param array<int,string> $columns select columns.
+     * 
+     * @return object|null|array|int|float|bool Return selected rows, otherwise false if execution failed.
+    */
+    public function select(array $columns = ['*']): mixed 
+    {
+        return $this->createQueryExecution('', 'select', $columns);
+    }
+
+    /**
+     * Select a single or next record from table,
+     * 
+     * @param array<int,string> $columns The table columns to return (default: *).
+     * 
+     * @return object|null|array|int|float|bool Return selected single row, otherwise false if execution failed.
+     * @throws DatabaseException If where method was not called.
+    */
+    public function find(array $columns = ['*']): mixed 
+    {
+        if ($this->whereCondition === []) {
+            throw new DatabaseException('Find cannot be called without a where method being called first.');
+        }
+        
+        return $this->createQueryExecution('', 'find', $columns);
+    }
+
+    /**
+     * Select records from table, by passing desired fetch mode and result type.
+     * 
+     * @param string $result The fetch result type (next or all).
+     * @param int $mode The fetch result mode FETCH_*.
+     * @param array<int,string> $columns The table columns to return (default: *).
+     * 
+     * @return object|null|array|int|float|bool Return selected records, otherwise false if execution failed.
+     * @throws DatabaseException If where method was not called.
+    */
+    public function fetch(string $result = 'all', int $mode = FETCH_OBJ, array $columns = ['*']): mixed 
+    {
+        if ($result === 'all' || $result === 'next') {
+            return $this->createQueryExecution('', 'fetch', $columns, $result, $mode);
+        }
+
+        throw new DatabaseException('Invalid fetch result type, expected "all or next".');
+    }
+
+    /**
+     * Returns query prepared statement based on build up method conditions.
+     * 
+     * @param array<int,string> $columns The table columns to return (default: *).
+     * 
+     * @return DatabaseInterface Return prepared statement if query is successful otherwise null.
+    */
+    public function stmt(array $columns = ['*']): DatabaseInterface|null
+    {
+        $this->returnType = 'stmt';
+        if($this->createQueryExecution('', 'stmt', $columns)){
+            return static::$handler;
+        }
+
+        $this->free();
+        static::$handler?->free();
+        static::$handler = null;
+
+        return null;
+    }
+
+    /**
+     * Create query and execute it.
+     * 
+     * @param string $query Initial method query starting.
+     * @param string $return The method return type based on calling method.
+     * @param array $columns For select and find methods, the column names to return.
+     * @param string $result The fetch result type (next or all).
+     * @param int $mode The fetch result mode FETCH_*.
+     * 
+     * @return mixed Return result of executed method query.
+    */
+    private function createQueryExecution(
+        string $query, 
+        string $return = 'total', 
+        array $columns = ['*'], 
+        string $result = 'all', 
+        int $mode = FETCH_OBJ
+    ): mixed
+    {
+        static::$handler = null;
+        if(!$this->printQuery && $return !== 'stmt' && $this->cache !== null && $this->hasCache){
+            $response = $this->cache->getItem($this->cacheKey);
+            if($response !== null){
+                $this->cacheKey = '';
+
+                $this->reset();
+                return $response;
+            }
+        }
+
+        if($return === 'select' || $return === 'find' || $return === 'stmt'|| $return === 'fetch'){
+            $columns = ($columns === ['*']) ? '*' : implode(", ", $columns);
+            $query = "SELECT {$columns}";
+        }
+
+        $sqlQuery = "{$query} FROM {$this->tableName} {$this->tableAlias}";
+
+        if ($this->joinTable !== '') {
+            $sqlQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
+
+            if ($this->joinConditions !== []) {
+                $sqlQuery .= " ON {$this->joinConditions[0]}";
+
+                if(($joins = count($this->joinConditions)) > 1){
+                    for ($i = 1; $i < $joins; $i++) {
+                        $sqlQuery .= " AND {$this->joinConditions[$i]}";
+                    }
+                }
+            } 
+        }
+    
+        try {
+            if($this->printQuery || $return === 'stmt' || $this->cache === null){
+                return $this->returnExecutedResult($sqlQuery, $return, $result, $mode);
+            }
+
+            return $this->cache->onExpired($this->cacheKey, function() use($sqlQuery, $return, $result, $mode) {
+                return $this->returnExecutedResult($sqlQuery, $return, $result, $mode);
+            });
+        } catch (DatabaseException $e) {
+            $e->handle();
+        }
+        
+        return false;
+    }
+
+    /**
+     * Return executed result records.
+     * 
+     * @param string $sqlQuery The sql query string to execute.
+     * @param string $return The return type.
+     * @param string $result The fetch result type (next or all).
+     * @param int $mode The fetch result mode FETCH_*.
+     * 
+     * @return mixed Return query result.
+    */
+    private function returnExecutedResult(
+        string $sqlQuery, 
+        string $return = 'total', 
+        string $result = 'all', 
+        int $mode = FETCH_OBJ
+    ): mixed
+    {
+        $isBided = false;
+        $isOrdered = false;
+        $response = false;
+
+        if ($this->whereCondition === []) {
+            // When using IN as WHERE and it has other ANDs ORs as binding.
+            $isBided = $this->andConditions !== [];
+            $this->buildAndConditions($sqlQuery, $isBided);
+        }else{
+            $isBided = true;
+            $sqlQuery .= $this->whereCondition['query'];
+            $this->buildWhereConditions($sqlQuery, $isBided);
+        }
+
+        if($this->queryGroup !== []){
+            $sqlQuery .= ' GROUP BY ' . rtrim(implode(', ', $this->queryGroup), ', ');
+        }
+
+        if($this->queryOrder !== []){
+            $isOrdered = true;
+            $sqlQuery .= ' ORDER BY ' . rtrim(implode(', ', $this->queryOrder), ', ');
+        }
+
+        if($this->queryMatchOrder !== []){
+            $this->orderAgainstMatch($sqlQuery, $isBided, $isOrdered);
+        }
+
+        if($return === 'find'){
+            $sqlQuery .= ' LIMIT 1';
+        }elseif($this->selectLimit !== ''){
+            $sqlQuery .= $this->selectLimit;
+        }
+
+        if($this->printQuery){
+            return $this->printDebugQuery($sqlQuery, $return);
+        }
+
+        if($isBided){
+            static::$handler = $this->db->prepare($sqlQuery);
+            if ($this->whereCondition !== []) {
+                static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            }
+            $this->bindConditions(static::$handler);
+            static::$handler->execute();
+        }else{
+            static::$handler = $this->db->query($sqlQuery);
+        }
+
+        if(static::$handler->ok()){
+            if($return === 'stmt'){
+                $response = true;
+            }elseif($return === 'select'){
+                $response = static::$handler->getAll($this->returnType);
+            }elseif($return === 'find'){
+                $response = static::$handler->getNext($this->returnType);
+            }elseif($return === 'total'){
+                $response = static::$handler->rowCount();
+            }elseif($return === 'fetch'){
+                $response = static::$handler->fetch($result, $mode);
+            }else{
+                $response = static::$handler->getNext()->totalCalc ?? 0;
+            }
+        }
+        
+        $this->reset();
+        return $response;
+    }
+
+    /**
+     * Update table with columns and values.
+     * 
+     * @param array<string,mixed> $setValues associative array of columns and values to update.
+     * 
+     * @return int Return number of affected rows.
+     * @throws DatabaseException Throw if error occurred while updating.
+     */
+    public function update(?array $setValues = []): int 
+    {
+        $columns = ($setValues === []) ? $this->querySetValues : $setValues;
+        static::$handler = null;
+
+        if ($columns === []) {
+            throw new DatabaseException('Update operation without SET values is not allowed.');
+        }
+
+        if ($this->whereCondition === []) {
+            throw new DatabaseException('Update operation without a WHERE condition is not allowed.');
+        }
+
+        $updateColumns = static::buildPlaceholder($columns, true);
+        $updateQuery = "UPDATE {$this->tableName} SET {$updateColumns}";
+        $updateQuery .= $this->whereCondition['query'];
+        $this->buildWhereConditions($updateQuery);
+
+        if($this->maxLimit > 0){
+            $updateQuery .= " LIMIT {$this->maxLimit}";
+        }
+
+        if($this->printQuery){
+            $this->printDebugQuery($updateQuery, 'update');
+            return 0;
+        }
+
+        try {
+            static::$handler = $this->db->prepare($updateQuery);
+            foreach($columns as $key => $value){
+                if(!is_string($key) || $key === '?'){
+                    throw new DatabaseException("Invalid update key {$key}, update key must be a valid table column name.");
+                }
+
+                $value = is_array($value) ? json_encode($value) : $value;
+                static::$handler->bind(static::trimPlaceholder($key), $value);
+            }
+            static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            $this->bindConditions(static::$handler);
+            static::$handler->execute();
+
+            $response = (static::$handler->ok() ? static::$handler->rowCount() : 0);
+            $this->reset();
+
+            return $response;
+        } catch (DatabaseException $e) {
+            $e->handle();
+        }
+
+        return 0;
+    }
+
+    /**
+     * Delete record from table.
+     * 
+     * @return int Return number of affected rows.
+     * @throws DatabaseException Throw if error occurs.
+    */
+    public function delete(): int
+    {
+        static::$handler = null;
+
+        if ($this->whereCondition === []) {
+            throw new DatabaseException('Delete operation without a WHERE condition is not allowed.');
+        }
+
+        $deleteQuery = "DELETE FROM {$this->tableName}";
+        $deleteQuery .= $this->whereCondition['query'];
+        $this->buildWhereConditions($deleteQuery);
+
+        if($this->maxLimit > 0){
+            $deleteQuery .= " LIMIT {$this->maxLimit}";
+        }
+
+        if($this->printQuery){
+            $this->printDebugQuery($deleteQuery, 'delete');
+            return 0;
+        }
+
+        try {
+            static::$handler = $this->db->prepare($deleteQuery);
+            static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            $this->bindConditions(static::$handler);
+            static::$handler->execute();
+
+            $response = (static::$handler->ok() ? static::$handler->rowCount() : 0);
+            $this->reset();
+
+            return $response;
+        } catch (DatabaseException $e) {
+            $e->handle();
+        }
+        
+        return 0;
+    }
+
+    /**
      * Return custom builder result from table
      * 
      * @param string $buildQuery query
      * @param int $mode return result type 
      * 
-     * @return mixed|PDOStatement|mysqli_stmt|mysqli_result|bool|null Return result or prepared statement.
+     * @return mixed|DatabaseInterface Return query result, prepared statement object, otherwise false on failure.
      * @throws DatabaseException If placeholder key is not a string.
     */
     private function returnExecute(string $buildQuery, int $mode): mixed
     {
+        if($this->printQuery){
+            return $this->printDebugQuery($buildQuery, 'execute');
+        }
+
         if($this->bindValues === []){
             static::$handler = $this->db->query($buildQuery);
         }else{
@@ -895,286 +1336,10 @@ final class Builder extends Connection
         }
 
         $response = (static::$handler->ok() ? 
-            (($this->returnType === 'stmt') ? true : static::$handler->getItem($mode, $this->returnType)) : false);
+            (($mode === RETURN_STMT) ? static::$handler : static::$handler->getItem($mode, $this->returnType)) : false);
         $this->reset();
 
         return $response;
-    }
-
-    /**
-     * Select a single record from table,
-     * 
-     * @param array<int, string> $columns select columns to return
-     * 
-     * @return object|null|array|int|bool returns selected row.
-    */
-    public function find(array $columns = ['*']): mixed 
-    {
-        static::$handler = null;
-
-        if ($this->whereCondition === []) {
-            throw new DatabaseException("Find operation without a WHERE condition is not allowed.");
-        }
-
-        if($this->returnType !== 'stmt' && $this->cache !== null && $this->hasCache){
-            $response = $this->cache->getItem($this->cacheKey);
-            if($response !== null){
-                $this->cacheKey = '';
-                $this->reset();
-
-                return $response;
-            }
-        }
-
-        $columns = ($columns === ['*'])  ? '*' : implode(", ", $columns);
-        $findQuery = "SELECT {$columns} FROM {$this->databaseTable} {$this->tableAlias}";
-        if ($this->joinTable !== '') {
-            $findQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
-            if ($this->joinConditions !== []) {
-                $findQuery .= " ON {$this->joinConditions[0]}";
-                if(($joins = count($this->joinConditions)) > 1){
-                    for ($i = 1; $i < $joins; $i++) {
-                        $findQuery .= " AND {$this->joinConditions[$i]}";
-                    }
-                }
-            } 
-        }
-        
-        try {
-            if($this->returnType === 'stmt' || $this->cache === null){
-                return $this->returnFind($findQuery);
-            }
-            
-            return $this->cache->onExpired($this->cacheKey, function() use($findQuery) {
-                return $this->returnFind($findQuery);
-            });
-        } catch (DatabaseException $e) {
-            $e->handle();
-        }
-        
-        return null;
-    }
-
-    /**
-     * Return single result from table
-     * 
-     * @param string $findQuery query pass by reference 
-     * 
-     * @return mixed
-    */
-    private function returnFind(string &$findQuery): mixed 
-    {
-        $findQuery .= $this->whereCondition['query'];
-        $this->buildWhereConditions($findQuery);
-        $findQuery .= ' LIMIT 1';
- 
-        static::$handler = $this->db->prepare($findQuery);
-        static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
-        $this->bindConditions(static::$handler);
-        static::$handler->execute();
-
-        $response = (static::$handler->ok() ? 
-            (($this->returnType === 'stmt') ? true : static::$handler->getNext($this->returnType)) : false);
-        $this->reset();
-
-        return $response;
-    }
-
-    /**
-     * Select total counts of records from table,
-     * 
-     * @param string $column column to index counting (default: *) 
-     * 
-     * @return int|bool returns total counts of records.
-    */
-    public function total(string $column = '*'): int|bool 
-    {
-        return $this->executeTotalOrSum("SELECT COUNT({$column})");
-    }
-
-    /**
-     * Select total sum of records from table, column
-     * 
-     * @param string $column column to index sum.
-     * 
-     * @return int|float|bool Returns total sum of records.
-    */
-    public function sum(string $column): int|float|bool
-    {
-        return $this->executeTotalOrSum("SELECT SUM({$column}) AS totalSum", true);
-    }
-
-    /**
-     * Return total sum or count of records from table, column.
-     * 
-     * @param string $query Method query.
-     * @param bool $sum whether to return total sum or count of records.
-     * 
-     * @return int|float|bool returns total sum or count of records.
-    */
-    private function executeTotalOrSum(string $query, bool $sum = false): float|int|bool 
-    {
-        static::$handler = null;
-        if($this->returnType !== 'stmt' && $this->cache !== null && $this->hasCache){
-            $response = $this->cache->getItem($this->cacheKey);
-            if($response !== null){
-                $this->cacheKey = '';
-                $this->reset();
-                return $response;
-            }
-        }
-
-        $totalQuery = "{$query} FROM {$this->databaseTable} {$this->tableAlias}";
-        
-        if ($this->joinTable !== '') {
-            $totalQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
-            if ($this->joinConditions !== []) {
-                $totalQuery .= " ON {$this->joinConditions[0]}";
-                if(count($this->joinConditions) > 1){
-                    for ($i = 1; $i < count($this->joinConditions); $i++) {
-                        $totalQuery .= " AND {$this->joinConditions[$i]}";
-                    }
-                }
-            } 
-        }
-    
-        try {
-            if($this->returnType === 'stmt' || $this->cache === null){
-                return $this->returnTotalOrSum($totalQuery, $sum);
-            }
-
-            return $this->cache->onExpired($this->cacheKey, function() use($totalQuery, $sum) {
-                return $this->returnTotalOrSum($totalQuery, $sum);
-            });
-        } catch (DatabaseException $e) {
-            $e->handle();
-        }
-        
-        return 0;
-    }
-
-    /**
-     * Return total number of rows in table
-     * 
-     * @param string $totalQuery query
-     * @param bool $sum Return sum or total
-     * 
-     * @return int|float|bool  returns selected row.
-    */
-    private function returnTotalOrSum(string $totalQuery, bool $sum = false): int|float|bool 
-    {
-        if ($this->whereCondition === []) {
-            static::$handler = $this->db->query($totalQuery);
-        }else{
-            $totalQuery .= $this->whereCondition['query'];
-            $this->buildWhereConditions($totalQuery);
-            static::$handler = $this->db->prepare($totalQuery);
-            static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
-            $this->bindConditions(static::$handler);
-            static::$handler->execute();
-        }
-
-        $response = static::$handler->ok() ? 
-            ($this->returnType === 'stmt' ? true : 
-            ($sum ? static::$handler->getNext()->totalSum ?? 0 : static::$handler->rowCount())) 
-            : false;
-        
-        $this->reset();
-
-        return $response;
-    }
-
-
-    /**
-     * Update table with columns and values
-     * 
-     * @param array<string, mixed> $setValues associative array of columns and values to update
-     * 
-     * @return int|bool returns affected row counts or false on failure.
-     * @throws DatabaseException Throw if error occurred while updating.
-     */
-    public function update(?array $setValues = []): int|bool 
-    {
-        $columns = ($setValues === []) ? $this->querySetValues : $setValues;
-        static::$handler = null;
-
-        if ($columns === []) {
-            throw new DatabaseException('Update operation without SET values is not allowed.');
-        }
-
-        if ($this->whereCondition === []) {
-            throw new DatabaseException('Update operation without a WHERE condition is not allowed.');
-        }
-
-        $updateColumns = static::buildPlaceholder($columns, true);
-        $updateQuery = "UPDATE {$this->databaseTable} SET {$updateColumns}";
-        $updateQuery .= $this->whereCondition['query'];
-        $this->buildWhereConditions($updateQuery);
-
-        if($this->maxLimit > 0){
-            $updateQuery .= " LIMIT {$this->maxLimit}";
-        }
-
-        try {
-            static::$handler = $this->db->prepare($updateQuery);
-            foreach($columns as $key => $value){
-                $value = is_string($value) ? $value : json_encode($value);
-                static::$handler->bind(static::trimPlaceholder($key), $value);
-            }
-            static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
-            $this->bindConditions(static::$handler);
-            static::$handler->execute();
-
-            $response = (static::$handler->ok() ? 
-                (($this->returnType === 'stmt') ? true : static::$handler->rowCount()) : false);
-            $this->reset();
-
-            return $response;
-        } catch (DatabaseException $e) {
-            $e->handle();
-        }
-
-        return false;
-    }
-
-    /**
-     * Delete record from table
-     * 
-     * @return int|bool returns number of affected rows or false on failure.
-     * @throws DatabaseException Throw if error occurs.
-    */
-    public function delete(): int|bool
-    {
-        static::$handler = null;
-
-        if ($this->whereCondition === []) {
-            throw new DatabaseException('Delete operation without a WHERE condition is not allowed.');
-        }
-
-        $deleteQuery = "DELETE FROM {$this->databaseTable}";
-        $deleteQuery .= $this->whereCondition['query'];
-        $this->buildWhereConditions($deleteQuery);
-
-        if($this->maxLimit > 0){
-            $deleteQuery .= " LIMIT {$this->maxLimit}";
-        }
-
-        try {
-            static::$handler = $this->db->prepare($deleteQuery);
-            static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
-            $this->bindConditions(static::$handler);
-            static::$handler->execute();
-
-            $response = (static::$handler->ok() ? 
-                (($this->returnType === 'stmt') ? true : static::$handler->rowCount()) : false);
-            $this->reset();
-
-            return $response;
-        } catch (DatabaseException $e) {
-            $e->handle();
-        }
-        
-        return false;
     }
 
     /**
@@ -1220,12 +1385,12 @@ final class Builder extends Connection
     }
 
     /**
-     * Delete all records in a table 
-     * And alter table auto increment to 1
+     * Truncate all records in a table and alter table auto increment to 1.
+     * If transaction failed rollback to default.
      * 
-     * @param bool $transaction Use query transaction.
+     * @param bool $transaction Weather to use transaction.
      * 
-     * @return bool returns true if completed
+     * @return bool Return true transaction was completed, otherwise false.
      * @throws DatabaseException
     */
     public function truncate(bool $transaction = true): bool 
@@ -1234,8 +1399,8 @@ final class Builder extends Connection
             if ($transaction) {
                 $this->db->beginTransaction();
             }
-            $deleteSuccess = $this->db->exec("DELETE FROM {$this->databaseTable}");
-            $resetSuccess = $this->db->exec("ALTER TABLE {$this->databaseTable} AUTO_INCREMENT = 1");
+            $deleteSuccess = $this->db->exec("DELETE FROM {$this->tableName}");
+            $resetSuccess = $this->db->exec("ALTER TABLE {$this->tableName} AUTO_INCREMENT = 1");
 
             if ($transaction) {
                 if ($deleteSuccess && $resetSuccess) {
@@ -1261,82 +1426,82 @@ final class Builder extends Connection
      * 
      * @param string $query Query statement to execute.
      * 
-     * @return int|bool returns affected row counts.
-     * @throws DatabaseException
+     * @return int Return number affected rows.
+     * @throws DatabaseException Throws if error occurs.
     */
-    public function exec(string $query): int|bool 
+    public function exec(string $query): int 
     {
         try {
-            $affected = $this->db->exec($query);
-
-            return $affected;
-        } catch (DatabaseException $e) {
-            $e->handle();
-        }
-
-        return false;
-    }
-
-    /**
-     * Drop table from database
-     * 
-     * @return int|bool returns affected row counts.
-    */
-    public function drop(): int|bool 
-    {
-        try {
-            $return = $this->db->exec("DROP TABLE IF EXISTS {$this->databaseTable}");
-            $this->reset();
-
-            return $return;
-        } catch (DatabaseException $e) {
-            $e->handle();
-        }
-
-        return false;
-    }
-
-    /**
-     * Get table column instance 
-     * 
-     * @param Scheme $scheme table column instance
-     * 
-     * @return int|bool affected row count
-    */
-    public function create(Scheme $scheme): int|bool 
-    {
-        try {
-            $query = $scheme->generate();
-
-            if(empty($query)){
-                return false;
-            }
-
             return $this->db->exec($query);
         } catch (DatabaseException $e) {
             $e->handle();
         }
 
+        return 0;
+    }
+
+    /**
+     * Drop database table if table exists.
+     * 
+     * @return int Return number affected rows.
+     * @throws DatabaseException Throws if error occurs.
+    */
+    public function drop(): int 
+    {
+        try {
+            $return = $this->db->exec("DROP TABLE IF EXISTS {$this->tableName}");
+            $this->reset();
+            return $return;
+        } catch (DatabaseException $e) {
+            $e->handle();
+        }
+
+        return 0;
+    }
+
+    /**
+     * Create table database table if it doesn't exist.
+     * 
+     * @param Scheme|string $scheme table scheme instance or SQL query string for table creation.
+     * 
+     * @return bool Return true if table table was created successfully, false otherwise.
+    */
+    public function create(Scheme|string $scheme): bool 
+    {
+        try {
+            $query = ($scheme instanceof Scheme) ? $scheme->generate() : $scheme;
+
+            if($query === ''){
+                return false;
+            }
+
+            return $this->db->exec($query) > 0;
+        } catch (DatabaseException $e) {
+            $e->handle();
+        }
+
         return false;
     }
 
     /**
-     * Get table column instance 
+     * Initializes a database schema instance with the provided table name.
      * 
-     * @return Scheme column class instance
+     * @return Scheme Return instance of the database scheme class.
     */
     public function scheme(): Scheme
     {
-        return new Scheme($this->databaseTable);
+        return new Scheme($this->tableName);
     }
 
     /**
-     * Execute insert query
-     * @param array $columns column name to target insert
-     * @param array $values array of values to insert
-     * @return int|bool returns affected row counts.
+     * Execute insert query.
+     * 
+     * @param array $columns column name to target insert.
+     * @param array $values array of values to insert.
+     * 
+     * @return int Return number affected row.
     */
-    private function executeInsertQuery(array $columns, array $values): int|bool 
+    private function executeInsertQuery(array $columns, array $values): int 
     {
         $inserts = '';
         foreach ($values as $row) {
@@ -1345,12 +1510,15 @@ final class Builder extends Connection
 
         $keys = implode(', ', $columns);
         $inserts = rtrim($inserts, ', ');
-        $insertQuery = "INSERT INTO {$this->databaseTable} ({$keys}) VALUES {$inserts}";
+        $insertQuery = "INSERT INTO {$this->tableName} ({$keys}) VALUES {$inserts}";
+
+        if($this->printQuery){
+            $this->printDebugQuery($insertQuery, 'insert');
+            return 0;
+        }
         
         static::$handler = $this->db->query($insertQuery);
-        $response = (static::$handler->ok() ? 
-            (($this->returnType === 'stmt') ? true : static::$handler->rowCount()) : 
-                false);
+        $response = (static::$handler->ok() ? static::$handler->rowCount() : 0);
 
         $this->reset();
 
@@ -1358,22 +1526,29 @@ final class Builder extends Connection
     }
 
     /**
-     * Execute insert query using prepared statement
-     * @param array $columns column name to target insert
-     * @param array $values array of values to insert
-     * @return int|bool returns affected row counts.
+     * Execute insert query using prepared statement.
+     * 
+     * @param array $columns column name to target insert.
+     * @param array $values array of values to insert.
+     * 
+     * @return int Return number affected row.
     */
-    private function executeInsertPrepared(array $columns, array $values): int|bool 
+    private function executeInsertPrepared(array $columns, array $values): int
     {
         $count = 0;
         [$placeholders, $inserts] = self::mapParams($columns);
-        $insertQuery = "INSERT INTO {$this->databaseTable} ({$inserts}) VALUES ($placeholders)";
+        $insertQuery = "INSERT INTO {$this->tableName} ({$inserts}) VALUES ($placeholders)";
        
+        if($this->printQuery){
+            $this->printDebugQuery($insertQuery, 'insert', $values);
+            return 0;
+        }
+
         static::$handler = $this->db->prepare($insertQuery);
     
         foreach ($values as $row) {
             foreach ($row as $key => $value) {
-                $value = is_string($value) ? $value : json_encode($value);
+                $value = is_array($value) ? json_encode($value) : $value;
                 static::$handler->bind(static::trimPlaceholder($key), $value);
             }
 
@@ -1384,100 +1559,370 @@ final class Builder extends Connection
             }
         }
 
-        $response = ($this->returnType === 'stmt') ? $count > 0 : $count;
         $this->reset();
-
-        return $response;
+        return $count;
     } 
 
     /**
-     * Bind query where conditions
+     * Build query conditions.
+     *
+     * @param string $query The SQL query string to which conditions passed by reference.
+     * @param bool $isBided Wether the param is bind params (default: true).
      * 
-     * @param DatabaseInterface $handler Pass handler by reference
+     * @return void
     */
-    private function bindConditions(DatabaseInterface &$handler): void 
+    private function buildWhereConditions(string &$query, bool $isBided = true): void
     {
         if ($this->andConditions === []) {
             return;
         }
 
-        foreach ($this->andConditions as $bindings) {
-            if (in_array($bindings['type'], ['AND', 'OR', 'AND_OR'], true)) {
-                $column = static::trimPlaceholder($bindings['column']);
-                $handler->bind($column, $bindings['value']);
-            }
-            
-            if ($bindings['type'] === 'AND_OR') {
-                $orColumn = static::trimPlaceholder($bindings['orColumn']);
-                $handler->bind($orColumn, $bindings['orValue']);
-            }
+        foreach ($this->andConditions as $index => $condition) {
+            $query .= match ($condition['type']) {
+                'GROUP_OR' => " AND " . self::buildGroupConditions($condition['conditions'], $index, $isBided, 'OR'),
+                'GROUP_AND' => " AND " . self::buildGroupConditions($condition['conditions'], $index, $isBided, 'AND'),
+                'BIND_OR' => " AND " . self::buildGroupBindConditions($condition['X'], $condition['Y'], $index, $isBided, 'OR', $condition['bind']),
+                'BIND_AND' => " AND " . self::buildGroupBindConditions($condition['X'], $condition['Y'], $index, $isBided, 'AND', $condition['bind']),
+                default => self::buildSingleWhereConditions($condition, $index, $isBided),
+            };
         }
     }
 
     /**
-     * Build query conditions.
+     * Build query for ands conditions.
      *
-     * @param string $query The SQL query string to which conditions are added.
+     * @param string $query The SQL query string to which search conditions passed by reference.
      * @param bool $isBided Wether the param is bind params (default: true).
+     * 
+     * @return void
     */
-    private function buildWhereConditions(string &$query, bool $isBided = true): void
+    private function buildAndConditions(string &$query, bool $isBided = true): void
     {
-        if ($this->andConditions !== []) {
-            foreach ($this->andConditions as $condition) {
-                $column = $condition['column'];
-                $operator = $condition['operator'] ?? '=';
-                $orOperator = $condition['orOperator'] ?? '=';
-                $placeholder = static::trimPlaceholder($column);
+        if ($this->andConditions === []) {
+            return;
+        }
 
-                $query .= match ($condition['type']) {
-                    'AND' => " AND $column $operator $placeholder",
-                    'OR' => " OR $column $operator $placeholder",
-                    'AND_OR' => " AND ($column $operator $placeholder OR {$condition['orColumn']}  $orOperator " . static::trimPlaceholder($condition['orColumn']) . ")",
-                    'IN' => " AND $column IN ({$condition['values']})",
-                    'IN_SET' => ($operator === '>') ?
-                        " AND FIND_IN_SET('{$condition['search']}', '{$condition['list']}') > 0" :
-                        " AND FIND_IN_SET('{$condition['search']}', '{$condition['list']}')",
-                    'LIKE' => " AND $column LIKE ?",
-                    default => '',
-                };
+        $query .= ' WHERE ';
+        $firstCondition = true;
+
+        foreach ($this->andConditions as $index => $condition) {
+            if (!$firstCondition) {
+                $query .= ($condition['type'] === 'OR') ? ' OR' : ' AND';
             }
+
+            $query .= match ($condition['type']) {
+                'GROUP_OR' => self::buildGroupConditions($condition['conditions'], $index, $isBided, 'OR'),
+                'GROUP_AND' => self::buildGroupConditions($condition['conditions'], $index, $isBided, 'AND'),
+                'BIND_OR' => self::buildGroupBindConditions($condition['X'], $condition['Y'], $index, $isBided, 'OR', $condition['bind']),
+                'BIND_AND' => self::buildGroupBindConditions($condition['X'], $condition['Y'], $index, $isBided, 'AND', $condition['bind']),
+                default => self::buildSingleAndCondition($condition, $index, $isBided),
+            };
+
+            $firstCondition = false;
         }
     }
 
     /**
-     * Build query search conditions.
+     * Constructs a single ANDs condition query string with placeholders for binding values.
      *
-     * @param string $query The SQL query string to which search conditions are added.
-     * @param bool $isBided Wether the param is bind params (default: true).
-    */
-    private function buildSearchConditions(string &$query, bool $isBided = true): void
+     * @param array   $condition  An array representing the search condition.
+     * @param int     $index      The index to append to the placeholder names.
+     * @param bool    $isBided    Indicates whether placeholders should be used for binding values (default: true).
+     *
+     * @return string Return query string representation of the single AND condition.
+     */
+    private static function buildSingleAndCondition(array $condition, int $index, bool $isBided = true): string
     {
-        if ($this->andConditions !== []) {
-            $query .= ' WHERE';
-            $firstCondition = true;
+        $operator = $condition['operator'] ?? '=';
+        $column = $condition['column'];
+        $placeholder = ($isBided ? 
+            (($condition['type'] === 'AGAINST') ? ":match_column_{$index}" : static::trimPlaceholder($column)) : 
+            addslashes($condition['value'])
+        );
 
-            foreach ($this->andConditions as $condition) {
-                $operator = $condition['operator'] ?? '=';
-                $column = $condition['column'];
-                $placeholder = $isBided ? static::trimPlaceholder($column) : addslashes($condition['value']);
-                $type = $condition['type'];
+        return match ($condition['type']) {
+            'IN' => " {$column} IN ({$condition['values']})",
+            'AGAINST' => " MATCH($column) AGAINST ({$placeholder} {$operator})",
+            'AND', 'OR' => " $column $operator $placeholder",
+            'IN_SET' => ($operator === '>') ?
+                " FIND_IN_SET('{$condition['search']}', '{$condition['list']}') > 0" :
+                " FIND_IN_SET('{$condition['search']}', '{$condition['list']}')",
+            'LIKE' => " $column LIKE ?",
+            default => '',
+        };
+    }
 
-                if (!$firstCondition) {
-                    $query .= ($type === 'OR') ? ' OR' : ' AND';
+    /**
+     * Constructs a single condition query string with placeholders for binding values.
+     *
+     * @param array   $condition  An array representing the condition.
+     * @param int     $index      The index to append to the placeholder names.
+     * @param bool    $isBided    Indicates whether placeholders should be used for binding values (default: true).
+     *
+     * @return string Return query string representation of the single condition.
+     */
+    private static function buildSingleWhereConditions(array $condition, int $index, $isBided = true): string
+    {
+        $column = $condition['column'];
+        $operator = $condition['operator'] ?? '=';
+        $placeholder = ($isBided ? 
+            (($condition['type'] === 'AGAINST') ? ":match_column_{$index}" : static::trimPlaceholder($column)) : 
+            addslashes($condition['value'])
+        );
+
+        return match ($condition['type']) {
+            'AND' => " AND $column $operator $placeholder",
+            'OR' => " OR $column $operator $placeholder",
+            'IN' => " AND $column IN ({$condition['values']})",
+            'AGAINST' => " AND MATCH($column) AGAINST ({$placeholder} {$operator})",
+            'IN_SET' => ($operator === '>') ?
+                " AND FIND_IN_SET('{$condition['search']}', '{$condition['list']}') > 0" :
+                " AND FIND_IN_SET('{$condition['search']}', '{$condition['list']}')",
+            'LIKE' => " AND $column LIKE ?",
+            default => '',
+        }; 
+    }
+
+    /**
+     * Builds a query string representation of single grouped conditions.
+     *
+     * @example 'SELECT * FROM foo WHERE (bar = 1 AND baz = 2)'.
+     * @example 'SELECT * FROM foo WHERE (boz = 1 OR bra = 2)'.
+     *
+     * @param array   $conditions   An array of conditions to be grouped.
+     * @param int     $index        The index to append to the placeholder names.
+     * @param bool    $isBided      Indicates whether placeholders should be used for binding values (default: true).
+     * @param string  $type         The type of logical operator to use between conditions within the group (default: 'OR').
+     * @param int     &$last        Reference to the total count of conditions processed so far across all groups.
+     *
+     * @return string Return query string representation of grouped conditions with placeholders.
+     */
+    private static function buildGroupConditions(
+        array $conditions, 
+        int $index, 
+        bool $isBided = true,  
+        string $type = 'OR', 
+        int &$last = 0
+    ): string
+    {
+        $group = '';
+        $count = 0;
+        foreach ($conditions as $idx => $condition) {
+            $column = key($condition);
+            $operator = $condition[$column]['operator'] ?? '=';
+            $placeholder = $isBided ? static::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1)) : addslashes($condition[$column]['value']);
+
+            if ($idx > 0) {
+                $group .= " {$type} ";
+            }
+
+            $group .= "{$column} {$operator} {$placeholder}";
+            $count++;
+        }
+
+        $last += $count;
+        return "({$group})";
+    }
+
+    /**
+     * Builds a query string representation of multiple group conditions.
+     * 
+     * @example 'SELECT * FROM foo WHERE ((bar = 1 AND baz = 2) AND (boz = 1 AND bra = 5))'.
+     * @example 'SELECT * FROM foo WHERE ((bar = 1 OR baz = 2) OR (boz = 1 OR bra = 5))'.
+     *
+     * @param array   $conditionsX  An array of conditions for the first group.
+     * @param array   $conditionsY  An array of conditions for the second group.
+     * @param int     $index        The index to append to the placeholder names.
+     * @param bool    $isBided      Indicates whether placeholders should be used for binding values (default: true).
+     * @param string  $type         The type of logical operator to use between groups (default: 'OR').
+     * @param string  $bind         The type of logical operator to use in binding groups (default: 'OR').
+     *
+     * @return string Return a query string representation of grouped conditions with placeholders.
+     */
+    private static function buildGroupBindConditions(
+        array $conditionsX, 
+        array $conditionsY, 
+        int $index, 
+        bool $isBided = true, 
+        string $type = 'OR',
+        string $bind = 'OR'
+    ): string
+    {
+        $last = 0;
+        $groupX = self::buildGroupConditions($conditionsX, $index, $isBided, $type, $last);
+        $groupY = self::buildGroupConditions($conditionsY, $index, $isBided, $type, $last);
+
+        return "({$groupX} {$bind} {$groupY})";
+    }
+
+     /**
+     * Bind query where conditions
+     * 
+     * @param DatabaseInterface &$handler Database handler passed by reference.
+     * 
+     * @return void
+    */
+    private function bindConditions(DatabaseInterface &$handler): void 
+    {
+        if($this->andConditions !== []) {
+            foreach ($this->andConditions as $index => $bindings) {
+                switch ($bindings['type']) {
+                    case 'AGAINST':
+                        $handler->bind(":match_column_{$index}", $bindings['value']);
+                    break;
+                    case 'GROUP_OR':
+                    case 'GROUP_AND':
+                        self::bindGroupConditions($bindings['conditions'], $handler, $index);
+                    break;
+                    case 'BIND_OR':
+                    case 'BIND_AND':
+                        $last = 0;
+                        self::bindGroupConditions($bindings['X'], $handler, $index, $last);
+                        self::bindGroupConditions($bindings['Y'], $handler, $index, $last);
+                    break;
+                    default:
+                        $handler->bind(static::trimPlaceholder($bindings['column']), $bindings['value']);
+                    break;
                 }
-
-                $query .= match ($type) {
-                    'IN' => " {$column} IN ({$condition['values']})",
-                    'AND', 'OR' => " $column $operator $placeholder",
-                    'IN_SET' => ($operator === '>') ?
-                        " FIND_IN_SET('{$condition['search']}', '{$condition['list']}') > 0" :
-                        " FIND_IN_SET('{$condition['search']}', '{$condition['list']}')",
-                    default => '',
-                };
-
-                $firstCondition = false;
             }
         }
+
+        if($this->queryMatchOrder !== []){
+            foreach($this->queryMatchOrder as $idx => $order){
+                $handler->bind(":match_order_{$idx}", $order['value']);
+            }
+        }
+    }
+
+    /**
+     * Bind group conditions to the database handler.
+     *
+     * @param array               $bindings  An array of conditions to bind.
+     * @param DatabaseInterface   $handler   The database handler to bind the values to.
+     * @param int                 $index     The index to append to the placeholder names.
+     * @param int                 &$last     A reference to the last counter used to ensure unique placeholder names.
+     *
+     * @return void
+     */
+    private function bindGroupConditions(array $bindings, DatabaseInterface &$handler, int $index, int &$last = 0): void 
+    {
+        $count = 0;
+        foreach ($bindings as $idx => $bind) {
+            $column = key($bind);
+            $placeholder = static::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1));
+            $handler->bind($placeholder, $bind[$column]['value']);
+            $count++;
+        }
+        $last += $count;
+    }
+
+    /**
+     * Print the MySQL query string for debugging purposes.
+     * 
+     * If this method is invoked in a production environment, 
+     * the query string will be logged using the `debug` level along with the calling method,
+     * and the method will return false.
+     * 
+     * @param string $query The MySQL query string to print.
+     * @param string $method The name of the calling method.
+     * 
+     * @return array|bool Returns false on production, otherwise return query array.
+     */
+    private function printDebugQuery(string $query, string $method, array $values = []): bool
+    {
+        $params = [];
+        if($method === 'insert'){
+            foreach($values as $bindings){
+                $column = key($bindings);
+                $value = is_array($bindings[$column]) ? json_encode($bindings[$column]) : $bindings[$column];
+                $params[] = ":{$column} = " . $value;
+            }
+        }else{
+            if ($this->whereCondition !== []) {
+                $params[] = "{$this->whereCondition['placeholder']} = " . $this->whereCondition['value'];
+            }
+
+            foreach ($this->andConditions as $index => $bindings) {
+                switch ($bindings['type']) {
+                    case 'AGAINST':
+                        $params[] = ":match_column_{$index} = " . $bindings['value'];
+                    break;
+                    case 'GROUP_OR':
+                    case 'GROUP_AND':
+                        self::bindDebugGroupConditions($bindings['conditions'], $index, $params);
+                    break;
+                    case 'BIND_OR':
+                    case 'BIND_AND':
+                        $last = 0;
+                        self::bindDebugGroupConditions($bindings['X'], $index, $params, $last);
+                        self::bindDebugGroupConditions($bindings['Y'], $index, $params, $last);
+                    break;
+                    default: 
+                        $placeholder = static::trimPlaceholder($bindings['column']);
+                        $params[] = ":$placeholder = " . $bindings['value'];
+                    break;
+                }
+            }
+        }
+        $this->reset();
+        $this->debugQuery = [
+            'method' => $method,
+            'pdo' => $query,
+            'mysqli' => preg_replace('/:([a-zA-Z0-9_]+)/', '?', $query),
+            'binding' => $params
+        ];
+
+        if (PRODUCTION) {
+            logger('debug', json_encode( $this->debugQuery, JSON_PRETTY_PRINT));
+            return false;
+        }
+
+        return false;
+    }
+
+     /**
+     * Orders the query based on the MATCH columns and mode.
+     * 
+     * @param string &$selectQuery The SQL query string passed by reference.
+     * @param bool $isBided Whether the value is bound.
+     * @param bool $isOrdered Whether the query has been ordered.
+     * 
+     * @return void
+    */
+    private function orderAgainstMatch(string &$selectQuery, bool $isBided = true, bool $isOrdered = false): void 
+    {
+        $orders = $isOrdered ? ' , ' : ' ORDER BY';
+        foreach($this->queryMatchOrder as $idx => $order){
+            $value =  ($isBided ? ":order_match_{$idx}" : 
+                (is_string($order['value']) ? "'" . addslashes($order['value']) . "'" :
+                 $order['value'])
+            );
+            $orders .= "MATCH({$order['column']}) AGAINST ({$value} {$order['mode']}) {$order['order']}, ";
+        }
+
+        $selectQuery .= rtrim($orders, ', ');
+    }
+
+    /**
+     * Binds conditions for debugging purposes in a group.
+     * 
+     * @param array $bindings The array of bindings.
+     * @param int $index The index.
+     * @param array &$params The array to store the debug parameters.
+     * @param int &$last The last index.
+     * 
+     * @return void
+     */
+    private function bindDebugGroupConditions(array $bindings, int $index, array &$params = [], int &$last = 0): void 
+    {
+        $count = 0;
+        foreach ($bindings as $idx => $bind) {
+            $column = key($bind);
+            $placeholder = static::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1));
+            $params[] = "{$placeholder} = " . $bind[$column]['value'];
+            $count++;
+        }
+        $last += $count;
     }
 
     /**
@@ -1487,12 +1932,11 @@ final class Builder extends Connection
      * 
      * @return Manager Database manager class instance.
      * 
-     * @see database/manager - Database Manager
+     * @see https://luminova.ng/docs/0.0.0/database/manager
      */
     public function manager(): Manager 
     {
         static $manager = null;
-
         $manager ??= new Manager($this->db);
 
         return $manager;
@@ -1512,8 +1956,7 @@ final class Builder extends Connection
     public function export(string $as = 'csv', ?string $filename = null, array $columns = ['*']): bool 
     {
         $manager = $this->manager();
-
-        $manager->setTable($this->databaseTable);
+        $manager->setTable($this->tableName);
 
         return $manager->export($as, $filename, $columns);
     }
@@ -1556,7 +1999,7 @@ final class Builder extends Connection
      * 
      * @var array $columns Array of column names.
      * 
-     * @return array<int,string> Array of insert params and placeholderss.
+     * @return array<int,string> Array of insert params and placeholders.
     */
     private static function mapParams(array $columns): array 
     {
@@ -1593,27 +2036,35 @@ final class Builder extends Connection
     }
 
     /**
-     * Quote array values int = int, string = 'string'
+     * Prepare quoted values from an array of columns.
+     *
+     * @param array $columns The array of columns to be quoted.
+     * @param string $return The return type, can be 'array' or 'string'.
      * 
-     * @param array $columns columns
-     * @param bool $implode should implode or just return the array.
-     * @param bool $implode should implode or just return the array
-     * 
-     * @return array|string Return array or string of column values.
-    */
-    private static function quotedValues(array $columns, bool $implode = true, bool $quote = false): array|string
+     * @return array|string An array of quoted values or a string of quoted values.
+     */
+    private static function quotedValues(array $columns, string $return = 'string'): array|string
     {
         $quoted = [];
+        $string = '';
         foreach ($columns as $item) {
-            $quoted[] = is_string($item) ? addslashes($item) : json_encode($item);
-        }
-
-        if($implode){
-            if($quote){
-                return "'" . implode("','",  $quoted) . "'";
+            if(is_array($item)){
+                $value = "'" . json_encode($item) . "'" ;
+            }elseif(is_numeric($item)){
+                $value = $item;
+            }else{
+                $value = "'" . addslashes($item) . "'";
             }
 
-            return implode(', ', $quoted);
+            if($return === 'string'){
+                $string .= "{$value}, ";
+            }else{
+                $quoted[] = $value;
+            }
+        }
+
+        if($return === 'string'){
+            return rtrim($string, ', ');
         }
 
         return $quoted;
@@ -1636,21 +2087,23 @@ final class Builder extends Connection
     */
     public function reset(): void 
     {
-        $this->databaseTable = ''; 
+        $this->tableName = ''; 
         $this->jointTableAlias = '';
         $this->tableAlias = '';
         $this->joinTable = '';
         $this->joinType = '';
         $this->joinConditions = [];
-        $this->queryLimit = '';
+        $this->selectLimit = '';
         $this->maxLimit = 1;
         $this->queryOrder = [];
+        $this->queryMatchOrder = [];
         $this->queryGroup = [];
         $this->whereCondition = [];
         $this->andConditions = [];
         $this->querySetValues = [];
         $this->hasCache = false;
         $this->cache = null;
+        $this->printQuery = false;
         $this->bindValues = [];
         $this->buildQuery = '';
         if($this->returnType !== 'stmt'){

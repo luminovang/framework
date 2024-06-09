@@ -23,8 +23,10 @@ final class Cron extends BaseCron
      */
     protected function schedule(): void 
     {
-        $this->service('\App\Controllers\IssueCommand::schedule')
-            ->seconds(5)
-            ->log(root('/writeable/log/') . 'cron.log');
+       /**
+         * $this->service('\App\Controllers\ExampleCommand::fooMethod')
+         *   ->seconds(5)
+         *   ->log(root('/writeable/log/') . 'cron.log');
+         */
     }
 }

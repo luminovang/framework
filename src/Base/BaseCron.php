@@ -11,6 +11,7 @@ namespace Luminova\Base;
 
 use \Luminova\Time\Time;
 use \Luminova\Time\CronInterval;
+use \Luminova\Base\BaseCommand;
 use \Luminova\Exceptions\RuntimeException;
 use \Closure;
 
@@ -45,11 +46,12 @@ abstract class BaseCron
     protected static ?string $timezone = null;
 
     /**
-     * Constructor.
+     * Initilize constructor with optional configuration.
      *
      * @param string|null $path Path to store cron job configuration files.
+     * @param string|null $filename The filename for lock file.
      */
-    public function __construct(string $path = null, ?string $filename = null)
+    public function __construct(?string $path = null, ?string $filename = null)
     {
         self::$path = $path ?? root('/writeable/cron/');
         self::$filename = $filename ?? 'schedules.json';
@@ -59,18 +61,16 @@ abstract class BaseCron
 
     /**
      * To define scheduled cron jobs.
-     * Called method `service` withing the `schedule` method.
-     * Each service should have its own configurations.
+     * Called method `service` withing the `schedule` method, each service should have its own configurations.
      * 
      * @return void
      */
     abstract protected function schedule(): void;
 
-
     /**
      * specific the service controller for the cron job.
      *
-     * @param string $controller The controller class and method.
+     * @param class-string<BaseCommand> $controller The controller class and method.
      * 
      * @return self Return cron class instance.
      */
@@ -84,7 +84,7 @@ abstract class BaseCron
     }
 
     /**
-     * set the callback for the cron job completion.
+     * Set the callback for the cron execution completion.
      *
      * @param Closure $onComplete The callback function to execute on completion.
      *      - Closure with one array parameter of task details.
@@ -99,7 +99,7 @@ abstract class BaseCron
     }
 
     /**
-     * set the callback for the cron job failure.
+     * Set a callback for the cron execution failure.
      *
      * @param Closure $onError The callback function to execute on failure.
      *      - Closure with one array parameter of task details.
@@ -114,7 +114,7 @@ abstract class BaseCron
     }
 
     /**
-     * specific the URL to ping on cron job completion.
+     * Specify the URL to ping on cron execution completion.
      *
      * @param string $url The URL to ping on completion.
      * 
@@ -128,7 +128,7 @@ abstract class BaseCron
     }
 
     /**
-     * specific the URL to ping on cron job failure.
+     * Specify the URL to ping on cron execution failure.
      *
      * @param string $url The URL to ping on failure.
      * 
@@ -142,23 +142,24 @@ abstract class BaseCron
     }
 
     /**
-     * set the log path for the cron job.
+     * Set the log path for the cron job execution response.
      *
-     * @param string $path The log file path.
+     * @param string $level The log level to use while logging execution response.
+     * Log levels [emergency, alert, critical, error, warning, notice, info, debug, exception, php_errors]
      * 
      * @return self Return cron class instance.
      */
-    protected function log(string $path): self
+    protected function log(string $level): self
     {
-        self::$controllers[count(self::$controllers) - 1]['log'] = $path;
+        self::$controllers[count(self::$controllers) - 1]['log'] = $level;
 
         return $this;
     }
 
     /**
-     * set the output file path for the cron job.
+     * Set the output file path for errors that may occur during execution.
      *
-     * @param string $path The output file path.
+     * @param string $path The output full filename.
      * 
      * @return self Return cron class instance.
      */
@@ -170,7 +171,7 @@ abstract class BaseCron
     }
 
     /**
-     * set the description for the cron job.
+     * Set a description for the cron service.
      *
      * @param string $description The description of the cron job.
      * 
@@ -189,6 +190,7 @@ abstract class BaseCron
      * @param bool $force Whether to force the creation (default: false).
      * 
      * @return bool Return true if the cron jobs were successfully created and written to a file, false otherwise.
+     * @internal
      */
     public final function create(bool $force = false): bool
     {
@@ -222,7 +224,7 @@ abstract class BaseCron
     }
 
     /**
-     * To excute cron task at a specific seconds.
+     * To execute cron task at a specific seconds.
      *
      * @param int $seconds Interval in seconds.
      * 
@@ -234,7 +236,7 @@ abstract class BaseCron
     }
 
     /**
-     * To excute cron task at a specific minutes.
+     * To execute cron task at a specific minutes.
      *
      * @param int $minutes Interval in minutes.
      * 
@@ -246,7 +248,7 @@ abstract class BaseCron
     }
 
     /**
-     * To excute cron task at a specific hour(s).
+     * To execute cron task at a specific hour(s).
      *
      * @param int $hours Interval in hours.
      * 
@@ -258,7 +260,7 @@ abstract class BaseCron
     }
 
     /**
-     * To excute cron task at a specific day.
+     * To execute cron task at a specific day.
      *
      * @param int $days Interval in days.
      * 
@@ -270,7 +272,7 @@ abstract class BaseCron
     }
 
     /**
-     * To excute cron task at a specific week.
+     * To execute cron task at a specific week.
      *
      * @param int $weeks Interval in weeks.
      * 
@@ -282,7 +284,7 @@ abstract class BaseCron
     }
 
     /**
-     * To excute cron task in specific month(s).
+     * To execute cron task in specific month(s).
      *
      * @param int $months Interval in months.
      * 
@@ -294,7 +296,7 @@ abstract class BaseCron
     }
 
     /**
-     * To excute cron task in specific year(s).
+     * To execute cron task in specific year(s).
      *
      * @param int $years Interval in years.
      * 
@@ -306,7 +308,7 @@ abstract class BaseCron
     }
 
     /**
-     * To excute cron task in using the cron timestamp expression.
+     * To execute cron task in using the cron timestamp expression.
      *
      * @param string $expression The cron expression.
      *
@@ -333,6 +335,7 @@ abstract class BaseCron
      * @param array $tasks An array of tasks to be locked.
      * 
      * @return bool Returns true on success, false on failure.
+     * @internal
     */
     public final function update(array $tasks): bool
     {
@@ -345,6 +348,7 @@ abstract class BaseCron
      * @param string|null $controller Optional controller name to fetch specific tasks.
      * 
      * @return array Returns an array of tasks. If no controller is specified, returns all tasks.
+     * @internal
      */
     public final function getTask(?string $controller = null): array
     {
@@ -361,6 +365,7 @@ abstract class BaseCron
      * Retrieves tasks from lock file.
      *
      * @return array|bool Returns an array of tasks if the file exists and is readable, false otherwise.
+     * @internal
      */
     public final static function getTaskFromFile(): array|bool
     {
@@ -382,6 +387,7 @@ abstract class BaseCron
      * @param string $unit Interval unit.
      * 
      * @return self Return cron class instance. 
+     * @internal
      */
     private function setInterval(string $format, ?int $value = null, ?string $unit = null): self
     {

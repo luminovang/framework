@@ -378,16 +378,17 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function getItem(int $mode = RETURN_ALL, string $return = 'object'): mixed 
+    public function getItem(int $mode = RETURN_ALL, string $fetch = 'object'): mixed 
     {
         return match ($mode) {
-            RETURN_NEXT => $this->getNext($return),
+            RETURN_NEXT => $this->getNext($fetch),
             RETURN_2D_NUM => $this->getInt(),
             RETURN_INT => $this->getCount(),
             RETURN_ID => $this->getLastInsertId(),
             RETURN_COUNT => $this->rowCount(),
             RETURN_COLUMN => $this->getColumns(),
-            RETURN_ALL => $this->getAll($return),
+            RETURN_ALL => $this->getAll($fetch),
+            RETURN_STMT => $this->stmt,
             default => false
         };
     }
@@ -395,15 +396,15 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function getNext(string $type = 'object'): array|object|bool 
+    public function getNext(string $fetch = 'object'): array|object|bool 
     {
-        $result = $this->fetch('next', $type === 'array' ? FETCH_ASSOC : FETCH_OBJ);
+        $result = $this->fetch('next', $fetch === 'array' ? FETCH_ASSOC : FETCH_OBJ);
 
         if($result === false || $result === null){
             return false;
         }
 
-        if($type === 'array'){
+        if($fetch === 'array'){
             return (array) $result;
         }
 
@@ -413,15 +414,15 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function getAll(string $type = 'object'): array|object|bool 
+    public function getAll(string $fetch = 'object'): array|object|bool 
     {
-        $result = $this->fetch('all', $type === 'array' ? FETCH_ASSOC : FETCH_OBJ);
+        $result = $this->fetch('all', $fetch === 'array' ? FETCH_ASSOC : FETCH_OBJ);
 
         if($result === false || $result === null){
             return false;
         }
 
-        if($type === 'array'){
+        if($fetch === 'array'){
             return (array) $result;
         }
 
