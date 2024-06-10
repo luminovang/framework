@@ -16,9 +16,6 @@ use \PDOStatement;
 use \mysqli_stmt;
 use \mysqli_result;
 
-/**
- * Interface for database drivers, providing methods for database connection, statement preparation, execution, and result fetching.
- */
 interface DatabaseInterface  
 {
     /**
@@ -77,7 +74,7 @@ interface DatabaseInterface
     /**
      * Debug dumps statement information for the last statement execution.
      *
-     * @return bool Dumped statement or false if no prepered statement or debug mode is disabled.
+     * @return bool Dumped statement or false if no prepared statement or debug mode is disabled.
      */
     public function dumpDebug(): bool;
 
@@ -258,7 +255,7 @@ interface DatabaseInterface
      *
      * @return PDOStatement|mysqli_stmt|mysqli_result|bool|null
     */
-    public function getStatment(): PDOStatement|mysqli_stmt|mysqli_result|bool|null;
+    public function getStatement(): PDOStatement|mysqli_stmt|mysqli_result|bool|null;
 
     /**
      * Returns the ID of the last inserted row or sequence value.

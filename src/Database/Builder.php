@@ -1190,7 +1190,7 @@ final class Builder extends Connection
             }elseif($return === 'find'){
                 $response = static::$handler->getNext($this->returnType);
             }elseif($return === 'total'){
-                $response = static::$handler->rowCount();
+                $response = static::$handler->getCount();
             }elseif($return === 'fetch'){
                 $response = static::$handler->fetch($result, $mode);
             }else{

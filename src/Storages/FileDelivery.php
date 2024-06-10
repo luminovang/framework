@@ -77,6 +77,10 @@ final class FileDelivery
             return true;
         }
 
+        if($filename === false){
+            return false;
+        }
+
         $read = false;
 
         if ($handler = fopen($filename, 'rb')) {

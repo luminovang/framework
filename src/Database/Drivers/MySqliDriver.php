@@ -500,7 +500,7 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function getStatment(): PDOStatement|mysqli_stmt|mysqli_result|bool|null
+    public function getStatement(): PDOStatement|mysqli_stmt|mysqli_result|bool|null
     {
         return $this->stmt;
     }

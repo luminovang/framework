@@ -258,7 +258,6 @@ class File
         return $this;
     }
 
-
     /**
      * Set upload file configurations.
      * 
@@ -317,8 +316,7 @@ class File
     {
         $this->message = null;
         $this->config = null;
-
-        unlink($this->temp);
+        @unlink($this->temp);
     }
 
     /**
