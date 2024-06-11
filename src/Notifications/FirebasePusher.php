@@ -13,6 +13,13 @@ namespace Luminova\Notifications;
 use \Kreait\Firebase\Factory;
 use \Kreait\Firebase\Messaging\CloudMessage;
 use \Kreait\Firebase\Messaging\Notification;
+use \Kreait\Firebase\Contract\Messaging;
+use \Kreait\Firebase\Messaging\MulticastSendReport;
+use \Kreait\Firebase\Messaging\AndroidConfig;
+use \Kreait\Firebase\Messaging\WebPushConfig;
+use \Kreait\Firebase\Messaging\ApnsConfig;
+use \Kreait\Firebase\Messaging\FcmOptions;
+use \Kreait\Firebase\Messaging\MessageTarget;
 use \Luminova\Exceptions\ErrorException;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Models\PushMessage;
@@ -28,199 +35,415 @@ class FirebasePusher
     /**
      * Notification factory.
      * 
-     * @var Factory $factory 
-    */
-    protected ?Factory $factory = null;
+     * @var Factory|null $factory 
+     */
+    private static ?Factory $factory = null;
 
     /**
-     * Flag for notification to id.
+     * Notification response report.
      * 
-     * @var string TO_ID
-    */
-    public const TO_ID = "id";
+     * @var MulticastSendReport|array|null $report 
+     */
+    private MulticastSendReport|array|null $report = null;
 
     /**
-     * Flag for notification to ids.
-     * 
-     * @var string TO_IDS
-    */
-    public const TO_IDS = "ids";
-
-    /**
-     * Flag for notification to topic.
-     * 
-     * @var string TO_TOPIC
-    */
-    public const TO_TOPIC = "topic";
-
-    /**
-     * Constructor
+     * Initializing the FirebasePusher class.
      *
      * @param string $filename The filename of the service account JSON file.
+     *                         - Note: The service account file must be stored in `/writeable/credentials/`.
+     * 
+     * @throws RuntimeException If the Factory class is not found or the service account file is missing.
      */
     public function __construct(string $filename = 'ServiceAccount.json')
     {
-        if(!class_exists(Factory::class)){
-            throw new RuntimeException('Package: ' .  Factory::class . ', not found, you need to install first before using firebase module.');
-        }
-       
-        if($this->factory === null){
-            $serviceAccount = root('/writeable/credentials/') . $filename;
+        self::$factory ??= self::createFactory($filename);
+    }
 
-            if (file_exists($serviceAccount)) {
-                $this->factory = (new Factory)->withServiceAccount($serviceAccount);
-            } else {
-                throw new RuntimeException("Firebase notification service account could not be found in '{$serviceAccount}'");
-            }
+    /**
+     * Get a shared instance of the Factory class.
+     *
+     * @param string $filename The filename of the service account JSON file.
+     *                         - Note: The service account file must be stored in `/writeable/credentials/`.
+     * 
+     * @return Factory|null The shared Factory instance.
+     * @throws RuntimeException If the Factory class is not found or the service account file is missing.
+     */
+    public static function getFactory(string $filename = 'ServiceAccount.json'): ?Factory
+    {
+        if (self::$factory === null) {
+            self::$factory = self::createFactory($filename);
         }
+
+        return self::$factory;
+    }
+
+    /**
+     * Create a new Factory instance with the specified service account file.
+     *
+     * @param string $filename The filename of the service account JSON file.
+     * 
+     * @return Factory The new Factory instance.
+     * @throws RuntimeException If the Factory class is not found or the service account file is missing.
+     */
+    private static function createFactory(string $filename): Factory
+    {
+        if (!class_exists(Factory::class)) {
+            throw new RuntimeException('Package: ' . Factory::class . ' not found. Please install the required package before using the Firebase module.');
+        }
+
+        $serviceAccount = root('/writeable/credentials/') . $filename;
+
+        if (file_exists($serviceAccount)) {
+            return (new Factory())->withServiceAccount($serviceAccount);
+        }
+
+        throw new RuntimeException("Firebase notification service account not found in '{$serviceAccount}'.");
     }
 
     /**
      * Get the Firebase messaging instance.
      *
-     * @return object The Firebase messaging instance.
+     * @return Messaging The Firebase messaging instance.
      */
-    public function messaging(): object
+    public function messaging(): Messaging
     {
-        return $this->factory->createMessaging();
+        return self::$factory->createMessaging();
     }
 
     /**
      * Create a Firebase notification.
      *
      * @param string $title The title of the notification.
-     * @param string $body  The body of the notification.
+     * @param string|null $body  The body of the notification.
+     * @param string|null $imageUrl The image URL of the notification.
      *
-     * @return object The Firebase notification.
+     * @return Notification The Firebase notification.
      */
-    private static function create(string $title, string $body): object
+    private static function create(string $title, ?string $body = null, ?string $imageUrl = null): Notification
     {
-        return Notification::create($title, $body);
+        return Notification::create($title, $body, $imageUrl);
+    }
+
+    /**
+     * Create a CloudMessage based on the given type, target, and configuration.
+     *
+     * @param string $type The type of target (e.g., 'token', 'topic', etc.).
+     * @param string|array $to The target value (e.g., token, topic name).
+     * @param PushMessage $config The configuration for the push message.
+     *
+     * @return CloudMessage|null The constructed CloudMessage instance, or null on failure.
+     * @throws ErrorException If an exception occurs during message construction.
+     */
+    private function message(string $type, string|array $to, PushMessage $config): ?CloudMessage
+    {
+        try {
+            $message = ($type === 'instance') ? CloudMessage::new() : CloudMessage::withTarget($type, $to);
+            $message = $message->withNotification(
+                self::create($config->getTitle(), $config->getBody(), $config->getImageUrl())
+            )->withDefaultSounds();
+
+            $platform = $config->getPlatform();
+            $sound = $config->get('sound');
+            $priority = $config->getPriority();
+
+            switch ($platform) {
+                case PushMessage::ANDROID:
+                    $pConfig = AndroidConfig::fromArray($config->fromArray($type, $to));
+                    if ($sound !== null) {
+                        $pConfig = $pConfig->withSound($sound);
+                    }
+                    if ($priority !== '') {
+                        $pConfig = $pConfig->withMessagePriority($priority);
+                    }
+                    $message = $message->withAndroidConfig($pConfig);
+                    break;
+
+                case PushMessage::APN:
+                    $pConfig = ApnsConfig::fromArray($config->fromArray($type, $to));
+                    if ($sound !== null) {
+                        $pConfig = $pConfig->withSound($sound);
+                    }
+                    if ($priority !== '') {
+                        $pConfig = $pConfig->withPriority($priority);
+                    }
+                    $message = $message->withApnsConfig($pConfig);
+                    break;
+
+                case PushMessage::WEBPUSH:
+                    $pConfig = WebPushConfig::fromArray($config->fromArray($type, $to));
+                    if ($priority !== '') {
+                        $pConfig = $pConfig->withUrgency($priority);
+                    }
+                    $message = $message->withWebPushConfig($pConfig);
+                    break;
+            }
+
+            if (($data = $config->getData()) !== []) {
+                $message = $message->withData($data);
+            }
+
+            if (($analytics = $config->getAnalytic()) !== '') {
+                $message = $message->withFcmOptions(FcmOptions::create()->withAnalyticsLabel($analytics));
+            }
+
+            return $message;
+
+        } catch (Exception $e) {
+            ErrorException::throwException($e->getMessage(), $e->getCode(), $e);
+        }
+
+        return null;
     }
 
     /**
      * Send a notification to a specific device by token.
      *
-     * @param array $data The notification data.
+     * @param PushMessage|array<string,mixed> $config The notification payload.
+     * @param bool $validateOnly Optional. If set to true, the message will only be validated without sending.
      *
-     * @return mixed The response from Firebase Cloud Messaging.
+     * @return self Return instance of luminova firebase class.
+     * @throws ErrorException If tokens are not provided correctly.
      */
-    public function sendToId(array $data): mixed
+    public function send(PushMessage|array $config, bool $validateOnly = false): self
     {
+        $this->report = null;
         try {
-            return $this->messaging()->send(
-                CloudMessage::withTarget("token", $data["token"])
-                    ->withNotification(Notification::create($data["title"], $data["body"]))
-                    ->withData($data["data"]??[])
-            );
+            if (is_array($config)) {
+                $config = new PushMessage($config);
+            }
+
+            if ($config instanceof PushMessage && $config->getToken() !== '') {
+                $message = self::message(MessageTarget::TOKEN, $config->getToken(), $config);
+
+                $this->report = $this->messaging()->send($message, $validateOnly);
+
+                return $this;
+            }
+
         } catch (Exception $e) {
-            ErrorException::throwException($e->getMessage());
+            ErrorException::throwException($e->getMessage(), $e->getCode(), $e);
         }
-        return [];
+
+        throw new ErrorException("Invalid input: Expected a PushMessage instance and must call methed setToken or an array with a 'topic' key token.");
     }
 
     /**
      * Send a notification to a topic.
      *
-     * @param array $data The notification data.
+     * @param PushMessage|array<string,mixed> $config The notification payload.
+     * @param bool $validateOnly Optional. If set to true, the message will only be validated without sending.
      *
-     * @return mixed The response from Firebase Cloud Messaging.
-    */
-
-    public function channel(array $data): mixed
+     * @return self Return instance of luminova firebase class.
+     * @throws ErrorException If the topic is not provided correctly.
+     */
+    public function channel(PushMessage|array $config, bool $validateOnly = false): self
     {
+        $this->report = null;
         try {
-            return $this->messaging()->send(
-                CloudMessage::withTarget("topic", $data["topic"])
-                    ->withNotification(
-                        Notification::create($data["title"], $data["body"], $data["image"] ?? '')
-                    )
-                    ->withData($data["data"] ?? [])
-            );
+            if (is_array($config)) {
+                $config = new PushMessage($config);
+            }
+
+            if ($config instanceof PushMessage && $config->getTopic() !== '') {
+                $message = self::message(MessageTarget::TOPIC, $config->getTopic(), $config);
+
+                $this->report = $this->messaging()->send($message, $validateOnly);
+                return $this;
+            }
+
         } catch (Exception $e) {
-            ErrorException::throwException($e->getMessage());
+            ErrorException::throwException($e->getMessage(), $e->getCode(), $e);
         }
-        return [];
+
+        throw new ErrorException("Invalid input: Expected a PushMessage instance and must call methed setTopic or an array with a 'topic' key included.");
     }
 
     /**
-     * Send notifications to multiple devices.
+     * Send conditional messages, by specifying an expression the target topics.
+     * @example "'TopicA' in topics && ('TopicB' in topics || 'TopicC' in topics)".
+     * 
+     * @param PushMessage|array<string,mixed> $config The notification payload.
+     * @param bool $validateOnly Optional. If set to true, the message will only be validated without sending.
      *
-     * @param array $data The notification data.
-     *
-     * @return mixed The response from Firebase Cloud Messaging.
+     * @return self Return instance of luminova firebase class.
+     * @throws ErrorException If the topic is not provided correctly.
      */
-    public function cast(array $data): mixed
+    public function condition(PushMessage|array $config, bool $validateOnly = false): self
     {
-        if (is_array($data["tokens"])) {
-            return $this->messaging()->sendMulticast(
-                CloudMessage::new()
-                    ->withNotification(
-                        Notification::create($data["title"], $data["body"], $data["image"] ?? '')
-                    )
-                    ->withData($data["data"]??[]),
-                $data["tokens"]
-            );
-        } else {
-            ErrorException::throwException("Method requires an array of notification ids");
+        $this->report = null;
+        try {
+            if (is_array($config)) {
+                $config = new PushMessage($config);
+            }
+
+            if ($config instanceof PushMessage && $config->getConditions() !== '') {
+                $message = self::message(MessageTarget::CONDITION, $config->getConditions(), $config);
+
+                $this->report = $this->messaging()->send($message, $validateOnly);
+                return $this;
+            }
+
+        } catch (Exception $e) {
+            ErrorException::throwException($e->getMessage(), $e->getCode(), $e);
         }
-        return [];
+
+        throw new ErrorException("Invalid input: Expected a PushMessage instance and must call methed setCondition or an array with a 'conditions' key included.");
     }
 
     /**
-     * Send notifications using a PushMessage object.
+     * Send notifications to multiple devices by tokens.
      *
-     * @param PushMessage $message The PushMessage instance.
+     * @param PushMessage|array<string,mixed> $config The notification data.
+     * @param bool $validateOnly Optional. If set to true, the message will only be validated without sending.
      *
-     * @return mixed The response from Firebase Cloud Messaging.
+     * @return self Return instance of luminova firebase class.
+     * @throws ErrorException If tokens are not provided or if an error occurs during message construction.
      */
-    public function push(PushMessage $message): mixed
+    public function broadcast(PushMessage|array $config, bool $validateOnly = false): self
     {
+        $this->report = null;
         try {
-            return $this->messaging()->sendMulticast($message->toArray(), $message->getTokens());
+            if (is_array($config)) {
+                $config = new PushMessage($config);
+            }
+
+            if ($config instanceof PushMessage && !empty($config->getTokens())) {
+                $message = $this->message('instance', [], $config);
+
+                $this->report = $this->messaging()->sendMulticast($message, $config->getTokens(), $validateOnly);
+                return $this;
+            }
         } catch (Exception $e) {
-            ErrorException::throwException($e->getMessage());
+            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+        }
+
+        throw new ErrorException("Invalid input: Expected a PushMessage instance or an array with a 'tokens' key.");
+    }
+
+    /**
+     * Subscribe a device token to a topic.
+     *
+     * @param string $token The device token.
+     * @param string $topic The topic to subscribe to.
+     *
+     * @return self Return instance of luminova firebase class.
+     */
+    public function subscribe(string $token, string $topic): self
+    {
+        $this->report = null;
+        try {
+            $this->report = $this->messaging()->subscribeToTopic($topic, $token);
+
+            return $this;
+        } catch (Exception $e) {
+            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
-    public function device(PushMessage $message): mixed{
+    /**
+     * Subscribe multiple device tokens to list of topics.
+     *
+     * @param array<int,string> $topics The device tokens.
+     * @param array<int,string> $tokens The topics to subscribe.
+     *
+     * @return self Return instance of luminova firebase class.
+     */
+    public function subscribers(array $topics, array $tokens): self
+    {
+        $this->report = null;
         try{
-            return $this->messaging()->sendMulticast(
-                CloudMessage::new()
-                ->withNotification(self::create($message->getTitle(), $message->getBody()))
-                ->withData($message->getData())
-                ->withAndroidConfig([
-                    'priority' => 'high',
-                    'notification' => [
-                        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-                    ],
-                ])
-            );
-        }catch (Exception $e) {
-            ErrorException::throwException($e->getMessage());
+            $this->report = $this->messaging()->subscribeToTopics($topics, $tokens);
+
+            return $this;
+        } catch (Exception $e) {
+            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
-    public function subscribe(string $token, string $topic): array 
+    /**
+     * Unsubscribe device token from a topic.
+     *
+     * @param string $token The device token.
+     * @param string $topic The topic to unsubscribe from.
+     *
+     * @return self Return instance of luminova firebase class.
+     */
+    public function unsubscribe(string $token, string $topic): self
     {
-        return $this->messaging()->subscribeToTopic($topic, $token);
+        $this->report = null;
+        try{
+            $this->report = $this->messaging()->unsubscribeFromTopic($topic, $token);
+
+            return $this;
+        } catch (Exception $e) {
+            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+        }
     }
 
     /**
-     * Send notifications based on the type (to ID, to IDs, to topic).
+     * Unsubscribe multiple device tokens from list topics.
      *
-     * @param array  $data The notification data.
-     * @param string $type The type of notification (TO_ID, TO_IDS, TO_TOPIC).
+     * @param array<int,string> $topics The topic to unsubscribe from.
+     * @param array<int,string> $tokens The tokens to unsubscribe from list of topics.
      *
-     * @return mixed The response from Firebase Cloud Messaging.
+     * @return self Return instance of luminova firebase class.
      */
-    public function send(array $data, string $type = self::TO_ID): mixed
+    public function unsubscribers(array $topics, array $tokens): self
     {
-        return match ($type) {
-            "topic" => $this->channel($data),
-            "id" => $this->sendToId($data),
-            "ids" => $this->cast($data),
-            default => []
-        };
+        $this->report = null;
+        try{
+            $this->report = $this->messaging()->unsubscribeFromTopics($topics, $tokens);
+
+            return $this;
+        } catch (Exception $e) {
+            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+        }
+    }
+
+    /**
+     * Unsubscribe list of device token from all topics.
+     *
+     * @param array<int,string> $tokens The device tokens to unsubscribe from all topics.
+     *
+     * @return self Return instance of luminova firebase class.
+     */
+    public function desubscribe(array $tokens): self
+    {
+        $this->report = null;
+        try{
+            $this->report = $this->messaging()->unsubscribeFromAllTopics($tokens);
+
+            return $this;
+        } catch (Exception $e) {
+            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+        }
+    }
+
+    /**
+     * Dtermind if notification or subscription was completed successfully.
+     * 
+     * @return bool Return true if sucessful, false otherwise.
+    */
+    public function isDone(): bool 
+    {
+        if($this->report === null){
+            return false;
+        }
+
+        if($this->report instanceof MulticastSendReport){
+            return $this->report->successes()->count() > 0;
+        }
+        
+        return (is_array($this->report) && ($this->report === [] || count($this->report) > 0));
+    }
+
+    /**
+     * Retrive response report from firebase sent notification or topic managment.
+     * 
+     * @return MulticastSendReport|array The response from Firebase Cloud Messaging.
+    */
+    public function getReport(): MulticastSendReport|array|null
+    {
+        return $this->report;
     }
 }

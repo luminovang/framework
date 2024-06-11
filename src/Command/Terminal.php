@@ -11,7 +11,7 @@ namespace Luminova\Command;
 
 use \Luminova\Application\Foundation;
 use \Luminova\Command\Colors;
-use \Luminova\Command\Executor;
+use \Luminova\Command\Console;
 use \Luminova\Command\TextUtils;
 use \Luminova\Security\InputValidator;
 use \Luminova\Command\Novakit\Commands;
@@ -856,7 +856,6 @@ class Terminal
     */
     public static final function extract(array $arguments, $controller = false): array
     {
-
         $optionValue = false;
         $result = [
             'arguments' => [],
@@ -1079,7 +1078,7 @@ class Terminal
     */
     public static final function hasCommand(string $command): bool
     {
-        return Executor::has($command);
+        return Console::has($command);
     }
 
     /**
@@ -1095,11 +1094,11 @@ class Terminal
     {
         static $terminal = null;
 
-        if(Executor::has($command)){
+        if(Console::has($command)){
             $terminal ??= new static();
             $terminal->explain($options);
 
-            $call = Executor::call($terminal, $options);
+            $call = Console::execute($terminal, $options);
 
             return $call === STATUS_SUCCESS;
         }
