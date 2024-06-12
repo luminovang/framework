@@ -23,28 +23,24 @@ use \Exception;
 class CronJobs extends BaseConsole 
 {
     /**
-     * @var string $group command group
+     * {@inheritdoc}
     */
     protected string $group = 'Cron';
 
     /**
-     * @var string $name command name
+     * {@inheritdoc}
     */
     protected string $name = 'cronjob';
 
     /**
-     * Options
-     *
-     * @var array<string, string> $options
+     * {@inheritdoc}
     */
     protected array $options = [
         '--force'  => 'Force update cron schedule jobs.',
     ];
 
     /**
-     * Usages
-     *
-     * @var array<string, string> $usages
+     * {@inheritdoc}
     */
     protected array $usages = [
         'php novakit cron:create',
@@ -54,11 +50,19 @@ class CronJobs extends BaseConsole
     ];
 
     /**
-     * @param array $params terminal options
-     * 
-     * @return int 
+     * @var Network|null $network network instance
     */
-    public function run(?array $params = []): int
+    private static ?Network $network = null;
+
+    /**
+     * @var Cron|null $cron Application cron instance.
+    */
+    private static ?Cron $cron = null;
+
+    /**
+     * {@inheritdoc}
+    */
+    public function run(?array $params = null): int
     {
         $this->explain($params);
         $command = trim($this->getCommand());
@@ -75,16 +79,10 @@ class CronJobs extends BaseConsole
         } 
             
         return (int) $runCommand;
-
-        return STATUS_SUCCESS;
     }
 
     /**
-     * Run helper command.
-     * 
-     * @param array $helps Help information.
-     * 
-     * @return int status code.
+     * {@inheritdoc}
     */
     public function help(array $helps): int
     {
@@ -100,16 +98,15 @@ class CronJobs extends BaseConsole
     */
     private function runCommands(bool $force = false): int 
     {
-        $cron = new Cron();
-        $cron->create($force);
-        $instance = $cron->getTask();
+        self::$cron ??= new Cron();
+        self::$cron->create($force);
+        $instance = self::$cron->getTask();
 
         if($instance === []){
             return STATUS_SUCCESS;
         }
 
-        $network = new Network();
-        $tasks = $cron->getTaskFromFile();
+        $tasks = self::$cron->getTaskFromFile();
         $executed = 0;
         $id = 0;
         $newTasks = [];
@@ -166,7 +163,7 @@ class CronJobs extends BaseConsole
                             $task['completed'] += 1;
         
                             if(isset($instance[$id])){
-                                $this->callCallbacks($network, $task, $instance, true, $logger);
+                                $this->callCallbacks($task, $instance, true, $logger);
                             }
                         } else {
                             if($retry){
@@ -179,7 +176,7 @@ class CronJobs extends BaseConsole
                             $task['failures'] += 1;
         
                             if(isset($instance[$id])){
-                                $this->callCallbacks($network, $task, $instance, false, $logger);
+                                $this->callCallbacks($task, $instance, false, $logger);
                             }
                         }
                     
@@ -206,7 +203,7 @@ class CronJobs extends BaseConsole
         }
     
         if($executed > 0){
-            $cron->update($newTasks);
+            self::$cron->update($newTasks);
         }
     
         return STATUS_SUCCESS;
@@ -215,13 +212,12 @@ class CronJobs extends BaseConsole
     /**
      * Executed cron jobs.
      * 
-     * @param Network $network Network request object.
      * @param array $task Cron task array information.
      * @param array $instance Cron task array information from class.
      * @param bool $isComplete Weather task is completed or not.
      * @param string &$logger Log line passed by reference.
     */
-    private function callCallbacks(Network $network, array $task, array $instance, $isComplete = true, string &$logger = ''): void
+    private function callCallbacks(array $task, array $instance, $isComplete = true, string &$logger = ''): void
     {
         $event = $isComplete ? 'Complete' : 'Failure';
         if($task['onComplete'] && isset($instance['on' . $event]) && $instance['on' . $event] instanceof Closure){
@@ -229,8 +225,9 @@ class CronJobs extends BaseConsole
         }
 
         if($task['pingOn' . $event] && isset($instance['pingOn' . $event])){
+            self::$network ??= new Network();
             try{
-                $network->get($instance['pingOn' . $event], $task);
+                self::$network->get($instance['pingOn' . $event], $task);
                 $logger .= $event ? "Failure ping succeeded\n" : "Completed ping succeeded\n";
             } catch(Exception|AppException $e){
                 $logger .= $event ? "Failure ping failed: " : "Completed ping failed: ";

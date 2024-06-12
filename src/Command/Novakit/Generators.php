@@ -16,20 +16,18 @@ use \Exception;
 class Generators extends BaseConsole 
 {
     /**
-     * @var string $group command group
-     */
+     * {@inheritdoc}
+    */
     protected string $group = 'Generators';
 
     /**
-     * @var string $name command name
-     */
+     * {@inheritdoc}
+    */
     protected string $name = 'create:*';
 
     /**
-     * Options
-     *
-     * @var array<string|int,string> $options
-     */
+     * {@inheritdoc}
+    */
     protected array $options = [
         '--extend'    => 'Extend class name',
         '--implement' => 'Implement class interface',
@@ -38,10 +36,8 @@ class Generators extends BaseConsole
     ];
 
     /**
-     * Usages
-     *
-     * @var array<string|int,string> $usages
-     */
+     * {@inheritdoc}
+    */
     protected array $usages = [
         'php novakit create:controller "name" -extend "className" -type "view"',
         'php novakit create:controller "FooController" -type "command"',
@@ -52,24 +48,18 @@ class Generators extends BaseConsole
     ];
    
     /**
-     * Description
-     *
-     * @var string $description
-     */
+     * {@inheritdoc}
+    */
     protected string $description = 'Create controller, view or class';
 
     /**
-     * @var string|null $engine
+     * {@inheritdoc}
     */
     private static ?string $engine = null;
 
     /**
-     * Run the generator command.
-     *
-     * @param array|null $options Terminal options
-     * 
-     * @return int Status code
-     */
+     * {@inheritdoc}
+    */
     public function run(?array $options = []): int
     {
         $this->explain($options);
@@ -103,12 +93,8 @@ class Generators extends BaseConsole
         return (int) $runCommand;
     }
 
-    /**
-     * Command helper method.
-     * 
-     * @param array $helps Help information.
-     * 
-     * @return int
+   /**
+     * {@inheritdoc}
     */
     public function help(array $helps): int
     {

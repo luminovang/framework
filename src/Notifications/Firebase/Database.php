@@ -8,16 +8,17 @@
  * @license See LICENSE file
  */
 
-namespace Luminova\Notifications;
-use \Kreait\Firebase\Factory;
-use \Kreait\Firebase\Contract\Database;
+ namespace Luminova\Notifications\Firebase;
 
-class FirebaseRealtime 
+use \Kreait\Firebase\Factory;
+use \Kreait\Firebase\Contract\Database as RealtimeDatabase;
+
+class Database 
 {
 	/**
-	 * @var Database|null $database
+	 * @var RealtimeDatabase|null $database
 	*/
-	protected ?Database $database = null;
+	protected ?RealtimeDatabase $database = null;
 
 	/**
 	 * @var string $tableName

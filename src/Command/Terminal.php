@@ -844,7 +844,6 @@ class Terminal
         return $result;
     }
 
-
     /**
      * Extract and process command line arguments.
      * 

@@ -14,26 +14,22 @@ use \Luminova\Base\BaseConsole;
 class Database extends BaseConsole 
 {
     /**
-     * @var string $group command group
+     * {@inheritdoc}
     */
     protected string $group = 'Database';
 
     /**
-     * @var string $name command name
+     * {@inheritdoc}
     */
     protected string $name = 'db';
 
     /**
-     * Options
-     *
-     * @var array<string,string> $options
+     * {@inheritdoc}
     */
     protected array $options = [];
 
     /**
-     * @param array $options terminal options
-     * 
-     * @return int 
+     * {@inheritdoc}
     */
     public function run(?array $options = []): int
     {
@@ -68,6 +64,9 @@ class Database extends BaseConsole
         return STATUS_SUCCESS;
     }
 
+    /**
+     * {@inheritdoc}
+    */
     public function help(array $helps): int
     {
         return STATUS_ERROR;

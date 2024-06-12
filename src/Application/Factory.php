@@ -24,6 +24,7 @@ use \App\Controllers\Config\Services as BootServices;
 use \Luminova\Template\ViewResponse;
 use \Luminova\Logger\Logger;
 use \Luminova\Security\InputValidator;
+use \Luminova\Notifications\Firebase\Notification;
 use \Luminova\Exceptions\RuntimeException;
 use \Exception;
 use \Throwable;
@@ -44,9 +45,8 @@ use \Throwable;
  * @method static Request             request(bool $shared = true)                               HTTP Request class.
  * @method static Network             network(?HttpClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
  * @method static Caller              caller(bool $shared = true)                                Class caller class.
+ * @method static Notification              notification(bool $shared = true, string $serviceAccount = 'serviceAccount.json')                              Firebase cloud message notification class.
 */
-
-//@method static someClass get_by_user_id(int $id) Bla-bla
 final class Factory 
 {
     /**
@@ -74,7 +74,8 @@ final class Factory
         'response'      => ViewResponse::class,
         'request'       => Request::class,
         'network'       => Network::class,
-        'caller'        => Caller::class
+        'caller'        => Caller::class,
+        'notification'        => Notification::class
     ];
 
     /**

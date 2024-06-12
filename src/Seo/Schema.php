@@ -438,7 +438,6 @@ final class Schema
             ];
         }
 
-
         if (static::getConfig("isProduct")) {
             $schema["product"] = [
                 "@type" => static::getConfig("product_type"),

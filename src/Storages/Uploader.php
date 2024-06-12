@@ -16,7 +16,7 @@ use \Luminova\Exceptions\StorageException;
 final class Uploader
 {
     /**
-     * Upload file to server.
+     * Upload file to server, by reading entire file from temp and writing to destination.
      *
      * @param File $file Instance of file being uploaded.
      * @param string|null $path Upload file location if not already set in file setConfig method.
@@ -82,14 +82,14 @@ final class Uploader
      *
      * @param File $file Instance of file being uploaded.
      * @param string|null $path The directory path where the file will be stored.
-     * @param int $chunk The current chunk part index (start: 1).
-     * @param int $chunks The total number of chunks parts the server will be expecting (start: 1).
+     * @param int $chunk The current chunk part index (start: 0).
+     * @param int $chunks The total number of chunks parts the server will be expecting (start: 0).
      * 
      * @return bool|int Return true if upload was successful, false otherwise. If chunks are being uploaded, returns remaining chunks count.
      * 
      * @throws StorageException If upload path is not specified in configuration.
      */
-    public static function chunk(File $file, ?string $path = null, int $chunk = 1, int $chunks = 1): bool|int
+    public static function chunk(File $file, ?string $path = null, int $chunk = 0, int $chunks = 0): bool|int
     {
         $destination = static::beforeUpload($file, $path, $symlink);
 
@@ -100,7 +100,7 @@ final class Uploader
         $config = $file->getConfig();
         $length = (isset($config->chunkLength) ? (int) $config->chunkLength : 5_242_880);
         $temp = $destination . '.part';
-        $out = fopen($temp, $chunk === 1 ? 'wb' : 'ab');
+        $out = fopen($temp, $chunk === 0 ? 'wb' : 'ab');
 
         if ($out === false) {
             return false;
@@ -121,7 +121,7 @@ final class Uploader
         fclose($out);
         $file->free();
 
-        if ($chunks !== 1 || $chunk === $chunks) {
+        if (!$chunks || $chunk === $chunks - 1) {
             if (rename($temp, $destination)) {
                 if($symlink !== null){
                     FileManager::symbolic($destination, $symlink);
@@ -139,23 +139,23 @@ final class Uploader
      * Save contents to a file.
      *
      * @param string $filename The file path and and name the to put content.
-     * @param string $contents The contents to be written to the file.
+     * @param string|resource $contents The contents to be written to the file.
      * 
      * @return bool Returns true if the file was successfully written, false otherwise.
      */
-    public static function write(string $filename, string $contents): bool 
+    public static function write(string $filename, mixed $contents): bool 
     {
-        $file = fopen($filename, 'w');
+       if(is_string($contents) || is_resource($contents)){
+            $file = fopen($filename, 'w');
 
-        if ($file === false) {
-            return false;
-        }
+            if ($file === false) {
+                return false;
+            }
 
-        $result = fwrite($file, $contents);
-        fclose($file);
+            $result = fwrite($file, is_resource($contents) ? stream_get_contents($contents) : $contents);
+            fclose($file);
 
-        if ($result !== false) {
-            return true;
+            return $result !== false;
         }
         return false;
     }

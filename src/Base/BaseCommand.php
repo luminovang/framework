@@ -52,7 +52,7 @@ abstract class BaseCommand extends Terminal
      * Allow access to protected static methods
      *
      * @param string $method method name to call.
-     * @param array $arguments arguments to pass to method.
+     * @param array<int,mixed> $arguments arguments to pass to method.
      * 
      * @return mixed Return value of method.
      * @ignore 

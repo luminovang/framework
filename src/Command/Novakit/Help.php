@@ -15,26 +15,22 @@ use \Luminova\Command\Novakit\Commands;
 class Help extends BaseConsole 
 {
     /**
-     * @var string $group command group
+     * {@inheritdoc}
     */
     protected string $group = 'Help';
 
     /**
-     * @var string $name command name
+     * {@inheritdoc}
     */
     protected string $name = 'help';
 
     /**
-     * Options
-     *
-     * @var array<string, string> $options
+     * {@inheritdoc}
     */
     protected array $options = [];
 
     /**
-     * @param array $options command options
-     * 
-     * @return int 
+     * {@inheritdoc}
     */
     public function run(?array $options = []): int
     {
@@ -58,6 +54,9 @@ class Help extends BaseConsole
         return STATUS_SUCCESS;
     }
 
+    /**
+     * {@inheritdoc}
+    */
     public function help(array $helps): int
     {
         return STATUS_ERROR;

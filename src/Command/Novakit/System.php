@@ -16,17 +16,17 @@ use \Luminova\Security\Crypter;
 class System extends BaseConsole 
 {
     /**
-     * @var string $group command group
+     * {@inheritdoc}
     */
     protected string $group = 'System';
 
     /**
-     * @var string $name command name
+     * {@inheritdoc}
     */
     protected string $name = 'generate:key';
 
     /**
-     * @var string|array $usage command usages
+     * {@inheritdoc}
     */
     protected string|array $usages  = [
         'php novakit generate:key',
@@ -36,9 +36,7 @@ class System extends BaseConsole
     ];
 
     /**
-     * Options
-     *
-     * @var array<string, string> $options
+     * {@inheritdoc}
     */
     protected array $options = [
         '--no-save'  => 'Do not save generated application key to .env file.',
@@ -47,9 +45,7 @@ class System extends BaseConsole
     ];
 
     /**
-     * @param array $options command options
-     * 
-     * @return int 
+     * {@inheritdoc}
     */
     public function run(?array $options = []): int
     {
@@ -74,6 +70,9 @@ class System extends BaseConsole
         return (int) $runCommand;
     }
 
+    /**
+     * {@inheritdoc}
+    */
     public function help(array $helps): int
     {
         return STATUS_ERROR;
@@ -89,7 +88,7 @@ class System extends BaseConsole
      */
     private function addEnv(string $key, string $value = ''): int 
     {
-        if(empty($key)){
+        if($key === ''){
             $this->beeps();
             $this->error('Environment variable key cannot be an empty string');
 
@@ -112,7 +111,7 @@ class System extends BaseConsole
      */
     private function removeEnv(string $key): int 
     {
-        if(empty($key)){
+        if($key === ''){
             $this->beeps();
             $this->error('Environment variable key cannot be an empty string');
 

@@ -14,48 +14,38 @@ use \Luminova\Base\BaseConsole;
 class Context extends BaseConsole 
 {
     /**
-     * @var string $group command group
-     */
+     * {@inheritdoc}
+    */
     protected string $group = 'Context';
 
     /**
-     * @var string $name command name
-     */
+     * {@inheritdoc}
+    */
     protected string $name = 'context';
 
     /**
-     * Options
-     *
-     * @var array<string,string>
-     */
+     * {@inheritdoc}
+    */
     protected array $options = [
         '--no-error' => 'Ignore adding error handler'
     ];
 
     /**
-     * Usages
-     *
-     * @var array<string,string>
-     */
+     * {@inheritdoc}
+    */
     protected array $usages = [
         'php novakit context "test"',
         'php novakit context "test" --no-error'
     ];
 
     /**
-     * Description
-     *
-     * @var string
-     */
+     * {@inheritdoc}
+    */
     protected string $description = 'Install router context';
 
     /**
-     * Run the context installation command.
-     *
-     * @param array|null $options Terminal options
-     * 
-     * @return int Status code
-     */
+     * {@inheritdoc}
+    */
     public function run(?array $options = []): int
     {
         $this->explain($options);
@@ -83,6 +73,9 @@ class Context extends BaseConsole
         return (int) $runCommand;
     }
 
+    /**
+     * {@inheritdoc}
+    */
     public function help(array $helps): int
     {
         return STATUS_ERROR;

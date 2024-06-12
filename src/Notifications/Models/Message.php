@@ -7,29 +7,37 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Models;
+namespace Luminova\Notifications\Models;
 
 use Luminova\Exceptions\InvalidArgumentException;
 
-final class PushMessage
+final class Message
 {
     /**
-     * @var int
+     * Default no specific platform.
+     * 
+     * @var int DEFAULT
      */
     public const DEFAULT = 1;
 
     /**
-     * @var int
+     * Android specific platform.
+     * 
+     * @var int ANDROID
      */
     public const ANDROID = 2;
 
     /**
-     * @var int
+     * IOS, APNs specific platform.
+     * 
+     * @var int APN
      */
     public const APN = 3;
 
     /**
-     * @var int
+     * Website, WebPush specific platform.
+     * 
+     * @var int WEBPUSH
      */
     public const WEBPUSH = 4;
 
@@ -65,10 +73,10 @@ final class PushMessage
      */
     private array $default = [
         'platform'      => self::DEFAULT,
+        'raw'           => false,
         'topic'         => '',
         'token'         => '',
         'conditions'    => '',
-        'topics'        => [],
         'tokens'        => []
     ];
 
@@ -90,23 +98,23 @@ final class PushMessage
     ];
 
     /**
-     * PushMessage constructor.
+     * Initialize new message model.
      *
-     * @param array|null $setter An optional array to initialize from array.
+     * @param array|null $setter An optional array to initialize model from.
+     *      - platform (int) Notification specific platform (default: 1).
+     *      - raw (bool) Send custom notification payload.
      *      - token (string) Optional single notification token.
      *      - topic (string) Optional single notification topic.
      *      - tokens (array<int,string>) Optional multiple notification tokens.
      *      - data (array<string,mixed>) Optional data to send with the notification.
+     *      - android (array<string,mixed>) Android specific configuration.
+     *      - apns (array<string,mixed>) APNs specific configuration.
+     *      - webpush (array<string,mixed>) WebPush specific configuration.
+     *      - fcm_options (array<string,mixed>) Optional firebase configurations.
      *      - notification (array<string,mixed>) Notification payload information:
-     *          - title (string) Notification title.
-     *          - body (string) Notification message body.
-     *          - image (string) Notification image URL.
-     *          - icon (string) Notification app icon.
-     *          - sound (string) Notification sound.
-     *          - vibrate (array<int>) Notification vibration pattern.
-     *          - click_action (string) Notification click action.
-     *          - tag (string) Notification tag.
-     *          - color (string) Notification color.
+     *         -  - title (string) Notification title.
+     *         - - body (string) Notification message body.
+     *         - - image (string) Notification image URL.
      * 
      * @see https://firebase.google.com/docs/cloud-messaging/admin/send-messages#apns_specific_fields
      * @see https://firebase.google.com/docs/cloud-messaging/admin/send-messages#android_specific_fields
@@ -114,25 +122,29 @@ final class PushMessage
      */
     public function __construct(?array $setter = null)
     {
-        $this->payload = $this->basic;
-        $this->default['platform'] = $setter['platform'] ?? self::DEFAULT;
-        $this->default['topic'] = $setter['topic'] ?? '';
-        $this->default['topics'] = $setter['topics'] ?? [];
-        $this->default['token'] = $setter['token'] ?? '';
-        $this->default['conditions'] = $setter['conditions'] ?? '';
-        $this->default['tokens'] = $setter['tokens'] ?? [];
-        $this->setFromArray($setter);
+        $this->default['raw'] = $setter['raw'] ?? false;
+
+        if($this->default['raw']){
+            $this->payload = $setter;
+        }else{
+            $this->payload = $this->basic;
+            $this->default['platform'] = $setter['platform'] ?? self::DEFAULT;
+            $this->default['topic'] = $setter['topic'] ?? '';
+            $this->default['token'] = $setter['token'] ?? '';
+            $this->default['conditions'] = $setter['conditions'] ?? '';
+            $this->default['tokens'] = $setter['tokens'] ?? [];
+            $this->setFromArray($setter);
+        }
     }
 
     /**
-     * Add a configuration key-value pair to the payload.
+     * Add a configuration key-value pair to the payload, it supports nested payload structures and can merge values recursively if needed.
      *
      * @param string $key The key to add.
      * @param mixed $value The value to associate with the key.
-     * @param string|null $root Optional root key for nested payloads
-     *      if NUll, the key will be store in payload root instead. and replace any existing key value.
+     * @param string|null $root Optional root key for nested payloads, if `NUll`, the key will be store in payload root instead. and replace any existing key value.
      * 
-     * @return self
+     * @return self Return notification message model instance for method chaining.
      */
     public function add(string $key, mixed $value, ?string $root = null): self
     {
@@ -167,7 +179,7 @@ final class PushMessage
      * @param string $keys The dot-separated keys representing the nested structure.
      * @param mixed $value The value to associate with the nested keys.
      * 
-     * @return self Returns the updated instance of the class, allowing method chaining.
+     * @return self Return notification message model instance for method chaining. Returns the updated instance of the class, allowing method chaining.
      */
     public function addNested(string $keys, mixed $value): self
     {
@@ -191,23 +203,25 @@ final class PushMessage
     }
 
     /**
-     * Add APN configuration key-value pair to the APN payload.
+     * Add APNs specific configuration key-value pair to notification payload.
      *
      * @param string $key The key to add.
      * @param mixed $value The value to associate with the key.
-     * @return self
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
-    public function addApn(string $key, mixed $value): self
+    public function addApns(string $key, mixed $value): self
     {
         return $this->add($key, $value, 'apns');
     }
 
     /**
-     * Add Webpush configuration key-value pair to the Webpush payload.
+     * Add WebPush specific configuration key-value pair to the notification payload.
      *
      * @param string $key The key to add.
      * @param mixed $value The value to associate with the key.
-     * @return self
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function addWebpush(string $key, mixed $value): self
     {
@@ -215,11 +229,12 @@ final class PushMessage
     }
 
     /**
-     * Add Android configuration key-value pair to the Android payload.
+     * Add Android specific configuration key-value pair to the notification payload.
      *
      * @param string $key The key to add.
      * @param mixed $value The value to associate with the key.
-     * @return self
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function addAndroid(string $key, mixed $value): self
     {
@@ -229,10 +244,10 @@ final class PushMessage
     /**
      * Add a custom key-value pair to notification data object.
      *
-     * @param string $key
-     * @param string $value
+     * @param string $key The key to add.
+     * @param string $value The value to associate with the key.
      * 
-     * @return self
+     * @return self Return notification message model instance for method chaining.
      */
     public function addData(string $key, string $value): self
     {
@@ -243,10 +258,10 @@ final class PushMessage
     /**
      * Add a key-value pair to the notification object.
      *
-     * @param string $key
-     * @param string $value
+     * @param string $key The key to add.
+     * @param string $value The value to associate with the key.
      * 
-     * @return self
+     * @return self Return notification message model instance for method chaining.
      */
     public function addNotification(string $key, mixed $value): self
     {
@@ -255,10 +270,37 @@ final class PushMessage
     }
 
     /**
-     * Set the title of the notification.
+     * Set array of key-value pair to the notification object.
+     * 
+     * @param array<string,mixed> $notification The notification payload object.
+     * 
+     * @return self Return notification message model instance for method chaining.
+     */
+    public function setNotification(array $notification): self
+    {
+        $this->payload['notification'] = $notification;
+        return $this;
+    }
+
+    /**
+     * Set FCM options. array of key-value pair to the `fcm_options` object.
+     * 
+     * @param array<string,mixed> $options The FCM options.
+     * 
+     * @return self Return notification message model instance for method chaining.
+     */
+    public function setFcmOptions(array $options): self
+    {
+        $this->payload['fcm_options'] = $options;
+        return $this;
+    }
+
+    /**
+     * Set the display title for notification.
      *
-     * @param string $title
-     * @return self
+     * @param string $title The notification title.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setTitle(string $title): self
     {
@@ -267,10 +309,11 @@ final class PushMessage
     }
 
     /**
-     * Set the body of the notification.
+     * Set the display body for notification.
      *
-     * @param string $body
-     * @return self
+     * @param string $body Notification message body.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setBody(string $body): self
     {
@@ -279,10 +322,11 @@ final class PushMessage
     }
 
     /**
-     * Set the image URL for the notification.
+     * Set the image URL for notification.
      *
      * @param string $url The image url to set.
-     * @return self
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setImageUrl(string $url): self
     {
@@ -293,8 +337,9 @@ final class PushMessage
     /**
      * Set the icon for the notification.
      *
-     * @param string $icon 
-     * @return self
+     * @param string $icon The notification icon.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setIcon(string $icon): self
     {
@@ -305,8 +350,9 @@ final class PushMessage
     /**
      * Set the sound for the notification.
      *
-     * @param string $sound Notification sound e.g default.
-     * @return self
+     * @param string $sound Notification sound.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setSound(string $sound): self
     {
@@ -315,10 +361,11 @@ final class PushMessage
     }
 
     /**
-     * Set the vibrate pattern for the notification.
+     * Set the vibration pattern for the notification.
      *
      * @param array $vibrate The vibrate pattern e.g. [200, 100, 200].
-     * @return self
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setVibration(array $vibrate): self
     {
@@ -329,8 +376,9 @@ final class PushMessage
     /**
      * Set a tag for the notification.
      *
-     * @param string $tag
-     * @return self
+     * @param string $tag The notification tag.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setTag(string $tag): self
     {
@@ -339,10 +387,10 @@ final class PushMessage
     }
 
     /**
-     * Set the color for the notification.
+     * Set a color for the notification.
      *
-     * @param string $color
-     * @return self
+     * @param string $color The notification color.
+     * @return self Return notification message model instance for method chaining.
      */
     public function setColor(string $color): self
     {
@@ -351,10 +399,11 @@ final class PushMessage
     }
 
     /**
-     * Set the topic for the notification.
+     * Set the analytic label for the notification.
      *
-     * @param string $analytic Set analytic label 
-     * @return self
+     * @param string $analytic Set analytic label.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setAnalytic(string $analytic): self
     {
@@ -363,10 +412,11 @@ final class PushMessage
     }
 
     /**
-     * Set the priority for the notification.
+     * Set the notification priority.
      *
-     * @param string $priority e.g normal.
-     * @return self
+     * @param string $priority The notification priority (e.g normal).
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setPriority(string $priority): self
     {
@@ -375,10 +425,11 @@ final class PushMessage
     }
 
     /**
-     * Set the ttl for the notification.
+     * Set TTL for the notification.
      *
-     * @param string $ttl e.g. 3600s.
-     * @return self
+     * @param string $ttl The ttl (e.g. 3600s).
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setTtl(string $ttl): self
     {
@@ -387,10 +438,11 @@ final class PushMessage
     }
 
     /**
-     * Add custom data to the notification.
+     * Set a link to open when notification is clicked.
      *
-     * @param string $url
-     * @return self
+     * @param string $url The notification action url.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setLink(string $url): self
     {
@@ -401,8 +453,9 @@ final class PushMessage
     /**
      * Set click action, an activity with a matching intent filter is launched when a user clicks on the notification.
      *
-     * @param string $action
-     * @return self
+     * @param string $action The notification intent action.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setClickAction(string $action): self
     {
@@ -414,8 +467,9 @@ final class PushMessage
      * Sets the number of badge count this notification will add. 
      * This may be displayed as a badge count for launchers that support badging.
      *
-     * @param int $count
-     * @return self
+     * @param int $count The number of badge to add for this notification.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setBadgeCount(int $count): self
     {
@@ -424,10 +478,48 @@ final class PushMessage
     }
 
     /**
-     * Set the topic for the notification.
+     * Sets package restriction, the package name of your application where the registration token must match in order to receive the message.
      *
-     * @param string $topic
-     * @return self
+     * @param string $package The notification package restriction (e.g: com.app.name.foo).
+     * 
+     * @return self Return notification message model instance for method chaining.
+     */
+    public function setPackage(string $package): self
+    {
+        $this->payload['restricted_package_name'] = $package;
+        return $this;
+    }
+
+    /**
+     * Determine if notification should be sent raw from payload array.
+     *
+     * @return bool Return true if should send notification as raw, otherwise false.
+     */
+    public function isRaw(): bool
+    {
+        return $this->default['raw'] ?? false;
+    }
+
+    /**
+     * Set raw flag, to send notification raw from payload array, instead of building notification.
+     * 
+     * @param bool $raw Should send notification as raw, otherwise false.
+     * 
+     * @return self Return notification message model instance for method chaining.
+     */
+    public function setRaw(bool $raw): self
+    {
+        $this->default['raw'] = $raw;
+        
+        return $this;
+    }
+
+    /**
+     * Set the notification topic to use when called `channel` method.
+     *
+     * @param string $topic The notification topic name.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setTopic(string $topic): self
     {
@@ -436,10 +528,11 @@ final class PushMessage
     }
 
     /**
-     * Set message topic conditions.
+     * Set the notification topic conditional expression to use when called `condition` method.
      *
-     * @param string $conditions
-     * @return self
+     * @param string $conditions The conditional expression.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setConditions(string $conditions): self
     {
@@ -448,10 +541,11 @@ final class PushMessage
     }
 
     /**
-     * Set an array of tokens to send the push message to.
+     * Set the notification device tokens to use when called `broadcast` method.
      *
-     * @param array $tokens
-     * @return self
+     * @param array<int,string> $tokens The device notification tokens.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setTokens(array $tokens): self
     {
@@ -460,10 +554,11 @@ final class PushMessage
     }
 
     /**
-     * Set the token to send the push message to.
+     * Set the notification device token to use when called `send` method.
      *
-     * @param string $token
-     * @return self
+     * @param string $token The notification device token.
+     * 
+     * @return self Return notification message model instance for method chaining.
      */
     public function setToken(string $token): self
     {
@@ -472,12 +567,16 @@ final class PushMessage
     }
 
     /**
-     * Get the data of the notification.
+     * Set the notification platform type.
      * 
      * @param int $platform The notification platform.
-     * (PushMessage::ANDROID, PushMessage::APN, PushMessage::WEBPUSH or PushMessage::DEFAULT).
+     *      - Message::DEFAULT) (1) - Default notification without platform specific. 
+     *      - Message::ANDROID (2) - Android platform. 
+     *      - Message::APN (3) - APNs platform. 
+     *      - Message::WEBPUSH (4) - WebPush platform.  
+     *      
      * 
-     * @return self
+     * @return self Return notification message model instance for method chaining.
      */
     public function setPlatform(int $platform): self
     {
@@ -486,9 +585,9 @@ final class PushMessage
     }
 
     /**
-     * Get the array of tokens to send the push message to.
+     * Get the array of notification device tokens.
      *
-     * @return array
+     * @return array Return the array of notification device tokens.
      */
     public function getTokens(): array
     {
@@ -496,9 +595,9 @@ final class PushMessage
     }
 
     /**
-     * Get message topic conditions.
+     * Get notification topic conditional expression.
      *
-     * @return string
+     * @return string Return notification topic expression.
      */
     public function getConditions(): string
     {
@@ -506,9 +605,9 @@ final class PushMessage
     }
 
     /**
-     * Get the token to send the push message to.
+     * Get notification token.
      *
-     * @return string
+     * @return string Return notification token.
      */
     public function getToken(): string
     {
@@ -516,9 +615,9 @@ final class PushMessage
     }
 
     /**
-     * Get the data of the notification.
+     * Get notification platform id.
      *
-     * @return int
+     * @return int Returns the notification platform id.
      */
     public function getPlatform(): int
     {
@@ -526,9 +625,9 @@ final class PushMessage
     }
 
     /**
-     * Get the token to send the push message to.
+     * Get notification priority.
      *
-     * @return string
+     * @return string Return notification priority.
      */
     public function getPriority(): string
     {
@@ -536,9 +635,9 @@ final class PushMessage
     }
 
     /**
-     * Get the title of the notification.
+     * Get notification title.
      *
-     * @return string
+     * @return string Return notification title.
      */
     public function getTitle(): string
     {
@@ -546,9 +645,9 @@ final class PushMessage
     }
 
     /**
-     * Get the body of the notification.
+     * Get notification body.
      *
-     * @return string
+     * @return string Return notification body.
      */
     public function getBody(): string
     {
@@ -556,9 +655,9 @@ final class PushMessage
     }
 
     /**
-     * Get the data of the notification.
+     * Get notification custom data.
      *
-     * @return array
+     * @return array<string,mixed> Returns the notification data.
      */
     public function getData(): array
     {
@@ -566,9 +665,9 @@ final class PushMessage
     }
 
     /**
-     * Get the image URL of the notification.
+     * Get notification image url.
      *
-     * @return string
+     * @return string Return notification image url.
      */
     public function getImageUrl(): string
     {
@@ -576,9 +675,9 @@ final class PushMessage
     }
 
     /**
-     * Get the topic of the notification.
+     * Get notification channel topic.
      *
-     * @return string
+     * @return string Returns notification channel topic.
      */
     public function getTopic(): string
     {
@@ -586,9 +685,9 @@ final class PushMessage
     }
 
     /**
-     * Get the topic of the notification.
+     * Get notification analytic label.
      *
-     * @return string
+     * @return string Return notification analytics label.
      */
     public function getAnalytic(): string
     {
@@ -596,9 +695,12 @@ final class PushMessage
     }
 
     /**
-     * Get the data from notification.
+     * Get key from notification object.
      *
-     * @return string
+     * @param $key Key to retrieve.
+     * @param $default Default value.
+     * 
+     * @return mixed Return notification key value.
      */
     public function get(string $key, mixed $default = null): mixed
     {
@@ -606,11 +708,13 @@ final class PushMessage
     }
 
     /**
-     * Get the data from notification.
+     * Get notification payload or a specific key from payload.
      *
-     * @return string
+     * @param string $key Optional key to retrieve from payload.
+     * 
+     * @return mixed Return array of notification payload or value from passed key.
      */
-    public function getPayload(?string $key = null): array
+    public function getPayload(?string $key = null): mixed
     {
         if($key === null){
             return $this->payload[$key];
@@ -623,6 +727,7 @@ final class PushMessage
      * Set the payload from an array of configuration settings.
      *
      * @param array|null $setter The array of configuration settings.
+     * 
      * @return void
      * @throws InvalidArgumentException
      */
@@ -658,17 +763,17 @@ final class PushMessage
     }
 
     /**
-     * Convert the PushMessage instance to an array.
-     * 242063
+     * Process notification payload and return an array representing full notification configurations.
+     * 
      * @return array<string,mixed> Return notification payload.
      */
-    public function fromArray(string $type, string|array $to): array
+    public function fromArray(): array
     {
-        $data = [];
-        if($type !== 'instance'){
-            $data[$type] = $to;
+        if($this->isRaw()){
+            return $this->payload;
         }
 
+        $data = [];
         $platform = $this->getPlatform();
 
         switch ($platform) {

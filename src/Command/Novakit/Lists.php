@@ -16,28 +16,27 @@ use \Luminova\Command\Novakit\Commands;
 class Lists extends BaseConsole 
 {
     /**
-     * @var string $group command group
+     * {@inheritdoc}
     */
     protected string $group = 'Lists';
 
     /**
-     * @var string $name command name
+     * {@inheritdoc}
     */
     protected string $name = 'list';
 
     /**
-     * Options
-     *
-     * @var array<string, string>
+     * {@inheritdoc}
     */
     protected array $options = [];
 
+    /**
+     * {@inheritdoc}
+    */
     protected string|array $usages  = 'php novakit list';
 
     /**
-     * @param array $params terminal options
-     * 
-     * @return int 
+     * {@inheritdoc}
     */
     public function run(?array $params = []): int
     {
@@ -46,6 +45,9 @@ class Lists extends BaseConsole
         return STATUS_SUCCESS;
     }
 
+    /**
+     * {@inheritdoc}
+    */
     public function help(array $helps): int
     {
         return STATUS_ERROR;

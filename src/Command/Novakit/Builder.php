@@ -15,17 +15,17 @@ use \Luminova\Composer\Builder as AppBuilder;
 class Builder extends BaseConsole 
 {
     /**
-     * @var string $group command group
+     * {@inheritdoc}
     */
     protected string $group = 'System';
 
     /**
-     * @var string $name command name
+     * {@inheritdoc}
     */
     protected string $name = 'build:project';
 
     /**
-     * @var string|array $usage command usages
+    * {@inheritdoc}
     */
     protected string|array $usages = [
         "Usage: php novakit build:project --type <build/zip>",
@@ -36,18 +36,14 @@ class Builder extends BaseConsole
     ];
 
     /**
-     * Options
-     *
-     * @var array<string, string> $options
+     * {@inheritdoc}
     */
     protected array $options = [
         '--type'  => 'Specify type of build',
     ];
 
     /**
-     * @param array $options command options
-     * 
-     * @return int 
+     * {@inheritdoc}
     */
     public function run(?array $options = []): int
     {
@@ -55,7 +51,7 @@ class Builder extends BaseConsole
 
         $type = $this->getOption('type');
 
-        if(empty($type)){ 
+        if($type === false){ 
             foreach ($this->usages as $line) {
                 $this->writeln($line);
             }
@@ -72,6 +68,9 @@ class Builder extends BaseConsole
         return STATUS_SUCCESS;
     }
 
+    /**
+     * {@inheritdoc}
+    */
     public function help(array $helps): int
     {
         return STATUS_ERROR;

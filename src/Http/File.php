@@ -9,6 +9,7 @@
  */
 namespace Luminova\Http;
 
+use \Luminova\Functions\Maths;
 use \stdClass;
 use \Luminova\Exceptions\StorageException;
 
@@ -86,6 +87,21 @@ class File
      * @var int $error
      */
     protected int $error = UPLOAD_ERR_NO_FILE;
+
+    /**
+     * File configuration options keys
+     * 
+     * @var array<string,string> $configurations
+     */
+    private static array $configurations = [
+        'upload_path'       => 'uploadPath',
+        'max_size'          => 'maxSize',
+        'min_size'          => 'minSize',
+        'allowed_types'     => 'allowedTypes',
+        'chunk_length'      => 'chunkLength',
+        'if_existed'        => 'ifExisted',
+        'symlink'           => 'symlink',
+    ];
 
     /**
      * Constructs a File object.
@@ -243,12 +259,12 @@ class File
      */
     public function setName(string $name): self
     {
-        if (strpos($name, '/') !== false || strpos($name, DIRECTORY_SEPARATOR) !== false) {
+        if (str_contains($name, DIRECTORY_SEPARATOR)) {
             throw new StorageException('Filename cannot contain paths.');
         }
 
         $extension = pathinfo($name, PATHINFO_EXTENSION);
-        if (empty($extension)) {
+        if ($extension === '') {
             throw new StorageException('Filename does not have a valid file extension type.');
         }
 
@@ -274,34 +290,16 @@ class File
      */
     public function setConfig(array $config): self
     {
-        $this->config = new stdClass;
+        $this->config = new stdClass();
 
-        if(isset($config['upload_path'])){
-            $this->config->uploadPath = rtrim($config['upload_path'], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-        }
-
-        if(isset($config['max_size'])){
-            $this->config->maxSize = (int) $config['max_size'];
-        }
-
-        if(isset($config['min_size'])){
-            $this->config->minSize = (int) $config['min_size'];
-        }
-
-        if(isset($config['allowed_types'])){
-            $this->config->allowedTypes = $config['allowed_types'];
-        }
-
-        if(isset($config['chunk_length'])){
-            $this->config->chunkLength = (int) $config['chunk_length'];
-        }
-
-        if(isset($config['if_existed'])){
-            $this->config->ifExisted = $config['if_existed'];
-        }
-
-        if(isset($config['symlink'])){
-            $this->config->symlink = $config['symlink'];
+        foreach (self::$configurations as $key => $name) {
+            if (isset($config[$key])) {
+                if($key === 'upload_path'){
+                    $this->config->{$name} = rtrim($config[$key], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+                }else{
+                    $this->config->{$name} = $config[$key];
+                }
+            }
         }
 
         return $this;
@@ -327,40 +325,39 @@ class File
     public function valid(): bool
     {
         if ($this->error !== UPLOAD_ERR_OK) {
-            $this->message = 'Upload error occurred.';
+            $this->message = 'File upload error occurred.';
             return false;
         }
-    
-        if ($this->size === 0) {
-            $this->message = 'File is empty.';
-            return false;
-        }
-    
-        if ($this->temp === null) {
-            $this->message = 'Temporary file not found.';
-            return false;
-        }
-    
-        if (isset($this->config->maxSize) && $this->size > $this->config->maxSize) {
-            $this->message = 'File size exceeds maximum limit.';
-            return false;
-        }
-    
-        if (isset($this->config->minSize) && $this->size < $this->config->minSize) {
-            $this->message = 'File size is too small.';
-            return false;
-        }
-    
-        if (isset($this->config->allowedTypes)) {
-            $allowed = explode('|', strtolower($this->config->allowedTypes));
 
+        if ($this->size === 0) {
+            $this->message = 'File is empty or corrupted.';
+            return false;
+        }
+
+        if ($this->temp === null) {
+            $this->message = 'File not found, or may not have been uploaded to the server corectly.';
+            return false;
+        }
+
+        if (isset($this->config->maxSize) && $this->size > $this->config->maxSize) {
+            $this->message = 'File size exceeds maximum limit. Maximum allowed size: ' . Maths::toUnit($this->config->maxSize, true) . '.';
+            return false;
+        }
+
+        if (isset($this->config->minSize) && $this->size < $this->config->minSize) {
+            $this->message = 'File size is too small. Minimum allowed size: ' . Maths::toUnit($this->config->minSize, true) . '.';
+            return false;
+        }
+
+        if (isset($this->config->allowedTypes) && $this->config->allowedTypes !== '') {
+            $allowed = explode('|', strtolower($this->config->allowedTypes));
             if (!in_array($this->extension, $allowed)) {
-                $this->message = 'File type is not allowed.';
+                $this->message = 'File type is not allowed. Allowed file types: "' . $this->config->allowedTypes . '".';
                 return false;
             }
         }
-    
+
         $this->message = 'Upload okay.';
         return true;
-    }    
+    }  
 }

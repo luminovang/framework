@@ -22,11 +22,11 @@ abstract class BaseConsole extends BaseCommand
     }
 
     /**
-     * Handle execution of command in command controller class.
+     * Handle running and execution of command in console controller class.
      *
-     * @param array<string, mixed> $params Command arguments and parameters
+     * @param array<string,mixed>|null $params Command arguments and parameters
      * 
      * @return int status code STATUS_SUCCESS on success else STATUS_ERROR
     */
-    abstract public function run(?array $params = []): int;
+    abstract public function run(?array $params = null): int;
 }

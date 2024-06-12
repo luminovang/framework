@@ -25,19 +25,17 @@ class Server extends BaseConsole
     private int $tries = 10;
 
     /**
-     * @var string $group command group
+     * {@inheritdoc}
     */
     protected string $group = 'Server';
 
     /**
-     * @var string $name command name
+     * {@inheritdoc}
     */
     protected string $name = 'server';
 
     /**
-     * Options
-     *
-     * @var array<string, string> $options
+     * {@inheritdoc}
     */
     protected array $options = [
         '--php'  => 'The PHP Binary [default: "PHP_BINARY"]',
@@ -45,20 +43,16 @@ class Server extends BaseConsole
         '--port' => 'The HTTP Host Port [default: "8080"]',
     ];
 
-     /**
-     * Usages
-     *
-     * @var array<string, string> $usages
-     */
+    /**
+     * {@inheritdoc}
+    */
     protected array $usages = [
         'php novakit server',
         'php novakit server --host localhost --port 8080',
     ];
 
     /**
-     * @param array $params terminal options
-     * 
-     * @return int 
+     * {@inheritdoc}
     */
     public function run(?array $params = []): int
     {
@@ -92,11 +86,7 @@ class Server extends BaseConsole
     }
 
     /**
-     * Run helper command.
-     * 
-     * @param array $helps Help information.
-     * 
-     * @return int status code.
+     * {@inheritdoc}
     */
     public function help(array $helps): int
     {
