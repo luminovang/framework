@@ -335,7 +335,7 @@ class File
         }
 
         if ($this->temp === null) {
-            $this->message = 'File not found, or may not have been uploaded to the server corectly.';
+            $this->message = 'File not found, or may not have been uploaded to the server correctly.';
             return false;
         }
 
