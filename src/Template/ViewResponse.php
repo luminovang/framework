@@ -12,6 +12,7 @@ namespace Luminova\Template;
 use \Luminova\Storages\FileManager;
 use \Luminova\Cache\PageMinifier;
 use \Luminova\Http\Header;
+use \Luminova\Http\Encoder;
 use \Luminova\Exceptions\JsonException;
 use \Exception;
 
@@ -106,7 +107,7 @@ class ViewResponse
         string $content, 
         int $status = 200, 
         array $headers = [],
-        bool $encode = true, 
+        bool $encode = false, 
         bool $minify = false
     ): int
     {
@@ -119,27 +120,31 @@ class ViewResponse
         }
 
         $length = false;
-        $encoding = false;
-
-        if($encode || $minify){
+       
+        if($minify && str_contains($headers['Content-Type'], 'text/html')){
             if(self::$minifier === null){
                 self::$minifier = new PageMinifier();
                 self::$minifier->codeblocks(false);
                 self::$minifier->copiable(false);
             }
 
-            $instance = self::$minifier->compress($content, $headers['Content-Type'], $minify, $encode);
+            $instance = self::$minifier->compress($content, $headers['Content-Type']);
             $content = $instance->getContent();
-            $encoding = $instance->getEncoding();
             $length = $instance->getLength();
         }
 
-        if(empty($content)){
+        if($encode){
+            [$encoding, $content] = (new Encoder())->encode($content);
+            if($encoding !== false){
+                $headers['Content-Encoding'] = $encoding;
+            }
+        }
+
+        if($content === ''){
             return STATUS_ERROR;
         }
 
         $headers['default_headers'] = true;
-        $headers['Content-Encoding'] = $encoding;
         $headers['Content-Length'] = ($length === false ? string_length($content) : $length);
 
         Header::parseHeaders($headers, $status);

@@ -327,16 +327,31 @@ final class FileDelivery
     private static function headers(array $headers, int $status = 200, bool $cache = false): void 
     {
         if (headers_sent()) {
-            header_remove();
+            return;
         }
+        
         http_response_code($status);
         $headers['X-Powered-By'] = Foundation::copyright();
-        foreach ($headers as $key => $value) {
-            header("$key: $value");
+        $removeHeaders = [];
+
+        foreach ($headers as $header => $value) {
+            if(!$header){
+                continue;
+            }
+
+            if($value === ''){
+                $removeHeaders[] = $header;
+            }else{
+                header("$header: $value");
+            }
         }
 
         if($cache){
-            header_remove("Pragma");
+            $removeHeaders[] = 'Pragma';
+        }
+
+        if($removeHeaders !== []){
+            array_map('header_remove', $removeHeaders);
         }
     }
 }

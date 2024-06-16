@@ -24,6 +24,25 @@ class Header
     public static array $httpMethods = ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS', 'HEAD'];
 
     /**
+     * Content types.
+     * 
+     * @var array<int,array> $contentTypes
+    */
+    private static array $contentTypes = [
+        'html'   => ['text/html', 'application/xhtml+xml'],
+        'text'   => ['text/plain'],
+        'js'     => ['application/javascript', 'application/x-javascript', 'text/javascript'],
+        'css'    => ['text/css'],
+        'json'   => ['application/json', 'application/x-json'],
+        'jsonld' => ['application/ld+json'],
+        'xml'    => ['application/xml', 'text/xml', 'application/x-xml'],
+        'rdf'    => ['application/rdf+xml'],
+        'atom'   => ['application/atom+xml'],
+        'rss'    => ['application/rss+xml'],
+        'form'   => ['application/x-www-form-urlencoded', 'multipart/form-data']
+    ];
+
+    /**
      * Header variables.
      * 
      * @var array $variables
@@ -208,7 +227,7 @@ class Header
     public static function getSystemHeaders(): array
     {
         return [
-            'Content-Type' => 'text/html',
+            'Content-Type'  => 'text/html',
             'Cache-Control' => env('default.cache.control', 'no-store, max-age=0, no-cache'),
             'Content-Language' => env('app.locale', 'en'), 
             'X-Content-Type-Options' => 'nosniff',
@@ -300,22 +319,28 @@ class Header
             }
         }
 
-        $charset = env('app.charset', 'utf-8');
-        
+        $removeHeaders = [];
         foreach ($headers as $header => $value) {
-            if ($header === 'default_headers' || ($header === 'Content-Encoding' && $value === false)) {
+            if (!$header || ($header === 'default_headers' || ($header === 'Content-Encoding' && $value === false))) {
                 continue;
             }
 
-            if ($header === 'Content-Type' && strpos($value, 'charset') === false) {
-                header("$header: {$value}; charset=$charset");
-            } else {
+            if($value === ''){
+                $removeHeaders[] = $header;
+            }else{          
+                $value = ($header === 'Content-Type' && !str_contains($value, 'charset')) ? 
+                    "{$value}; charset=" . env('app.charset', 'utf-8') : $value;
+
                 header("$header: $value");
             }
         }
 
         if (!env('x.powered', true)) {
-            header_remove('X-Powered-By');
+            $$removeHeaders[] = 'X-Powered-By';
+        }
+
+        if($removeHeaders !== []){
+            array_map('header_remove', $removeHeaders);
         }
     }
 
@@ -344,24 +369,10 @@ class Header
     */
     public static function getContentTypes(string $type, int|null $index = 0): array|string|null
     {
-        $types = [
-            'html'   => ['text/html', 'application/xhtml+xml'],
-            'text'   => ['text/plain'],
-            'js'     => ['application/javascript', 'application/x-javascript', 'text/javascript'],
-            'css'    => ['text/css'],
-            'json'   => ['application/json', 'application/x-json'],
-            'jsonld' => ['application/ld+json'],
-            'xml'    => ['application/xml', 'text/xml', 'application/x-xml'],
-            'rdf'    => ['application/rdf+xml'],
-            'atom'   => ['application/atom+xml'],
-            'rss'    => ['application/rss+xml'],
-            'form'   => ['application/x-www-form-urlencoded', 'multipart/form-data']
-        ];
-
         if($index === null){
-            return $types[$type] ?? null;
+            return self::$contentTypes[$type] ?? null;
         }
 
-        return $types[$type][$index] ?? 'text/html';
+        return self::$contentTypes[$type][$index] ?? 'text/html';
     }
 }

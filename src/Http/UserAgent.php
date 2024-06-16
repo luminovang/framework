@@ -84,9 +84,9 @@ class UserAgent
     /**
      * The platform/operating system version.
      *
-     * @var string $platformversion
+     * @var string $platformVersion
      */
-    protected string $platformversion = '';
+    protected string $platformVersion = '';
 
     /**
      * The name of the robot if it's a known robot.
@@ -227,7 +227,7 @@ class UserAgent
             $this->platform = $agent->platform;
             $this->version = $agent->version;
             $this->browser = $agent->browser;
-            $this->platformversion = $agent->platform_version;
+            $this->platformVersion = $agent->platform_version;
             $this->isRobot();
             $this->isMobile();
             return;
@@ -265,7 +265,7 @@ class UserAgent
      * Check if the user agent string is from a known robot.
      * 
      * @param string|null $keyword Optional robot name, keyword or pattern.
-     * - Pass `NULL` to check if robot is in array of robot keywards `self::$config->robotPatterns`.
+     * - Pass `NULL` to check if robot is in array of robot keywords `self::$config->robotPatterns`.
      * 
      * @return bool True if the user agent is from known robot, false otherwise.
     */
@@ -382,7 +382,7 @@ class UserAgent
     /**
      * Check if keyword or patterns matched with the user agent string, browser, mobile or robot name.
      * 
-     * @param string $name The keyward or pattern to check if matched on user-agent string.
+     * @param string $name The keycard or pattern to check if matched on user-agent string.
      * @param string|null $lookup The context to lookup matches, if null it will search user-agent string.
      *  - `browser`, `mobile` or `robot`
      * 
@@ -440,6 +440,6 @@ class UserAgent
         $this->mobile = '';
         $this->robot = '';
         $this->platform = '';
-        $this->platformversion = '';
+        $this->platformVersion = '';
     }
 }

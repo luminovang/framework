@@ -897,7 +897,7 @@ trait TemplateView
     {
         if ($content !== false && $content !== '') {
             $headers = null;
-            if (self::$minifyContent) {
+            if (self::$minifyContent && $type === 'html') {
                 $minifier = Helper::getMinifier(
                     $content, 
                     $type, 

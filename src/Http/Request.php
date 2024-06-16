@@ -21,7 +21,7 @@ use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
 
 /**
- * Requet HTTP getter method 
+ * Request HTTP getter method 
  * 
  * @method mixed getGet(string $key, mixed $default = null)       Get a value from the GET request.
  * @method mixed getPost(string $key, mixed $default = null)      Get a value from the POST request.
@@ -406,13 +406,6 @@ final class Request
     public function getUri(): string
     {
         return $this->getScheme() . '://' . $this->getHost() . $this->server->get('REQUEST_URI', '');
-
-        /* 
-        if (($params = $this->getQuery()) !== '') {
-            $params = '?' . $params;
-        }
-
-        return $this->getScheme().'://'.$this->getHost() . $this->getPaths() . $params;*/
     }
 
     /**
@@ -638,7 +631,7 @@ final class Request
     }
 
     /**
-     * Check if the given (hostnames, origins, proxy ip or subnet) matches any of the trusted patterns.
+     * Check if the given (hostname's, origins, proxy ip or subnet) matches any of the trusted patterns.
      * 
      * @param string $input The domain, origin or ip address to check.
      * @param string $context The context to check (hostname, origin or proxy).
