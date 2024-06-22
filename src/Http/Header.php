@@ -336,7 +336,7 @@ class Header
         }
 
         if (!env('x.powered', true)) {
-            $$removeHeaders[] = 'X-Powered-By';
+            $removeHeaders[] = 'X-Powered-By';
         }
 
         if($removeHeaders !== []){
