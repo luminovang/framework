@@ -84,9 +84,9 @@ class UserAgent
     /**
      * The platform/operating system version.
      *
-     * @var string $platformVersion
+     * @var string $platformversion
      */
-    protected string $platformVersion = '';
+    protected string $platformversion = '';
 
     /**
      * The name of the robot if it's a known robot.
@@ -227,7 +227,7 @@ class UserAgent
             $this->platform = $agent->platform;
             $this->version = $agent->version;
             $this->browser = $agent->browser;
-            $this->platformVersion = $agent->platform_version;
+            $this->platformversion = $agent->platform_version;
             $this->isRobot();
             $this->isMobile();
             return;
@@ -440,6 +440,6 @@ class UserAgent
         $this->mobile = '';
         $this->robot = '';
         $this->platform = '';
-        $this->platformVersion = '';
+        $this->platformversion = '';
     }
 }
