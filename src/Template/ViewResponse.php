@@ -125,7 +125,7 @@ class ViewResponse
             if(self::$minifier === null){
                 self::$minifier = new PageMinifier();
                 self::$minifier->codeblocks(false);
-                self::$minifier->copiable(false);
+                self::$minifier->copyable(false);
             }
 
             $instance = self::$minifier->compress($content, $headers['Content-Type']);

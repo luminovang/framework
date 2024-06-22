@@ -28,9 +28,9 @@ final class PageMinifier
 
     /** 
 	* Allow copying of code blocks  
-	* @var bool $copiable
+	* @var bool $copyable
 	*/
-    private bool $copiable = false;
+    private bool $copyable = false;
 
     /** 
 	* Minified content headers.
@@ -93,9 +93,9 @@ final class PageMinifier
      * 
      *  @return self Returns minifier class instance.
      */
-	public function copiable(bool $allow): self 
+	public function copyable(bool $allow): self 
     {
-		$this->copiable = $allow;
+		$this->copyable = $allow;
 
 		return $this;
 	}
@@ -157,7 +157,7 @@ final class PageMinifier
         $content = is_string($data) ? $data : static::toJsonString($data);
 
         // Minify content if required
-        $content = ($this->codeblocks ? static::minify($content) : static::minifyIgnore($content, $this->copiable));
+        $content = ($this->codeblocks ? static::minify($content) : static::minifyIgnore($content, $this->copyable));
 
         // Resolve content type if it's a shorthand
         if (strpos($contentType, '/') === false) {

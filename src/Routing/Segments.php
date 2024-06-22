@@ -79,7 +79,7 @@ class Segments
     /**
      * Get the current view segments as array.
      * 
-     * @return array<int, string> Array list of url segments
+     * @return array<int,string> Array list of url segments
     */
     public function segments(): array 
     {

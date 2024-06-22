@@ -76,16 +76,16 @@ class Smarty
 
         if(class_exists(SmartyTemplate::class)){
             $this->smarty = new SmartyTemplate();
-            self::makedirs();
+            self::makeDirs();
         }else{
             throw new RuntimeException('Smarty is not available, run composer command "composer require smarty/smarty" if you want to use smarty template', 1991);
         }
 
-        $sufix = DIRECTORY_SEPARATOR . 'smarty';
+        $suffix = DIRECTORY_SEPARATOR . 'smarty';
 
-        $this->smarty->setCompileDir($root . Helper::bothtrim(self::$config->compileFolder) . $sufix);
-        $this->smarty->setConfigDir($root . Helper::bothtrim(self::$config->configFolder) . $sufix);
-        $this->smarty->setCacheDir($root . Helper::bothtrim(self::$config->cacheFolder) . $sufix);
+        $this->smarty->setCompileDir($root . Helper::bothTrim(self::$config->compileFolder) . $suffix);
+        $this->smarty->setConfigDir($root . Helper::bothTrim(self::$config->configFolder) . $suffix);
+        $this->smarty->setCacheDir($root . Helper::bothTrim(self::$config->cacheFolder) . $suffix);
         $this->smarty->addExtension(new Modifiers());
 
         if(PRODUCTION){
@@ -215,11 +215,11 @@ class Smarty
     */
     public function isCached(string $view): bool
     {
-        return $this->smarty->isCached($view, Helper::cachekey());
+        return $this->smarty->isCached($view, Helper::cacheKey());
     }
 
     /**
-     * Minify template ouput
+     * Minify template output
      * 
      * @param bool $minify Should the template be minified.
      * @param array $options Minification options.
@@ -268,7 +268,7 @@ class Smarty
     */
     public function display(string $view, bool $return = false): bool|string
     {
-        $cache_id = Helper::cachekey();
+        $cache_id = Helper::cacheKey();
         try{
             $content = $this->smarty->fetch($view, $cache_id);
 
@@ -299,7 +299,7 @@ class Smarty
      * 
      * @return void
      */
-    private static function makedirs(): void 
+    private static function makeDirs(): void 
     {
         $dirs = [
             self::$config->compileFolder, 
@@ -307,7 +307,7 @@ class Smarty
             self::$config->cacheFolder
         ];
 
-        $notFounds = array_filter($dirs, fn($dir) => !file_exists(self::$root .  Helper::bothtrim($dir) . DIRECTORY_SEPARATOR . 'smarty'));
+        $notFounds = array_filter($dirs, fn($dir) => !file_exists(self::$root .  Helper::bothTrim($dir) . DIRECTORY_SEPARATOR . 'smarty'));
 
         foreach ($notFounds as $dir) {
             make_dir(self::$root . $dir);

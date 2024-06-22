@@ -286,7 +286,7 @@ final class PageViewCache
     }
 
     /**
-     * Determin the content encoding
+     * Determine the content encoding
      * 
      * @return string|false Return the content encoding handler, otherwise false.
     */

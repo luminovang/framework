@@ -69,8 +69,8 @@ class Twig
         self::$root = $root;
 
         if($options['caching']){
-            $sufix = DIRECTORY_SEPARATOR . 'twig';
-            $options['cache'] = $root . Helper::bothtrim($config->cacheFolder) . $sufix;
+            $suffix = DIRECTORY_SEPARATOR . 'twig';
+            $options['cache'] = $root . Helper::bothTrim($config->cacheFolder) . $suffix;
         }else{
             $options['cache'] = false;
         }
@@ -189,7 +189,7 @@ class Twig
             echo $content;
 
             return true;
-        }catch(RuntimeError | SyntaxError $e){
+        }catch(RuntimeError|SyntaxError $e){
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
     }

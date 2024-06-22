@@ -47,7 +47,7 @@ class Helper
         }
 
         self::$minifier->codeblocks($ignore);
-        self::$minifier->copiable($copy);
+        self::$minifier->copyable($copy);
 
         return self::$minifier->compress($contents, $type);
     }
@@ -55,26 +55,26 @@ class Helper
     /** 
      * Get page view cache instance
      *
-     * @param string $direcory Cache directory path. 
+     * @param string $directory Cache directory path. 
      * @param DateTimeInterface|int|null $expiry  Cache expiration ttl (default: 0).
      * @param string|null $key Optional cache key.
      *
      * @return PageViewCache Return page view cache instance.
     */
     public static function getCache(
-        string $direcory, 
+        string $directory, 
         DateTimeInterface|int|null $expiry = 0, 
         string|null $key = null
     ): PageViewCache
     {
-        $key ??= static::cachekey();
+        $key ??= static::cacheKey();
 
         if(self::$viewCache === null){
             self::$viewCache = new PageViewCache();
         }
 
         self::$viewCache->setExpiry($expiry);
-        self::$viewCache->setDirectory($direcory);
+        self::$viewCache->setDirectory($directory);
         self::$viewCache->setKey($key);
 
         return self::$viewCache;
@@ -83,20 +83,20 @@ class Helper
     /**
      * Determine if the cache has expired or not.
      * 
-     * @param string $direcory The cache directory.
+     * @param string $directory The cache directory.
      * @param string|null $key Optional cache key.
      * 
      * @return bool true if the cache has expired otherwise false.
     */
-    public static function expired(string $direcory, ?string $key = null): bool
+    public static function expired(string $directory, ?string $key = null): bool
     {
-        $key ??= static::cachekey();
+        $key ??= static::cacheKey();
 
         if($key === ''){
             return false;
         }
 
-        return PageViewCache::expired($key, $direcory);
+        return PageViewCache::expired($key, $directory);
     }
 
     /**
@@ -106,7 +106,7 @@ class Helper
      * 
      * @return string Return MD5 hashed cache key.
     */
-    public static function cachekey(?string $url = null): string 
+    public static function cacheKey(?string $url = null): string 
     {
         if ($url === null) {
             $url = $_SERVER['REQUEST_METHOD'] ?? 'CLI';
@@ -124,7 +124,7 @@ class Helper
      *
      * @return string path
     */
-    public static function bothtrim(string $path): string 
+    public static function bothTrim(string $path): string 
     {
         return  trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
     }

@@ -845,7 +845,7 @@ trait TemplateView
     }
 
     /**
-     * Initalize self class keyword.
+     * Initialize self class keyword.
      * 
      * @return object self classes.
     */
@@ -898,14 +898,14 @@ trait TemplateView
         if ($content !== false && $content !== '') {
             $headers = null;
             if (self::$minifyContent && $type === 'html') {
-                $minifier = Helper::getMinifier(
+                $minify = Helper::getMinifier(
                     $content, 
                     $type, 
                     $ignore, 
                     $copy
                 );
-                $content = $minifier->getContent();
-                $headers = $minifier->getHeaders();
+                $content = $minify->getContent();
+                $headers = $minify->getHeaders();
             }else{
                 $headers = ['Content-Type' => Header::getContentTypes($type)];
             }
