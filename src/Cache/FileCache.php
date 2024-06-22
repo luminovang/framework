@@ -158,7 +158,7 @@ final class FileCache
     /**
      * Get static Singleton Class.
      * 
-     * @param string|null $storage cache storage filename to hash
+     * @param string|null $storage cache storage filename to hash.
      * @param string $folder cache storage sub folder.
      * 
      * @param static Return new class instance.
@@ -337,7 +337,7 @@ final class FileCache
      *      -   Return content to be cached.
      * 
      * @return mixed Return cache content currently stored under key.
-     * @throws ErrorException if the file cannot be saved
+     * @throws ErrorException if the file cannot be saved.
      */
     public function onExpired(string $key, Closure $callback): mixed 
     {
@@ -371,7 +371,7 @@ final class FileCache
      * @param bool $lock lock catch to avoid deletion even when cache time expired.
      * 
      * @return bool Return true if item was successfully updated, otherwise false.
-     * @throws ErrorException if the file cannot be saved
+     * @throws ErrorException if the file cannot be saved.
      */
     public function refresh(
         string $key, 
@@ -397,13 +397,13 @@ final class FileCache
     }
 
     /**
-     * Get cache content from disk
+     * Get cache content from disk.
      * 
-     * @param string $key cache key
+     * @param string $key cache key.
      * @param bool $onlyContent Weather to return only cache content or with metadata (default: true).
      * 
-     * @return mixed Returns data if key is valid and not expired, NULL otherwise
-     * @throws ErrorException if the file cannot be saved
+     * @return mixed Returns data if key is valid and not expired, NULL otherwise.
+     * @throws ErrorException if the file cannot be saved.
     */
     public function getItem(string $key, bool $onlyContent = true): mixed
     {
@@ -438,7 +438,7 @@ final class FileCache
     }
 
     /**
-     * Creates, Reloads and retrieve cache once class is created
+     * Creates, Reloads and retrieve cache once class is created.
      * 
      * @return self Return cache class instance.
      * @throws ErrorException if there is a problem loading the cache.
@@ -451,9 +451,9 @@ final class FileCache
     }
 
     /**
-     * Checks if cache key exist
+     * Checks if cache key exist.
      * 
-     * @param string $key cache key
+     * @param string $key cache key.
      * 
      * @return bool Return true if cache key exists, otherwise false.
     */
@@ -463,7 +463,7 @@ final class FileCache
     }
 
     /**
-     * Remove expired cache by key
+     * Remove expired cache by key.
      * 
      * @return int Return number of deleted expired items.
     */
@@ -541,9 +541,9 @@ final class FileCache
     }
 
     /**
-     * Checks if the cache timestamp has expired by key
+     * Checks if the cache timestamp has expired by key.
      * 
-     * @param string $key cache key
+     * @param string $key cache key.
      * 
      * @return bool Return true if cache has expired, otherwise false.
     */
@@ -611,10 +611,10 @@ final class FileCache
     }
 
     /**
-     * Fetch cache data from disk
+     * Fetch cache data from disk.
      * 
      * @return array Return cache information.
-     * @throws ErrorException if cannot load cache, unable to unserialize, hash sum not found or invalid key
+     * @throws ErrorException if cannot load cache, unable to unserialize, hash sum not found or invalid key.
     */
     private function fetch(): array 
     {
@@ -656,11 +656,11 @@ final class FileCache
     }
 
     /**
-     * Remove the security line in php file cache
+     * Remove the security line in php file cache.
      * 
-     * @param string $str cache string
+     * @param string $str cache string.
      * 
-     * @return string cache text without the first security line
+     * @return string cache text without the first security line.
      */
     private static function unlock(string $str): string 
     {
@@ -675,7 +675,7 @@ final class FileCache
     /**
      * Wipes clean the entire cache's.
      * 
-     * @param bool $clearDisk Whether to clear all cache disk 
+     * @param bool $clearDisk Whether to clear all cache disk.
      * 
      * @return bool Return true if cache was successfully cleared, false otherwise.
      */
@@ -704,10 +704,10 @@ final class FileCache
 
     /**
      * Remove cached storage file from disk with full path.
-     * This will use the current storage path
+     * This will use the current storage path.
      * 
-     * @param string $storage cache storage names
-     * @param string $extension cache file extension type
+     * @param string $storage cache storage names.
+     * @param string $extension cache file extension type.
      * 
      * @return bool Return true on success, false on failure.
     */
@@ -717,11 +717,11 @@ final class FileCache
     }
 
     /**
-     * Remove cache file from disk with full path
+     * Remove cache file from disk with full path.
      * 
-     * @param string $path cache full path /
-     * @param string $storage cache file array names
-     * @param string $extension cache file extension type
+     * @param string $path cache full path /.
+     * @param string $storage cache file array names.
+     * @param string $extension cache file extension type.
      * 
      * @return bool Return true if cache file was successfully deleted, false otherwise.
     */
