@@ -1307,10 +1307,10 @@ final class Builder extends Connection
     }
 
     /**
-     * Return custom builder result from table
+     * Return custom builder result from table.
      * 
-     * @param string $buildQuery query
-     * @param int $mode return result type 
+     * @param string $buildQuery query.
+     * @param int $mode return result type.
      * 
      * @return mixed|DatabaseInterface Return query result, prepared statement object, otherwise false on failure.
      * @throws DatabaseException If placeholder key is not a string.
@@ -1343,9 +1343,9 @@ final class Builder extends Connection
     }
 
     /**
-     * Get errors 
+     * Get errors.
      * 
-     * @return array 
+     * @return array Return error information.
     */
     public function errors(): array 
     {
@@ -1355,7 +1355,7 @@ final class Builder extends Connection
     /**
      * Begin a transaction
      * 
-     * @return self 
+     * @return self Return builder class instance.
     */
     public function transaction(): self 
     {
