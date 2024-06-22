@@ -382,7 +382,7 @@ class UserAgent
     /**
      * Check if keyword or patterns matched with the user agent string, browser, mobile or robot name.
      * 
-     * @param string $name The keycard or pattern to check if matched on user-agent string.
+     * @param string $name The keyword or pattern to check if matched on user-agent string.
      * @param string|null $lookup The context to lookup matches, if null it will search user-agent string.
      *  - `browser`, `mobile` or `robot`
      * 
