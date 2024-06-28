@@ -452,9 +452,9 @@ class FileManager
      * Download a file to the user's browser.
      *
      * @param mixed $content The full file path, resource, or string to download.
-     *      File path - Download content from path specified.
-     *      Resource - Download content from resource specified.
-     *      String - Download content from string specified.
+     *      - File path - Download content from path specified.
+     *      - Resource - Download content from resource specified.
+     *      - String - Download content from string specified.
      * @param string|null $filename The filename as it will be shown in the download.
      * @param array $headers Optional headers for download.
      * @param bool $delete Whether to delete the file after download (default: false).
@@ -463,52 +463,148 @@ class FileManager
      */
     public static function download(mixed $content, ?string $filename = null, array $headers = [], bool $delete = false): bool
     {
+        if (!$content) {
+            return false;
+        }
+
+        $length = 0;
+        $typeOf = '';
+
         if (is_resource($content)) {
             $typeOf = 'resource';
             $stat = fstat($content);
-            $length = $stat['size'];
-        } elseif (is_string($content) && file_exists($content) && is_readable($content)) {
+            if ($stat !== false) {
+                $length = $stat['size'];
+            }
+        } elseif (str_contains($content, DIRECTORY_SEPARATOR) && is_readable($content)) {
             $typeOf = 'file';
             $filename ??= basename($content);
-            $mime = get_mime($content) ?: 'application/octet-stream';
+            $mime = get_mime($content);
             $length = filesize($content);
+            if ($mime === false) {
+                $mime = null;
+            }
         } elseif (is_string($content)) {
             $typeOf = 'string';
             $length = strlen($content);
         } else {
             return false;
         }
+        
+        if (!$length) {
+            return false;
+        }
 
+        $bufferSize = 8192; // 8KB buffer size
+        $isPartialContent = $length > (5 * 1024 * 1024);
+        $offset = 0;
         $filename ??= 'file_download';
         $mime ??= 'application/octet-stream';
         $headers = array_merge([
+            'Connection' => 'close',
             'Content-Type' => $mime,
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
             'Content-Transfer-Encoding' => 'binary',
+            'Accept-Ranges' => 'bytes',
             'Expires' => 0,
             'Cache-Control' => 'must-revalidate',
             'Pragma' => 'public',
             'Content-Length' => $length,
+            'Content-Range' => "bytes 0-" . ($length - 1) . "/$length"
         ], $headers);
+
+        if (isset($_SERVER['HTTP_RANGE'])) {
+            [$length, $offset, $limit, $rangeHeader] = self::getHttpContentRange($length);
+            if ($rangeHeader !== null) {
+                $isPartialContent = true;
+                $headers["Content-Range"] = $rangeHeader;
+                $headers["Content-Length"] = $length;
+                http_response_code(206);
+            }
+        }
+
+        if ($isPartialContent && ob_get_level()) {
+            ob_end_clean();
+        }
 
         foreach ($headers as $key => $value) {
             header("{$key}: {$value}");
         }
 
-        if ($typeOf === 'file') {
-            $read = readfile($content);
-            if ($delete && $read !== false) {
-                unlink($content);
+        if ($typeOf === 'file' || $typeOf === 'resource') {
+            $handler = ($typeOf === 'file') ? fopen($content, 'rb') : $content;
+
+            if (!$handler) {
+                return false;
             }
-            return $read !== false;
+
+            fseek($handler, $offset);
+            if ($isPartialContent) {
+                while (!feof($handler) && $length > 0) {
+                    $read = min($bufferSize, $length);
+                    echo fread($handler, $read);
+                    $length -= $read;
+                    ob_flush();
+                    flush();
+                }
+            } else {
+                fpassthru($handler);
+            }
+
+            if ($typeOf === 'file') {
+                fclose($handler);
+                if ($delete) {
+                    unlink($content);
+                }
+            }
+
+            return true;
         }
 
-        if ($typeOf === 'resource') {
-            return fpassthru($content) !== false;
+        if ($isPartialContent && $typeOf === 'string') {
+            $start = $offset;
+            $end = $length - 1;
+            while ($start <= $end) {
+                $bufferSize = min($bufferSize, $end - $start + 1);
+                echo substr($content, $start, $bufferSize);
+                $start += $bufferSize;
+                ob_flush();
+                flush();
+            }
+
+            return true;
         }
 
         echo $content;
         return true;
+    }
+
+    /**
+     * Handle byte-range requests from HTTP_RANGE.
+     * 
+     * @param int $filesize The original content length.
+     * 
+     * @return array<int,mixed> Return content length and range.
+     *      - [length, offset, limit, rangeHeader].
+    */
+    public static function getHttpContentRange(int $filesize): array
+    {
+        $offset = 0;
+        $length = $filesize;
+        $header = null;
+        $limit = $filesize - 1;
+        $httpRange = $_SERVER['HTTP_RANGE'] ?? false;
+
+        if ($httpRange && preg_match('/bytes=(\d+)-(\d+)?/', $httpRange, $matches)) {
+            $offset = intval($matches[1]);
+            $limit = isset($matches[2]) ? intval($matches[2]) : $filesize - 1;
+            
+            $limit = min($limit, $filesize - 1);
+            $length = ($limit - $offset) + 1;
+            $header = "bytes $offset-$limit/$filesize";
+        }
+
+        return [$length, $offset, $limit, $header];
     }
 
     /**
@@ -561,8 +657,8 @@ class FileManager
             return false;
         }
 
-        $linkpath = dirname($link);
-        if(!file_exists($linkpath) && !make_dir($linkpath, 0755)){
+        $linkPath = dirname($link);
+        if(!file_exists($linkPath) && !make_dir($linkPath, 0755)){
             logger('alert', 'Unable to create symlink destination directory');
             return false;
         }

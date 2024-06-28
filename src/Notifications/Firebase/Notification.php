@@ -215,6 +215,9 @@ class Notification
                     }
                     $message = $message->withWebPushConfig($pConfig);
                     break;
+                case Message::DEFAULT;
+                default:
+                    break;
             }
 
             if (($data = $config->getData()) !== []) {

@@ -681,7 +681,7 @@ final class Message
      */
     public function getTopic(): string
     {
-        return $this->payload['topic'] ?? 'test';
+        return $this->default['topic'] ?? 'test';
     }
 
     /**
