@@ -13,7 +13,7 @@ namespace Luminova\Base;
 abstract class BaseConfig
 {
     /**
-     * Initalizer
+     * Initializer
     */
     public function __construct(){}
 
