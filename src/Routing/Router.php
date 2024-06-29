@@ -21,6 +21,7 @@ use \Luminova\Base\BaseController;
 use \Luminova\Application\Factory;
 use \Luminova\Application\Foundation;
 use \Luminova\Exceptions\RouterException;
+use \Luminova\Interface\RoutableInterface;
 use \Luminova\Interface\ErrorHandlerInterface;
 use \ReflectionMethod;
 use \ReflectionFunction;
@@ -560,8 +561,8 @@ final class Router
 
         if($method === 'POST'){
             $headers = Header::getHeaders();
-            $overriders = ['PUT' => true,'DELETE' => true, 'PATCH' => true];
-            if (isset($headers['X-HTTP-Method-Override']) && isset($overriders[$headers['X-HTTP-Method-Override']])) {
+            $overrides = ['PUT' => true, 'DELETE' => true, 'PATCH' => true];
+            if (isset($headers['X-HTTP-Method-Override']) && isset($overrides[$headers['X-HTTP-Method-Override']])) {
                 $method = $headers['X-HTTP-Method-Override'];
             }
         }
@@ -1118,7 +1119,8 @@ final class Router
             if (!($class->isInstantiable() && (
                 $class->isSubclassOf(BaseCommand::class) || 
                 $class->isSubclassOf(BaseViewController::class) ||
-                $class->isSubclassOf(BaseController::class)))) {
+                $class->isSubclassOf(BaseController::class) ||
+                $class->implementsInterface(RoutableInterface::class)))) {
                 RouterException::throwWith('invalid_controller', 1, [
                     $className
                 ]);
@@ -1127,7 +1129,9 @@ final class Router
 
             $caller = $class->getMethod($method);
             
-            if ($caller->isPublic() && !$caller->isAbstract() && (!$caller->isStatic() || $class->isSubclassOf(ErrorHandlerInterface::class))) {
+            if ($caller->isPublic() && !$caller->isAbstract() && 
+                (!$caller->isStatic() || $class->implementsInterface(ErrorHandlerInterface::class) || $class->implementsInterface(RoutableInterface::class))
+            ) {
                 if (isset($arguments['command']) && self::$isCli) {;
                     if($class->getProperty('group')->getDefaultValue() === self::getArgument(1)) {
                         $arguments['classMethod'] = $method;
