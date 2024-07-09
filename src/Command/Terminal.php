@@ -267,11 +267,171 @@ class Terminal
                 }
                 static::fwrite($message . ' ' . $placeholder . ': ');
             }
-            $input = trim(static::input()) ?: $default;
+            $input = static::input();
+            $input = ($input === '') ? $default : $input;
         } while ($validationRules !== false && !static::validate($input, ['input' => $validationRules]));
     
 
         return $input;
+    }
+
+    /**
+     * Prompts the user to enter a password, with options for retry attempts and a timeout.
+     *
+     * @param string $message The message to display when prompting for the password.
+     * @param int $retry The number of retry attempts if the user provides an empty password (default: 3).
+     * @param int $timeout The number of seconds to wait for user input before displaying an error message (default: 0).
+     *
+     * @return string Return the entered password.
+     */
+    protected static final function password(
+        string $message = 'Enter Password', 
+        int $retry = 3, 
+        int $timeout = 0
+    ): string
+    {
+        $attempts = 0;
+        $visibilityPromptShown = false;
+
+        do {
+            $password = '';
+
+            if (is_platform('windows') || static::isWindowsTerminal(STDIN)) {
+                $vbscript = sys_get_temp_dir() . 'prompt_password.vbs';
+                $inputBox = 'wscript.echo(InputBox("'. addslashes($message) . '", "", "password here"))';
+    
+                if ($timeout > 0) {
+                    $result = static::timeout(static function() {
+                        static::newLine();
+                        static::error("Error: Timeout exceeded. No input provided.");
+                    }, $timeout);
+    
+                    if ($result === true) {
+                        return '';
+                    }
+                }
+    
+                if (file_put_contents($vbscript, $inputBox) !== false) {
+                    $password = shell_exec("cscript //nologo " . escapeshellarg($vbscript));
+                }
+    
+                if (empty($password)) {
+                    $password = shell_exec('powershell -Command "Read-Host -AsSecureString | ConvertFrom-SecureString"');
+                }
+
+                $password = ($password === false || $password === null) ? '' : trim($password);
+    
+                unlink($vbscript);
+            } else {
+                $command = "/usr/bin/env bash -c 'echo OK'";
+                $continue = shell_exec($command);
+                $continue = ($continue === false || $continue === null) ? 'ERR' : trim($continue);
+    
+                if ($continue !== 'OK') {
+                    if (!$visibilityPromptShown && static::visibility(false) === false) {
+                        $continue = static::prompt('Your password may be visible while typing, do you wish to continue?', [
+                            'yes', 'no'
+                        ], 'required|in_array(yes,no)');
+                    } else {
+                        $continue = 'yes';
+                    }
+                }
+    
+                if ($continue !== 'no') {
+                    static::fwrite($message . ': ');
+    
+                    if ($continue === 'yes') {
+                        static::visibility(false);
+                    }
+    
+                    if ($timeout > 0) {
+                        $result = static::timeout(static function() {
+                            static::newLine();
+                            static::error("Error: Timeout exceeded. No input provided.");
+                        }, $timeout);
+    
+                        if ($result === true) {
+                            if ($continue === 'yes') {
+                                static::visibility(true);
+                            }
+                            
+                            return '';
+                        }
+                    }
+    
+                    if ($continue === 'yes') {
+                        $password = static::input();
+                        static::visibility(true);
+                    } elseif ($continue === 'OK') {
+                        $command = "/usr/bin/env bash -c 'read -s inputPassword && echo \$inputPassword'";
+                        $password = shell_exec($command);
+                        $password = ($password === false || $password === null) ? '' : trim($password);
+                    }
+                }
+            }
+    
+            if ($password !== '') {
+                static::newLine();
+                return $password;
+            }
+    
+            $attempts++;
+            $visibilityPromptShown = true;
+            if ($retry === 0 || $attempts < $retry) {
+                static::newLine();
+                static::error("Error: Password cannot be empty. Please try again.");
+            }
+        } while ($retry === 0 || $attempts < $retry);
+    
+        if($retry !== 0){
+            static::newLine();
+            static::error("Error: Maximum retry attempts reached. Exiting.");
+        }
+
+        return '';
+    }
+
+    /**
+     * Execute a callback function after a specified timeout when no input or output is received.
+     *
+     * @param Closure $callback The callback function to execute on timeout.
+     * @param int $timeout Timeout duration in seconds. If <= 0, callback is invoked immediately (default: 0).
+     * @param mixed $stream Optional stream to monitor for activity (default: STDIN).
+     * 
+     * @return bool Returns true if the timeout occurred and callback was executed, otherwise false.
+     */
+    protected static final function timeout(Closure $callback, int $timeout = 0, mixed $stream = STDIN): bool
+    {
+        if ($timeout <= 0) {
+            $callback();
+            return true;
+        }
+    
+        $read = [$stream];
+        $write = null;
+        $except = null;
+        $result = stream_select($read, $write, $except, $timeout);
+        
+        if ($result === false || $result === 0) {
+            $callback();
+            return true;
+        }
+    
+        return false;
+    }
+
+    /**
+     * Toggles the terminal visibility of user input.
+     *
+     * @param bool $visibility True to show input, False to hide input.
+     * 
+     * @return bool Return true if visibility toggling was successful, false otherwise.
+     */
+    protected static final function visibility(bool $visibility = true): bool
+    {
+        $command = ($visibility === true) ? 'stty echo' : 'stty -echo';
+        
+        return shell_exec($command) !== null;
     }
 
     /**
@@ -326,7 +486,8 @@ class Terminal
                 static::fwrite("Please select correct options from list.");
                 static::newLine();
             }
-            $input = trim(static::input());
+
+            $input = static::input();
             if($input === ''){
                 $input = $defaultInput;
             }
@@ -425,7 +586,7 @@ class Terminal
      * @param string $text The text display in card.
      * @param int|null $padding Optional maximum padding to use.
      * 
-     * @return string Return beautiful card text.
+     * @return string Return beautiful card with text.
     */
     public static final function card(string $text, ?int $padding = null): string 
     {
@@ -512,20 +673,28 @@ class Terminal
      * Get user input from the shell, after requesting for user to type or select an option.
      *
      * @param string|null $prompt Optional message to prompt the user after they have typed.
+     * @param bool $useFopen Optional use file-read, this opens `STDIN` stream in read-only binary mode (default: false). 
+     *                      This creates a new file resource.
      * 
      * @return string Return user input string.
     */
-    protected static final function input(?string $prompt = null): string
+    protected static final function input(?string $prompt = null, bool $useFopen = false): string
     {
         if (static::$isReadline && ENVIRONMENT !== 'testing') {
             return @readline($prompt);
         }
 
-        if($prompt !== null){
+        if ($prompt !== null) {
             echo $prompt;
         }
 
-        return fgets(fopen('php://stdin', 'rb'));
+        if ($useFopen) {
+            $input  = fgets(fopen(STDIN, 'rb'));
+        } else {
+            $input = fgets(STDIN);
+        }
+
+        return ($input === false) ? '' : trim($input);
     }
 
     /**
