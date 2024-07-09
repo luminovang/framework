@@ -643,8 +643,8 @@ trait TableTrait
     public function getCreateQuery(): string
     {
         $sql = $this->sqlHeader();
-        $primarys = $this->getTableOptions('primary');
-        $primaryLength = ($primarys === [] || $primarys === null) ? 0 : count($primarys);
+        $primaries = $this->getTableOptions('primary');
+        $primaryLength = ($primaries === [] || $primaries === null) ? 0 : count($primaries);
         $sql .= "\n-- SQL Table Definitions\n\n";
         $sql .= "CREATE TABLE " . ($this->ifNotExists ? "IF NOT EXISTS " : "") . "`{$this->tableName}` (\n"; 
         $executions = [];
@@ -749,8 +749,8 @@ trait TableTrait
             }
             $sql = rtrim($sql, ",\n");
 
-            if ($primarys !== [] && $primaryLength > 1) {
-                $sql .= ",\nPRIMARY KEY (`" . implode("`,`", $primarys) . "`)";
+            if ($primaries !== [] && $primaryLength > 1) {
+                $sql .= ",\nPRIMARY KEY (`" . implode("`,`", $primaries) . "`)";
             }
 
             $pkConstraint = $this->getTableOptions('pkConstraint');
