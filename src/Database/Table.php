@@ -292,6 +292,29 @@ final class Table
     }
 
     /**
+     * Sets the column to invisible in `MYSQL`.
+     * Invisible columns are not shown in `SELECT *` queries but can still be accessed when explicitly specified in the query.
+     * 
+     * @return self Returns the table class instance.
+     * > The `INVISIBLE` attribute can only be used in MySQL 8.0.23 and later.
+     */
+    public function invisible(): self
+    {
+        return $this->add('visibility', 'INVISIBLE', false);
+    }
+
+    /**
+     * Sets the column to visible in `MYSQL`, this is useful for alter when column was previously set to `INVISIBLE`.
+     * 
+     * @return self Returns the table class instance.
+     * > The `VISIBLE` attribute can only be used in MySQL 8.0.23 and later.
+     */
+    public function visible(): self
+    {
+        return $this->add('visibility', 'VISIBLE', false);
+    }
+
+    /**
      * Sets the column to nullable.
      * 
      * This method sets the column to allow `NUL`L values in the database.

@@ -176,7 +176,8 @@ trait TableTrait
         'collation',
         'charset',
         'nullable',
-        'index'
+        'index',
+        'visibility'
     ];
 
     /**
@@ -453,6 +454,17 @@ trait TableTrait
 
                 foreach (static::$typesToCheck as $type) {
                     if ($this->hasChanged($type, $name, $previous, $column)) {
+
+                        if($type === 'visibility'){
+                            $alters .= Alter::setVisibility(
+                                $this->database, 
+                                $this->tableName,
+                                $name,
+                                $typeLength,
+                                $column['visibility']
+                            );
+                        }
+
                         if($type === 'default'){
                             $alters .= Alter::setDefault(
                                 $this->database, 
@@ -674,6 +686,10 @@ trait TableTrait
                         $name
                     );
                 }
+            }
+
+            if (!empty($column['visibility'])) {
+                $entry .= " {$column['visibility']}";
             }
 
             if (!empty($column['primary']) && $primaryLength === 1) {

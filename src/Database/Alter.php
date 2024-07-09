@@ -152,6 +152,20 @@ class Alter
         return "ALTER TABLE {$table} DROP COLUMN {$column};\n";
     }
 
+    public static function setVisibility(
+        string $database,
+        string $table,
+        string $column,
+        string $typeLength,
+        string $visibility
+    ): string {
+        if($database === 'mysql'){
+            return "ALTER TABLE {$table} MODIFY COLUMN {$column} {$typeLength} {$visibility};\n";
+        }
+
+        return "-- Visibility {$visibility} is not supported for {$database}\n";
+    }
+
     /**
      * Renames a column in a table.
      *
