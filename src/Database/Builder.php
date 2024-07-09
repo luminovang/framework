@@ -9,7 +9,6 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Database\Scheme;
 use \Luminova\Cache\FileCache;
 use \Luminova\Database\Connection;
 use \Luminova\Database\Manager;
@@ -18,6 +17,7 @@ use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Time\Time;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \DateTimeInterface;
+use \Exception;
 
 final class Builder extends Connection 
 {  
@@ -868,8 +868,8 @@ final class Builder extends Connection
                 return $this->executeInsertPrepared($columns, $values);
             }
             return $this->executeInsertQuery($columns, $values);
-        } catch (DatabaseException $e) {
-            $e->handle();
+        } catch (DatabaseException|Exception $e) {
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
         return 0;
     }
@@ -939,8 +939,8 @@ final class Builder extends Connection
             return $this->cache->onExpired($this->cacheKey, function() use($mode) {
                 return $this->returnExecute($this->buildQuery, $mode);
             });
-        } catch (DatabaseException $e) {
-            $e->handle();
+        } catch (DatabaseException|Exception $e) {
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
 
         return null;
@@ -1110,8 +1110,8 @@ final class Builder extends Connection
             return $this->cache->onExpired($this->cacheKey, function() use($sqlQuery, $return, $result, $mode) {
                 return $this->returnExecutedResult($sqlQuery, $return, $result, $mode);
             });
-        } catch (DatabaseException $e) {
-            $e->handle();
+        } catch (DatabaseException|Exception $e) {
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
         
         return false;
@@ -1255,8 +1255,8 @@ final class Builder extends Connection
             $this->reset();
 
             return $response;
-        } catch (DatabaseException $e) {
-            $e->handle();
+        } catch (DatabaseException|Exception $e) {
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
 
         return 0;
@@ -1299,8 +1299,8 @@ final class Builder extends Connection
             $this->reset();
 
             return $response;
-        } catch (DatabaseException $e) {
-            $e->handle();
+        } catch (DatabaseException|Exception $e) {
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
         
         return 0;
@@ -1343,7 +1343,7 @@ final class Builder extends Connection
     }
 
     /**
-     * Get errors.
+     * Get error information.
      * 
      * @return array Return error information.
     */
@@ -1353,57 +1353,99 @@ final class Builder extends Connection
     }
 
     /**
-     * Begin a transaction
+     * Begins a transaction with optional read-only isolation level and savepoint.
+     *
+     * @param int $flags Optional flags to set transaction properties.
+     *                  For MySQLi:
+     *                      - MYSQLI_TRANS_START_READ_ONLY: Set transaction as read-only.
+     *                  For PDO:
+     *                      - No predefined flags, specify `4` to create read-only isolation.
+     * @param ?string $name Optional name for a savepoint.
+     *                    If provided in PDO, savepoint will be created instead.
      * 
-     * @return self Return builder class instance.
-    */
-    public function transaction(): self 
+     * @return bool Returns true if the transaction and optional savepoint were successfully started.
+     * @throws DatabaseException Throws exception on PDO if failure to set transaction isolation level or create savepoint.
+     */
+    public function transaction(int $flags = 0, ?string $name = null): bool 
     {
-        $this->db->beginTransaction();
-
-        return $this;
+        return $this->db->beginTransaction($flags, $name);
     }
 
     /**
-     * Commit a transaction
+     * Commits a transaction.
+     *
+     * @param int $flags Optional flags for custom handling.
+     *                 Only supported in MySQLi.
+     * @param ?string $name Optional name for a savepoint.
+     *                Only supported in MySQLi.
      * 
-     * @return void 
-    */
-    public function commit(): void 
+     * @return bool Returns true if the transaction was successfully committed.
+     */
+    public function commit(int $flags = 0, ?string $name = null): bool 
     {
-        $this->db->commit();
+        return $this->db->commit($flags, $name);
     }
 
     /**
-     * Rollback a transaction to default
+     * Rolls back the current transaction or to a specific savepoint.
+     *
+     * @param int $flags Optional flags for custom handling.
+     *                   Only supported in MySQLi.
+     * @param ?string $name Optional name of the savepoint to roll back to.
+     *                    If provided in PDO, rolls back to the savepoint named.
      * 
-     * @return void 
-    */
-    public function rollback(): void 
+     * @return bool Return true if rolled back was successful, otherwise false.
+     * @throws DatabaseException Throws exception on PDO if failure to create savepoint.
+     */
+    public function rollback(int $flags = 0, ?string $name = null): bool 
     {
-        $this->db->rollback();
+        return $this->db->rollback($flags, $name);
     }
 
     /**
-     * Truncate all records in a table and alter table auto increment to 1.
+     * Truncate database table records.
      * If transaction failed rollback to default.
      * 
      * @param bool $transaction Weather to use transaction.
      * 
-     * @return bool Return true transaction was completed, otherwise false.
-     * @throws DatabaseException
+     * @return bool Return true truncation was completed, otherwise false.
+     * @throws DatabaseException Throws if an error occured during execution.
     */
     public function truncate(bool $transaction = true): bool 
     {
         try {
+            $driverName = $this->db->getDriver();
+            $transaction = ($transaction && $driverName !== 'sqlite');
+
             if ($transaction) {
                 $this->db->beginTransaction();
             }
-            $deleteSuccess = $this->db->exec("DELETE FROM {$this->tableName}");
-            $resetSuccess = $this->db->exec("ALTER TABLE {$this->tableName} AUTO_INCREMENT = 1");
+
+            if ($driverName === 'mysql' || $driverName === 'pgsql') {
+                $completed = $this->db->exec("TRUNCATE TABLE {$this->tableName}");
+            } elseif ($driverName === 'sqlite') {
+                $deleteSuccess = $this->db->exec("DELETE FROM {$this->tableName}");
+                $resetSuccess = true;
+
+                $result = $this->db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'")->getNext('array');
+                if ($result) {
+                    $resetSuccess = $this->db->exec("DELETE FROM sqlite_sequence WHERE name = '{$this->tableName}'");
+                }
+
+                $completed = $deleteSuccess && $resetSuccess;
+
+                if ($completed && !$this->db->exec("VACUUM")) {
+                    $completed = false;
+                }
+            } else {
+                $deleteSuccess = $this->db->exec("DELETE FROM {$this->tableName}");
+                $resetSuccess = $this->db->exec("ALTER TABLE {$this->tableName} AUTO_INCREMENT = 1");
+
+                $completed = $deleteSuccess && $resetSuccess;
+            }
 
             if ($transaction) {
-                if ($deleteSuccess && $resetSuccess) {
+                if ($completed) {
                     $this->db->commit();
                     return true;
                 }
@@ -1412,19 +1454,23 @@ final class Builder extends Connection
                 return false;
             }
 
-            return $deleteSuccess && $resetSuccess;
+            return (bool) $completed;
 
-        } catch (DatabaseException $e) {
-            $e->handle();
+        } catch (DatabaseException|Exception $e) {
+            if ($transaction) {
+                $this->db->rollback();
+            }
+
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
 
         return false;
     }
 
     /**
-     * Execute an SQL statement and return the number of affected rows.
+     * Execute an SQL query string and return the number of affected rows.
      * 
-     * @param string $query Query statement to execute.
+     * @param string $query Query string to execute.
      * 
      * @return int Return number affected rows.
      * @throws DatabaseException Throws if error occurs.
@@ -1433,8 +1479,8 @@ final class Builder extends Connection
     {
         try {
             return $this->db->exec($query);
-        } catch (DatabaseException $e) {
-            $e->handle();
+        } catch (DatabaseException|Exception $e) {
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
 
         return 0;
@@ -1452,45 +1498,11 @@ final class Builder extends Connection
             $return = $this->db->exec("DROP TABLE IF EXISTS {$this->tableName}");
             $this->reset();
             return $return;
-        } catch (DatabaseException $e) {
-            $e->handle();
+        } catch (DatabaseException|Exception $e) {
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
 
         return 0;
-    }
-
-    /**
-     * Create table database table if it doesn't exist.
-     * 
-     * @param Scheme|string $scheme table scheme instance or SQL query string for table creation.
-     * 
-     * @return bool Return true if table table was created successfully, false otherwise.
-    */
-    public function create(Scheme|string $scheme): bool 
-    {
-        try {
-            $query = ($scheme instanceof Scheme) ? $scheme->generate() : $scheme;
-
-            if($query === ''){
-                return false;
-            }
-
-            return $this->db->exec($query) > 0;
-        } catch (DatabaseException $e) {
-            $e->handle();
-        }
-
-        return false;
-    }
-
-    /**
-     * Initializes a database schema instance with the provided table name.
-     * 
-     * @return Scheme Return instance of the database scheme class.
-    */
-    public function scheme(): Scheme
-    {
-        return new Scheme($this->tableName);
     }
 
     /**

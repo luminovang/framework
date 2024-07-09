@@ -57,9 +57,9 @@ abstract class AppException extends Exception implements ExceptionInterface
   /**
     * {@inheritdoc}
   */
-  public static function throwException(string $message, int $code = 0, Throwable $previous = null): void
+  public static function throwException(string $message, int|string $code = 0, Throwable $previous = null): void
   {
-    (new static($message, $code, $previous))->handle();
+    (new static($message, is_int($code) ? $code : 0, $previous))->handle();
   }
 
   /**

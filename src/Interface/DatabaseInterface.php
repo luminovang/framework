@@ -28,6 +28,13 @@ interface DatabaseInterface
     public function __construct(BaseDatabase $config);
 
     /**
+     * Get database connection driver name.
+     * 
+     * @return string|null Return driver name if connection is open, otherwise null.
+     */
+    public function getDriver(): ?string;
+
+    /**
      * Checks if the database is connected.
      * 
      * @return bool True if connected, false otherwise.
@@ -112,26 +119,46 @@ interface DatabaseInterface
      */
     public function exec(string $query): int;
 
-   /**
-     * Begins a transaction.
+    /**
+     * Begins a transaction with optional read-only isolation level and savepoint.
      *
-     * @return void 
+     * @param int $flags Optional flags to set transaction properties.
+     *                  For MySQLi:
+     *                      - MYSQLI_TRANS_START_READ_ONLY: Set transaction as read-only.
+     *                  For PDO:
+     *                      - No predefined flags, specify `4` to create read-only isolation.
+     * @param ?string $name Optional name for a savepoint.
+     *                    If provided in PDO, savepoint will be created instead.
+     * 
+     * @return bool Returns true if the transaction and optional savepoint were successfully started.
+     * @throws DatabaseException Throws exception on PDO if failure to set transaction isolation level or create savepoint.
      */
-    public function beginTransaction(): void;
+    public function beginTransaction(int $flags = 0, ?string $name = null): bool;
 
     /**
      * Commits a transaction.
      *
-     * @return void 
+     * @param int $flags Optional flags for custom handling.
+     *                 Only supported in MySQLi.
+     * @param ?string $name Optional name for a savepoint.
+     *                Only supported in MySQLi.
+     * 
+     * @return bool Returns true if the transaction was successfully committed.
      */
-    public function commit(): void;
+    public function commit(int $flags = 0, ?string $name = null): bool;
 
     /**
-     * Rolls back a transaction.
+     * Rolls back the current transaction or to a specific savepoint.
      *
-     * @return void
+     * @param int $flags Optional flags for custom handling.
+     *                   Only supported in MySQLi.
+     * @param ?string $name Optional name of the savepoint to roll back to.
+     *                    If provided in PDO, rolls back to the savepoint named.
+     * 
+     * @return bool Return true if rolled back was successful, otherwise false.
+     * @throws DatabaseException Throws exception on PDO if failure to create savepoint.
      */
-    public function rollback(): void;
+    public function rollback(int $flags = 0, ?string $name = null): bool;
 
     /**
      * Returns the appropriate parameter type based on the value and type.

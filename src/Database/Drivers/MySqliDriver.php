@@ -110,6 +110,18 @@ final class MySqliDriver implements DatabaseInterface
     }
 
     /**
+     * {@inheritdoc}
+    */
+    public function getDriver(): ?string 
+    {
+        if($this->connection === null){
+            return null;
+        }
+
+        return 'mysqli';
+    }
+
+    /**
      * Initializes the database connection.
      * This method is called internally and should not be called directly.
      * 
@@ -274,26 +286,25 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function beginTransaction(): void
+    public function beginTransaction(int $flags = 0, ?string $name = null): bool
     {
-        $this->connection->begin_transaction();
+        return $this->connection->begin_transaction($flags, $name);
     }
 
     /**
      * {@inheritdoc}
     */
-    public function commit(): void 
+    public function commit(int $flags = 0, ?string $name = null): bool 
     {
-        $this->connection->commit();
-        
+        return $this->connection->commit($flags, $name);
     }
 
     /**
      * {@inheritdoc}
     */
-    public function rollback(): void 
+    public function rollback(int $flags = 0, ?string $name = null): bool 
     {
-        $this->connection->rollback();
+        return $this->connection->rollback($flags, $name);
     }
 
     /**

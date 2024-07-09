@@ -1274,3 +1274,30 @@ if (!function_exists('get_mime')) {
         return $mime;
     }
 }
+
+if (!function_exists('shared')) {
+    /**
+     * Temporarily stores and retrieves values within the same scope.
+     *
+     * @param string $key The key to identify the value.
+     * @param mixed $value The value to store (optional).
+     * @param mixed $default The default value return if key not found (default: NULL).
+     * 
+     * @return mixed Returns the value associated with the key, or default value if the key does not exist.
+     */
+    function shared(string $key, mixed $value = null, mixed $default = null): mixed 
+    {
+        static $preference = [];
+
+        if ($value !== null) {
+            $preference[$key] = $value;
+            return $value;
+        }
+
+        if(array_key_exists($key, $preference)){
+            return $preference[$key];
+        }
+
+        return $default;
+    }
+ }

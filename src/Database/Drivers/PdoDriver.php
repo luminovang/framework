@@ -86,6 +86,18 @@ final class PdoDriver implements DatabaseInterface
     }
 
     /**
+     * {@inheritdoc}
+    */
+    public function getDriver(): ?string 
+    {
+        if($this->connection === null){
+            return null;
+        }
+
+        return $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME);
+    }
+
+    /**
      * Initializes the database connection.
      * This method is called internally and should not be called directly.
      * 
@@ -102,7 +114,7 @@ final class PdoDriver implements DatabaseInterface
         $driver = strtolower($this->config->pdo_driver);
         $dns = $this->dnsConnection($driver);
 
-        if ($dns === '' || ($driver === "sqlite" && empty($this->config->sqlite_path))) {
+        if ($dns === '' || ($driver === "sqlite" && $this->config->sqlite_path === '')) {
             throw new DatabaseException("No PDO database driver found for: '{$driver}'");
         }
 
@@ -128,9 +140,9 @@ final class PdoDriver implements DatabaseInterface
     }
 
     /**
-     * Get driver dns connection
+     * Get driver dns connection.
      *
-     * @param string $context Connection driver context name 
+     * @param string $context Connection driver context name.
      * 
      * @return string
     */
@@ -141,7 +153,7 @@ final class PdoDriver implements DatabaseInterface
             'dblib' => "dblib:host={$this->config->host};dbname={$this->config->database};port={$this->config->port}",
             'oci' => "oci:dbname={$this->config->database}",
             'pgsql' => "pgsql:host={$this->config->host} port={$this->config->port} dbname={$this->config->database} user={$this->config->username} password={$this->config->password}",
-            'sqlite' => "sqlite:/{$this->config->sqlite_path}",
+            'sqlite' => "sqlite:{$this->config->sqlite_path}",
             'mysql' => $this->mysqlDns()
         ];
 
@@ -288,26 +300,66 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function beginTransaction(): void
+    public function beginTransaction(int $flags = 0, ?string $name = null): bool
     {
-        $this->connection->beginTransaction();
+        $readonly = true;
+        $savepoint = true;
+
+        if ($flags === 4) {
+            $readonly = $this->connection->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+            
+            if ($readonly === false) {
+                DatabaseException::throwException("Failed to set transaction isolation level for read-only.");
+            }
+        }
+
+        $status = $this->connection->beginTransaction();
+        if ($status === false) {
+            return false;
+        }
+
+        if ($name !== null) {
+            $name = $this->connection->quote("tnx_{$name}");
+            if ($name === false) {
+                DatabaseException::throwException("Failed to create savepoint name.");
+            }
+
+            $savepoint = $this->connection->exec("SAVEPOINT {$name}") !== false;
+            
+            if ($savepoint === false) {
+                $this->connection->rollBack(); 
+                return false;
+            }
+        }
+
+        return $status && $readonly && $savepoint;
     }
 
     /**
      * {@inheritdoc}
     */
-    public function commit(): void 
+    public function commit(int $flags = 0, ?string $name = null): bool 
     {
-        $this->connection->commit();
+        return $this->connection->commit();
         
     }
 
     /**
      * {@inheritdoc}
      */
-    public function rollback(): void 
+    public function rollback(int $flags = 0, ?string $name = null): bool 
     {
-        $this->connection->rollBack();
+        if ($name !== null) {
+            $name = $this->connection->quote("tnx_{$name}");
+
+            if ($name === false) {
+                DatabaseException::throwException("Failed to create savepoint name.");
+            }
+
+            return $this->connection->exec("ROLLBACK TO SAVEPOINT {$name}") !== false;
+        }
+
+        return $this->connection->rollBack();
     }
 
     /**

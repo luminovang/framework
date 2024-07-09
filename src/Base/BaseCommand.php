@@ -14,35 +14,40 @@ use \Luminova\Command\Terminal;
 abstract class BaseCommand extends Terminal 
 {
     /**
-     * @var string $group command group
-    */
+     * @var string $group command group.
+     */
     protected string $group = '';
 
     /**
-     * @var string $name command name
-    */
+     * @var string $name command name.
+     */
     protected string $name = '';
 
     /**
      * Use the array key for command usage and the value for description.
      * 
      * @var string|array<string|int,string> $usage command usages.
-    */
+     */
     protected string|array $usage = '';
 
     /**
-     * @var array<string|int,string> $options command options
-    */
+     * @var array<string|int,string> $options command options.
+     */
     protected array $options = [];
 
     /**
-     * @var string $description command description
-    */
+     * @var array<string|int,string> $examples show command examples.
+     */
+    protected array $examples = [];
+
+    /**
+     * @var string $description command description.
+     */
     protected string $description = '';
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function __construct()
     {
         parent::__construct();
@@ -66,13 +71,20 @@ abstract class BaseCommand extends Terminal
         return null;
     }
 
-
     /**
-     * Override the default help implementation
+     * Override the default help display implementation.
+     * Return STATUS_SUCCESS success if you implemented your own help display otherwise return STATUS_ERROR.
      *
-     * @param array $helps Helps information
+     * @param array<string,mixed> $helps Helps information about command:
+     *      - class: The class name of the command (Note: this key may not be available if you extend BaseConsole).
+     *      - group :The group name of the command.
+     *      - name: The name of the command.
+     *      - description: The description of the command.
+     *      - usages: The usages of the command.
+     *      - options: The available options for the command.
+     *      - examples: The examples of the command.
      * 
-     * @return int return STATUS_SUCCESS if you implemented your own help else return STATUS_ERROR.
+     * @return int Return status code.
     */
     abstract public function help(array $helps): int;
 
@@ -89,7 +101,7 @@ abstract class BaseCommand extends Terminal
         return $this->{$key} ?? null;
     }
     
-     /**
+    /**
      * Check if property is set
      *
      * @param string $key property key

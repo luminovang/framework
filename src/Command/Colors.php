@@ -89,6 +89,46 @@ final class Colors
         return "\033[{$formatCode};{$colorCode}m{$text}\033[0m";
     }
 
+    /**
+     * Returns the length of formatting and colors to apply to text.
+     *
+     * @param int|null $format Optionally apply text formatting (ex: TextUtils::ANSI_BOLD).
+     * @param string|null $foreground Foreground color name
+     * @param string|null $background Optional background color name
+     *
+     * @return int Return length of ansi formatting.
+     */
+    public static function length(?int $format = null, ?string $foreground = null, ?string $background = null): int
+    {
+        $formatCode = ($format === null) ? 0 : strlen(TextUtils::style('T', $format, false)) - 1;
+
+        if (!static::isValidColor($foreground, static::$foregroundColors)) {
+            return strlen("\033[m\033[0m") + $formatCode;
+        }
+
+        if ($background !== null && !static::isValidColor($background, static::$backgroundColors)) {
+            return strlen("\033[m\033[0m") + $formatCode;
+        }
+
+        $colorCode = static::$foregroundColors[$foreground];
+        if ($background !== null) {
+            $colorCode .= ';' . static::$backgroundColors[$background];
+        }
+
+        return strlen("\033[{$colorCode}m\033[0m") + $formatCode;
+    }
+
+    /**
+     * Returns the length of the text excluding any ANSI color codes.
+     *
+     * @param string $text The text to measure.
+     *
+     * @return int The length of the text excluding ANSI color codes.
+     */
+    public static function textLength(string $text): int
+    {
+        return strlen(preg_replace('/\033\[[^m]*m/', '', $text));
+    }
 
     /**
      * Check if color name exist

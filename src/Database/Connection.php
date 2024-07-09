@@ -222,7 +222,7 @@ class Connection
       foreach ($servers as $config) {
         try {
           $connection = static::newInstance(self::newConfig($config));
-        } catch (DatabaseException | Exception $e) {
+        } catch (DatabaseException|Exception $e) {
           logger('error', 'Failed to connect to backup database: ' . $e->getMessage(), [
             'host' => $config['host'],
             'port' => $config['port'],
@@ -249,7 +249,7 @@ class Connection
     for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
       try {
           $connection = static::newInstance();
-      } catch (DatabaseException | Exception $e) {
+      } catch (DatabaseException|Exception $e) {
         logger('error', 'Attempt (' . $attempt . '), failed to connect to database: ' . $e->getMessage());
       }
 
@@ -318,7 +318,7 @@ class Connection
   {
     $var = (PRODUCTION ? 'database' : 'database.development');
     $sqlite = env("{$var}.sqlite.path", '');
-    $sqlite = ($sqlite !== '') ? APP_ROOT . DIRECTORY_SEPARATOR . trim($sqlite, DIRECTORY_SEPARATOR) : null;
+    $sqlite = ($sqlite !== '') ? APP_ROOT . trim($sqlite, DIRECTORY_SEPARATOR) : null;
  
     return self::newConfig([
       'port' => env('database.port'),

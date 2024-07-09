@@ -197,10 +197,11 @@ class FileManager
      * Convert permission string to Unix integer permission.
      * 
      * @param string $permission The permission string (e.g., 'rw-r--r--').
+     * @param bool $decimal Weather to return permission as decimal or formatted octal string.
      * 
-     * @return int|null The Unix integer permission, or null if the conversion failed.
+     * @return string|int|null The Unix integer permission, or null if the conversion failed.
      */
-    public static function toUnixPermission(string $permission): ?int
+    public static function toUnixPermission(string $permission, bool $decimal = false): string|int|null
     {
         $permissions = [
             'r' => 4,
@@ -209,21 +210,31 @@ class FileManager
             '-' => 0,
         ];
 
-        $unixPermission = 0;
-
         if (strlen($permission) !== 9) {
             return null;
         }
 
-        for ($i = 0; $i < 9; $i++) {
-            $char = $permission[$i];
-            if (!isset($permissions[$char])) {
-                return null; 
-            }
-            $unixPermission += $permissions[$char] << (8 - $i);
+        $owner = 0;
+        $group = 0;
+        $others = 0;
+
+        for ($i = 0; $i < 3; $i++) {
+            $owner += $permissions[$permission[$i]];
+        }
+        for ($i = 3; $i < 6; $i++) {
+            $group += $permissions[$permission[$i]];
+        }
+        for ($i = 6; $i < 9; $i++) {
+            $others += $permissions[$permission[$i]];
         }
 
-        return $unixPermission;
+        $unixPermission = ($owner << 6) + ($group << 3) + $others;
+
+        if($decimal){
+            return $unixPermission;
+        }
+
+        return sprintf("%04o", $unixPermission);
     }
 
     /**

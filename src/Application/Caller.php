@@ -10,31 +10,40 @@
 namespace Luminova\Application;
 
 use \Luminova\Exceptions\RuntimeException;
+use \RecursiveIteratorIterator;
+use \RecursiveDirectoryIterator;
 use \ReflectionClass;
 use \ReflectionException;
 use \ReflectionMethod;
 
 final class Caller 
 {
-      /**
+    /**
      * Get all classes that extends a base class 
      * 
-     * @param class-string $baseClass The base class to check 
+     * @param class-string $baseClass The base class to check.
+     * @param string $directory The directory of the extending classes.
      * 
-     * @return array Return array of classes that extend the base class.
+     * @return array<int,string> Return array of classes that extend the base class.
     */
-    public static function extenders(string $baseClass): array 
+    public static function extenders(string $baseClass, string $directory): array 
     {
-        $subClasses = [];
-        $allClasses = get_declared_classes();
+        $classes = [];
+        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory));
 
-        foreach ($allClasses as $name) {
-            if (is_subclass_of($name, $baseClass)) {
-                $subClasses[] = $name;
+        foreach ($files as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php') {
+                require_once $file->getRealPath();
             }
         }
 
-        return $subClasses;
+        foreach (get_declared_classes() as $class) {
+            if (is_subclass_of($class, $baseClass)) {
+                $classes[] = $class;
+            }
+        }
+
+        return $classes;
     }
     
     /**

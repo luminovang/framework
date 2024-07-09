@@ -58,9 +58,9 @@ class Server extends BaseConsole
     {
         $this->explain($params);
    
-        $php = escapeshellarg($this->getOption('php', PHP_BINARY));
-        $host = $this->getOption('host', 'localhost');
-        $port = (int) $this->getOption('port', 8080) + $this->offset;
+        $php = escapeshellarg($this->getAnyOption('php', 'b', PHP_BINARY));
+        $host = $this->getAnyOption('host', 'h', 'localhost');
+        $port = (int) $this->getAnyOption('port', 'p', 8080) + $this->offset;
         $root = escapeshellarg(FRONT_CONTROLLER);
 
         $this->header();

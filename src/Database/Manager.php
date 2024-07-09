@@ -114,7 +114,7 @@ final class Manager
     }
 
     /**
-     * Backup database 
+     * Backup database.
      * 
      * @param string $filename Filename to store backup as.
      * 

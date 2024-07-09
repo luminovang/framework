@@ -9,10 +9,11 @@
  */
 namespace Luminova\Command;
 
+use \Luminova\Base\BaseConsole;
 use \Luminova\Command\Terminal;
 use \Luminova\Application\Foundation;
 use \Luminova\Command\Novakit\Server;
-use \Luminova\Command\Novakit\Help;
+use \Luminova\Command\Novakit\SystemHelp;
 use \Luminova\Command\Novakit\Lists;
 use \Luminova\Command\Novakit\Database;
 use \Luminova\Command\Novakit\Generators;
@@ -54,10 +55,10 @@ final class Console
         self::$instance::explain($commands);
         $command = self::$instance::getCommand();
 
-        if('--version' === $command){
-            self::$instance::header();
+        if('--version' === $command || '--v' === $command){
             self::$instance::writeln('Novakit Command Line Tool');
-            self::$instance::writeln(sprintf('Version: %s', Foundation::NOVAKIT_VERSION), 'green');
+            self::$instance::writeln(sprintf('Framework Version: %s', Foundation::VERSION), 'green');
+            self::$instance::writeln(sprintf('Novakit Version: %s', Foundation::NOVAKIT_VERSION), 'green');
 
             exit(STATUS_SUCCESS);
         }
@@ -81,12 +82,14 @@ final class Console
     public static function execute(Terminal $terminal, array $options): int
     {
         $command = trim($terminal::getCommand());
-
-        $newCommand = (string) match($command){
-            '-help', '--help' => Help::class,
+        /**
+         * @var class-string<BaseConsole> $newCommand
+        */
+        $newCommand = match($command){
+            '-h', '--help' => SystemHelp::class,
             'create:controller','create:view','create:class', 'create:model', => Generators::class,
             'list' => Lists::class,
-            'db:create','db:update','db:insert','db:delete','db:drop','db:truncate','db:select' => Database::class,
+            'db:drop','db:truncate','db:seed','db:migrate', 'db:alter', 'db:clear' => Database::class,
             'server', 'serve' => Server::class,
             'generate:key','generate:sitemap','env:add','env:remove' => System::class,
             'build:project' => Builder::class,
@@ -98,6 +101,20 @@ final class Console
         if ($newCommand === '') {
             return $terminal::oops($command);
         } 
+
+        if($terminal::isHelp($options['options'])){
+            $info = self::getCommand($command);
+            
+            if(!array_key_exists('no-header', $options['options'])){
+                $terminal::header();
+            }
+
+            if((new $newCommand())->help($info) === STATUS_ERROR){
+                $terminal->helper($info);
+            }
+
+            return STATUS_SUCCESS;
+        }
 
         return (int) (new $newCommand())->run($options);
     }

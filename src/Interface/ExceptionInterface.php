@@ -13,11 +13,11 @@ use \Throwable;
 
 interface ExceptionInterface extends Throwable
 {
-    /***
+    /**
      * Constructor for BaseException.
      *
-     * @param string message   The exception message (default: 'Database error').
-     * @param int $code  The exception code (default: 500).
+     * @param string message  The exception error message.
+     * @param int $code  The exception code (default: 0).
      * @param Throwable $previous  The previous exception if applicable (default: null).
     */
     public function __construct(string $message, int $code = 0, Throwable $previous = null);
@@ -49,12 +49,12 @@ interface ExceptionInterface extends Throwable
     /**
      * Create and handle a exception gracefully.
      *
-     * @param string $message he exception message.
-     * @param int $code The exception code (default: 500).
+     * @param string $message The exception message.
+     * @param int|string $code The exception code (default: 0).
      * @param Throwable $previous  The previous exception if applicable (default: null).
      * 
      * @return void 
-     * @throws static Exception
+     * @throws static Throws the exception from the called class. 
     */
-    public static function throwException(string $message, int $code = 0, Throwable $previous = null): void;
+    public static function throwException(string $message, int|string $code = 0, Throwable $previous = null): void;
 }

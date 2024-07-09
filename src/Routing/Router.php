@@ -756,6 +756,7 @@ final class Router
         $group = self::getArgument();
 
         if(self::$term->isHelp($group)){
+            self::$term->header();
             self::$term->helper(null, true);
             return STATUS_SUCCESS;
         }
@@ -1189,10 +1190,16 @@ final class Router
             'name' => $instance->name,
             'description' => $instance->description,
             'usages' => $instance->usages,
-            'options' => $instance->options
+            'options' => $instance->options,
+            'examples' => $instance->examples,
         ];
 
         if(self::$term->isHelp($arguments['command'])){
+            
+            if(!array_key_exists('no-header', $arguments['options'])){
+                self::$term->header();
+            }
+
             if($instance->help($arguments[$id]) === STATUS_ERROR){
                 self::$term->helper($arguments[$id]);
             }

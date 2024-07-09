@@ -25,50 +25,42 @@ class Terminal
      *
      * @var int|null $height
     */
-    protected static $height;
+    protected static ?int $height = null;
 
     /**
      * Width of terminal visible window
      *
      * @var int|null $width
     */
-    protected static $width;
+    protected static ?int $width = null;
 
     /**
-     * Is the readline library on the system?
+     * Is the readline library on the system.
      *
-     * @var bool
+     * @var bool $isReadline
      */
-    public static $isReadline = false;
+    public static bool $isReadline = false;
 
     /**
-     * Prompt message display 
-     *
-     * @var string $waitMessage
-     */
-    private static $waitMessage = 'Press any key to continue...';
-
-    /**
-     * Write in a new line enabled
+     * Write in a new line enabled.
      *
      * @var bool $isNewline
     */
-    protected static $isNewline = false;
+    protected static bool $isNewline = false;
 
     /**
-     * Is colored text supported
+     * Is colored text supported.
      *
      * @var bool $isColored
     */
-    protected static $isColored = false;
+    protected static bool $isColored = false;
 
     /**
-     * Passed command line arguments
-     * And infos about command
+     * Passed command line arguments and infos about command.
      *
      * @var array $commandsOptions
     */
-    protected static $commandsOptions = [];
+    protected static array $commandsOptions = [];
 
     /**
      * Initialize command line instance before running any commands.
@@ -85,25 +77,30 @@ class Terminal
     }
 
     /**
-     * Show a waiting countdown, intentionally freeze screen while waiting
+     * Show a waiting countdown, intentionally freeze screen while waiting.
      * Or ask user for a key press to continue.
-     * 
-     * Examples
-     * 
-     * @example $this->waiting(20, true); show waiting for 20 seconds with countdown message
-     * @example $this->waiting(0, false); show waiting message till user press any key
-     * @example $this->waiting(20, false); show waiting for 20 seconds with a freezed screen
      *
-     * @param int  $seconds Number of seconds for waiting
-     * @param bool $countdown Show waiting countdown
+     * @param int  $seconds Number of seconds for waiting.
+     * @param bool $countdown Show waiting countdown.
+     * @param string $message Waiting message instruction.
      *
      * @return void
+     * 
+     * Examples:
+     * 
+     * @example $this->waiting(20, true); show waiting for 20 seconds with countdown message.
+     * @example $this->waiting(0, false); show waiting message till user press any key.
+     * @example $this->waiting(20, false); show waiting for 20 seconds with a freezed screen.
      */
-    protected static final function waiting(int $seconds, bool $countdown = false): void
+    protected static final function waiting(
+        int $seconds, 
+        bool $countdown = false, 
+        string $message = 'Press any key to continue...'
+    ): void
     {
         if ($seconds <= 0) {
             if (!$countdown) {
-                static::writeln(self::$waitMessage);
+                static::writeln($message);
                 static::input();
             }
             return;
@@ -123,20 +120,18 @@ class Terminal
     }
 
     /**
-     * Displays a progress bar on the CLI.
-     * Progress should be called in a loop
-     * Or use watcher()
-     * 
-     * Examples 
-     * 
-     * @example $this->progress(1, 10, true); Show progress bar line with beep when completed
-     * @example $this->progress(1, 10, false); Show progress bar line without beep when completed
+     * Displays a progress bar on the CLI, this method should be called in a loop.
      *
-     * @param int|bool $progressLine Current loop index number or false to terminate the progress bar
-     * @param int|null $progressCount Total count of progress bar to show or null to on termination
-     * @param bool $beep Beep when progress is completed, default is true
+     * @param int|bool $progressLine Current loop index number or false to terminate the progress bar.
+     * @param int|null $progressCount Total count of progress bar to show or null to on termination.
+     * @param bool $beep Weather to beep when progress is completed (default: true).
      *
-     * @return float|int
+     * @return float|int Return the progress step percentage.
+     * 
+     * Examples:
+     * 
+     * @example $this->progress(1, 10, true); Show progress bar line with beep when completed.
+     * @example $this->progress(1, 10, false); Show progress bar line without beep when completed.
     */
     protected static final function progress(int|bool $progressLine = 1, ?int $progressCount = 10, bool $beep = true): int|float
     {
@@ -147,21 +142,13 @@ class Terminal
             return 100;
         }
 
-        // Avoid division by zero or negative numbers
         $progressLine = max(0, $progressLine);
         $progressCount = max(1, $progressCount);
-
-        // Calculate the progress bar width
         $percent = min(100, max(0, ($progressLine / $progressCount) * 100));
         $barWidth = (int) round($percent / 10);
-
-        // Create the progress bar
         $progressBar = '[' . str_repeat('#', $barWidth) . str_repeat('.', 10 - $barWidth) . ']';
-
-        // Textual representation
         $progressText = sprintf(' %3d%% Complete', $percent);
 
-        // Write the progress bar and text
         static::fwrite("\033[32m" . $progressBar . "\033[0m" . $progressText . PHP_EOL);
 
         if ($progressLine <= $progressCount) {
@@ -172,24 +159,28 @@ class Terminal
     }
 
     /**
-     * Displays a progress bar on the CLI with a callback functions
-     * Progress shouldn't be called in a loop
-     * You can pass your function to execute in $stepCallback callback function
-     * This is useful when you just want to display a progress bar 
-     * and execute next method when it finished
+     * Displays a progress bar on the CLI with an optional callback functions.
+     * This method shouldn't be called in a loop, pass your function to execute in `$stepCallback` Closure function.
+     * 
+     * This is useful when you just want to display a progress bar and execute next method when it finish counting.
      *
-     * Examples 
-     * 
-     * @example $this->watcher(100, Closure, Closure, true) Show 100 lines of progress bar with a callbacks and beep on finish
-     * 
      * @param int $limit Total count of progress bar to show.
      * @param Closure|null $onFinish(): void Execute callback when progress finished.
      * @param Closure|null $onProgress(int $progress):void Execute callback on each progress step.
-     * @param bool $beep Beep when progress is completed, default is true.
+     * @param bool $beep Weather to beep when progress is completed (default: true).
      *
      * @return void
+     * 
+     * Examples:
+     * 
+     * @example $this->watcher(100, Closure, Closure, true) Show 100 lines of progress bar with a callbacks and beep on finish.
     */
-    protected static final function watcher(int $limit, ?Closure $onFinish = null, ?Closure $onProgress = null, bool $beep = true): void 
+    protected static final function watcher(
+        int $limit, 
+        ?Closure $onFinish = null, 
+        ?Closure $onProgress = null, 
+        bool $beep = true
+    ): void 
     {
         $progress = 0;
     
@@ -215,37 +206,35 @@ class Terminal
     }
   
     /**
-     * Beeps a certain number of times.
-     *
-     * Usages
-     * @example $this->beeps(1) Beep once 
+     * Beep or make a bell sound for a certain number of time.
      * 
-     * @param int $num The number of times to beep
+     * @param int $total The total number of time to beep.
      *
      * @return void
     */
-    protected static final function beeps(int $num = 1): void
+    public static final function beeps(int $total = 1): void
     {
-        echo str_repeat("\x07", $num);
+        echo str_repeat("\x07", $total);
     }
 
     /**
-     * Prompt for user for to input a text, pass options as an array ["YES", "NO"].
-     * Optionally, you can make a colored options by use the array key for color name ["green" => "YES","red" => "NO"]
+     * Prompt user to type something, optionally pass an array of options for user to enter any.
+     * Optionally, you can make a colored options by using the array key for color name ["green" => "YES","red" => "NO"].
      *
+     *
+     * @param string $message The message to prompt.
+     * @param array $options  Optional array options to prompt for selection.
+     * @param string|null $validations Optional validation rules to ensure only the listed options are allowed.
+     * @param bool $silent Weather to print validation failure message if wrong option was selected (default: false).
+     *
+     * @return string Return user input value.
+     * 
      * Examples
      *
-     * @example $name = $this->prompt('What is your name?'); Prompt user to enter their name
-     * @example $color = $this->prompt('Are you sure you want to continue?', ["green" => "YES","red" => "NO"]); Prompt user to choose any option and specify each option color in array key
-     * @example $color = $this->prompt('What is your gender?', ['male','female']); Prompt user to select their gender, no colored text will be used
-     * @example $email = $this->prompt('Are you sure you want to continue?', ["YES", "NO], 'required|in_array(YES,NO)'); Prompt user to choose any option and pass a validation
-     *
-     * @param string $message Prompt message.
-     * @param array $options  Options to prompt selection, 
-     * @param string|null $validations Validation rules.
-     * @param bool $silent Print validation failure message parameter is true (default: false).
-     *
-     * @return string Return The user input.
+     * @example $name = $this->prompt('What is your name?'); Prompt user to enter their name.
+     * @example $color = $this->prompt('Are you sure you want to continue?', ["green" => "YES","red" => "NO"]); Prompt user to choose any option and specify each option color in array key.
+     * @example $color = $this->prompt('What is your gender?', ['male','female']); Prompt user to select their gender, no colored text will be used.
+     * @example $email = $this->prompt('Are you sure you want to continue?', ["YES", "NO], 'required|in_array(YES,NO)'); Prompt user to choose any option and pass a validation.
     */
     protected static final function prompt(string $message, array $options = [], ?string $validations = null, bool $silent = false): string
     {
@@ -274,7 +263,7 @@ class Terminal
         do {
             if(!$silent){
                 if (isset($input)) {
-                    static::fwrite("Input validation failed. ");
+                    static::fwrite('Input validation failed. ');
                 }
                 static::fwrite($message . ' ' . $placeholder . ': ');
             }
@@ -286,22 +275,22 @@ class Terminal
     }
 
     /**
-     * Prompt multi choice selection
+     * Prompt user with multiple selection options.
      * Display array index key as the option identifier to select.
-     * If you use associative array users will still see index key instead
+     * If you use associative array users will still see index key instead.
+     *
+     *
+     * @param string $text  Display text description for your multiple options.
+     * @param array  $options A list of options ['male' => 'Male', 'female' => 'Female] or ['male', 'female'].
+     * @param bool $required Require user to choose any option else the first array will be return as default.
+     *
+     * @return array<string|int,mixed> $options The selected array keys and values.
+     * @throws InvalidArgumentException Throw if options is an empty array.
      * 
-     * Examples
+     * Examples:
      *
      * @example $array = $this->chooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML']); Prompt multiple chooser, using PHP as default if user didn't select anything before hit return.
-     * @example $array = $this->chooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML'], true); Prompt multiple chooser, persisting that user must choose an option
-     *
-     *
-     * @param string $text  Display text description for your multiple options
-     * @param array  $options A list of options ['male' => 'Male', 'female' => 'Female] or ['male', 'female']
-     * @param bool $required Require user to choose any option else the first array will be return as default
-     *
-     * @return array<string|int, mixed> $options The selected array keys and values
-     * @throws InvalidArgumentException
+     * @example $array = $this->chooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML'], true); Prompt multiple chooser, persisting that user must choose an option.
     */
     protected static final function chooser(string $text, array $options, bool $required = false): array
     {
@@ -354,7 +343,7 @@ class Terminal
      * 
      * @param string $command The command to execute.
      * 
-     * @return array|int The output of the command as an array of lines, or false on failure
+     * @return array|int The output of the command as an array of lines, or false on failure.
      */
     public final function execute(string $command): array|int
     {
@@ -368,13 +357,12 @@ class Terminal
     }
 
     /**
-     * Return user selected options
-     * Get Input Array Values
+     * Get user multiple selected options from input.
      * 
-     * @param array $input user input as array.
-     * @param array $options options .
+     * @param array $input The user input array.
+     * @param array $options The prompted options.
      * 
-     * @return array<string|int,mixed> $options The selected array keys and values
+     * @return array<string|int,mixed> $options The selected array keys and values.
     */
     private static function getInputValues(array $input, array $options): array
     {
@@ -384,14 +372,15 @@ class Terminal
                 $result[$options[$value]['key']] = $options[$value]['value'];
             }
         }
+
         return $result;
     }
 
     /**
-     * Display select options with key index as an identifier
+     * Display select options with key index as an identifier.
      * 
-     * @param array<string,mixed> $options options.
-     * @param int $max Paddend end max.
+     * @param array<string,mixed> $options The options to display.
+     * @param int $max The maximum padding end to apply.
      * 
      * @return void 
     */
@@ -405,23 +394,23 @@ class Terminal
     }
 
     /**
-     * Wrap it with padding left and width to a maximum
-
-     * @param string|null $string string to write
-     * @param int $max maximum width
-     * @param int $leftPadding left padding
+     * Wrap a text with padding left and width to a maximum number.
      * 
-     * @return string $lines
+     * @param string|null $text The text to wrap.
+     * @param int $max The maximum width to use.
+     * @param int $leftPadding The left padding to apply.
+     * 
+     * @return string Return wrapped text with padding left and width.
     */
-    public static final function wrap(?string $string = null, int $max = 0, int $leftPadding = 0): string
+    public static final function wrap(?string $text = null, int $max = 0, int $leftPadding = 0): string
     {
-        if (empty($string)) {
+        if ($text === null || $text === '') {
             return '';
         }
         $max = min($max, static::getWidth());
         $max -= $leftPadding;
 
-        $lines = wordwrap($string, $max, PHP_EOL);
+        $lines = wordwrap($text, $max, PHP_EOL);
 
         if ($leftPadding > 0) {
             $lines = preg_replace('/^/m', str_repeat(' ', $leftPadding), $lines);
@@ -431,10 +420,10 @@ class Terminal
     }
 
     /**
-     * Create a card text.
+     * Generate a card like with text centered within the card.
      *
-     * @param string $text string to pad
-     * @param int|null $padding maximum padding
+     * @param string $text The text display in card.
+     * @param int|null $padding Optional maximum padding to use.
      * 
      * @return string Return beautiful card text.
     */
@@ -462,7 +451,7 @@ class Terminal
     /**
      * Attempts to determine the width of the viewable CLI window.
      * 
-     * @param int $default Optional default width (default: 80)
+     * @param int $default Optional default width (default: 80).
      * 
      * @return int Return terminal window width or default.
     */
@@ -478,7 +467,7 @@ class Terminal
     /**
      * Attempts to determine the height of the viewable CLI window.
      * 
-     * @param int $default Optional default height (default: 24)
+     * @param int $default Optional default height (default: 24).
      * 
      * @return int Return terminal window height or default.
     */
@@ -522,9 +511,9 @@ class Terminal
     /**
      * Get user input from the shell, after requesting for user to type or select an option.
      *
-     * @param string|null $prompt You may specify a string to prompt the user after they have typed.
+     * @param string|null $prompt Optional message to prompt the user after they have typed.
      * 
-     * @return string User input string.
+     * @return string Return user input string.
     */
     protected static final function input(?string $prompt = null): string
     {
@@ -532,16 +521,20 @@ class Terminal
             return @readline($prompt);
         }
 
-        echo $prompt;
+        if($prompt !== null){
+            echo $prompt;
+        }
 
         return fgets(fopen('php://stdin', 'rb'));
     }
 
     /**
-     * Input validation on prompts
+     * Command user input validation on prompts.
      *
-     * @param string $value Input value
-     * @param array $rules Validation rules
+     * @param string $value The user input value.
+     * @param array $rules The validation rules.
+     * 
+     * @return bool Return true if validation succeeded, false if validation failed.
     */
     protected static final function validate(string $value, array $rules): bool
     {
@@ -561,11 +554,11 @@ class Terminal
     }
 
     /**
-     * Display error text on CLI 
+     * Display error text on CLI .
      *
-     * @param string $text Error message
-     * @param string|null $foreground Foreground color name
-     * @param string|null $background Optional background color name
+     * @param string $text The text to output.
+     * @param string|null $foreground Foreground color name.
+     * @param string|null $background Optional background color name.
      * 
      * @return void
     */
@@ -584,11 +577,11 @@ class Terminal
     }
 
     /**
-     * Display success text on CLI 
+     * Display success text on CLI.
      *
-     * @param string $text Error message
-     * @param string|null $foreground Foreground color name
-     * @param string|null $background Optional background color name
+     * @param string $text The text to output.
+     * @param string|null $foreground Foreground color name.
+     * @param string|null $background Optional background color name.
      * 
      * @return void
     */
@@ -609,9 +602,9 @@ class Terminal
     /**
      * Print text to CLI with newline.
      * 
-     * @param string $text Text to display
-     * @param string|null $foreground Optional foreground color name
-     * @param string|null $background Optional background color name
+     * @param string $text The text to write.
+     * @param string|null $foreground Optional foreground color name.
+     * @param string|null $background Optional background color name.
      *
      * @return void
     */
@@ -632,9 +625,9 @@ class Terminal
     /**
      * Print text to CLI without a newline.
      * 
-     * @param string $text Text to display
-     * @param string|null $foreground Optional foreground color name
-     * @param string|null $background Optional background color name
+     * @param string $text The text to write.
+     * @param string|null $foreground Optional foreground color name.
+     * @param string|null $background Optional background color name.
      *
      * @return void
     */
@@ -650,11 +643,11 @@ class Terminal
     }
 
     /**
-     * Echo / output a message to CLI
+     * Print a message to CLI using echo.
      *
-     * @param string $text string to output
-     * @param string|null $foreground Optional foreground color name
-     * @param string|null $background Optional background color name
+     * @param string $text The text to print.
+     * @param string|null $foreground Optional foreground color name.
+     * @param string|null $background Optional background color name.
      *
      * @return void
     */
@@ -668,14 +661,14 @@ class Terminal
     }
 
     /**
-     * Write text to resource handler or output text if not in cli mode
+     * Write text to resource handler or output text if not in cli mode.
      *
-     * @param string $text string to output or write
-     * @param resource $handle resource handler
+     * @param string $text The text to output or write.
+     * @param resource $handle The resource handler to use (e.g. STDOUT, STDIN, STDERR).
      *
      * @return void
     */
-    protected static final function fwrite(string $text, $handle = STDOUT): void
+    protected static final function fwrite(string $text, mixed $handle = STDOUT): void
     {
         if (!is_command()) {
             echo $text;
@@ -686,7 +679,7 @@ class Terminal
     }
 
     /**
-     * Clears the screen of output
+     * Clears the screen of output.
      *
      * @return void
     */
@@ -698,7 +691,7 @@ class Terminal
     }
 
     /**
-     * Clears cli output to update new text
+     * Clears cli output to update new text.
      *
      * @return void
     */
@@ -708,17 +701,21 @@ class Terminal
     }
 
     /**
-     * Returns the given text with the correct color codes for a foreground and
-     * optionally a background color.
+     * Returns the given text with the correct color codes for a foreground and optionally a background color.
      *
-     * @param string $text Text to color
-     * @param string|null $foreground Foreground color name
-     * @param string|null $background Optional background color name
-     * @param int|null $format Optionally apply text formatting.
+     * @param string $text The text to apply color to.
+     * @param string|null $foreground The foreground color name.
+     * @param string|null $background Optional background color name.
+     * @param int|null $format Optionally apply text formatting style.
      *
      * @return string A colored text if color is supported
     */
-    public static final function color(string $text, string|null $foreground, ?string $background = null, ?int $format = null): string
+    public static final function color(
+        string $text, 
+        string|null $foreground, 
+        ?string $background = null, 
+        ?int $format = null
+    ): string
     {
         if (!static::$isColored) {
             return $text;
@@ -728,9 +725,9 @@ class Terminal
     }
 
     /**
-     * Create a new line 
+     * Create and print new lines based on count passed.
      *
-     * @param int $count Count of new lines to create
+     * @param int $count The count of new lines to print.
      * 
      * @return void 
     */
@@ -742,12 +739,12 @@ class Terminal
     }
 
     /**
-     * Oops! Show an error message for unknow command.
+     * Oops! Show an error message for unknown command.
      *
      * @param string $command The executed command.
      * @param string|null $color Text color for the command.
      * 
-     * @return int Return status code for.
+     * @return int Return status code STATUS_ERROR.
     */
     public static function oops(string $command, string|null $color = 'red'): int 
     {
@@ -757,13 +754,71 @@ class Terminal
     }
 
     /**
-     * Checks whether the current stream resource supports or
-     * refers to a valid terminal type device.
+     * Prints a formatted table header and rows to the console.
      *
-     * @param string $function Function name to check
-     * @param resource|string $resource Resource to handle STDIN/STDOUT
+     * @param array<int,string> $headers The headers for the table columns.
+     * @param array<string,string> $rows The rows of data to display in the table.
+     * @param string|null $headerColor The table heading columns text color.
+     * @param int $headerPadding Optional table heading columns padding.
      * 
-     * @return bool if the stream resource is supported
+     * @return void
+     */
+    public static function table(
+        array $headers, 
+        array $rows, 
+        ?string $headerColor = null, 
+        int $headerPadding = 1
+    ): void
+    {
+        $border = '+';
+        $colorLength = 0;
+
+        if($headerColor !== null){
+            $colorLength = Colors::length(null, $headerColor, null) + $headerPadding;
+        }
+
+        $columnWidths = array_map(function($header) use ($rows) {
+            $columnValues = array_column($rows, $header);
+            $maxValueLength = max(array_map('strlen', $columnValues));
+            return max(strlen($header), $maxValueLength);
+        }, $headers);
+
+        foreach ($columnWidths as $width) {
+            $border .= str_repeat('-', $width + 2) . '+';
+        }
+
+        echo $border . PHP_EOL;
+
+        $headerRow = '|';
+        foreach ($headers as $i => $header) {
+            if($headerColor === null){
+                $headerRow .= ' ' . str_pad($header, $columnWidths[$i]) . ' |';
+            }else{
+                $headerRow .= ' ' . str_pad(self::color($header, $headerColor), $columnWidths[$i] + $colorLength) . ' |';
+            }
+
+        }
+        echo $headerRow . PHP_EOL;
+        echo $border . PHP_EOL;
+
+        foreach ($rows as $row) {
+            $rowString = '|';
+            foreach ($headers as $i => $header) {
+                $rowString .= ' ' . str_pad($row[$header], $columnWidths[$i]) . ' |';
+            }
+            echo $rowString . PHP_EOL;
+        }
+
+        echo $border . PHP_EOL;
+    }
+
+    /**
+     * Checks whether the current stream resource supports or refers to a valid terminal type device.
+     *
+     * @param string $function Function name to check.
+     * @param resource|string $resource Resource to handle (e.g. STDIN, STDOUT).
+     * 
+     * @return bool Return true if stream resource is supported, otherwise false.
     */
     public static final function streamSupports(string $function, mixed $resource): bool
     {
@@ -775,10 +830,9 @@ class Terminal
     }
 
     /**
-     * Register command line queries to static::$options 
-     * To make available using getOptions() etc
+     * Register command line queries to make it available using getOptions() etc.
      * 
-     * @param array $values arguments 
+     * @param array $values The command arguments.
      * 
      * @return void
      * @internal
@@ -789,11 +843,11 @@ class Terminal
     }
 
     /**
-     * Parse command line queries to static::$options
+     * Parse command line queries.
      * 
-     * @param array $arguments arguments $_SERVER['argv']
+     * @param array $arguments The command arguments from $_SERVER['argv'].
      * 
-     * @return array<string, mixed>
+     * @return array<string,mixed> Return parsed command arguments and options.
      * @internal Pass raw command arguments from $_SERVER['argv'].
     */
     public static final function parseCommands(array $arguments, bool $controller = false): array
@@ -848,9 +902,9 @@ class Terminal
      * Extract and process command line arguments.
      * 
      * @param array $arguments Command line arguments
-     * @param bool $controller is the controller command?
+     * @param bool $controller is the controller command?.
      * 
-     * @return array<string,array>
+     * @return array<string,array> Return extracted command line arguments and options.
      * @internal
     */
     public static final function extract(array $arguments, $controller = false): array
@@ -894,11 +948,11 @@ class Terminal
     }
 
     /**
-     * Get command argument by index number
+     * Get command argument by index number.
      * 
-     * @param int $index Index position
+     * @param int $index The index position to get.
      * 
-     * @return mixed
+     * @return mixed Return command argument by index number.
     */
     public static final function getArgument(int $index): mixed
     {
@@ -910,9 +964,9 @@ class Terminal
     }
 
     /**
-     * Get command arguments
+     * Get command arguments.
      * 
-     * @return array
+     * @return array Return command arguments.
     */
     public static final function getArguments(): array
     {
@@ -920,9 +974,9 @@ class Terminal
     }
 
     /**
-     * Get command name
+     * Get command name.
      * 
-     * @return string|null
+     * @return string|null Return the command name.
     */
     public static final function getCommand(): ?string
     {
@@ -931,9 +985,8 @@ class Terminal
 
     /**
      * Get command caller command string.
-     * The full passed command, options and arguments 
      * 
-     * @return string|null
+     * @return string|null Return the full passed command, options and arguments.
     */
     public static final function getCaller(): ?string
     {
@@ -942,12 +995,12 @@ class Terminal
 
     /**
      * Get options value from command arguments.
-     * If option flag is passed with an empty value true will be return else default or false
+     * If option key is passed with an empty value true will be return otherwise the default value.
      * 
-     * @param string $key Option key to retrieve
-     * @param mixed $default Default value to return (default: false)
+     * @param string $key Option key to retrieve.
+     * @param mixed $default Default value to return (default: false).
      * 
-     * @return mixed Option ot default value.
+     * @return mixed Return option value, true if empty value, otherwise default value.
      */
     public static final function getOption(string $key, mixed $default = false): mixed
     {
@@ -961,9 +1014,34 @@ class Terminal
     }
 
     /**
+     * Get options value from command arguments with an alias key to lookup if main key isn't found.
+     * If option key is passed with an empty value true will be return otherwise the default value.
+     * 
+     * @param string $key Option key to retrieve.
+     * @param string $alias Option key alias to retrieve. if main key is not found.
+     * @param mixed $default Default value to return (default: false).
+     * 
+     * @return mixed Return option value, true if empty value, otherwise default value.
+     */
+    public static final function getAnyOption(string $key, string $alias, mixed $default = false): mixed
+    {
+        $options = static::getOptions();
+
+        if (array_key_exists($key, $options)) {
+            return $options[$key] ?? true;
+        }
+
+        if (array_key_exists($alias, $options)) {
+            return $options[$alias] ?? true;
+        }
+    
+        return $default;
+    }
+
+    /**
      * Returns the command controller class method.
      * 
-     * @return string|null The command controller class method or null
+     * @return string|null The command controller class method or null.
     */
     public static final function getMethod(): string|null
     {
@@ -973,7 +1051,7 @@ class Terminal
     /**
      * Returns the array of options.
      * 
-     * @return array static::$options['options']
+     * @return array static::$options['options'].
     */
     public static final function getOptions(): array
     {
@@ -981,10 +1059,9 @@ class Terminal
     }
 
     /**
-     * Gets a single query command-line by name.
-     * If it doesn't exists return null
+     * Gets a single query command-line by name, if it doesn't exists return null.
      *
-     * @param string $name Option key name
+     * @param string $name Option key name.
      * 
      * @return mixed Command option query value.
     */
@@ -1000,7 +1077,7 @@ class Terminal
     /**
      * Returns the raw array of requested query commands.
      * 
-     * @return array static::$commandsOptions
+     * @return array static::$commandsOptions.
     */
     public static final function getQueries(): array
     {
@@ -1010,7 +1087,7 @@ class Terminal
     /**
      * Check if the stream resource supports colors.
      *
-     * @param resource|string $resource STDIN/STDOUT
+     * @param resource|string $resource STDIN/STDOUT.
      * 
      * @return bool Return true if the resource supports colors.
     */
@@ -1032,9 +1109,9 @@ class Terminal
     }
 
     /**
-     * Checks whether the no color is available in environment
+     * Checks whether the no color is available in environment.
      *
-     * @return bool 
+     * @return bool Return true if color is disabled, false otherwise.
     */
     private static function isColorDisabled(): bool
     {
@@ -1042,9 +1119,9 @@ class Terminal
     }
 
     /**
-     * Checks whether the current terminal is mac terminal
+     * Checks whether the current terminal is mac terminal.
      *
-     * @return bool 
+     * @return bool Return true if is mac, otherwise false.
     */
     public static final function isMacTerminal(): bool
     {
@@ -1054,9 +1131,9 @@ class Terminal
     }
 
     /**
-     * Checks whether the stream resource on windows is terminal
+     * Checks whether the stream resource on windows is terminal.
      *
-     * @param resource|string $resource STDIN/STDOUT
+     * @param resource|string $resource The resource type to check (e.g. STDIN, STDOUT).
      * 
      * @return bool return true if is windows terminal, false otherwise.
     */
@@ -1071,7 +1148,7 @@ class Terminal
     /**
      * Checks whether framework has the requested command.
      *
-     * @param string $command Command name to check
+     * @param string $command Command name to check.
      * 
      * @return bool Return true if command exist, false otherwise.
     */
@@ -1083,8 +1160,8 @@ class Terminal
     /**
      * Checks whether system controller has requested command and run the command.
      *
-     * @param string $command Command name to check
-     * @param array $options Command compiled arguments
+     * @param string $command Command name to check.
+     * @param array $options Command compiled arguments.
      * 
      * @return bool Return true if command exist, false otherwise.
      * @internal Used in router to execute controller command.
@@ -1106,86 +1183,107 @@ class Terminal
     }
 
     /**
-     * Check if command is help command 
+     * Check if command is help command.
      * 
-     * @param string $command Command name to check.
+     * @param string|array $command Command name to check or command array options.
      * 
      * @return bool Return true if command is help, false otherwise.
     */
-    public static final function isHelp(string $command): bool 
+    public static final function isHelp(string|array $command): bool 
     {
-        return preg_match('/^-{1,2}help/', $command);
+        if(is_array($command)){
+            if(array_key_exists('help', $command) || array_key_exists('h', $command)){
+                return true;
+            }
+            return false;
+        }
+
+        return preg_match('/^(-h|--help|)$/', $command);
     }
 
     /**
-     * Print help
+     * Print help Used by system only.
      *
      * @param array|null $helps Pass the command protected properties as an array.
-     * @param bool $all Indicate whether you are printing all help commands or not
-     *      - Used by system only
+     * @param bool $all Indicate whether you are printing all help commands or not.
      * 
      * @return void
      * @internal Used in router to print controller help information.
     */
     public static final function helper(array|null $helps, bool $all = false): void
     {
-        if( $helps === null){
-            $helps = Commands::getCommands();
-        }else{
-            $helps = ($all ? $helps : [$helps]);
-        }
+        $helps = (($helps === null) ? Commands::getCommands() : ($all ? $helps : [$helps]));
 
         foreach($helps as $name => $help){
-
             foreach($help as $key => $value){
                 if($key === 'description'){
                     static::writeln('Description:');
-                    static::writeln(TextUtils::padStart('', 7) . $value);
+                    static::writeln($value);
                     static::newLine();
                 }
 
                 if($key === 'usages'){
-                    static::writeln('Usages:');
                     if(is_array($value)){
-                        foreach($value as $usage => $usages){
-                            if(is_string($usage)){
-                                static::writeln(TextUtils::padStart('', 7) . static::color($usage, 'yellow'));
-                                static::writeln(TextUtils::padStart('', 10) . $usages);
-                            }else{
-                                static::writeln(TextUtils::padStart('', 7) . $usages);
-                            }
-                        }
+                        static::addHelp($value, $key);
                     }else{
+                        static::writeln('Usages:');
                         static::writeln($value);
+                        static::newLine();
                     }
-                    static::newLine();
                 }
 
-                if($key === 'options' && is_array($value)){
-                    static::writeln('Options:');
-                    foreach($value as $info => $option){
-                        if(is_string($info)){
-                            static::writeln(TextUtils::padStart('', 8) . static::color($info, 'lightGreen'));
-                            static::writeln(TextUtils::padStart('', 11) . $option);
-                        }else{
-                            static::writeln(TextUtils::padStart('', 8) . $option);
-                        }
+                if(is_array($value)){
+                    if($key === 'options'){
+                        static::addHelp($value, $key);
                     }
-                    static::newLine();
+
+                    if($key === 'examples'){
+                        static::addHelp($value, $key);
+                    }
                 }
             }
         }
     }
 
     /**
-     * Print NovaKit Command line header information
+     * Add help information.
+     * 
+     * @param array $option Help line options.
+     * @param string $key Help line key.
+     * 
+     * @return void
+    */
+    private static function addHelp(array $options, string $key): void 
+    {
+        if($options === []){
+            return;
+        }
+        
+        $minus = ($key === 'usages' || $key === 'examples') ? 1 : 0;
+        $color = (($key === 'usages') ? 'yellow' : (($key === 'usages') ? 'lightYellow' : 'lightGreen'));
+        static::writeln(ucfirst($key) . ':');
+
+        foreach($options as $info => $values){
+            if(is_string($info)){
+                static::writeln(TextUtils::padStart('', 8 - $minus) . static::color($info, $color));
+                static::writeln(TextUtils::padStart('', 11 - $minus) . $values);
+            }else{
+                static::writeln(TextUtils::padStart('', 8 - $minus) . $values);
+            }
+        }
+        static::newLine();
+    }
+
+    /**
+     * Print NovaKit Command line header information.
      * 
      * @return void
     */
     public static final function header(): void
     {
         static::write(sprintf(
-            'PHP Luminova v%s NovaKit Command Line Tool - Server Time: %s UTC%s',
+            'PHP Luminova v%s NovaKit Command Line Tool v%s - Server Time: %s UTC%s',
+            Foundation::VERSION,
             Foundation::NOVAKIT_VERSION,
             date('Y-m-d H:i:s'),
             date('P')
