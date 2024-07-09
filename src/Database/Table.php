@@ -419,7 +419,7 @@ final class Table
     /**
      * Define an index constraint on a column `Table::INDEX_*`.
      * This method allows you to specify various types of index constraints on a table column,
-     * such as default, unique, fulltext, spatial, or primary key.
+     * such as default, unique, full-text, spatial, or primary key.
      *
      * @param string $index The type of index constraint to apply (default: 'INDEX').
      *                      Supported values: 'INDEX', 'UNIQUE', 'FULLTEXT', 'SPATIAL', 'PRIMARY KEY'.
@@ -462,7 +462,7 @@ final class Table
     }
 
     /**
-     * Sets a column index as `FULLTEXT` (e.g., `column_name FULLTEXT INDEX`).
+     * Sets a column index as full-text (e.g., `column_name FULLTEXT INDEX`).
      * This method specifies that the column is optimized for full-text searches,
      * allowing efficient keyword-based searching of text within the column.
      * 

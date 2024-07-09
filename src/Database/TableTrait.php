@@ -110,7 +110,7 @@ trait TableTrait
     public const INDEX_DEFAULT = 'INDEX';
 
     /**
-     * Fulltext table index.
+     * Full text table index.
      * 
      * @var string INDEX_FULLTEXT
     */
@@ -874,7 +874,7 @@ trait TableTrait
     /**
      * Define an inline index constraint on a column.
      * This method allows you to specify various types of inline index constraints on a table column,
-     * such as default, unique, fulltext, spatial, or primary key.
+     * such as default, unique, full-text, spatial, or primary key.
      *
      * @param string $index The type of index constraint to apply (e.g., 'INDEX', 'UNIQUE') (default: 'INDEX').
      * @param string|null $columns The column names to apply the index on (optional).
