@@ -19,6 +19,7 @@ abstract class BaseCommand extends Terminal
      * @var string $group Command group name.
      * > The group name will be used in registering command routes.
      * > Only methods that belong to same group will be registered in one group method.
+     * > E.g `php index.php <command-group-name> <command> <arguments>`.
      */
     protected string $group = '';
 
@@ -26,8 +27,8 @@ abstract class BaseCommand extends Terminal
      * The execution command name for current controller class.
      * 
      * @var string $name Command name.
-     * > The command name will be used called methods belonging to same group
-     * > E.g `php index.php <command-name> <method> <arguments>`.
+     * > The command name will be used internally to build information of your command 
+     * which can be used in display command helps.
      */
     protected string $name = '';
 
@@ -49,7 +50,7 @@ abstract class BaseCommand extends Terminal
 
     /**
      * The examples on how to use command.
-     * Show full example on how commands can be used.
+     * This allows you to show full example on how commands can be used.
      * 
      * @var array<string|int,string> $examples show command examples.
      */

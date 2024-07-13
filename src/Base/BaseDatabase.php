@@ -101,7 +101,7 @@ abstract class BaseDatabase
      * @var bool $persistent 
     */
     private bool $persistent = true;
-
+    
     /**
      * emulate pre-parse statement.
      * 

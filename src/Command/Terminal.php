@@ -298,8 +298,8 @@ class Terminal
 
             if (is_platform('windows') || static::isWindowsTerminal(STDIN)) {
                 $vbscript = sys_get_temp_dir() . 'prompt_password.vbs';
-                $inputBox = 'wscript.echo(InputBox("'. addslashes($message) . '", "", ""))';
-           
+                $inputBox = 'wscript.echo(InputBox("'. addslashes($message) . '", "", "password here"))';
+    
                 if ($timeout > 0) {
                     $result = static::timeout(static function() {
                         static::newLine();
@@ -1387,6 +1387,11 @@ class Terminal
         $helps = (($helps === null) ? Commands::getCommands() : ($all ? $helps : [$helps]));
 
         foreach($helps as $name => $help){
+            if($all){
+                static::newLine();
+                static::writeln("------[{$name} Help Information]------");
+            }
+
             foreach($help as $key => $value){
                 if($key === 'description'){
                     static::writeln('Description:');

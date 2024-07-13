@@ -21,14 +21,14 @@ final class Commands
         'help' => [
             'name' => 'help',
             'group' => 'Help',
-            'description' => "\033[1;33mPHP Luminova Novakit Command Help (Novakit Version: " . Foundation::NOVAKIT_VERSION . ", Framework Version: " . Foundation::VERSION . ")\n\033[0mThis command displays help options for the Novakit CLI tool.\n\n\033[1;31mIMPORTANT NOTE:\033[0m\nThe \033[1;33m--help\033[0m (\033[1;33m-h\033[0m) option is reserved for displaying help messages and should not be used for custom arguments when creating CLI applications.",
+            'description' => "\033[1;33mPHP Luminova Novakit Command Help (Novakit Version: " . Foundation::NOVAKIT_VERSION . ", Framework Version: " . Foundation::VERSION . ")\n\033[0mThis command displays help options for the Novakit CLI tool.\n\nTo execute `novakit` commands, run them from your application's root directory (e.g., 'php novakit command'). For controller-related commands, navigate to the `public` directory before execution (e.g., 'php index.php command').\n\n\033[1;31mIMPORTANT NOTE:\033[0m\nThe \033[1;33m--help\033[0m (\033[1;33m-h\033[0m) options are reserved for displaying help messages and should not be used for custom arguments when creating CLI applications.",
             'usages' => [
-                'php novakit list',
-                'php novakit --version',
-                'php novakit NovaKitCommand --help',
-                'php index.php ControllerCommand --help',
-                'php novakit NovaKitCommand --foo=bar baz',
-                'php index.php ControllerCommand --foo=bar --baz',
+                'php novakit <command> --help',
+                'php index.php <controller-command> --help',
+                'php novakit <NovaKitCommand> --help',
+                'php index.php <ControllerCommandGroup> --help',
+                'php novakit <NovaKitCommand> --foo=bar baz',
+                'php index.php <ControllerCommandGroup> --foo=bar --baz',
             ],
             'options' => [
                 '-h, --help' => "Display help message related to novakit or controller command.",
@@ -56,7 +56,8 @@ final class Commands
                 'php novakit db:seed --help' => "Displays help for executing database seeders.",
                 'php novakit db:migrate --help' => 'Displays help for executing database table migrations.',
                 'php novakit cron:create --help' => "Displays help for creating cron tasks and locking them in the cron lock file.",
-                'php novakit cron:run --help' => "Displays help for running cron jobs that are locked in the cron lock file."
+                'php novakit cron:run --help' => "Displays help for running cron jobs that are locked in the cron lock file.",
+                'php index.php YourControllerCommandGroup --help' => 'Display help information related to your controller commands.',
             ],
         ],
         'list' => [
