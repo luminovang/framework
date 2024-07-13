@@ -298,8 +298,8 @@ class Terminal
 
             if (is_platform('windows') || static::isWindowsTerminal(STDIN)) {
                 $vbscript = sys_get_temp_dir() . 'prompt_password.vbs';
-                $inputBox = 'wscript.echo(InputBox("'. addslashes($message) . '", "", "password here"))';
-    
+                $inputBox = 'wscript.echo(InputBox("'. addslashes($message) . '", "", ""))';
+           
                 if ($timeout > 0) {
                     $result = static::timeout(static function() {
                         static::newLine();
