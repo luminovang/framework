@@ -56,7 +56,7 @@ abstract class Migration
      * 
      * @example Implementation.
      * 
-     * `Schema::rebame('foo', 'bar');`
+     * `Schema::rename('foo', 'bar');`
      */
     public abstract function alter(): void;
 

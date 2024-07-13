@@ -27,7 +27,7 @@ abstract class Seeder
     public abstract function run(Builder $builder): void;
 
     /**
-     * Invoke another seeder within seedee run method.
+     * Invoke another seeder within seeder run method.
      * 
      * @param class-string<Seeder> $seed The seeder class name.
     */
