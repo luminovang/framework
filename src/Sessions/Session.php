@@ -215,6 +215,8 @@ class Session
      *  A unique session ID is automatically generated once synchronize() is called.
      * 
      * @return string|null Returns the session ID or null if not logged in.
+     * > **Note**
+     * > The session ID returned from this method is not same as PHP `session_id`.
     */
     public function ssid(): string|null
     {
@@ -309,10 +311,12 @@ class Session
     /**
      * Initializes session data and starts the session if it isn't already started.
      * This method replaces the default PHP session_start(), but with additional configuration.
+     * 
+     * @param string|null $sid Optional specify session identifier from PHP `session_id`.
      *
-     * @return void
+     * @return void 
     */
-    public function start(): void
+    public function start(?string $sid = null): void
     {
         if ($this->manager instanceof SessionManager) {
             if ((bool) ini_get('session.auto_start')) {
@@ -328,6 +332,14 @@ class Session
 
             if (session_status() === PHP_SESSION_NONE) {
                 $this->sessionConfigure();
+                if($sid !== null){
+                    if(preg_match('/^[-,a-zA-Z0-9]{1,128}$/', $sid) > 0){
+                        session_id($sid);
+                    }else{
+                        logger('error', "Invalid: The sessions ID '{$sid}' provided is invalid.");
+                    }
+                }
+
                 session_start();
                 $this->ipListener();
             }
