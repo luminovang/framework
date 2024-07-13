@@ -29,7 +29,7 @@ abstract class BaseFunction extends Normalizer
     private static array $instances = [];
 
     /**
-     * Initalize or return a shared an instance of the IP address class.
+     * Initialize or return a shared an instance of the IP address class.
      *
      * @return IPAddress Returns a ip address class instance
     */
@@ -39,7 +39,7 @@ abstract class BaseFunction extends Normalizer
     }
 
     /**
-     * Initalize or return a shared an instance of the Files class.
+     * Initialize or return a shared an instance of the Files class.
      *
      * @return FileManager Returns a file class instance
     */
@@ -49,7 +49,7 @@ abstract class BaseFunction extends Normalizer
     }
 
     /**
-     * Initalize or return a shared an instance of the tor detector class.
+     * Initialize or return a shared an instance of the tor detector class.
      *
      * @return TorDetector Returns a tor detector class instance
     */
@@ -59,7 +59,7 @@ abstract class BaseFunction extends Normalizer
     }
 
      /**
-     * Initalize or return a shared an instance of the math class.
+     * Initialize or return a shared an instance of the math class.
      *
      * @return Maths Returns a math class instance
     */

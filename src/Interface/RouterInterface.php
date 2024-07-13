@@ -9,6 +9,10 @@
  */
 namespace Luminova\Interface;
 
-interface RoutableInterface
+/**
+ * Interface for creating routable classes.
+ * Implement this interface in any class you want to be rendered by the router.
+ */
+interface RouterInterface
 {
 }

@@ -21,14 +21,14 @@ abstract class BaseDatabase
     /**
      * The hostname or IP address of the database server.
      * 
-     * @var string $host [localhost, 127.0.0.1]
+     * @var string $host [localhost, 127.0.0.1].
      */
     private string $host = 'localhost'; 
 
     /**
-     * Database connection driver type
+     * Database connection driver type.
      * 
-     * @var string $connection [pdo, mysqli]
+     * @var string $connection [pdo, mysqli].
      */
     private string $connection = 'pdo'; 
 
@@ -82,30 +82,30 @@ abstract class BaseDatabase
     private string $database = '';
 
     /**
-     * Database force socket connection
+     * Database force socket connection.
      * 
      * @var bool $socket 
     */
     private bool $socket = false;
 
     /**
-     * Database connection socket path
+     * Database connection socket path.
      * 
      * @var string $socket 
     */
     private string $socket_path = '';
 
     /**
-     * persistent database connection
+     * persistent database connection.
      * 
      * @var bool $persistent 
     */
     private bool $persistent = true;
 
     /**
-     * emulate preparse statment
+     * emulate pre-parse statement.
      * 
-     * @var bool $emulate_preparse 
+     * @var bool $emulate_prepares 
     */
     private bool $emulate_preparse = false;
 
@@ -150,7 +150,7 @@ abstract class BaseDatabase
     }
 
     /**
-     * Since we don't want devs to think they can change the database properties.
+     * Since we don't want dev's to think they can change the database properties.
      * We made then private and create a magic getter method to publicly access them.
      * 
      * @param string $property Property name.

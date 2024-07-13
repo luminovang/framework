@@ -21,7 +21,7 @@ use \Luminova\Base\BaseController;
 use \Luminova\Application\Factory;
 use \Luminova\Application\Foundation;
 use \Luminova\Exceptions\RouterException;
-use \Luminova\Interface\RoutableInterface;
+use \Luminova\Interface\RouterInterface;
 use \Luminova\Interface\ErrorHandlerInterface;
 use \ReflectionMethod;
 use \ReflectionFunction;
@@ -1121,7 +1121,7 @@ final class Router
                 $class->isSubclassOf(BaseCommand::class) || 
                 $class->isSubclassOf(BaseViewController::class) ||
                 $class->isSubclassOf(BaseController::class) ||
-                $class->implementsInterface(RoutableInterface::class)))) {
+                $class->implementsInterface(RouterInterface::class)))) {
                 RouterException::throwWith('invalid_controller', 1, [
                     $className
                 ]);
@@ -1131,7 +1131,7 @@ final class Router
             $caller = $class->getMethod($method);
             
             if ($caller->isPublic() && !$caller->isAbstract() && 
-                (!$caller->isStatic() || $class->implementsInterface(ErrorHandlerInterface::class) || $class->implementsInterface(RoutableInterface::class))
+                (!$caller->isStatic() || $class->implementsInterface(ErrorHandlerInterface::class) || $class->implementsInterface(RouterInterface::class))
             ) {
                 if (isset($arguments['command']) && self::$isCli) {;
                     if($class->getProperty('group')->getDefaultValue() === self::getArgument(1)) {
@@ -1152,18 +1152,17 @@ final class Router
 
                 return status_code($result, false);
             }
-
-            RouterException::throwWith('invalid_method', 1, [
-                $method
-            ]);
         } catch (ReflectionException $e) {
             if($e->getCode() === 1){
                 throw new RouterException($e->getMessage(), 1, $e);
             }
 
             RouterException::throwException($e->getMessage(), $e->getCode(), $e);
+
+            return false;
         }
 
+        RouterException::throwWith('invalid_method', 1, [$method]);
         return false;
     }
 
@@ -1194,6 +1193,7 @@ final class Router
             'examples' => $instance->examples,
         ];
 
+        // Check command string to determine if it has help arguments.
         if(self::$term->isHelp($arguments['command'])){
             
             if(!array_key_exists('no-header', $arguments['options'])){
@@ -1201,14 +1201,17 @@ final class Router
             }
 
             if($instance->help($arguments[$id]) === STATUS_ERROR){
+                // Fallback to default help information if dev does not implement help.
                 self::$term->helper($arguments[$id]);
             }
 
             return STATUS_SUCCESS;
         }
 
+        // Make the command available through get options.
         $instance->explain($arguments);
-        return $caller->invokeArgs(
+
+        return (int) $caller->invokeArgs(
             $instance, 
             self::injection($caller, $arguments['params']??[])
         );

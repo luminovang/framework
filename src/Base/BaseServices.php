@@ -20,7 +20,7 @@ abstract class BaseServices implements ServicesInterface
     private static array $serviceQueue = [];
 
     /**
-     * Add a service class to the service autoloading.
+     * Add a service class to the service auto-loading.
      *
      * Usage:
      *     - static::newService(Configuration::class) as $config = service('Configuration')
@@ -53,7 +53,7 @@ abstract class BaseServices implements ServicesInterface
         }
 
         if($arguments !== [] && !array_is_list($arguments)){
-            throw new RuntimeException('Invlaid argument, class arguments expected array to be list.');
+            throw new RuntimeException('Invalid argument, class arguments expected array to be list.');
         }
 
         self::$serviceQueue[$alias] = [

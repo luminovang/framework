@@ -14,16 +14,25 @@ use \Luminova\Command\Terminal;
 abstract class BaseCommand extends Terminal 
 {
     /**
-     * @var string $group command group.
+     * The group name for current command controller class.
+     * 
+     * @var string $group Command group name.
+     * > The group name will be used in registering command routes.
+     * > Only methods that belong to same group will be registered in one group method.
      */
     protected string $group = '';
 
     /**
-     * @var string $name command name.
+     * The execution command name for current controller class.
+     * 
+     * @var string $name Command name.
+     * > The command name will be used called methods belonging to same group
+     * > E.g `php index.php <command-name> <method> <arguments>`.
      */
     protected string $name = '';
 
     /**
+     * The command usages. 
      * Use the array key for command usage and the value for description.
      * 
      * @var string|array<string|int,string> $usage command usages.
@@ -31,16 +40,25 @@ abstract class BaseCommand extends Terminal
     protected string|array $usage = '';
 
     /**
+     * The command available options.
+     * Use the key for the options (e.g ['-f, --foo' => 'Foo description']).
+     * 
      * @var array<string|int,string> $options command options.
      */
     protected array $options = [];
 
     /**
+     * The examples on how to use command.
+     * Show full example on how commands can be used.
+     * 
      * @var array<string|int,string> $examples show command examples.
      */
     protected array $examples = [];
 
     /**
+     * The full command description.
+     * Tell more information what the command does.
+     * 
      * @var string $description command description.
      */
     protected string $description = '';

@@ -13,7 +13,7 @@ namespace Luminova\Base;
 use \Luminova\Database\Builder;
 use \Luminova\Security\InputValidator;
 use \Luminova\Storages\FileManager;
-use \Peterujah\NanoBlock\SearchController as Searchable;
+use \Peterujah\NanoBlock\SearchController as SearchInstance;
 use \Luminova\Exceptions\RuntimeException;
 use \DateTimeInterface;
 
@@ -34,18 +34,11 @@ abstract class BaseModel
     protected string $primaryKey = ''; 
 
     /**
-     * Searchable table column names.
-     * 
-     * @var array<int, string> $searchables
-    */
-    protected array $searchables = [];
-
-    /**
      *  Enable database caching for query builder.
      * 
-     * @var bool $cachable
+     * @var bool $cacheable
     */
-    protected bool $cachable = true; 
+    protected bool $cacheable = true; 
 
     /**
      * Database cache expiration time in seconds.
@@ -69,18 +62,25 @@ abstract class BaseModel
     protected bool $readOnly = false; 
 
     /**
+     * Searchable table column names.
+     * 
+     * @var array<int,string> $searchable
+    */
+    protected array $searchable = [];
+
+    /**
      * Fields that can be inserted.
      * 
-     * @var array<int,string> $insertables
+     * @var array<int,string> $insertable
     */
-    protected array $insertables = []; 
+    protected array $insertable = []; 
 
     /**
      * Fields that can be updated.
      * 
-     * @var array $updatables
+     * @var array<int,string> $updatable
     */
-    protected array $updatables = []; 
+    protected array $updatable = []; 
 
     /**
      * Input validation rules.
@@ -113,9 +113,9 @@ abstract class BaseModel
     /**
      * Search database controller instance.
      * 
-     * @var Searchable $searchInstance
+     * @var SearchInstance $searchInstance
     */
-    private static ?Searchable $searchInstance = null;
+    private static ?SearchInstance $searchInstance = null;
 
     /**
      * Constructor for the Model class.
@@ -127,10 +127,10 @@ abstract class BaseModel
     public function __construct(?Builder $builder = null)
     {
         $this->builder ??= ($builder ?? Builder::getInstance());
-        $this->builder->caching($this->cachable);
+        $this->builder->caching($this->cacheable);
         $this->builder->table($this->table);
 
-        if($this->cachable && static::$cacheFolder === ''){
+        if($this->cacheable && static::$cacheFolder === ''){
             static::$cacheFolder = get_class_name(static::class);
         }
     }
@@ -141,7 +141,7 @@ abstract class BaseModel
      * @param array<string,mixed> $values nested array of values to insert into table.
      * 
      * @return bool Return true if records was inserted, otherwise false.
-     * @throws RuntimeException Throws if columns contains unallowed key.
+     * @throws RuntimeException Throws if insert columns contains column names that isn't defined in `$insertable`.
     */
     public function insert(array $values): bool 
     {
@@ -149,7 +149,7 @@ abstract class BaseModel
             return 0;
         }
 
-        $this->assertIsAllowed($this->insertables, $values);
+        $this->assertIsAllowed($this->insertable, $values);
         return $this->builder->table($this->table)->insert($values) > 0;
     }
 
@@ -161,7 +161,7 @@ abstract class BaseModel
      * @param int $max The maximum number of records to update.
      * 
      * @return bool Return true if records was updated, otherwise false.
-     * @throws RuntimeException Throws if columns contains unallowed key.
+     * @throws RuntimeException Throws if update columns contains column names that isn't defined in `$updatable`.
     */
     public function update(string|array $key, array $data, int $max = 1): bool  
     {
@@ -169,7 +169,7 @@ abstract class BaseModel
             return 0;
         }
 
-        $this->assertIsAllowed($this->updatables, $data);
+        $this->assertIsAllowed($this->updatable, $data);
         $tbl = $this->builder->table($this->table);
         $tbl->max($max);
 
@@ -300,9 +300,9 @@ abstract class BaseModel
     }
 
      /**
-     * Select records from the database.
+     * Search records from the database table using the `$searchable` to index search columns.
      *
-     * @param string $query Search query string, escape string before passing.
+     * @param string $query The Search query string, escape string before passing.
      * @param array<int,string> $fields The fields to retrieve (default is all).
      * @param int $limit Search result limit (default: 100).
      * @param int $offset Search limit offset (default: 0).
@@ -320,7 +320,7 @@ abstract class BaseModel
         $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
         $columns = 'WHERE';
 
-        foreach($this->searchables as $column){
+        foreach($this->searchable as $column){
             $columns .= " LOWER({$column}) LIKE :keyword OR";
         }
 
@@ -334,7 +334,8 @@ abstract class BaseModel
     }
 
     /**
-     * Run a search in database table of current model. 
+     * Run a search in database table using the `$searchable` to index search columns.
+     * This method uses third-party libraries to search database table.
      * 
      * @param string $query search query string, escape string before passing.
      * @param array<int,string> $fields The fields to retrieve (default is all).
@@ -359,15 +360,15 @@ abstract class BaseModel
 
         $search = $this->searchInstance($flag);
         $search->setQuery($query)->split();
-        $sqls = $search->getQuery();
+        $queries = $search->getQuery();
 
-        if(empty($sqls)){
+        if(empty($queries)){
             return false;
         }
 
         $cache_key = static::cacheKey($query, $fields);
         $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
-        $sql = "SELECT {$fields} FROM {$this->table} {$sqls} LIMIT {$offset}, {$limit}";
+        $sql = "SELECT {$fields} FROM {$this->table} {$queries} LIMIT {$offset}, {$limit}";
 
         $tbl = $this->builder->query($sql);
         $tbl->cache($cache_key, $this->table . '_doSearch', $this->expiry, static::$cacheFolder);
@@ -406,32 +407,32 @@ abstract class BaseModel
     /**
      * Return search controller class instance. 
      * 
-     * @param string $flag Search matching flag.
+     * @param string $flag Search matching flag (e.g. `any`).
      * 
-     * @return Searchable Search controller instance.
+     * @return SearchInstance Search controller instance.
      * @throws RuntimeException If the third party search controller class is not installed.
     */
-    protected function searchInstance(string $flag): Searchable
+    protected function searchInstance(string $flag): SearchInstance
     {
-        if(!class_uses(Searchable::class)){
+        if(!class_uses(SearchInstance::class)){
             throw new RuntimeException('The search controller library is not installed. Please run the composer command "composer require peterujah/php-search-controller" to install it.');
         }
 
         $flags = [
-            'start' => Searchable::START_WITH_QUERY,
-            'end' => Searchable::END_WITH_QUERY,
-            'any' => Searchable::HAVE_ANY_QUERY,
-            'second' => Searchable::HAVE_SECOND_QUERY,
-            'length2' => Searchable::START_WITH_QUERY_2LENGTH,
-            'length3' => Searchable::START_WITH_QUERY_3LENGTH,
-            'startend' => Searchable::START_END_WITH_QUERY,
+            'start' => SearchInstance::START_WITH_QUERY,
+            'end' => SearchInstance::END_WITH_QUERY,
+            'any' => SearchInstance::HAVE_ANY_QUERY,
+            'second' => SearchInstance::HAVE_SECOND_QUERY,
+            'length2' => SearchInstance::START_WITH_QUERY_2LENGTH,
+            'length3' => SearchInstance::START_WITH_QUERY_3LENGTH,
+            'startend' => SearchInstance::START_END_WITH_QUERY,
         ];
 
-        $flag = $flags[$flag] ?? Searchable::HAVE_ANY_QUERY;
+        $flag = $flags[$flag] ?? SearchInstance::HAVE_ANY_QUERY;
 
-        self::$searchInstance ??= new Searchable();
+        self::$searchInstance ??= new SearchInstance();
         self::$searchInstance->setOperators($flag);
-        self::$searchInstance->setParameter($this->searchables);
+        self::$searchInstance->setParameter($this->searchable);
 
         return self::$searchInstance;
     }
@@ -464,6 +465,7 @@ abstract class BaseModel
         if($this->rules !== []){
             static::$validation->rules = $this->rules;
         }
+
         if($this->messages !== []){
             static::$validation->messages = $this->messages;
         }
@@ -478,7 +480,7 @@ abstract class BaseModel
      * @param array<string,mixed> $columns The column keys and value to check.
      * 
      * @return void 
-     * @throws RuntimeException Throws if columns contains unallowed key.
+     * @throws RuntimeException Throws if columns contains un-allowed key.
     */
     protected function assertIsAllowed(array $allowed, array $columns): void 
     {
@@ -487,14 +489,14 @@ abstract class BaseModel
         }
 
         $columns = array_keys($columns);
-        $unallowed = array_diff($columns, $allowed);
+        $unsupported = array_diff($columns, $allowed);
 
-        if($unallowed === []){
+        if($unsupported === []){
             return;
         }
 
-        $unallowed = implode(', ', $unallowed);
-        throw new RuntimeException("The data contains unallowed columns: $unallowed");
+        $unsupported = implode(', ', $unsupported);
+        throw new RuntimeException("The data contains unsupported columns: $unsupported");
     }
 
     /**
@@ -520,11 +522,11 @@ abstract class BaseModel
     /**
      * Get the table searchable array of column names.
      *
-     * @return array<int, string> Return table searchable column names.
+     * @return array<int,string> Return table searchable column names.
      */
     public function getSearchable(): array
     {
-        return $this->searchables;
+        return $this->searchable;
     }
 
     /**

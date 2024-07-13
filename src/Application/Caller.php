@@ -19,13 +19,13 @@ use \ReflectionMethod;
 final class Caller 
 {
     /**
-     * Get all classes that extends a base class 
+     * Retrieve all classes that extend a specified base class within a given directory.
      * 
-     * @param class-string $baseClass The base class to check.
-     * @param string $directory The directory of the extending classes.
+     * @param class-string $baseClass The fully qualified name of the base class to check.
+     * @param string $directory The directory to search for classes that extend the base class.
      * 
-     * @return array<int,string> Return array of classes that extend the base class.
-    */
+     * @return array<int,class-string> An array of fully qualified class names that extend the base class.
+     */
     public static function extenders(string $baseClass, string $directory): array 
     {
         $classes = [];

@@ -26,7 +26,7 @@ abstract class BaseConsole extends BaseCommand
      *
      * @param array<string,mixed>|null $params Command arguments and parameters
      * 
-     * @return int status code STATUS_SUCCESS on success else STATUS_ERROR
+     * @return int Return status code STATUS_SUCCESS on success else STATUS_ERROR
     */
     abstract public function run(?array $params = null): int;
 }

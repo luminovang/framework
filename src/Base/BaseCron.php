@@ -46,7 +46,7 @@ abstract class BaseCron
     protected static ?string $timezone = null;
 
     /**
-     * Initilize constructor with optional configuration.
+     * Initialize constructor with optional configuration.
      *
      * @param string|null $path Path to store cron job configuration files.
      * @param string|null $filename The filename for lock file.

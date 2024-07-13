@@ -33,7 +33,7 @@ class Helper
      * @param bool $ignore
      * @param bool $copy 
      *
-     * @return PageMinifier Return minifier instance.
+     * @return PageMinifier Return minified instance.
     */
     public static function getMinifier(
         mixed $contents, 

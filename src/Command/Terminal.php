@@ -1361,9 +1361,12 @@ class Terminal
     public static final function isHelp(string|array $command): bool 
     {
         if(is_array($command)){
+            $command = $command['options'] ?? $command;
+
             if(array_key_exists('help', $command) || array_key_exists('h', $command)){
                 return true;
             }
+
             return false;
         }
 
@@ -1414,6 +1417,23 @@ class Terminal
         }
     }
 
+     /**
+     * Print NovaKit Command line header information.
+     * 
+     * @return void
+    */
+    public static final function header(): void
+    {
+        static::write(sprintf(
+            'PHP Luminova v%s NovaKit Command Line Tool v%s - Server Time: %s UTC%s',
+            Foundation::VERSION,
+            Foundation::NOVAKIT_VERSION,
+            date('Y-m-d H:i:s'),
+            date('P')
+        ), 'green');
+        static::newLine();
+    }
+
     /**
      * Add help information.
      * 
@@ -1440,23 +1460,6 @@ class Terminal
                 static::writeln(TextUtils::padStart('', 8 - $minus) . $values);
             }
         }
-        static::newLine();
-    }
-
-    /**
-     * Print NovaKit Command line header information.
-     * 
-     * @return void
-    */
-    public static final function header(): void
-    {
-        static::write(sprintf(
-            'PHP Luminova v%s NovaKit Command Line Tool v%s - Server Time: %s UTC%s',
-            Foundation::VERSION,
-            Foundation::NOVAKIT_VERSION,
-            date('Y-m-d H:i:s'),
-            date('P')
-        ), 'green');
         static::newLine();
     }
 }
