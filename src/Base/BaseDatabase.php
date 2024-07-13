@@ -105,7 +105,7 @@ abstract class BaseDatabase
     /**
      * emulate pre-parse statement.
      * 
-     * @var bool $emulate_prepares 
+     * @var bool $emulate_preparse 
     */
     private bool $emulate_preparse = false;
 
