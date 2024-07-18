@@ -28,12 +28,9 @@ class Lists extends BaseConsole
     /**
      * {@inheritdoc}
     */
-    protected array $options = [];
-
-    /**
-     * {@inheritdoc}
-    */
-    protected string|array $usages  = 'php novakit list';
+    protected array $usages = [
+        'php novakit list --help'
+    ];
 
     /**
      * {@inheritdoc}

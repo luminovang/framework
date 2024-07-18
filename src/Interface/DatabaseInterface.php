@@ -161,6 +161,13 @@ interface DatabaseInterface
     public function rollback(int $flags = 0, ?string $name = null): bool;
 
     /**
+     * Check if any active transaction.
+     * 
+     * @return bool Return true if any active transaction, otherwise false.
+    */
+    public function inTransaction(): bool;
+
+    /**
      * Returns the appropriate parameter type based on the value and type.
      *
      * @param mixed $value The parameter value.

@@ -67,7 +67,7 @@ final class Context
     /**
      * Initialize Constructor
      * 
-     * @param string $name Route content name
+     * @param string $name Route content name.
      * @param Closure|array<int,string>|null $onError Context error handling method.
      *      - array - Method name in [ViewErrors::class, 'methodname']; to handle error.
      *      - Closure - Closure(class-string<\T> $arguments [, mixed $... ]): int.
@@ -117,7 +117,7 @@ final class Context
      * @return array<string,string> Return registered context
      * @internal
     */
-    public static function getInstances(): array 
+    public static function getPrefixes(): array 
     {
         return self::$contexts;
     }

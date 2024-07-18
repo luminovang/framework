@@ -170,7 +170,10 @@ final class PdoDriver implements DatabaseInterface
     private function mysqlDns(): string
     {
         if (is_command() || NOVAKIT_ENV !== null || $this->config->socket) {
-            $socket = (($this->config->socket_path === '' || $this->config->socket_path === null) ? ini_get('pdo_mysql.default_socket') : $this->config->socket_path);
+            $socket = (($this->config->socket_path === '' || $this->config->socket_path === null) ? 
+                ini_get('pdo_mysql.default_socket') : 
+                $this->config->socket_path
+            );
             return "mysql:unix_socket={$socket};dbname={$this->config->database}";
         }
 
@@ -349,17 +352,25 @@ final class PdoDriver implements DatabaseInterface
      */
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
-        if ($name !== null) {
-            $name = $this->connection->quote("tnx_{$name}");
+        if ($name === null) {
+            return $this->connection->rollBack();
+        }
+        
+        $name = $this->connection->quote("tnx_{$name}");
 
-            if ($name === false) {
-                DatabaseException::throwException("Failed to create savepoint name.");
-            }
-
-            return $this->connection->exec("ROLLBACK TO SAVEPOINT {$name}") !== false;
+        if ($name === false) {
+            DatabaseException::throwException("Failed to create savepoint name.");
         }
 
-        return $this->connection->rollBack();
+        return $this->connection->exec("ROLLBACK TO SAVEPOINT {$name}") !== false;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function inTransaction(): bool 
+    {
+        return $this->connection->inTransaction();
     }
 
     /**

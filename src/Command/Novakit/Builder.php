@@ -28,18 +28,7 @@ class Builder extends BaseConsole
     * {@inheritdoc}
     */
     protected string|array $usages = [
-        "Usage: php novakit build:project --type <build/zip>",
-        "  - Build and package the application for production.",
-        "  - Example: php novakit build:project --type build",
-        "  - Archive the application into a zip file.",
-        "  - Example: php novakit build:project --type zip",
-    ];
-
-    /**
-     * {@inheritdoc}
-    */
-    protected array $options = [
-        '--type'  => 'Specify type of build',
+        "php novakit build:project --help"
     ];
 
     /**

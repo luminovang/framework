@@ -28,29 +28,12 @@ class Generators extends BaseConsole
     /**
      * {@inheritdoc}
     */
-    protected array $options = [
-        '--extend'    => 'Extend class name',
-        '--implement' => 'Implement class interface',
-        '--type'      => 'Type of controller',
-        '--dir'      => 'Sub directory location',
-    ];
-
-    /**
-     * {@inheritdoc}
-    */
     protected array $usages = [
-        'php novakit create:controller "name" -extend "className" -type "view"',
-        'php novakit create:controller "FooController" -type "command"',
-        'php novakit create:class "name" -extend "className" -implement "myInterface"',
-        'php novakit create:view "name"',
-        'php novakit create:class "name"',
-        'php novakit create:model "name"',
+        'php novakit create:controller --help',
+        'php novakit create:class --help',
+        'php novakit create:view --help',
+        'php novakit create:model --help',
     ];
-   
-    /**
-     * {@inheritdoc}
-    */
-    protected string $description = 'Create controller, view or class';
 
     /**
      * {@inheritdoc}
@@ -105,18 +88,18 @@ class Generators extends BaseConsole
      * Create a controller.
      *
      * @param string $name  Controller name.
-     * @param string $tyoe  The type of controller.
+     * @param string $type  The type of controller.
      * @param string|null $dir Directory path.
      * 
      * @return void
      */
-    private function createController(string $name, string $tyoe = 'view', ?string $dir = null): void 
+    private function createController(string $name, string $type = 'view', ?string $dir = null): void 
     {
         $view = '';
-        if($tyoe === 'view'){
+        if($type === 'view'){
             $use = 'use \Luminova\Base\BaseViewController;';
             $extend = 'BaseViewController';
-        }elseif($tyoe === 'command'){
+        }elseif($type === 'command'){
             $use = 'use \Luminova\Base\BaseCommand;';
             $extend = 'BaseCommand';
         }else{
@@ -125,7 +108,7 @@ class Generators extends BaseConsole
         }
 
         $name = ucfirst($name);
-        if($tyoe === 'view' || $tyoe === 'api'){
+        if($type === 'view' || $type === 'api'){
             $classContent = <<<PHP
             <?php
             namespace App\Controllers;
@@ -144,7 +127,7 @@ class Generators extends BaseConsole
 
             PHP;
 
-            if($tyoe === 'view'){
+            if($type === 'view'){
                 $view = strtolower($name);
                 $view = str_replace('controller', '', $view);
                 $classContent .= <<<PHP
@@ -156,7 +139,7 @@ class Generators extends BaseConsole
 
                 PHP;
             }
-        }elseif($tyoe === 'command'){
+        }elseif($type === 'command'){
             $classContent = <<<PHP
             <?php
             namespace App\Controllers;
@@ -190,7 +173,7 @@ class Generators extends BaseConsole
 
             PHP;
         }else{
-            $this->writeln("Invalid controller --type flag: {$tyoe}, use 'api, view or command'", 'red');
+            $this->writeln("Invalid controller --type flag: {$type}, use 'api, view or command'", 'red');
             return;
         }
 
@@ -199,7 +182,7 @@ class Generators extends BaseConsole
         $path = "/app/Controllers/";
         
         if($this->saveFile($classContent, $path, "{$name}.php")){
-            if($tyoe === 'view'){
+            if($type === 'view'){
                 $this->createView($view, $dir);
             }
         }else{
@@ -301,16 +284,16 @@ class Generators extends BaseConsole
             /**
              * Searchable table column names.
              * 
-             * @var array<int, string> \$searchables
+             * @var array<int,string> \$searchable
             */
-            protected array \$searchables = [];
+            protected array \$searchable = [];
         
             /**
              *  Enable database caching for query builder.
              * 
-             * @var bool \$cachable
+             * @var bool \$cacheable
             */
-            protected bool \$cachable = true; 
+            protected bool \$cacheable = true; 
         
             /**
              * Database cache expiration time in seconds.
@@ -329,16 +312,16 @@ class Generators extends BaseConsole
             /**
              * Fields that can be inserted.
              * 
-             * @var array<int,string> \$insertables
+             * @var array<int,string> \$insertable
             */
-            protected array \$insertables = []; 
+            protected array \$insertable = []; 
         
             /**
              * Fields that can be updated.
              * 
-             * @var array \$updatables
+             * @var array \$updatable
             */
-            protected array \$updatables = []; 
+            protected array \$updatable = []; 
         
             /**
              * Input validation rules.

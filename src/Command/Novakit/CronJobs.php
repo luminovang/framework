@@ -35,18 +35,9 @@ class CronJobs extends BaseConsole
     /**
      * {@inheritdoc}
     */
-    protected array $options = [
-        '--force'  => 'Force update cron schedule jobs.',
-    ];
-
-    /**
-     * {@inheritdoc}
-    */
     protected array $usages = [
-        'php novakit cron:create',
-        'php novakit cron:run',
-        'php novakit cron:run --force',
-        'php novakit cron:create --force',
+        'php novakit cron:create --help',
+        'php novakit cron:run --help'
     ];
 
     /**

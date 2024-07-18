@@ -34,7 +34,14 @@ class Database extends BaseConsole
     /**
      * {@inheritdoc}
     */
-    protected array $options = [];
+    protected array $usages = [
+        'php novakit db:clear --help',
+        'php novakit db:drop --help',
+        'php novakit db:alter --help',
+        'php novakit db:truncate --help',
+        'php novakit db:seed --help',
+        'php novakit db:migrate --help'
+    ];
 
     /**
      * @var ?Builder $builder
@@ -42,9 +49,9 @@ class Database extends BaseConsole
     private static ?Builder $builder = null;
 
      /**
-     * @var bool $isDubug
+     * @var bool $isDebug
     */
-    private static bool $isDubug = false;
+    private static bool $isDebug = false;
 
     /**
      * {@inheritdoc}
@@ -53,8 +60,8 @@ class Database extends BaseConsole
     {
         $this->explain($options);
         static::$builder ??= Builder::getInstance();
-        static::$isDubug = (bool) $this->getAnyOption('debug', 'b', false);
-        shared('SHOW_QUERY_DEBUG', static::$isDubug);
+        static::$isDebug = (bool) $this->getAnyOption('debug', 'b', false);
+        shared('SHOW_QUERY_DEBUG', static::$isDebug);
 
         return match(trim($this->getCommand())){
             'db:clear' => $this->clearLocks(),
@@ -218,7 +225,7 @@ class Database extends BaseConsole
         $executed = 0; 
         $path = root('/app/Controllers/Database/Migrations/');
 
-        if(!$noBackup && !static::$isDubug){
+        if(!$noBackup && !static::$isDebug){
             $backup = root('/writeable/database/Migrations/');
             if(file_exists($lockfile = $backup . 'migrations.lock')){
                 $lock = file_get_contents($lockfile);
@@ -227,24 +234,24 @@ class Database extends BaseConsole
         }
 
         try {
-            $migratClass = "\\App\Controllers\\Database\\Migrations\\{$class}";
+            $migrateClass = "\\App\Controllers\\Database\\Migrations\\{$class}";
             /**
              * @var Migration $instance
              */
-            $instance = new $migratClass();
+            $instance = new $migrateClass();
             $instance->up();
             sleep(1);
             $instance->alter();
 
-            if(static::$isDubug){
+            if(static::$isDebug){
                 return STATUS_SUCCESS;
             }
 
             if(shared('ALTER_SUCCESS') === true){
                 $executed++;
 
-                if(!$noBackup && ($lock === [] || !$this->guardVersion($migratClass, $lock, $path, $backup, null, true))){
-                    static::lockFile($lock, $migratClass, $path, $backup);
+                if(!$noBackup && ($lock === [] || !$this->guardVersion($migrateClass, $lock, $path, $backup, null, true))){
+                    static::lockFile($lock, $migrateClass, $path, $backup);
                 }
             }
 
@@ -296,6 +303,7 @@ class Database extends BaseConsole
         $backup = null; 
         $executed = 0;
         $path = root('/app/Controllers/Database/Seeders/');
+        $namespace = '\\App\\Controllers\\Database\\Seeders';
 
         if(!$noBackup){
             $backup = root('/writeable/database/Seeders/');
@@ -311,10 +319,10 @@ class Database extends BaseConsole
                 /**
                  * @var class-string<Seeder>[] $extenders
                  */
-                $extenders = Caller::extenders(Seeder::class, $path);
+                $extenders = Caller::extenders(Seeder::class, $path, $namespace);
                 foreach ($extenders as $seed) {
 
-                    if($lock !== [] && $this->guardversion($seed, $lock, $path, $backup, true)){
+                    if($lock !== [] && $this->guardVersion($seed, $lock, $path, $backup, true)){
                         continue;
                     }
 
@@ -336,9 +344,9 @@ class Database extends BaseConsole
                     }
                 }
             } else {
-                $seed = "\\App\\Controllers\\Database\\Seeders\\{$class}";
+                $seed = "{$namespace}\\{$class}";
 
-                if($lock !== [] && $this->guardversion($seed, $lock, $path, $backup, true)){
+                if($lock !== [] && $this->guardVersion($seed, $lock, $path, $backup, true)){
                     return STATUS_SUCCESS;
                 }
 
@@ -412,7 +420,7 @@ class Database extends BaseConsole
         $noBackup = $this->getAnyOption('no-backup', 'n', false);
         $noInvokes = $this->getAnyOption('no-invoke', 'i', false);
         if(!$drop && $this->getAnyOption('rollback', 'r', false)){
-            static::$isDubug = false;
+            static::$isDebug = false;
             return $this->rollbackMigration($class, $noBackup, $noInvokes);
         }
 
@@ -425,11 +433,12 @@ class Database extends BaseConsole
         $backup = null; 
         $executed = 0; 
         $drop ??= $this->getAnyOption('drop', 'd', false);
-        static::$isDubug = $drop ? false : static::$isDubug;
+        static::$isDebug = $drop ? false : static::$isDebug;
         $path = root('/app/Controllers/Database/Migrations/');
-        $shouldGuard = (static::$isDubug === false && $drop === false);
+        $shouldGuard = (static::$isDebug === false && $drop === false);
+        $namespace = '\\App\\Controllers\\Database\\Migrations';
 
-        if(!static::$isDubug && $noBackup === false){
+        if(!static::$isDebug && $noBackup === false){
             $backup = root('/writeable/database/Migrations/');
             if(file_exists($lockfile = $backup . 'migrations.lock')){
                 $lock = file_get_contents($lockfile);
@@ -439,7 +448,7 @@ class Database extends BaseConsole
 
         try {
             if($class === false){
-                $extenders = Caller::extenders(Migration::class, $path);
+                $extenders = Caller::extenders(Migration::class, $path, $namespace);
 
                 foreach ($extenders as $migrate) {
                     if($shouldGuard && $lock !== [] && $this->guardVersion($migrate, $lock, $path, $backup)){
@@ -455,7 +464,7 @@ class Database extends BaseConsole
                     }
                 }
             }else{
-                $migrate = "\\App\Controllers\\Database\\Migrations\\{$class}";
+                $migrate = "{$namespace}\\{$class}";
 
                 if($shouldGuard && $lock !== [] && $this->guardVersion($migrate, $lock, $path, $backup)){
                     return STATUS_SUCCESS;
@@ -484,7 +493,7 @@ class Database extends BaseConsole
                 }
             }
 
-            if(static::$isDubug){
+            if(static::$isDebug){
                 return STATUS_SUCCESS;
             }
 
@@ -503,7 +512,7 @@ class Database extends BaseConsole
         } catch (AppException|Exception $e) {
             $db = shared('DROP_TRANSACTION');
 
-            if($db instanceof DatabaseInterface){
+            if($db instanceof DatabaseInterface && $db->inTransaction()){
                 $db->rollback();
             }
             $this->writeln("Migration execution failed: " . $e->getMessage(), 'white', 'red');
@@ -531,7 +540,7 @@ class Database extends BaseConsole
          * @var Migration $instance
          */
         $instance = new $namespace();
-        if(static::$isDubug){
+        if(static::$isDebug){
             $instance->up();
         }else{
             $instance->down();
@@ -548,15 +557,17 @@ class Database extends BaseConsole
              * @var DatabaseInterface $db
             */
             $db = shared('DROP_TRANSACTION');
+            $hasTnx = ($db instanceof DatabaseInterface && $db->inTransaction());
 
             if(shared('MIGRATION_SUCCESS') === true){
- 
-                if($db instanceof DatabaseInterface){
+                if($hasTnx){
                     $db->commit();
                 }
 
                 return true;
-            }elseif($db instanceof DatabaseInterface){
+            }
+            
+            if($hasTnx){
                 $db->rollback();
             }
         }
@@ -659,7 +670,7 @@ class Database extends BaseConsole
                     } catch (Exception $e) {
                         $db = shared('DROP_TRANSACTION');
                         
-                        if ($db instanceof DatabaseInterface) {
+                        if ($db instanceof DatabaseInterface && $db->inTransaction()) {
                             $db->rollback();
                         }
                         $this->writeln("Error: {$e->getMessage()}", 'red');
@@ -733,12 +744,9 @@ class Database extends BaseConsole
                                 $seeders = $seeder->getInvokes();
                             }
 
-                            if(shared('SEEDING_SUCESS') === true){
-                                $executions++;
-                                if(!$noBackup){
-                                    //static::lockFile($lock, $seederClass, $path, $backupPath, true);
-                                    static::updateLockFile($lock, (int) $input, null, $seederClass, $path, $backupPath, true);
-                                }
+                            $executions++;
+                            if(!$noBackup){
+                                static::updateLockFile($lock, (int) $input, null, $seederClass, $path, $backupPath, true);
                             }
                         
                             foreach ($seeders as $seed) {
@@ -748,13 +756,12 @@ class Database extends BaseConsole
                                 $seeder = new $seed();
                                 $seeder->run(static::$builder);
 
-                                if(shared('SEEDING_SUCESS') === true){
-                                    $executions++;
-                                    if(!$noBackup){
-                                        //static::lockFile($lock, $seed, $path, $backupPath, true);
-                                        static::updateLockFile($lock, (int) $input, null, $seed, $path, $backupPath, true);
-                                    }
+                                $executions++;
+                                if(!$noBackup){
+                                    //static::lockFile($lock, $seed, $path, $backupPath, true);
+                                    static::updateLockFile($lock, (int) $input, null, $seed, $path, $backupPath, true);
                                 }
+                            
                             }
                         }
 
@@ -763,7 +770,7 @@ class Database extends BaseConsole
                             return STATUS_SUCCESS;
                         }
 
-                        $this->writeln("Failed: Nove seeder was rolled back to version '{$input}'.", 'red');
+                        $this->writeln("Failed: No seeder was rolled back to version '{$input}'.", 'red');
                     } catch (Exception $e) {
                         $this->writeln("Error: {$e->getMessage()}", 'red');
                     }
@@ -821,7 +828,7 @@ class Database extends BaseConsole
      * @param string   $path     The path to the original migration or seeder file.
      * @param string   $backup   The directory path where backup files will be stored.
      * @param bool     $seeder   Whether the context refers to a seeder (`true`) or migration (`false`).
-     * @param bool     $drop   Whether runing drop migration.
+     * @param bool     $drop   Whether running drop migration.
      *
      * @return bool Returns true if the operation was successful, false otherwise.
      */

@@ -27,7 +27,9 @@ class SystemHelp extends BaseConsole
     /**
      * {@inheritdoc}
     */
-    protected array $options = [];
+    protected array $usages = [
+        'php novakit --help'
+    ];
 
     /**
      * {@inheritdoc}

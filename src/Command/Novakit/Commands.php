@@ -159,13 +159,19 @@ final class Commands
         'context' => [
             'name' => 'context',
             'group' => 'System',
-            'description' => "Install application router context.",
+            'description' => "Install application route context or create routes from defined route annotation attributes.",
             'usages' => [
-                'php novakit context "name"',
+                'php novakit context <context-name>',
+                'php novakit context --export-attr',
+            ], 
+            'options' => [
+                '-e, --export-attr' => 'Indicate to export and build routes from route annotations.',
+                '-n, --no-error' => 'Indicate to leave error callback handler `NULL` while adding new context.',
             ],
-            'options' => [],
             'examples' => [
-                'php novakit context "name"',
+                'php novakit context "foo"',
+                'php novakit context "foo" --no-error',
+                'php novakit context --export-attr',
             ],
         ],
         'create:controller' => [

@@ -29,19 +29,10 @@ class System extends BaseConsole
      * {@inheritdoc}
     */
     protected string|array $usages  = [
-        'php novakit generate:key',
-        'php novakit generate:sitemap',
-        'php novakit env:add --key="my_new_key" --value="my key value"',
-        'php novakit env:remove'
-    ];
-
-    /**
-     * {@inheritdoc}
-    */
-    protected array $options = [
-        '--no-save'  => 'Do not save generated application key to .env file.',
-        '--key'  => 'Env key to update, add or delete.',
-        '--value'  => 'Env key value to generate.',
+        'php novakit generate:key --help',
+        'php novakit generate:sitemap --help',
+        'php novakit env:add --help',
+        'php novakit env:remove --help'
     ];
 
     /**

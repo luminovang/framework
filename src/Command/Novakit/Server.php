@@ -37,18 +37,8 @@ class Server extends BaseConsole
     /**
      * {@inheritdoc}
     */
-    protected array $options = [
-        '--php'  => 'The PHP Binary [default: "PHP_BINARY"]',
-        '--host' => 'The HTTP Host [default: "localhost"]',
-        '--port' => 'The HTTP Host Port [default: "8080"]',
-    ];
-
-    /**
-     * {@inheritdoc}
-    */
     protected array $usages = [
-        'php novakit server',
-        'php novakit server --host localhost --port 8080',
+        'php novakit server --help'
     ];
 
     /**

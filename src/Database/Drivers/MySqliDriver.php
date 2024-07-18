@@ -84,6 +84,13 @@ final class MySqliDriver implements DatabaseInterface
     private bool $executed = false;
 
     /**
+     * Active transaction.
+     * 
+     * @var bool $inTransaction
+    */
+    private bool $inTransaction = false;
+
+    /**
      * {@inheritdoc}
     */
     public function __construct(BaseDatabase $config) 
@@ -288,7 +295,12 @@ final class MySqliDriver implements DatabaseInterface
     */
     public function beginTransaction(int $flags = 0, ?string $name = null): bool
     {
-        return $this->connection->begin_transaction($flags, $name);
+        if($this->connection->begin_transaction($flags, $name)){
+            $this->inTransaction = true;
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -296,6 +308,7 @@ final class MySqliDriver implements DatabaseInterface
     */
     public function commit(int $flags = 0, ?string $name = null): bool 
     {
+        $this->inTransaction = false;
         return $this->connection->commit($flags, $name);
     }
 
@@ -304,7 +317,16 @@ final class MySqliDriver implements DatabaseInterface
     */
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
+        $this->inTransaction = false;
         return $this->connection->rollback($flags, $name);
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function inTransaction(): bool 
+    {
+        return $this->inTransaction;
     }
 
     /**

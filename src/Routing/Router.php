@@ -15,11 +15,12 @@ use \Luminova\Routing\Context;
 use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Base\BaseApplication;
-use \App\Controllers\Application;
+use \Luminova\Annotations\AttributeCollectors;
 use \Luminova\Base\BaseViewController;
 use \Luminova\Base\BaseController;
 use \Luminova\Application\Factory;
 use \Luminova\Application\Foundation;
+use \App\Controllers\Application;
 use \Luminova\Exceptions\RouterException;
 use \Luminova\Interface\RouterInterface;
 use \Luminova\Interface\ErrorHandlerInterface;
@@ -36,19 +37,19 @@ use \Exception;
 /**
  * Router shorthand methods for capture, to handle http methods by it name.
  *
- * @method static void get(string $pattern, Closure|string $callback) Handle "GET" requests.
- * @method static void post(string $pattern, Closure|string $callback) Handle "POST" requests.
- * @method static void patch(string $pattern, Closure|string $callback) Handle "PATCH" requests.
- * @method static void delete(string $pattern, Closure|string $callback) Handle "DELETE" requests.
- * @method static void put(string $pattern, Closure|string $callback) Handle "PUT" requests.
- * @method static void options(string $pattern, Closure|string $callback) Handle "OPTIONS" requests.
+ * @method static void get(string $pattern, Closure|string $callback) Route to handle http `GET` requests.
+ * @method static void post(string $pattern, Closure|string $callback) Route to handle http `POST` requests.
+ * @method static void patch(string $pattern, Closure|string $callback) Route to handle http `PATCH` requests.
+ * @method static void delete(string $pattern, Closure|string $callback) Route to handle http `DELETE` requests.
+ * @method static void put(string $pattern, Closure|string $callback) Route to handle http `PUT` requests.
+ * @method static void options(string $pattern, Closure|string $callback) Route to handle http `OPTIONS` requests.
 */
 final class Router 
 {
     /**
-     * Route patterns and handling functions
+     * Route patterns and handling functions.
      * 
-     * @var array<string, array> $controllers
+     * @var array<string,array> $controllers
     */
     private static array $controllers = [
         'routes' =>             [], 
@@ -61,7 +62,7 @@ final class Router
     ];
 
     /**
-     * All allowed HTTP request methods
+     * All allowed HTTP request methods.
      * 
      * @var array<string,string> $httpMethods
     */
@@ -77,7 +78,7 @@ final class Router
     ];
     
     /**
-     * Current route base group, used for (sub)route mounting
+     * Current route base group, used for (sub) route mounting.
      * 
      * @var string $baseGroup
     */
@@ -91,14 +92,14 @@ final class Router
     private static string $method = '';
 
     /**
-     * Application registered controllers namespace
+     * Application registered controllers namespace.
      * 
      * @var array $namespace
     */
     private static array $namespace = [];
 
     /**
-     * @var Terminal $term 
+     * @var Terminal|null $term 
     */
     private static ?Terminal $term = null;
 
@@ -108,7 +109,7 @@ final class Router
     private static bool $isCli = false;
 
     /**
-     * @var BaseApplication $application 
+     * @var BaseApplication|null $application 
     */
     private static ?BaseApplication $application = null;
 
@@ -129,7 +130,7 @@ final class Router
      * @param array $arguments Method arguments.
      * 
      * Expected arguments
-     *  - string $pattern A route pattern or template view name.
+     *  - string $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
      *  - Closure|string $callback Handle callback for router.
      * 
      * @return mixed Return value of method.
@@ -155,112 +156,81 @@ final class Router
      * Define URI prefixes and error handlers for specific URI prefix names.
      * Ensures only required routes for handling requests are loaded based on the URI prefix.
      * 
-     * @param Context|array<string,mixed> $contexts [, Context $... ] Arguments containing routing context.
+     * @param Context|array<string,mixed>|null ...$contexts [, Context $... ] Arguments containing routing context or array of arguments.
+     *              Pass `NULL` only when using route annotations.
      * 
      * @return self Returns the router instance.
      */
-    public function context(Context|array ...$contexts): self 
+    public function context(Context|array|null ...$contexts): self 
     {
-        if($contexts === []){
-            RouterException::throwWith('no_context', E_ERROR);
-        }
-
         self::$isCli = is_command();
         self::$method  = self::getRoutingMethod();
 
+        // When using attribute for routes.
+        if((bool) env('feature.route.annotation', false)){
+            $collector = new AttributeCollectors('\\App\\Controllers\\', $this->baseGroup, self::$isCli);
+            
+            if(self::$isCli){
+                $collector->installCli('app/Controllers');
+            }else{
+                $collector->installHttp('app/Controllers', self::getFirst());
+            }
+
+            $current = $this->baseGroup;
+            self::$controllers = array_merge(
+                self::$controllers, 
+                $collector->getRoutes()
+            );
+            
+            $this->baseGroup = $current;
+
+            return $this;
+        }
+
+        // When using default context manager.
+        if(empty($contexts)){
+            RouterException::throwWith('no_context', E_ERROR);
+        }
+        
         if (isset(self::$httpMethods[self::$method])) {
             $first = self::getFirst();
             $current = $this->baseGroup;
-            $fromArray = true;
-
-            if($contexts[0] instanceof Context) {
-                $fromArray = false;
-                $instances = Context::getInstances();
-            }else{
-                $instances = array_reduce($contexts, function($result, $item) {
-                    if ($item['prefix'] !== Context::WEB) {
-                        $result[$item['prefix']] = $item['prefix'];
-                    }
-                    return $result;
-                }, []);
-            }
+            $fromArray = !($contexts[0] instanceof Context);
+            $prefixes = $fromArray ? self::getArrayPrefixes($contexts) : Context::getPrefixes();
 
             foreach ($contexts as $context) {
                 $name = $fromArray ? ($context['prefix'] ?? '') : $context->getName();
+
+                if($name === ''){
+                    continue;
+                }
+                
                 $eHandler = $fromArray ? ($context['error'] ?? null) : $context->getErrorHandler();
 
-                if($name !== ''){
-                    self::reset();
-                    $install = $this->installContext($name, $eHandler, $first, $instances);
+                self::reset();
+                $result = $this->installContext($name, $eHandler, $first, $prefixes);
 
-                    if($install === 2){
-                        return $this;
-                    }
+                if($result === 2){
+                    return $this;
+                }
 
-                    if($install){
-                        self::bootContext($name, $this, self::$application);
-                        break;
-                    }
+                if($result === true){
+                    self::bootContext($name, $this, self::$application);
+                    break;
                 }
             }
 
             $this->baseGroup = $current;
         }
-
+        
         return $this;
-    }
-
-    /**
-     * Install the appropriate context.
-     * 
-     * @param string $name The context prefix name.
-     * @param Closure|array|null $eHandler Context error handler.
-     * @param string $first The request URI first segment.
-     * @param array<string,string> $instances List of context prefix names without web context as web is default.
-     * 
-     * @return bool|int<2> Return bool if context match was found or 2 if in cli but not in cli mode, otherwise false.
-    */
-    private function installContext(
-        string $name, 
-        Closure|array|null $eHandler, 
-        string $first, 
-        array $instances
-    ): bool 
-    {
-        if($first === $name) {
-            if ($name === Context::CLI){
-                if(!self::$isCli) {
-                    return 2;
-                }
-                
-                defined('CLI_ENVIRONMENT') || define('CLI_ENVIRONMENT', env('cli.environment.mood', 'testing'));
-            }elseif($eHandler !== null){
-                $this->setErrorListener($eHandler);
-            }
-        
-            if (isset($instances[$name])) {  
-                $this->baseGroup .= '/' . $name;
-            }
-
-            return true;
-        }
-        
-        if(!isset($instances[$first]) && self::isWeContext($name, $first)) {
-            if($eHandler !== null){
-                $this->setErrorListener($eHandler);
-            }
-
-            return true;
-        }
-        
-        return false;
     }
 
     /**
      * Before middleware, to handle router middleware authentication.
      * 
-     * @param string  $methods  Allowed methods, can be serrated with | pipe symbol.
-     * @param string  $pattern A route pattern or template view name.
+     * @param string  $methods  Allowed methods, can be serrated with `|` pipe symbol (e.g. `GET|POST`).
+     * @param string  $pattern The route URL pattern or template view name (e.g `/.*`, `/home`, `/user/([0-9])`).
      * @param Closure|string $callback Callback function to execute.
      * 
      * @return void
@@ -275,14 +245,14 @@ final class Router
             return;
         }
 
-        $this->authentication('routes_middleware', $methods, $pattern, $callback, true);
+        $this->addHttpRoute('routes_middleware', $methods, $pattern, $callback, true);
     }
 
     /**
      * After middleware route, executes the callback function after request was executed successfully.
      *
-     * @param string  $methods  Allowed methods, can be serrated with | pipe symbol.
-     * @param string  $pattern A route pattern or template view name.
+     * @param string  $methods  Allowed methods, can be serrated with `|` pipe symbol (e.g. `GET|POST`).
+     * @param string  $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
      * @param Closure|string $callback Callback function to execute.
      * 
      * @return void
@@ -297,14 +267,66 @@ final class Router
             return;
         }
 
-        $this->authentication('routes_after', $methods, $pattern, $callback);
+        $this->addHttpRoute('routes_after', $methods, $pattern, $callback);
+    }
+
+    /**
+     * Capture front controller request method based on pattern and execute the callback.
+     *
+     * @param string $methods Allowed methods, can be separated with `|` pipe symbol (e.g `GET|POST|PUT`).
+     * @param string $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback Callback function to execute (e.g `ClassBaseName::methodName`).
+     * 
+     * @return void
+     * @throws RouterException Throws if blank method is passed.
+    */
+    public function capture(string $methods, string $pattern, Closure|string $callback): void
+    {
+        if ($methods === '') {
+            RouterException::throwWith('empty_argument', 0, [
+               '$methods'
+            ]);
+            return;
+        }
+
+        $this->addHttpRoute('routes', $methods, $pattern, $callback);
+    }
+
+    /**
+     * An alias for route capture method to handle any type of request method.
+     *
+     * @param string $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback Handle callback for router (e.g `ClassBaseName::methodName`).
+     * 
+     * @return void
+    */
+    public function any(string $pattern, Closure|string $callback): void
+    {
+        $this->capture('GET|POST|PUT|DELETE|OPTIONS|PATCH|HEAD', $pattern, $callback);
+    }
+
+    /**
+     * Capture front controller command request names and execute callback.
+     *
+     * @param string $pattern Allowed command pattern or script name (e.g `foo`, `foo/(:int)/bar/(:string)`).
+     * @param Closure|string $callback Callback function to execute (e.g `ClassBaseName::methodName`).
+     * 
+     * @return void
+    */
+    public function command(string $pattern, Closure|string $callback): void
+    {
+        self::$controllers['cli_commands']["CLI"][] = [
+            'callback' => $callback,
+            'pattern' => self::parsePatternValue(trim($pattern, '/')),
+            'middleware' => false
+        ];
     }
 
     /**
      * Before middleware, for command middleware authentication.
      *
      * @param string $group Command middleware group name or `any` for global middleware.
-     * @param Closure|string $callback Callback controller handler.
+     * @param Closure|string $callback Callback controller handler (e.g `ClassBaseName::methodName`).
      * 
      * @return void
      * @throws RouterException Throws when called in wrong context.
@@ -324,120 +346,49 @@ final class Router
     }
 
     /**
-     * Capture front controller request method based on pattern and execute the callback.
-     *
-     * @param string $methods Allowed methods, can be separated with | pipe symbol.
-     * @param string $pattern A route pattern or template view name.
-     * @param Closure|string $callback Callback function to execute.
-     * 
-     * @return void
-     * @throws RouterException Throws if blank method is passed.
-    */
-    public function capture(string $methods, string $pattern, Closure|string $callback): void
-    {
-        if ($methods === '') {
-            RouterException::throwWith('empty_argument', 0, [
-               '$methods'
-            ]);
-            return;
-        }
-
-        $pattern = $this->baseGroup . '/' . trim($pattern, '/');
-        $pattern = ($this->baseGroup !== '') ? rtrim($pattern, '/') : $pattern;
-        $pipes = explode('|', $methods);
-
-        foreach ($pipes as $method) {
-            self::$controllers['routes'][$method][] = [
-                'pattern' => $pattern,
-                'callback' => $callback,
-                'middleware' => false
-            ];
-        }
-    }
-
-    /**
-     * Capture front controller command request names and execute callback
-     *
-     * @param string $pattern Allowed command pattern or script name.
-     * @param Closure|string $callback Callback function to execute.
-     * 
-     * @return void
-    */
-    public function command(string $pattern, Closure|string $callback): void
-    {
-        self::$controllers['cli_commands']["CLI"][] = [
-            'callback' => $callback,
-            'pattern' => self::parsePatternValue(trim($pattern, '/')),
-            'middleware' => false
-        ];
-    }
-
-    /**
-     * A shorthand for route capture method to handle any type of request method.
-     *
-     * @param string $pattern A route pattern or template view name.
-     * @param Closure|string $callback Handle callback for router.
-     * 
-     * @return void
-    */
-    public function any(string $pattern, Closure|string $callback): void
-    {
-        $this->capture('GET|POST|PUT|DELETE|OPTIONS|PATCH|HEAD', $pattern, $callback);
-    }
-
-    /**
      * Binds a collection of routes segment in a single base route.
      *
-     * @param string $group The binding group pattern.
-     * @param Closure $callback Callback group function to handle binds.
+     * @param string $prefix The binding group prefix or pattern (e.g. `/blog`, `/account/([a-z])`).
+     * @param Closure $callback The bind callback function to handle group of routes.
      * 
      * @return void
+     * @example - Example blog website binding.
+     * 
+     * ```
+     * $router->bind('/blog', static function(Router $router){
+     *      $router->get('/', 'BlogController::blogs');
+     *      $router->get('/id/([aZ-Az-0-9-])', 'BlogController::blog');
+     * });
+     * ```
     */
-    public function bind(string $group, Closure $callback): void
+    public function bind(string $prefix, Closure $callback): void
     {
         $current = $this->baseGroup;
-        $this->baseGroup .= $group;
+        $this->baseGroup .= $prefix;
 
         $callback(...self::noneParamInjection($callback));
         $this->baseGroup = $current;
     }
 
     /**
-     * Binds a command route group.
+     * Binds commands route within a group.
      *
-     * @param string $group The binding group name.
+     * @param string $group The command group name. 
      * @param Closure $callback Callback command function to handle group.
      * 
      * @return void
+     * @example - Example blog command grouping.
+     * 
+     * ```
+     * $router->group('blog', static function(Router $router){
+     *      $router->command('list', 'BlogController::blogs');
+     *      $router->command('id/(:mixed)', 'BlogController::blog');
+     * });
+     * ```
     */
     public function group(string $group, Closure $callback): void
     {
         self::$controllers['cli_groups'][$group][] = $callback;
-    }
-
-    /**
-     * Boot route context.
-     *
-     * @param string $context Route context name
-     * @param Router $router  Make router instance available in route.
-     * @param BaseApplication $app Make application instance available in route.
-     * 
-     * @return void
-     * @throws RouterException
-    */
-    private static function bootContext(string $context, Router $router, BaseApplication $app): void 
-    {
-        if (file_exists($__lmv_context = APP_ROOT . DIRECTORY_SEPARATOR . 'routes' . DIRECTORY_SEPARATOR . $context . '.php')) {
-            require_once $__lmv_context;
-            self::$application->__on('onContextInstalled', $context);
-            return;
-        }
-
-        self::printError(
-            '500 Internal Server Error', 
-            RouterException::withMessage('invalid_context', $context), 
-            500
-        );
     }
 
     /**
@@ -469,29 +420,6 @@ final class Router
     }
 
     /**
-     * If the controller already contains a namespace, use it directly.
-     * If not, loop through registered namespaces to find the correct class.
-     * 
-     * @param string $controller Controller class base name.
-     * 
-     * @return string $className
-    */
-    private static function getControllerClass(string $controller): string
-    {
-        if (class_exists($controller)) {
-            return $controller;
-        }
-
-        foreach (self::$namespace as $namespace) {
-            if(class_exists($namespace . $controller)) {
-                return $namespace . $controller;
-            }
-        }
-
-        return '';
-    }
-
-    /**
      * Run application routes, loop all defined routing methods to call controller 
      * if method matches view  or command name.
      * 
@@ -516,61 +444,6 @@ final class Router
     }
 
     /**
-     * Enable encoding of response.
-     * 
-     * @param string|null $encoding
-     * 
-     * @return bool
-     */
-    private static function outputEncoding(?string $encoding = null): void
-    {
-        if ($encoding === null || $encoding === '') {
-            ob_start();
-            return;
-        }
-
-        if (str_contains($encoding, 'x-gzip') || str_contains($encoding, 'gzip')) {
-            ob_start('ob_gzhandler');
-            return;
-        }
-
-        $handler = env('script.output.handler', null);
-        ob_start($handler === '' ? null : $handler);
-    }
-
-    /**
-     * Get the request method for routing, considering overrides.
-     *
-     * @return string The request method for routing.
-     * @internal
-     */
-    private static function getRoutingMethod(): string
-    {
-        $method = ($_SERVER['REQUEST_METHOD'] ?? null);
-
-        if($method === null && self::$isCli){
-            return 'CLI';
-        }
-  
-        if($method === 'HEAD'){
-            ob_start();
-            return 'GET';
-        }
-
-        self::outputEncoding($_SERVER['HTTP_ACCEPT_ENCODING'] ?? null);
-
-        if($method === 'POST'){
-            $headers = Header::getHeaders();
-            $overrides = ['PUT' => true, 'DELETE' => true, 'PATCH' => true];
-            if (isset($headers['X-HTTP-Method-Override']) && isset($overrides[$headers['X-HTTP-Method-Override']])) {
-                $method = $headers['X-HTTP-Method-Override'];
-            }
-        }
-        
-        return strtoupper($method ?? '');
-    }
-
-    /**
      * Set an error listener callback function.
      *
      * @param Closure|string|array<int,string> $match Matching route pattern.
@@ -578,7 +451,10 @@ final class Router
      *  
      * @return void
     */
-    public function setErrorListener(Closure|string|array $match, Closure|array|string|null $callback = null): void
+    public function setErrorListener(
+        Closure|string|array $match, 
+        Closure|array|string|null $callback = null
+    ): void
     {
         if ($callback === null) {
             self::$controllers['errors']['/'] = $match;
@@ -608,26 +484,6 @@ final class Router
         }
        
         self::printError('Error file not found', null, $status);
-    }
-
-    /**
-     * Show error message with proper header and status code.
-     * 
-     * @param string $header Header Title of error message.
-     * @param string|null $message Optional message body to display.
-     * @param int $status http status code.
-     * 
-     * @return void
-     * 
-    */
-    private static function printError(string $header, ?string $message = null, int $status = 404): void 
-    {
-        Header::headerNoCache($status);
-        if($message){
-            echo "<html><title>{$header}</title><body><h1>{$header}</h1><p>{$message}</p></body></html>";
-        }
-
-        exit(STATUS_ERROR);
     }
 
     /**
@@ -666,60 +522,156 @@ final class Router
     }
 
     /**
-     * Get first segment of current view uri.
+     * Boot route context.
+     * Allow accessing router and application instance within the context.
+     *
+     * @param string $context Route context name
+     * @param Router $router  Make router instance available in route.
+     * @param BaseApplication $app Make application instance available in route.
      * 
-     * @return string First url segment.
+     * @return void
+     * @throws RouterException
     */
-    private static function getFirst(): string
+    private static function bootContext(
+        string $context, 
+        Router $router, 
+        BaseApplication $app
+    ): void 
     {
-        if(self::$isCli){
-            return 'cli';
+        $__lmv_context = APP_ROOT . 'routes' . DIRECTORY_SEPARATOR . $context . '.php';
+        if (file_exists($__lmv_context)) {
+            require_once $__lmv_context;
+            self::$application->__on('onContextInstalled', $context);
+            return;
         }
 
-        $segments = Foundation::getSegments();
-        return reset($segments);
+        self::printError(
+            '500 Internal Server Error', 
+            RouterException::withMessage('invalid_context', $context), 
+            500
+        );
     }
-
+    
     /**
-     * Is context a web instance
-     *
-     * @param string $result context name.
-     * @param string $first First url segment.
+     * If the controller already contains a namespace, use it directly.
+     * If not, loop through registered namespaces to find the correct class.
+     * 
+     * @param string $controller Controller class base name.
+     * 
+     * @return string $className
+    */
+    private static function getControllerClass(string $controller): string
+    {
+        if (class_exists($controller)) {
+            return $controller;
+        }
+
+        foreach (self::$namespace as $namespace) {
+            if(class_exists($namespace . $controller)) {
+                return $namespace . $controller;
+            }
+        }
+
+        return '';
+    }
+    
+    /**
+     * Enable encoding of response.
+     * 
+     * @param string|null $encoding
      * 
      * @return bool
-    */
-    private static function isWeContext(string $result, ?string $first = null): bool 
+     */
+    private static function outputEncoding(?string $encoding = null): void
     {
-        return ($first === null || $first === '' || Context::WEB) && $result !== Context::CLI && $result !== Context::API;
-    }
-
-    /**
-     * Get terminal instance 
-     * 
-     * @return Terminal Return instance of Terminal class.
-    */
-    private static function terminal(): Terminal
-    {
-        if(self::$term === null){
-            self::$term = new Terminal();
+        if ($encoding === null || $encoding === '') {
+            ob_start();
+            return;
         }
 
-        return self::$term;
+        if (str_contains($encoding, 'x-gzip') || str_contains($encoding, 'gzip')) {
+            ob_start('ob_gzhandler');
+            return;
+        }
+
+        $handler = env('script.output.handler', null);
+        ob_start($handler === '' ? null : $handler);
     }
 
     /**
-     * Register a middleware authentication.
+     * Get the request method for routing, considering overrides.
+     *
+     * @return string The request method for routing.
+     * @internal
+     */
+    private static function getRoutingMethod(): string
+    {
+        $method = ($_SERVER['REQUEST_METHOD'] ?? null);
+
+        if($method === null && self::$isCli){
+            return 'CLI';
+        }
+
+        if($method === null){
+            return '';
+        }
+
+        $method = strtoupper($method);
+  
+        if($method === 'HEAD'){
+            ob_start();
+            return 'GET';
+        }
+
+        self::outputEncoding($_SERVER['HTTP_ACCEPT_ENCODING'] ?? null);
+
+        if($method === 'POST'){
+            $headers = Header::getHeaders();
+            $overrides = ['PUT' => true, 'DELETE' => true, 'PATCH' => true];
+            if (isset($headers['X-HTTP-Method-Override']) && isset($overrides[$headers['X-HTTP-Method-Override']])) {
+                $method = $headers['X-HTTP-Method-Override'];
+            }
+        }
+        
+        return $method;
+    }
+    
+    /**
+     * Show error message with proper header and status code.
+     * 
+     * @param string $header Header Title of error message.
+     * @param string|null $message Optional message body to display.
+     * @param int $status http status code.
+     * 
+     * @return void
+    */
+    private static function printError(
+        string $header, 
+        ?string $message = null, 
+        int $status = 404
+    ): void 
+    {
+        Header::headerNoCache($status);
+        if($message){
+            echo "<html><title>{$header}</title><body><h1>{$header}</h1><p>{$message}</p></body></html>";
+        }
+
+        exit(STATUS_ERROR);
+    }
+
+    /**
+     * Register a http route.
      *
      * @param string  $to group name.
      * @param string  $methods  Allowed methods, can be serrated with | pipe symbol.
-     * @param string  $pattern A route pattern or template view name.
+     * @param string  $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
      * @param Closure|string $callback Callback function to execute.
      * @param bool $terminate Terminate if it before middleware.
      * 
      * @return void
      * @throws RouterException Throws when called in wrong context.
     */
-    private function authentication(
+    private function addHttpRoute(
         string $to, 
         string $methods, 
         string $pattern, 
@@ -743,6 +695,118 @@ final class Router
                 'middleware' => $terminate
             ];
         }
+    }
+
+    /**
+     * Get first segment of current view uri.
+     * 
+     * @return string First url segment.
+    */
+    private static function getFirst(): string
+    {
+        if(self::$isCli){
+            return 'cli';
+        }
+
+        $segments = Foundation::getSegments();
+        return reset($segments);
+    }
+
+    /**
+     * Extract context prefix from array context arguments.
+     * 
+     * @param array<int,array> $contexts The context arguments as an array.
+     * 
+     * @return array<string,string> Return array of context prefixes.
+    */
+    private function getArrayPrefixes(array $contexts): array 
+    {
+        $prefixes = [];
+        foreach ($contexts as $item) {
+            if ($item['prefix'] === Context::WEB || $item['prefix'] === null || $item['prefix'] === '') {
+                continue;
+            }
+
+            $prefixes[$item['prefix']] = $item['prefix'];
+        }
+
+        return $prefixes;
+    }
+
+    /**
+     * Install the appropriate context.
+     * 
+     * @param string $name The context prefix name.
+     * @param Closure|array|null $eHandler Context error handler.
+     * @param string $first The request URI first segment.
+     * @param array<string,string> $prefixes List of context prefix names without web context as web is default.
+     * 
+     * @return bool|int<2> Return bool if context match was found or 2 if in cli but not in cli mode, otherwise false.
+    */
+    private function installContext(
+        string $name, 
+        Closure|array|null $eHandler, 
+        string $first, 
+        array $prefixes
+    ): bool|int
+    {
+        if($first === $name) {
+            if ($name === Context::CLI){
+                if(!self::$isCli) {
+                    return 2;
+                }
+                
+                defined('CLI_ENVIRONMENT') || define('CLI_ENVIRONMENT', env('cli.environment.mood', 'testing'));
+                return true;
+            }
+            
+            if($eHandler !== null){
+                $this->setErrorListener($eHandler);
+            }
+        
+            if (isset($prefixes[$name])) {  
+                $this->baseGroup .= '/' . $name;
+            }
+
+            return true;
+        }
+        
+        if(!isset($prefixes[$first]) && self::isWeContext($name, $first)) {
+            if($eHandler !== null){
+                $this->setErrorListener($eHandler);
+            }
+
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Is context a web instance.
+     *
+     * @param string $result The context name.
+     * @param string $first The first uri segment.
+     * 
+     * @return bool Return true if the context is a web instance, otherwise false.
+    */
+    private static function isWeContext(string $result, ?string $first = null): bool 
+    {
+        return ($first === null || $first === '' || $result === Context::WEB) && $result !== Context::CLI && $result !== Context::API;
+    }
+
+    /**
+     * Get terminal instance.
+     * 
+     * @return Terminal Return instance of Terminal class.
+    */
+    private static function terminal(): Terminal
+    {
+        if(self::$term === null){
+            self::$term = new Terminal();
+        }
+
+        return self::$term;
     }
 
     /**
@@ -908,7 +972,11 @@ final class Router
     * @return array<int,mixed> Return method params and arguments-value pairs.
     * @internal 
     */
-    private static function injection(Closure|ReflectionMethod|string $caller, array $arguments = [], bool $injection = false): array
+    private static function injection(
+        Closure|ReflectionMethod|string $caller, 
+        array $arguments = [], 
+        bool $injection = false
+    ): array
     {
         if (!$injection && !(bool) env('feature.route.dependency.injection', false)) {
             return $arguments;
@@ -1060,7 +1128,11 @@ final class Router
     * @return bool 
     * @throws RouterException if method is not callable or doesn't exist
     */
-    private static function call(Closure|string|array $callback, array $arguments = [], bool $injection = false): bool
+    private static function call(
+        Closure|string|array $callback, 
+        array $arguments = [], 
+        bool $injection = false
+    ): bool
     {
         if ($callback instanceof Closure) {
             $arguments = ((isset($arguments['command']) && self::$isCli) ?  ($arguments['params'] ?? []) : $arguments);
@@ -1221,9 +1293,9 @@ final class Router
     * Replace all curly braces matches {} into word patterns (like Laravel)
     * Convert pattern to a regex pattern  & Checks if there is a routing match.
     *
-    * @param string $pattern Url router pattern.
-    * @param string $uri Request uri.
-    * @param mixed &$matches Url matches.
+    * @param string $pattern Url current route pattern.
+    * @param string $uri The current request uri.
+    * @param mixed &$matches Url matches passed by reference.
     *
     * @return bool is match true or false.
     */
@@ -1272,27 +1344,6 @@ final class Router
         }
 
         return '';
-    }
-
-    /**
-     * Get the current command controller views
-     * 
-     * @return array $views Return command arguments as URI.
-    */
-    public static function getArguments(): array
-    {
-        $views = [
-            'view' => '',
-            'options' => [],
-        ];
-       
-        if (isset($_SERVER['argv'][2])) {
-            $result = self::$term->extract(array_slice($_SERVER['argv'], 2), true);
-            $views['view'] = '/' . implode('/', $result['arguments']);
-            $views['options'] = $result['options'];
-        }
-
-        return $views;
     }
     
     /**

@@ -17,6 +17,7 @@ abstract class Seeder
      * @var array<int,class-string<Seeder>> $invokes
     */
     private static array $invokes = [];
+    
     /**
      * Run database table seeder.
      * 
