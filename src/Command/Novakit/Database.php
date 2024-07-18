@@ -17,6 +17,7 @@ use \Luminova\Database\Seeder;
 use \Luminova\Storages\FileManager;
 use \Luminova\Application\Caller;
 use \Luminova\Exceptions\AppException;
+use \Luminova\Exceptions\DatabaseException;
 use \Exception;
 
 class Database extends BaseConsole 
@@ -59,6 +60,9 @@ class Database extends BaseConsole
     public function run(?array $options = []): int
     {
         $this->explain($options);
+        // Temporarily enable cli exception
+        setenv('throw.cli.exceptions', true);
+
         static::$builder ??= Builder::getInstance();
         static::$isDebug = (bool) $this->getAnyOption('debug', 'b', false);
         shared('SHOW_QUERY_DEBUG', static::$isDebug);
@@ -85,11 +89,13 @@ class Database extends BaseConsole
     /**
      * Run database table truncation.
      * 
+     * @param mixed $table The table to truncate.
+     * 
      * @return int Returns STATUS_SUCCESS on successful execution, STATUS_ERROR on failure.
     */
-    private function doTruncate(): int 
+    private function doTruncate(mixed $table = null): int 
     {
-        $table = $this->getAnyOption('table', 't');
+        $table ??= $this->getAnyOption('table', 't');
 
         if ($table === false || $table === '') {
             $this->writeln("Error: You must specify the table name using '--table=Foo'.", 'white', 'red');
@@ -97,6 +103,7 @@ class Database extends BaseConsole
         }
       
         $noTransaction = $this->getAnyOption('no-transaction', 'n', false);
+ 
         if(static::$builder->table($table)->truncate(!$noTransaction)){
             $this->writeln("Success: Table '{$table}' was truncated successfully.", 'white', 'green');
             return STATUS_SUCCESS;
@@ -201,7 +208,6 @@ class Database extends BaseConsole
         return STATUS_ERROR;
     }
    
-
     /**
      * Run database table migration alter.
      * 
@@ -288,10 +294,10 @@ class Database extends BaseConsole
         }
 
         $noBackup = $this->getAnyOption('no-backup', 'n', false);
-        $noInvokes = $this->getAnyOption('no-invoke', 'i', false);
+        $invokes = $this->getAnyOption('invoke', 'i', false);
 
         if($this->getAnyOption('rollback', 'r', false)){
-            return $this->rollbackSeeder($class, $noBackup, $noInvokes);
+            return $this->rollbackSeeder($class, $noBackup, $invokes);
         }
 
         /**
@@ -330,17 +336,15 @@ class Database extends BaseConsole
                      * @var Seeder $seeder
                      */
                     $seeder = new $seed();
-                    //static::$builder->database()->beginTransaction();
-                    $seeder->run(static::$builder);
-                    //static::$builder->database()->commit();
-
-                    if($noInvokes === false){
-                        $seeders = array_merge($seeders, $seeder->getInvokes());
-                    }
-
-                    $executed++;
-                    if(!$noBackup){
-                        static::lockFile($lock, $seed, $path, $backup, true);
+                    if($this->doSeeding($seeder)){
+                        if($invokes === true){
+                            $seeders = array_merge($seeders, $seeder->getInvokes());
+                        }
+    
+                        $executed++;
+                        if(!$noBackup){
+                            static::lockFile($lock, $seed, $path, $backup, true);
+                        }
                     }
                 }
             } else {
@@ -354,17 +358,15 @@ class Database extends BaseConsole
                  * @var Seeder $seeder
                 */
                 $seeder = new $seed();
-                //static::$builder->database()->beginTransaction();
-                $seeder->run(static::$builder);
-                //static::$builder->database()->commit();
+                if($this->doSeeding($seeder)){
+                    if($invokes === true){
+                        $seeders = $seeder->getInvokes();
+                    }
 
-                if($noInvokes === false){
-                    $seeders = $seeder->getInvokes();
-                }
-                $executed++;
-
-                if(!$noBackup){
-                    static::lockFile($lock, $seed, $path, $backup, true);
+                    $executed++;
+                    if(!$noBackup){
+                        static::lockFile($lock, $seed, $path, $backup, true);
+                    }
                 }
             }
 
@@ -377,13 +379,12 @@ class Database extends BaseConsole
                  * @var Seeder $seeder
                 */
                 $seeder = new $seed();
-                //static::$builder->database()->beginTransaction();
-                $seeder->run(static::$builder);
-                //static::$builder->database()->commit();
-                $executed++;
-
-                if(!$noBackup){
-                    static::lockFile($lock, $seed, $path, $backup, true);
+                if($this->doSeeding($seeder)){
+                    $seeder->run(static::$builder);
+                    $executed++;
+                    if(!$noBackup){
+                        static::lockFile($lock, $seed, $path, $backup, true);
+                    }
                 }
             }
 
@@ -394,7 +395,6 @@ class Database extends BaseConsole
 
             $this->writeln("Failed: No seeder was execution.", 'red');
         } catch (AppException|Exception $e) {
-            //static::$builder->database()->rollback();
             $this->writeln("Seeder execution failed: " . $e->getMessage(), 'white', 'red');
         }
 
@@ -418,10 +418,10 @@ class Database extends BaseConsole
         }
 
         $noBackup = $this->getAnyOption('no-backup', 'n', false);
-        $noInvokes = $this->getAnyOption('no-invoke', 'i', false);
+        $invokes = $this->getAnyOption('invoke', 'i', false);
         if(!$drop && $this->getAnyOption('rollback', 'r', false)){
             static::$isDebug = false;
-            return $this->rollbackMigration($class, $noBackup, $noInvokes);
+            return $this->rollbackMigration($class, $noBackup, $invokes);
         }
 
         /**
@@ -455,7 +455,7 @@ class Database extends BaseConsole
                         continue;
                     }
 
-                    if($this->doMigration($migrate, $drop, $migrants)){
+                    if($this->doMigration($migrate, $drop, $invokes, $migrants)){
                         $executed++;
 
                         if($noBackup === false){
@@ -470,7 +470,7 @@ class Database extends BaseConsole
                     return STATUS_SUCCESS;
                 }
 
-                if($this->doMigration($migrate, $drop, $migrants)){
+                if($this->doMigration($migrate, $drop, $invokes, $migrants)){
                     $executed++;
 
                     if($noBackup === false){
@@ -484,7 +484,7 @@ class Database extends BaseConsole
                     continue;
                 }
 
-                if($this->doMigration($migrate, $drop, null)){
+                if($this->doMigration($migrate, $drop, false, null)){
                     $executed++;
 
                     if($noBackup === false){
@@ -525,7 +525,8 @@ class Database extends BaseConsole
      * Executes migrations.
      *
      * @param string $namespace The migrations class namespace.
-     * @param bool|null $drop Weather to migrations drop table.
+     * @param bool $drop Weather to migrations drop table.
+     * @param bool $invokes Weather to invoke migrations classes.
      * @param array|null $migrants Pass migrations invokers by reference.
      * 
      * @return bool Returns true if migrations otherwise false.
@@ -533,6 +534,7 @@ class Database extends BaseConsole
     private function doMigration(
         string $namespace, 
         bool $drop = false, 
+        bool $invokes = false,
         ?array &$migrants = null,
     ): bool 
     {
@@ -540,16 +542,20 @@ class Database extends BaseConsole
          * @var Migration $instance
          */
         $instance = new $namespace();
+
         if(static::$isDebug){
             $instance->up();
-        }else{
+            return false;
+        }
+
+        try{
             $instance->down();
             if($drop === false){
                 sleep(1);
                 $instance->up();
             }
 
-            if($migrants !== null){
+            if($invokes === true){
                 $migrants = $instance->getInvokes();
             }
 
@@ -561,7 +567,7 @@ class Database extends BaseConsole
 
             if(shared('MIGRATION_SUCCESS') === true){
                 if($hasTnx){
-                    $db->commit();
+                    return $db->commit();
                 }
 
                 return true;
@@ -570,6 +576,33 @@ class Database extends BaseConsole
             if($hasTnx){
                 $db->rollback();
             }
+            
+        } catch (Exception|AppException $e) {
+            $db = shared('DROP_TRANSACTION');
+            if ($db instanceof DatabaseInterface && $db->inTransaction()) {
+                $db->rollback();
+            }
+            
+            $this->writeln("Error: " . $e->getMessage(), 'white', 'red');
+        }
+
+        return false;
+    }
+
+    /**
+     * Execute seeder.
+     * 
+     * @param Seeder $seeder The seeder to execute.
+     * 
+     * @return bool Return true if seeder succeeded, false otherwise.
+    */
+    private function doSeeding(Seeder $seeder): bool 
+    {
+        try{
+            $seeder->run(static::$builder);
+            return true;
+        } catch (Exception|AppException $e) {
+            $this->writeln("Error: " . $e->getMessage(), 'white', 'red');
         }
         return false;
     }
@@ -587,7 +620,7 @@ class Database extends BaseConsole
     private function rollbackMigration(
         mixed $class, 
         bool $noBackup = false, 
-        bool $noInvokes = false, 
+        bool $invokes = false, 
         int|string|null $input = null
     ): int 
     {
@@ -636,38 +669,38 @@ class Database extends BaseConsole
                         }
                         
                         if (copy($backupFile, $migrationPath . $class . '.php')) {
-                            $migrants = $noInvokes ? null : [];
+                            $migrants = [];
 
-                            if ($this->doMigration($migrateClass, false, $migrants)) {
+                            if ($this->doMigration($migrateClass, false, $invokes, $migrants)) {
                                 $executions++;
 
                                 if(!$noBackup){
                                     static::updateLockFile($lock, (int) $input, $class, $migrateClass, $migrationPath, $backupPath);
                                 }
-                            }
-                            
-                            foreach ($migrants as $migrate) {
-                                $class = get_class_name($migrate);
 
-                                if ($class === '') {
-                                    continue;
+                                foreach ($migrants as $migrate) {
+                                    $class = get_class_name($migrate);
+    
+                                    if ($class === '') {
+                                        continue;
+                                    }
+    
+                                    if ($this->rollbackMigration($class, $noBackup, true, $input) === STATUS_SUCCESS) {
+                                        $executions++;
+                                    }
+    
+                                    sleep(1);
                                 }
 
-                                if ($this->rollbackMigration($class, $noBackup, true, $input) === STATUS_SUCCESS) {
-                                    $executions++;
+                                if ($executions > 0) {
+                                    $this->writeln("Success: Migration rolled back to version '{$input}' successfully.", 'green');
+                                    return STATUS_SUCCESS;
                                 }
-
-                                sleep(1);
                             }
-                        }
-
-                        if ($executions > 0) {
-                            $this->writeln("Success: Migration rolled back to version '{$input}' successfully.", 'green');
-                            return STATUS_SUCCESS;
                         }
 
                         $this->writeln("Failed: No migrations were rolled back to version '{$input}'.", 'red');
-                    } catch (Exception $e) {
+                    } catch (Exception|AppException $e) {
                         $db = shared('DROP_TRANSACTION');
                         
                         if ($db instanceof DatabaseInterface && $db->inTransaction()) {
@@ -693,10 +726,11 @@ class Database extends BaseConsole
      *
      * @param mixed $class The class name of the seeder to rollback.
      * @param bool $noBackup Weather no backup flag is passed.
+     * @param bool $invokes Weather to invokes other invokable seeders (default: false).
      *
      * @return int Returns STATUS_SUCCESS on successful rollback, STATUS_ERROR on failure.
      */
-    private function rollbackSeeder(mixed $class, bool $noBackup = false, bool $noInvokes = false): int 
+    private function rollbackSeeder(mixed $class, bool $noBackup = false, bool $invokes = false): int 
     {
         if (empty($class)) {
             $this->writeln('Error: You must specify a seeder class name to rollback using `--class=Foo --rollback`.', 'white', 'red');
@@ -704,7 +738,9 @@ class Database extends BaseConsole
         }
 
         shared('SHOW_QUERY_DEBUG', (bool) $this->getAnyOption('debug', 'b', false));
+        $table = $this->getAnyOption('table', 't', false);
         $backupPath = root('/writeable/database/Seeders/');
+        $truncated = false;
 
         if (file_exists($lockFile = $backupPath . 'seeders.lock')) {
             $lock = file_get_contents($lockFile);
@@ -718,7 +754,7 @@ class Database extends BaseConsole
 
             if (isset($lock[$class])) {
                 $metadata = $lock[$class]['metadata'] ?? [];
-                $versions = $this->listLocks($lock, $class, 'Seed');
+                $versions = $this->listLocks($lock, $class, 'Seed', ($table === true || $table === false));
                 $executions = 0;
 
                 $input = $this->prompt('Enter the version number you want to rollback to:', $versions, 'required|in_array(' . implode(',', $versions) . ')');
@@ -728,50 +764,57 @@ class Database extends BaseConsole
                         $backupFile = $backupPath . $metadata[$input]['backup'];
                         $path = root('/app/Controllers/Database/Seeders/');
                         $seederClass = "\\App\Controllers\\Database\\Seeders\\{$class}";
+                        $continue = 'yes';
 
                         if($this->guardVersion($seederClass, $lock, $path, $backupPath, (int) $input)){
                             return STATUS_SUCCESS;
                         }
- 
-                        if (copy($backupFile, $path . $class . '.php')) {
+
+                        if($table !== true && $table !== false){
+                            if(static::$builder->table($table)->temp()){
+                               $truncated = $this->doTruncate($table) === STATUS_SUCCESS;
+                            }else{
+                                $this->writeln("Error: Unable to create backup table '{$table}'. Recovery of seed records may be impossible if rollback fails.", 'red');
+                                $continue = $this->prompt('Do you wish to continue?', ['yes' => 'green', 'no' => 'red'], 'required|in_array(yes,no)');
+                                
+                                if($continue === 'yes'){
+                                    $this->doTruncate($table);
+                                }
+                            }
+                        }
+                 
+                        if ($continue === 'yes' && copy($backupFile, $path . $class . '.php')) {
                             /**
                              * @var Seeder $seeder
                              */
                             $seeder = new $seederClass();
-                            $seeder->run(static::$builder);
 
-                            if($noInvokes === false){
-                                $seeders = $seeder->getInvokes();
-                            }
-
-                            $executions++;
-                            if(!$noBackup){
-                                static::updateLockFile($lock, (int) $input, null, $seederClass, $path, $backupPath, true);
-                            }
-                        
-                            foreach ($seeders as $seed) {
-                                /**
-                                 * @var Seeder $seeder
-                                 */
-                                $seeder = new $seed();
-                                $seeder->run(static::$builder);
-
+                            if($this->doSeeding($seeder)){
                                 $executions++;
                                 if(!$noBackup){
-                                    //static::lockFile($lock, $seed, $path, $backupPath, true);
-                                    static::updateLockFile($lock, (int) $input, null, $seed, $path, $backupPath, true);
+                                    static::updateLockFile($lock, (int) $input, null, $seederClass, $path, $backupPath, true);
                                 }
                             
-                            }
-                        }
+                                if($invokes === true){
+                                    foreach ($seeder->getInvokes() as $seed) {
+                                        if($this->doSeeding(new $seed())){
+                                            $executions++;
+                                            if(!$noBackup){
+                                                static::updateLockFile($lock, (int) $input, null, $seed, $path, $backupPath, true);
+                                            }
+                                        }
+                                    }
+                                }
 
-                        if($executions > 0){
-                            $this->writeln("Success: Seeder rolled back to version '{$input}' successfully.", 'green');
-                            return STATUS_SUCCESS;
+                                if($executions > 0){
+                                    $this->writeln("Success: Seeder rolled back to version '{$input}' successfully.", 'green');
+                                    return STATUS_SUCCESS;
+                                }
+                            }
                         }
 
                         $this->writeln("Failed: No seeder was rolled back to version '{$input}'.", 'red');
-                    } catch (Exception $e) {
+                    } catch (Exception|AppException $e) {
                         $this->writeln("Error: {$e->getMessage()}", 'red');
                     }
                 }else{
@@ -780,6 +823,10 @@ class Database extends BaseConsole
             } else {
                 $this->writeln("Error: No lock found for class: '{$class}'", 'white', 'red');
             }
+        }
+
+        if($truncated && static::$builder->exec("INSERT INTO {$table} SELECT * FROM temp_{$table}") > 0){
+            $this->writeln("Table: '{$table}' records has been restored to last version");
         }
 
         return STATUS_ERROR;
@@ -798,7 +845,8 @@ class Database extends BaseConsole
     private function listLocks(
         array $lock, 
         string $class, 
-        string $title = 'Migration'
+        string $title = 'Migration',
+        bool $warn = false
     ): array
     {
         $headers = ['Version', 'Backup', $title . ' Date'];
@@ -806,6 +854,14 @@ class Database extends BaseConsole
         $metadata = $lock[$class]['metadata'] ?? [];
 
         $this->writeln("{$title} Class: " . $lock[$class]['namespace']);
+
+        if($warn){
+            $this->writeln(
+                "Note: To avoid adding new seed records instead of replacing them, truncate the seeder table before rolling back.\n" .
+                "Alternatively, pass the `--table` argument with your seed table name to truncate before rolling back the seeder.",
+                'yellow'
+            );            
+        }
 
         foreach ($metadata as $item) {
             $versions[] = $item['version'];

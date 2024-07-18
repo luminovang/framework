@@ -325,14 +325,16 @@ final class Commands
             ],
             'options' => [
                 '-c, --class' => "Specify the seeder class to run.",
+                '-t, --table' => "Specify the seeder class table name to truncate before rolling back.",
                 '-r, --rollback' => "Rollback seeder to previous version.",
                 '-n, --no-backup' => "Run seeder without backup.",
-                '-i, --no-invoke' => "Run seeder without invoking other invokable seeders classes.",
+                '-i, --invoke' => "Run seeder and also invoke other invokable seeders classes.",
             ],
             'examples' => [
                 'php novakit db:seed',
                 'php novakit db:seed --class=TestSeeder',
                 'php novakit db:seed --class=TestSeeder --rollback',
+                'php novakit db:seed --class=TestSeeder --rollback --table=Foo',
                 'php novakit db:seed --class=TestSeeder --no-backup',
                 'php novakit db:seed --no-backup',
             ],
@@ -351,7 +353,7 @@ final class Commands
                 '-d, --drop' => "Drop table for `down` method during migration.",
                 '-r, --rollback' => "Rollback migration to previous version.",
                 '-b, --debug' => "Print generated migration SQL query string without applying any changes.",
-                '-i, --no-invoke' => "Run migration without invoking other invokable migration classes.",
+                '-i, --invoke' => "Run migration and also invoke other invokable migration classes.",
             ],
             'examples' => [
                 'php novakit db:migrate',

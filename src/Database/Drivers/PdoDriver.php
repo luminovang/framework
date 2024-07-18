@@ -154,6 +154,7 @@ final class PdoDriver implements DatabaseInterface
             'oci' => "oci:dbname={$this->config->database}",
             'pgsql' => "pgsql:host={$this->config->host} port={$this->config->port} dbname={$this->config->database} user={$this->config->username} password={$this->config->password}",
             'sqlite' => "sqlite:{$this->config->sqlite_path}",
+            'sqlsrv' => "sqlsrv:Server={$this->config->host};Database={$this->config->database}",
             'mysql' => $this->mysqlDns()
         ];
 
@@ -287,14 +288,9 @@ final class PdoDriver implements DatabaseInterface
         $this->executed = false;
         $executed = $this->connection->exec($query);
 
-        if($executed!== false){
+        if($executed !== false){
             $this->executed = true;
-
-            if($executed === 0){
-                return 1;
-            }
-
-            return $executed;
+            return ($executed === 0) ? 1 :$executed;
         }
 
         return 0;
@@ -344,7 +340,6 @@ final class PdoDriver implements DatabaseInterface
     public function commit(int $flags = 0, ?string $name = null): bool 
     {
         return $this->connection->commit();
-        
     }
 
     /**
@@ -355,7 +350,7 @@ final class PdoDriver implements DatabaseInterface
         if ($name === null) {
             return $this->connection->rollBack();
         }
-        
+
         $name = $this->connection->quote("tnx_{$name}");
 
         if ($name === false) {

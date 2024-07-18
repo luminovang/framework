@@ -22,7 +22,7 @@ use \Exception;
 final class Builder extends Connection 
 {  
     /**
-     * Class instance
+     * Class instance.
      * 
      * @var Builder|null $instance 
     */
@@ -36,21 +36,21 @@ final class Builder extends Connection
     private string $tableName = '';
 
     /**
-     * Table name to join query
+     * Table name to join query.
      * 
      * @var string $joinTable 
     */
     private string $joinTable = '';
 
     /**
-     * Table join query type
+     * Table join query type.
      * 
      * @var string $joinType 
     */
     private string $joinType = '';
 
     /**
-     * Table join bind parameters
+     * Table join bind parameters.
      * 
      * @var array $joinConditions 
     */
@@ -85,7 +85,7 @@ final class Builder extends Connection
     private array $queryMatchOrder = [];
 
     /**
-     * Table query group column by
+     * Table query group column by.
      * 
      * @var array<int,string> $queryGroup 
     */
@@ -99,16 +99,16 @@ final class Builder extends Connection
     private array $whereCondition = [];
 
     /**
-     * Table query and query column
+     * Table query and query column.
      * 
-     * @var array<int,mixed>  $andConditions 
+     * @var array<int,mixed> $andConditions 
     */
     private array $andConditions = [];
 
     /**
-     * Table query update set values
+     * Table query update set values.
      * 
-     * @var array<int,mixed>  $querySetValues 
+     * @var array<int,mixed> $querySetValues 
     */
     private array $querySetValues = [];
 
@@ -209,7 +209,7 @@ final class Builder extends Connection
     private static DatabaseInterface|bool|null $handler = null;
 
     /**
-     * Reset query properties before cloning
+     * Reset query properties before cloning.
      * 
      * @ignore
     */
@@ -221,7 +221,7 @@ final class Builder extends Connection
     /**
      * Get database connection instance.
      * 
-     * @return DatabaseInterface|null 
+     * @return DatabaseInterface|null Return database driver instance.
     */
     public function db(): ?DatabaseInterface
     {
@@ -229,9 +229,9 @@ final class Builder extends Connection
     }
 
     /**
-     * Class shared singleton class instance
+     * Class shared singleton class instance.
      *
-     * @return static object $instance.
+     * @return static Return new static instance of builder class.
      * @throws DatabaseException If the database connection fails.
     */
     public static function getInstance(): static 
@@ -240,39 +240,59 @@ final class Builder extends Connection
     }
 
     /**
-     * Sets database table name to query.
+     * Sets the database table name to build query for.
      *
-     * @param string $table The table name.
-     * @param string $alias table alias.
+     * @param string $table The table name (non-empty string).
+     * @param string|null $alias Optional table alias (default: NULL).
      * 
-     * @return self $this Class instance.
+     * @return self Returns the instance of builder class.
+     * @throws InvalidArgumentException Throws if an invalid table name is provided.
     */
-    public function table(string $table, string $alias = ''): self
+    public function table(string $table, ?string $alias = null): self
     {
+        if($table === ''){
+            throw new InvalidArgumentException('Invalid table argument, $table argument expected non-empty string.');
+        }
+
         $this->tableName = $table;
 
-        if($alias !== ''){
-            $this->tableAlias = $alias;
+        if($alias !== null){
+            $this->tableAlias = "AS {$alias}";;
         }
+
         return $this;
     }
 
     /**
-     * Specifies a join operation in the query.
+     * Specifies a join operation in query execution.
      *
      * @param string $table The name of the table to join.
      * @param string $type The type of join (default: "INNER").
-     * @param string $alias The alias for the joined table (optional).
+     * @param string|null $alias Optional table join alias (default: NULL).
      * 
-     * @return self Returns the instance of the class.
+     * @return self Returns the instance of builder class.
+     * @throws InvalidArgumentException Throws if invalid argument is provided.
+     * 
+     * **Join Types**
+     * 
+     * `INNER` - Returns rows with matching values in both tables.
+     * `LEFT`  - Returns all rows from the left table and matching rows from the right table, or NULLs for non-matching rows from the right table.
+     * `RIGHT` - Returns all rows from the right table and matching rows from the left table, or NULLs for non-matching rows from the left table.
+     * `CROSS` - Returns the Cartesian product of the two tables.
+     * `FULL`  - Returns rows with matching values in either table, with NULLs for non-matching rows from either table.
+     * `FULL OUTER` - Returns all rows when there is a match in either the left or right table, or NULL from the side that does not have a match.
     */
-    public function join(string $table, string $type = 'INNER', string $alias = ''): self
+    public function join(string $table, string $type = 'INNER', ?string $alias = null): self
     {
-        $this->joinType = $type;
+        if($table === '' || $type === ''){
+            throw new InvalidArgumentException('Invalid join argument, $table or $type argument expected non-empty string.');
+        }
+
+        $this->joinType = strtoupper($type);
         $this->joinTable = $table;
         
-        if($alias !== ''){
-            $this->jointTableAlias = $alias;
+        if($alias !== null){
+            $this->jointTableAlias = "AS {$alias}";
         }
         
         return $this;
@@ -287,7 +307,7 @@ final class Builder extends Connection
      * 
      * @example string $tbl->on('a.column', '=', 'b.column);
      * 
-     * @return self Returns the instance of the class.
+     * @return self Returns the instance of builder class.
     */
     public function on(string $condition, string $operator, mixed $value): self
     {
@@ -297,65 +317,97 @@ final class Builder extends Connection
     }
 
     /**
-     * Sets join table inner.
+     * Sets table join condition as `INNER JOIN`.
      * 
      * @param string $table The table name.
-     * @param string $alias join table alias.
+     * @param string|null $alias Optional table join alias (default: NULL).
      * 
-     * @return self $this Class instance.
+     * @return self Returns the instance of the class.
+     * @throws InvalidArgumentException Throws if invalid argument is provided.
     */
-    public function innerJoin(string $table, string $alias = ''): self
+    public function innerJoin(string $table, ?string $alias = null): self
     {
         return $this->join($table, 'INNER', $alias);
     }
 
     /**
-     * Sets join table left
+     * Sets table join condition as `LEFT JOIN`.
      * 
      * @param string $table The table name
-     * @param string $alias join table alias
+     * @param string|null $alias Optional table join alias (default: NULL).
      * 
-     * @return self $this Class instance.
+     * @return self Returns the instance of the class.
+     * @throws InvalidArgumentException Throws if invalid argument is provided.
     */
-    public function leftJoin(string $table, string $alias = ''): self
+    public function leftJoin(string $table, ?string $alias = null): self
     {
         return $this->join($table, 'LEFT', $alias);
     }
 
     /**
-     * Sets join table right.
+     * Sets table join condition as `RIGHT JOIN`.
      * 
-     * @param string $table The table name.
-     * @param string $alias join table alias.
+     * @param string $table The table name
+     * @param string|null $alias Optional table join alias (default: NULL).
      * 
-     * @return self $this Class instance.
+     * @return self Returns the instance of the class.
+     * @throws InvalidArgumentException Throws if invalid argument is provided.
     */
-    public function rightJoin(string $table, string $alias = ''): self
+    public function rightJoin(string $table, ?string $alias = null): self
     {
         return $this->join($table, 'RIGHT', $alias);
     }
 
     /**
-     * Sets join table cross.
+     * Sets table join condition as `CROSS JOIN`.
      * 
-     * @param string $table The table name.
-     * @param string $alias join table alias.
+     * @param string $table The table name
+     * @param string|null $alias Optional table join alias (default: NULL).
      * 
-     * @return self $this Class instance.
+     * @return self Returns the instance of the class.
+     * @throws InvalidArgumentException Throws if invalid argument is provided.
     */
-    public function crossJoin(string $table, string $alias = ''): self
+    public function crossJoin(string $table, ?string $alias = null): self
     {
         return $this->join($table, 'CROSS', $alias);
     }
 
     /**
-     * Set query limit for select, update.
+     * Sets table join condition as `FULL JOIN`.
      * 
-     * @param int $limit limit threshold.
-     * @param int $offset start offset query limit
+     * @param string $table The table name
+     * @param string|null $alias Optional table join alias (default: NULL).
      * 
-     * @return self Return instance of builder class.
+     * @return self Returns the instance of the class.
+     * @throws InvalidArgumentException Throws if invalid argument is provided.
     */
+    public function fullJoin(string $table, ?string $alias = null): self
+    {
+        return $this->join($table, 'FULL', $alias);
+    }
+
+    /**
+     * Sets table join condition as `FULL OUTER JOIN`.
+     * 
+     * @param string $table The table name
+     * @param string|null $alias Optional table join alias (default: NULL).
+     * 
+     * @return self Returns the instance of the class.
+     * @throws InvalidArgumentException Throws if invalid argument is provided.
+    */
+    public function fullOuterJoin(string $table, ?string $alias = null): self
+    {
+        return $this->join($table, 'FULL OUTER', $alias);
+    }
+
+    /**
+     * Sets the query limit for SELECT and UPDATE statements.
+     *
+     * @param int $limit  The maximum number of results to return.
+     * @param int $offset The starting offset for the results (default is 0).
+     *
+     * @return self Returns the instance of the builder class.
+     */
     public function limit(int $limit, int $offset = 0): self
     {
         if($limit > 0){
@@ -367,9 +419,9 @@ final class Builder extends Connection
     }
 
     /**
-     * Set max limit for update, delete queries.
+     * Set max limit for update, delete methods.
      * 
-     * @param int $limit number of records to update or delete 
+     * @param int $limit number of records to update or delete.
      * 
      * @return self Return instance of builder class.
     */
@@ -386,7 +438,7 @@ final class Builder extends Connection
      * @param string $column The column name to index order.
      * @param string $order The order algorithm to use (either "ASC" or "DESC").
      * 
-     * @return self Returns an instance of the class.
+     * @return self Returns the instance of the class.
     */
     public function order(string $column, string $order = 'ASC'): self 
     {
@@ -408,7 +460,7 @@ final class Builder extends Connection
      *          - WITH_QUERY_EXPANSION
      * @param string $order The order algorithm to use (either "ASC" or "DESC").
      * 
-     * @return self Returns an instance of the class.
+     * @return self Returns the instance of the class.
     */
     public function orderByMatch(
         array $columns, 
@@ -431,7 +483,7 @@ final class Builder extends Connection
      * 
      * @param string $group The column name to group by.
      * 
-     * @return self The class instance.
+     * @return self Returns the instance of the class.
     */
     public function group(string $group): self 
     {
@@ -441,11 +493,11 @@ final class Builder extends Connection
     }
 
     /**
-     * Set query where
+     * Set query condition for `WHERE` operator.
      * 
-     * @param string $column column name.
-     * @param string $operator Comparison Operator.
-     * @param mixed $value Where condition value.
+     * @param string $column The column name.
+     * @param string $operator The comparison operator (e.g. `=`, `>=`, `<>`).
+     * @param mixed $value The where condition column value.
      * 
      * @return self Return instance of builder class.
     */
@@ -465,11 +517,11 @@ final class Builder extends Connection
     }
 
     /**
-     * Set query where and
+     * Set query condition for `AND` operator.
      * 
-     * @param string $column column name
-     * @param string $operator Comparison operator
-     * @param mixed $value column key value
+     * @param string $column The column name.
+     * @param string $operator The comparison operator (e.g. `=`, `>=`, `<>`).
+     * @param mixed $value The and condition column value.
      * 
      * @return self Return instance of builder class.
     */
@@ -513,10 +565,10 @@ final class Builder extends Connection
     }
 
     /**
-     * Set update columns and values
+     * Set update columns and values.
      * 
-     * @param string $column column name
-     * @param mixed $value column key value
+     * @param string $column The column name to update.
+     * @param mixed $value The column key value to update.
      * 
      * @return self Return instance of builder class.
     */
@@ -528,11 +580,11 @@ final class Builder extends Connection
     }
 
     /**
-     * Set query where or | and or
+     * Set query condition for `OR` operator.
      * 
-     * @param string $column column name
-     * @param string $operator Comparison operator
-     * @param mixed $value column key value
+     * @param string $column The column name.
+     * @param string $operator The comparison operator to use.
+     * @param mixed $value The column key value.
      * 
      * @return self Return instance of builder class.
     */
@@ -550,12 +602,12 @@ final class Builder extends Connection
     /**
      * Set query condition for OR grouping (e.g (? OR ?)).
      * 
-     * @param string $column column name
-     * @param string $operator Comparison operator
-     * @param mixed $value column key value
-     * @param string $orColumn column name
-     * @param string $orOperator Comparison operator
-     * @param mixed $orValue column or key value
+     * @param string $column column name.
+     * @param string $operator Comparison operator.
+     * @param mixed $value column key value.
+     * @param string $orColumn column name.
+     * @param string $orOperator Comparison operator.
+     * @param mixed $orValue column or key value.
      * 
      * @return self Return instance of builder class.
      * @deprecated This method is deprecated and will be removed in a future release, use `orGroup` instead.
@@ -669,21 +721,21 @@ final class Builder extends Connection
     }
 
     /**
-     * Set query where IN () expression
+     * Set query to search using `IN ()` expression.
      * 
-     * @param string $column column name.
-     * @param array $lists of values.
+     * @param string $column The column name.
+     * @param array<int,mixed> $list The expression values.
      * 
      * @return self Return instance of builder class.
+     * @throws InvalidArgumentException If values is not provided.
     */
-    public function in(string $column, array $lists = []): self
+    public function in(string $column, array $list): self
     {
-        if ($lists === []) {
-            return $this;
+        if($list === []){
+            throw new InvalidArgumentException('Invalid argument $list, expected non-empty array list.');
         }
 
-        $values = static::quotedValues($lists);
-
+        $values = static::quotedValues($list);
         $this->andConditions[] = [
             'type' => 'IN', 
             'column' => $column, 
@@ -694,18 +746,28 @@ final class Builder extends Connection
     }
 
     /**
-     * Set query where FIND_IN_SET() expression
+     * Set query to search using `FIND_IN_SET()` expression.
      * 
-     * @param string $search search value
-     * @param string $operator allow specifying the operator for matching (e.g., > or =)
-     * @param array $list of values
+     * @param string $search The search value.
+     * @param string $operator allow specifying the operator for matching (e.g., > or =).
+     * @param array<int,mixed> $list The expression values.
      * 
      * @return self Return instance of builder class.
+     * @throws InvalidArgumentException If values is not provided.
+     * 
+     * @example Using `=` Operator is same as `SELECT * FROM fruits WHERE FIND_IN_SET('apple', 'apple,banana,orange')`.
+     * ```
+     * $builder->table('fruits')->inset('apple', '=', ['apple','banana','orange']);
+     * ```
+     * @example Using `>` Operator is same as `SELECT * FROM employees WHERE FIND_IN_SET('2', skills) > 0`.
+     * ```
+     * $builder->table('employees')->inset('2', '>', [1,2,3]);
+     * ```
     */
-    public function inset(string $search, string $operator = '=', array $list = []): self
+    public function inset(string $search, string $operator, array $list): self
     {
         if($list === []){
-            return $this;
+            throw new InvalidArgumentException('Invalid argument $list, expected non-empty array list.');
         }
 
         $this->andConditions[] = [
@@ -775,7 +837,7 @@ final class Builder extends Connection
      *              - date     - Return SQL date format.
      * @param null|int $timestamp Optional timestamp
      *
-     * @return string Formatted date/time/timestamp.
+     * @return string Return Formatted date/time/timestamp.
      */
     public static function datetime(string $format = 'datetime', ?int $timestamp = null): string
     {
@@ -786,9 +848,9 @@ final class Builder extends Connection
     }
 
     /**
-     * Enable or disabled all caching 
+     * Enable or disabled all caching subsequent select operations.
      *
-     * @param bool $enable Status action.
+     * @param bool $enable The caching status action.
      * 
      * @return self Return instance of builder class.
     */
@@ -841,10 +903,11 @@ final class Builder extends Connection
     /**
      * Insert records into table.
      * 
-     * @param array<string, mixed> $values array of values to insert into table.
-     * @param bool $prepare Use bind values and execute prepare statement instead of query.
+     * @param array<int,array<string,mixed>> $values An associative arrays, 
+     * each containing column names and corresponding values to insert into the table.
+     * @param bool $prepare Use bind values and execute prepare statement instead of query (default: true).
      * 
-     * @return int Return number of affected rows.
+     * @return int Return number of affected rows or 0 if none was inserted.
     */
     public function insert(array $values, bool $prepare = true): int
     {
@@ -871,6 +934,7 @@ final class Builder extends Connection
         } catch (DatabaseException|Exception $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
+
         return 0;
     }
 
@@ -1015,7 +1079,7 @@ final class Builder extends Connection
      * Select records from table, by passing desired fetch mode and result type.
      * 
      * @param string $result The fetch result type (next or all).
-     * @param int $mode The fetch result mode FETCH_*.
+     * @param int $mode The fetch result mode FETCH_* (default: FETCH_OBJ).
      * @param array<int,string> $columns The table columns to return (default: *).
      * 
      * @return object|null|array|int|float|bool Return selected records, otherwise false if execution failed.
@@ -1182,20 +1246,15 @@ final class Builder extends Connection
             static::$handler = $this->db->query($sqlQuery);
         }
 
-        if(static::$handler->ok()){
-            if($return === 'stmt'){
-                $response = true;
-            }elseif($return === 'select'){
-                $response = static::$handler->getAll($this->returnType);
-            }elseif($return === 'find'){
-                $response = static::$handler->getNext($this->returnType);
-            }elseif($return === 'total'){
-                $response = static::$handler->getCount();
-            }elseif($return === 'fetch'){
-                $response = static::$handler->fetch($result, $mode);
-            }else{
-                $response = static::$handler->getNext()->totalCalc ?? 0;
-            }
+        if (static::$handler->ok()) {
+            $response = match ($return) {
+                'stmt' => true,
+                'select' => static::$handler->getAll($this->returnType),
+                'find' => static::$handler->getNext($this->returnType),
+                'total' => static::$handler->getCount(),
+                'fetch' => static::$handler->fetch($result, $mode),
+                default => static::$handler->getNext()->totalCalc ?? 0,
+            };
         }
         
         $this->reset();
@@ -1406,10 +1465,10 @@ final class Builder extends Connection
      * Truncate database table records.
      * If transaction failed rollback to default.
      * 
-     * @param bool $transaction Weather to use transaction.
+     * @param bool $transaction Weather to use transaction (default true).
      * 
      * @return bool Return true truncation was completed, otherwise false.
-     * @throws DatabaseException Throws if an error occured during execution.
+     * @throws DatabaseException Throws if an error occurred during execution.
     */
     public function truncate(bool $transaction = true): bool 
     {
@@ -1417,8 +1476,9 @@ final class Builder extends Connection
             $driverName = $this->db->getDriver();
             $transaction = ($transaction && $driverName !== 'sqlite');
 
-            if ($transaction) {
-                $this->db->beginTransaction();
+            if ($transaction && !$this->db->beginTransaction()) {
+                DatabaseException::throwException('Failed: Unable to start transaction');
+                return false;
             }
 
             if ($driverName === 'mysql' || $driverName === 'pgsql') {
@@ -1444,26 +1504,108 @@ final class Builder extends Connection
                 $completed = $deleteSuccess && $resetSuccess;
             }
 
-            if ($transaction) {
-                if ($completed) {
-                    $this->db->commit();
+            if ($transaction && $this->db->inTransaction()) {
+                if ($completed && $this->db->commit()) {
+                    $this->reset();
                     return true;
                 }
 
                 $this->db->rollback();
-                return false;
+                $completed = false;
             }
 
+            $this->reset();
             return (bool) $completed;
 
         } catch (DatabaseException|Exception $e) {
-            if ($transaction) {
+            if ($transaction && $this->db->inTransaction()) {
                 $this->db->rollback();
             }
 
+            $this->reset();
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            return false;
         }
 
+        if ($transaction && $this->db->inTransaction()) {
+            $this->db->rollback();
+        }
+
+        $this->reset();
+        return false;
+    }
+
+    /**
+     * Creates a temporary table and copies all records from the main table to the temporary table.
+     *
+     * @param bool $transaction Whether to use a transaction (default is true).
+     *
+     * @return bool Returns true if the operation was successful; false otherwise.
+     * @throws DatabaseException Throws an exception if a database error occurs during the operation.
+     *
+     * @example
+     * ```php
+     * if ($builder->table('users')->temp()) {
+     *     $data = $builder->table('temp_users')->select();
+     * }
+     * ```
+     * 
+     * **Note:**
+     * - Temporary tables are automatically deleted when the current session ends.
+     * - To query the temporary table, use the `temp_` prefix before the main table name.
+     */
+    public function temp(bool $transaction = true): bool 
+    {
+        if($this->tableName === ''){
+            throw new DatabaseException('You must specify a table name before creating temporal table.');
+        }
+
+        try {
+            $create = "CREATE TEMPORARY TABLE IF NOT EXISTS temp_{$this->tableName} 
+            AS (SELECT * FROM {$this->tableName} WHERE 1 = 0)";
+            
+            if($transaction && !$this->db->beginTransaction()){
+                DatabaseException::throwException('Failed: Unable to start transaction');
+                return false;
+            }
+
+            if ($this->db->exec($create) > 0 && 
+                $this->db->exec("INSERT INTO temp_{$this->tableName} SELECT * FROM {$this->tableName}") > 0
+            ) {
+                $result = false;
+                if($transaction && $this->db->inTransaction()){
+                    if($this->db->commit()){
+                        $result = true;
+                    }else{
+                        $this->db->rollBack();
+                    }
+                }
+
+                $this->reset();
+                return $result;
+            }
+
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+
+            $this->reset();
+            return false;
+        } catch (DatabaseException | Exception $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+
+            $this->reset();
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            return false;
+        }
+
+        if ($this->db->inTransaction()) {
+            $this->db->rollBack();
+        }
+
+        $this->reset();
         return false;
     }
 
@@ -1489,20 +1631,113 @@ final class Builder extends Connection
     /**
      * Drop database table if table exists.
      * 
-     * @return int Return number affected rows.
+     * @param bool $transaction Whether to use a transaction (default: false).
+     * 
+     * @return bool Return true if table was successfully dropped, false otherwise.
      * @throws DatabaseException Throws if error occurs.
     */
-    public function drop(): int 
+    public function drop(bool $transaction = false): bool 
     {
-        try {
-            $return = $this->db->exec("DROP TABLE IF EXISTS {$this->tableName}");
-            $this->reset();
-            return $return;
-        } catch (DatabaseException|Exception $e) {
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+        return $this->dropTable(false, $transaction);
+    }
+
+    /**
+     * Drop a temporal database table if table exists.
+     * 
+     * @param bool $transaction Whether to use a transaction (default: false).
+     * 
+     * @return bool Return true if table was successfully dropped, false otherwise.
+     * @throws DatabaseException Throws if error occurs.
+    */
+    public function dropTemp(bool $transaction = false): bool 
+    {
+        return $this->dropTable(true, $transaction);
+    }
+
+    /**
+     * Drop main or temporal database table if table exists.
+     * 
+     * @param bool $isTempTable Whether to drop temporary table (default false).
+     * @param bool $transaction Whether to use a transaction (default: false).
+     * 
+     * @return bool Return true if table was successfully dropped, false otherwise.
+     * @throws DatabaseException Throws if error occurs.
+    */
+    private function dropTable(bool $isTempTable = false, bool $transaction = false): bool
+    {
+        if ($this->tableName === '') {
+            throw new DatabaseException('You must specify a table name before dropping a temporary table.');
         }
 
-        return 0;
+        try {
+            if ($transaction && !$this->db->beginTransaction()) {
+                DatabaseException::throwException('Failed: Unable to start transaction for drop table.');
+                return false;
+            }
+
+            $drop = $this->getDropTableSQL($isTempTable);
+
+            if ($this->db->exec($drop) >= 0) {
+                $result = false;
+                if ($transaction && $this->db->inTransaction()) {
+                    if ($this->db->commit()) {
+                        $result = true;
+                    } else {
+                        $this->db->rollBack();
+                    }
+                }
+
+                $this->reset();
+                return $result;
+            }
+
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+
+            $this->reset();
+        } catch (DatabaseException | Exception $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+
+            $this->reset();
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            return false;
+        }
+
+        return false;
+    }
+
+    /**
+     * Build sql query string to drop table.
+     * 
+     * @param bool $isTempTable Whether to drop temporary table (default false).
+     * 
+     * @return string Return SQL query string based on database type.
+    */
+    private function getDropTableSQL(bool $isTempTable = false): string
+    {
+        $tablePrefix = $isTempTable ? 'temp_' : '';
+        $tableIdentifier = $isTempTable ? "#temp_{$this->tableName}" : $this->tableName;
+
+        switch ($this->db->getDriver()) {
+            case 'mysql':
+                return "DROP " . ($isTempTable ? "TEMPORARY " : "") . "TABLE IF EXISTS {$tablePrefix}{$this->tableName}";
+
+            case 'dblib':
+                return "DROP TABLE IF EXISTS {$tableIdentifier}";
+
+            case 'sqlsrv':
+                return "IF OBJECT_ID('{$tablePrefix}{$this->tableName}', 'U') IS NOT NULL DROP TABLE {$tablePrefix}{$this->tableName}";
+
+            case 'oracle':
+            case 'oci':
+                return "BEGIN EXECUTE IMMEDIATE 'DROP TABLE {$tablePrefix}{$this->tableName}'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;";
+
+            default:
+                return "DROP TABLE IF EXISTS {$tablePrefix}{$this->tableName}";
+        }
     }
 
     /**
@@ -1698,9 +1933,6 @@ final class Builder extends Connection
     /**
      * Builds a query string representation of single grouped conditions.
      *
-     * @example 'SELECT * FROM foo WHERE (bar = 1 AND baz = 2)'.
-     * @example 'SELECT * FROM foo WHERE (boz = 1 OR bra = 2)'.
-     *
      * @param array   $conditions   An array of conditions to be grouped.
      * @param int     $index        The index to append to the placeholder names.
      * @param bool    $isBided      Indicates whether placeholders should be used for binding values (default: true).
@@ -1708,6 +1940,9 @@ final class Builder extends Connection
      * @param int     &$last        Reference to the total count of conditions processed so far across all groups.
      *
      * @return string Return query string representation of grouped conditions with placeholders.
+     * 
+     * @example 'SELECT * FROM foo WHERE (bar = 1 AND baz = 2)'.
+     * @example 'SELECT * FROM foo WHERE (boz = 1 OR bra = 2)'.
      */
     private static function buildGroupConditions(
         array $conditions, 
@@ -1738,9 +1973,6 @@ final class Builder extends Connection
 
     /**
      * Builds a query string representation of multiple group conditions.
-     * 
-     * @example 'SELECT * FROM foo WHERE ((bar = 1 AND baz = 2) AND (boz = 1 AND bra = 5))'.
-     * @example 'SELECT * FROM foo WHERE ((bar = 1 OR baz = 2) OR (boz = 1 OR bra = 5))'.
      *
      * @param array   $conditionsX  An array of conditions for the first group.
      * @param array   $conditionsY  An array of conditions for the second group.
@@ -1750,6 +1982,9 @@ final class Builder extends Connection
      * @param string  $bind         The type of logical operator to use in binding groups (default: 'OR').
      *
      * @return string Return a query string representation of grouped conditions with placeholders.
+     * 
+     * @example 'SELECT * FROM foo WHERE ((bar = 1 AND baz = 2) AND (boz = 1 AND bra = 5))'.
+     * @example 'SELECT * FROM foo WHERE ((bar = 1 OR baz = 2) OR (boz = 1 OR bra = 5))'.
      */
     private static function buildGroupBindConditions(
         array $conditionsX, 
@@ -1768,7 +2003,7 @@ final class Builder extends Connection
     }
 
      /**
-     * Bind query where conditions
+     * Bind query where conditions.
      * 
      * @param DatabaseInterface &$handler Database handler passed by reference.
      * 
@@ -1809,14 +2044,19 @@ final class Builder extends Connection
     /**
      * Bind group conditions to the database handler.
      *
-     * @param array               $bindings  An array of conditions to bind.
+     * @param array  $bindings  An array of conditions to bind.
      * @param DatabaseInterface   $handler   The database handler to bind the values to.
-     * @param int                 $index     The index to append to the placeholder names.
-     * @param int                 &$last     A reference to the last counter used to ensure unique placeholder names.
+     * @param int $index  The index to append to the placeholder names.
+     * @param int &$last  A reference to the last counter used to ensure unique placeholder names.
      *
      * @return void
      */
-    private function bindGroupConditions(array $bindings, DatabaseInterface &$handler, int $index, int &$last = 0): void 
+    private function bindGroupConditions(
+        array $bindings, 
+        DatabaseInterface &$handler, 
+        int $index, 
+        int &$last = 0
+    ): void 
     {
         $count = 0;
         foreach ($bindings as $idx => $bind) {
@@ -2026,12 +2266,12 @@ final class Builder extends Connection
     }
 
     /**
-     * Convert array keys to placeholders key = :key
+     * Convert array keys to placeholders key = :key.
      * 
-     * @param array $columns columns
-     * @param bool $implode should implode or just return the array
+     * @param array $columns The columns.
+     * @param bool $implode should implode or just return the array.
      * 
-     * @return array|string 
+     * @return array|string Return array or string.
     */
     private static function buildPlaceholder(array $columns, bool $implode = false): array|string
     {

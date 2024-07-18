@@ -38,7 +38,11 @@ abstract class AppException extends Exception implements ExceptionInterface
   public function handle(): void
   {
     if(Foundation::isCommand()){
-      $display = function($exception): int {
+      if((bool) env('throw.cli.exceptions', false)){
+        throw $this;
+      }
+
+      $display = function(AppException $exception): int {
         include_once path('views') . 'system_errors' . DIRECTORY_SEPARATOR . 'cli.php';
         return STATUS_ERROR;
       };
