@@ -7,7 +7,7 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
 */
-namespace Luminova\Annotations;
+namespace Luminova\Attributes;
 use \Attribute;
 
 #[Attribute(Attribute::IS_REPEATABLE | Attribute::TARGET_METHOD)]
@@ -23,7 +23,7 @@ final class Route
      * @param string|null $group The command group name for CLI route (default: NULL).
      * @param string|null $middleware Middleware type (default: NULL).
      *          -   HTTP middleware route - `before` or `after`.
-     *          -   CLI middleware rote `any` for global middleware or `before` for command group middleware.
+     *          -   CLI middleware route `global` or `before` for global middleware. Using `after` for command group middleware.
      * 
      * @example For HTTP Route.
      *  ```
@@ -42,7 +42,7 @@ final class Route
      * ```
      * 
      * ```
-     *  #[Route(group: 'bar', middleware: 'before')]
+     *  #[Route(group: 'bar', middleware: 'global')]
      * public function middleware():int {}
      * ```
      */

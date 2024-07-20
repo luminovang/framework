@@ -35,9 +35,9 @@ abstract class BaseDatabase
     /**
      * The PDO database driver.
      * 
-     * @var string|null $pdo_driver 
+     * @var string|null $pdo_engine 
      */
-    private ?string $pdo_driver = 'mysql';
+    private ?string $pdo_engine = 'mysql';
 
     /**
      * The character set used for the database connection.
@@ -118,7 +118,7 @@ abstract class BaseDatabase
      *      [
      *          'port' => 0,
      *          'host' => '',
-     *          'pdo_driver' => 'mysql',
+     *          'pdo_engine' => 'mysql',
      *          'connection' => 'pdo',
      *          'charset' => 'utf8',
      *          'persistent' => true,
@@ -185,7 +185,7 @@ abstract class BaseDatabase
         $this->port = $config['port'] ?? 3306;
         $this->host = $config['host'] ?? 'localhost';
         $this->connection = $config['connection'] ?? 'pdo';
-        $this->pdo_driver = $config['pdo_driver'] ?? 'mysql';
+        $this->pdo_engine = $config['pdo_engine'] ?? 'mysql';
         $this->charset = $config['charset'] ?? 'utf8mb4';
         $this->sqlite_path = $config['sqlite_path'] ?? null;
         $this->production = $config['production'] ?? false;

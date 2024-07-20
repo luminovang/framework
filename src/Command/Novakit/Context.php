@@ -10,7 +10,8 @@
 namespace Luminova\Command\Novakit;
 
 use \Luminova\Base\BaseConsole;
-use \Luminova\Annotations\AttributeCollectors;
+use \Luminova\Attributes\Generator;
+use \Luminova\Storages\FileManager;
 
 class Context extends BaseConsole 
 {
@@ -34,11 +35,6 @@ class Context extends BaseConsole
     /**
      * {@inheritdoc}
     */
-    protected string $description = 'Install router context';
-
-    /**
-     * {@inheritdoc}
-    */
     public function run(?array $options = []): int
     {
         $this->explain($options);
@@ -46,9 +42,13 @@ class Context extends BaseConsole
         $command = trim($this->getCommand());
         $noError = (bool) $this->getAnyOption('no-error', 'n', false);
         $isExport = (bool) $this->getAnyOption('export-attr', 'e', false);
+        $isClear = (bool) $this->getAnyOption('clear-attr', 'c', false);
 
         $runCommand = match($command){
-            'context' => $isExport ? $this->buildAttributes() : $this->installContext($this->getArgument(1), $noError),
+            'context' => ($isExport ? $this->buildAttributes() : (
+                $isClear ? $this->clearAttributes() : 
+                $this->installContext($this->getArgument(1), $noError)
+            )),
             default => null
         };
 
@@ -84,9 +84,9 @@ class Context extends BaseConsole
             return STATUS_ERROR;
         }
 
-        $camelcase = camel_case('on' . $name) . 'Error';
+        $camelCase = camel_case('on' . $name) . 'Error';
         $controller = ucfirst($name) . 'Controller::index';
-        $onError = ($noError ? '' : ', ' . "[ViewErrors::class, '$camelcase']");
+        $onError = ($noError ? '' : ', ' . "[ViewErrors::class, '$camelCase']");
         $index = root('public') . 'index.php';
         $indexContent = file_get_contents($index);
 
@@ -102,8 +102,8 @@ class Context extends BaseConsole
             new Context('$name', $onError)
         PHP;
 
-        $postion = strpos($indexContent, 'Boot::http()->router->context(') + strlen('Boot::http()->router->context(');
-        $content = substr_replace($indexContent, "\n$newContext,", $postion, 0);
+        $position = strpos($indexContent, 'Boot::http()->router->context(') + strlen('Boot::http()->router->context(');
+        $content = substr_replace($indexContent, "\n$newContext,", $position, 0);
 
         if (strpos($name, ' ') !== false) {
             $this->writeln('Your context name contains space characters', 'red');
@@ -140,15 +140,33 @@ class Context extends BaseConsole
         return STATUS_ERROR;
     }
 
+    /**
+     * Clear cached attribute.
+     * 
+     * @return int Return status code.
+     */
+    private function clearAttributes(): int 
+    {
+        $backup = root('/writeable/caches/routes/');
+        FileManager::remove($backup, false, $deleted);
+        
+        if ($deleted > 0) {
+            $this->writeln("Success: '{$deleted}' cached attribute(s) was cleared.", 'white', 'green');
+            return STATUS_SUCCESS;
+        }
+
+        $this->writeln("Error: No cached attributes to clear.", 'white', 'red');
+        return STATUS_ERROR;
+    }
 
     /**
-     * Build routes from annotation.
+     * Build routes from attribute.
      * 
-     * @return int Status code
+     * @return int Return status code.
      */
-    public function buildAttributes(): int
+    private function buildAttributes(): int
     {
-        $collector = (new AttributeCollectors('\\App\\Controllers\\'))->export('app/Controllers');
+        $collector = (new Generator('\\App\\Controllers\\'))->export('app/Controllers');
 
         $head = "<?php\nuse \Luminova\Routing\Router;\n/** @var \Luminova\Routing\Router \$router */\n/** @var \App\Controllers\Application \$app */\n\n";
         $httpContents = '';
@@ -201,8 +219,8 @@ class Context extends BaseConsole
                         }
                     }elseif($ctx === 'cli'){
                         if($line['middleware'] !== null){
-                            if($line['middleware'] === 'any'){
-                                $cliHeader .= "\$router->before('any', '{$line['callback']}');\n";
+                            if($line['middleware'] === 'before' || $line['middleware'] === 'global'){
+                                $cliHeader .= "\$router->before('global', '{$line['callback']}');\n";
                             }else{
                                 $cliContents .= "   \$router->before('{$group}', '{$line['callback']}');\n";
                             }
@@ -261,14 +279,14 @@ class Context extends BaseConsole
                     
                     if(write_content($index, $newIndexContent)){
                         $this->writeln("Routes exported successfully.", 'green');
-                        setenv('feature.route.annotation', 'disable', true);
+                        setenv('feature.route.attributes', 'disable', true);
                         return STATUS_SUCCESS;
                     }
                 }
             }
         }
 
-        $this->writeln("Failed: Unable to create route from annotation.", 'red');
+        $this->writeln("Failed: Unable to create route from attribute.", 'red');
         return STATUS_ERROR;
     }
 

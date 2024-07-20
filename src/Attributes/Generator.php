@@ -7,10 +7,10 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
 */
-namespace Luminova\Annotations;
+namespace Luminova\Attributes;
 
-use \Luminova\Annotations\Route;
-use \Luminova\Annotations\Context;
+use \Luminova\Attributes\Route;
+use \Luminova\Attributes\Error;
 use \Luminova\Routing\Router;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Base\BaseController;
@@ -26,7 +26,7 @@ use \FilesystemIterator;
 use \SplFileInfo;
 use \Luminova\Exceptions\RouterException;
 
-class AttributeCollectors
+final class Generator
 {
     /**
      * @var array<string,array> $routes
@@ -44,12 +44,22 @@ class AttributeCollectors
     private bool $cli = false;
 
     /**
+     * @var bool $cache
+    */
+    private static bool $cache = false;
+
+    /**
      * @var string $baseGroup
     */
     private string $baseGroup;
 
     /**
-     * Constructor to initialize the AttributeCollectors.
+     * @var array<string,RecursiveIteratorIterator> $files
+    */
+    private static array $files = [];
+
+    /**
+     * Constructor to initialize the Generator.
      *
      * @param string $namespace Namespace for the classes.
      * @param string $baseGroup Base group for route patterns.
@@ -60,6 +70,7 @@ class AttributeCollectors
         $this->namespace = $namespace;
         $this->baseGroup = $baseGroup;
         $this->cli = $cli;
+        self::$cache = (bool) env('feature.route.cache.attributes', false);
     }
 
     /**
@@ -75,7 +86,10 @@ class AttributeCollectors
             return;
         }
 
-        $files = $this->load($path);
+        $files = $this->load($path, 'http');
+        if($files === true){
+            return;
+        }
 
         foreach ($files as $file) {
             $fileName = $file->getBasename();
@@ -95,9 +109,9 @@ class AttributeCollectors
                     /**
                      * Handle context attributes and register error handlers.
                     */
-                    foreach ($class->getAttributes(Context::class) as $context) {
+                    foreach ($class->getAttributes(Error::class) as $context) {
                         $ctx = $context->newInstance();
-                        if($ctx->onError === null || !($ctx->name === $prefix || $ctx->name === 'web')){
+                        if($ctx->onError === null || !($ctx->context === $prefix || $ctx->context === 'web')){
                             continue;
                         }
 
@@ -121,6 +135,10 @@ class AttributeCollectors
                             $pattern = $this->baseGroup . '/' . trim($attr->pattern, '/');
                             $pattern = ($this->baseGroup !== '') ? rtrim($pattern, '/') : $pattern;
 
+                            /**
+                             * Only process matched prefix.
+                             * If middle and prefix is not empty and pattern is base skip.
+                            */
                             if(
                                 ($prefix !== '' && !str_starts_with(ltrim($pattern, '/'), $prefix)) &&
                                 ($attr->middleware !== null && $prefix !== '' &&  $attr->pattern === '/')
@@ -151,9 +169,9 @@ class AttributeCollectors
             }
         }
 
+        $this->cache('http');
         gc_mem_caches();
     }
-
 
     /**
      * Install CLI commands from the given path.
@@ -167,7 +185,11 @@ class AttributeCollectors
             return;
         }
 
-        $files = $this->load($path);
+        $files = $this->load($path, 'cli');
+        if($files === true){
+            return;
+        }
+
         foreach ($files as $file) {
             $fileName = $file->getBasename();
             $fileName = pathinfo($fileName, PATHINFO_FILENAME);
@@ -195,7 +217,7 @@ class AttributeCollectors
                             $group = trim($attr->group, '/');
 
                             if($attr->middleware !== null){
-                                $security = ($attr->middleware === 'any') ? 'any' : $group;
+                                $security = ($attr->middleware === 'before' || $attr->middleware === 'global') ? 'global' : $group;
                                 $this->routes['cli_middleware']['CLI'][$security][] = [
                                     'callback' => $callback,
                                     'pattern' => $group,
@@ -211,6 +233,7 @@ class AttributeCollectors
                 }
             }
         }
+        $this->cache('cli');
         gc_mem_caches();
     }
 
@@ -224,7 +247,7 @@ class AttributeCollectors
     */
     public function export(string $path): self
     {
-        $files = $this->load($path);
+        $files = $this->load($path, 'export');
         foreach ($files as $file) {
             $fileName = $file->getBasename();
             $fileName = pathinfo($fileName, PATHINFO_FILENAME);
@@ -284,22 +307,74 @@ class AttributeCollectors
     }
 
     /**
-     * Load PHP files from the specified path.
+     * Loads route files from the specified path and context.
      *
-     * @param string $path Path to the directory containing PHP files.
+     * This method attempts to load cached routes from a pre-defined cache directory
+     * if the context is not 'export'. If the cached file exists, it loads the routes
+     * from the file. Otherwise, it iterates through the directory to find and return
+     * PHP route files.
+     *
+     * @param string $path The directory path to search for route files.
+     * @param string $context The context used for caching.
      * 
-     * @return array[RecursiveIteratorIterator]|RecursiveIteratorIterator List of SplFileInfo objects for each PHP file found.
+     * @return RecursiveIteratorIterator|bool An iterator for route files or true if cached routes are loaded.
      */
-    protected function load(string $path): array|RecursiveIteratorIterator
+    protected function load(string $path, string $context): RecursiveIteratorIterator|bool
     {
-        $files = new RecursiveIteratorIterator(
+        if (self::$cache && $context !== 'export' && $lock = root('/writeable/caches/routes/')) {
+            if (file_exists($file = $lock . $context . '.php')) {
+                $this->routes = include_once $file;
+                return true;
+            }
+        }
+
+        static::$files[$path] ??= new RecursiveIteratorIterator(
             new RecursiveCallbackFilterIterator(
                 new RecursiveDirectoryIterator(root($path), FilesystemIterator::SKIP_DOTS | FilesystemIterator::FOLLOW_SYMLINKS),
                 fn (SplFileInfo $entry) => $entry->isFile() && $entry->getExtension() === 'php' && $entry->getBasename() !== 'Application.php'
             )
         );
 
-        return $files;
+        return static::$files[$path];
+    }
+
+    /**
+     * Stores the current routes to a cache file.
+     *
+     * This method saves the current state of routes to a PHP file in a pre-defined
+     * cache directory. The routes are serialized and written to the file, which can
+     * be used for faster loading in future requests.
+     *
+     * @param string $context The context used for caching.
+     * @return bool True on success, false on failure.
+     */
+    protected function cache(string $context): bool
+    {
+        if(!self::$cache || $this->routes === []){
+            return false;
+        }
+
+        $lock = root('/writeable/caches/routes/');
+
+        if(make_dir($lock) && $routes = var_export($this->routes, true)){
+            $returnRoutes = <<<PHP
+            <?php
+            /**
+             * Luminova Framework
+             *
+             * @package Luminova
+             * @author Ujah Chigozie Peter
+             * @copyright (c) Nanoblock Technology Ltd
+             * @license See LICENSE file
+            */
+            return $routes;
+            PHP;
+            
+            return write_content($lock . $context . '.php', $returnRoutes);
+        }
+
+        logger('error', 'Failed to cache routes, unable to create routes directory in writeable.');
+        return false;
     }
 
     /**

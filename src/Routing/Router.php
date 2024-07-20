@@ -15,7 +15,7 @@ use \Luminova\Routing\Context;
 use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Base\BaseApplication;
-use \Luminova\Annotations\AttributeCollectors;
+use \Luminova\Attributes\Generator;
 use \Luminova\Base\BaseViewController;
 use \Luminova\Base\BaseController;
 use \Luminova\Application\Factory;
@@ -157,9 +157,10 @@ final class Router
      * Ensures only required routes for handling requests are loaded based on the URI prefix.
      * 
      * @param Context|array<string,mixed>|null ...$contexts [, Context $... ] Arguments containing routing context or array of arguments.
-     *              Pass `NULL` only when using route annotations.
+     *              Pass `NULL` only when using route attributes.
      * 
      * @return self Returns the router instance.
+     * @throws RouterException Throws if not context arguments was passed and route attribute is disabled.
      */
     public function context(Context|array|null ...$contexts): self 
     {
@@ -167,8 +168,8 @@ final class Router
         self::$method  = self::getRoutingMethod();
 
         // When using attribute for routes.
-        if((bool) env('feature.route.annotation', false)){
-            $collector = new AttributeCollectors('\\App\\Controllers\\', $this->baseGroup, self::$isCli);
+        if((bool) env('feature.route.attributes', false)){
+            $collector = new Generator('\\App\\Controllers\\', $this->baseGroup, self::$isCli);
             
             if(self::$isCli){
                 $collector->installCli('app/Controllers');
@@ -325,7 +326,7 @@ final class Router
     /**
      * Before middleware, for command middleware authentication.
      *
-     * @param string $group Command middleware group name or `any` for global middleware.
+     * @param string $group Command middleware group name or `global` for global middleware.
      * @param Closure|string $callback Callback controller handler (e.g `ClassBaseName::methodName`).
      * 
      * @return void
@@ -826,7 +827,7 @@ final class Router
         }
 
         $command = self::getArgument(2);
-        $global = (self::$controllers['cli_middleware'][self::$method]['any']??null);
+        $global = (self::$controllers['cli_middleware'][self::$method]['global']??null);
 
         if($global !== null && !self::handleCommand($global)){
             return STATUS_ERROR;

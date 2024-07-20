@@ -281,10 +281,6 @@ class CronJobs extends BaseConsole
             }
         }
 
-        if($created){
-            return STATUS_SUCCESS;
-        }
-
-        return STATUS_ERROR;
+        return $created ? STATUS_SUCCESS : STATUS_ERROR;
     }
 }

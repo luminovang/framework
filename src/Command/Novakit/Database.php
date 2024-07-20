@@ -17,7 +17,6 @@ use \Luminova\Database\Seeder;
 use \Luminova\Storages\FileManager;
 use \Luminova\Application\Caller;
 use \Luminova\Exceptions\AppException;
-use \Luminova\Exceptions\DatabaseException;
 use \Exception;
 
 class Database extends BaseConsole 

@@ -111,7 +111,7 @@ final class PdoDriver implements DatabaseInterface
             return;
         }
 
-        $driver = strtolower($this->config->pdo_driver);
+        $driver = strtolower($this->config->pdo_engine);
         $dns = $this->dnsConnection($driver);
 
         if ($dns === '' || ($driver === "sqlite" && $this->config->sqlite_path === '')) {

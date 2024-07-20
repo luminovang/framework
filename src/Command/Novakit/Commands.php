@@ -165,7 +165,8 @@ final class Commands
                 'php novakit context --export-attr',
             ], 
             'options' => [
-                '-e, --export-attr' => 'Indicate to export and build routes from route annotations.',
+                '-e, --export-attr' => 'Indicate to export and build code-based routes from defined route attributes.',
+                '-c, --clear-attr' => 'Indicate to clear all cached route attributes to allow re-caching new changed.',
                 '-n, --no-error' => 'Indicate to leave error callback handler `NULL` while adding new context.',
             ],
             'examples' => [

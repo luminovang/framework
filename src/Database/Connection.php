@@ -21,26 +21,28 @@ use \Exception;
 class Connection
 {
   /**
-   * Database connection instance 
+   * Database connection driver instance.
    * 
    * @var DatabaseInterface|null $db
   */
   protected ?DatabaseInterface $db = null;
 
   /** 
+   * Database connection static instance.
+   * 
    * @var ?self $instance
   */
   private static ?self $instance = null;
 
   /**
-   * Use a pool connections
+   * Use a connections pool.
    * 
-   * @var bool $pools
+   * @var bool $pool
   */
   private bool $pool = false;
 
   /**
-   * Pool connections 
+   * Connections pools.
    * 
    * @var array $pools
   */
@@ -323,7 +325,7 @@ class Connection
     return self::newConfig([
       'port' => env('database.port'),
       'host' => env('database.hostname'),
-      'pdo_driver' => env('database.pdo.driver'),
+      'pdo_engine' => env('database.pdo.engine'),
       'connection' => strtolower(env('database.connection', 'pdo')),
       'charset' => env('database.charset', ''),
       'persistent' => (bool) env('database.persistent.connection', true),
