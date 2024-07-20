@@ -25,6 +25,7 @@ use \RecursiveCallbackFilterIterator;
 use \FilesystemIterator;
 use \SplFileInfo;
 use \Luminova\Exceptions\RouterException;
+use \Exception;
 
 final class Generator
 {
@@ -355,25 +356,32 @@ final class Generator
         }
 
         $lock = root('/writeable/caches/routes/');
+        try{
+            if($this->cli){
+                // Catch error on cli
+                setenv('throw.cli.exceptions', true);
+            }
 
-        if(make_dir($lock) && $routes = var_export($this->routes, true)){
-            $returnRoutes = <<<PHP
-            <?php
-            /**
-             * Luminova Framework
-             *
-             * @package Luminova
-             * @author Ujah Chigozie Peter
-             * @copyright (c) Nanoblock Technology Ltd
-             * @license See LICENSE file
-            */
-            return $routes;
-            PHP;
-            
-            return write_content($lock . $context . '.php', $returnRoutes);
+            if(make_dir($lock) && $routes = var_export($this->routes, true)){
+                $returnRoutes = <<<PHP
+                <?php
+                /**
+                 * Luminova Framework
+                 *
+                 * @package Luminova
+                 * @author Ujah Chigozie Peter
+                 * @copyright (c) Nanoblock Technology Ltd
+                 * @license See LICENSE file
+                */
+                return $routes;
+                PHP;
+
+                return write_content($lock . $context . '.php', $returnRoutes);
+            }
+        }catch(Exception $e){
+            logger('error', 'Attribute Cache Error: ' . $e->getMessage());
         }
 
-        logger('error', 'Failed to cache routes, unable to create routes directory in writeable.');
         return false;
     }
 

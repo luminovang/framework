@@ -1298,7 +1298,7 @@ final class Router
     * @param string $uri The current request uri.
     * @param mixed &$matches Url matches passed by reference.
     *
-    * @return bool is match true or false.
+    * @return bool Return true if is match, otherwise false.
     */
     private static function uriCapture(string $pattern, string $uri, mixed &$matches): bool
     {
@@ -1345,6 +1345,27 @@ final class Router
         }
 
         return '';
+    }
+
+    /**
+     * Get the current command controller views
+     * 
+     * @return array<string,mixed> $views Return array of command routes parameters as URI.
+    */
+    public static function getArguments(): array
+    {
+        $views = [
+            'view' => '',
+            'options' => [],
+        ];
+       
+        if (isset($_SERVER['argv'][2])) {
+            $result = self::$term->extract(array_slice($_SERVER['argv'], 2), true);
+            $views['view'] = '/' . implode('/', $result['arguments']);
+            $views['options'] = $result['options'];
+        }
+
+        return $views;
     }
     
     /**
