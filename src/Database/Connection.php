@@ -325,7 +325,7 @@ class Connection
     return self::newConfig([
       'port' => env('database.port'),
       'host' => env('database.hostname'),
-      'pdo_engine' => env('database.pdo.engine'),
+      'pdo_engine' => env('database.pdo.engine', 'mysql'),
       'connection' => strtolower(env('database.connection', 'pdo')),
       'charset' => env('database.charset', ''),
       'persistent' => (bool) env('database.persistent.connection', true),
