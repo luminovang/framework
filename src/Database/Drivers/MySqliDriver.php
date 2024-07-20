@@ -286,7 +286,6 @@ final class MySqliDriver implements DatabaseInterface
         if ($this->stmt == null || $this->stmt === false) {
             return 0;
         }
-        //FF
 
         return $this->rowCount;
     }
