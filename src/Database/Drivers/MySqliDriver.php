@@ -250,7 +250,7 @@ final class MySqliDriver implements DatabaseInterface
         $query = preg_replace('/:([a-zA-Z0-9_]+)/', '?', $query);
         $this->rowCount = 0;
         $this->stmt = $this->connection->prepare($query);
-        $this->isSelect = (stripos($query, 'SELECT') === 0);
+        $this->isSelect = str_starts_with($query, 'SELECT');
 
         return $this;
     }
@@ -266,7 +266,7 @@ final class MySqliDriver implements DatabaseInterface
 
         if ($this->stmt !== null || $this->stmt !== false) {
             $this->executed = true;
-            if (stripos($query, 'SELECT') === 0) {
+            if (str_starts_with($query, 'SELECT')) {
                 $this->rowCount = $this->stmt->num_rows;
             } else {
                 $this->rowCount = $this->connection->affected_rows;
