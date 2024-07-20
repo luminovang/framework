@@ -598,41 +598,6 @@ final class Builder extends Connection
         ];
         return $this;
     }
-    
-    /**
-     * Set query condition for OR grouping (e.g (? OR ?)).
-     * 
-     * @param string $column column name.
-     * @param string $operator Comparison operator.
-     * @param mixed $value column key value.
-     * @param string $orColumn column name.
-     * @param string $orOperator Comparison operator.
-     * @param mixed $orValue column or key value.
-     * 
-     * @return self Return instance of builder class.
-     * @deprecated This method is deprecated and will be removed in a future release, use `orGroup` instead.
-    */
-    public function andor(
-        string $column, 
-        string $operator, 
-        mixed $value, 
-        string $orColumn, 
-        string $orOperator, 
-        mixed $orValue
-    ): self
-    {
-        $conditions = [];
-        $conditions[][$column] = [
-            'operator' => $operator,
-            'value' => $value,
-        ];
-        $conditions[][$orColumn] = [
-            'operator' => $orOperator,
-            'value' => $orValue,
-        ];
-
-        return $this->orGroup($conditions);
-    }
 
     /**
      * Adds a group of conditions combined with OR to the query.
