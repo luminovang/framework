@@ -224,7 +224,7 @@ final class MySqliDriver implements DatabaseInterface
     public function info(): array 
     {
         preg_match_all('/(\S[^:]+): (\d+)/',  $this->connection->info, $matches); 
-        $info = array_combine ($matches[1], $matches[2]);
+        $info = array_combine($matches[1], $matches[2]);
 
         return $info;
     }
@@ -308,8 +308,12 @@ final class MySqliDriver implements DatabaseInterface
     */
     public function commit(int $flags = 0, ?string $name = null): bool 
     {
-        $this->inTransaction = false;
-        return $this->connection->commit($flags, $name);
+        if($this->connection->commit($flags, $name)){
+            $this->inTransaction = false;
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -317,8 +321,11 @@ final class MySqliDriver implements DatabaseInterface
     */
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
-        $this->inTransaction = false;
-        return $this->connection->rollback($flags, $name);
+        if($this->connection->rollback($flags, $name)){
+            $this->inTransaction = false;
+            return true;
+        }
+        return false;
     }
 
     /**
