@@ -54,7 +54,7 @@ final class InputValidator implements ValidationInterface
 
                 foreach ($ruleParts as $rulePart) {
                     [$ruleName, $ruleParam] = self::parseRule($rulePart);
-                    
+
                     if($ruleName === ''){
                         continue;
                     }
@@ -374,11 +374,6 @@ final class InputValidator implements ValidationInterface
             $param = $matches[2] ?? '';
         }
         
-        /*if($name === ''){
-            $name = preg_replace("/\s*\([^)]*\)/", '', $rule);
-            $param = str_replace([$name . '(', ')'], '', $rule);
-        }*/
-
         return [
             $name,
             ($param === '') ? '' : trim($param)
