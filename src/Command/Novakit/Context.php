@@ -219,7 +219,7 @@ class Context extends BaseConsole
                         }
                     }elseif($ctx === 'cli'){
                         if($line['middleware'] !== null){
-                            if($line['middleware'] === 'before' || $line['middleware'] === 'global'){
+                            if($line['middleware'] === 'global'){
                                 $cliHeader .= "\$router->before('global', '{$line['callback']}');\n";
                             }else{
                                 $cliContents .= "   \$router->before('{$group}', '{$line['callback']}');\n";

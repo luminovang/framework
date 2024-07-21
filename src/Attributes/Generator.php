@@ -218,7 +218,7 @@ final class Generator
                             $group = trim($attr->group, '/');
 
                             if($attr->middleware !== null){
-                                $security = ($attr->middleware === 'before' || $attr->middleware === 'global') ? 'global' : $group;
+                                $security = ($attr->middleware === 'global') ? 'global' : $group;
                                 $this->routes['cli_middleware']['CLI'][$security][] = [
                                     'callback' => $callback,
                                     'pattern' => $group,
