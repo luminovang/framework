@@ -11,6 +11,7 @@
 namespace Luminova\Security;
 
 use \Luminova\Interface\ValidationInterface;
+use \Exception;
 use \JsonException;
 
 final class InputValidator implements ValidationInterface
@@ -47,15 +48,22 @@ final class InputValidator implements ValidationInterface
                 $fieldValue = $input[$field] ?? null;
                 $ruleParts = explode('|', $rule);
 
+                if($ruleParts === []){
+                    continue;
+                }
+
                 foreach ($ruleParts as $rulePart) {
-                    $ruleName = preg_replace("/\s*\([^)]*\)/", '', $rulePart);
-                    $ruleParam = str_replace([$ruleName . '(', ')'], '', $rulePart);
+                    [$ruleName, $ruleParam] = self::parseRule($rulePart);
                     
+                    if($ruleName === ''){
+                        continue;
+                    }
+
                     switch ($ruleName) {
                         case 'none':
                             return true;
                         case 'required':
-                            if (is_empty($fieldValue)) {
+                            if ($this->isEmpty($fieldValue)) {
                                 $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
@@ -91,19 +99,16 @@ final class InputValidator implements ValidationInterface
                                 } else {
                                     $exist = list_in_array($fieldValue, $matches);
                                 }
+
                                 if (!$exist) {
                                     $this->addError($field, $ruleName, $fieldValue);
                                 }
                             }
                         break;
                         case 'fallback':
-                            $defaultValue = $ruleParam;
-                            if (is_empty($fieldValue)) {
-                                $defaultValue = "";
-                            } elseif (strtolower($ruleParam) == 'null') {
-                                $defaultValue = null;
+                            if ($this->isEmpty($fieldValue)) {
+                                $input[$field] = (strtolower($ruleParam) === 'null') ? null : $ruleParam;
                             }
-                            $input[$field] = $defaultValue;
                         break;
                         default:
                             if (!static::validation($ruleName, $fieldValue, $rulePart, $ruleParam)) {
@@ -236,52 +241,152 @@ final class InputValidator implements ValidationInterface
     }
 
     /**
-     * Validate fields 
-     * @param string $ruleName The name of the rule to validate
-     * @param string $value The value to validate
-     * @param string $rule The rule line
-     * @param string $param additional validation parameters
-     * @return boolean true if the rule passed else false
+     * Validate fields.
+     * 
+     * @param string $ruleName The name of the rule to validate.
+     * @param string $value The value to validate.
+     * @param string $rule The rule line.
+     * @param string $param additional validation parameters.
+     * 
+     * @return boolean true if the rule passed else false.
     */
     private static function validation(string $ruleName, mixed $value, string $rule, mixed $param = null): bool
     {
-        try{
+        try {
             return match ($ruleName) {
                 'max_length', 'max' => mb_strlen($value) <= (int) $param,
                 'min_length', 'min' => mb_strlen($value) >= (int) $param,
-                'exact_length', 'length' => mb_strlen($value) == (int) $param,
+                'exact_length', 'length' => mb_strlen($value) === (int) $param,
                 'string' => is_string($value),
-                'integer' => match ($param) {
-                    'positive' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value > 0,
-                    'negative' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value < 0,
-                    default => filter_var($value, FILTER_VALIDATE_INT) !== false,
-                },
+                'integer' => self::validateInteger($value, $param),
                 'email' => filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
-                'alphanumeric' => preg_match("/[^A-Za-z0-9]/", $value) !== false,
-                'alphabet' => preg_match("/^[A-Za-z]+$/", $value) !== false,
+                'alphanumeric' => ctype_alnum($value),
+                'alphabet' => ctype_alpha($value),
                 'url' => filter_var($value, FILTER_VALIDATE_URL) !== false,
-                'uuid' => func()->isUuid($value), //$version = (int) $param;
-                'ip' =>  func()->ip()->isValid($value, (int) $param),
+                'uuid' => func()->isUuid($value),
+                'ip' => func()->ip()->isValid($value, (int) $param),
                 'phone' => func()->isPhone($value),
-                'decimal' => preg_match('/^-?\d+(\.\d+)?$/', $value) === 1,
+                'decimal' => filter_var($value, FILTER_VALIDATE_FLOAT) !== false,
                 'binary' => ctype_print($value) && !preg_match('/[^\x20-\x7E\t\r\n]/', $value),
                 'hexadecimal' => ctype_xdigit($value),
-                'array' => is_array(json_decode($value, true, 512, JSON_THROW_ON_ERROR)) || is_array($value),
-                'json' => (json_decode($value, null, 512, JSON_THROW_ON_ERROR) && json_last_error() === JSON_ERROR_NONE),
-                'path' => match ($param) {
-                    'true' => is_string($value) && is_readable($value),
-                    default => is_string($value) && preg_match("#^[a-zA-Z]:[\\\/]{1,2}#", $value)
-                },
-                'scheme' => str_starts_with($value, rtrim($param, '://')),
-                default => true,
+                'array' => is_array($value) || is_array(json_decode($value, true, 512, JSON_THROW_ON_ERROR)),
+                'json' => self::validateJson($value),
+                'path' => self::validatePath($value, $param),
+                'scheme' => str_starts_with($value, rtrim($param, '://') . '://'),
+                default => true
             };
-        } catch (JsonException) {
+        } catch (Exception|JsonException) {
             return false;
         }
     }
 
     /**
-     * Add validation error message
+     * Validates if the given value is an integer and optionally checks if it meets specific conditions.
+     *
+     * @param mixed $value The value to be validated.
+     * @param mixed $param The condition to check for the integer value. Accepts 'positive', 'negative', or any other string to validate the integer without additional conditions.
+     *
+     * @return bool Return true if the value is a valid integer and meets the condition (if provided); `false` otherwise.
+     */
+    private static function validateInteger(mixed $value, mixed $param = 'none'): bool
+    {
+        if (filter_var($value, FILTER_VALIDATE_INT) === false) {
+            return false;
+        }
+
+        if ($param === 'positive') {
+            return (int) $value > 0;
+        }
+
+        if ($param === 'negative') {
+            return (int) $value < 0;
+        }
+
+        return true;
+    }
+
+   /**
+     * Validates if the given value is a valid JSON string.
+     *
+     * @param mixed $value The value to be validated.
+     *
+     * @return bool Returns true if the value is a valid JSON string; `false` otherwise.
+     */
+    private static function validateJson(mixed $value): bool
+    {
+        error_clear_last();
+        json_decode($value, null, 512, JSON_THROW_ON_ERROR);
+
+        return json_last_error() === JSON_ERROR_NONE;
+    }
+
+    /**
+     * Validates if the given value is a valid file path based on the specified condition.
+     *
+     * @param mixed $value The value to be validated. Should be a string representing a file path.
+     * @param mixed $param The condition to check for the file path. Accepts 'true' to check if the path is readable or any other string to validate the path format.
+     *
+     * Returns **bool**: `true` if the value is a valid path and meets the condition (if provided); `false` otherwise.
+     */
+    private static function validatePath(mixed $value, mixed $param = 'false'): bool
+    {
+        if(!is_string($value)){
+            return false;
+        }
+
+        if($param === 'true'){
+            return is_readable($value);
+        }
+
+        return preg_match("#^[a-zA-Z]:[\\\/]{1,2}#", $value);
+    }
+
+    /**
+     * Check if input value or rule param is empty.
+     * 
+     * @param mixed $value The value to check.
+     * 
+     * @return Return true if the value is not empty, false otherwise.
+    */
+    private function isEmpty(mixed $value): bool 
+    {
+        if ($value === null || $value === '') {
+            return true;
+        }
+
+        return is_empty($value);
+    }
+
+    /**
+     * Parses a validation rule string to extract the rule name and optional parameter.
+     * 
+     * @param string $rule The validation rule string to be parsed.
+     * 
+     * @return array<int,string> Return an array of rule names and parameter if available.
+    */
+    private static function parseRule(string $rule): array
+    {
+        $name = '';
+        $param = '';
+
+        if (preg_match('/^(\w+)(?:\(([^)]*)\))?$/', $rule, $matches)) {
+            $name = $matches[1] ?? '';
+            $param = $matches[2] ?? '';
+        }
+        
+        /*if($name === ''){
+            $name = preg_replace("/\s*\([^)]*\)/", '', $rule);
+            $param = str_replace([$name . '(', ')'], '', $rule);
+        }*/
+
+        return [
+            $name,
+            ($param === '') ? '' : trim($param)
+        ];
+    }
+
+    /**
+     * Add validation error message.
      * 
      * @param string $field input field name.
      * @param string $ruleName Rule name.
