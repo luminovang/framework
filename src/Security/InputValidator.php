@@ -16,7 +16,7 @@ use \JsonException;
 final class InputValidator implements ValidationInterface
 {
     /**
-     * @var array<string,mixed> $failures validated errors messages.
+     * @var array<string,array> $failures validated errors messages.
     */
     private array $failures = [];
 
@@ -33,11 +33,9 @@ final class InputValidator implements ValidationInterface
     /**
      * {@inheritdoc}
     */
-    public function validate(array $input, array $rules = []): bool
+    public function validate(array $input, ?array $rules = null): bool
     {
-        if ($rules === []) {
-            $rules = $this->rules;
-        }
+        $rules ??= $this->rules;
     
         if ($rules === [] || ($rules === [] && $input === [])) {
             return true;
@@ -62,7 +60,7 @@ final class InputValidator implements ValidationInterface
                             }
                         break;
                         case 'callback':
-                            if (is_callable($ruleParam) && !$ruleParam($fieldValue, $field)) {
+                            if ($ruleParam !== '' && is_callable($ruleParam) && !$ruleParam($fieldValue, $field)) {
                                 $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
@@ -127,76 +125,78 @@ final class InputValidator implements ValidationInterface
     */
     public function getErrors(): array
     {
-        return $this->failures??[];
+        return $this->failures;
     }
 
     /**
      * {@inheritdoc}
     */
-    public function getError(string $field): string
+    public function getError(string|int $fieldIndex = 0, string $type = 'message'): string
     {
-        return $this->failures[$field][0]??'';
+        $errors = $this->getErrorField($fieldIndex);
+
+        if($errors === []){
+            return '';
+        }
+
+        return $errors[0][$type] ?? '';
+    }
+
+     /**
+     * {@inheritdoc}
+    */
+    public function getErrorFieldLine(string $prefix = ''): string
+    {
+        return $prefix . $this->getError(0, 'field');
     }
 
     /**
      * {@inheritdoc}
     */
-    public function getErrorField(string $field): string
+    public function getErrorLine(string|int $fieldIndex = 0, int $errorIndex = 0): string
     {
-        return $this->failures[$field]['field']??'';
-    }
-
-    /**
-     * {@inheritdoc}
-    */
-    public function getErrorLine(int $fieldIndex = 0, int $errorsIndex = 0): string
-    {
-        $errors = $this->getErrorLineInfo($fieldIndex);
+        $errors = $this->getErrorField($fieldIndex);
 
         if($errors === []){
             return '';
         }
         
-        $error = array_keys($errors)[$errorsIndex] ?? null;
+        $error = $errors[$errorIndex] ?? null;
 
-        // Retrieve the error message based on the indices
-        $message = $errors[$error] ?? '';
+        if($error === null){
+            return '';
+        }
 
-        return $message;
+        return $errors['message'] ?? '';
     }
 
     /**
      * {@inheritdoc}
     */
-    public function getErrorLineInfo(int $fieldIndex = 0): array
+    public function getErrorField(string|int $fieldIndex = 0): array
     {
-        $errors = $this->failures;
-        // Get the keys of the provided indices
-        $field = array_keys($errors)[$fieldIndex] ?? null;
-
-        if($field === null){
+        if($this->failures === []){
             return [];
         }
 
-        // Retrieve the error message based on the indices
-        $infos = $errors[$field] ?? [];
+        $field = is_int($fieldIndex) ? 
+            (array_keys($this->failures)[$fieldIndex] ?? null) : 
+            $fieldIndex;
+
+        if($field === null || $field === ''){
+            return [];
+        }
+
+        $infos = $this->failures[$field] ?? [];
+
+        if($infos === []){
+            return [];
+        }
 
         // Remove the parent key from the error array
-        unset($errors[$field]);
+        unset($this->failures[$field]);
 
         return $infos;
-    }
-
-    /**
-     * {@inheritdoc}
-    */
-    public function getErrorFieldLine(string $prefix = ''): string
-    {
-        $errors = $this->getErrorLineInfo();
-
-        $field = $errors['field'] ?? '';
-
-        return $prefix . $field;
     }
 
     /**
@@ -250,6 +250,7 @@ final class InputValidator implements ValidationInterface
                 'max_length', 'max' => mb_strlen($value) <= (int) $param,
                 'min_length', 'min' => mb_strlen($value) >= (int) $param,
                 'exact_length', 'length' => mb_strlen($value) == (int) $param,
+                'string' => is_string($value),
                 'integer' => match ($param) {
                     'positive' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value > 0,
                     'negative' => filter_var($value, FILTER_VALIDATE_INT) !== false && (int) $value < 0,
@@ -282,9 +283,9 @@ final class InputValidator implements ValidationInterface
     /**
      * Add validation error message
      * 
-     * @param string $field input field name
-     * @param string $ruleName Rule name
-     * @param mixed $value Filed value
+     * @param string $field input field name.
+     * @param string $ruleName Rule name.
+     * @param mixed $value Filed value.
      * 
      * @return void 
     */
@@ -293,15 +294,18 @@ final class InputValidator implements ValidationInterface
         $message = $this->messages[$field][$ruleName] ?? null;
 
         if($message === null){
-            $message = 'Validation failed for "' . $field . '" while validating [' . $ruleName . '].';
+            $message = "Validation failed for field: '{$field}', while validating [{$ruleName}].";
         }else{
             $message = static::replace($message, [
                 $field, $ruleName, $value
             ]);
         }
 
-        $this->failures[$field][] = $message;
-        $this->failures[$field]['field'] = $field;
+        $this->failures[$field][] = [
+            'message' => $message,
+            'rule' => $ruleName,
+            'field' => $field
+        ];
     }
 
     /**
