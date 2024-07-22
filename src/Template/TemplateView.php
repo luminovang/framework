@@ -343,17 +343,17 @@ trait TemplateView
     }
 
     /** 
-     * Redirect to view url
+     * Redirect to another view url.
      *
-     * @param string $view view name
-     * @param int $response_code response status code
+     * @param string $view The view name or view path to redirect to.
+     * @param int $response_code The redirect response status code.
      *
      * @return void
     */
     public final function redirect(string $view, int $response_code = 0): void 
     {
         $view = start_url($view);
-        header("Location: $view", true, $response_code);
+        header("Location: {$view}", true, $response_code);
         exit(STATUS_SUCCESS);
     }
 

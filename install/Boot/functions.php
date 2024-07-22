@@ -73,7 +73,7 @@ if (!function_exists('app')) {
     /**
      * Get application container class shared instance or new instance if not shared. 
      * 
-     * @return BaseApplication Application shared instance.
+     * @return Application Return application shared instance.
     */
     function app(): Application 
     {

@@ -133,7 +133,16 @@ abstract class BaseModel
         if($this->cacheable && static::$cacheFolder === ''){
             static::$cacheFolder = get_class_name(static::class);
         }
+
+        $this->onCreate();
     }
+
+    /**
+     * Model on create method, an alternative method to __construct().
+     * 
+     * @return void 
+    */
+    protected function onCreate(): void {}
 
     /**
      * Insert a new record into the current database.
@@ -207,7 +216,7 @@ abstract class BaseModel
     /**
      * Select records from the database table.
      *
-     * @param string|array<int,mixed> $key The key?s to select its record, if null all record in table will be selected.
+     * @param string|array<int,mixed>|null $key The key?s to select its record, if null all record in table will be selected.
      * @param array<int,string> $fields The fields to retrieve (default is all).
      * @param int $limit Select result limit (default: 100).
      * @param int $offset Select limit offset (default: 0).
@@ -215,7 +224,7 @@ abstract class BaseModel
      * @return mixed Return selected records or false on failure.
     */
     public function select(
-        string|array $key = null, 
+        string|array|null $key = null, 
         array $fields = ['*'],  
         int $limit = 100, 
         int $offset = 0
@@ -240,12 +249,12 @@ abstract class BaseModel
     /**
      * Delete a record from the database.
      * 
-     * @param string|array<int,mixed> $key The keys to delete, if null all record in table will be deleted.
+     * @param string|array<int,mixed>|null $key The keys to delete, if null all record in table will be deleted.
      * @param int $max The maximum number of records to delete.
      * 
      * @return bool Return true if the record was successfully deleted otherwise false.
     */
-    public function delete(string|array $key = null, int $max = 1): bool 
+    public function delete(string|array|null $key = null, int $max = 1): bool 
     {
         if($this->readOnly){
             return false;
@@ -299,7 +308,7 @@ abstract class BaseModel
         return $tbl->total();
     }
 
-     /**
+    /**
      * Search records from the database table using the `$searchable` to index search columns.
      *
      * @param string $query The Search query string, escape string before passing.

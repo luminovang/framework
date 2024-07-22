@@ -47,6 +47,13 @@ use \Exception;
 final class Router 
 {
     /**
+     * Any HTTP request methods.
+     * 
+     * @var string HTTP_METHODS
+    */
+    public const HTTP_METHODS = 'GET|POST|PUT|DELETE|OPTIONS|PATCH|HEAD';
+    
+    /**
      * Route patterns and handling functions.
      * 
      * @var array<string,array> $controllers
@@ -303,7 +310,7 @@ final class Router
     */
     public function any(string $pattern, Closure|string $callback): void
     {
-        $this->capture('GET|POST|PUT|DELETE|OPTIONS|PATCH|HEAD', $pattern, $callback);
+        $this->capture(self::HTTP_METHODS, $pattern, $callback);
     }
 
     /**
@@ -425,7 +432,7 @@ final class Router
      * if method matches view  or command name.
      * 
      * @return void
-     * @throws RouterException Throw if encountered error while executing controller callback
+     * @throws RouterException Throw if encountered error while executing controller callback.
     */
     public function run(): void
     {
@@ -490,7 +497,7 @@ final class Router
     /**
      * Get list of registered controller namespaces.
      *
-     * @return array<int,string> Registered namespaces.
+     * @return array<int,string> Return registered namespaces.
      * @internal
     */
     public static function getNamespaces(): array
@@ -501,7 +508,7 @@ final class Router
      /**
      * Get the current segment relative URI.
      * 
-     * @return string Relative paths
+     * @return string Return relative paths.
     */
     public static function getUriSegments(): string
     {
@@ -526,7 +533,7 @@ final class Router
      * Boot route context.
      * Allow accessing router and application instance within the context.
      *
-     * @param string $context Route context name
+     * @param string $context Route context name.
      * @param Router $router  Make router instance available in route.
      * @param BaseApplication $app Make application instance available in route.
      * 
@@ -890,26 +897,26 @@ final class Router
     /**
      * Handle a set of routes: if a match is found, execute the relating handling function.
      *
-     * @param array $routes  Collection of route patterns and their handling functions.
-     * @param string $uri View URI.
+     * @param array $routes Collection of route patterns and their handling functions.
+     * @param string $uri The view request URI path.
      *
-     * @return bool $error error status [0 => true, 1 => false].
+     * @return bool Return true if controller was handled, otherwise false.
      * @throws RouterException if method is not callable or doesn't exist.
     */
     private static function handleWebsite(array $routes, string $uri): bool
     {
-        $passed = false;
+        $match = false;
         foreach ($routes as $route) {
-            if (self::uriCapture($route['pattern'], $uri, $matches)) {
+            if ($match = self::uriCapture($route['pattern'], $uri, $matches)) {
                 $passed = self::call($route['callback'], self::matchesToArray((array) $matches));
+            }
 
-                if (!$route['middleware'] || (!$passed && $route['middleware'])) {
-                    return $passed;
-                }
+            if ((!$match && $route['middleware']) || ($match && $passed)) {
+                return true;
             }
         }
        
-        return $passed;
+        return false;
     }
 
     /**
@@ -1051,8 +1058,8 @@ final class Router
      * Create a new instance of a class.
      *
      * @param string $class The class name.
-     * @return object|null The new instance of the class, or null if the class is not found.
      * 
+     * @return object|null The new instance of the class, or null if the class is not found.
      * @throws Exception Throws if the class does not exist or requires arguments to initialize.
      */
     private static function newInstance(string $class): ?object 
@@ -1072,7 +1079,7 @@ final class Router
      *
      * @param ReflectionNamedType[]|ReflectionIntersectionType[] $unions The union types.
      * 
-     * @return array The union types.
+     * @return array Return the union types.
      */
     private static function getUnionTypes(array $unions): array
     {
@@ -1099,7 +1106,8 @@ final class Router
      *
      * @param string $type The type to cast to.
      * @param mixed $value The value to cast.
-     * @return mixed The casted value.
+     * 
+     * @return mixed Return the casted value.
      */
     private static function typeCasting(string $type, mixed $value): mixed 
     {
@@ -1120,14 +1128,14 @@ final class Router
     }
 
     /**
-    * Execute router HTTP callback class method with the given parameters using instance callback or reflection class
+    * Execute router HTTP callback class method with the given parameters using instance callback or reflection class.
     *
     * @param Closure|string|array<int,string> $callback Class public callback method eg: UserController:update.
     * @param array $arguments Method arguments to pass to callback method.
     * @param bool $injection Force use dependency injection. Default is false.
     *
-    * @return bool 
-    * @throws RouterException if method is not callable or doesn't exist
+    * @return bool Return true if controller method was executed successfully, false otherwise.
+    * @throws RouterException if method is not callable or doesn't exist.
     */
     private static function call(
         Closure|string|array $callback, 
@@ -1163,7 +1171,7 @@ final class Router
     }
 
     /**
-     * Execute class using reflection method
+     * Execute class using reflection method.
      *
      * @param string $className Controller class name.
      * @param string $method Controller class method name.
@@ -1295,14 +1303,23 @@ final class Router
     * Convert pattern to a regex pattern  & Checks if there is a routing match.
     *
     * @param string $pattern Url current route pattern.
-    * @param string $uri The current request uri.
+    * @param string $uri The current request uri path.
     * @param mixed &$matches Url matches passed by reference.
     *
     * @return bool Return true if is match, otherwise false.
     */
     private static function uriCapture(string $pattern, string $uri, mixed &$matches): bool
     {
-        return (bool) preg_match_all('#^' . preg_replace('/\/{(.*?)}/', '/(.*?)', $pattern) . '$#', $uri, $matches, PREG_OFFSET_CAPTURE);
+        error_clear_last();
+        $matches = [];
+        $pattern = '#^' . preg_replace('/\/{(.*?)}/', '/(.*?)', $pattern) . '$#';
+        $result = (bool) preg_match_all($pattern, $uri, $matches, PREG_OFFSET_CAPTURE);
+    
+        if ($result === false || preg_last_error() !== PREG_NO_ERROR) {
+            return false;
+        }
+
+        return $result;
     }
 
     /**

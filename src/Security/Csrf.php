@@ -56,7 +56,7 @@ final class Csrf
     }
 
     /**
-     * Initalize the session configuration.
+     * Initialize the session configuration.
     */
     private static function intConfig(): void 
     {
@@ -141,10 +141,11 @@ final class Csrf
      * Validates a submitted CSRF token.
      *
      * @param string $token The token submitted by the user.
+     * @param bool $reuse Weather to retain or delete the token after successful verification (default: true).
      * 
-     * @return bool True if the submitted token is valid, false otherwise.
+     * @return bool Return true if the submitted token is valid, false otherwise.
      */
-    public static function validate(string $token): bool 
+    public static function validate(string $token, bool $reuse = false): bool 
     {
         self::intConfig();
         $storage = self::tokenStorage();
@@ -161,7 +162,7 @@ final class Csrf
         }
 
         if (hash_equals($tokenHash, $token)) {
-            self::delete();
+            if(!$reuse) {self::delete();}
             return true;
         }
 
