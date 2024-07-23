@@ -607,7 +607,7 @@ class Database extends BaseConsole
             $this->writeln("[" . $this->color(get_class_name($seeder), 'green') . "] Execution completed.");
             return true;
         } catch (Exception|AppException $e) {
-            $this->writeln("HError: " . $e->getMessage(), 'white', 'red');
+            $this->writeln("Error: " . $e->getMessage(), 'white', 'red');
         }
         return false;
     }
