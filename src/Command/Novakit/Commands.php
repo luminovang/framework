@@ -63,7 +63,7 @@ final class Commands
         'list' => [
             'name' => 'list',
             'group' => 'Lists',
-            'description' => "Lists all available commands and their descriptions.",
+            'description' => "Lists all available novakit commands and their descriptions.",
             'usages' => [
                 'php novakit list',
             ],
@@ -84,13 +84,13 @@ final class Commands
             ],
             'examples' => [
                 'php novakit server',
-                'php novakit server --host=localhost --port=8080 --php=PHP-BINARY-PATH',
+                'php novakit server --host=localhost --port=8080 --php="PHP-BINARY-PATH"',
             ],
         ],
         'build:project' => [
             'name' => 'build:project',
-            'group' => 'System',
-            'description' => "Generates application build files for production.",
+            'group' => 'Builder',
+            'description' => "Archive required application files for production based on 'app.version' or copy them to build directory without zipping.",
             'usages' => [
                 'php novakit build:project',
             ],
@@ -98,8 +98,8 @@ final class Commands
                 '--type' => "Specify the type of build to generate (`zip` or `build`).",
             ],
             'examples' => [
-                'php novakit build:project --type=zip',
-                'php novakit build:project --type=build',
+                'php novakit build:project --type=zip' => 'Generates application production files as zip files',
+                'php novakit build:project --type=build' => 'Copy application production files to build directory.',
             ],
         ],
         'generate:key' => [
@@ -145,7 +145,7 @@ final class Commands
         'env:remove' => [
             'name' => 'env:remove',
             'group' => 'System',
-            'description' => "Removes a variable from the .env file.",
+            'description' => "Removes an environment variable key from the '.env' file.",
             'usages' => [
                 'php novakit env:remove --key="test.key"',
             ],
@@ -158,7 +158,7 @@ final class Commands
         ],
         'context' => [
             'name' => 'context',
-            'group' => 'System',
+            'group' => 'Context',
             'description' => "Install application route context or create routes from defined route annotation attributes.",
             'usages' => [
                 'php novakit context <context-name>',
@@ -422,7 +422,7 @@ final class Commands
     */
     public static function getCommands(): array 
     {
-        asort(self::$commands);
+       // asort(self::$commands);
         return self::$commands;
     }
 

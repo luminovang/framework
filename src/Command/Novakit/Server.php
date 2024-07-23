@@ -15,16 +15,6 @@ use \Luminova\Application\Foundation;
 class Server extends BaseConsole 
 {
     /**
-     * @var int $offset port offset
-    */
-    private int $offset = 0;
-
-    /**
-     * @var int $tries number of tries
-    */
-    private int $tries = 10;
-
-    /**
      * {@inheritdoc}
     */
     protected string $group = 'Server';
@@ -42,11 +32,21 @@ class Server extends BaseConsole
     ];
 
     /**
+     * @var int $offset port offset
+    */
+    private int $offset = 0;
+
+    /**
+     * @var int $tries number of tries
+    */
+    private int $tries = 10;
+
+    /**
      * {@inheritdoc}
     */
-    public function run(?array $params = []): int
+    public function run(?array $options = []): int
     {
-        $this->explain($params);
+        $this->explain($options);
    
         $php = escapeshellarg($this->getAnyOption('php', 'b', PHP_BINARY));
         $host = $this->getAnyOption('host', 'h', 'localhost');
@@ -57,7 +57,7 @@ class Server extends BaseConsole
         $this->writeln('Server Software Information: NovaKit/' . Foundation::NOVAKIT_VERSION . ' (Luminova) PHP/' . PHP_VERSION. ' (Development Server)', 'yellow');
         $this->newLine();
         $this->writeln('Listening on http://' . $host . ':' . $port, 'green');
-        $this->writeln('Document root is ' . $root, 'green');
+        $this->writeln('Document root: ' . $root, 'green');
         $this->newLine();
         $this->writeln('Press Ctrl-C to stop.');
         $this->newLine();
@@ -69,7 +69,7 @@ class Server extends BaseConsole
         if ($status && $this->offset < $this->tries) {
             $this->offset++;
 
-            $this->run($params);
+            $this->run($options);
         }
 
         return STATUS_SUCCESS;

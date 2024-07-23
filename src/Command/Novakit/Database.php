@@ -61,8 +61,13 @@ class Database extends BaseConsole
         $this->explain($options);
         // Temporarily enable cli exception
         setenv('throw.cli.exceptions', true);
+        try{
+            static::$builder ??= Builder::getInstance();
+        }catch(AppException|Exception $e){
+            $this->writeln("Database Connection Error: " . $e->getMessage(), 'white', 'red');
+            return STATUS_ERROR;
+        }
 
-        static::$builder ??= Builder::getInstance();
         static::$isDebug = (bool) $this->getAnyOption('debug', 'b', false);
         shared('SHOW_QUERY_DEBUG', static::$isDebug);
 
@@ -599,9 +604,10 @@ class Database extends BaseConsole
     {
         try{
             $seeder->run(static::$builder);
+            $this->writeln("[" . $this->color(get_class_name($seeder), 'green') . "] Execution completed.");
             return true;
         } catch (Exception|AppException $e) {
-            $this->writeln("Error: " . $e->getMessage(), 'white', 'red');
+            $this->writeln("HError: " . $e->getMessage(), 'white', 'red');
         }
         return false;
     }

@@ -35,7 +35,7 @@ class Lists extends BaseConsole
     /**
      * {@inheritdoc}
     */
-    public function run(?array $params = []): int
+    public function run(?array $options = []): int
     {
         static::listCommands();
 
@@ -64,6 +64,7 @@ class Lists extends BaseConsole
             foreach ($list as $command) {
                 self::writeln('   ' . self::color(TextUtils::padEnd($command['name'], 25), 'green') . $command['description']);
             }
+
             self::newLine();
         }
     }

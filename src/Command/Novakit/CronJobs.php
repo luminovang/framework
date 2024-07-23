@@ -56,6 +56,7 @@ class CronJobs extends BaseConsole
     public function run(?array $params = null): int
     {
         $this->explain($params);
+        setenv('throw.cli.exceptions', true);
         $command = trim($this->getCommand());
         $force = $this->getOption('force', false);
 
@@ -170,13 +171,13 @@ class CronJobs extends BaseConsole
                                 $this->callCallbacks($task, $instance, false, $logger);
                             }
                         }
-                    
-                        if($task['log'] !== null && $logger !== ''){
-                            logger($task['log'], rtrim($logger, "\n"));
-                            $logger = '';
-                        }
                     }catch(Exception $e){
-                        echo $$e->getMessage();
+                        $logger .= 'Exception Error: ' . $$e->getMessage();
+                    }
+
+                    if($task['log'] !== null && $logger !== ''){
+                        logger($task['log'], rtrim($logger, "\n"));
+                        $logger = '';
                     }
 
                     if($task['output'] !== null){

@@ -408,14 +408,14 @@ class Generators extends BaseConsole
         $continue = 'yes';
 
         if(file_exists($filepath)){
-            $continue = $this->prompt('File with same name "' . $filename .'", already exsit in path: "' . $path . '", do you want to continue?', ["yes", "no"], 'required|in_array(yes,no)');
+            $continue = $this->prompt('File with same name "' . $filename .'", already exist in path: "' . $path . '", do you want to continue?', ["yes", "no"], 'required|in_array(yes,no)');
         }
 
         if($continue === 'yes'){
             try {
                 if(write_content($filepath, $content)){
                     $filepath = filter_paths($filepath);
-                    $this->writeln("Completed succefully location: /{$filepath}", 'green');
+                    $this->writeln("Completed successfully location: /{$filepath}", 'green');
                     return true;
                 }
             } catch(Exception $e) {

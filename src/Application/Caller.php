@@ -52,7 +52,7 @@ final class Caller
                 }
 
                 if($class->isSubclassOf($baseClass)){
-                    $classes[] =  $class->getName();
+                    $classes[] = $class->getName();
                 }
             }
         }

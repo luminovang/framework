@@ -23,7 +23,7 @@ class System extends BaseConsole
     /**
      * {@inheritdoc}
     */
-    protected string $name = 'generate:key';
+    protected string $name = 'generator';
 
     /**
      * {@inheritdoc}

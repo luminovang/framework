@@ -17,12 +17,12 @@ class Builder extends BaseConsole
     /**
      * {@inheritdoc}
     */
-    protected string $group = 'System';
+    protected string $group = 'Builder';
 
     /**
      * {@inheritdoc}
     */
-    protected string $name = 'build:project';
+    protected string $name = 'builder';
 
     /**
     * {@inheritdoc}
@@ -37,8 +37,7 @@ class Builder extends BaseConsole
     public function run(?array $options = []): int
     {
         $this->explain($options);
-
-        $type = $this->getOption('type');
+        $type = $this->getAnyOption('type', 't');
 
         if($type === false){ 
             foreach ($this->usages as $line) {
