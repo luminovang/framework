@@ -53,7 +53,7 @@ if(!function_exists('setenv')){
                     $line = $file->fgets();
                     if (preg_match($pattern, $line)) {
                         $found = true;
-                        $content .= "$key=$value";
+                        $content .= "$key=$value\n";
                     }else{
                         $content .= $line;
                     }
@@ -329,4 +329,3 @@ defined('RETURN_ALL') || define('RETURN_ALL', 6);
  * @var int RETURN_STMT Return prepared statement.
 */
 defined('RETURN_STMT') || define('RETURN_STMT', 7);
-
