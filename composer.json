@@ -4,7 +4,7 @@
     "keywords": ["Framework","PHP","MVC","PHP Framework", "Luminova", "PHP Luminova Framework", "Luminova Ng", "PHP Luminova"],
     "license": "MIT",
     "type": "library",
-    "homepage": "https://github.com/luminovang/framework",
+    "homepage": "https://luminova.ng",
     "support": {
         "source": "https://github.com/luminovang/framework/"
     },
@@ -21,6 +21,7 @@
         "rector/rector": "0.18.3"
     },
     "suggest": {
+        "luminovang/luminova": "To use this module you need to install it through luminovang/framework.",
         "ext-curl": "Needed if you use CURLRequest class",
         "ext-exif": "Needed if you run Image class tests",
         "ext-fileinfo": "Needed to improve mime type detection for files",
