@@ -9,7 +9,7 @@
  */
 namespace Luminova\Notifications\Models;
 
-use Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Exceptions\InvalidArgumentException;
 
 final class Message
 {

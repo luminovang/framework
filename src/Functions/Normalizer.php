@@ -9,6 +9,7 @@
  */
 namespace Luminova\Functions;
 
+use \Luminova\Exceptions\InvalidArgumentException;
 class Normalizer
 {
 	/**
@@ -18,7 +19,7 @@ class Normalizer
 	 * @param string $target Link target attribute in HTML anchor name.
 	 * 	-	@example [_blank, _self, _top, _window, _parent or frame name]
 	 * @param string $blocked Replace blocked word with
-	 * @param bool $no_html Determines whether to remove all HTML tags or only allow certain tags like <p> by default, it's set to true.
+	 * @param bool $noHtml Determines whether to remove all HTML tags or only allow certain tags like <p> by default, it's set to true.
 	 * 
 	 * @return string $text
 	*/
@@ -26,19 +27,18 @@ class Normalizer
 		string $text, 
 		string $target = '_self', 
 		?string $blocked = null, 
-		bool $no_html = true
+		bool $noHtml = true
 	): string 
 	{
-		if(empty( $text )){
+		if($text  === ''){
 			return  $text;
 		}
 
-		if($no_html){
+		if($noHtml){
 			$text = preg_replace('/<([^>]+)>(.*?)<\/\1>|<([^>]+) \/>/', ($blocked ?? ''), $text); 
 		}
 
 		// Replace website links
-		//$text = preg_replace('/(https?:\/\/(?:www\.)?\S+(?:\.(?:[a-z]+)))/i', '<a href="$1" ' . $target . '>$1</a>', $text);
 		$text = preg_replace_callback('/(https?:\/\/(?:www\.)?(\S+(?:\.(?:[a-z]+))))/i', function($matches) use($target){
 			$target = "target='{$target}'";
 			$link = $matches[1];
@@ -166,31 +166,102 @@ class Normalizer
 		return $code . $checksumDigit;
 	}
 	
-	/** 
-	* Generates uuid string version 4
-	* @return string uuid
-	*/
-
-	public static function uuid(): string
+	/**
+     * Generates a UUID string of the specified version.
+     *
+     * @param int $version The version of the UUID to generate (1, 2, 3, 4, or 5).
+     * @param string|null $namespace The namespace for versions 3 and 5.
+     * @param string|null $name The name for versions 3 and 5.
+	 * 
+     * @return string Return the generated UUID string.
+     * @throws InvalidArgumentException If the namespace or name is not provided for versions 3 or 5.
+     */
+	public static function uuid(int $version = 4, ?string $namespace = null, ?string $name = null): string
     {
-        $data = random_bytes(16);
-        $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
-        $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+		return match($version) {
+			1, 2 => static::uuid1Or2(),
+			3, 5 => static::uuid3Or5($namespace, $name, $version),
+			/**
+			 * Generates a version 4 UUID.
+			 *
+			 * @return string The generated UUID string.
+			 */
+			default => (function(): string {
+				$data = random_bytes(16);
+				$data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+				$data[8] = chr(ord($data[8]) & 0x3f | 0x80);
 
-        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+				return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+			})(),
+		};
     }
-	
-	/** 
-	* Checks a valid uuid version 4
-	* @param string $uuid 
-	* @return bool true or false
-	*/
-	public static function isUuid( string $uuid ): bool 
-	{
-		$pattern = '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/';
 
-    	return (bool) preg_match($pattern, $uuid);
+	/**
+     * Generates a version 1 or version 2 UUID.
+     *
+     * @return string The generated UUID string.
+     */
+	private static function uuid1Or2(): string 
+	{
+		$data = random_bytes(16);
+		$time_low = bin2hex(substr($data, 0, 4));
+		$time_mid = bin2hex(substr($data, 4, 2));
+		$time_hi_and_version = bin2hex(chr((ord($data[6]) & 0x0f) | 0x10) . substr($data, 7, 1));
+		$clock_seq = bin2hex(chr((ord($data[8]) & 0x3f) | 0x80) . substr($data, 9, 1));
+		$node = bin2hex(substr($data, 10, 6));
+	
+		return sprintf('%s-%s-%s-%s-%s', $time_low, $time_mid, $time_hi_and_version, $clock_seq, $node);
 	}
+
+	/**
+     * Generates a version 3 or version 5 UUID.
+     *
+     * @param string|null $namespace The namespace for the UUID.
+     * @param string|null $name The name for the UUID.
+     * @param int $version The version of the UUID to generate (3 or 5).
+	 * 
+     * @return string Return the generated UUID string.
+     * @throws InvalidArgumentException If the namespace or name is not provided or if the namespace is invalid.
+     */
+	private static function uuid3Or5(string|null $namespace, string|null $name, int $version = 3): string 
+	{
+		if ($namespace === null || $name === null) {
+			throw new InvalidArgumentException("Namespace and name must be provided for version {$version} UUID");
+		}
+	
+		if (!static::isUuid($namespace, $version)) {
+			throw new InvalidArgumentException("Invalid namespace UUID provided for version {$version} UUID");
+		}
+	
+		$namespaceBinary = hex2bin(str_replace(['-', '{', '}'], '', $namespace));
+		$hash = ($version === 3) ? md5($namespaceBinary . $name) : sha1($namespaceBinary . $name);
+	
+		return sprintf('%08s-%04s-%04x-%02x%02x-%012s',
+			substr($hash, 0, 8),
+			substr($hash, 8, 4),
+			(hexdec(substr($hash, 12, 4)) & 0x0fff) | (($version === 3) ? 0x3000 : 0x5000),
+			(hexdec(substr($hash, 16, 2)) & 0x3f) | 0x80,
+			hexdec(substr($hash, 18, 2)),
+			substr($hash, 20, 12)
+		);
+	}
+	
+	/**
+     * Validates a UUID string against a specific version.
+     *
+     * @param string $uuid The UUID string to check.
+     * @param int $version The UUID version to check (default: 4).
+	 * 
+     * @return bool Return true if the UUID is valid, false otherwise.
+     */
+    public static function isUuid(string $uuid, int $version = 4): bool 
+    {
+        $pattern = ($version === 4)
+            ? '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i'
+            : '/^\{?[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}\}?$/';
+
+        return (bool) preg_match($pattern, $uuid);
+    }
 
 	/**
 	 * Checks if string is a valid email address
@@ -293,9 +364,9 @@ class Normalizer
 	 *
 	 * @return string The sanitized string.
 	*/
-	public static function strictInput(string $string, string $type = 'name', string $replacement = ''): string
+	public static function strictType(string $string, string $type = 'name', string $replacement = ''): string
 	{
-		if(empty($string)){
+		if($string === ''){
 			return $string;
 		}
 		
@@ -393,7 +464,7 @@ class Normalizer
 	 */
 	public static function truncate(string $text, int $length = 10, string $encoding = 'UTF-8'): string
 	{
-		if(empty($text)){
+		if($text === ''){
 			return $text;
 		}
 
@@ -438,7 +509,7 @@ class Normalizer
 	 */
 	public static function maskEmail(string $email, string $masker = '*'): string 
 	{
-		if (empty($email)) {
+		if ($email === '') {
 			return '';
 		}
 
@@ -460,7 +531,7 @@ class Normalizer
 	 */
 	public static function mask(string $string, string $masker = '*', string $position = 'center'): string 
 	{
-		if (empty($string)) {
+		if ($string === '') {
 			return '';
 		}
 

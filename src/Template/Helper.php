@@ -10,20 +10,23 @@
 namespace Luminova\Template;
 
 
-use \Luminova\Cache\PageMinifier;
-use \Luminova\Cache\PageViewCache;
+use \Luminova\Optimization\Minification;
+use \Luminova\Cache\ViewCache;
 use \DateTimeInterface;
 
 class Helper 
 {
-    private static ?PageMinifier $minifier = null;
+    /**
+     * @var ?Minification $minifier
+    */
+    private static ?Minification $minifier = null;
 
     /**
      * View cache instance 
      * 
-     * @var PageViewCache $viewCache 
+     * @var ViewCache $viewCache 
     */
-    private static ?PageViewCache $viewCache  = null;
+    private static ?ViewCache $viewCache  = null;
 
     /** 
      * Render minification
@@ -33,17 +36,17 @@ class Helper
      * @param bool $ignore
      * @param bool $copy 
      *
-     * @return PageMinifier Return minified instance.
+     * @return Minification Return minified instance.
     */
     public static function getMinifier(
         mixed $contents, 
         string $type = 'html', 
         bool $ignore = true, 
         bool $copy = false,
-    ): PageMinifier
+    ): Minification
     {
         if(self::$minifier === null){
-            self::$minifier = new PageMinifier();
+            self::$minifier = new Minification();
         }
 
         self::$minifier->codeblocks($ignore);
@@ -59,18 +62,18 @@ class Helper
      * @param DateTimeInterface|int|null $expiry  Cache expiration ttl (default: 0).
      * @param string|null $key Optional cache key.
      *
-     * @return PageViewCache Return page view cache instance.
+     * @return ViewCache Return page view cache instance.
     */
     public static function getCache(
         string $directory, 
         DateTimeInterface|int|null $expiry = 0, 
         string|null $key = null
-    ): PageViewCache
+    ): ViewCache
     {
         $key ??= static::cacheKey();
 
         if(self::$viewCache === null){
-            self::$viewCache = new PageViewCache();
+            self::$viewCache = new ViewCache();
         }
 
         self::$viewCache->setExpiry($expiry);
@@ -78,25 +81,6 @@ class Helper
         self::$viewCache->setKey($key);
 
         return self::$viewCache;
-    }
-
-    /**
-     * Determine if the cache has expired or not.
-     * 
-     * @param string $directory The cache directory.
-     * @param string|null $key Optional cache key.
-     * 
-     * @return bool true if the cache has expired otherwise false.
-    */
-    public static function expired(string $directory, ?string $key = null): bool
-    {
-        $key ??= static::cacheKey();
-
-        if($key === ''){
-            return false;
-        }
-
-        return PageViewCache::expired($key, $directory);
     }
 
     /**

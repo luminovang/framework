@@ -9,7 +9,7 @@
  */
 namespace Luminova\Seo;  
 
-use \App\Controllers\Config\Sitemap as SitemapConfig;
+use \App\Config\Sitemap as SitemapConfig;
 use \Luminova\Base\BaseApplication;
 use \Luminova\Base\BaseConsole;
 use \Luminova\Command\TextUtils;
@@ -144,10 +144,10 @@ final class Sitemap
             self::$cli?->writeln(TextUtils::padEnd('Extracted:', 20) . self::$cli?->color('[' .self::$counts  . ']', 'green'));
             self::$cli?->writeln(TextUtils::padEnd('Skipped:', 20) . self::$cli?->color('[' .self::$skipped  . ']', 'yellow'));
             self::$cli?->writeln(TextUtils::padEnd('Failed:', 20) . self::$cli?->color('[' . count(self::$failed) . ']', 'red'));
-
+            gc_mem_caches();
             return true;
         }
-
+        gc_mem_caches();
         return false;
     }
 

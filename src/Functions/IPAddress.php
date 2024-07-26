@@ -9,10 +9,10 @@
  */
 namespace Luminova\Functions;
 
-use \Luminova\Functions\TorDetector;
-use \App\Controllers\Config\IPConfig;
+use \App\Config\IPConfig;
 use \Luminova\Time\Time;
 use \Luminova\Http\Network;
+use \Luminova\Functions\TorDetector;
 use \Luminova\Exceptions\AppException;
 use \Exception;
 
@@ -106,10 +106,12 @@ class IPAddress
       $cacheFile = $path . "ip_info_$ip.json";
 
       if (file_exists($cacheFile)) {
-         $response = file_get_contents($cacheFile);
-         $result = json_decode($response);
+         $response = get_content($cacheFile);
+         if($response !== false){
+            $result = json_decode($response);
 
-         return $result;
+            return $result;
+         }
       }
 
       $headers = [];

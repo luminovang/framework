@@ -77,8 +77,8 @@ final class TextUtils
     /**
      * Create a border around text.
      *
-     * @param string $text string to pad.
-     * @param int $padding Padding location default is both left and reight.
+     * @param string $text The string to pad.
+     * @param int $padding Padding location default is both left and right.
      * 
      * @return string Return text with border round.
     */
@@ -101,10 +101,10 @@ final class TextUtils
     }
 
     /**
-     * Create a centered text
+     * Create a centered text.
      *
-     * @param string $text string to pad
-     * @param int|null $padding maximum padding
+     * @param string $text string to pad.
+     * @param int|null $padding maximum padding.
      * 
      * @return string Return centered text.
     */
@@ -126,13 +126,13 @@ final class TextUtils
      * @param string $text string to pad.
      * @param int $length Maximum length of padding.
      * @param string $char Padding character (default: ' ').
-     * @param int $padd Padding location default is both left and reight (default: STR_PAD_BOTH).
+     * @param int $pad The padding position (default: STR_PAD_BOTH).
      * 
      * @return string Return padded string.
     */
-    public static function padding(string $text, int $length, string $char = ' ', int $padd = STR_PAD_BOTH): string 
+    public static function padding(string $text, int $length, string $char = ' ', int $pad = STR_PAD_BOTH): string 
     {
-        return str_pad($text, $length, $char, $padd);
+        return str_pad($text, $length, $char, $pad);
     }
 
     /**

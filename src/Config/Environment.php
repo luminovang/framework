@@ -12,7 +12,7 @@ namespace Luminova\Config;
 use \Luminova\Exceptions\FileException;
 use \SplFileObject;
 
-final class DotEnv
+final class Environment
 {
     /**
      * Register environment variables from a .env file.
@@ -25,7 +25,7 @@ final class DotEnv
     public static function register(string $path): void
     {
         if (!file_exists($path)) {
-            throw new FileException("DotEnv file not found on: $path, make sure you add .env file to your project root");
+            throw new FileException("Environment file not found on: $path, make sure you add .env file to your project root");
         }
 
         $file = new SplFileObject($path, 'r');

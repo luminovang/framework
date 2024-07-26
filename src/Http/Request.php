@@ -16,7 +16,7 @@ use \Luminova\Http\File;
 use \Luminova\Http\UserAgent;
 use \Luminova\Functions\IPAddress;
 use \Luminova\Functions\Normalizer;
-use \App\Controllers\Config\Security;
+use \App\Config\Security;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
 

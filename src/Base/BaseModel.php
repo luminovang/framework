@@ -11,7 +11,7 @@
 namespace Luminova\Base;
 
 use \Luminova\Database\Builder;
-use \Luminova\Security\InputValidator;
+use \Luminova\Security\Validation;
 use \Luminova\Storages\FileManager;
 use \Peterujah\NanoBlock\SearchController as SearchInstance;
 use \Luminova\Exceptions\RuntimeException;
@@ -106,9 +106,9 @@ abstract class BaseModel
     /**
      * Input validation class instance.
      * 
-     * @var InputValidator $validation
+     * @var Validation $validation
     */
-    protected static ?InputValidator $validation = null;
+    protected static ?Validation $validation = null;
 
     /**
      * Search database controller instance.
@@ -464,12 +464,12 @@ abstract class BaseModel
     /**
      * Initialize and ser validation class object.
      *
-     * @return InputValidator Validation class instance.
+     * @return Validation Validation class instance.
      * > After first initialization you can then use `static::$validation` to access the object.
     */
-    protected function validation(): InputValidator
+    protected function validation(): Validation
     {
-        static::$validation ??= new InputValidator();
+        static::$validation ??= new Validation();
 
         if($this->rules !== []){
             static::$validation->rules = $this->rules;

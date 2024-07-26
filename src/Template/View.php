@@ -20,12 +20,12 @@ use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
 use \Luminova\Template\Helper;
-use \Luminova\Cache\PageViewCache;
-use \App\Controllers\Config\Template as TemplateConfig;
+use \Luminova\Cache\ViewCache;
+use \App\Config\Template as TemplateConfig;
 use \Luminova\Debugger\Performance;
 use \DateTimeInterface;
 
-trait TemplateView
+trait View
 { 
     /**
      * Template configuration.
@@ -168,7 +168,7 @@ trait TemplateView
     private bool $codeblockButton = false;
 
     /** 
-     * Initialize template
+     * Initialize template view configuration.
      *
      * @return void
      * @internal 
@@ -206,7 +206,7 @@ trait TemplateView
      * @param bool $minify Indicate if codeblocks should be minified (default: false)
      * @param bool $button Indicate if codeblock tags should include a copy button (default: false).
      *
-     * @return self $this
+     * @return self Return instance of of View class or BaseApplication depending where its called.
     */
     public final function codeblock(bool $minify, bool $button = false): self 
     {
@@ -221,7 +221,7 @@ trait TemplateView
      *
      * @param string $path folder name to search for view.
      *
-     * @return self $this Instance of self.
+     * @return self Return instance of of View class or BaseApplication depending where its called.
     */
     public final function setFolder(string $path): self
     {
@@ -235,7 +235,7 @@ trait TemplateView
      *
      * @param string|array<int, string> $viewName view name or array of view names.
      *
-     * @return self $this Instance of self.
+     * @return self Return instance of of View class or BaseApplication depending where its called.
     */
     public final function noCaching(array|string $viewName): self
     {
@@ -296,7 +296,7 @@ trait TemplateView
      * }else{
      *      $cache->reuse();
      * }```
-     * @return self $this Instance of self.
+     * @return self Return instance of of View class or BaseApplication depending where its called.
     */
     public final function cache(DateTimeInterface|int|null $expiry = null): self 
     {
@@ -358,10 +358,14 @@ trait TemplateView
     }
 
     /** 
-     * render render template view
+     * Render template view file withing the `resources/views` directory.
+     * Do not include the extension type, only the file name.
      *
-     * @param string $viewName view name
-     * @param string $viewType Type of content not same as header Content-Type
+     * @param string $viewName The view name (e.g, `index`).
+     * @param string $viewType The type of content in view file, not same as header Content-Type.
+     * 
+     * View Types: 
+     * 
      * - html Html content.
      * - json Json content.
      * - text Plain text content.
@@ -409,10 +413,10 @@ trait TemplateView
     /**
      * Render view content with additional options available as globals within the template view.
      *
-     * @param array<string, mixed> $options Additional parameters to pass in the template file.
+     * @param array<string,mixed> $options Additional parameters to pass in the template file.
      * @param int $status HTTP status code (default: 200 OK).
      * 
-     * @example `$this->app->view('name')->render([])` Display your template view with options.
+     * @example `$this->app->view('name')->render([...])` Display your template view with options.
      * 
      * @return int The HTTP status code.
      * @throws RuntimeException If the view rendering fails.
@@ -425,7 +429,7 @@ trait TemplateView
     /**
      * Get the rendered contents of a view.
      *
-     * @param array<string, mixed> $options Additional parameters to pass in the template file.
+     * @param array<string,mixed> $options Additional parameters to pass in the template file.
      * @param int $status HTTP status code (default: 200 OK).
      * 
      * @example `$content = $this->app->view('name')->respond([])` Display your template view or send as an email.
@@ -755,12 +759,12 @@ trait TemplateView
      * Render without smarty using default .php template engine.
      * 
      * @param array $options View options
-     * @param PageViewCache|null $_lmv_cache Cache instance if should cache page contents
+     * @param ViewCache|null $_lmv_cache Cache instance if should cache page contents
      * @param bool $_lmv_return Should return view contents.
      * 
      * @return bool|string Return true on success, false on failure.
     */
-    private function renderDefault(array $options, ?PageViewCache $_lmv_cache = null, bool $_lmv_return = false): bool|string
+    private function renderDefault(array $options, ?ViewCache $_lmv_cache = null, bool $_lmv_return = false): bool|string
     {
         $lmv_view_type = $options['viewType']??'html';
         if(self::$config->variablePrefixing !== null){
@@ -796,7 +800,7 @@ trait TemplateView
      * 
      * @param string $_lmv_viewfile View template file 
      * @param array $options View options
-     * @param PageViewCache|null $_lmv_cache Cache instance if should cache page contents
+     * @param ViewCache|null $_lmv_cache Cache instance if should cache page contents
      * @param bool $_lmv_ignore Ignore html codeblock during minimizing
      * @param bool $_lmv_copy Allow copy on html code tag or not
      * @param bool $_lmv_return Should return view contents.
@@ -806,7 +810,7 @@ trait TemplateView
     private static function renderIsolation(
         string $_lmv_viewfile, 
         array $options,
-        ?PageViewCache $_lmv_cache = null,
+        ?ViewCache $_lmv_cache = null,
         bool $_lmv_ignore = true, 
         bool $_lmv_copy = false,
         bool $_lmv_return = false
@@ -883,7 +887,7 @@ trait TemplateView
      * @param string $type The view content type.
      * @param bool $ignore Ignore codeblocks.
      * @param bool $copy Add copy button to codeblocks.
-     * @param PageViewCache|null $cache Cache instance.
+     * @param ViewCache|null $cache Cache instance.
      * 
      * @return array<int,mixed> Return contents.
     */
@@ -892,7 +896,7 @@ trait TemplateView
         string $type, 
         bool $ignore, 
         bool $copy, 
-        ?PageViewCache $cache = null
+        ?ViewCache $cache = null
     ): array 
     {
         if ($content !== false && $content !== '') {

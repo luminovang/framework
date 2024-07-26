@@ -659,7 +659,7 @@ class Storage extends Adapters
     private static function getConfigs(string $context = 'local'): array 
     {
         if(self::$configs === []){
-            $path = path('controllers') . 'Config' . DIRECTORY_SEPARATOR . 'Storage.php';
+            $path = root('/app/Config/') . 'Storage.php';
 
             if (file_exists($path)) {
                 self::$configs = require_once $path;

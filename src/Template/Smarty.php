@@ -10,9 +10,9 @@
 namespace Luminova\Template;
 
 use \Smarty\Smarty as SmartyTemplate;
-use \App\Controllers\Config\Template as TemplateConfig;
-use \App\Controllers\Config\Templates\Smarty\Classes;
-use \App\Controllers\Config\Templates\Smarty\Modifiers;
+use \App\Config\Template as TemplateConfig;
+use \App\Config\Templates\Smarty\Classes;
+use \App\Config\Templates\Smarty\Modifiers;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Template\Helper;
 use \Exception;

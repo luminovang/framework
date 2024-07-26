@@ -39,6 +39,11 @@ final class Layout
     private static string $file = '';
 
     /** 
+     * @var string|null $layouts
+    */
+    private static ?string $layouts = null;
+
+    /** 
      * @var self|null $instance
     */
     private static ?self $instance = null;
@@ -81,7 +86,8 @@ final class Layout
      */
     public function layout(string $layout): self
     {
-        self::$file = root('/resources/views/layouts/') . trim($layout, '/') . '.php';
+        self::$layouts ??= root('/resources/views/layouts/');
+        self::$file = self::$layouts . trim($layout, DIRECTORY_SEPARATOR) . '.php';
 
         if (!file_exists(self::$file)) {
             throw new RuntimeException('Layout not found: ' . filter_paths(self::$file));

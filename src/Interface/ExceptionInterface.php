@@ -37,8 +37,7 @@ interface ExceptionInterface extends Throwable
      * @return void
     */
     public function log(string $level = 'exception'): void;
-
-
+    
     /**
      * Handle exception gracefully based on environment and exception error code.
      * 

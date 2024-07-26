@@ -11,7 +11,7 @@ namespace Luminova\Http;
 
 use \Luminova\Application\Foundation;
 use \Luminova\Functions\Normalizer;
-use \App\Controllers\Config\Apis;
+use \App\Config\Apis;
 
 class Header
 {

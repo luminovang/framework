@@ -10,7 +10,7 @@
 namespace Luminova\Command\Novakit;
 
 use \Luminova\Base\BaseConsole;
-use \App\Controllers\Config\Template;
+use \App\Config\Template;
 use \Exception;
 
 class Generators extends BaseConsole 
@@ -260,7 +260,7 @@ class Generators extends BaseConsole
 
         $modelContent = <<<PHP
         <?php
-        namespace App\Controllers\Models;
+        namespace App\Models;
 
         use \Luminova\Base\BaseModel;
         use \DateTimeInterface;
@@ -339,7 +339,7 @@ class Generators extends BaseConsole
         }
         PHP;
 
-        $path = "/app/Controllers/Models/";
+        $path = "/app/Models/";
         
         if (!$this->saveFile($modelContent, $path, "{$name}.php")) {
             $this->writeln("Unable to create model {$name}", 'red');
@@ -372,7 +372,7 @@ class Generators extends BaseConsole
 
         $classContent = <<<PHP
         <?php
-        namespace App\Controllers\Utils;
+        namespace App\Utils;
 
         $use
 
@@ -386,7 +386,7 @@ class Generators extends BaseConsole
         }
         PHP;
 
-        $path = "/app/Controllers/Utils/";
+        $path = "/app/Utils/";
         
         if (!$this->saveFile($classContent, $path, "{$name}.php")) {
             $this->writeln("Unable to create class {$name}", 'red');

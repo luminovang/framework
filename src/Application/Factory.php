@@ -20,10 +20,10 @@ use \Luminova\Storages\FileManager;
 use \Luminova\Http\Request;
 use \Luminova\Http\Network;
 use \Luminova\Application\Services;
-use \App\Controllers\Config\Services as BootServices;
-use \Luminova\Template\ViewResponse;
+use \App\Config\Services as BootServices;
+use \Luminova\Template\Response;
 use \Luminova\Logger\Logger;
-use \Luminova\Security\InputValidator;
+use \Luminova\Security\Validation;
 use \Luminova\Notifications\Firebase\Notification;
 use \Luminova\Exceptions\RuntimeException;
 use \Exception;
@@ -40,8 +40,8 @@ use \Throwable;
  * @method static Translator          language(?string $locale = null, bool $shared = true)      Application translation class.
  * @method static Logger              logger(bool $shared = true)                                PSR logger class.
  * @method static FileManager         fileManager(bool $shared = true)                           File manager class.
- * @method static InputValidator      validate(bool $shared = true)                              Input validation class.
- * @method static ViewResponse        response(int $status = 200, bool $shared = true)           Render response class.
+ * @method static Validation          validate(bool $shared = true)                              Input validation class.
+ * @method static Response            response(int $status = 200, bool $shared = true)           Render response class.
  * @method static Request             request(bool $shared = true)                               HTTP Request class.
  * @method static Network             network(?HttpClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
  * @method static Caller              caller(bool $shared = true)                                Class caller class.
@@ -70,8 +70,8 @@ final class Factory
         'language'      => Translator::class,
         'logger'        => Logger::class,
         'fileManager'   => FileManager::class,
-        'validate'      => InputValidator::class,
-        'response'      => ViewResponse::class,
+        'validate'      => Validation::class,
+        'response'      => Response::class,
         'request'       => Request::class,
         'network'       => Network::class,
         'caller'        => Caller::class,

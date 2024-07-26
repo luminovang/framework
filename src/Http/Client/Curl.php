@@ -10,14 +10,14 @@
 
 namespace Luminova\Http\Client;
 
-use JsonException;
 use \Luminova\Http\Message\Response;
 use \Luminova\Interface\HttpClientInterface;
 use \Luminova\Exceptions\Http\RequestException;
 use \Luminova\Exceptions\Http\ConnectException;
 use \Luminova\Exceptions\Http\ClientException;
 use \Luminova\Exceptions\Http\ServerException;
-use Throwable;
+use \Throwable;
+use \JsonException;
 
 class Curl implements HttpClientInterface
 {

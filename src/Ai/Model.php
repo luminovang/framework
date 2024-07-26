@@ -11,7 +11,7 @@ namespace Luminova\Ai;
 
 use \Luminova\Interface\AiInterface;
 use \Luminova\Ai\Models\OpenAI;
-use \App\Controllers\Config\AI;
+use \App\Config\AI;
 use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\RuntimeException;
 use \Throwable;
@@ -29,7 +29,7 @@ final class Model
     private static ?AI $config = null;
 
     /**
-     * Initalize model instance with AI interface.
+     * Initialize model instance with AI interface.
      * 
      * @param AiInterface $ai The AI object to use (default: Openai).
     */

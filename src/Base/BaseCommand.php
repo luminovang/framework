@@ -70,6 +70,7 @@ abstract class BaseCommand extends Terminal
     public function __construct()
     {
         parent::__construct();
+        $this->onCreate();
     }
 
     /**
@@ -103,9 +104,16 @@ abstract class BaseCommand extends Terminal
      *      - options: The available options for the command.
      *      - examples: The examples of the command.
      * 
-     * @return int Return status code.
+     * @return int Return status code success as implemented, error using default implementation.
     */
     abstract public function help(array $helps): int;
+
+    /**
+     * Command on create method, an alternative method to __construct()
+     * 
+     * @return void 
+    */
+    protected function onCreate(): void {}
 
     /**
      * Property getter

@@ -10,8 +10,8 @@
 namespace Luminova\Http;
 
 use \Luminova\Functions\Maths;
-use \stdClass;
 use \Luminova\Exceptions\StorageException;
+use \stdClass;
 
 /**
  * Represents an uploaded file.

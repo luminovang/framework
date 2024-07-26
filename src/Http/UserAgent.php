@@ -9,7 +9,7 @@
  */
 namespace Luminova\Http;
 
-use \App\Controllers\Config\Browser;
+use \App\Config\Browser;
 
 /**
  * Getter method for retrieving the browser information.

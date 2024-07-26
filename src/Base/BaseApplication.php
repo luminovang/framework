@@ -7,20 +7,19 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Base;
 
 use \Luminova\Routing\Router;
-use \Luminova\Template\TemplateView;
+use \Luminova\Template\View;
 
 abstract class BaseApplication
 {
     /**
-     * Adds helper class for handling view template rendering and response.
+     * Inherit helper class for handling view template rendering and response.
      *
      * @see https://luminova.ng/docs/0.0.0/templates/views
     */
-    use TemplateView;
+    use View;
 
     /**
      * Base Application instance
@@ -43,7 +42,7 @@ abstract class BaseApplication
         $this->router ??= new Router($this);
 
         // Set application controller class namespace
-        $this->router->addNamespace('\App\Controllers');
+        $this->router->addNamespace('\\App\\Controllers\\');
 
         // Initialize the template engine
         $this->initialize();
@@ -55,11 +54,10 @@ abstract class BaseApplication
     /**
      * Trigger application events listeners.
      * 
-     * @param $event Event method to trigger.
-     * @param mixed $arguments [mixed ...$] The event arguments.
+     * @param string $event The event method name to trigger.
+     * @param mixed $arguments [mixed ...$] Optional event method arguments.
      * 
      * @return void
-     * @internal
     */
     public final function __on(string $event, mixed ...$arguments): void 
     {
@@ -111,7 +109,7 @@ abstract class BaseApplication
     /**
      * Get the base application instance shared singleton class instance.
      * 
-     * @return static Application shared instance
+     * @return static Return application shared instance.
      */
     public static final function getInstance(): static 
     {

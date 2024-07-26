@@ -40,7 +40,8 @@ final class Schema
 
     /**
      * Initialize class constructor and load configurations.
-     * @see /app/Controllers/Config/Meta.php
+     * @see /app/Config/Meta.php
+     * @see https://luminova.ng/docs/3.0.2/configs/schema
     */
     public function __construct()
     {
@@ -606,7 +607,7 @@ final class Schema
      */
     private static function loadSchema(): array
     {
-        $path = path('controllers') . 'Config' . DIRECTORY_SEPARATOR . 'Schema.php';
+        $path = root('/app/Config/') . 'Schema.php';
     
         if (file_exists($path)) {
             return require $path;

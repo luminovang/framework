@@ -10,7 +10,7 @@
 namespace Luminova\Cookies;
 
 use \Luminova\Base\BaseConfig;
-use \App\Controllers\Config\Cookie as CookieConfig;
+use \App\Config\Cookie as CookieConfig;
 use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
 use \Luminova\Interface\CookieInterface;

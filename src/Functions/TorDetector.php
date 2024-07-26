@@ -30,7 +30,7 @@ final class TorDetector
     {
         $currentTime = time();
         if (file_exists(self::getPth()) && ($currentTime - filemtime(self::getPth()) < self::$cacheExpiry)) {
-            return file_get_contents(self::getPth());
+            return get_content(self::getPth());
         }
 
         $result = file_get_contents(self::$torExitNodeListUrl);

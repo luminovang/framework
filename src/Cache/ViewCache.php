@@ -14,7 +14,7 @@ use \Luminova\Time\Timestamp;
 use \Luminova\Storages\FileManager;
 use \DateTimeInterface;
 
-final class PageViewCache
+final class ViewCache
 {
     /**
      * The directory where cached files will be stored.

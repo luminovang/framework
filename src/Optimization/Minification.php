@@ -7,40 +7,43 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Cache;
+namespace Luminova\Optimization;
 
 use \Luminova\Http\Header;
 use \JsonException;
 
-final class PageMinifier 
+final class Minification 
 {
     /** 
-     * Ignore html code block tag <code></code>
+     * Ignore html code block tag `<code></code>`. 
+     * 
      * @var bool $codeblocks
      */
     private bool $codeblocks = false;
 
     /** 
-	*  Minified content
-	* @var mixed $contents
+	 *  Minified content.
+     *
+	 * @var mixed $contents
 	*/
     private mixed $contents = '';
 
     /** 
-	* Allow copying of code blocks  
-	* @var bool $copyable
+	 * Allow copying of code blocks.
+     *  
+	 * @var bool $copyable
 	*/
     private bool $copyable = false;
 
     /** 
-	* Minified content headers.
-    *
-	* @var array $headers
+	 * Minified content headers.
+     *
+	 * @var array $headers
 	*/
     private array $headers = [];
 
     /**
-     * Regular expression patterns for content stripping
+     * Regular expression patterns for content stripping.
      * @var array $patterns
     */
     private static array $patterns = [
@@ -58,7 +61,7 @@ final class PageMinifier
             '',
             ' '
         ],
-        "line" =>[
+        "line" => [
             "\n",
             "\r",
             "\t"
@@ -69,15 +72,14 @@ final class PageMinifier
      * Class constructor.
      * Initializes default settings for the response headers and cache control.
      */
-    public function __construct() {
-        
-    }
+    public function __construct() {}
     
     /**
-     * sets ignore minifying code block
+     * sets ignore minifying code block.
      *
-     * @param bool $ignore
-     *  @return self Returns minifier class instance.
+     * @param bool $ignore Weather to ignore minifying code blocks.
+     * 
+     * @return self Returns minification class instance.
      */
 	public function codeblocks(bool $ignore): self 
     {
@@ -86,12 +88,12 @@ final class PageMinifier
 		return $this;
 	}
 
-     /**
-     * sets allow copy code block
+    /**
+     * sets allow copy code block.
      *
-     * @param bool $allow
+     * @param bool $allow Weather to include code copy button.
      * 
-     *  @return self Returns minifier class instance.
+     *  @return self Returns minification class instance.
      */
 	public function copyable(bool $allow): self 
     {
@@ -101,9 +103,9 @@ final class PageMinifier
 	}
 
     /**
-     * Get minified content
+     * Get minified content,
      * 
-     * @return string Return minified contents
+     * @return string Return minified contents.
      */
     public function getContent(): string 
     {
@@ -111,7 +113,7 @@ final class PageMinifier
     }
 
     /**
-     * Get content encoding
+     * Get content encoding.
      * 
      * @return string|null|false Return minified content encoding.
      */
@@ -121,7 +123,7 @@ final class PageMinifier
     }
 
      /**
-     * Get content encoding
+     * Get content encoding.
      * 
      * @return int Return content length.
      */
@@ -131,7 +133,7 @@ final class PageMinifier
     }
 
     /**
-     * Get page header information
+     * Get page header information.
      * 
      * @return array Get minified content headers.
      */
@@ -146,7 +148,7 @@ final class PageMinifier
      * @param string|array|object $data The content to compress (can be an array or object for JSON response).
      * @param string $contentType The expected content type for the response.
      * 
-     * @return self Returns minifier class instance.
+     * @return self Returns minification class instance.
      */
     public function compress(
         string|array|object $data,
@@ -173,11 +175,11 @@ final class PageMinifier
     }
 
     /**
-     * Convert content to json string
+     * Convert content to json string.
      * 
-     * @param array|object $data
+     * @param array|object $data The content to convert to json string.
      * 
-     * @return string
+     * @return string Return json string or empty string.
     */
     private static function toJsonString(array|object $data): string
     {

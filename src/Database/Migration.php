@@ -68,7 +68,7 @@ abstract class Migration
      * @return void
      * 
      * @example Implementation.
-     * `Schema::invoke('\App\Controllers\Database\Migration\AnotherMigration')`
+     * `Schema::invoke('\App\Database\Migration\AnotherMigration')`
     */
     protected final function invoke(string $migrate): void
     {

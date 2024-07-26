@@ -13,7 +13,7 @@ use \Luminova\Application\Foundation;
 use \Luminova\Command\Colors;
 use \Luminova\Command\Console;
 use \Luminova\Command\TextUtils;
-use \Luminova\Security\InputValidator;
+use \Luminova\Security\Validation;
 use \Luminova\Command\Novakit\Commands;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Closure;
@@ -68,7 +68,7 @@ class Terminal
     public function __construct()
     {
         defined('STDOUT') || define('STDOUT', 'php://output');
-        defined('STDIN') || define('STDIN', 'php://stdin');
+        defined('STDIN')  || define('STDIN', 'php://stdin');
         defined('STDERR') || define('STDERR', 'php://stderr');
         
         static::$isReadline = extension_loaded('readline');
@@ -298,7 +298,7 @@ class Terminal
 
             if (is_platform('windows') || static::isWindowsTerminal(STDIN)) {
                 $vbscript = sys_get_temp_dir() . 'prompt_password.vbs';
-                $inputBox = 'wscript.echo(InputBox("'. addslashes($message) . '", "", "password here"))';
+                $inputBox = 'wscript.echo(InputBox("'. addslashes($message) . '", "", ""))';
     
                 if ($timeout > 0) {
                     $result = static::timeout(static function() {
@@ -708,7 +708,7 @@ class Terminal
     protected static final function validate(string $value, array $rules): bool
     {
         static $validation = null;
-        $validation ??= new InputValidator();
+        $validation ??= new Validation();
         $validation->setRules($rules);
         $field = [
             'input' => $value

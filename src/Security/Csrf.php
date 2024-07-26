@@ -11,7 +11,7 @@
 namespace Luminova\Security;
 
 use \Luminova\Exceptions\BadMethodCallException;
-use \App\Controllers\Config\Session as CookieConfig;
+use \App\Config\Session as CookieConfig;
 
 final class Csrf 
 {

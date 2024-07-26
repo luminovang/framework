@@ -370,7 +370,7 @@ abstract class BaseCron
     public final static function getTaskFromFile(): array|bool
     {
         if(file_exists($file = self::$path . self::$filename)){
-            $content = file_get_contents($file);
+            $content = get_content($file);
             if($content !== false){
                 return json_decode($content, true);
             }

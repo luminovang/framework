@@ -110,7 +110,7 @@ class System extends BaseConsole
         }
 
         $envFile = root() . '.env';
-        $envContents = file_get_contents($envFile);
+        $envContents = get_content($envFile);
         
         if($envContents === false){
             $this->beeps();

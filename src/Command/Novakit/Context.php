@@ -88,12 +88,12 @@ class Context extends BaseConsole
         $controller = ucfirst($name) . 'Controller::index';
         $onError = ($noError ? '' : ', ' . "[ViewErrors::class, '$camelCase']");
         $index = root('public') . 'index.php';
-        $indexContent = file_get_contents($index);
+        $indexContent = get_content($index);
 
         $handler = <<<PHP
         <?php 
         /** @var \Luminova\Routing\Router \$router */
-        /** @var \App\Controllers\Application \$app */
+        /** @var \App\Application \$app */
         
         \$router->get('/', '$controller');
         PHP;
@@ -168,7 +168,7 @@ class Context extends BaseConsole
     {
         $collector = (new Generator('\\App\\Controllers\\'))->export('app/Controllers');
 
-        $head = "<?php\nuse \Luminova\Routing\Router;\n/** @var \Luminova\Routing\Router \$router */\n/** @var \App\Controllers\Application \$app */\n\n";
+        $head = "<?php\nuse \Luminova\Routing\Router;\n/** @var \Luminova\Routing\Router \$router */\n/** @var \App\Application \$app */\n\n";
         $httpContents = '';
         $apiContents = '';
         $cliContents = '';
@@ -260,7 +260,7 @@ class Context extends BaseConsole
 
         if ($newContext !== '') {
             $index = root('public') . 'index.php';
-            $indexContent = file_get_contents($index);
+            $indexContent = get_content($index);
             $search = "Boot::http()->router->context(";
             $startPos = strpos($indexContent, $search);
 

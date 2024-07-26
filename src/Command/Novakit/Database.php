@@ -164,7 +164,7 @@ class Database extends BaseConsole
             $lock = [];
         
             if (file_exists($filename)) {
-                $lock = file_get_contents($filename);
+                $lock = get_content($filename);
                 $lock = ($lock !== false && $lock !== '') ? json_decode($lock, true) : [];
             }
             
@@ -233,18 +233,18 @@ class Database extends BaseConsole
         $lock = [];
         $backup = null; 
         $executed = 0; 
-        $path = root('/app/Controllers/Database/Migrations/');
+        $path = root('/app/Database/Migrations/');
 
         if(!$noBackup && !static::$isDebug){
             $backup = root('/writeable/database/Migrations/');
             if(file_exists($lockfile = $backup . 'migrations.lock')){
-                $lock = file_get_contents($lockfile);
+                $lock = get_content($lockfile);
                 $lock = ($lock !== false && $lock !== '') ? json_decode($lock, true) : [];
             }
         }
 
         try {
-            $migrateClass = "\\App\Controllers\\Database\\Migrations\\{$class}";
+            $migrateClass = "\\App\\Database\\Migrations\\{$class}";
             /**
              * @var Migration $instance
              */
@@ -312,14 +312,14 @@ class Database extends BaseConsole
         $lock = [];
         $backup = null; 
         $executed = 0;
-        $path = root('/app/Controllers/Database/Seeders/');
-        $namespace = '\\App\\Controllers\\Database\\Seeders';
+        $path = root('/app/Database/Seeders/');
+        $namespace = '\\App\\Database\\Seeders';
 
         if(!$noBackup){
             $backup = root('/writeable/database/Seeders/');
             
             if(file_exists($lockfile = $backup . 'seeders.lock')){
-                $lock = file_get_contents($lockfile);
+                $lock = get_content($lockfile);
                 $lock = ($lock !== false && $lock !== '') ? json_decode($lock, true) : [];
             }
         }
@@ -438,14 +438,14 @@ class Database extends BaseConsole
         $executed = 0; 
         $drop ??= $this->getAnyOption('drop', 'd', false);
         static::$isDebug = $drop ? false : static::$isDebug;
-        $path = root('/app/Controllers/Database/Migrations/');
+        $path = root('/app/Database/Migrations/');
         $shouldGuard = (static::$isDebug === false && $drop === false);
-        $namespace = '\\App\\Controllers\\Database\\Migrations';
+        $namespace = '\\App\\Database\\Migrations';
 
         if(!static::$isDebug && $noBackup === false){
             $backup = root('/writeable/database/Migrations/');
             if(file_exists($lockfile = $backup . 'migrations.lock')){
-                $lock = file_get_contents($lockfile);
+                $lock = get_content($lockfile);
                 $lock = ($lock !== false && $lock !== '') ? json_decode($lock, true) : [];
             }
         }
@@ -637,7 +637,7 @@ class Database extends BaseConsole
         $backupPath = root('/writeable/database/Migrations/');
 
         if (file_exists($lockFile = $backupPath . 'migrations.lock')) {
-            $lock = file_get_contents($lockFile);
+            $lock = get_content($lockFile);
 
             if ($lock === false || $lock === '') {
                 $this->writeln('Error: Nothing to rollback, migration backup lock is empty.', 'white', 'red');
@@ -665,8 +665,8 @@ class Database extends BaseConsole
                 if (in_array($input, $versions)) {
                     try {
                         $backupFile = $backupPath . $metadata[$input]['backup'];
-                        $migrationPath = root('/app/Controllers/Database/Migrations/');
-                        $migrateClass = "\\App\\Controllers\\Database\\Migrations\\{$class}";
+                        $migrationPath = root('/app/Database/Migrations/');
+                        $migrateClass = "\\App\\Database\\Migrations\\{$class}";
                         $executions = 0;
 
                         if ($this->guardVersion($migrateClass, $lock, $migrationPath, $backupPath, (int) $input)) {
@@ -748,7 +748,7 @@ class Database extends BaseConsole
         $truncated = false;
 
         if (file_exists($lockFile = $backupPath . 'seeders.lock')) {
-            $lock = file_get_contents($lockFile);
+            $lock = get_content($lockFile);
 
             if($lock === false || $lock === ''){
                 $this->writeln('Error: Seeder backup lock is empty.', 'white', 'red');
@@ -767,8 +767,8 @@ class Database extends BaseConsole
                 if (in_array($input, $versions)) {
                     try {
                         $backupFile = $backupPath . $metadata[$input]['backup'];
-                        $path = root('/app/Controllers/Database/Seeders/');
-                        $seederClass = "\\App\Controllers\\Database\\Seeders\\{$class}";
+                        $path = root('/app/Database/Seeders/');
+                        $seederClass = "\\App\\Database\\Seeders\\{$class}";
                         $continue = 'yes';
 
                         if($this->guardVersion($seederClass, $lock, $path, $backupPath, (int) $input)){

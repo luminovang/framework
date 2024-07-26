@@ -13,6 +13,8 @@ use \Luminova\Exceptions\FileException;
 use \Luminova\Exceptions\RuntimeException;
 use \RecursiveIteratorIterator;
 use \RecursiveDirectoryIterator;
+use \SplFileObject;
+use \Exception;
 
 class FileManager
 {
@@ -50,6 +52,13 @@ class FileManager
      * @var string $controllers
      */
     protected string $controllers = 'app/Controllers/';
+
+    /**
+     * Path to the application files.
+     * 
+     * @var string $app
+     */
+    protected string $app = 'app/';
 
     /**
      * Path to the writeable files.
@@ -105,7 +114,7 @@ class FileManager
      * 
      * @var string $languages
      */
-    protected string $languages = 'app/Controllers/Languages/';
+    protected string $languages = 'app/Languages/';
 
     /**
      * Check if file has read or write permission is granted.
@@ -150,7 +159,9 @@ class FileManager
     {
         error_clear_last();
         if (!@chmod($location, $permission)) {
-            FileException::handlePermission($location, (error_get_last()['message'] ?? ''));
+            if (($error = error_get_last()) !== null) {
+                FileException::handlePermission($location, $error['message']);
+            }
 
             return false;
         }
@@ -238,47 +249,102 @@ class FileManager
     }
 
     /**
+     * Reads the content of a file with options for specifying the length of data to read and the starting offset.
+     * 
+     * @param string $filename The path to the file to be read.
+     * @param int $length The maximum number of bytes to read, if set to `0`, it read 8192 bytes at a time (default: 0).
+     * @param int $offset The starting position in the file to begin reading from (default: 0).
+     * @param bool $useInclude If `true`, the file will be searched in the include path (default: false). 
+     * @param resource|null $context A context resource created with `stream_context_create()` (default: null).
+     * 
+     * @return string|false Returns the contents of the file as a string, or `false` on failure.
+     * 
+     * @throws FileException If an error occurs while opening or reading the file.
+     */
+    public static function getContent(
+        string $filename, 
+        int $length = 0, 
+        int $offset = 0, 
+        bool $useInclude = false, 
+        $context = null
+    ): string|bool
+    {
+        if ($filename === '') {
+            return false;
+        }
+
+        try {
+            $file = new SplFileObject($filename, 'r', $useInclude, $context);
+            
+            // Seek to the offset if needed
+            if ($offset > 0) {
+                $file->seek($offset);
+            }
+
+            $contents = '';
+            while (!$file->eof()) {
+                $readLength = ($length > 0 ? min($length - strlen($contents), 8192) : 8192);
+                $data = $file->fread($readLength);
+
+                if ($data === false) {
+                    return false;
+                }
+                $contents .= $data;
+
+                // If a specific length is required and that length is met
+                if ($length > 0 && strlen($contents) >= $length) {
+                    break;
+                }
+            }
+
+            return $contents;
+        } catch (Exception $e) {
+            FileException::handleFile($filename, $e->getMessage());
+            return false;
+        }
+
+        return false;
+    }
+
+    /**
      * Write or append contents to a file.
      *
      * @param string $filename The path to the file where to write the data.
      * @param string|resource $content The contents to write to the file, either as a string or a stream resource.
-     * @param int $flags [optional] The flags determining the behavior of the write operation. Defaults to 0.
-     * @param resource $context [optional] A valid context resource created with stream_context_create.
+     * @param int $flags [optional] The flags determining the behavior of the write operation (default: 0).
+     * @param resource|null $context [optional] A valid context resource created with stream_context_create (default: null).
      * 
      * @return bool True if the operation was successful, false otherwise.
      * @throws FileException If unable to write to the file.
      */
-    public static function write(string $filename, mixed $content, int $flags = 0, $context = null): bool 
+    public static function write(string $filename, mixed $content, int $flags = 0, $context = null): bool
     {
-        if(empty($filename)){
+        if ($filename === '' || $content === '' || $content === null) {
             return false;
         }
 
-        if (static::isResource($content, 'stream')) {
-            return static::stream($filename, $content, $flags, $context);
+        if (!is_string($content)) {
+            return self::stream($filename, $content, $flags, $context);
         }
 
-        error_clear_last();
-        $handler = false;
-        $lock = $flags & (LOCK_EX | LOCK_NB | LOCK_SH | LOCK_UN);
-        if(!$lock){
-            $mode = (($flags & FILE_APPEND) !== 0) ? 'a' : 'w';
-            $handler = @fopen($filename, $mode, ($flags & FILE_USE_INCLUDE_PATH), $context);
-        }
-        
-        if ($handler === false) {
-            $result = @file_put_contents($filename, $content, $flags, $context);
-        }else{
-            $result = @fwrite($handler, $content);
-            @fclose($handler);
-        }
+        try {
+            $include = ($flags & FILE_USE_INCLUDE_PATH) !== 0;
+            $mode = ($flags & FILE_APPEND) ? 'a' : 'w';
+            $file = new SplFileObject($filename, $mode, $include, $context);
 
-        if ($result === false) {
-            FileException::handleFile($filename, (error_get_last()['message'] ?? ''));
+            if ($flags & (LOCK_EX | LOCK_NB | LOCK_SH | LOCK_UN)) {
+                $file->flock($flags);
+                $result = $file->fwrite($content);
+                $file->flock(LOCK_UN);
+            } else {
+                $result = $file->fwrite($content);
+            }
+        } catch (Exception $e) {
+            FileException::handleFile($filename, $e->getMessage());
             return false;
         }
 
-        return true;
+        return $result !== false;
     }
 
     /**
@@ -294,26 +360,46 @@ class FileManager
      */
     public static function stream(string $filename, mixed $resource, int $flags = 0, mixed $context = null): bool
     {
-        if (empty($filename)) {
+        if ($filename === '' || $resource === null) {
             return false;
         }
 
         if (!static::isResource($resource, 'stream')) {
-            throw new FileException(
-                "Invalid stream provided, expected stream resource, received " . gettype($resource)
-            );
+            throw new FileException('Invalid stream provided, expected stream resource, received ' . gettype($resource));
         }
 
         error_clear_last();
 
-        // Rewind the stream if needed
-        if (ftell($resource) !== 0 && stream_get_meta_data($resource)['seekable']) {
-            rewind($resource);
+        try {
+            $mode = ($flags & FILE_APPEND) ? 'a' : 'w';
+            $include = ($flags & FILE_USE_INCLUDE_PATH) !== 0;
+            $file = new SplFileObject($filename, $mode, $include, $context);
+
+            // Rewind the stream if needed
+            if (ftell($resource) !== 0 && stream_get_meta_data($resource)['seekable']) {
+                rewind($resource);
+            }
+
+            while (!feof($resource)) {
+                $data = fread($resource, 8192);
+                if ($data === false) {
+                    throw new FileException("Error reading from the stream.");
+                }
+
+                $written = $file->fwrite($data);
+                if ($written === false) {
+                    throw new FileException("Error writing to the file $filename.");
+                }
+            }
+
+            fclose($resource);
+        } catch (Exception $e) {
+            FileException::handleFile($filename, $e->getMessage());
+            return false;
         }
 
-        // Write to the file
-        if (@file_put_contents($filename, $resource, $flags, $context) === false) {
-            FileException::handleFile($filename, (error_get_last()['message'] ?? ''));
+        if (($error = error_get_last()) !== null) {
+            FileException::handleFile($filename, $error['message']);
             return false;
         }
 
@@ -330,7 +416,7 @@ class FileManager
      */
     public static function isResource(mixed $resource, ?string $type = null): bool 
     {
-        if (!is_resource($resource)) {
+        if ($resource === null || !is_resource($resource)) {
             return false;
         } 
             
@@ -354,7 +440,7 @@ class FileManager
     */
     public static function mkdir(string $path, int $permissions = 0777, bool $recursive = true): bool 
     {
-        if(empty($path)){
+        if($path === ''){
             return false;
         }
     
@@ -362,7 +448,9 @@ class FileManager
             error_clear_last();
 
             if(!@mkdir($path, $permissions, $recursive)){
-                FileException::handleDirectory($path, (error_get_last()['message'] ?? ''));
+                if (($error = error_get_last()) !== null) {
+                    FileException::handleDirectory($path, $error['message']);
+                }
                 
                 return false;
             }

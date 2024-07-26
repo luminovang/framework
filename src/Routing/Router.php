@@ -9,6 +9,7 @@
  */
 namespace Luminova\Routing;
 
+use \App\Application;
 use \Luminova\Http\Header;
 use \Luminova\Command\Terminal;
 use \Luminova\Routing\Context;
@@ -20,7 +21,6 @@ use \Luminova\Base\BaseViewController;
 use \Luminova\Base\BaseController;
 use \Luminova\Application\Factory;
 use \Luminova\Application\Foundation;
-use \App\Controllers\Application;
 use \Luminova\Exceptions\RouterException;
 use \Luminova\Interface\RouterInterface;
 use \Luminova\Interface\ErrorHandlerInterface;
@@ -237,7 +237,7 @@ final class Router
     /**
      * Before middleware, to handle router middleware authentication.
      * 
-     * @param string  $methods  Allowed methods, can be serrated with `|` pipe symbol (e.g. `GET|POST`).
+     * @param string  $methods  The allowed methods, can be serrated with `|` pipe symbol (e.g. `GET|POST`).
      * @param string  $pattern The route URL pattern or template view name (e.g `/.*`, `/home`, `/user/([0-9])`).
      * @param Closure|string $callback Callback function to execute.
      * 
@@ -259,9 +259,9 @@ final class Router
     /**
      * After middleware route, executes the callback function after request was executed successfully.
      *
-     * @param string  $methods  Allowed methods, can be serrated with `|` pipe symbol (e.g. `GET|POST`).
+     * @param string  $methods  The allowed methods, can be serrated with `|` pipe symbol (e.g. `GET|POST`).
      * @param string  $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback Callback function to execute.
+     * @param Closure|string $callback The callback function to execute (e.g `ClassBaseName::methodName`).
      * 
      * @return void
      * @throws RouterException Throws if blank method is passed.
@@ -281,9 +281,9 @@ final class Router
     /**
      * Capture front controller request method based on pattern and execute the callback.
      *
-     * @param string $methods Allowed methods, can be separated with `|` pipe symbol (e.g `GET|POST|PUT`).
+     * @param string $methods The allowed methods, can be separated with `` pipe symbol (e.g `GET|POST|PUT`).
      * @param string $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback Callback function to execute (e.g `ClassBaseName::methodName`).
+     * @param Closure|string $callback The callback function to execute (e.g `ClassBaseName::methodName`).
      * 
      * @return void
      * @throws RouterException Throws if blank method is passed.
@@ -304,7 +304,7 @@ final class Router
      * An alias for route capture method to handle any type of request method.
      *
      * @param string $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback Handle callback for router (e.g `ClassBaseName::methodName`).
+     * @param Closure|string $callback The callback to execute (e.g `ClassBaseName::methodName`).
      * 
      * @return void
     */
@@ -316,16 +316,16 @@ final class Router
     /**
      * Capture front controller command request names and execute callback.
      *
-     * @param string $pattern Allowed command pattern or script name (e.g `foo`, `foo/(:int)/bar/(:string)`).
-     * @param Closure|string $callback Callback function to execute (e.g `ClassBaseName::methodName`).
+     * @param string $command The allowed command name or command with filters (e.g `foo`, `foo/(:int)/bar/(:string)`).
+     * @param Closure|string $callback The callback function to execute (e.g `ClassBaseName::methodName`).
      * 
      * @return void
     */
-    public function command(string $pattern, Closure|string $callback): void
+    public function command(string $command, Closure|string $callback): void
     {
         self::$controllers['cli_commands']["CLI"][] = [
             'callback' => $callback,
-            'pattern' => self::parsePatternValue(trim($pattern, '/')),
+            'pattern' => self::parsePatternValue(trim($command, '/')),
             'middleware' => false
         ];
     }
@@ -333,7 +333,7 @@ final class Router
     /**
      * Before middleware, for command middleware authentication.
      *
-     * @param string $group Command middleware group name or `global` for global middleware.
+     * @param string $group The command middleware group name or `global` for global middleware.
      * @param Closure|string $callback Callback controller handler (e.g `ClassBaseName::methodName`).
      * 
      * @return void
@@ -354,10 +354,10 @@ final class Router
     }
 
     /**
-     * Binds a collection of routes segment in a single base route.
+     *The Bind method allow you to group a collection nested `URI`  together in a single base path prefix or pattern.
      *
-     * @param string $prefix The binding group prefix or pattern (e.g. `/blog`, `/account/([a-z])`).
-     * @param Closure $callback The bind callback function to handle group of routes.
+     * @param string $prefix The path prefix name or pattern (e.g. `/blog`, `/account/([a-z])`).
+     * @param Closure $callback The callback function to handle routes group binding.
      * 
      * @return void
      * @example - Example blog website binding.
@@ -417,9 +417,9 @@ final class Router
             return;
         }
 
-        $namespace = '\\' . ltrim($namespace, '\\') . '\\';
+        $namespace = '\\' . trim($namespace, '\\') . '\\';
 
-        if(!str_starts_with($namespace, '\App\Controllers\\')) {
+        if(!str_starts_with($namespace, '\\App\\Controllers\\')) {
             RouterException::throwWith('invalid_namespace');
             return;
         }
@@ -1323,7 +1323,7 @@ final class Router
     }
 
     /**
-     * Replace command script pattern values match (:value) and replace with (pattern).
+     * Replace command script filter values match (:value) and replace with actual (pattern).
      *
      * @param string $input command script pattern.
      * 
@@ -1332,7 +1332,7 @@ final class Router
     private static function parsePatternValue(string $input): string
     {
         $patterns = [
-            '(:value)' => '([^/]+)',
+            '(:mixed)' => '([^/]+)',
             '(:optional)' => '?([^/]*)',
             '(:int)' => '(\d+)',
             '(:float)' => '([+-]?\d+\.\d+)',

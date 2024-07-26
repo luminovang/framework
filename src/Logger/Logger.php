@@ -12,7 +12,7 @@ namespace Luminova\Logger;
 use \Psr\Log\LoggerInterface;
 use \Luminova\Logger\LogLevel;
 use \Luminova\Logger\NovaLogger;
-use \App\Controllers\Config\Preference;
+use \App\Config\Preference;
 use \Luminova\Exceptions\InvalidArgumentException;
 
 class Logger implements LoggerInterface

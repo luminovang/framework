@@ -9,14 +9,14 @@
  */
 namespace Luminova\Functions;
 
-use \Laminas\Escaper\Escaper as LaminasEscaper;
+use \Laminas\Escaper\Escaper;
 use \Luminova\Exceptions\BadMethodCallException;
 use \Luminova\Exceptions\RuntimeException;
 
-class Escaper
+class Escape
 {
     /**
-     * @var object $escaper Escaper object
+     * @var class-object<Escaper> $escaper Escaper object
     */
     private ?object $escaper = null;
 
@@ -31,7 +31,7 @@ class Escaper
     protected int $encodingFlags = 0;
 
      /**
-     * @var array $supportedEncodings Escaper supported encodings
+     * @var string[] $supportedEncodings Escaper supported encodings
     */
     protected array $supportedEncodings = [
         'iso-8859-1',
@@ -71,11 +71,11 @@ class Escaper
     ];
 
     /**
-     * Constructor.
+     * Input escaper constructor.
      * 
-     * @param string $encoding The character encoding to use. Defaults to 'utf-8'.
+     * @param string|null $encoding The character encoding to use. Defaults to 'utf-8'.
      */
-    public function __construct(?string $encoding = 'utf-8')
+    public function __construct(string|null $encoding = 'utf-8')
     {
         if($encoding !== null){
             $encoding = strtolower($encoding);
@@ -87,8 +87,8 @@ class Escaper
         }
         $this->encodingFlags = ENT_QUOTES | ENT_SUBSTITUTE;
 
-        if (class_exists(LaminasEscaper::class)) {
-            $this->escaper = new LaminasEscaper($encoding);
+        if (class_exists(Escaper::class)) {
+            $this->escaper = new Escaper($encoding);
         }
     }
 
@@ -128,7 +128,8 @@ class Escaper
      * Escape HTML special characters.
      * 
      * @param string $string The string to be escaped.
-     * @return string The escaped string.
+     * 
+     * @return string Return the escaped string.
      */
     protected function escapeHtml(string $string): string
     {
@@ -139,7 +140,8 @@ class Escaper
      * Escape HTML attribute values.
      * 
      * @param string $string The string to be escaped.
-     * @return string The escaped string.
+     * 
+     * @return string Return the escaped string.
      */
     protected function escapeHtmlAttr(string $string): string
     {
@@ -166,7 +168,8 @@ class Escaper
      * Escape CSS special characters.
      * 
      * @param string $string The string to be escaped.
-     * @return string The escaped string.
+     * 
+     * @return string Return the escaped string.
      */
     protected function escapeCss(string $string): string
     {
@@ -177,7 +180,8 @@ class Escaper
      * Convert a string to UTF-8 encoding.
      * 
      * @param string $string The string to be converted.
-     * @return string The converted string.
+     * 
+     * @return string Return the converted string.
      * @throws RuntimeException When the string is not valid UTF-8 or cannot be converted.
      */
     protected function toUtf8(string $string): string
@@ -198,7 +202,7 @@ class Escaper
      * Convert a string from UTF-8 encoding.
      * 
      * @param string $string The string to be converted.
-     * @return string The converted string.
+     * @return string Return the converted string.
      */
     protected function fromUtf8(string $string): string
     {
@@ -211,7 +215,8 @@ class Escaper
      * @param array|string $string The string or array of strings to be converted.
      * @param string $to The target character encoding.
      * @param array|string|null $from The source character encoding. Defaults to null (auto-detection).
-     * @return string The converted string.
+     * 
+     * @return string Return the converted string.
      */
     protected function convertEncoding(array|string $string, string $to, null|array|string $from = null): string
     {

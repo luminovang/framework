@@ -12,7 +12,7 @@ namespace Luminova\Security;
 
 use \Luminova\Interface\EncryptionInterface;
 use \Luminova\Exceptions\EncryptionException;
-use \App\Controllers\Config\Encryption;
+use \App\Config\Encryption;
 use \Luminova\Security\Encryption\OpenSSL;
 use \Luminova\Security\Encryption\Sodium;
 

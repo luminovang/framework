@@ -147,7 +147,7 @@ final class FileCache
     public function __construct(?string $storage = null, string $folder = '')
     {
         $this->setExtension(self::JSON);
-        $this->setPath(path('caches') . $folder);
+        $this->setPath(root('/writeable/caches/') . $folder);
 
         if( $storage !== null){
             $this->storageHashed = static::hashStorage($storage);
@@ -621,7 +621,7 @@ final class FileCache
         $filepath = $this->getPath();
 
         if (is_readable( $filepath )) {
-            $file = file_get_contents($filepath);
+            $file = get_content($filepath);
          
             if ($file === false) {
                 throw new ErrorException("Cannot load cache file! ({$this->storageHashed})");

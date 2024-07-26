@@ -371,7 +371,7 @@ class NovaMailer implements MailerInterface
         $body .= $this->Body . "\r\n";
 
         foreach ($this->attachments as $attachment) {
-            $fileContent = file_get_contents($attachment['path']);
+            $fileContent = get_content($attachment['path']);
             $fileContent = chunk_split(base64_encode($fileContent));
             $body .= "--$boundary\r\n";
             $body .= "Content-Type: application/octet-stream; name=\"" . $attachment['name'] . "\"\r\n";

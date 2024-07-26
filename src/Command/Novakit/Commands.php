@@ -212,7 +212,7 @@ final class Commands
         'create:class' => [
             'name' => 'create:class',
             'group' => 'Generators',
-            'description' => "Creates a new class file and stores it in the `/app/Controllers/Utils/` directory.",
+            'description' => "Creates a new class file and stores it in the `/app/Utils/` directory.",
             'usages' => [
                 'php novakit create:class TestClass',
             ],
@@ -229,7 +229,7 @@ final class Commands
         'create:model' => [
             'name' => 'create:model',
             'group' => 'Generators',
-            'description' => "Creates a new model class that extends BaseModel and stores it in the `/app/Controllers/Models/` directory.",
+            'description' => "Creates a new model class that extends BaseModel and stores it in the `/app/Models/` directory.",
             'usages' => [
                 'php novakit create:model TestModel'
             ],

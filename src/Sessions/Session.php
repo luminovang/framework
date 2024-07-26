@@ -10,7 +10,7 @@
 namespace Luminova\Sessions;
 
 use \Luminova\Interface\SessionManagerInterface;
-use \App\Controllers\Config\Session as SessionConfig;
+use \App\Config\Session as SessionConfig;
 use \Luminova\Sessions\SessionManager;
 
 class Session 

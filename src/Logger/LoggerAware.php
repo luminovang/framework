@@ -14,7 +14,7 @@ use \Psr\Log\LoggerAwareInterface;
 use \Psr\Log\LoggerAwareTrait;
 use \Luminova\Logger\LogLevel;
 use \Luminova\Logger\NovaLogger;
-use \App\Controllers\Config\Preference;
+use \App\Config\Preference;
 use \Luminova\Exceptions\InvalidArgumentException;
 
 class LoggerAware implements LoggerInterface, LoggerAwareInterface

@@ -10,13 +10,13 @@
 namespace Luminova\Template;
 
 use \Luminova\Storages\FileManager;
-use \Luminova\Cache\PageMinifier;
+use \Luminova\Optimization\Minification;
 use \Luminova\Http\Header;
 use \Luminova\Http\Encoder;
 use \Luminova\Exceptions\JsonException;
 use \Exception;
 
-class ViewResponse 
+class Response 
 {
     /**
      * @var int $status
@@ -34,9 +34,9 @@ class ViewResponse
     private bool $minify = false;
 
     /**
-     * @var PageMinifier|null $minifier
+     * @var Minification|null $minifier
     */
-    private static ?PageMinifier $minifier = null;
+    private static ?Minification $minifier = null;
 
     /**
      * Response constructor.
@@ -123,7 +123,7 @@ class ViewResponse
        
         if($minify && str_contains($headers['Content-Type'], 'text/html')){
             if(self::$minifier === null){
-                self::$minifier = new PageMinifier();
+                self::$minifier = new Minification();
                 self::$minifier->codeblocks(false);
                 self::$minifier->copyable(false);
             }

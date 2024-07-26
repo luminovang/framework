@@ -185,7 +185,12 @@ final class Services
             if (empty($arguments)) {
                 $instance = is_string($service) ? new $service() : $service;
             } else {
-                $instance = (new ReflectionClass($service))->newInstance(...$arguments);
+                $reflection = new ReflectionClass($service);
+                if (!$reflection->isInstantiable()) {
+                    throw new ReflectionException("Service class: '{$service}' is not instantiable.");
+                }
+
+                $instance = $reflection->newInstance(...$arguments);
             }
 
             if($shared || $serialize){
@@ -225,7 +230,13 @@ final class Services
         }
 
         try{
-            $instance = (new ReflectionClass($instance))->newInstance(...$arguments);
+            $reflection = new ReflectionClass($instance);
+
+            if (!$reflection->isInstantiable()) {
+                throw new ReflectionException("Service class: '{$service}' is not instantiable.");
+            }
+
+            $instance = $reflection->newInstance(...$arguments);
             static::storeInstance($alias, $instance, $shared, $serialize);
             return $instance;
         } catch (ReflectionException|Throwable $e) {
@@ -342,7 +353,7 @@ final class Services
         $path = path('services') . $alias . static::$suffix;
 
         if (file_exists($path)) {
-            $content = file_get_contents($path);
+            $content = get_content($path);
 
             if ($content !== false) {
                 return unserialize($content);

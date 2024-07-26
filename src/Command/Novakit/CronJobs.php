@@ -12,9 +12,9 @@ namespace Luminova\Command\Novakit;
 use \Luminova\Base\BaseConsole;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Http\Network;
-use \App\Controllers\Config\Cron;
-use \Luminova\Exceptions\AppException;
 use \Luminova\Time\Time;
+use \App\Config\Cron;
+use \Luminova\Exceptions\AppException;
 use \ReflectionClass;
 use \Closure;
 use \DateInterval;
@@ -58,7 +58,7 @@ class CronJobs extends BaseConsole
         $this->explain($params);
         setenv('throw.cli.exceptions', true);
         $command = trim($this->getCommand());
-        $force = $this->getOption('force', false);
+        $force = $this->getAnyOption('force', 'f', false);
 
         $runCommand = match($command){
             'cron:create'   => $this->createCommands($force),

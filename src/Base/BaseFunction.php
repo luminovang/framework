@@ -10,7 +10,7 @@
 
 namespace Luminova\Base;
 
-use \Luminova\Functions\Escaper;
+use \Luminova\Functions\Escape;
 use \Luminova\Functions\IPAddress;
 use \Luminova\Storages\FileManager;
 use \Luminova\Functions\TorDetector;
@@ -90,7 +90,7 @@ abstract class BaseFunction extends Normalizer
                 $context = is_string($key) ? $key : $context;
                 $value = static::escape($value, $context, $encoding);
             });
-        } elseif (is_string($input)) {
+        } elseif(is_string($input)) {
             $context = strtolower($context);
 
             if ($context === 'raw') {
@@ -102,10 +102,10 @@ abstract class BaseFunction extends Normalizer
             }
 
             $method = $context === 'attr' ? 'escapeHtmlAttr' : 'escape' . ucfirst($context);
-            static $escaper;
+            static $escaper = null;
 
-            if (!$escaper || ($encoding && $escaper->getEncoding() !== $encoding)) {
-                $escaper = new Escaper($encoding);
+            if ($escaper === null || ($encoding && $escaper->getEncoding() !== $encoding)) {
+                $escaper = new Escape($encoding);
             }
 
             $input = $escaper->{$method}($input);

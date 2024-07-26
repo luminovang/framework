@@ -136,7 +136,7 @@ class Sodium implements EncryptionInterface
         $encrypted = base64_decode($data['encrypted']);
 
         if (mb_strlen($encrypted, '8bit') < SODIUM_CRYPTO_SECRETBOX_MACBYTES) {
-            throw new EncryptionException('Decription error, message was truncated or tampered with.');
+            throw new EncryptionException('Decryption error, message was truncated or tampered with.');
         }
 
         try{

@@ -12,7 +12,7 @@ namespace Luminova\Library;
 final class Modules
 {
     /**
-     * Register the autoloader with PHP's SPL autoload stack.
+     * Register the autoload with PHP's SPL autoload stack.
     */
     public static function register(): void
     {
@@ -26,9 +26,9 @@ final class Modules
      */
     public static function autoloadClass(string $class): void
     {
-        if (file_exists($modules = path('controllers') . 'Config' . DIRECTORY_SEPARATOR . 'Modules.php')) {
+        if (file_exists($modules = root('/app/Config/') . 'Modules.php')) {
 
-            $config = require $modules;
+            $config = require_once $modules;
 
             if (isset($config['psr-4'])) {
                 foreach ($config['psr-4'] as $namespace => $baseDir) {
@@ -40,7 +40,7 @@ final class Modules
                         $file = $baseDir . str_replace('\\', '/', $relativeClass) . '.php';
 
                         if (file_exists($file)) {
-                            require $file;
+                            require_once $file;
                             return;
                         }
                     }

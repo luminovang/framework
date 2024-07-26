@@ -14,7 +14,7 @@ use \Luminova\Interface\ValidationInterface;
 use \Exception;
 use \JsonException;
 
-final class InputValidator implements ValidationInterface
+final class Validation implements ValidationInterface
 {
     /**
      * @var array<string,array> $failures validated errors messages.
@@ -263,10 +263,10 @@ final class InputValidator implements ValidationInterface
                 'alphanumeric' => ctype_alnum($value),
                 'alphabet' => ctype_alpha($value),
                 'url' => filter_var($value, FILTER_VALIDATE_URL) !== false,
-                'uuid' => func()->isUuid($value),
-                'ip' => func()->ip()->isValid($value, (int) $param),
+                'uuid' => func()->isUuid($value, (int) $param ?? 4),
+                'ip' => func()->ip()->isValid($value, (int) $param ?? 0),
                 'phone' => func()->isPhone($value),
-                'decimal' => filter_var($value, FILTER_VALIDATE_FLOAT) !== false,
+                'decimal' => filter_var($value, FILTER_VALIDATE_FLOAT) !== false && str_contains((string)$value, '.'),
                 'binary' => ctype_print($value) && !preg_match('/[^\x20-\x7E\t\r\n]/', $value),
                 'hexadecimal' => ctype_xdigit($value),
                 'array' => is_array($value) || is_array(json_decode($value, true, 512, JSON_THROW_ON_ERROR)),

@@ -15,7 +15,7 @@ use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Base\BaseDatabase;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Exceptions\DatabaseLimitException;
-use \App\Controllers\Config\Database;
+use \App\Config\Database;
 use \Exception;
 
 class Connection

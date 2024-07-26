@@ -10,9 +10,9 @@
 
 namespace Luminova\Base;
 
-use \App\Controllers\Application;
+use \App\Application;
 use \Luminova\Http\Request;
-use \Luminova\Security\InputValidator;
+use \Luminova\Security\Validation;
 
 abstract class BaseController
 {
@@ -26,9 +26,9 @@ abstract class BaseController
     /**
      * Input validation object 
      * 
-     * @var InputValidator|null $validate
+     * @var Validation|null $validate
     */
-    protected ?InputValidator $validate = null;
+    protected ?Validation $validate = null;
  
     /**
      * Application instance
@@ -100,12 +100,12 @@ abstract class BaseController
     /**
      * Initializes the input validator class instance.
      * 
-     * @return InputValidator Return input validation instance.
+     * @return Validation Return input validation instance.
     */
-    protected final function validate(): InputValidator
+    protected final function validate(): Validation
     {
         if($this->validate === null){
-            $this->validate = new InputValidator();
+            $this->validate = new Validation();
         }
         
         return $this->validate;

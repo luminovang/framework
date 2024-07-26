@@ -21,7 +21,7 @@ interface MailerInterface
     public function __construct(bool $exceptions = false);
 
     /**
-     * 
+     * Initialize mail client configurations.
     */
     public function initialize(): void;
 

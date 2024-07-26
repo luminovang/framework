@@ -12,7 +12,7 @@ namespace Luminova\Email;
 use \Luminova\Interface\MailerInterface;
 use \Luminova\Application\Foundation;
 use \Luminova\Base\BaseMailer;
-use \App\Controllers\Config\Preference;
+use \App\Config\Preference;
 use \Luminova\Exceptions\MailerException;
 use \Exception;
 
