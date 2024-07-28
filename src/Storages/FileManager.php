@@ -299,7 +299,7 @@ class FileManager
 
             return $contents;
         } catch (Exception|\RuntimeException|\LogicException $e) {
-            FileException::handleFile($filename, $e->getMessage());
+            FileException::handleReadFile($filename, $e->getMessage(), $e);
             return false;
         }
 
@@ -340,7 +340,7 @@ class FileManager
                 $result = $file->fwrite($content);
             }
         } catch (Exception|\RuntimeException|\LogicException $e) {
-            FileException::handleFile($filename, $e->getMessage());
+            FileException::handleFile($filename, $e->getMessage(), $e);
             return false;
         }
 
@@ -394,7 +394,7 @@ class FileManager
 
             fclose($resource);
         } catch (Exception|\RuntimeException|\LogicException $e) {
-            FileException::handleFile($filename, $e->getMessage());
+            FileException::handleFile($filename, $e->getMessage(), $e);
             return false;
         }
 

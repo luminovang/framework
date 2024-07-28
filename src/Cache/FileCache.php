@@ -617,34 +617,40 @@ final class FileCache
     private function fetch(): array 
     {
         $filepath = $this->getPath();
-        $file = get_content($filepath);
+        $content = false;
+        
+        try{
+            $content = get_content($filepath);
+        }catch(Exception|AppException){
+           return [];
+        }
 
-        if ($file === false) {
+        if ($content === false) {
             throw new ErrorException("Cannot load cache file! ({$this->storageHashed})");
         }
 
-        $data = unserialize(self::unlock($file));
+        $content = unserialize(self::unlock($content));
 
-        if ($data === null) {
+        if ($content === null) {
             unlink($filepath);
             throw new ErrorException("Failed to unserialize cache file, cache file deleted. ({$this->storageHashed})");
         }
         
-        if (isset($data["hash-sum"])) {
+        if (isset($content["hash-sum"])) {
 
-            $hash = $data["hash-sum"];
-            unset($data["hash-sum"]);
+            $hash = $content["hash-sum"];
+            unset($content["hash-sum"]);
 
-            if ($hash !== md5(serialize($data))) {
+            if ($hash !== md5(serialize($content))) {
                 unlink($filepath);
-                throw new ErrorException("Cache data miss-hashed, cache file was deleted");
+                throw new ErrorException("Invalid or miss-hashed cache data, cache file has been deleted.");
             }
 
-            return $data;
+            return $content;
         }
 
         unlink($filepath);
-        throw new ErrorException("No hash found in cache file, cache file deleted");
+        throw new ErrorException("No hash found in cache file, cache has been deleted.");
     }
 
     /**
