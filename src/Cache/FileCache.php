@@ -584,8 +584,10 @@ final class FileCache
     public function setItem(string $key, mixed $data, int|DateTimeInterface|null $expiration = 0, int|DateInterval|null $expireAfter = null, bool $lock = false): bool 
     {
         $serialize = serialize($data);
-        if ($serialize === '') {
-            throw new ErrorException("Failed to create cache file!");
+
+        if ($serialize === '' || $serialize === null) {
+            ErrorException::throwException("Failed to create cache file!");
+            return false;
         }
 
         if($expiration !== null){
@@ -618,22 +620,27 @@ final class FileCache
     {
         $filepath = $this->getPath();
         $content = false;
-        
+
         try{
+            if (!is_readable($filepath)) {
+                return [];
+            }
+
             $content = get_content($filepath);
         }catch(Exception|AppException){
            return [];
         }
 
         if ($content === false) {
-            throw new ErrorException("Cannot load cache file! ({$this->storageHashed})");
+            return [];
         }
 
         $content = unserialize(self::unlock($content));
 
         if ($content === null) {
             unlink($filepath);
-            throw new ErrorException("Failed to unserialize cache file, cache file deleted. ({$this->storageHashed})");
+            ErrorException::throwException("Failed to read cache content, cache file deleted. ({$this->storageHashed})");
+            return [];
         }
         
         if (isset($content["hash-sum"])) {
@@ -643,14 +650,16 @@ final class FileCache
 
             if ($hash !== md5(serialize($content))) {
                 unlink($filepath);
-                throw new ErrorException("Invalid or miss-hashed cache data, cache file has been deleted.");
+                ErrorException::throwException('Invalid or miss-hashed cache data, cache file has been deleted.');
+                return [];
             }
 
             return $content;
         }
 
         unlink($filepath);
-        throw new ErrorException("No hash found in cache file, cache has been deleted.");
+        ErrorException::throwException('No hash found in cache file, cache has been deleted.');
+        return [];
     }
 
     /**
@@ -740,7 +749,9 @@ final class FileCache
      private function commit(): bool 
      {
         try{
-            make_dir($this->storagePath);     
+            if(!make_dir($this->storagePath)){
+                return false;
+            }    
         
             $cache = $this->cacheInstance;
             $cache["hash-sum"] = md5(serialize($cache));
