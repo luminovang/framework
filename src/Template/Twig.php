@@ -174,7 +174,7 @@ class Twig
             $content = $template->render($options);
             
             if($this->minify){
-                $content = Helper::getMinifier(
+                $content = Helper::getMinification(
                     $content, 
                     $options['viewType'], 
                     $this->minifyOptions['codeblock'], 

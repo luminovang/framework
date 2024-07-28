@@ -235,10 +235,7 @@ final class FileCache
      */
     public function setExpire(DateTimeInterface|int|null $expiration): self
     {
-        if($expiration === null){
-            $expiration = 0;
-        }
-
+        $expiration ??= 0;
         $this->expiration = Timestamp::ttlToSeconds($expiration);
         $this->expireAfter = null;
 
@@ -254,7 +251,7 @@ final class FileCache
      */
     public function expiresAfter(int|DateInterval|null $time): self
     {
-        $this->expireAfter = $time === null ? null : Timestamp::ttlToSeconds($time);
+        $this->expireAfter = ($time === null) ? null : Timestamp::ttlToSeconds($time);
 
         return $this;
     }
@@ -351,6 +348,7 @@ final class FileCache
 
         if ($this->hasExpired($key)){
             $content = $callback();
+
             if(!empty($content)){
                 $this->setItem($key, $content, $this->expiration, $this->expireAfter, $this->lock);
             }
@@ -619,40 +617,34 @@ final class FileCache
     private function fetch(): array 
     {
         $filepath = $this->getPath();
+        $file = get_content($filepath);
 
-        if (is_readable( $filepath )) {
-            $file = get_content($filepath);
-         
-            if ($file === false) {
-                throw new ErrorException("Cannot load cache file! ({$this->storageHashed})");
-            }
-
-            $data = unserialize(self::unlock($file));
-
-            if ($data === null) {
-                unlink($filepath);
-                throw new ErrorException("Failed to unserialize cache file, cache file deleted. ({$this->storageHashed})");
-            }
-           
-     
-            if (isset($data["hash-sum"])) {
-
-                $hash = $data["hash-sum"];
-                unset($data["hash-sum"]);
-
-                if ($hash !== md5(serialize($data))) {
-                    unlink($filepath);
-                    throw new ErrorException("Cache data miss-hashed, cache file was deleted");
-                }
-
-                return $data;
-            }
-
-            unlink($filepath);
-            throw new ErrorException("No hash found in cache file, cache file deleted");
+        if ($file === false) {
+            throw new ErrorException("Cannot load cache file! ({$this->storageHashed})");
         }
 
-        return [];
+        $data = unserialize(self::unlock($file));
+
+        if ($data === null) {
+            unlink($filepath);
+            throw new ErrorException("Failed to unserialize cache file, cache file deleted. ({$this->storageHashed})");
+        }
+        
+        if (isset($data["hash-sum"])) {
+
+            $hash = $data["hash-sum"];
+            unset($data["hash-sum"]);
+
+            if ($hash !== md5(serialize($data))) {
+                unlink($filepath);
+                throw new ErrorException("Cache data miss-hashed, cache file was deleted");
+            }
+
+            return $data;
+        }
+
+        unlink($filepath);
+        throw new ErrorException("No hash found in cache file, cache file deleted");
     }
 
     /**

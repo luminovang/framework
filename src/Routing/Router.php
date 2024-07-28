@@ -20,6 +20,7 @@ use \Luminova\Attributes\Generator;
 use \Luminova\Base\BaseViewController;
 use \Luminova\Base\BaseController;
 use \Luminova\Application\Factory;
+use \Luminova\Cache\ViewCache;
 use \Luminova\Application\Foundation;
 use \Luminova\Exceptions\RouterException;
 use \Luminova\Interface\RouterInterface;
@@ -867,11 +868,26 @@ final class Router
      * Loop all defined HTTP request method and view routes.
      *
      * @return int Return status success, status error on failure.
-     * @throws RouterException
+     * @throws RouterException Throws if any error occurs while running HTTP routes.
     */
     private static function runAsHttp(): int
     {
         $uri = static::getUriSegments();
+
+        // If the view url ends with `.HTML`, then try serving the cached static version.
+        if (
+            (bool) env('page.caching', false) && 
+            preg_match('/\.(html|json|text|xml|rdf|atom|rss|css|js)$/', $uri, $matches)
+        ) {
+            $cache = (new ViewCache(0, root('writeable/caches/default')))->setKey(Foundation::cacheKey());
+    
+            if (!$cache->expired()) {
+                return (int) $cache->read();
+            }
+            
+           // Remove the matched file extension and render request normally.
+           $uri = substr($uri, 0, -strlen($matches[0]));;
+        }  
        
         $middleware = (self::$controllers['routes_middleware'][self::$method] ?? null);
         if ($middleware !== null && !self::handleWebsite($middleware, $uri)) {

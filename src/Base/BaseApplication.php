@@ -11,6 +11,7 @@ namespace Luminova\Base;
 
 use \Luminova\Routing\Router;
 use \Luminova\Template\View;
+use \Luminova\Exceptions\BadMethodCallException;
 
 abstract class BaseApplication
 {
@@ -139,7 +140,7 @@ abstract class BaseApplication
         $value = static::attrGetter($key);
 
         if($value === static::$KEY_NOT_FOUND) {
-            return $this->{$key} ?? null;
+            return $this->{$key} ?? static::${$key} ?? null;
         }
 
         return $value;

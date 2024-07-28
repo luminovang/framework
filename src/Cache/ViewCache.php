@@ -146,6 +146,24 @@ final class ViewCache
     */
     public function expired(): bool
     {
+        if($this->init() === false || $this->lockFile === []){
+            return true;
+        }
+      
+        if(time() >= (int) ($this->lockFile['Expiry'] ?? 0)){
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Load and initialize the cache file.
+     * 
+     * @return bool Return true if the cache initialized, false otherwise.
+    */
+    private function init(): bool
+    {
         $location = $this->getFilename();
         $this->lockFile = [];
 
@@ -153,16 +171,12 @@ final class ViewCache
             include_once $location;
             $func = $this->lockFunc;
             if(function_exists($func) && ($lock = $func($this->key)) !== false){
-                if(time() >= (int) ($lock['Expiry'] ?? 0)){
-                    return true;
-                }
-
                 $this->lockFile = $lock;
-                return false;
+                return true;
             }
         }
 
-        return true;
+        return false;
     }
 
     /**
@@ -192,9 +206,13 @@ final class ViewCache
     */
     public function read(): bool
     {
-        $headers = ['default_headers' => true];
+        if($this->lockFile === [] && $this->init() === false){
+            Header::headerNoCache(404);
+            return false;
+        }
     
         if (isset($this->lockFile['Func']) && function_exists($this->lockFile['Func'])) {
+            $headers = ['default_headers' => true];
             $headers['ETag'] =  '"' . $this->lockFile['ETag'] . '"';
             $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T',  $this->lockFile['Expiry']);
             $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T',  $this->lockFile['Modify']);
@@ -236,6 +254,10 @@ final class ViewCache
     */
     public function get(): ?string
     {
+        if($this->lockFile === [] && $this->init() === false){
+            return null;
+        }
+
         if (isset($this->lockFile['Func']) && function_exists($this->lockFile['Func'])) {
             ob_start();
             echo $this->lockFile['Func']();

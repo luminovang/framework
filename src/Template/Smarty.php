@@ -273,7 +273,7 @@ class Smarty
             $content = $this->smarty->fetch($view, $cache_id);
 
             if($this->minify){
-                $content = Helper::getMinifier(
+                $content = Helper::getMinification(
                     $content, 
                     $this->viewType, 
                     $this->minifyOptions['codeblock'], 

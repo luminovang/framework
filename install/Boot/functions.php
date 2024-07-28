@@ -488,10 +488,14 @@ if(!function_exists('browser')) {
      * 
      * @param string|null $user_agent  The user agent string to analyze.
      * @param bool $return Set the return type, if `instance` return userAgent class object otherwise return array or json object.
-     *      -   Return Types: [array, object, instance]
      * @param bool $shared Allow shared instance creation (default: true).
      * 
      * @return array<string,mixed>|object<string,mixed>|UserAgent|false Return browser information.
+     * 
+     * Return Types: 
+     * - array.
+     * - object.
+     * - instance.
     */
     function browser(?string $user_agent = null, string $return = 'object', bool $shared = true): mixed
     { 

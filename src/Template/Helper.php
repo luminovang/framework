@@ -9,7 +9,6 @@
 */
 namespace Luminova\Template;
 
-
 use \Luminova\Optimization\Minification;
 use \Luminova\Cache\ViewCache;
 use \DateTimeInterface;
@@ -17,61 +16,61 @@ use \DateTimeInterface;
 class Helper 
 {
     /**
-     * @var ?Minification $minifier
+     * Page minification instance.
+     * 
+     * @var ?Minification $min
     */
-    private static ?Minification $minifier = null;
+    private static ?Minification $min = null;
 
     /**
-     * View cache instance 
+     * View cache instance.
      * 
      * @var ViewCache $viewCache 
     */
     private static ?ViewCache $viewCache  = null;
 
     /** 
-     * Render minification
+     * Initialize minification instance.
      *
-     * @param mixed $contents view contents output buffer
-     * @param string $type content type
-     * @param bool $ignore
-     * @param bool $copy 
+     * @param mixed $contents view contents output buffer.
+     * @param string $type The content type.
+     * @param bool $ignore Weather to ignore code blocks minification.
+     * @param bool $copy Weather to include code block copy button.
      *
      * @return Minification Return minified instance.
     */
-    public static function getMinifier(
+    public static function getMinification(
         mixed $contents, 
         string $type = 'html', 
         bool $ignore = true, 
         bool $copy = false,
     ): Minification
     {
-        if(self::$minifier === null){
-            self::$minifier = new Minification();
+        if(self::$min === null){
+            self::$min = new Minification();
         }
 
-        self::$minifier->codeblocks($ignore);
-        self::$minifier->copyable($copy);
+        self::$min->codeblocks($ignore);
+        self::$min->copyable($copy);
 
-        return self::$minifier->compress($contents, $type);
+        return self::$min->compress($contents, $type);
     }
 
     /** 
      * Get page view cache instance
      *
      * @param string $directory Cache directory path. 
+     * @param string $key The view cache key.
      * @param DateTimeInterface|int|null $expiry  Cache expiration ttl (default: 0).
-     * @param string|null $key Optional cache key.
      *
      * @return ViewCache Return page view cache instance.
     */
     public static function getCache(
         string $directory, 
+        string $key,
         DateTimeInterface|int|null $expiry = 0, 
-        string|null $key = null
     ): ViewCache
     {
-        $key ??= static::cacheKey();
-
         if(self::$viewCache === null){
             self::$viewCache = new ViewCache();
         }
@@ -83,30 +82,12 @@ class Helper
         return self::$viewCache;
     }
 
-    /**
-     * Generate cache file key
-     * 
-     * @param string|null $url Optional request url to drive cache key from.
-     * 
-     * @return string Return MD5 hashed cache key.
-    */
-    public static function cacheKey(?string $url = null): string 
-    {
-        if ($url === null) {
-            $url = $_SERVER['REQUEST_METHOD'] ?? 'CLI';
-            $url .= $_SERVER['REQUEST_URI'] ?? 'index';
-        }
-        $url = str_replace(['/', '?', '&', '=', '#'], '-', $url);
-        
-        return md5($url);
-    }
-
-     /** 
-     * Get base view file directory
+    /** 
+     * Get base view file directory and trim.
      *
-     * @param string path
+     * @param string $path The path to trim.
      *
-     * @return string path
+     * @return string Return trimmed path.
     */
     public static function bothTrim(string $path): string 
     {
@@ -117,26 +98,11 @@ class Helper
      * Fixes the broken css,image & links when added additional slash(/) at the router link
      * The function will add the appropriate relative base based on how many invalid link detected.
      *
-     * @return string relative path 
+     * @return string Return relative path.
     */
     public static function relativeLevel(): string 
     {
-        $level = substr_count(self::getViewUri(), '/');
-        
-        if($level === 0){
-            return './';
-        }
-
-        return str_repeat('../', $level);
-    }
-
-    /** 
-     * Get template base view segments
-     *
-     * @return string template view segments
-    */
-    private static function getViewUri(): string
-    {
+        $level = 0;
         if(isset($_SERVER['REQUEST_URI'])){
             $length = isset($_SERVER['SCRIPT_NAME']) ? strlen(dirname($_SERVER['SCRIPT_NAME'])) : 0;
             $url = substr(rawurldecode($_SERVER['REQUEST_URI']), $length);
@@ -145,29 +111,33 @@ class Helper
                 $url = substr($url, 0, $pos);
             }
 
-            return '/' . trim($url, '/');
+            $level = substr_count('/' . trim($url, '/'), '/');
         }
 
-        return '/';
+        if($level === 0){
+            return './';
+        }
+
+        return str_repeat('../', $level);
     }
 
-     /**
-     * Convert view name to title and add suffix if specified
+    /**
+     * Convert view name to title and add suffix if specified.
      *
-     * @param string $view    View name
-     * @param bool   $suffix  Whether to add suffix
+     * @param string $view  The view name.
+     * @param bool   $suffix Whether to add suffix.
      *
-     * @return string View title
-    */
+     * @return string Return view page title.
+     */
     public static function toTitle(string $view, bool $suffix = false): string 
     {
-        $view = str_replace(['_', '-', ','], [' ', ' ', ''], $view);
+        $view = strtr($view, ['_' => ' ', '-' => ' ', ',' => '']);
         $view = ucwords($view);
 
-        if ($suffix && !str_contains($view, '- ' . APP_NAME)) {
+        if ($suffix && !str_contains($view, ' - ' . APP_NAME)) {
             $view .= ' - ' . APP_NAME;
         }
 
-        return trim($view);
+        return $view;
     }
 }

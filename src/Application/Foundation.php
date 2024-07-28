@@ -7,7 +7,6 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Application;
 
 use \Luminova\Errors\ErrorStack;
@@ -19,7 +18,7 @@ final class Foundation
      * 
     * @var string VERSION
     */
-    public const VERSION = '3.1.7';
+    public const VERSION = '3.1.8';
 
     /**
      * Minimum required php version.
@@ -273,6 +272,24 @@ final class Foundation
         }
 
         return '/';
+    }
+
+    /**
+     * Generate cache key for storing and serving static pages.
+     * 
+     * @param string|null $url Optional request URL to derive cache key from.
+     * 
+     * @return string Return MD5 hashed page cache key.
+     */
+    public static function cacheKey(?string $url = null): string 
+    {
+        if ($url === null) {
+            $url = $_SERVER['REQUEST_METHOD'] ?? 'CLI';
+            $url .= $_SERVER['REQUEST_URI'] ?? 'index';
+        }
+
+        $url = strtr($url, ['/' => '-', '?' => '-', '&' => '-', '=' => '-', '#' => '-']);
+        return md5($url);
     }
 
     /**

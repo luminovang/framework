@@ -13,6 +13,7 @@ use \Luminova\Storages\FileManager;
 use \Luminova\Template\Smarty;
 use \Luminova\Template\Twig;
 use \Luminova\Http\Header;
+use \Luminova\Application\Foundation; 
 use \Luminova\Exceptions\AppException; 
 use \Luminova\Interface\ExceptionInterface; 
 use \Luminova\Exceptions\ViewNotFoundException; 
@@ -317,7 +318,7 @@ trait View
     */
     public final function expired(): bool
     {
-        return Helper::getCache(self::$cacheFolder)->expired();
+        return Helper::getCache(self::$cacheFolder, Foundation::cacheKey())->expired();
     }
 
     /**
@@ -333,7 +334,7 @@ trait View
         }
 
         $this->forceCache = false;
-        $cache = Helper::getCache(self::$cacheFolder, $this->cacheExpiry);
+        $cache = Helper::getCache(self::$cacheFolder, Foundation::cacheKey(), $this->cacheExpiry);
 
         if ($cache->read()) {
             return STATUS_SUCCESS;
@@ -596,7 +597,7 @@ trait View
                 $cache = null;
 
                 if ($cacheable) {
-                    $cache = Helper::getCache(self::$cacheFolder, $this->cacheExpiry);
+                    $cache = Helper::getCache(self::$cacheFolder, Foundation::cacheKey(), $this->cacheExpiry);
                     if (!$cache->expired()) {
                         return $return ? $cache->get() : $cache->read();
                     }
@@ -902,7 +903,7 @@ trait View
         if ($content !== false && $content !== '') {
             $headers = null;
             if (self::$minifyContent && $type === 'html') {
-                $minify = Helper::getMinifier(
+                $minify = Helper::getMinification(
                     $content, 
                     $type, 
                     $ignore, 
@@ -927,7 +928,6 @@ trait View
         return [$headers, $content];
     }
     
-
     /** 
      * Check if view should be optimized page caching or not
      *
