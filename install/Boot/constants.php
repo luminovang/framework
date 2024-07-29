@@ -147,8 +147,8 @@ if(!function_exists('env')){
             }
             return;
         }catch(RuntimeException|LogicException){}
-        exit("Environment file not found on: {$path}, make sure you add .env file to your project root.");
     }
+    exit("Environment file not found on: {$path}, make sure you add .env file to your project root.");
 })(APP_ROOT . '.env');
 
 /**
