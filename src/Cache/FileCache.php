@@ -359,7 +359,7 @@ final class FileCache
         return $this->getItem($key);
     }
 
-     /**
+    /**
      * Refresh cache content with new data and expiration if necessary.
      * 
      * @param string $key cache key.
@@ -762,11 +762,8 @@ final class FileCache
             }
         
             $writeLine .= serialize($cache);
-        
-            $filePath = $this->getPath();
-            $saved = write_content($filePath, $writeLine);
 
-            return $saved;
+            return write_content($this->getPath(), $writeLine);
         }catch(Exception|AppException $e){
             logger('error', 'Unable to commit cache: ' . $e->getMessage(), [
                 'class' => 'FileCache'

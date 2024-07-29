@@ -146,11 +146,11 @@ final class ViewCache
     */
     public function expired(): bool
     {
-        if($this->init() === false || $this->lockFile === []){
+        if($this->init() === false){
             return true;
         }
       
-        if(time() >= (int) ($this->lockFile['Expiry'] ?? 0)){
+        if($this->lockFile === [] || time() >= (int) ($this->lockFile['Expiry'] ?? 0)){
             return true;
         }
 
@@ -292,7 +292,7 @@ final class ViewCache
         $locks = [];
         $locks[$this->key] = $headers;
 
-        $pageContent = "<?php function {$this->lockFunc}(string \$key): array|false {\n";
+        $pageContent = "<?php function {$this->lockFunc}(string \$key): array|bool {\n";
         $pageContent .= "    \$lock = " . var_export($locks, true) . ";\n";
         $pageContent .= "    return \$lock[\$key]??false;\n";
         $pageContent .= "}?>\n";
@@ -300,11 +300,11 @@ final class ViewCache
         $pageContent .= $content;
         $pageContent .= "<?php }?>\n";
 
-        if(!write_content($this->getFilename(), $pageContent)){
-            return false;
+        if(write_content($this->getFilename(), $pageContent)){
+            return true;
         }
 
-        return true;
+        return false;
     }
 
     /**
