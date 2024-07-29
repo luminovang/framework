@@ -45,9 +45,9 @@ trait View
     /** 
      * Holds the project document root
      * 
-     * @var string $documentRoot
+     * @var string|null $documentRoot
     */
-    private static string $documentRoot = '';
+    private static ?string $documentRoot = null;
 
     /** 
      * Holds the project template filename
@@ -527,11 +527,11 @@ trait View
     */
     private static function viewRoot(): string
     {
-        if(self::$documentRoot === ''){
+        if(self::$documentRoot === null){
             self::$documentRoot = APP_ROOT;
         }
 
-        return rtrim(self::$documentRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return self::$documentRoot;
     }
 
     /** 
