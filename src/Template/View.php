@@ -496,7 +496,7 @@ trait View
     */
     public static final function link(string $filename = ''): string 
     {
-        $base = PRODUCTION ? '/' : Helper::relativeLevel() . ((NOVAKIT_ENV === null) ? 'public/' : '/');
+        $base = (PRODUCTION ? '/' : Helper::relativeLevel());
         
         if($filename === ''){
             return $base;

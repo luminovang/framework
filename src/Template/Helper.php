@@ -114,11 +114,13 @@ class Helper
             $level = substr_count('/' . trim($url, '/'), '/');
         }
 
+        $suffix = (NOVAKIT_ENV === null) ? 'public/' : '/';
+
         if($level === 0){
-            return './';
+            return './' . $suffix;
         }
 
-        return str_repeat('../', $level);
+        return str_repeat('../', $level) . $suffix;
     }
 
     /**
