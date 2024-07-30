@@ -17,21 +17,21 @@ use \Luminova\Security\Validation;
 abstract class BaseController
 {
     /**
-     * HTTP request object 
+     * HTTP request object.
      * 
      * @var Request|null $request 
     */
     protected ?Request $request = null;
  
     /**
-     * Input validation object 
+     * Input validation object.
      * 
      * @var Validation|null $validate
     */
     protected ?Validation $validate = null;
  
     /**
-     * Application instance
+     * Application instance.
      * 
      * @var Application|null $app 
     */
@@ -49,7 +49,7 @@ abstract class BaseController
     }
 
     /**
-     * Uninitialized controller instance
+     * Uninitialized controller instance.
      * @ignore 
     */
     public function __destruct() 
@@ -58,11 +58,11 @@ abstract class BaseController
     }
     
     /**
-     * Property getter
+     * Property getter.
      *
-     * @param string $key property key
+     * @param string $key property key.
      * 
-     * @return ?mixed return property else null
+     * @return ?mixed Return property value, otherwise null.
      * @ignore 
     */
     public function __get(string $key): mixed
@@ -71,11 +71,11 @@ abstract class BaseController
     }
     
      /**
-     * Check if property is set
+     * Check if property is set.
      *
-     * @param string $key property key
+     * @param string $key The property key,
      * 
-     * @return bool
+     * @return bool Return true if property is set, otherwise false.
      * @ignore 
     */
     public function __isset(string $key): bool
@@ -84,7 +84,7 @@ abstract class BaseController
     }
 
     /**
-     * Initializes the http request class instance
+     * Initializes the http request class instance.
      * 
      * @return Request Return http request instance. 
     */
@@ -128,11 +128,23 @@ abstract class BaseController
     /**
      * Shorthand to render view in controller class.
      *
-     * @param string $view view name.
-     * @param array $options Optional options to be passed to view template.
-     * @param string $type The type of view content you are compiling (default: html).
+     * @param string $view The view file name without extension type like: [`.php`, `.tpl`, `.twg`],  (e.g, `index`).
+     * @param array<string,mixed> $options Optional options to be passed to view template.
+     * @param string $type The view content extension type (default: `html`).
      * 
      * @return int Return STATUS_SUCCESS on success, otherwise STATUS_ERROR failure.
+     * 
+     * View Types: 
+     * 
+     * - html Html content.
+     * - json Json content.
+     * - text Plain text content.
+     * - xml  Xml content.
+     * - js   JavaScript content.
+     * - css  CSS content.
+     * - rdf  RDF content.
+     * - atom Atom content.
+     * - rss  RSS feed content.
     */
     protected final function view(string $view, array $options = [], string $type = 'html'): int
     {
@@ -142,11 +154,23 @@ abstract class BaseController
     /**
      * Shorthand to respond view contents in controller class.
      *
-     * @param string $view view name.
-     * @param array $options Optional options to be passed to view template.
-     * @param string $type The type of view content you are compiling (default: html).
+     * @param string $view The view file name without extension type like: [`.php`, `.tpl`, `.twg`],  (e.g, `index`).
+     * @param array<string,mixed> $options Optional options to be passed to view template.
+     * @param string $type The view content extension type (default: `html`).
      * 
      * @return string Return view contents which is ready to be rendered.
+     * 
+     * View Types: 
+     * 
+     * - html Html content.
+     * - json Json content.
+     * - text Plain text content.
+     * - xml  Xml content.
+     * - js   JavaScript content.
+     * - css  CSS content.
+     * - rdf  RDF content.
+     * - atom Atom content.
+     * - rss  RSS feed content.
     */
     protected final function respond(string $view, array $options = [], string $type = 'html'): string
     {
@@ -154,14 +178,14 @@ abstract class BaseController
     }
 
     /**
-     * Controller onCreate method an alternative to __construct
+     * Controller onCreate method an alternative to __construct.
      * 
      * @return void 
     */
     protected function onCreate(): void {}
 
     /**
-     * Controller onDestroy method an alternative to __distruct 
+     * Controller onDestroy method an alternative to __distruct.
      * 
      * @return void 
     */

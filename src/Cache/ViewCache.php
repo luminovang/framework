@@ -140,21 +140,26 @@ final class ViewCache
     }
 
     /**
-     * Check if the cached has expired.
+     * Check if the cached content has expired.
      * 
-     * @return bool True if the cache is still valid; false otherwise.
-    */
-    public function expired(): bool
+     * @param string|null $type The type of cached content to check (default: null).
+     * 
+     * @return bool|int Return true if the cache is expired, otherwise false.
+     */
+    public function expired(?string $type = null): bool|int
     {
-        if($this->init() === false){
-            return true;
-        }
-      
-        if($this->lockFile === [] || time() >= (int) ($this->lockFile['Expiry'] ?? 0)){
+        // Initialize and validate the cache
+        if (!$this->init() || $this->lockFile === []) {
             return true;
         }
 
-        return false;
+        // If content extension type doesn't match with cached version.
+        if($type !== null && ($this->lockFile['viewType']??'') !== $type){
+            return 404;
+        }
+
+        // Check if cache has expired
+        return time() >= (int) ($this->lockFile['Expiry'] ?? 0);
     }
 
     /**
@@ -202,16 +207,23 @@ final class ViewCache
     /**
      * Load the content from the cache file and exit the script.
      * 
-     * @return bool True if loading was successful; false otherwise.
+     * @param string|null $type The type of cached content to check (default: null).
+     * 
+     * @return bool|int Return true if loading was successful, if miss-matched type return int 404, otherwise false.
     */
-    public function read(): bool
+    public function read(?string $type = null): bool|int
     {
         if($this->lockFile === [] && $this->init() === false){
             Header::headerNoCache(404);
             return false;
         }
-    
-        if (isset($this->lockFile['Func']) && function_exists($this->lockFile['Func'])) {
+
+        if($type !== null && ($this->lockFile['viewType']??'') !== $type){
+            return 404;
+        }
+
+        $func = ($this->lockFile['Func']??false);
+        if ($func && function_exists($func)) {
             $headers = ['default_headers' => true];
             $headers['ETag'] =  '"' . $this->lockFile['ETag'] . '"';
             $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T',  $this->lockFile['Expiry']);
@@ -250,12 +262,18 @@ final class ViewCache
     /**
      * Get the content from the cache filet.
      * 
+     * @param string|null $type The type of cached content to check (default: null).
+     * 
      * @return string|null Return cached contents, null otherwise.
     */
-    public function get(): ?string
+    public function get(?string $type = null): ?string
     {
         if($this->lockFile === [] && $this->init() === false){
             return null;
+        }
+
+        if($type !== null && ($this->lockFile['viewType']??'') !== $type){
+            return 404;
         }
 
         if (isset($this->lockFile['Func']) && function_exists($this->lockFile['Func'])) {

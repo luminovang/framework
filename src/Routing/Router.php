@@ -93,11 +93,18 @@ final class Router
     private string $baseGroup = '';
 
     /**
-     * HTTP Request Method 
+     * The current request method.
      * 
      * @var string $method
     */
     private static string $method = '';
+
+    /**
+     * The current request Uri. 
+     * 
+     * @var string $uri
+    */
+    private static string $uri = '';
 
     /**
      * Application registered controllers namespace.
@@ -107,14 +114,25 @@ final class Router
     private static array $namespace = [];
 
     /**
+     * Terminal instance.
+     * 
      * @var Terminal|null $term 
     */
     private static ?Terminal $term = null;
 
     /**
+     * Weather router is running in cli mode.
+     * 
      * @var bool $isCli 
     */
     private static bool $isCli = false;
+
+    /**
+     * Terminate router run when serving static content.
+     * 
+     * @var bool $terminate 
+    */
+    private static bool $terminate = false;
 
     /**
      * @var BaseApplication|null $application 
@@ -124,7 +142,7 @@ final class Router
     /**
      * Initialize router class.
      * 
-     * @param BaseApplication $application Your application instance.
+     * @param BaseApplication $application Instance of application class.
     */
     public function __construct(BaseApplication $application)
     {
@@ -137,7 +155,8 @@ final class Router
      * @param string $name Method to call.
      * @param array $arguments Method arguments.
      * 
-     * Expected arguments
+     * Expected arguments:
+     * 
      *  - string $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
      *  - Closure|string $callback Handle callback for router.
      * 
@@ -174,11 +193,16 @@ final class Router
     {
         self::$isCli = is_command();
         self::$method  = self::getRoutingMethod();
+        self::$uri = self::getUriSegments();
+
+        // If the view uri ends with `.extension`, then try serving the cached static version.
+        if(self::$uri !== '/cli' && self::serveStaticCache()){
+            return $this;
+        }
 
         // When using attribute for routes.
         if((bool) env('feature.route.attributes', false)){
             $collector = new Generator('\\App\\Controllers\\', $this->baseGroup, self::$isCli);
-            
             if(self::$isCli){
                 $collector->installCli('app/Controllers');
             }else{
@@ -437,6 +461,10 @@ final class Router
     */
     public function run(): void
     {
+        if(self::$terminate){
+            exit(STATUS_SUCCESS);
+        }
+
         if(self::$method === 'CLI'){
             self::terminal();
             $exitCode = self::runAsCommand();
@@ -481,13 +509,16 @@ final class Router
     */
     public static function triggerError(int $status = 404): void
     {
+     
         foreach (self::$controllers['errors'] as $pattern => $callable) {
-            if (self::uriCapture($pattern, static::getUriSegments(), $matches) && self::call($callable, $matches, true)) {
+            $matches = [];
+            if (self::uriCapture($pattern, self::$uri, $matches) && self::call($callable, $matches, true)) {
                 return;
             }
         }
       
         $error = (self::$controllers['errors']['/'] ?? null);
+
         if ($error !== null && self::call($error, [], true)) {
             return;
         }
@@ -872,42 +903,67 @@ final class Router
     */
     private static function runAsHttp(): int
     {
-        $uri = static::getUriSegments();
-
-        // If the view url ends with `.HTML`, then try serving the cached static version.
-        if (
-            (bool) env('page.caching', false) && 
-            preg_match('/\.(html|json|text|xml|rdf|atom|rss|css|js)$/', $uri, $matches)
-        ) {
-            $cache = (new ViewCache(0, root('writeable/caches/default')))->setKey(Foundation::cacheKey());
-    
-            if (!$cache->expired()) {
-                return (int) $cache->read();
-            }
-            
-           // Remove the matched file extension and render request normally.
-           $uri = substr($uri, 0, -strlen($matches[0]));;
-        }  
-       
         $middleware = (self::$controllers['routes_middleware'][self::$method] ?? null);
-        if ($middleware !== null && !self::handleWebsite($middleware, $uri)) {
+        if ($middleware !== null && !self::handleWebsite($middleware, self::$uri)) {
             return STATUS_ERROR;
         }
 
         $routes = (self::$controllers['routes'][self::$method] ?? null);
-        if ($routes !== null && self::handleWebsite($routes, $uri)) {
+
+        if ($routes !== null && self::handleWebsite($routes, self::$uri)) {
             $after = (self::$controllers['routes_after'][self::$method] ?? null);
+            
             if($after !== null){
-                self::handleWebsite($after, $uri);
+                self::handleWebsite($after, self::$uri);
             }
 
-            self::$application->__on('onViewPresent', $uri);
+            self::$application->__on('onViewPresent', self::$uri);
 
             return STATUS_SUCCESS;
         }
 
         static::triggerError();
         return STATUS_ERROR;
+    }
+
+    /**
+     * Serve static cached pages.
+     * If cache is enabled and the request is not in CLI mode, check if the cache is still valid.
+     * If valid, render the cache and terminate further router execution.
+     *
+     * @return bool Return true if cache is rendered, otherwise false.
+     */
+    private static function serveStaticCache(): bool
+    {
+        if (
+            self::$isCli || 
+            self::$method === 'CLI' || 
+            !env('page.caching', false)
+        ) {
+            return false;
+        }
+
+        // Supported extension types to match.
+        $types = env('page.caching.statics', false);
+
+        if ($types && $types !== '' && preg_match('/\.(' . $types . ')$/i', self::$uri, $matches)) {
+            $cache = (new ViewCache(0, root('writeable/caches/default')))->setKey(Foundation::cacheKey());
+
+            // If expiration return mismatched int code 404 ignore and do not try to replace to actual url.
+            $expired = $cache->expired($matches[1]);
+
+            if ($expired === true) {
+                // Remove the matched file extension to render the request normally
+                self::$uri = substr(self::$uri, 0, -strlen($matches[0]));
+            }elseif($expired === false && $cache->read() === true){
+                // Render the cached content.
+                // Terminate router run method to ensure other unwanted modules are loaded.
+                self::$terminate = true;
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     /**
@@ -922,8 +978,12 @@ final class Router
     private static function handleWebsite(array $routes, string $uri): bool
     {
         $match = false;
+
         foreach ($routes as $route) {
-            if ($match = self::uriCapture($route['pattern'], $uri, $matches)) {
+            $matches = [];
+            $match = self::uriCapture($route['pattern'], $uri, $matches);
+
+            if ($match) {
                 $passed = self::call($route['callback'], self::matchesToArray((array) $matches));
             }
 
@@ -954,7 +1014,9 @@ final class Router
             if($route['middleware']){
                 return self::call($route['callback'], $commands);
             }
-            
+
+            $matches = [];
+
             if (self::uriCapture($route['pattern'], $queries['view'], $matches)) {
                 $commands['params'] = self::matchesToArray((array) $matches);
                 return self::call($route['callback'], $commands);

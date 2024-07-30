@@ -176,8 +176,8 @@ trait View
     */
     protected final function initialize(): void
     {
-        self::$config = new TemplateConfig();
-        self::$documentRoot = root();
+        self::$config ??= new TemplateConfig();
+        self::$documentRoot ??= root();
         self::$minifyContent = (bool) env('page.minification', false);
         self::$cacheView = (bool) env('page.caching', false);
         self::$cacheFolder = self::withViewFolder(self::trimDir(self::$config->cacheFolder) . 'default');
@@ -187,9 +187,9 @@ trait View
     /** 
      * Get property from self::$publicOptions or self::$publicClasses
      *
-     * @param string $key property name 
+     * @param string $key The property name.
      *
-     * @return mixed Return option or class object.
+     * @return mixed Return option value or class object.
      * @internal 
     */
     protected static final function attrGetter(string $key): mixed 
@@ -218,11 +218,15 @@ trait View
     }
 
     /** 
-     * Set sub view folder name to look for template file within the `resources/views/`.
+     * Set sub view folder name to look for view file within the `resources/views/`.
      *
      * @param string $path folder name to search for view.
      *
      * @return self Return instance of of View class or BaseApplication depending where its called.
+     * 
+     * - If called in controller `onCreate` or `__construct` method, the entire controller view will be searched in the specified folder.
+     * - If called in application `onCreate` or `__construct` method, the entire application view will be searched in the specified folder.
+     * - If called with the controller method before rendering view, only the method view will be searched in the specified folder.
     */
     public final function setFolder(string $path): self
     {
@@ -234,9 +238,11 @@ trait View
     /** 
      * Add a view to page cache ignore list.
      *
-     * @param string|array<int, string> $viewName view name or array of view names.
+     * @param string|array<int,string> $viewName view name or array of view names.
      *
      * @return self Return instance of of View class or BaseApplication depending where its called.
+     * 
+     * > This method is recommended to call within the application `onCreate` or `__construct` method.
     */
     public final function noCaching(array|string $viewName): self
     {
@@ -249,14 +255,32 @@ trait View
         return $this;
     }
 
+    /** 
+     * Set if view base context should be cached.
+     * Useful in api context to manually handle caching.
+     *
+     * @param bool $allow Weather to allow caching of views.
+     *
+     * @return self Return instance of View or BaseApplication depending on where its called,
+     * 
+     * - If set in controller `onCreate` or `__construct`, the entire views within the controller will not be cached.
+     * - If set in application class, the entire application views will not be cached.
+    */
+    public final function cacheable(bool $allow): self
+    {
+        $this->contextCaching = $allow;
+
+        return $this;
+    }
+
     /**
      * Export / Register a class instance to make it accessible within the view template.
      *
      * @param class-string<\T>|class-object<\T> $class The class name or instance of a class to register.
-     * @param string|null $alias Optional class alias.
+     * @param string|null $alias Optional class alias to use in accessing class object (default: null).
      * @param bool $initialize Whether to initialize class-string or leave it as static class (default: true).
      * 
-     * @return true true on success, false on failure
+     * @return true Return true on success, false on failure.
      * @throws RuntimeException If the class does not exist or failed.
      * @throws RuntimeException If there is an error during registration.
     */
@@ -287,7 +311,9 @@ trait View
      * 
      * @param DateTimeInterface|int|null $expiry Cache expiration default, set to null to use default expiration from .env file.
      * 
-     * @example Usage example with cache 
+     * @return self Return instance of of View class or BaseApplication depending where its called.
+     * 
+     * @example - Usage example with cache.
      * ```
      * $cache = $this-app->cache(60); 
      * //Check if already cached before caching again.
@@ -297,7 +323,6 @@ trait View
      * }else{
      *      $cache->reuse();
      * }```
-     * @return self Return instance of of View class or BaseApplication depending where its called.
     */
     public final function cache(DateTimeInterface|int|null $expiry = null): self 
     {
@@ -314,11 +339,20 @@ trait View
      * Check if page cache has expired.
      * Note: the expiration check we use the time used while saving cache.
      * 
+     * @param string|null $viewType The view content extension type (default: `html`).
+     * 
      * @return bool Returns true if cache doesn't exist or expired.
+     * @throws RuntimeException Throw if the cached version doesn't match with the current view type.
     */
-    public final function expired(): bool
+    public final function expired(string|null $viewType = 'html'): bool
     {
-        return Helper::getCache(self::$cacheFolder, Foundation::cacheKey())->expired();
+        $expired = Helper::getCache(self::$cacheFolder, Foundation::cacheKey())->expired($viewType);
+
+        if($expired === 404){
+            throw new RuntimeException('Invalid mismatch view type: ' . $viewType);
+        }
+
+        return $expired;
     }
 
     /**
@@ -344,28 +378,13 @@ trait View
     }
 
     /** 
-     * Redirect to another view url.
-     *
-     * @param string $view The view name or view path to redirect to.
-     * @param int $response_code The redirect response status code.
-     *
-     * @return void
-    */
-    public final function redirect(string $view, int $response_code = 0): void 
-    {
-        $view = start_url($view);
-        header("Location: {$view}", true, $response_code);
-        exit(STATUS_SUCCESS);
-    }
-
-    /** 
      * Render template view file withing the `resources/views` directory.
-     * Do not include the extension type, only the file name.
+     * Do not include the extension type (e.g, `.php`, `.tpl`, `.twg`), only the file name.
      *
-     * @param string $viewName The view name (e.g, `index`).
-     * @param string $viewType The type of content in view file, not same as header Content-Type.
+     * @param string $viewName The view file name without extension type (e.g, `index`).
+     * @param string $viewType The view content extension type (default: `html`).
      * 
-     * View Types: 
+     * Supported View Types: 
      * 
      * - html Html content.
      * - json Json content.
@@ -377,7 +396,8 @@ trait View
      * - atom Atom content.
      * - rss  RSS feed content.
      *
-     * @return self $this
+     * @return self Return instance of View or BaseApplication depending on where its called.
+     * @throws RuntimeException Throw if invalid or unsupported view type specified.
     */
     public final function view(string $viewName, string $viewType = 'html'): self 
     {
@@ -415,12 +435,16 @@ trait View
      * Render view content with additional options available as globals within the template view.
      *
      * @param array<string,mixed> $options Additional parameters to pass in the template file.
-     * @param int $status HTTP status code (default: 200 OK).
+     * @param int $status The HTTP status code (default: 200 OK).
      * 
-     * @example `$this->app->view('name')->render([...])` Display your template view with options.
-     * 
-     * @return int The HTTP status code.
+     * @return int Return status code STATUS_SUCCESS or STATUS_ERROR on failure.
      * @throws RuntimeException If the view rendering fails.
+     * 
+     * @example - Display your template view with options.
+     * 
+     * ```php
+     * $this->app->view('name')->render([...])
+     * ```
      */
     public final function render(array $options = [], int $status = 200): int 
     {
@@ -433,20 +457,42 @@ trait View
      * @param array<string,mixed> $options Additional parameters to pass in the template file.
      * @param int $status HTTP status code (default: 200 OK).
      * 
-     * @example `$content = $this->app->view('name')->respond([])` Display your template view or send as an email.
-     * 
-     * @return string The rendered view contents.
+     * @return string Return the compiled view contents.
      * @throws RuntimeException If the view rendering fails.
+     * 
+     * @example - Display your template view or send as an email.
+     * 
+     * ```php
+     * $content = $this->app->view('name', 'html')->respond(['foo' => 'bar']);
+     * ```
      */
     public final function respond(array $options = [], int $status = 200): string
     {
         return $this->call($options, $status, true);
     }
 
+     /** 
+     * Redirect to another view url.
+     *
+     * @param string $view The view name or view path to redirect to.
+     * @param int $response_code The redirect response status code (default: 0).
+     *
+     * @return void
+    */
+    public final function redirect(string $view, int $response_code = 0): void 
+    {
+        $view = start_url($view);
+        header("Location: {$view}", true, $response_code);
+        exit(STATUS_SUCCESS);
+    }
+
     /**
      * Retrieves information about a view file.
      *
-     * @return array An associative array containing information about the view file:
+     * @return array<string,mixed> Return an associative array containing information about the view file.
+     * 
+     * Return Keys:
+     * 
      *    -  'location': The full path to the view file.
      *    -  'engine': The template engine.
      *    -  'size': The size of the view file in bytes.
@@ -488,11 +534,11 @@ trait View
     }
 
     /**
-     * Create a public link to of a file, directory, or a view.
+     * Create a relative url to view or file ensuring the url starts from public root directory.
      * 
-     * @param string $filename Filename to prepend to base.
+     * @param string $filename Optional view, path or file to prepend to root URL.
      * 
-     * @return string Return a public url of file.
+     * @return string Return full url to view or file.
     */
     public static final function link(string $filename = ''): string 
     {
@@ -506,24 +552,9 @@ trait View
     }
 
     /** 
-     * Set if view base context should be cached.
-     * Useful in api context to manually handle caching.
+     * Get application root folder.
      *
-     * @param bool $allow true or false
-     *
-     * @return self $this
-    */
-    public final function cacheable(bool $allow): self
-    {
-        $this->contextCaching = $allow;
-
-        return $this;
-    }
-
-    /** 
-     * Get view root folder
-     *
-     * @return string root
+     * @return string Return the application root directory.
     */
     private static function viewRoot(): string
     {
@@ -555,7 +586,7 @@ trait View
     }
 
     /** 
-     * Get template engine type
+     * Get template engine type.
      *
      * @return string Return template engine name.
     */
@@ -567,11 +598,12 @@ trait View
     /** 
      * Creates and Render template by including the accessible global variable within the template file.
      *
-     * @param array $options additional parameters to pass in the template file
-     * @param int $status HTTP status code (default: 200 OK)
+     * @param array $options additional parameters to pass in the template file.
+     * @param int $status HTTP status code (default: 200 OK).
+     * @param bool $return Weather to return content instead.
      *
-     * @return bool Return true on success, false on failure.
-     * @throws ViewNotFoundException
+     * @return bool|string  Return true on success, false on failure.
+     * @throws ViewNotFoundException Throw if view file is not found.
     */
     private function call(array $options = [], int $status = 200, bool $return = false): bool|string 
     {
@@ -598,7 +630,8 @@ trait View
 
                 if ($cacheable) {
                     $cache = Helper::getCache(self::$cacheFolder, Foundation::cacheKey(), $this->cacheExpiry);
-                    if (!$cache->expired()) {
+   
+                    if ($cache->expired($options['viewType']) === false) {
                         return $return ? $cache->get() : $cache->read();
                     }
                 }
@@ -624,12 +657,13 @@ trait View
     }
 
     /**
-     * Initialize rendering setup
-     * @param int $status HTTP status code (default: 200 OK)
+     * Initialize rendering setup.
      * 
-     * @return bool 
-     * @throws ViewNotFoundException
-     * @throws RuntimeException
+     * @param int $status HTTP status code (default: 200 OK).
+     * 
+     * @return bool Return true if setup is ready.
+     * @throws ViewNotFoundException Throw if view file is not found.
+     * @throws RuntimeException Throw of error occurred during rendering.
     */
     private function assertSetup(int $status = 200): bool
     {
@@ -659,12 +693,16 @@ trait View
     }
 
     /**
-     * Render with smarty
+     * Render with smarty engine.
      * 
      * @param string $view View file name.
      * @param string $templateDir View template directory.
-     * @param array $options View options
-     * @param bool $caching Should cache page contents
+     * @param array $options View options.
+     * @param bool $caching Should cache page contents.
+     * @param int $cacheExpiry Cache expiration.
+     * @param bool $minify Should minify.
+     * @param bool $copy Should include code copy button.
+     * @param bool $return Should return content instead of render.
      * 
      * @return bool|string Return true on success, false on failure.
     */
@@ -708,12 +746,16 @@ trait View
     }
 
     /**
-     * Render with smarty
+     * Render with twig engine.
      * 
      * @param string $view View file name.
      * @param string $templateDir View template directory.
-     * @param array $options View options
-     * @param bool $shouldCache Should cache page contents
+     * @param array $options View options.
+     * @param bool $shouldCache Should cache page contents.
+     * @param int $cacheExpiry Cache expiration.
+     * @param bool $minify Should minify.
+     * @param bool $copy Should include code copy button.
+     * @param bool $return Should return content instead of render.
      * 
      * @return bool|string Return true on success, false on failure.
     */
@@ -759,8 +801,8 @@ trait View
     /**
      * Render without smarty using default .php template engine.
      * 
-     * @param array $options View options
-     * @param ViewCache|null $_lmv_cache Cache instance if should cache page contents
+     * @param array $options View options.
+     * @param ViewCache|null $_lmv_cache Cache instance if should cache page contents.
      * @param bool $_lmv_return Should return view contents.
      * 
      * @return bool|string Return true on success, false on failure.
@@ -797,16 +839,17 @@ trait View
     }
 
     /**
-     * Render without in isolation mode
+     * Render without in isolation mode.
      * 
-     * @param string $_lmv_viewfile View template file 
-     * @param array $options View options
-     * @param ViewCache|null $_lmv_cache Cache instance if should cache page contents
-     * @param bool $_lmv_ignore Ignore html codeblock during minimizing
-     * @param bool $_lmv_copy Allow copy on html code tag or not
+     * @param string $_lmv_viewfile View template file.
+     * @param array $options View options.
+     * @param ViewCache|null $_lmv_cache Cache instance if should cache page contents.
+     * @param bool $_lmv_ignore Ignore html codeblock during minimizing.
+     * @param bool $_lmv_copy Allow copy on html code tag or not.
      * @param bool $_lmv_return Should return view contents.
      * 
      * @return bool|string Return true on success, false on failure.
+     * @throws RuntimeException Throw if error occurred.
     */
     private static function renderIsolation(
         string $_lmv_viewfile, 
@@ -852,7 +895,7 @@ trait View
     /**
      * Initialize self class keyword.
      * 
-     * @return object self classes.
+     * @return class-object Return new instance of anonymous classes.
     */
     private static function newSelfInstance(): object 
     {
@@ -890,7 +933,7 @@ trait View
      * @param bool $copy Add copy button to codeblocks.
      * @param ViewCache|null $cache Cache instance.
      * 
-     * @return array<int,mixed> Return contents.
+     * @return array<int,mixed> Return array of contents and headers.
     */
     private static function assertMinifyAndSaveCache(
         string|false $content, 
@@ -929,9 +972,9 @@ trait View
     }
     
     /** 
-     * Check if view should be optimized page caching or not
+     * Check if view should be optimized page caching or not.
      *
-     * @return bool 
+     * @return bool Return true if should cache, otherwise false.
     */
     private function shouldCache(): bool 
     {
@@ -947,9 +990,9 @@ trait View
     }
 
     /** 
-     * Check if cache expiry is empty 
+     * Check if cache expiry is empty.
      *
-     * @return bool 
+     * @return bool Return true if no cache expiration found.
     */
     private function emptyTtl(): bool 
     {
@@ -957,10 +1000,10 @@ trait View
     }
 
     /** 
-     * Handle exceptions
+     * Handle exceptions.
      *
-     * @param ExceptionInterface $exception
-     * @param array $options view options
+     * @param ExceptionInterface $exception The exception interface thrown.
+     * @param array<string,mixed> $options The view options.
      *
      * @return void 
     */
@@ -984,9 +1027,9 @@ trait View
     /**
      * Sets project template options.
      * 
-     * @param  array<string, mixed> $attributes
+     * @param array<string,mixed> $attributes The attributes to set.
      * 
-     * @return int Number of registered options
+     * @return void
      * @throws RuntimeException If there is an error setting the attributes.
     */
     private static function extract(array $attributes): void
@@ -1016,6 +1059,8 @@ trait View
      * 
      * @param string $key key name to check.
      * @throws RuntimeException Throws if key is not a valid PHP variable key.
+     * 
+     * @return void
     */
     private static function assertValidKey(string $key): void 
     {
@@ -1051,11 +1096,11 @@ trait View
     }
 
     /**
-     * Parse user template options
+     * Parse user template options.
      * 
      * @param array<string,mixed> $options The template options.
      * 
-     * @return array<string,mixed> The parsed options.
+     * @return array<string,mixed> Return the parsed options.
     */
     private function parseOptions(array $options = []): array 
     {
@@ -1080,11 +1125,11 @@ trait View
     }
 
     /** 
-     * Get base view file directory
+     * Get base view file directory.
      *
-     * @param string path
+     * @param string Path to trim.
      *
-     * @return string path
+     * @return string Return trimmed directory path.
     */
     private static function trimDir(string $path): string 
     {
@@ -1092,11 +1137,11 @@ trait View
     }
 
     /** 
-     * Get base view file directory
+     * Get base view file directory.
      *
-     * @param string path
+     * @param string The view directory path. 
      *
-     * @return string path
+     * @return string Return view file directory.
     */
     private static function withViewFolder(string $path): string 
     {
@@ -1104,11 +1149,11 @@ trait View
     }
 
     /** 
-     * Get error file from directory
+     * Get error file from directory.
      *
-     * @param string $filename file name
+     * @param string $filename file name.
      *
-     * @return string path
+     * @return string Return error directory.
     */
     private static function getErrorFolder(string $filename): string 
     {

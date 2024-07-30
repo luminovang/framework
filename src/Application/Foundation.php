@@ -176,7 +176,7 @@ final class Foundation
         if (static::isCommand()) {
             $view = 'cli.php';
         } elseif (static::isApiContext()) {
-            $view = 'api.php';
+            $view = (defined('IS_UP') ? env('app.api.prefix', 'api')  . '.php' : 'api.php');
         } else {
             $view = 'errors.php';
         }
@@ -277,18 +277,25 @@ final class Foundation
     /**
      * Generate cache key for storing and serving static pages.
      * 
-     * @param string|null $url Optional request URL to derive cache key from.
-     * 
      * @return string Return MD5 hashed page cache key.
      */
-    public static function cacheKey(?string $url = null): string 
+    public static function cacheKey(): string 
     {
-        if ($url === null) {
-            $url = $_SERVER['REQUEST_METHOD'] ?? 'CLI';
-            $url .= $_SERVER['REQUEST_URI'] ?? 'index';
-        }
+        $url = $_SERVER['REQUEST_METHOD'] ?? 'CLI';
+        $url .= $_SERVER['REQUEST_URI'] ?? 'index';
+        $url = strtr($url, [
+            '/' => '-', 
+            '?' => '-', 
+            '&' => '-', 
+            '=' => '-', 
+            '#' => '-'
+        ]);
 
-        $url = strtr($url, ['/' => '-', '?' => '-', '&' => '-', '=' => '-', '#' => '-']);
+        // Remove static cache extension to avoid creating 2 versions of same cache.
+        if($types = env('page.caching.statics', false)){
+            $url = preg_replace('/\.(' . $types . ')$/i', '', $url);
+        }
+        
         return md5($url);
     }
 
@@ -317,7 +324,7 @@ final class Foundation
     public static function isApiContext(): bool
     {
         $segments = static::getSegments();
-        return reset($segments) === 'api';
+        return reset($segments) === (defined('IS_UP') ? env('app.api.prefix', 'api') : 'api');
     }
 
     /**
