@@ -22,13 +22,6 @@ abstract class BaseServices implements ServicesInterface
     /**
      * Add a service class to the service auto-loading.
      *
-     * Usage:
-     *     - static::newService(Configuration::class) as $config = service('Configuration')
-     *     - static::newService('\Luminova\Config\Configuration') as $config = service('Configuration')
-     *     - static::newService(Configuration:class, 'config') as $config = service('config')
-     *     - Services::Configuration()
-     *     - Services::config()
-     *
      * @param class-string $class The class name to add to service.
      * @param string|null $alias Service class name alias. Defaults to class name.
      * @param bool $shared Whether the instance should be shared. Defaults to true.
@@ -37,6 +30,13 @@ abstract class BaseServices implements ServicesInterface
      *
      * @return true Returns true if the service was added successfully, otherwise throws an exception.
      * @throws RuntimeException If the service already exists or class argument is not an array list.
+     * 
+     * @example - Usage:
+     *     - static::newService(Configuration::class) as $config = service('Configuration')
+     *     - static::newService('\Luminova\Config\Configuration') as $config = service('Configuration')
+     *     - static::newService(Configuration:class, 'config') as $config = service('config')
+     *     - Services::Configuration()
+     *     - Services::config()
      */
     protected static final function newService(
         string $class, 

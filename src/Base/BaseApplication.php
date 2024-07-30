@@ -11,7 +11,6 @@ namespace Luminova\Base;
 
 use \Luminova\Routing\Router;
 use \Luminova\Template\View;
-use \Luminova\Exceptions\BadMethodCallException;
 
 abstract class BaseApplication
 {
@@ -23,19 +22,19 @@ abstract class BaseApplication
     use View;
 
     /**
-     * Base Application instance
+     * Base Application instance.
      *
      * @var static|null $instance
     */
     private static ?self $instance = null;
 
     /**
-     * @var Router $router Router class instance
+     * @var Router $router Router class instance.
     */
     public ?Router $router = null;
 
     /**
-     * Initialize the base application constructor
+     * Initialize the base application constructor.
      */
     public function __construct() 
     {
@@ -66,7 +65,7 @@ abstract class BaseApplication
     }
 
     /**
-     * Application on create method, an alternative method to __construct()
+     * Application on create method, an alternative method to __construct().
      * 
      * @return void 
     */
@@ -118,9 +117,9 @@ abstract class BaseApplication
     }
 
     /**
-     * Get the current segments relative uri
+     * Get the current segments relative uri.
      *
-     * @return string URI of the current request 
+     * @return string URI of the current request.
      */
     public final function getView(): string 
     {
@@ -128,9 +127,9 @@ abstract class BaseApplication
     }
 
     /**
-     * Get protected property from template class static::$publicOptions or static::$publicClasses
+     * Get protected property from template class options or exported classes.
      *
-     * @param string $key property or attribute key
+     * @param string $key property or class alias name.
      * 
      * @return ?mixed return property otherwise null if not found.
      * @ignore

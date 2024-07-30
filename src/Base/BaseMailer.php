@@ -17,21 +17,21 @@ abstract class BaseMailer
     /**
      * Get the subject of the email.
      *
-     * @return string|null The subject of the email.
+     * @return string|null Return the subject of the email.
      */
     abstract public function getSubject(): ?string;
 
     /**
      * Get the HTML body of the email.
      *
-     * @return string|null The body of the email.
+     * @return string|null Return the HTML body of the email.
      */
     abstract public function getHtml(): ?string;
 
     /**
      * Get the Text alternative email body non-HTML text.
      *
-     * @return string|null The body Text.
+     * @return string|null Return the plain text body of the email.
      */
     abstract public function getText(): ?string;
 
@@ -40,7 +40,8 @@ abstract class BaseMailer
      *
      * @return array<string,string>|null An array of attachments for the email.
      * 
-     * Array keys 
+     * Array keys:
+     * 
      * - path: The file path.
      * - name: Optional file name.
      * - encoding: File encoding (default: base64).
