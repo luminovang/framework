@@ -29,12 +29,13 @@ use \Luminova\Exceptions\AppException;
 
 if (!function_exists('root')) {
     /**
-     * Return to the root directory of your project.
+     * Find application root directory of your project.
+     * This ensures that the return path is from root directory.
      *
      * @param string $suffix Optional path to prepend to the root directory.
-     *                  - The suffix must be a path not a filename if file name is passed, it return `/root/filename.foo/`.
      * 
      * @return string Return application document root, and optional appended suffix.
+     * > The suffix must be a path not a filename if file name is passed, it return `/root/filename.foo/`.
      */
     function root(?string $suffix = null): string
     {
@@ -97,7 +98,7 @@ if (!function_exists('request')) {
      * 
      * @param bool $shared Return a shared instance (default: true).
      * 
-     * @return Request|null Return Request object.
+     * @return Request|null Return http request object.
     */
     function request(bool $shared = true): ?Request 
     {
@@ -342,7 +343,7 @@ if(!function_exists('ip_address')){
             return Factory::functions()->ip()->info(null, $options);
         }
 
-       return Factory::functions()->ip()->get();
+        return Factory::functions()->ip()->get();
     }
 }
 
@@ -401,7 +402,12 @@ if (!function_exists('cookie')) {
      * 
      * @return Cookie Return cookie instance.
     */
-    function cookie(string $name, string $value = '', array $options = [], bool $shared = false): Cookie
+    function cookie(
+        string $name, 
+        string $value = '', 
+        array $options = [], 
+        bool $shared = false
+    ): Cookie
     {
         return Factory::cookie($name, $value, $options, $shared);
     }
@@ -555,15 +561,15 @@ if(!function_exists('is_platform')) {
      * 
      * @return bool Return true if the platform is matching, false otherwise.
      * 
-     * Possible OS Values:
+     * Predefine OS Values:
      * 
-     * - mac.
-     * - windows.
-     * - linux.
-     * - freebsd.
-     * - openbsd.
-     * - solaris.
-     * - aws.
+     * - mac - For macOS.
+     * - windows - For Windows os.
+     * - linux - For linux os.
+     * - freebsd - For FreeBSD os.
+     * - openbsd - For openbsd os.
+     * - solaris - For solaris os.
+     * - aws - For AWS OpsWorks.
      * - etc.
     */
     function is_platform(string $os): bool
