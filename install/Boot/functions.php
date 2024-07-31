@@ -896,11 +896,11 @@ if (!function_exists('to_array')) {
 
 if (!function_exists('to_object')) {
     /**
-     * Convert an array or string list to json object
+     * Convert an array or string list to json object.
      *
-     * @param array|string $input Array or String list to convert
+     * @param array|string $input Array or String list to convert.
      * 
-     * @return object|false $object  Return JSON object, otherwise false.
+     * @return object|false $object Return JSON object, otherwise false.
     */
     function to_object(array|string $input): object|bool
     {
