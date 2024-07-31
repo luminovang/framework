@@ -188,11 +188,8 @@ final class Factory
     {
         try{
             static $boot = null;
-
-            if($boot === null){
-                $boot = new BootServices();
-            }
-            
+            $boot ??= new BootServices();
+     
             $boot->bootstrap();
             $instance = static::service();
             $instance->queService($boot->getServices());
@@ -246,11 +243,7 @@ final class Factory
     private static function create(string $class, ?string $alias = null, bool $shared = true, mixed ...$arguments): object
     {
         try {
-            if($class === 'BaseFunction'){
-                $instance = new class extends BaseFunction{};
-            }else{
-                $instance = new $class(...$arguments);
-            }
+            $instance = ($class === 'BaseFunction') ? new class extends BaseFunction{} : new $class(...$arguments);
             
             if ($shared && $alias) {
                 self::$instances[$alias] = $instance;
@@ -258,7 +251,7 @@ final class Factory
 
             return $instance;
         } catch (Throwable|Exception $e) {
-            throw new RuntimeException("Failed to instantiate factory method '$alias', " . $e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException("Failed to instantiate factory method '{$alias}', " . $e->getMessage(), $e->getCode(), $e);
         }
     }
 
