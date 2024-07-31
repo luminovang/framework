@@ -15,7 +15,6 @@ use \Twig\Error\RuntimeError;
 use \Twig\Error\SyntaxError;
 use \App\Config\Template as TemplateConfig;
 use \App\Config\Templates\Twig\Extensions;
-use \App\Config\Templates\Twig\Rot13Provider;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Template\Helper;
 

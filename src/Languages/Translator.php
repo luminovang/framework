@@ -99,7 +99,6 @@ final class Translator
     {
         $keys = explode('.', $lang);
         $filename = array_shift($keys);
-
         $translations = $this->load($filename);
 
         if ($translations === []) {
@@ -126,10 +125,10 @@ final class Translator
     }
 
     /**
-     * Translate placeholders
+     * Translate placeholders.
      * 
-     * @param string $message message to be translated
-     * @param array $placeholders array 
+     * @param string $message message to be translated.
+     * @param array $placeholders array.
      * 
      * @return string 
     */

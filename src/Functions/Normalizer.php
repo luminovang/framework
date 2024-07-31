@@ -10,10 +10,12 @@
 namespace Luminova\Functions;
 
 use \Luminova\Exceptions\InvalidArgumentException;
+
 class Normalizer
 {
 	/**
-	 * Format text before display by matching links, email, phone, hashtags and mentions with a link representation and replace multiple new lines.
+	 * Format text before display by matching links, email, phone, 
+	 * hashtags and mentions with a link representation and replace multiple new lines.
 	 * 
 	 * @param string $text Text to be formatted
 	 * @param string $target Link target attribute in HTML anchor name.
@@ -21,7 +23,7 @@ class Normalizer
 	 * @param string $blocked Replace blocked word with
 	 * @param bool $noHtml Determines whether to remove all HTML tags or only allow certain tags like <p> by default, it's set to true.
 	 * 
-	 * @return string $text
+	 * @return string Return formatted text.
 	*/
 	public static function normalize(
 		string $text, 

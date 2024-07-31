@@ -7,13 +7,12 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Base;
 
 use \Luminova\Functions\Escape;
-use \Luminova\Functions\IPAddress;
+use \Luminova\Functions\IP;
 use \Luminova\Storages\FileManager;
-use \Luminova\Functions\TorDetector;
+use \Luminova\Functions\Tor;
 use \Luminova\Functions\Maths;
 use \Luminova\Functions\Normalizer;
 use \Luminova\Exceptions\InvalidArgumentException;
@@ -24,24 +23,24 @@ use \Exception;
 abstract class BaseFunction extends Normalizer
 {
     /**
-     * @var array $instance method instances
+     * @var array $instance method instances.
     */
     private static array $instances = [];
 
     /**
      * Initialize or return a shared an instance of the IP address class.
      *
-     * @return IPAddress Returns a ip address class instance
+     * @return IP Returns a ip address class instance.
     */
-    public static final function ip(): IPAddress
+    public static final function ip(): IP
     {
-        return self::$instances['ip'] ??= new IPAddress();
+        return self::$instances['ip'] ??= new IP();
     }
 
     /**
      * Initialize or return a shared an instance of the Files class.
      *
-     * @return FileManager Returns a file class instance
+     * @return FileManager Returns a file class instance.
     */
     public static final function files(): FileManager
     {
@@ -51,17 +50,17 @@ abstract class BaseFunction extends Normalizer
     /**
      * Initialize or return a shared an instance of the tor detector class.
      *
-     * @return TorDetector Returns a tor detector class instance
+     * @return Tor Returns a tor detector class instance.
     */
-    public static final function tor(): TorDetector
+    public static final function tor(): Tor
     {
-        return self::$instances['tor'] ??= new TorDetector();
+        return self::$instances['tor'] ??= new Tor();
     }
 
      /**
      * Initialize or return a shared an instance of the math class.
      *
-     * @return Maths Returns a math class instance
+     * @return Maths Returns a math class instance.
     */
     public static final function math(): Maths
     {
@@ -83,7 +82,7 @@ abstract class BaseFunction extends Normalizer
      * @throws BadMethodCallException When the called method does not exist.
      * @throws RuntimeException When the string is not valid UTF-8 or cannot be converted.
      */
-    public static final function escape(string|array $input, string $context = 'html', ?string $encoding = null): array|string
+    public static final function escape(string|array $input, string $context = 'html', string|null $encoding = 'utf-8'): array|string
     {
         if (is_array($input)) {
             array_walk_recursive($input, function (&$value, $key) use ($context, $encoding) {
@@ -101,7 +100,7 @@ abstract class BaseFunction extends Normalizer
                 throw new InvalidArgumentException('Invalid escape context provided.');
             }
 
-            $method = $context === 'attr' ? 'escapeHtmlAttr' : 'escape' . ucfirst($context);
+            $method = ($context === 'attr') ? 'escapeHtmlAttr' : 'escape' . ucfirst($context);
             static $escaper = null;
 
             if ($escaper === null || ($encoding && $escaper->getEncoding() !== $encoding)) {

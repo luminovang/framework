@@ -106,11 +106,11 @@ trait View
     private static array $publicClasses = [];
 
     /** 
-     * Ignore view optimization
+     * Ignore or allow view optimization
      * 
-     * @var array $cacheIgnores
+     * @var array<string,array> $cacheOption
     */
-    private array $cacheIgnores = [];
+    private array $cacheOption = [];
 
     /**
      * Force use of cache response.
@@ -127,46 +127,53 @@ trait View
     private DateTimeInterface|int|null $cacheExpiry = 0;
 
      /**
-     * Default cache path
+     * Default cache path.
      * 
      * @var string $cacheFolder 
     */
     private static string $cacheFolder = 'writeable/caches/default';
 
     /**
-     * Minify page content 
+     * Minify page content.
      * 
      * @var bool $minifyContent 
     */
     private static bool $minifyContent = false;
 
     /**
-     * Should cache view base
+     * Should cache view base.
      * 
      * @var bool $cacheView
     */
-    private static bool $cacheView = false;
+    private bool $cacheView = false;
 
     /**
-     * Set base context caching mode
-     * 
-     * @var bool $contextCaching
-    */
-    private bool $contextCaching = true;
-
-    /**
-     * Should minify codeblock tags
+     * Should minify codeblock tags.
      * 
      * @var bool $minifyCodeblocks 
     */
     private bool $minifyCodeblocks = false;
 
     /**
-     * Allow copy codeblock
+     * Allow copy codeblock.
      * 
      * @var bool $codeblockButton 
     */
     private bool $codeblockButton = false;
+
+    /**
+     * Enable performance profiling.
+     * 
+     * @var bool $profiling 
+    */
+    private static bool $profiling = false;
+
+    /**
+     * Supported view types.
+     * 
+     * @var string[] $supportedTypes
+    */
+    private static array $supportedTypes = ['html', 'json', 'text', 'xml', 'js', 'css', 'rdf', 'atom', 'rss'];
 
     /** 
      * Initialize template view configuration.
@@ -179,8 +186,9 @@ trait View
         self::$config ??= new TemplateConfig();
         self::$documentRoot ??= root();
         self::$minifyContent = (bool) env('page.minification', false);
-        self::$cacheView = (bool) env('page.caching', false);
+        self::$profiling = (!PRODUCTION && env('debug.show.performance.profiling', false));
         self::$cacheFolder = self::withViewFolder(self::trimDir(self::$config->cacheFolder) . 'default');
+        $this->cacheView = (bool) env('page.caching', false);
         $this->cacheExpiry = (int) env('page.cache.expiry', 0);
     }
 
@@ -207,7 +215,7 @@ trait View
      * @param bool $minify Indicate if codeblocks should be minified (default: false)
      * @param bool $button Indicate if codeblock tags should include a copy button (default: false).
      *
-     * @return self Return instance of of View class or BaseApplication depending where its called.
+     * @return self Returns the instance of the View class or BaseApplication, depending on where it's called.
     */
     public final function codeblock(bool $minify, bool $button = false): self 
     {
@@ -222,7 +230,7 @@ trait View
      *
      * @param string $path folder name to search for view.
      *
-     * @return self Return instance of of View class or BaseApplication depending where its called.
+     * @return self Returns the instance of the View class or BaseApplication, depending on where it's called.
      * 
      * - If called in controller `onCreate` or `__construct` method, the entire controller view will be searched in the specified folder.
      * - If called in application `onCreate` or `__construct` method, the entire application view will be searched in the specified folder.
@@ -236,20 +244,40 @@ trait View
     }
 
     /** 
-     * Add a view to page cache ignore list.
+     * Adds a view to the list of views that should not be cached.
      *
-     * @param string|array<int,string> $viewName view name or array of view names.
+     * @param string|string[] $viewName A single view name or an array of view names to exclude from caching.
      *
-     * @return self Return instance of of View class or BaseApplication depending where its called.
+     * @return self Returns the instance of the View class or BaseApplication, depending on where it's called.
      * 
-     * > This method is recommended to call within the application `onCreate` or `__construct` method.
+     * > It is recommended to use this method within the `onCreate` or `__construct` methods of your application.
     */
     public final function noCaching(array|string $viewName): self
     {
         if(is_string($viewName)){
-            $this->cacheIgnores[] = $viewName;
+            $this->cacheOption['ignore'][] = $viewName;
         }else{
-            $this->cacheIgnores = $viewName;
+            $this->cacheOption['ignore'] = $viewName;
+        }
+        
+        return $this;
+    }
+
+    /** 
+     * Specifies views that should exclusively be cached.
+     *
+     * @param string|string[] $viewName A single view name or an array of view names to cache.
+     *
+     * @return self Returns the instance of the View class or BaseApplication, depending on where it's called.
+     * 
+     * > It is recommended to invoke this method within the `onCreate` or `__construct` methods of your application.
+     */
+    public final function cacheOnly(array|string $viewName): self
+    {
+        if(is_string($viewName)){
+            $this->cacheOption['only'][] = $viewName;
+        }else{
+            $this->cacheOption['only'] = $viewName;
         }
         
         return $this;
@@ -268,7 +296,7 @@ trait View
     */
     public final function cacheable(bool $allow): self
     {
-        $this->contextCaching = $allow;
+        $this->cacheView = $allow;
 
         return $this;
     }
@@ -311,7 +339,7 @@ trait View
      * 
      * @param DateTimeInterface|int|null $expiry Cache expiration default, set to null to use default expiration from .env file.
      * 
-     * @return self Return instance of of View class or BaseApplication depending where its called.
+     * @return self Returns the instance of the View class or BaseApplication, depending on where it's called.
      * 
      * @example - Usage example with cache.
      * ```
@@ -401,15 +429,21 @@ trait View
     */
     public final function view(string $viewName, string $viewType = 'html'): self 
     {
-        if(!PRODUCTION && (bool) env('debug.show.performance.profiling', false)){
+        if(self::$profiling){
             Performance::start();
         }
 
         $viewName = trim($viewName, '/');
         $viewType = strtolower($viewType);
     
-        if(!in_array($viewType, ['html', 'json', 'text', 'xml', 'js', 'css', 'rdf', 'atom', 'rss'])){
-            throw new RuntimeException(sprintf('Invalid argument, "%s" required types (html, json, text, xml, js, css, rdf, atom, rss). To render other formats use helper function `response()->render()`', $viewType));
+        if(!in_array($viewType, static::$supportedTypes)){
+            $supported = implode(', ', static::$supportedTypes);
+            throw new RuntimeException(sprintf(
+                'Invalid argument, unsupported view type: "%s" for view: "%s", supported types (%s). To render other formats use helper function `response()->render()`', 
+                $viewType, 
+                $viewName,
+                $supported
+            ));
         }
 
         $this->templateDir = self::withViewFolder(self::$viewFolder);
@@ -420,7 +454,7 @@ trait View
 
         $this->templateFile = $this->templateDir . $viewName . self::dot();
 
-        if (!file_exists($this->templateFile) && PRODUCTION) {
+        if (PRODUCTION && !file_exists($this->templateFile)) {
             $viewName = '404';
             $this->templateFile = $this->templateDir . $viewName . self::dot();
         }
@@ -832,7 +866,8 @@ trait View
 
         Header::parseHeaders($_lmv_headers);
         echo $_lmv_contents;
-       if(!PRODUCTION && (bool) env('debug.show.performance.profiling', false)){
+
+        if(self::$profiling){
             Performance::stop();
         }
         return true;
@@ -974,19 +1009,29 @@ trait View
     /** 
      * Check if view should be optimized page caching or not.
      *
-     * @return bool Return true if should cache, otherwise false.
+     * @return bool Return true if view should be cached, otherwise false.
     */
-    private function shouldCache(): bool 
+    private function shouldCache(): bool
     {
-        if($this->forceCache){
+        if ($this->forceCache) {
             return true;
         }
 
-        if (!$this->contextCaching || !self::$cacheView || $this->emptyTtl()) {
+        if (!$this->cacheView || $this->emptyTtl()) {
             return false;
         }
 
-        return !in_array($this->activeView, $this->cacheIgnores, true);
+        if($this->cacheOption === []){
+            return true;
+        }
+
+        // Check if the view is in the 'only' list
+        if (isset($this->cacheOption['only'])) {
+            return in_array($this->activeView, $this->cacheOption['only'], true);
+        }
+
+        // Check if the view is in the 'ignore' list
+        return !in_array($this->activeView, $this->cacheOption['ignore'] ?? [], true);
     }
 
     /** 
@@ -996,7 +1041,7 @@ trait View
     */
     private function emptyTtl(): bool 
     {
-        return $this->cacheExpiry === null || (is_int($this->cacheExpiry) && $this->cacheExpiry < 1);
+        return ($this->cacheExpiry === null || (is_int($this->cacheExpiry) && $this->cacheExpiry < 1));
     }
 
     /** 
@@ -1041,7 +1086,8 @@ trait View
         $prefix = (self::$config->variablePrefixing ? '_' : '');
         foreach ($attributes as $name => $value) {
             self::assertValidKey($name);           
-            $key = is_int($name) ? '_' . $name : $prefix . $name;
+            $key = (is_int($name) ? '_' . $name : $prefix . $name);
+
             if ($key === '_' || $key === '') {
                 throw new RuntimeException("Invalid option key: '{$key}'. View option key must be non-empty strings.");
             }
@@ -1110,7 +1156,7 @@ trait View
         $options['active'] = $this->activeView;
         
         if(isset($options['nocache']) && !$options['nocache']){
-            $this->cacheIgnores[] = $this->activeView;
+            $this->cacheOption['ignore'][] = $this->activeView;
         }
 
         if(!isset($options['title'])){

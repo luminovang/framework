@@ -12,7 +12,6 @@ namespace Luminova\Sessions;
 use \Luminova\Interface\SessionManagerInterface;
 use \Luminova\Base\BaseConfig;
 use \Luminova\Exceptions\JsonException;
-use \Throwable;
 
 final class CookieManager implements SessionManagerInterface 
 { 
@@ -181,7 +180,7 @@ final class CookieManager implements SessionManagerInterface
 
         try {
             return (object) json_decode(json_encode($_COOKIE[self::$table]??[], JSON_THROW_ON_ERROR));
-        }catch(Throwable $e){
+        }catch(\JsonException $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -209,7 +208,7 @@ final class CookieManager implements SessionManagerInterface
             $result = json_encode($result, JSON_THROW_ON_ERROR);
 
             return (object) json_decode($result);
-        }catch(Throwable $e){
+        }catch(\JsonException $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }

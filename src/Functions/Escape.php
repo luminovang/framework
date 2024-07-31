@@ -73,11 +73,11 @@ class Escape
     /**
      * Input escaper constructor.
      * 
-     * @param string|null $encoding The character encoding to use. Defaults to 'utf-8'.
+     * @param string|null $encoding The character encoding to use (default: 'utf-8').
      */
     public function __construct(string|null $encoding = 'utf-8')
     {
-        if($encoding !== null){
+        if($encoding !== null && $encoding !== 'utf-8'){
             $encoding = strtolower($encoding);
             if (!in_array($encoding, $this->supportedEncodings)) {
                 $encoding = 'utf-8';
@@ -108,7 +108,9 @@ class Escape
                 return $this->{$name}(...$arguments);
             }
 
-            throw new BadMethodCallException('Method ' . $name . ' does not exist, to use ' . $name . ', you need to install a third-party library first. Run "composer require laminas/laminas-escaper"');
+            throw new BadMethodCallException(
+                sprintf('Method %s does not exist, to use it, you need to install a third-party escaper library by running "composer require laminas/laminas-escaper"', $name)
+            );
         }
 
         return $this->escaper->{$name}(...$arguments);

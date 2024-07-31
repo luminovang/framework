@@ -10,11 +10,11 @@
 
 namespace Luminova\Security;
 
-use \Luminova\Interface\EncryptionInterface;
-use \Luminova\Exceptions\EncryptionException;
 use \App\Config\Encryption;
+use \Luminova\Interface\EncryptionInterface;
 use \Luminova\Security\Encryption\OpenSSL;
 use \Luminova\Security\Encryption\Sodium;
+use \Luminova\Exceptions\EncryptionException;
 
 /**
  * The Crypter class provides methods for encrypting and decrypting data using encryption algorithms in OpenSSL or Sodium.
@@ -103,8 +103,8 @@ final class Crypter
      /**
      * Determine if the given key and cipher method are valid.
      *
-     * @param string $key Encryption key
-     * @param string $method Cipher method
+     * @param string $key The encryption key.
+     * @param string $method The encryption cipher method.
      * 
      * @return bool Return true if encryption method and key are valid false otherwise.
      */
@@ -147,12 +147,12 @@ final class Crypter
     /**
      * Decrypt the given data using OpenSSL or Sodium encryption.
      *
-     * @param string $data The data to decrypt.
+     * @param string $data The encrypted data to decrypt.
      * 
-     * @return string|null The decrypted data, or null if decryption fails.
+     * @return string|false|null The decrypted data, or null if decryption fails.
      * @throws EncryptionException Throws when invalid encryption data is passed.
      */
-    public static function decrypt(string $data): string|null|bool
+    public static function decrypt(string $data): string|bool|null
     {
         $crypt = static::getInstance();
 
@@ -168,19 +168,23 @@ final class Crypter
     }
 
     /** 
-	* Generate a hash representation of user password string.
-	*
-	* @param string $password password string
-	* @param array|null $options 
-	* @example $options array<string, mixed> [
+    * Generate a hash representation of user password string.
+    *
+    * @param string $password The actual password to hash.
+    * @param array|null $options Optional password hash options.
+    *
+    * @return string|false Return hashed password otherwise false on empty password. 
+    *
+    * Default Options:
+    *  ```
+    * [
 	*		'cost' => 12,
-	*		'salt' => 'custom_salt', // You can optionally specify a custom salt
-	*		'algorithm' => PASSWORD_BCRYPT, // Optionally specify the algorithm
-	*	];
-	*
-	* @return string|bool Return hashed password otherwise false on empty password. 
-	*/
-	public static function password(string $password, array|null $options = null): string|bool
+	*		'algorithm' => PASSWORD_BCRYPT,
+    *       //'salt' => 'my_custom_salt', // You can optionally specify password salt
+	* ];
+    * ```
+    */
+	public static function password(string $password, ?array $options = null): string|bool
 	{
 		if($password === ''){
 			return false;
@@ -195,12 +199,12 @@ final class Crypter
 	}
 	
 	/** 
-	* Verify a password hash and verify if it match
+	* Verify a password against it stored hash value to determine if if they match.
 	*
-	* @param string $password password string
-	* @param string $hash password hash
+	* @param string $password The password string to verify.
+	* @param string $hash The password stored hash value.
 	*
-	* @return bool true or false
+	* @return bool Return true if password matches with the hash, otherwise false.
 	*/
 	public static function verify(string $password, string $hash): bool 
 	{
@@ -212,45 +216,20 @@ final class Crypter
 	}
 
     /**
-     * Get the encryption extension handler
-     * 
-     * @return string|false Handler name or false if not found.
-    */
-    private static function handler(): string|bool
-    {
-        $handler = strtolower(self::$config->handler);
-
-        if($handler === 'openssl' && extension_loaded('openssl')) {
-            return $handler;
-        }
-
-        if($handler === 'sodium' && extension_loaded('sodium')) {
-            return $handler;
-        }
-        
-        return false;
-    }
-
-    /**
-     * Initialize the configuration
-    */
-    private static function initConfig(): void 
-    {
-        self::$config ??= new Encryption();
-    }
-
-    /**
      * Generate a random key string using your default encryption handler.
      * For private key, or public key generation it uses openssl rsa.
      *
-     * @param string $type The type of key to generate: 'random', 'private', or 'public'.
+     * @param string $type The type of key to generate: (e.g, 'random', 'private', or 'public').
      * @param array $options Additional options for key generation.
-     *      - For 'random' type: 'length' specifies the length of the random string.
-     *      - For 'private' type: 'private_key_bits' specifies the number of bits in the private key,
-     *        and 'private_key_type' specifies the type of the private key (e.g., OPENSSL_KEYTYPE_RSA).
-     *      - For 'public' type: 'private_key' is the private key string from which to derive the public key.
      * 
-     * @return string|array|false The generated key(s), an array of private and public key, or false on failure. 
+     * Options Keys: 
+     *      - For 'random' type, use key 'length' to specifies the length of the random string.
+     *      - For 'private' type, use key 'private_key_bits default(2048)' to specifies the number of bits in the private key,
+     *        and 'private_key_type (default: OPENSSL_KEYTYPE_RSA)' specifies the type of the private key (e.g., OPENSSL_KEYTYPE_RSA).
+     *      - For 'public' type, use key 'private_key' to specify the private key string from which to derive the public key
+     *        if the key private_key is not specified, it generate a new private key to use.
+     * 
+     * @return string|array<string,string>|false Return the generated key(s), an array of private and public key, or false on failure. 
     */
     public static function generate_key(string $type = 'random', array $options = []): array|string|bool
     {
@@ -310,5 +289,33 @@ final class Crypter
         }
 
         return false;
+    }
+
+    /**
+     * Get the encryption extension handler.
+     * 
+     * @return string|false Return handler name or false if not found.
+    */
+    private static function handler(): string|bool
+    {
+        $handler = strtolower(self::$config->handler);
+
+        if($handler === 'openssl' && extension_loaded('openssl')) {
+            return $handler;
+        }
+
+        if($handler === 'sodium' && extension_loaded('sodium')) {
+            return $handler;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Initialize the configuration
+    */
+    private static function initConfig(): void 
+    {
+        self::$config ??= new Encryption();
     }
 }

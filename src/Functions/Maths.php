@@ -11,7 +11,7 @@ namespace Luminova\Functions;
 
 use \NumberFormatter;
 
-class Maths
+final class Maths
 {
     /**
      * Array of units for byte conversion.
@@ -21,7 +21,7 @@ class Maths
     private static array $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 
     /**
-     * Array of crypto currecny length.
+     * Array of crypto currency length.
      * 
      * @var array<string,int> $decimals
      */
@@ -193,30 +193,47 @@ class Maths
     /**
      * Calculate the distance between two points on the Earth's surface.
      * 
-     * @param float|string $olat The latitude of the origin point.
-     * @param float|string $olon The longitude of the origin point.
-     * @param float|string $dlat The latitude of the destination point.
-     * @param float|string $dlon The longitude of the destination point.
+     * @param float|string $origin_lat The latitude of the origin point.
+     * @param float|string $origin_lng The longitude of the origin point.
+     * @param float|string $dest_lat The latitude of the destination point.
+     * @param float|string $dest_lng The longitude of the destination point.
      * @param string $unit The unit of distance to be returned (default is 'km').
-     *                     Supported units: 'km', 'mi', 'nmi'.
      * 
      * @return float|false The distance between the two points, or false on invalid input.
      * 
+     * Supported units: 
+     * 
+     * - 'km' - Kilometers, 
+     * - 'mi' - Miles, 
+     * - 'nmi' - Nautical miles.
+     * 
      * > If you are passing a string, make sure its a float string.
      */
-    public static function distance(float|string $olat, float|string $olon, float|string $dlat, float|string $dlon, string $unit = 'km'): float|bool 
+    public static function distance(
+        float|string $origin_lat, 
+        float|string $origin_lng, 
+        float|string $dest_lat, 
+        float|string $dest_lng, 
+        string $unit = 'km'
+    ): float|bool 
     {
-        if (!isset(self::$radius[$unit]) || !is_float($olat) || !is_float($olon) || !is_float($dlat) || !is_float($dlon)) {
+        if (
+            !isset(self::$radius[$unit]) || 
+            !is_float($origin_lat) || 
+            !is_float($origin_lng) || 
+            !is_float($dest_lat) || 
+            !is_float($dest_lng)
+        ) {
             return false;
         }
 
-        $lat1 = deg2rad((float) $olat);
-        $lon1 = deg2rad((float) $olon);
-        $lat2 = deg2rad((float) $dlat);
-        $lon2 = deg2rad((float) $dlon);
+        $lat1 = deg2rad((float) $origin_lat);
+        $lng1 = deg2rad((float) $origin_lng);
+        $lat2 = deg2rad((float) $dest_lat);
+        $lng2 = deg2rad((float) $dest_lng);
 
         $deltaLat = $lat2 - $lat1;
-        $deltaLon = $lon2 - $lon1;
+        $deltaLon = $lng2 - $lng1;
 
         $a = sin($deltaLat / 2) * sin($deltaLat / 2) +
             cos($lat1) * cos($lat2) *

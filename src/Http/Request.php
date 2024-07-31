@@ -14,7 +14,7 @@ use \Luminova\Http\Header;
 use \Luminova\Http\Server;
 use \Luminova\Http\File;
 use \Luminova\Http\UserAgent;
-use \Luminova\Functions\IPAddress;
+use \Luminova\Functions\IP;
 use \Luminova\Functions\Normalizer;
 use \App\Config\Security;
 use \Luminova\Exceptions\InvalidArgumentException;
@@ -646,7 +646,7 @@ final class Request
         }
 
         if($context === 'proxy'){
-            return IPAddress::isTrustedProxy($input);
+            return IP::isTrustedProxy($input);
         }
 
         self::initConfig();

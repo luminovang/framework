@@ -7,11 +7,10 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Security;
 
-use \Luminova\Exceptions\BadMethodCallException;
 use \App\Config\Session as CookieConfig;
+use \Luminova\Exceptions\BadMethodCallException;
 
 final class Csrf 
 {
@@ -198,10 +197,10 @@ final class Csrf
 
     /**
      * Detain which storage engin to use
-     * If session is not started but dev fallback to using cookie storage
+     * If session is not started but dev fallback to using cookie storage.
      * 
      * 
-     * @return string cookie or session
+     * @return string cookie or session.
     */
     private static function tokenStorage(): string 
     {
@@ -214,7 +213,7 @@ final class Csrf
     }
 
     /**
-     * Save token depending on storage
+     * Save token depending on storage.
      * 
      * @param string $token
      * @param ?int $expiry

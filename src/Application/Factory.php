@@ -10,10 +10,11 @@
 namespace Luminova\Application;
 
 use \Luminova\Time\Task;
-use \Luminova\Application\Functions;
+use \Luminova\Base\BaseFunction;
 use \Luminova\Application\Caller;
 use \Luminova\Sessions\Session;
 use \Luminova\Cookies\Cookie;
+use \Luminova\Functions\Escape;
 use \Luminova\Library\Modules;
 use \Luminova\Languages\Translator;
 use \Luminova\Storages\FileManager;
@@ -32,7 +33,7 @@ use \Throwable;
 /**
  * Factory methods classes.
  *
- * @method static Functions           functions(bool $shared = true)                             Utility function helper class.
+ * @method static BaseFunction        functions(bool $shared = true)                             Utility function helper class.
  * @method static Session             session(?SessionManagerInterface $manager = null, bool $shared = true)                   Server-side user session class.
  * @method static Cookie              cookie(string $name, mixed $value = '', array $options = [], bool $shared = true)                    Client-side cookie class
  * @method static Task                task(bool $shared = true)                      Time task utility class.
@@ -45,7 +46,8 @@ use \Throwable;
  * @method static Request             request(bool $shared = true)                               HTTP Request class.
  * @method static Network             network(?HttpClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
  * @method static Caller              caller(bool $shared = true)                                Class caller class.
- * @method static Notification              notification(bool $shared = true, string $serviceAccount = 'serviceAccount.json')                              Firebase cloud message notification class.
+ * @method static Notification        notification(bool $shared = true, string $serviceAccount = 'serviceAccount.json')                              Firebase cloud message notification class.
+ * @method static Escape              escaper(bool $shared = true, string|null $encoding = 'utf-8')                              Input escaper class instance.
 */
 final class Factory 
 {
@@ -65,7 +67,8 @@ final class Factory
         'task'          => Task::class,
         'session'       => Session::class,
         'cookie'        => Cookie::class,
-        'functions'     => Functions::class,
+        'functions'     => 'BaseFunction',
+        'escaper'       => Escape::class,
         'modules'       => Modules::class,
         'language'      => Translator::class,
         'logger'        => Logger::class,
@@ -243,8 +246,12 @@ final class Factory
     private static function create(string $class, ?string $alias = null, bool $shared = true, mixed ...$arguments): object
     {
         try {
-            $instance = new $class(...$arguments);
- 
+            if($class === 'BaseFunction'){
+                $instance = new class extends BaseFunction{};
+            }else{
+                $instance = new $class(...$arguments);
+            }
+            
             if ($shared && $alias) {
                 self::$instances[$alias] = $instance;
             }

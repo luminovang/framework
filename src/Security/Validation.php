@@ -61,6 +61,7 @@ final class Validation implements ValidationInterface
 
                     switch ($ruleName) {
                         case 'none':
+                        case 'nullable':
                             return true;
                         case 'required':
                             if ($this->isEmpty($fieldValue)) {
@@ -73,7 +74,7 @@ final class Validation implements ValidationInterface
                             }
                         break;
                         case 'match':
-                            if (!preg_match('/' . $ruleParam . '/', $fieldValue)) {
+                            if ($ruleParam !== '' && !preg_match('/' . $ruleParam . '/', $fieldValue)) {
                                 $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
@@ -83,7 +84,7 @@ final class Validation implements ValidationInterface
                             }
                         break;
                         case 'in_array':
-                            if (!empty($ruleParam)) {
+                            if ($ruleParam !== '') {
                                 $matches = list_to_array($ruleParam);
                                 if (!in_array($fieldValue, $matches)) {
                                     $this->addError($field, $ruleName, $fieldValue);
@@ -91,7 +92,7 @@ final class Validation implements ValidationInterface
                             }
                         break;
                         case 'keys_exist':
-                            if (!empty($ruleParam)) {
+                            if ($ruleParam !== '') {
                                 $matches = list_to_array($ruleParam);
                                 if (is_array($fieldValue)) {
                                     $intersection = array_intersect($matches, $fieldValue);
@@ -225,7 +226,7 @@ final class Validation implements ValidationInterface
     {
         $this->rules[$field] = $rules;
 
-        if(!empty($message)){
+        if($messages !== []){
             $this->messages[$field] = $messages;
         }
 
@@ -248,32 +249,28 @@ final class Validation implements ValidationInterface
      * @param string $rule The rule line.
      * @param string $param additional validation parameters.
      * 
-     * @return boolean true if the rule passed else false.
+     * @return boolean Return true if the rule passed else false.
     */
     private static function validation(string $ruleName, mixed $value, string $rule, mixed $param = null): bool
     {
         try {
             return match ($ruleName) {
-                'max_length', 'max' => mb_strlen($value) <= (int) $param,
-                'min_length', 'min' => mb_strlen($value) >= (int) $param,
-                'exact_length', 'length' => mb_strlen($value) === (int) $param,
+                'max_length', 'max' => is_string($value) && mb_strlen($value) <= (int) $param,
+                'min_length', 'min' => is_string($value) && mb_strlen($value) >= (int) $param,
+                'exact_length', 'length' => is_string($value) && mb_strlen($value) === (int) $param,
                 'string' => is_string($value),
                 'integer' => self::validateInteger($value, $param),
                 'email' => filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
                 'alphanumeric' => ctype_alnum($value),
                 'alphabet' => ctype_alpha($value),
                 'url' => filter_var($value, FILTER_VALIDATE_URL) !== false,
-                'uuid' => func()->isUuid($value, (int) $param ?? 4),
-                'ip' => func()->ip()->isValid($value, (int) $param ?? 0),
-                'phone' => func()->isPhone($value),
-                'decimal' => filter_var($value, FILTER_VALIDATE_FLOAT) !== false && str_contains((string)$value, '.'),
+                'decimal' => filter_var($value, FILTER_VALIDATE_FLOAT) !== false && str_contains((string) $value, '.'),
                 'binary' => ctype_print($value) && !preg_match('/[^\x20-\x7E\t\r\n]/', $value),
                 'hexadecimal' => ctype_xdigit($value),
                 'array' => is_array($value) || is_array(json_decode($value, true, 512, JSON_THROW_ON_ERROR)),
-                'json' => self::validateJson($value),
-                'path' => self::validatePath($value, $param),
-                'scheme' => str_starts_with($value, rtrim($param, '://') . '://'),
-                default => true
+                'json' => is_json($value),
+                'path', 'scheme' => self::validatePath($ruleName, $value, $param),
+                default => self::validateOthers($ruleName, $value, $param)
             };
         } catch (Exception|JsonException) {
             return false;
@@ -305,40 +302,65 @@ final class Validation implements ValidationInterface
         return true;
     }
 
-   /**
-     * Validates if the given value is a valid JSON string.
-     *
-     * @param mixed $value The value to be validated.
-     *
-     * @return bool Returns true if the value is a valid JSON string; `false` otherwise.
-     */
-    private static function validateJson(mixed $value): bool
-    {
-        error_clear_last();
-        json_decode($value, null, 512, JSON_THROW_ON_ERROR);
-
-        return json_last_error() === JSON_ERROR_NONE;
-    }
-
     /**
      * Validates if the given value is a valid file path based on the specified condition.
      *
      * @param mixed $value The value to be validated. Should be a string representing a file path.
      * @param mixed $param The condition to check for the file path. Accepts 'true' to check if the path is readable or any other string to validate the path format.
      *
-     * Returns **bool**: `true` if the value is a valid path and meets the condition (if provided); `false` otherwise.
+     * @return bool Returns true if the value passed false otherwise.
      */
-    private static function validatePath(mixed $value, mixed $param = 'false'): bool
+    private static function validatePath(string $rule, mixed $value, mixed $param = 'false'): bool
     {
         if(!is_string($value)){
             return false;
         }
 
-        if($param === 'true'){
-            return is_readable($value);
+        if($rule === 'path'){
+            if($param === 'true' || $param === 'readable'){
+                return is_readable($value);
+            }
+
+            if($param === 'writable'){
+                return is_writable($value);
+            }
+
+            return preg_match("#^[a-zA-Z]:[\\\/]{1,2}#", $value);
         }
 
-        return preg_match("#^[a-zA-Z]:[\\\/]{1,2}#", $value);
+        return str_starts_with($value, rtrim($param, '://') . '://');
+    }
+
+    /**
+     * Validates uuid, ip address or phone number.
+     *
+     * @param string $name The rule name.
+     * @param mixed $value The value to be validated.
+     * @param string $value The rule parameter.
+     *
+     * @return bool Returns true if the value passed false otherwise.
+     */
+    private static function validateOthers(string $name, mixed $value, string $param): bool
+    {
+        if($name === 'uuid' || $name === 'ip' || $name === 'phone'){
+
+            static $func = null;
+            $func ??= func();
+
+            if($name === 'phone'){
+                return $func->isPhone((string) $value, ($param === '') ? 10 : (int) $param);
+            }
+
+            if($name === 'uuid'){
+                return $func->isUuid((string) $value, ($param === '') ? 4 : (int) $param);
+            }
+
+            if($name === 'ip'){
+                return $func->ip()->isValid((string) $value, ($param === '') ? 0 : (int) $param);
+            }
+        }
+
+       return true;
     }
 
     /**
@@ -350,7 +372,7 @@ final class Validation implements ValidationInterface
     */
     private function isEmpty(mixed $value): bool 
     {
-        if ($value === null || $value === '') {
+        if ($value === null || $value === '' || $value === []) {
             return true;
         }
 
@@ -409,12 +431,12 @@ final class Validation implements ValidationInterface
     }
 
     /**
-     * Translate placeholders
+     * Translate placeholders.
      * 
-     * @param string $message message to be translated
-     * @param array $placeholders array 
+     * @param string $message message to be translated.
+     * @param array $placeholders array.
      * 
-     * @return string 
+     * @return string Return the translated message.
     */
     private static function replace(string $message, array $placeholders = []): string 
     {

@@ -15,8 +15,6 @@ use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
 use \Luminova\Interface\CookieInterface;
 use \Luminova\Exceptions\CookieException;
-use \Luminova\Exceptions\JsonException;
-use \Throwable;
 
 class Cookie implements CookieInterface
 {
@@ -659,7 +657,7 @@ class Cookie implements CookieInterface
                 return $_COOKIE[$name];
             }
 
-            if ($this->isJson($_COOKIE[$name])) {
+            if (is_json($_COOKIE[$name])) {
                return json_decode($_COOKIE[$name], true) ?? [];
             }
 
@@ -667,24 +665,6 @@ class Cookie implements CookieInterface
         }
 
         return null;
-    }
-
-    /** 
-     * Is value a valid JSON string
-     * 
-     * @param string $value
-     * 
-     * @return bool
-    */
-    private function isJson(string $value): bool
-    {
-        try {
-            json_decode($value, null, 512, JSON_THROW_ON_ERROR);
-
-            return true;
-        } catch (Throwable|JsonException $e) {
-            return false;
-        }
     }
 
     /**

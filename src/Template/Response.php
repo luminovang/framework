@@ -170,7 +170,7 @@ class Response
             $content = json_encode($content, JSON_THROW_ON_ERROR);
 
             return static::render($content, $this->status, [], $this->encode, $this->minify);
-        }catch(Exception $e){
+        }catch(Exception|\JsonException $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
 

@@ -12,7 +12,6 @@ namespace Luminova\Sessions;
 use \Luminova\Base\BaseConfig;
 use \Luminova\Interface\SessionManagerInterface;
 use \Luminova\Exceptions\JsonException;
-use \Throwable;
 
 final class SessionManager implements SessionManagerInterface 
 {
@@ -173,7 +172,7 @@ final class SessionManager implements SessionManagerInterface
             $result = json_encode($result, JSON_THROW_ON_ERROR);
 
             return (object) json_decode($result);
-        }catch(Throwable $e){
+        }catch(\JsonException $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -201,7 +200,7 @@ final class SessionManager implements SessionManagerInterface
             $result = json_encode($result, JSON_THROW_ON_ERROR);
 
             return (object) json_decode($result);
-        }catch(Throwable $e){
+        }catch(\JsonException $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }

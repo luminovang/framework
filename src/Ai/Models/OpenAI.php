@@ -16,7 +16,6 @@ use \Luminova\Storages\FileManager;
 use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\JsonException;
-use \JsonException as JsonError;
 use \CurlFile;
 
 class OpenAI implements AiInterface
@@ -111,7 +110,7 @@ class OpenAI implements AiInterface
             return $content;
         } catch (AppException $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-        } catch (JsonError $e) {
+        } catch (\JsonException $e) {
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -141,7 +140,7 @@ class OpenAI implements AiInterface
             return $content['choices'] ?? [];
         } catch (AppException $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-        } catch (JsonError $e) {
+        } catch (\JsonException $e) {
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -177,7 +176,7 @@ class OpenAI implements AiInterface
             return $replies;
         } catch (AppException $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-        } catch (JsonError $e) {
+        } catch (\JsonException $e) {
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -205,7 +204,7 @@ class OpenAI implements AiInterface
             return $content['data'] ?? [];
         } catch (AppException $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-        } catch (JsonError $e) {
+        } catch (\JsonException $e) {
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -231,7 +230,7 @@ class OpenAI implements AiInterface
             return $content;
         } catch (AppException $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-        } catch (JsonError $e) {
+        } catch (\JsonException $e) {
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -259,7 +258,7 @@ class OpenAI implements AiInterface
             return $content['data'] ?? false;
         } catch (AppException $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-        } catch (JsonError $e) {
+        } catch (\JsonException $e) {
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -315,7 +314,7 @@ class OpenAI implements AiInterface
             return $content['data'] ?? false;
         } catch (AppException $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-        } catch (JsonError $e) {
+        } catch (\JsonException $e) {
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -357,7 +356,7 @@ class OpenAI implements AiInterface
             return false;
         } catch (AppException $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-        } catch (JsonError $e) {
+        } catch (\JsonException $e) {
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -414,7 +413,7 @@ class OpenAI implements AiInterface
             return $content['text']??false;
         } catch (AppException $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-        } catch (JsonError $e) {
+        } catch (\JsonException $e) {
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
     }

@@ -23,6 +23,7 @@ class Helper
         if (!self::isPermittedPath($path)) {
             return false;
         }
+        
         $readable = is_file($path);
         if (!str_starts_with($path, '\\\\')) {
             $readable = $readable && is_readable($path);
