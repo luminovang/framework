@@ -161,7 +161,7 @@ final class FileCache
      * @param string|null $storage cache storage filename to hash.
      * @param string $folder cache storage sub folder.
      * 
-     * @param static Return new class instance.
+     * @param static Return new static class instance.
      */
     public static function getInstance(?string $storage = null, string $folder = ''): static 
     {
@@ -177,7 +177,7 @@ final class FileCache
      * 
      * @param string $path cache directory must end with.
      * 
-     * @return self Return class instance.
+     * @return self Return instance of file cache.
      */
     public function setPath(string $path): self 
     {
@@ -191,7 +191,7 @@ final class FileCache
      * 
      * @param string $storage cache storage filename,
      * 
-     * @return self Return class instance.
+     * @return self Return instance of file cache.
      */
     public function setStorage(string $storage): self
     {
@@ -205,7 +205,7 @@ final class FileCache
      * 
      * @param string $name cache filename to hash.
      * 
-     * @return string hashed name with prefix.
+     * @return string Return hashed name with prefix.
      */
     public static function hashStorage(string $name): string 
     {
@@ -217,7 +217,7 @@ final class FileCache
      * 
      * @param string $extension The file extension to use in storing cache.
      * 
-     * @return self Return class instance.
+     * @return self Return instance of file cache.
      */
     public function setExtension(string $extension): self
     {
@@ -231,7 +231,7 @@ final class FileCache
      *
      * @param DateTimeInterface|null $expiration The expiration time of the cache item.
      * 
-     * @return self The current instance.
+     * @return self Return instance of file cache.
      */
     public function setExpire(DateTimeInterface|int|null $expiration): self
     {
@@ -247,7 +247,7 @@ final class FileCache
      *
      * @param int|DateInterval|null $time The expiration time in seconds or as a DateInterval.
      * 
-     * @return self The current instance.
+     * @return self Return instance of file cache.
      */
     public function expiresAfter(int|DateInterval|null $time): self
     {
@@ -261,7 +261,7 @@ final class FileCache
      * 
      * @param bool $lock lock flag to be used.
      * 
-     * @return self Return class instance.
+     * @return self Return instance of file cache.
      */
     public function setLock(bool $lock): self 
     {
@@ -275,7 +275,7 @@ final class FileCache
      * 
      * @param bool $encoding Enable base64 encoding or disable.
      * 
-     * @return self Return class instance.
+     * @return self Return instance of file cache.
      */
     public function enableBase64(bool $encoding): self 
     {
@@ -289,7 +289,7 @@ final class FileCache
      * 
      * @param bool $allow Auto deletion flag.
      * 
-     * @return self Return class instance.
+     * @return self Return instance of file cache.
      */
     public function enableDeleteExpired(bool $allow): self 
     {
@@ -307,7 +307,7 @@ final class FileCache
      * 
      * @param bool $secure The secure flag to use.
      * 
-     * @return self Return class instance.
+     * @return self Return instance of file cache.
     */
     public function enableSecureAccess(bool $secure): self 
     {
@@ -329,9 +329,9 @@ final class FileCache
     /**
      * Read cache content, of update the content with new item if it has expired.
      * 
-     * @param string $key cache key.
-     * @param Closure $callback(): mixed Callback called when data needs to be refreshed.
-     *      -   Return content to be cached.
+     * @param string $key The cache key, non-empty string.
+     * @param Closure $callback Callback function to refreshed cache when expired.
+     *      -   The callback must return content to be cached.
      * 
      * @return mixed Return cache content currently stored under key.
      * @throws ErrorException if the file cannot be saved.
@@ -362,11 +362,11 @@ final class FileCache
     /**
      * Refresh cache content with new data and expiration if necessary.
      * 
-     * @param string $key cache key.
-     * @param mixed $content New content to update.
-     * @param int $expiration cache expiry time.
-     * @param int $expireAfter cache expiry time after.
-     * @param bool $lock lock catch to avoid deletion even when cache time expired.
+     * @param string $key The cache key.
+     * @param mixed $content The content to update.
+     * @param int $expiration cache expiry time (default: 0).
+     * @param int|null $expireAfter cache expiry time after (default: null).
+     * @param bool $lock lock catch to avoid deletion even when cache time expired (default: true).
      * 
      * @return bool Return true if item was successfully updated, otherwise false.
      * @throws ErrorException if the file cannot be saved.
@@ -375,7 +375,7 @@ final class FileCache
         string $key, 
         mixed $content, 
         int $expiration = 0, 
-        int|null $expireAfter = null, 
+        ?int $expireAfter = null, 
         bool $lock = true
     ): bool 
     {
@@ -397,7 +397,7 @@ final class FileCache
     /**
      * Get cache content from disk.
      * 
-     * @param string $key cache key.
+     * @param string $key The cache key.
      * @param bool $onlyContent Weather to return only cache content or with metadata (default: true).
      * 
      * @return mixed Returns data if key is valid and not expired, NULL otherwise.
@@ -438,7 +438,7 @@ final class FileCache
     /**
      * Creates, Reloads and retrieve cache once class is created.
      * 
-     * @return self Return cache class instance.
+     * @return self Return instance of file cache.
      * @throws ErrorException if there is a problem loading the cache.
     */
     public function create(): self 
@@ -451,7 +451,7 @@ final class FileCache
     /**
      * Checks if cache key exist.
      * 
-     * @param string $key cache key.
+     * @param string $key The cache key.
      * 
      * @return bool Return true if cache key exists, otherwise false.
     */
@@ -502,7 +502,7 @@ final class FileCache
     /**
      * Delete cache by array keys.
      * 
-     * @param iterable $keys array cache keys.
+     * @param iterable $keys array of cache keys to delete.
      * 
      * @return bool Return true if cache was successfully deleted, otherwise false.
     */
@@ -541,7 +541,7 @@ final class FileCache
     /**
      * Checks if the cache timestamp has expired by key.
      * 
-     * @param string $key cache key.
+     * @param string $key The cache key to check if expired.
      * 
      * @return bool Return true if cache has expired, otherwise false.
     */
@@ -572,16 +572,22 @@ final class FileCache
     /**
      * Builds cache data and save it.
      * 
-     * @param string $key The cache keys.
-     * @param mixed $data The cache contents.
-     * @param int|DateTimeInterface|null $expiration cache expiration time.
-     * @param int|DateInterval|null $expireAfter cache expiration time after.
-     * @param bool $lock Lock catch to avoid deletion even when cache time expired.
+     * @param string $key The cache key to use.
+     * @param mixed $data The contents to store in cache.
+     * @param DateTimeInterface|int|null $expiration cache expiration time (default: 0).
+     * @param DateInterval|int|null $expireAfter cache expiration time after (default: null).
+     * @param bool $lock Weather to lock catch and avoid deletion even when cache time expired (default: false).
      * 
      * @return bool Return true if cache was saved, otherwise false.
      * @throws ErrorException if the file cannot be saved.
     */
-    public function setItem(string $key, mixed $data, int|DateTimeInterface|null $expiration = 0, int|DateInterval|null $expireAfter = null, bool $lock = false): bool 
+    public function setItem(
+        string $key, 
+        mixed $data, 
+        DateTimeInterface|int|null $expiration = 0, 
+        DateInterval|int|null $expireAfter = null, 
+        bool $lock = false
+    ): bool 
     {
         $serialize = serialize($data);
 
@@ -613,7 +619,7 @@ final class FileCache
     /**
      * Fetch cache data from disk.
      * 
-     * @return array Return cache information.
+     * @return array<string,mixed> Return cache information.
      * @throws ErrorException if cannot load cache, unable to unserialize, hash sum not found or invalid key.
     */
     private function fetch(): array 
@@ -665,9 +671,9 @@ final class FileCache
     /**
      * Remove the security line in php file cache.
      * 
-     * @param string $str cache string.
+     * @param string $str The cache string content.
      * 
-     * @return string cache text without the first security line.
+     * @return string Return cache content without the first PHP security line.
      */
     private static function unlock(string $str): string 
     {
@@ -713,8 +719,8 @@ final class FileCache
      * Remove cached storage file from disk with full path.
      * This will use the current storage path.
      * 
-     * @param string $storage cache storage names.
-     * @param string $extension cache file extension type.
+     * @param string $storage The cache storage names.
+     * @param string $extension The cache file extension type used while storing cache (default: json).
      * 
      * @return bool Return true on success, false on failure.
     */
@@ -726,9 +732,9 @@ final class FileCache
     /**
      * Remove cache file from disk with full path.
      * 
-     * @param string $path cache full path /.
-     * @param string $storage cache file array names.
-     * @param string $extension cache file extension type.
+     * @param string $path The cache full path.
+     * @param string $storage The cache storage name.
+     * @param string $extension The cache file extension type used while storing cache (default: json).
      * 
      * @return bool Return true if cache file was successfully deleted, false otherwise.
     */

@@ -141,6 +141,7 @@ final class ViewCache
 
     /**
      * Check if the cached content has expired.
+     * This method return false if not expired, but if the view type is mismatched it return integer 404.
      * 
      * @param string|null $type The type of cached content to check (default: null).
      * 
@@ -296,7 +297,9 @@ final class ViewCache
      */
     public function saveCache(string $content, array $headers = [], string $type = 'html'): bool
     {
-        make_dir($this->getLocation());     
+        if(!make_dir($this->getLocation())){
+            return false;
+        }   
 
         $headers['Content-Encoding'] =  static::whichEncode();
         $headers['viewType'] = $type;

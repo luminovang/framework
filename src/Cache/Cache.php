@@ -7,7 +7,6 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Cache;
 
 use \Luminova\Cache\FileCache;
@@ -20,16 +19,16 @@ final class Cache
     /**
     * Engin type for file cache
     *
-    * @var string FILE
+    * @var int FILE
     */
-    public const FILE = 'FileCache';
+    public const FILE = 1;
 
     /**
     * Engin type for Memcached
     *
-    * @var string MEM
+    * @var int MEM
     */
-    public const MEM = 'MemoryCache';
+    public const MEM = 2;
 
     /**
     * Engin instance
@@ -48,9 +47,9 @@ final class Cache
     /**
     * Cache constructor.
     *
-    * @param string $engine The cache engine to use (e.g., self::FILE or self::MEM).
+    * @param int $engine The cache engine to use (e.g., self::FILE or self::MEM).
     */
-    public function __construct(string $engine = self::FILE)
+    public function __construct(int $engine = self::FILE)
     {
         $this->engine = self::newInstance($engine);
     }
@@ -58,11 +57,11 @@ final class Cache
     /**
      * Get an instance of the cache engine.
      * 
-     * @param string $engine The cache engine to use (e.g., self::FILE or self::MEM).
+     * @param int $engine The cache engine to use (e.g., self::FILE or self::MEM).
      * 
      * @return static The cache engine instance.
      */
-    public static function getInstance(string $engine = self::FILE): static
+    public static function getInstance(int $engine = self::FILE): static
     {
         if (self::$instance === null) {
             self::$instance = new static($engine);
@@ -76,18 +75,17 @@ final class Cache
      *
      * @param string $engine The cache engine to create (e.g., self::FILE or self::MEM).
      *
-     * @return FileCache|MemoryCache|object The cache engine instance.
+     * @return FileCache|MemoryCache Return the cache engine instance.
      * @throws ClassException When the Memcached class is not available for the MemoryCache.
      */
-    private static function newInstance(string $engine): object
+    private static function newInstance(string $engine): FileCache|MemoryCache
     {
         switch ($engine) {
             case static::MEM:
                 if (class_exists(Memcached::class)) {
                     return new MemoryCache();
-                } else {
-                    throw new ClassException('Memcached does not exist');
                 }
+                throw new ClassException('Memcached does not exist');
             case static::FILE:
             default:
                 return new FileCache();

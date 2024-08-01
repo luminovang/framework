@@ -652,26 +652,27 @@ if(!function_exists('import')) {
  if(!function_exists('logger')) {
     /**
      * Log a message at the given level.
+     * This function will make use of your preferred psr logger class if available.
      *
-     * @param string $level The log level.
-     * @param string $message The log message.
+     * @param string $level The log level to use.
+     * @param string $message The message to log.
      * @param array $context Additional context data (optional).
      * 
      * Log Levels:
      * 
-     * - emergency.
-     * - alert. 
-     * - critical. 
-     * - error.
-     * - warning.
-     * - notice.
-     * - info.
-     * - debug.
-     * - exception.
-     * - php_errors.
+     * - emergency - Log emergency error that need attention.
+     * - alert - Log alert message. 
+     * - critical - Log critical issue that may cause app not to work properly. 
+     * - error - Log minor error.
+     * - warning - Log a warning message.
+     * - notice - Log a notice to attend later.
+     * - info - Log an information.
+     * - debug - Log for debugging purpose.
+     * - exception - Log an exception message.
+     * - php_errors - Log any php related error.
      *
      * @return void
-     * @throws InvalidArgumentException
+     * @throws \Luminova\Exceptions\InvalidArgumentException Throws if error occurs while login.
     */
     function logger(string $level, string $message, array $context = []): void
     {

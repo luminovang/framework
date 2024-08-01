@@ -12,6 +12,7 @@ namespace Luminova\Logger;
 use \Luminova\Logger\LogLevel;
 use \Psr\Log\AbstractLogger;
 use \Luminova\Time\Time;
+use \Luminova\Exceptions\FileException;
 
 class NovaLogger extends AbstractLogger
 {
@@ -59,24 +60,28 @@ class NovaLogger extends AbstractLogger
      *
      * @param string $level The log level (e.g., "emergency," "error," "info").
      * @param string $message The log message.
-     * @param array $context Additional context data (optional).
+     * @param array $context Optional additional context to include in log.
      *
      * @return void
+     * @throws FileException — If unable to write log to file.
      */
     public function log($level, $message, array $context = [])
     {
-        make_dir($this->path);
+        static $time = null;
         
-        $level = static::$levels[$level] ?? LogLevel::INFO;
-        $filepath = $this->path . "{$level}{$this->extension}";
-        $time = Time::now()->format('Y-m-d\TH:i:sP');
+        if(make_dir($this->path)){
+            $level = static::$levels[$level] ?? LogLevel::INFO;
+            $filepath = $this->path . "{$level}{$this->extension}";
+            $time ??= Time::now();
+            $now = $time->format('Y-m-d\TH:i:sP');
 
-        $message = "[{$level}] [{$time}]: {$message}";
-        
-        if ($context !== []) {
-            $message .= ' Context: ' . print_r($context, true);
+            $message = "[{$level}] [{$now}]: {$message}";
+            
+            if ($context !== []) {
+                $message .= ' Context: ' . print_r($context, true);
+            }
+
+            write_content($filepath, $message . PHP_EOL, FILE_APPEND | LOCK_EX);
         }
-
-        write_content($filepath, $message . PHP_EOL, FILE_APPEND | LOCK_EX);
     }
 }
