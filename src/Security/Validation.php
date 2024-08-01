@@ -7,7 +7,6 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Security;
 
 use \Luminova\Interface\ValidationInterface;
