@@ -347,7 +347,6 @@ final class Validation implements ValidationInterface
     private static function validateOthers(string $name, mixed $value, string $param): bool
     {
         if($name === 'uuid' || $name === 'ip' || $name === 'phone'){
-
             static $func = null;
             $func ??= func();
 
