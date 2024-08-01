@@ -310,7 +310,7 @@ final class Validation implements ValidationInterface
      *
      * @return bool Returns true if the value passed false otherwise.
      */
-    private static function validatePath(string $rule, mixed $value, mixed $param = 'false'): bool
+    private static function validatePath(string $rule, mixed $value, mixed $param = ''): bool
     {
         if(!is_string($value)){
             return false;
@@ -325,7 +325,11 @@ final class Validation implements ValidationInterface
                 return is_writable($value);
             }
 
-            return preg_match("#^[a-zA-Z]:[\\\/]{1,2}#", $value);
+            return preg_match('#^(?:[a-zA-Z]:[\\\/]|/|\\\\)[\\w\\s\\-_.\\/\\\\]+$#i', $value);
+        }
+
+        if($param === ''){
+            return preg_match('#^[a-z][a-z\d+.-]*://#i', $value);
         }
 
         return str_starts_with($value, rtrim($param, '://') . '://');
