@@ -204,11 +204,7 @@ final class Request
      */
     public function getBody(bool $object = false): array|object
     {
-        if($object){
-            return (object) $this->body;
-        }
-
-        return $this->body;
+        return $object ? (object) $this->body : $this->body;
     }
 
    /**
@@ -307,8 +303,10 @@ final class Request
      */
     public function getAuth(): ?string
     {
-        if(!$auth = $this->header->get('Authorization') && !$auth = $this->server->get('HTTP_AUTHORIZATION')){
-            $auth = $this->server->get('REDIRECT_HTTP_AUTHORIZATION');
+        if(!$auth = $this->header->get('Authorization')){
+            if(!$auth = $this->server->get('HTTP_AUTHORIZATION')){
+                $auth = $this->server->get('REDIRECT_HTTP_AUTHORIZATION');
+            }
         }
 
         if($auth === null){
@@ -430,45 +428,43 @@ final class Request
     /**
      * Returns the requested URI (path and query string).
      *
-     * @return string The raw URI (i.e. not URI decoded)
+     * @return string Return raw URI (i.e. not URI decoded)
     */
     public function getRequestUri(): string
     {
-        if($this->uri === null){
-            $this->uri = $this->extractRequestUri();
-        }
-        
-        return $this->uri;
+        return $this->uri ??= $this->extractRequestUri();
     }
 
     /**
      * Get current hostname without port, if allowed host is set it will check if host is in allowed list or patterns.
      * 
-     * @param bool $extension Should throw an exception if invalid host or not allowed host (default: false).
+     * @param bool $exception Should throw an exception if invalid host or not allowed host (default: false).
      * 
      * @return string Return hostname.
      * @throws SecurityException If host is invalid or not allowed.
     */
-    public function getHost(bool $extension = false): ?string
+    public function getHost(bool $exception = false): ?string
     {
-        return $this->getHostname($extension, false);
+        return $this->getHostname($exception, false);
     }
 
     /**
      * Get current hostname with port if port is available. 
      * If allowed host is set it will check if host is in allowed list or patterns.
      * 
-     * @param bool $extension Should throw an exception if invalid host or not allowed host (default: false).
+     * @param bool $exception Should throw an exception if invalid host or not allowed host (default: false).
      * @param bool $port Should return hostname with port (default: true).
      * 
      * @return string Return hostname.
      * @throws SecurityException If host is invalid or not allowed.
     */
-    public function getHostname(bool $extension = false, bool $port = true): ?string
+    public function getHostname(bool $exception = false, bool $port = true): ?string
     {
-        if (!$hostname = $this->server->get('HTTP_HOST') && !$hostname = $this->header->get('HOST')) {
-            if (!$hostname = $this->server->get('SERVER_NAME')) {
-                $hostname = $this->server->get('SERVER_ADDR', '');
+        if (!$hostname = $this->server->get('HTTP_HOST')) {
+           if(!$hostname = $this->header->get('HOST')){
+                if (!$hostname = $this->server->get('SERVER_NAME')) {
+                    $hostname = $this->server->get('SERVER_ADDR', '');
+                }
             }
         }
 
@@ -481,6 +477,7 @@ final class Request
         if(!$port){
             $hostname = strtolower(preg_replace('/:\d+$/', '', $hostname));
         }
+
         $error = 'Invalid Hostname "%s".';
         // Remove any unwanted characters from the hostname
         if($hostname && preg_replace('/(?:^\[)?[a-zA-Z0-9-:\]_]+\.?/', '', $hostname) === ''){
@@ -491,7 +488,7 @@ final class Request
             $error = 'Untrusted Hostname "%s".';
         }
     
-        if($extension){
+        if($exception){
             throw new SecurityException(sprintf($error, $hostname));
         }
 
@@ -540,8 +537,10 @@ final class Request
     */
     public function getPort(): int|string|null
     {
-        if (!$port = $this->server->get('HTTP_X_FORWARDED_PORT') && !$port = $this->server->get('X_FORWARDED_PORT')) {
-            return $this->server->get('SERVER_PORT');
+        if (!$port = $this->server->get('HTTP_X_FORWARDED_PORT')) {
+            if(!$port = $this->server->get('X_FORWARDED_PORT')){
+                return $this->server->get('SERVER_PORT');
+            }
         }
         
         $pos = ('[' === $port[0]) ? strpos($port, ':', strrpos($port, ']')) : strrpos($port, ':');

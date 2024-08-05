@@ -10,6 +10,7 @@
 namespace Luminova\Application;
 
 use \Luminova\Errors\ErrorStack;
+use \Luminova\Debugger\Performance;
 
 final class Foundation 
 {
@@ -47,6 +48,13 @@ final class Foundation
      * @var ?string $segments
     */
     private static ?string $segments = null;
+
+    /**
+     * Enable performance profiling.
+     * 
+     * @var bool $profiling 
+    */
+    private static bool $profiling = false;
 
     /**
      * Stack cached errors
@@ -88,6 +96,8 @@ final class Foundation
      * @var array<int,string> $systemPaths
     */
     private static array $systemPaths = [
+        'public',
+        'bin',
         'system',  
         'bootstrap',
         'resources', 
@@ -119,6 +129,20 @@ final class Foundation
     public static final function version(bool $integer = false): string|int
     {
         return $integer ? (int) strict(self::VERSION, 'int') : self::VERSION;
+    }
+
+    /**
+     * Start or stop application profiling.
+     * 
+     * @param string $action The name of the action (e.g, start or stop).
+     * 
+     * @return void
+    */
+    public static final function profiling(string $action): void
+    {
+        if(!PRODUCTION && env('debug.show.performance.profiling', false)){
+            ($action === 'start' ? Performance::start() : Performance::stop());
+        }
     }
 
     /**

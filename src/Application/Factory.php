@@ -42,7 +42,7 @@ use \Throwable;
  * @method static Logger              logger(bool $shared = true)                                PSR logger class.
  * @method static FileManager         fileManager(bool $shared = true)                           File manager class.
  * @method static Validation          validate(bool $shared = true)                              Input validation class.
- * @method static Response            response(int $status = 200, bool $shared = true)           Render response class.
+ * @method static Response            response(int $status = 200, array $headers = [], bool $shared = true)           Render response class.
  * @method static Request             request(bool $shared = true)                               HTTP Request class.
  * @method static Network             network(?\Luminova\Interface\HttpClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
  * @method static Caller              caller(bool $shared = true)                                Class caller class.

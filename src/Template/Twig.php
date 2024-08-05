@@ -54,6 +54,11 @@ class Twig
     private bool $minify = false;
 
     /**
+     * @var array<string,mixed> $headers
+    */
+    private array $headers = [];
+
+    /**
      * Initializes the Twig
      * 
      * @param TemplateConfig $config Template configuration.
@@ -63,7 +68,12 @@ class Twig
      * 
      * @throws RuntimeException
     */
-    public function __construct(TemplateConfig $config, string $root, string $viewPath, array $options = [])
+    public function __construct(
+        TemplateConfig $config, 
+        string $root, 
+        string $viewPath, 
+        array $options = []
+    )
     {
         self::$root = $root;
 
@@ -154,6 +164,20 @@ class Twig
     {
         $this->minify = $minify;
         $this->minifyOptions = $options;
+
+        return $this;
+    }
+
+    /**
+     * Set response header.
+     *
+     * @param array<string,mixed> $headers The headers key-pair.
+     * 
+     * @return self Luminova twig template instance.
+     */
+    public function headers(array $headers): self 
+    {
+        $this->headers = $headers;
 
         return $this;
     }

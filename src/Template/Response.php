@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework
+ * Class for handling HTTP responses.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -10,6 +10,7 @@
 namespace Luminova\Template;
 
 use \Luminova\Storages\FileManager;
+use \Luminova\Storages\FileDelivery;
 use \Luminova\Optimization\Minification;
 use \Luminova\Http\Header;
 use \Luminova\Http\Encoder;
@@ -36,22 +37,26 @@ class Response
     /**
      * Response constructor.
      *
-     * @param int $status HTTP status code (default: 200 OK)
+     * @param int $status HTTP status code (default: 200 OK).
+     * @param array<string,mixed> $headers The header key-pair.
      */
-    public function __construct(private int $status = 200)
+    public function __construct(
+        private int $status = 200, 
+        private array $headers = []
+    )
     {
-        $this->encode = (bool) env('enable.encoding', true);
+        $this->encode = (bool) env('enable.encoding', false);
         $this->minify = (bool) env('page.minification', false);
     }
 
     /**
-     * Set status code
+     * Set status code.
      *
-     * @param int $status HTTP status code (default: 200 OK)
+     * @param int $status HTTP status code.
      * 
-     * @return self $this Return class instance.
+     * @return self Return response class instance.
      */
-    public function setStatus(int $status = 200): self 
+    public function setStatus(int $status): self 
     {
         $this->status = $status;
 
@@ -59,11 +64,11 @@ class Response
     }
 
     /**
-     * Set enable content encoding
+     * Set enable content encoding.
      *
      * @param bool $encode Enable content encoding like gzip.
      * 
-     * @return self $this Return class instance.
+     * @return self Return response class instance.
      */
     public function encode(bool $encode): self 
     {
@@ -73,11 +78,11 @@ class Response
     }
 
     /**
-     * Set enable content minification
+     * Set enable content minification.
      *
      * @param bool $minify Enable content minification.
      * 
-     * @return self $this Return class instance.
+     * @return self Return response class instance.
      */
     public function minify(bool $minify): self 
     {
@@ -87,17 +92,78 @@ class Response
     }
 
     /**
+     * Set response header.
+     *
+     * @param string $key The header key.
+     * @param mixed $value The header value for key.
+     * 
+     * @return self Return response class instance.
+     */
+    public function header(string $key, mixed $value): self 
+    {
+        $this->headers[$key] = $value;
+
+        return $this;
+    }
+
+    /**
+     * Set response header.
+     *
+     * @param array<string,mixed> $headers The headers key-pair.
+     * 
+     * @return self Return response class instance.
+     */
+    public function headers(array $headers): self 
+    {
+        $this->headers = $headers;
+
+        return $this;
+    }
+
+    /**
+     * Get the HTTP status code.
+     * 
+     * @return int Return the HTTP status code.
+     */
+    public function getStatusCode(): int
+    {
+        return $this->status;
+    }
+
+    /**
+     * Get a single HTTP header.
+     * 
+     * @param string $name Header name.
+     * 
+     * @return string|null Return HTTP header.
+     */
+    public function getHeader(string $name): ?string
+    {
+        return $this->headers[$name] ?? null;
+    }
+
+    /**
+     * Get all HTTP headers.
+     * 
+     * @return array Return HTTP headers.
+     */
+    public function getHeaders(): array
+    {
+        return $this->headers;
+    }
+
+    /**
      * Render any content format anywhere.
      *
-     * @param mixed $content Response content
-     * @param int $status Content type of the response
+     * @param mixed $content Response content.
+     * @param int $status Content type of the response.
      * @param array $header Additional headers.
      * @param bool $encode Enable content encoding like gzip.
      * @param bool $minify Enable content minification and compress.
      * 
      * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
     */
-    public static function render(
+    public function render(
         string $content, 
         int $status = 200, 
         array $headers = [],
@@ -105,9 +171,11 @@ class Response
         bool $minify = false
     ): int
     {
-        if(empty($content)){
+        if($content === ''){
             return STATUS_ERROR;
         }
+
+        $headers = array_merge($this->headers, $headers);
 
         if(!isset($headers['Content-Type'])){
             $headers['Content-Type'] = 'application/json';
@@ -116,12 +184,10 @@ class Response
         $length = false;
        
         if($minify && str_contains($headers['Content-Type'], 'text/html')){
-            if(self::$min === null){
-                self::$min = new Minification();
-                self::$min->codeblocks(false);
-                self::$min->copyable(false);
-            }
-
+            self::$min ??= new Minification();
+            self::$min->codeblocks(false);
+            self::$min->copyable(false);
+            
             $instance = self::$min->compress($content, $headers['Content-Type']);
             $content = $instance->getContent();
             $length = $instance->getLength();
@@ -163,7 +229,9 @@ class Response
         try {
             $content = json_encode($content, JSON_THROW_ON_ERROR);
 
-            return static::render($content, $this->status, [], $this->encode, $this->minify);
+            return $this->render($content, $this->status, [
+                'Content-Type' => 'application/json'
+            ], $this->encode, $this->minify);
         }catch(Exception|\JsonException $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
@@ -174,13 +242,13 @@ class Response
     /**
      * Send a plain text response.
      *
-     * @param string $content Text content
+     * @param string $content The text content.
      * 
      * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
      */
     public function text(string $content): int 
     {
-        return static::render($content, $this->status, [
+        return $this->render($content, $this->status, [
             'Content-Type' => 'text/plain'
         ], $this->encode, $this->minify);
     }
@@ -194,7 +262,7 @@ class Response
      */
     public function html(string $content): int 
     {
-        return static::render($content, $this->status, [
+        return $this->render($content, $this->status, [
             'Content-Type' => 'text/html'
         ], $this->encode, $this->minify);
     }
@@ -208,7 +276,7 @@ class Response
      */
     public function xml(string $content): int 
     {
-        return static::render($content, $this->status, [
+        return $this->render($content, $this->status, [
             'Content-Type' => 'application/xml'
         ], $this->encode, $this->minify);
     }
@@ -216,15 +284,37 @@ class Response
     /**
      * Download a file
      *
-     * @param string $fileOrContent Path to the file or content to be downloaded
-     * @param string|null $name Optional Name to be used for the downloaded file
+     * @param string $fileOrContent Path to the file or content to be downloaded.
+     * @param string|null $name Optional Name to be used for the downloaded file (default: null).
      * @param array $headers Optional download headers.
      * 
-     * @return bool True if the download was successful, false otherwise
+     * @return bool True if the download was successful, false otherwise.
      */
     public function download(string $fileOrContent, ?string $name = null, array $headers = []): bool 
     {
         return FileManager::download($fileOrContent, $name, $headers);
+    }
+
+    /**
+     * Streaming large files.
+     *
+     * @param string $path The path to file storage (e.g: /writeable/storages/images/).
+     * @param string $basename The file name (e.g: image.png).
+     * @param array $headers Optional stream headers.
+     * @param bool $eTag Whether to generate ETag headers (default: true).
+     * @param int $expiry Expiry time in seconds for cache control (default: 0), indicating no cache.
+     * 
+     * @return bool Return true if file streaming was successful, false otherwise.
+     */
+    public function stream(
+        string $path, 
+        string $basename, 
+        array $headers = [],
+        bool $eTag = true,
+        int $expiry = 0
+        ): bool 
+    {
+        return (new FileDelivery($path, $eTag))->output($basename, $expiry, $headers);
     }
 
     /** 

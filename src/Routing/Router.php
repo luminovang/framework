@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework routing.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -147,6 +147,7 @@ final class Router
     public function __construct(BaseApplication $application)
     {
         self::$application = $application;
+        Foundation::profiling('start');
     }
 
     /**
@@ -477,6 +478,7 @@ final class Router
         }
 
         self::$application->__on('onFinish');
+        Foundation::profiling('stop');
         exit($exitCode);
     }
 
@@ -1147,9 +1149,7 @@ final class Router
         if ($callback instanceof Closure) {
             $arguments = ((self::$isCli && isset($arguments['command'])) ? ($arguments['params'] ?? []) : $arguments);
             
-            return status_code(call_user_func_array($callback, 
-                self::injection($callback, $arguments, $injection)
-            ), false);
+            return status_code($callback(...self::injection($callback, $arguments, $injection)), false);
         }
 
         if (is_array($callback)) {

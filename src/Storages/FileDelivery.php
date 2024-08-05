@@ -19,43 +19,31 @@ use \Exception;
 
 final class FileDelivery
 {
-     /**
-     * @var string $filepath
-    */
-    private static string $filepath;
-
-    /**
-     * @var bool $etag
-    */
-    private static bool $etag = true;
-
     /**
      * Constructor to initialize the file path and ETag option.
      * 
-     * @param string $filepath Path to the private storage (e.g: /writeable/storages/images/).
-     * @param bool $etag Whether to generate ETag headers.
+     * @param string $path Path to the private storage (e.g: /writeable/storages/images/).
+     * @param bool $eTag Whether to generate ETag headers (default: true).
     */
-    public function __construct(string $filepath, bool $etag)
-    {
-        static::$filepath = $filepath;
-        static::$etag = $etag;
-    }
+    public function __construct(
+        private string $path, 
+        private bool $eTag = true
+    ){}
 
     /**
      * Static method to initialize the FileDelivery with a base path and ETag option.
      * 
-     * @param string $basepath Base path for file storage, (e.g: /images/).
-     * @param bool $etag Whether to generate ETag headers.
+     * @param string $path The base path for file storage, (e.g: /images/).
+     * @param bool $eTag Whether to generate ETag headers.
      * 
      * @return static Instance of the FileDelivery class.
      *  > Note
      *  > Your files must be stored in the storage directory located in `/writeable/storages/`.
-     *  > Additionally you don't need to specify the `/writeable/storages/` in your `$basepath` parameter.
+     *  > Additionally you don't need to specify the `/writeable/storages/` in your `$path` parameter.
     */
-    public static function storage(string $basepath, bool $etag = true): static
+    public static function storage(string $path, bool $eTag = true): static
     {
-        $path = root('writeable/storages/' . trim($basepath, DIRECTORY_SEPARATOR));
-        return new self($path, $etag);
+        return new self(root('writeable/storages/' . trim($path, DIRECTORY_SEPARATOR)), $eTag);
     }
 
     /**
@@ -187,7 +175,7 @@ final class FileDelivery
     */
     public function url(string $basename, int $expiry = 3600): string|bool
     {
-        $filename = static::$filepath . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
+        $filename = $this->filepath . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
   
         if (!file_exists($filename)) {
             return false;
@@ -211,20 +199,20 @@ final class FileDelivery
      */
     private function assertOutputHead(string $basename, int $expiry, array &$headers): string|bool
     {
-        $filename = static::$filepath . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
+        $filename = $this->filepath . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
   
         if (!file_exists($filename)) {
             return static::expiredHeader(404);
         }
 
-        if (self::$etag) {
-            $etag = '"' . md5_file($filename) . '"';
-            $headers['ETag'] = $etag;
+        if ($this->eTag) {
+            $eTag = '"' . md5_file($filename) . '"';
+            $headers['ETag'] = $eTag;
 
             if ($expiry > 0) {
                 $filemtime = filemtime($filename);
                 $ifNoneMatch = trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '');
-                if ($ifNoneMatch === $etag) {
+                if ($ifNoneMatch === $eTag) {
                     return static::notModifiedHeader($expiry, $filemtime);
                 }
 

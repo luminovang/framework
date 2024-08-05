@@ -786,9 +786,7 @@ if (!function_exists('get_column')) {
             return $columns;
         }
 
-        return array_map(function($item) use ($property) {
-            return is_object($item) ? $item->{$property} : $item[$property];
-        }, $from);
+        return array_map(fn($item) => (is_object($item) ? $item->{$property} : $item[$property]), $from);
     }
 }
 
@@ -1203,16 +1201,26 @@ if (!function_exists('is_dev_server')) {
 
 if (!function_exists('response')) {
     /** 
-    * Initiate a view response object. 
+    * Initiate a new view response object.
     *
     * @param int $status int $status HTTP status code (default: 200 OK).
-    * @param bool $encode Enable content encoding like gzip, deflate.
+    * @param array<string,mixed> $headers Additional response headers.
+    * @param bool $encode Enable content encoding like gzip, deflate (default: true).
+    * @param bool $shared Weather to return shared instance (default: true).
     *
-    * @return Response Return vew response object. 
+    * @return Response Return view response object. 
     */
-    function response(int $status = 200, bool $encode = true): Response
+    function response(
+        int $status = 200, 
+        array $headers = [], 
+        bool $encode = true,
+        bool $shared = true
+    ): Response
     {
-        return Factory::response($status, true)->setStatus($status)->encode($encode);
+        return Factory::response($status, [], $shared)
+            ->setStatus($status)
+            ->encode($encode)
+            ->headers($headers);
     }
 }
 
@@ -1368,6 +1376,7 @@ if (!function_exists('camel_case')) {
 
         $camelCase = '';
         $firstPart = true;
+
         foreach ($parts as $part) {
             $camelCase .= $firstPart ? $part : ucfirst($part);
             $firstPart = false;
@@ -1436,17 +1445,19 @@ if (!function_exists('get_mime')) {
     /**
      * Detect MIME Content-type for a file.
      * 
-     * @param string $filename Path to the file.
+     * @param string $filename The file to extract its mime.
+     * @param string|null $magic_database Optional magic database for custom mime (e.g, \path\custom.magic).
      * 
      * @return string|false Return the content type in MIME format, otherwise false.
     */
-    function get_mime(string $filename): string|bool
+    function get_mime(string $filename, ?string $magic_database = null): string|bool
     {
         $mime = mime_content_type($filename);
         
-        if ($mime === false && ($finfo = finfo_open(FILEINFO_MIME_TYPE)) !== false) {
+        if (!$mime && ($finfo = finfo_open(FILEINFO_MIME_TYPE, $magic_database)) !== false) {
             $mime = finfo_file($finfo, $filename);
             finfo_close($finfo);
+
             return $mime;
         }
 

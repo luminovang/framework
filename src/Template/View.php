@@ -23,7 +23,6 @@ use \Luminova\Time\Timestamp;
 use \Luminova\Template\Helper;
 use \Luminova\Cache\ViewCache;
 use \App\Config\Template as TemplateConfig;
-use \Luminova\Debugger\Performance;
 use \DateTimeInterface;
 
 trait View
@@ -162,18 +161,18 @@ trait View
     private bool $codeblockButton = false;
 
     /**
-     * Enable performance profiling.
-     * 
-     * @var bool $profiling 
-    */
-    private static bool $profiling = false;
-
-    /**
      * Supported view types.
      * 
      * @var string[] $supportedTypes
     */
     private static array $supportedTypes = ['html', 'json', 'text', 'txt', 'xml', 'js', 'css', 'rdf', 'atom', 'rss'];
+
+    /**
+     * View headers.
+     * 
+     * @var array<string,mixed> $headers
+    */
+    private array $headers = [];
 
     /** 
      * Initialize template view configuration.
@@ -186,7 +185,6 @@ trait View
         self::$config ??= new TemplateConfig();
         self::$documentRoot ??= root();
         self::$minifyContent = (bool) env('page.minification', false);
-        self::$profiling = (!PRODUCTION && env('debug.show.performance.profiling', false));
         self::$cacheFolder = self::withViewFolder(self::trimDir(self::$config->cacheFolder) . 'default');
         $this->cacheView = (bool) env('page.caching', false);
         $this->cacheExpiry = (int) env('page.cache.expiry', 0);
@@ -405,6 +403,35 @@ trait View
         throw new RuntimeException('No cache not found to reuse.');
     }
 
+    /**
+     * Set response header.
+     *
+     * @param string $key The header key.
+     * @param mixed $value The header value for key.
+     * 
+     * @return self Return instance of View or BaseApplication depending on where its called.
+     */
+    public function header(string $key, mixed $value): self 
+    {
+        $this->headers[$key] = $value;
+
+        return $this;
+    }
+
+    /**
+     * Set response header.
+     *
+     * @param array<string,mixed> $headers The headers key-pair.
+     * 
+     * @return self Return instance of View or BaseApplication depending on where its called.
+     */
+    public function headers(array $headers): self 
+    {
+        $this->headers = $headers;
+
+        return $this;
+    }
+
     /** 
      * Render template view file withing the `resources/views` directory.
      * Do not include the extension type (e.g, `.php`, `.tpl`, `.twg`), only the file name.
@@ -429,10 +456,6 @@ trait View
     */
     public final function view(string $viewName, string $viewType = 'html'): self 
     {
-        if(self::$profiling){
-            Performance::start();
-        }
-
         $viewName = trim($viewName, '/');
         $viewType = strtolower($viewType);
     
@@ -656,7 +679,8 @@ trait View
                         Timestamp::ttlToSeconds($this->cacheExpiry),
                         $this->minifyCodeblocks, 
                         $this->codeblockButton,
-                        $return 
+                        $return,
+                        $this->headers
                     );
                 }
 
@@ -677,11 +701,12 @@ trait View
                         $cache,
                         $this->minifyCodeblocks, 
                         $this->codeblockButton,
-                        $return 
+                        $return,
+                        $this->headers
                     );
                 }
 
-                return $this->renderDefault($options, $cache, $return);
+                return $this->renderDefault($options, $cache, $return, $this->headers);
             }
         } catch (ExceptionInterface $e) {
             self::handleException($e, $options);
@@ -737,6 +762,7 @@ trait View
      * @param bool $minify Should minify.
      * @param bool $copy Should include code copy button.
      * @param bool $return Should return content instead of render.
+     * @param array $customHeaders Additional headers.
      * 
      * @return bool|string Return true on success, false on failure.
     */
@@ -748,7 +774,8 @@ trait View
         int $cacheExpiry = 3600,
         bool $minify = false,
         bool $copy = false,
-        bool $return = false
+        bool $return = false,
+        array $customHeaders = []
     ): bool|string
     {
         static $instance = null;
@@ -758,6 +785,7 @@ trait View
         }
 
         try{
+            $instance->headers($customHeaders);
             $instance->setPath($templateDir);
             $instance->minify(self::$minifyContent, [
                 'codeblock' => $minify,
@@ -790,6 +818,7 @@ trait View
      * @param bool $minify Should minify.
      * @param bool $copy Should include code copy button.
      * @param bool $return Should return content instead of render.
+     * @param array $customHeaders Additional headers.
      * 
      * @return bool|string Return true on success, false on failure.
     */
@@ -801,7 +830,8 @@ trait View
         int $cacheExpiry = 3600,
         bool $minify = false,
         bool $copy = false,
-        bool $return = false
+        bool $return = false,
+        array $customHeaders = []
     ): bool|string
     {
         static $instance = null;
@@ -816,6 +846,7 @@ trait View
         }
 
         try{
+            $instance->headers($customHeaders);
             $instance->setPath($templateDir);
             $instance->minify(self::$minifyContent, [
                 'codeblock' => $minify,
@@ -838,10 +869,16 @@ trait View
      * @param array $options View options.
      * @param ViewCache|null $_lmv_cache Cache instance if should cache page contents.
      * @param bool $_lmv_return Should return view contents.
+     * @param array $customHeaders Additional headers.
      * 
      * @return bool|string Return true on success, false on failure.
     */
-    private function renderDefault(array $options, ?ViewCache $_lmv_cache = null, bool $_lmv_return = false): bool|string
+    private function renderDefault(
+        array $options, 
+        ?ViewCache $_lmv_cache = null, 
+        bool $_lmv_return = false,
+        array $customHeaders
+    ): bool|string
     {
         $lmv_view_type = $options['viewType']??'html';
         if(self::$config->variablePrefixing !== null){
@@ -857,7 +894,8 @@ trait View
             $lmv_view_type,
             $this->minifyCodeblocks, 
             $this->codeblockButton,
-            $_lmv_cache
+            $_lmv_cache,
+            $customHeaders
         );
 
         if($_lmv_return){
@@ -867,9 +905,6 @@ trait View
         Header::parseHeaders($_lmv_headers);
         echo $_lmv_contents;
 
-        if(self::$profiling){
-            Performance::stop();
-        }
         return true;
     }
 
@@ -882,6 +917,7 @@ trait View
      * @param bool $_lmv_ignore Ignore html codeblock during minimizing.
      * @param bool $_lmv_copy Allow copy on html code tag or not.
      * @param bool $_lmv_return Should return view contents.
+     * @param array $customHeaders Additional headers.
      * 
      * @return bool|string Return true on success, false on failure.
      * @throws RuntimeException Throw if error occurred.
@@ -892,7 +928,8 @@ trait View
         ?ViewCache $_lmv_cache = null,
         bool $_lmv_ignore = true, 
         bool $_lmv_copy = false,
-        bool $_lmv_return = false
+        bool $_lmv_return = false,
+        array $customHeaders = []
     ): bool|string
     {
         $self = self::newSelfInstance();
@@ -914,7 +951,8 @@ trait View
             $lmv_view_type,
             $_lmv_ignore, 
             $_lmv_copy,
-            $_lmv_cache
+            $_lmv_cache,
+            $customHeaders
         );
 
         if($_lmv_return){
@@ -967,15 +1005,17 @@ trait View
      * @param bool $ignore Ignore codeblocks.
      * @param bool $copy Add copy button to codeblocks.
      * @param ViewCache|null $cache Cache instance.
+     * @param array $customHeaders Additional headers.
      * 
      * @return array<int,mixed> Return array of contents and headers.
     */
-    private static function assertMinifyAndSaveCache(
+    private function assertMinifyAndSaveCache(
         string|false $content, 
         string $type, 
         bool $ignore, 
         bool $copy, 
-        ?ViewCache $cache = null
+        ?ViewCache $cache = null,
+        array $customHeaders = []
     ): array 
     {
         if ($content !== false && $content !== '') {
@@ -1003,6 +1043,7 @@ trait View
         }
 
         $headers['default_headers'] = true;
+        $headers = array_merge($customHeaders, $headers);
         return [$headers, $content];
     }
     

@@ -61,6 +61,12 @@ class Smarty
     private string $viewType = 'html';
 
     /**
+     * @var array<string,mixed> $headers
+    */
+    private array $headers = [];
+
+
+    /**
      * Initializes the Smarty
      * 
      * @param TemplateConfig $config Template configuration.
@@ -230,6 +236,20 @@ class Smarty
     {
         $this->minify = $minify;
         $this->minifyOptions = $options;
+
+        return $this;
+    }
+
+    /**
+     * Set response header.
+     *
+     * @param array<string,mixed> $headers The headers key-pair.
+     * 
+     * @return self Luminova smarty template instance.
+     */
+    public function headers(array $headers): self 
+    {
+        $this->headers = $headers;
 
         return $this;
     }

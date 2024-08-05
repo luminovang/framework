@@ -105,7 +105,7 @@ final class IP
          }
       }
       
-      return '0.0.0.0'; 
+      return PRODUCTION ? '0.0.0.0' : $_SERVER['REMOTE_ADDR']; 
    }
 
    /**
