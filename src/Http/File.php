@@ -33,62 +33,6 @@ class File
     protected ?stdClass $config = null;
 
     /**
-     * The index of the file.
-     * 
-     * @var int $index
-     */
-    protected int $index = 0;
-
-    /**
-     * The name of the file.
-     * 
-     * @var string|null $name
-     */
-    protected ?string $name = null;
-
-    /**
-     * The file type.
-     * 
-     * @var string|null $type
-     */
-    protected ?string $type = null;
-
-    /**
-     * The size of the file in bytes.
-     * 
-     * @var int $size
-     */
-    protected int $size = 0;
-
-    /**
-     * The MIME type of the file.
-     * 
-     * @var string|null $mime
-     */
-    protected ?string $mime = null;
-
-    /**
-     * The file extension.
-     * 
-     * @var string|null $extension
-     */
-    protected ?string $extension = null;
-
-    /**
-     * The temporary file path.
-     * 
-     * @var string|null $temp
-     */
-    protected ?string $temp = null;
-
-    /**
-     * The error code of the file upload.
-     * 
-     * @var int $error
-     */
-    protected int $error = UPLOAD_ERR_NO_FILE;
-
-    /**
      * File configuration options keys
      * 
      * @var array<string,string> $configurations
@@ -113,27 +57,19 @@ class File
      * @param string|null $mime The MIME type of the file.
      * @param string|null $extension The file extension.
      * @param string|null $temp The temporary file path.
-     * @param int $error The error code of the file upload.
+     * @param int $error The error code of the file upload (default: UPLOAD_ERR_NO_FILE).
      */
     public function __construct(
-        int $index,
-        ?string $name = null,
-        ?string $type = null,
-        int $size = 0,
-        ?string $mime = null,
-        ?string $extension = null,
-        ?string $temp = null,
-        int $error = 0
+        protected int $index = 0,
+        protected ?string $name = null,
+        protected ?string $type = null,
+        protected int $size = 0,
+        protected ?string $mime = null,
+        protected ?string $extension = null,
+        protected ?string $temp = null,
+        protected int $error = UPLOAD_ERR_NO_FILE
     ) {
         $this->message = null;
-        $this->index = $index;
-        $this->name = $name;
-        $this->type = $type;
-        $this->size = $size;
-        $this->mime = $mime;
-        $this->extension = $extension;
-        $this->temp = $temp;
-        $this->error = $error;
     }
 
     /**
@@ -351,6 +287,7 @@ class File
 
         if (isset($this->config->allowedTypes) && $this->config->allowedTypes !== '') {
             $allowed = explode('|', strtolower($this->config->allowedTypes));
+            
             if (!in_array($this->extension, $allowed)) {
                 $this->message = 'File type is not allowed. Allowed file types: "' . $this->config->allowedTypes . '".';
                 return false;

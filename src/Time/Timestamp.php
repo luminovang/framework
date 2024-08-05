@@ -44,9 +44,7 @@ class Timestamp
             }
         }
 
-        $timestamp = $expires > 0 ? (int) $expires : 0;
-
-        return $timestamp;
+        return ($expires > 0) ? (int) $expires : 0;
     }
 
     /**
@@ -67,18 +65,15 @@ class Timestamp
         }
 
         $now = Time::now();
+        
         if($ttl instanceof DateInterval){
-            $endTime = $now->add($ttl);
-
-            return $endTime->getTimestamp() - $now->getTimestamp();
+            return $now->add($ttl)->getTimestamp() - $now->getTimestamp();
         }
 
         if($ttl instanceof DateTimeInterface){
             $diff = $now->diff($ttl);
-
-            $seconds = $diff->s + ($diff->i * 60) + ($diff->h * 3600) + ($diff->d * 86400) + ($diff->m * 2592000) + ($diff->y * 31536000);
             
-            return $seconds;
+            return $diff->s + ($diff->i * 60) + ($diff->h * 3600) + ($diff->d * 86400) + ($diff->m * 2592000) + ($diff->y * 31536000);
         }
 
         return 0;

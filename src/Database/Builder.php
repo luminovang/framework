@@ -9,15 +9,17 @@
  */
 namespace Luminova\Database;
 
+use \Luminova\Time\Time;
 use \Luminova\Cache\FileCache;
 use \Luminova\Database\Connection;
 use \Luminova\Database\Manager;
 use \Luminova\Interface\DatabaseInterface;
+use \Luminova\Exceptions\ErrorException;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Time\Time;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \DateTimeInterface;
 use \Exception;
+use \JsonException;
 
 final class Builder extends Connection 
 {  
@@ -566,9 +568,9 @@ final class Builder extends Connection
 
     /**
      * Set update columns and values.
-     * 
+     * This should be called before calling update method.
      * @param string $column The column name to update.
-     * @param mixed $value The column key value to update.
+     * @param mixed $value The column name value to update.
      * 
      * @return self Return instance of builder class.
     */
@@ -693,6 +695,7 @@ final class Builder extends Connection
      * 
      * @return self Return instance of builder class.
      * @throws InvalidArgumentException If values is not provided.
+     * @throws JsonException If an error occurs while encoding values.
     */
     public function in(string $column, array $list): self
     {
@@ -829,12 +832,13 @@ final class Builder extends Connection
     /**
      * Cache the query result using a specified storage.
      *
-     * @param string $key The storage cache key
+     * @param string $key The storage cache key.
      * @param string $storage Private storage name hash name (optional): but is recommended to void storing large data in one file.
      * @param DateTimeInterface|int $expiry The cache expiry time in seconds (default: 7 days).
      * @param string|null $folder Optionally set a folder name to store caches.
      * 
      * @return self Return instance of builder class.
+     * @throws ErrorException If the file cannot be saved or an error occurs.
     */
     public function cache(
         string $key, 
@@ -873,6 +877,8 @@ final class Builder extends Connection
      * @param bool $prepare Use bind values and execute prepare statement instead of query (default: true).
      * 
      * @return int Return number of affected rows or 0 if none was inserted.
+     * @throws DatabaseException If an error occurs or insert values are not associative array.
+     * @throws JsonException If an error occurs while encoding array values.
     */
     public function insert(array $values, bool $prepare = true): int
     {
@@ -885,6 +891,7 @@ final class Builder extends Connection
         }
         
         if (!is_associative($values[0])) {
+            DatabaseException::throwException('Invalid insert values, values must be an associative array.');
             return 0;
         }
 
@@ -911,11 +918,11 @@ final class Builder extends Connection
      * @param string $query The SQL query string.
      * 
      * @return self Returns an instance of the builder class.
-     * @throws DatabaseException When the query is empty.
+     * @throws DatabaseException If the query is empty string.
      */
     public function query(string $query): self 
     {
-        if (empty($query)) {
+        if ($query === '') {
             throw new DatabaseException("Builder operation without a query condition is not allowed.");
         }
 
@@ -965,9 +972,7 @@ final class Builder extends Connection
                 return $this->returnExecute($this->buildQuery, $mode);
             }
 
-            return $this->cache->onExpired($this->cacheKey, function() use($mode) {
-                return $this->returnExecute($this->buildQuery, $mode);
-            });
+            return $this->cache->onExpired($this->cacheKey, fn() => $this->returnExecute($this->buildQuery, $mode));
         } catch (DatabaseException|Exception $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
@@ -981,6 +986,7 @@ final class Builder extends Connection
      * @param string $column The column to index calculation (default: *).
      * 
      * @return int|bool Return total number of records in table, otherwise false if execution failed.
+     * @throws DatabaseException If an error occurs.
     */
     public function total(string $column = '*'): int|bool 
     {
@@ -993,6 +999,7 @@ final class Builder extends Connection
      * @param string $column The column to calculate the sum.
      * 
      * @return int|float|bool Return total sum columns, otherwise false if execution failed.
+     * @throws DatabaseException If an error occurs.
     */
     public function sum(string $column): int|float|bool
     {
@@ -1005,6 +1012,7 @@ final class Builder extends Connection
      * @param string $column The column to calculate the average.
      * 
      * @return int|float|bool Return total average of columns, otherwise false if execution failed.
+     * @throws DatabaseException If an error occurs.
      */
     public function average(string $column): int|float|bool
     {
@@ -1017,6 +1025,7 @@ final class Builder extends Connection
      * @param array<int,string> $columns select columns.
      * 
      * @return object|null|array|int|float|bool Return selected rows, otherwise false if execution failed.
+     * @throws DatabaseException If an error occurs.
     */
     public function select(array $columns = ['*']): mixed 
     {
@@ -1029,7 +1038,7 @@ final class Builder extends Connection
      * @param array<int,string> $columns The table columns to return (default: *).
      * 
      * @return object|null|array|int|float|bool Return selected single row, otherwise false if execution failed.
-     * @throws DatabaseException If where method was not called.
+     * @throws DatabaseException If where method was not called or an error occurs.
     */
     public function find(array $columns = ['*']): mixed 
     {
@@ -1048,7 +1057,7 @@ final class Builder extends Connection
      * @param array<int,string> $columns The table columns to return (default: *).
      * 
      * @return object|null|array|int|float|bool Return selected records, otherwise false if execution failed.
-     * @throws DatabaseException If where method was not called.
+     * @throws DatabaseException If an error occurs.
     */
     public function fetch(string $result = 'all', int $mode = FETCH_OBJ, array $columns = ['*']): mixed 
     {
@@ -1065,6 +1074,7 @@ final class Builder extends Connection
      * @param array<int,string> $columns The table columns to return (default: *).
      * 
      * @return DatabaseInterface Return prepared statement if query is successful otherwise null.
+     * @throws DatabaseException If an error occurs.
     */
     public function stmt(array $columns = ['*']): DatabaseInterface|null
     {
@@ -1090,6 +1100,7 @@ final class Builder extends Connection
      * @param int $mode The fetch result mode FETCH_*.
      * 
      * @return mixed Return result of executed method query.
+     * @throws DatabaseException If an error occurs.
     */
     private function createQueryExecution(
         string $query, 
@@ -1136,9 +1147,7 @@ final class Builder extends Connection
                 return $this->returnExecutedResult($sqlQuery, $return, $result, $mode);
             }
 
-            return $this->cache->onExpired($this->cacheKey, function() use($sqlQuery, $return, $result, $mode) {
-                return $this->returnExecutedResult($sqlQuery, $return, $result, $mode);
-            });
+            return $this->cache->onExpired($this->cacheKey, fn() => $this->returnExecutedResult($sqlQuery, $return, $result, $mode));
         } catch (DatabaseException|Exception $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
@@ -1155,6 +1164,7 @@ final class Builder extends Connection
      * @param int $mode The fetch result mode FETCH_*.
      * 
      * @return mixed Return query result.
+     * @throws DatabaseException If an error occurs.
     */
     private function returnExecutedResult(
         string $sqlQuery, 
@@ -1232,7 +1242,8 @@ final class Builder extends Connection
      * @param array<string,mixed> $setValues associative array of columns and values to update.
      * 
      * @return int Return number of affected rows.
-     * @throws DatabaseException Throw if error occurred while updating.
+     * @throws DatabaseException Throw if error occurred while updating or where method was never called.
+     * @throws JsonException If an error occurs while encoding values.
      */
     public function update(?array $setValues = []): int 
     {
@@ -1240,11 +1251,15 @@ final class Builder extends Connection
         static::$handler = null;
 
         if ($columns === []) {
-            throw new DatabaseException('Update operation without SET values is not allowed.');
+            throw new DatabaseException('Update operation without SET values is not allowed. Set update values directly with update method or use set method instead.');
         }
 
         if ($this->whereCondition === []) {
-            throw new DatabaseException('Update operation without a WHERE condition is not allowed.');
+            throw new DatabaseException('Update operation without a WHERE condition is not allowed. Use where method set set update condition.');
+        }
+
+        if(isset($columns[0])){
+            throw new DatabaseException('Invalid update values, values must be an associative array, key-value pairs, where the key is the column name and the value to update.');
         }
 
         $updateColumns = static::buildPlaceholder($columns, true);
@@ -1268,7 +1283,7 @@ final class Builder extends Connection
                     throw new DatabaseException("Invalid update key {$key}, update key must be a valid table column name.");
                 }
 
-                $value = is_array($value) ? json_encode($value) : $value;
+                $value = is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
                 static::$handler->bind(static::trimPlaceholder($key), $value);
             }
             static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
@@ -1686,23 +1701,13 @@ final class Builder extends Connection
         $tablePrefix = $isTempTable ? 'temp_' : '';
         $tableIdentifier = $isTempTable ? "#temp_{$this->tableName}" : $this->tableName;
 
-        switch ($this->db->getDriver()) {
-            case 'mysql':
-                return "DROP " . ($isTempTable ? "TEMPORARY " : "") . "TABLE IF EXISTS {$tablePrefix}{$this->tableName}";
-
-            case 'dblib':
-                return "DROP TABLE IF EXISTS {$tableIdentifier}";
-
-            case 'sqlsrv':
-                return "IF OBJECT_ID('{$tablePrefix}{$this->tableName}', 'U') IS NOT NULL DROP TABLE {$tablePrefix}{$this->tableName}";
-
-            case 'oracle':
-            case 'oci':
-                return "BEGIN EXECUTE IMMEDIATE 'DROP TABLE {$tablePrefix}{$this->tableName}'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;";
-
-            default:
-                return "DROP TABLE IF EXISTS {$tablePrefix}{$this->tableName}";
-        }
+        return match ($this->db->getDriver()) {
+            'mysql' => "DROP " . ($isTempTable ? "TEMPORARY " : "") . "TABLE IF EXISTS {$tablePrefix}{$this->tableName}",
+            'dblib' => "DROP TABLE IF EXISTS {$tableIdentifier}",
+            'sqlsrv' => "IF OBJECT_ID('{$tablePrefix}{$this->tableName}', 'U') IS NOT NULL DROP TABLE {$tablePrefix}{$this->tableName}",
+            'oracle', 'oci' => "BEGIN EXECUTE IMMEDIATE 'DROP TABLE {$tablePrefix}{$this->tableName}'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;",
+            default => "DROP TABLE IF EXISTS {$tablePrefix}{$this->tableName}"
+        };
     }
 
     /**
@@ -1712,6 +1717,8 @@ final class Builder extends Connection
      * @param array $values array of values to insert.
      * 
      * @return int Return number affected row.
+     * @throws DatabaseException If an error occurs.
+     * @throws JsonException If an error occurs while encoding values.
     */
     private function executeInsertQuery(array $columns, array $values): int 
     {
@@ -1744,6 +1751,8 @@ final class Builder extends Connection
      * @param array $values array of values to insert.
      * 
      * @return int Return number affected row.
+     * @throws DatabaseException If an error occurs.
+     * @throws JsonException If an error occurs while encoding values.
     */
     private function executeInsertPrepared(array $columns, array $values): int
     {
@@ -1760,7 +1769,7 @@ final class Builder extends Connection
     
         foreach ($values as $row) {
             foreach ($row as $key => $value) {
-                $value = is_array($value) ? json_encode($value) : $value;
+                $value = is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
                 static::$handler->bind(static::trimPlaceholder($key), $value);
             }
 
@@ -1976,33 +1985,29 @@ final class Builder extends Connection
     */
     private function bindConditions(DatabaseInterface &$handler): void 
     {
-        if($this->andConditions !== []) {
-            foreach ($this->andConditions as $index => $bindings) {
-                switch ($bindings['type']) {
-                    case 'AGAINST':
-                        $handler->bind(":match_column_{$index}", $bindings['value']);
-                    break;
-                    case 'GROUP_OR':
-                    case 'GROUP_AND':
-                        self::bindGroupConditions($bindings['conditions'], $handler, $index);
-                    break;
-                    case 'BIND_OR':
-                    case 'BIND_AND':
-                        $last = 0;
-                        self::bindGroupConditions($bindings['X'], $handler, $index, $last);
-                        self::bindGroupConditions($bindings['Y'], $handler, $index, $last);
-                    break;
-                    default:
-                        $handler->bind(static::trimPlaceholder($bindings['column']), $bindings['value']);
-                    break;
-                }
+        foreach ($this->andConditions as $index => $bindings) {
+            switch ($bindings['type']) {
+                case 'AGAINST':
+                    $handler->bind(":match_column_{$index}", $bindings['value']);
+                break;
+                case 'GROUP_OR':
+                case 'GROUP_AND':
+                    self::bindGroupConditions($bindings['conditions'], $handler, $index);
+                break;
+                case 'BIND_OR':
+                case 'BIND_AND':
+                    $last = 0;
+                    self::bindGroupConditions($bindings['X'], $handler, $index, $last);
+                    self::bindGroupConditions($bindings['Y'], $handler, $index, $last);
+                break;
+                default:
+                    $handler->bind(static::trimPlaceholder($bindings['column']), $bindings['value']);
+                break;
             }
         }
 
-        if($this->queryMatchOrder !== []){
-            foreach($this->queryMatchOrder as $idx => $order){
-                $handler->bind(":match_order_{$idx}", $order['value']);
-            }
+        foreach($this->queryMatchOrder as $idx => $order){
+            $handler->bind(":match_order_{$idx}", $order['value']);
         }
     }
 
@@ -2044,6 +2049,7 @@ final class Builder extends Connection
      * @param string $method The name of the calling method.
      * 
      * @return array|bool Returns false on production, otherwise return query array.
+     * @throws JsonException If an error occurs while encoding values.
      */
     private function printDebugQuery(string $query, string $method, array $values = []): bool
     {
@@ -2051,7 +2057,7 @@ final class Builder extends Connection
         if($method === 'insert'){
             foreach($values as $bindings){
                 $column = key($bindings);
-                $value = is_array($bindings[$column]) ? json_encode($bindings[$column]) : $bindings[$column];
+                $value = is_array($bindings[$column]) ? json_encode($bindings[$column], JSON_THROW_ON_ERROR) : $bindings[$column];
                 $params[] = ":{$column} = " . $value;
             }
         }else{
@@ -2259,6 +2265,7 @@ final class Builder extends Connection
      * @param string $return The return type, can be 'array' or 'string'.
      * 
      * @return array|string An array of quoted values or a string of quoted values.
+     * @throws JsonException If an error occurs while encoding values.
      */
     private static function quotedValues(array $columns, string $return = 'string'): array|string
     {
@@ -2266,7 +2273,7 @@ final class Builder extends Connection
         $string = '';
         foreach ($columns as $item) {
             if(is_array($item)){
-                $value = "'" . json_encode($item) . "'" ;
+                $value = "'" . json_encode($item, JSON_THROW_ON_ERROR) . "'" ;
             }elseif(is_numeric($item)){
                 $value = $item;
             }else{

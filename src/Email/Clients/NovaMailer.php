@@ -261,17 +261,9 @@ class NovaMailer implements MailerInterface
     public function send(): bool 
     {
         error_clear_last();
-        if($this->attachments === []){
-            $result = $this->sendWithOutAttachment();
-        }else{
-            $result = $this->sendWithAttachment();
-        }
 
-        if($this->sendWith === 'smtp'){
-            $success = $this->smtp_mail($result);
-        }else{
-            $success = mail($this->to, $this->Subject, $result['body'], $result['headers']);
-        }
+        $result = ($this->attachments === []) ? $this->sendWithOutAttachment() : $this->sendWithAttachment();
+        $success = ($this->sendWith === 'smtp') ?  $this->smtp_mail($result) : mail($this->to, $this->Subject, $result['body'], $result['headers']);
 
         if (!$success) {
             $error = error_get_last();
@@ -306,11 +298,7 @@ class NovaMailer implements MailerInterface
     */
     public function isHTML(bool $isHtml = true): void 
     {
-        if ($isHtml) {
-            $this->contentType = self::CONTENT_TYPE_TEXT_HTML;
-        } else {
-            $this->contentType = self::CONTENT_TYPE_PLAINTEXT;
-        }
+        $this->contentType = $isHtml ? self::CONTENT_TYPE_TEXT_HTML : self::CONTENT_TYPE_PLAINTEXT;
     }
 
     /**

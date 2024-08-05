@@ -138,6 +138,6 @@ abstract class BaseCommand extends Terminal
     */
     public function __isset(string $key): bool
     {
-        return isset($this->{$key});
+        return property_exists($this, $key);
     }
 }

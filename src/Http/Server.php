@@ -12,20 +12,12 @@ namespace Luminova\Http;
 class Server
 {
     /**
-     * Server variables.
-     * 
-     * @var array $variables
-    */
-    protected array $variables = [];
-
-    /**
      * Initializes the server constructor.
      * 
      * @param array<string, mixed> $variables.
     */
-    public function __construct(array $variables)
+    public function __construct(protected array $variables = [])
     {
-        $this->variables = $variables;
     }
 
    /**

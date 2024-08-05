@@ -37,7 +37,7 @@ final class Console
     */
     public function __construct()
     { 
-        if(self::$instance === null){
+        if(!self::$instance instanceof Terminal){
             self::$instance = new Terminal();
         }
     }
@@ -155,6 +155,6 @@ final class Console
     {
         $isCommand = self::getCommand($command);
 
-        return isset($isCommand[$key]) ? $isCommand[$key] : null;
+        return $isCommand[$key] ?? null;
     }
 }

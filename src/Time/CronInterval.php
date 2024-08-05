@@ -151,13 +151,13 @@ class CronInterval
     
         if ($minute === '*') {
             $nextRun = $nextRun->modify('+1 minute');
-        } elseif (strpos($minute, '*/') === 0) {
+        } elseif (str_starts_with($minute, '*/')) {
             $interval = self::parseFormat($minute, 2);
             $nextRun = $nextRun->modify('+' . $interval . ' minutes');
         }
     
         if ($hour !== '*') {
-            if (strpos($hour, '*/') === 0) {
+            if (str_starts_with($hour, '*/')) {
                 $interval = self::parseFormat($hour, 2);
                 $nextRun = $nextRun->modify('+' . $interval . ' hours');
             } else {
@@ -167,18 +167,18 @@ class CronInterval
             }
         }
     
-        if ($day !== '*' && strpos($day, '*/') === 0) {
+        if ($day !== '*' && str_starts_with($day, '*/')) {
             $interval = self::parseFormat($day, 2);
             $nextRun = $nextRun->modify('+' . $interval . ' days');
         }
     
-        if ($month !== '*' && strpos($month, '*/') === 0) {
+        if ($month !== '*' && str_starts_with($month, '*/')) {
             $interval = self::parseFormat($month);
             $nextRun = $nextRun->modify('+' . $interval . ' months');
         }
     
         if ($weekday !== '*') {
-            $nextRun = $nextRun->modify('next ' . self::getDayOfWeek($weekday, $nextRun));
+            $nextRun = $nextRun->modify('next ' . self::getDayOfWeek($weekday));
         }
     
         return $nextRun->getTimestamp() - $now->getTimestamp();
@@ -219,25 +219,23 @@ class CronInterval
     {
         if ($component === '*') {
             return 1; 
-        } elseif (strpos($component, '*/') === 0) {
-            return (int) substr($component, 2);
-        } else {
-            $values = explode(',', $component);
-            $validValues = [];
-            foreach ($values as $value) {
-                $value = (int) $value; 
-                if ($value >= 0 && $value <= ($component === 'M' ? 12 : 59)) { 
-                    $validValues[] = $value;
-                } else {
-                    throw new RuntimeException("Invalid value '$value' in component '$component'");
-                }
-            }
-
-            if($validValues === []){
-                return count($values);
-            }
-
-            return max($validValues); 
         }
+        
+        if (str_starts_with($component, '*/')) {
+            return (int) substr($component, 2);
+        } 
+
+        $values = explode(',', $component);
+        $validValues = [];
+        foreach ($values as $value) {
+            $value = (int) $value; 
+            if ($value >= 0 && $value <= ($component === 'M' ? 12 : 59)) { 
+                $validValues[] = $value;
+            } else {
+                throw new RuntimeException("Invalid value '$value' in component '$component'");
+            }
+        }
+
+        return ($validValues === []) ? count($values) : max($validValues); 
     }
 }

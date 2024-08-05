@@ -14,22 +14,23 @@ use \Luminova\Http\Message\Response;
 
 interface HttpClientInterface 
 {
-     /**
+    /**
      * Curl client constructor.
-     * @param array $config client configuration
+     * 
+     * @param array $config client configuration.
      * 
     */
     public function __construct(array $config = []);
     
     /**
-     * Send an HTTP request.
+     * Send an HTTP request to a url.
      *
-     * @param string $method
-     * @param string $url
-     * @param array $data
-     * @param array $headers
+     * @param string $method The request method.
+     * @param string $url The URL to send the request.
+     * @param array<string,mixed> $data The data to send.
+     * @param array<string,mixed> $headers The headers to send with the request.
      *
-     * @return Response
+     * @return Response Return request response object.
      */
     public function request(string $method, string $url, array $data = [], array $headers = []): Response;
 } 

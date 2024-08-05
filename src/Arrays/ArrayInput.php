@@ -11,18 +11,11 @@ namespace Luminova\Arrays;
 
 class ArrayInput
 {
-    /**
-     * @var array $parameters
-    */
-    private array $parameters = [];
 
     /**
      * @param array $parameters
     */
-    public function __construct(array $parameters = [])
-    {
-        $this->parameters = $parameters;
-    }
+    public function __construct(private array $parameters = []){ }
 
     /**
      * @param array $values

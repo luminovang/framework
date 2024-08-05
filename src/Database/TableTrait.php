@@ -10,6 +10,7 @@
 namespace Luminova\Database;
 
 use \Luminova\Database\Alter;
+use \Luminova\Database\Table;
 use \Luminova\Exceptions\DatabaseException;
 
 /**
@@ -60,104 +61,6 @@ use \Luminova\Exceptions\DatabaseException;
 */
 trait TableTrait 
 {
-    /**
-     * Default field value none.
-     * 
-     * @var string DEFAULT_NONE
-    */
-    public const DEFAULT_NONE = '__NONE__';
-
-    /**
-     * Default field value timestamp.
-     * 
-     * @var string DEFAULT_TIMESTAMP
-    */
-    public const DEFAULT_TIMESTAMP = 'CURRENT_TIMESTAMP';
-
-    /**
-     * Default field value null.
-     * 
-     * @var string DEFAULT_NULL
-    */
-    public const DEFAULT_NULL = 'NULL';
-
-    /**
-     * Primary key.
-     * 
-     * @var string INDEX_PRIMARY_KEY
-    */
-    public const INDEX_PRIMARY_KEY = 'PRIMARY KEY';
-
-    /**
-     * Foreign key.
-     * 
-     * @var string INDEX_FOREIGN_KEY
-    */
-    public const INDEX_FOREIGN_KEY = 'FOREIGN KEY';
-   
-    /**
-     * Uniqu table index.
-     * 
-     * @var string INDEX_UNIQUE
-    */
-    public const INDEX_UNIQUE = 'UNIQUE';
-
-    /**
-     * Indexd table index.
-     * 
-     * @var string INDEX_DEFAULT
-    */
-    public const INDEX_DEFAULT = 'INDEX';
-
-    /**
-     * Full text table index.
-     * 
-     * @var string INDEX_FULLTEXT
-    */
-    public const INDEX_FULLTEXT = 'FULLTEXT';
-
-    /**
-     * Spatial table index.
-     * 
-     * @var string INDEX_SPATIAL
-    */
-    public const INDEX_SPATIAL = 'SPATIAL';
-
-    /**
-     * Generate schema for mysql database.
-     * 
-     * @var string MYSQL
-    */
-    public const MYSQL = 'mysql';
-
-    /**
-     * Generate schema for sql server database.
-     * 
-     * @var string SQL_SERVER
-    */
-    public const SQL_SERVER = 'sql-server';
-
-    /**
-     * Generate schema for ms access database.
-     * 
-     * @var string MS_ACCESS
-    */
-    public const MS_ACCESS = 'ms-access';
-
-    /**
-     * Generate schema for oracle database.
-     * 
-     * @var string ORACLE
-    */
-    public const ORACLE = 'oracle';
-
-    /**
-     * Replaces format to column name.
-     * 
-     * @var string COLUMN_NAME
-    */
-    public const COLUMN_NAME = '{__REPLACE_COLUMN_NAME__}';
-
     /**
      * Previous types to change changes.
      * 
@@ -233,11 +136,11 @@ trait TableTrait
      * @var array<int,string> $supportedIndexes
     */
     protected static array $supportedIndexes = [
-        self::INDEX_DEFAULT,
-        self::INDEX_UNIQUE,
-        self::INDEX_FULLTEXT,
-        self::INDEX_SPATIAL,
-        self::INDEX_PRIMARY_KEY
+        Table::INDEX_DEFAULT,
+        Table::INDEX_UNIQUE,
+        Table::INDEX_FULLTEXT,
+        Table::INDEX_SPATIAL,
+        Table::INDEX_PRIMARY_KEY
     ];
 
     /**
@@ -255,8 +158,8 @@ trait TableTrait
         $column = array_key_last($this->columns);
 
         if ($column !== null) {
-            if(is_string($value) && str_contains($value, self::COLUMN_NAME)){
-                $value = str_replace(self::COLUMN_NAME, "{$column}", $value);
+            if(is_string($value) && str_contains($value, Table::COLUMN_NAME)){
+                $value = str_replace(Table::COLUMN_NAME, "{$column}", $value);
             }
 
             if($append){
@@ -345,7 +248,7 @@ trait TableTrait
      */
     protected function getValues(array $input, ?string $type = null, ?string $name = null): string
     {
-        if (empty($input)) {
+        if ($input === []) {
             if($type === null || $name === null){
                 $name = array_key_last($this->columns);
                 $type = $this->columns[$name]['type']??'UNKNOWN';
@@ -354,9 +257,7 @@ trait TableTrait
             throw new DatabaseException("The '$type' column '$name' must have at least one value.");
         }
 
-        $values = array_map(function($value) {
-            return is_numeric($value) ? $value : "'" . str_replace(['\\', '\''], ['\\\\', '\\\''], $value) . "'";
-        }, $input);
+        $values = array_map(fn($value) => is_numeric($value) ? $value : "'" . str_replace(['\\', '\''], ['\\\\', '\\\''], $value) . "'", $input);
 
         return implode(', ', $values);
     }
@@ -378,11 +279,7 @@ trait TableTrait
         $current = $current[$type] ?? null;
 
         if (is_array($previous) && is_array($current)) {
-            if (count(array_diff($previous, $current)) === 0 && count(array_diff($current, $previous)) === 0) {
-                return false; 
-            }
-            
-            return true;
+            return !(array_diff($previous, $current) === [] && array_diff($current, $previous) === []);
         }
         
         return $previous !== $current;
@@ -405,6 +302,7 @@ trait TableTrait
         $columns['info']['engine'] = $this->engine;
         $columns['info']['session'] = $this->session;
         $columns['info']['global'] = $this->global;
+        
         return $columns;
     }
 
@@ -508,8 +406,7 @@ trait TableTrait
                                 $this->database,
                                 $this->tableName,
                                 $name,
-                                $typeLength,
-                                $attributes
+                                $typeLength
                             );
                         }
 
@@ -627,10 +524,6 @@ trait TableTrait
             $alters .= Alter::engine($this->database, $this->tableName, $this->engine);
         }
 
-        if(!empty($queries)){
-            $alters .= ",\n" . implode(",\n", $queries);
-         }
-
         return $this->prettify ? $alters : str_replace("\n", " ", $alters);
     }
 
@@ -671,7 +564,7 @@ trait TableTrait
             }
      
             if (!empty($column['increment'])) {
-                if($this->database === self::ORACLE){
+                if($this->database === Table::ORACLE){
                     $alters .= Alter::getIncrement(
                         $this->database,
                         $this->tableName,
@@ -890,8 +783,8 @@ trait TableTrait
 
         if(in_array($uppIndex, static::$supportedIndexes)){
             if($columns !== null && $columns !== ''){
-                $id = strtolower("idx_{$this->tableName}_" . self::COLUMN_NAME. "_{$uppIndex}");
-                $uppIndex = ($uppIndex === self::INDEX_DEFAULT) ? '' : "{$uppIndex} ";
+                $id = strtolower("idx_{$this->tableName}_" . Table::COLUMN_NAME. "_{$uppIndex}");
+                $uppIndex = ($uppIndex === Table::INDEX_DEFAULT) ? '' : "{$uppIndex} ";
 
                 return $this->entry("CONSTRAINT `{$id}` {$uppIndex}INDEX ({$columns})");
             }

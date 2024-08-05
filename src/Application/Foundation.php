@@ -18,7 +18,7 @@ final class Foundation
      * 
     * @var string VERSION
     */
-    public const VERSION = '3.1.9';
+    public const VERSION = '3.2.0';
 
     /**
      * Minimum required php version.
@@ -39,7 +39,14 @@ final class Foundation
      * 
      * @var ?string $base
     */
-    private static string|null $base = null;
+    private static ?string $base = null;
+
+    /**
+     * Request url segments.
+     * 
+     * @var ?string $segments
+    */
+    private static ?string $segments = null;
 
     /**
      * Stack cached errors
@@ -115,7 +122,7 @@ final class Foundation
     }
 
     /**
-     * Initializes error display
+     * Initializes error display.
      * 
      * @return void 
     */
@@ -131,13 +138,12 @@ final class Foundation
         ini_set('display_errors', $display);
         set_error_handler([static::class, 'handle']);
         register_shutdown_function([static::class, 'shutdown']);
-       
     }
 
     /**
-     * Get error type
+     * Get error type.
      * 
-     * @param int $errno error code
+     * @param int $errno The error code.
      * 
      * @return string Return Error name by error code.
     */
@@ -147,9 +153,9 @@ final class Foundation
     }
 
     /**
-     * Get error logging level
+     * Get error logging level.
      * 
-     * @param int $errno Error code
+     * @param int $errno The error code.
      * 
      * @return string Return error log level by error code.
     */
@@ -195,27 +201,14 @@ final class Foundation
     }
 
     /**
-     * Return server base path.
+     * Retrieve the server public controller directory.
+     * Remove the index controller file name from the scrip name.
      *
-     * @return string Application router base path
+     * @return string Return public directory path.
     */
     public static function getBase(): string
     {
-        if (static::$base !== null) {
-            return static::$base;
-        }
-
-        if (isset($_SERVER['SCRIPT_NAME'])) {
-            $script = $_SERVER['SCRIPT_NAME'];
-
-            if (($last = strrpos($script, '/')) !== false && $last > 0) {
-                static::$base = substr($script, 0, $last) . '/';
-                return static::$base;
-            }
-        }
-
-        static::$base = '/';
-        return static::$base;
+        return static::$base ??= dirname($_SERVER['SCRIPT_NAME'] ?? '') . '/';
     }
 
     /**
@@ -255,23 +248,51 @@ final class Foundation
     }
 
     /**
-     * Get the current segment relative URI.
+     * Get the request url segments as relative.
+     * Removes the public controller path from uri if available.
      * 
      * @return string Relative url segment paths.
     */
     public static function getUriSegments(): string
     {
-        if (isset($_SERVER['REQUEST_URI'])) {
-            $uri = substr(rawurldecode($_SERVER['REQUEST_URI']), mb_strlen(static::getBase()));
+        if(static::$segments === null){
+            static::$segments = '/';
 
-            if (false !== ($pos = strpos($uri, '?'))) {
-                $uri = substr($uri, 0, $pos);
+            if (isset($_SERVER['REQUEST_URI'])) {
+                $uri = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen(static::getBase()));
+
+                // Remove url parameters if available.
+                if ($uri !== '' && false !== ($pos = strpos($uri, '?'))) {
+                    $uri = substr($uri, 0, $pos);
+                }
+
+                static::$segments = '/' . trim($uri, '/');
             }
-
-            return '/' . trim($uri, '/');
         }
 
-        return '/';
+        return static::$segments;
+    }
+
+    /**
+     * Get the current view segments as array.
+     * 
+     * @return array<int,string> The array list of url segments.
+    */
+    public static function getSegments(): array
+    {
+        $segments = static::getUriSegments();
+
+        if($segments === '/'){
+            return [''];
+        }
+
+        $segments = explode('/', trim($segments, '/'));
+   
+        if (($public = array_search('public', $segments)) !== false) {
+            array_splice($segments, $public, 1);
+        }
+
+        return $segments;
     }
 
     /**
@@ -300,22 +321,6 @@ final class Foundation
     }
 
     /**
-     * Get the current view segments as array.
-     * 
-     * @return array<int,string> Array list of url segments
-    */
-    public static function getSegments(): array
-    {
-        $segments = explode('/', trim(static::getUriSegments(), '/'));
-   
-        if (($public = array_search('public', $segments)) !== false) {
-            array_splice($segments, $public, 1);
-        }
-
-        return $segments;
-    }
-
-    /**
      * Check if the request URL indicates an API endpoint.
      * This method checks if the URL path starts with '/api' or 'public/api'.
      * 
@@ -323,8 +328,7 @@ final class Foundation
     */
     public static function isApiContext(): bool
     {
-        $segments = static::getSegments();
-        return reset($segments) === (defined('IS_UP') ? env('app.api.prefix', 'api') : 'api');
+        return static::getSegments()[0] === (defined('IS_UP') ? env('app.api.prefix', 'api') : 'api');
     }
 
     /**
@@ -376,22 +380,22 @@ final class Foundation
     /**
      * Handle errors.
      * 
-     * @param int $errno Error code.
-     * @param string $errstr Error message.
-     * @param string $errFile Error file.
-     * @param int $errLine Error line number.
+     * @param int $errno The error code.
+     * @param string $errstr The error message.
+     * @param string $errFile The error file.
+     * @param int $errLine The error line number.
      * 
      * @return bool Return true if error was handled by framework, false otherwise.
     */
-    public static function handle(int $errno, string $errstr, string $errfile, int $errline): bool 
+    public static function handle(int $errno, string $errstr, string $errFile, int $errLine): bool 
     {
         if (error_reporting() === 0) {
             return false;
         }
 
         $stack = new ErrorStack($errstr, $errno);
-        $stack->setFile(static::filterPath($errfile));
-        $stack->setLine($errline);
+        $stack->setFile(static::filterPath($errFile));
+        $stack->setLine($errLine);
         $stack->setName(static::getName($errno));
        
         self::$errors[] = $stack;

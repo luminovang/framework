@@ -31,7 +31,7 @@ final class Environment
         $file = new SplFileObject($path, 'r');
         while (!$file->eof()) {
             $line = trim($file->fgets());
-            if (strpos($line, '#') === 0 || strpos($line, ';') === 0) {
+            if (str_starts_with($line, '#') || str_starts_with($line, ';')) {
                 continue;
             }
 

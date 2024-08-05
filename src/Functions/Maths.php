@@ -62,9 +62,8 @@ final class Maths
         }
     
         $formatted = number_format($bytes, 2);
-        $result = $add_name ? $formatted . ' ' . self::$units[$index] : $formatted;
-    
-        return $result;
+
+        return ($add_name ? $formatted . ' ' . self::$units[$index] : $formatted);
     }
 
     /**
@@ -72,7 +71,7 @@ final class Maths
      *
      * @param string $units The string representation of the byte size (e.g., '1KB', '2MB').
      * 
-     * @return int The size in bytes.
+     * @return int Return the size in bytes.
      */
     public static function toBytes(string $units): int
     {
@@ -87,6 +86,9 @@ final class Maths
                 $value *= 1024;
             case 'K':
                 $value *= 1024;
+            break;
+            case 'B':
+            default:
         }
 
         return $value;
@@ -102,14 +104,12 @@ final class Maths
     */
     public static function average(int|float ...$numbers): ?float 
     {
-        if (empty($numbers)) {
+        if ($numbers === []) {
             return null;
         }
         
         $total = array_sum($numbers);
-        $average = $total / count($numbers);
-        
-        return $average;
+        return $total / count($numbers);
     }
 
     /**
@@ -227,10 +227,10 @@ final class Maths
             return false;
         }
 
-        $lat1 = deg2rad((float) $origin_lat);
-        $lng1 = deg2rad((float) $origin_lng);
-        $lat2 = deg2rad((float) $dest_lat);
-        $lng2 = deg2rad((float) $dest_lng);
+        $lat1 = deg2rad($origin_lat);
+        $lng1 = deg2rad($origin_lng);
+        $lat2 = deg2rad($dest_lat);
+        $lng2 = deg2rad($dest_lng);
 
         $deltaLat = $lat2 - $lat1;
         $deltaLon = $lng2 - $lng1;

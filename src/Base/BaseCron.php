@@ -201,6 +201,7 @@ abstract class BaseCron
         $this->schedule();
         $now = Time::now(self::$timezone);
         $commands = [];
+        
         foreach(self::$controllers as $command){
             $commands[$command['controller']] = [
                 'description' => $command['description'] ?? '',

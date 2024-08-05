@@ -28,7 +28,7 @@ abstract class BaseServices implements ServicesInterface
      * @param bool $serialize Whether the instance should be serialized and stored in cache. Defaults to false.
      * @param array<int,mixed> $arguments Optional arguments to initialize the class with.
      *
-     * @return true Returns true if the service was added successfully, otherwise throws an exception.
+     * @return bool Returns true if the service was added successfully, otherwise throws an exception.
      * @throws RuntimeException If the service already exists or class argument is not an array list.
      * 
      * @example - Usage:

@@ -34,7 +34,7 @@ use \Throwable;
  * Factory methods classes.
  *
  * @method static BaseFunction        functions(bool $shared = true)                             Utility function helper class.
- * @method static Session             session(?SessionManagerInterface $manager = null, bool $shared = true)                   Server-side user session class.
+ * @method static Session             session(?\Luminova\Interface\SessionManagerInterface $manager = null, bool $shared = true)                   Server-side user session class, if manager is null `\Luminova\Sessions\SessionManager` will be used instead.
  * @method static Cookie              cookie(string $name, mixed $value = '', array $options = [], bool $shared = true)                    Client-side cookie class
  * @method static Task                task(bool $shared = true)                      Time task utility class.
  * @method static Modules             modules(bool $shared = true)                               PSR-4 Module autoloader and file importer class.
@@ -44,7 +44,7 @@ use \Throwable;
  * @method static Validation          validate(bool $shared = true)                              Input validation class.
  * @method static Response            response(int $status = 200, bool $shared = true)           Render response class.
  * @method static Request             request(bool $shared = true)                               HTTP Request class.
- * @method static Network             network(?HttpClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
+ * @method static Network             network(?\Luminova\Interface\HttpClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
  * @method static Caller              caller(bool $shared = true)                                Class caller class.
  * @method static Notification        notification(bool $shared = true, string $serviceAccount = 'serviceAccount.json')                              Firebase cloud message notification class.
  * @method static Escape              escaper(bool $shared = true, string|null $encoding = 'utf-8')                              Input escaper class instance.
@@ -88,11 +88,11 @@ final class Factory
      * @param array $arguments Arguments to pass to the factory constructor.
      * @param bool $shared The last parameter to pass to the factory constructor indicate if it should return a shared instance.
      * 
-     * @example Factory::method('foo', 'bar', false)
-     * @example Factory::method(false)
-     * 
      * @return class-object<\T> An instance of the factory class.
      * @throws RuntimeException If failed to instantiate the factory.
+     * 
+     * @example Factory::method('foo', 'bar', false)
+     * @example Factory::method(false)
      * 
      * @ignore 
      */

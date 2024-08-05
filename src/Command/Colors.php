@@ -16,9 +16,9 @@ final class Colors
     /**
      * Text Foreground color list
      *
-     * @var array<string, string> $foregroundColors
+     * @var array<string,string> $foregroundColors
      */
-    protected static $foregroundColors = [
+    protected static array $foregroundColors = [
         'black'        => '0;30',
         'darkGray'     => '1;30',
         'blue'         => '0;34',
@@ -41,9 +41,9 @@ final class Colors
     /**
      * Text Background color list
      *
-     * @var array<string, string> $backgroundColors
+     * @var array<string,string> $backgroundColors
      */
-    protected static $backgroundColors = [
+    protected static array $backgroundColors = [
         'black'      => '40',
         'red'        => '41',
         'green'      => '42',
@@ -73,11 +73,11 @@ final class Colors
 
         $formatCode = ($format === null) ? '' : TextUtils::style($text, $format, false);
 
-        if (!static::isValidColor($foreground, static::$foregroundColors)) {
+        if (!self::isValidColor($foreground, static::$foregroundColors)) {
             return "\033[{$formatCode}m{$text}\033[0m";
         }
 
-        if ($background !== null && !static::isValidColor($background, static::$backgroundColors)) {
+        if ($background !== null && !self::isValidColor($background, static::$backgroundColors)) {
             return "\033[{$formatCode}m{$text}\033[0m";
         }
 
@@ -102,11 +102,11 @@ final class Colors
     {
         $formatCode = ($format === null) ? 0 : strlen(TextUtils::style('T', $format, false)) - 1;
 
-        if (!static::isValidColor($foreground, static::$foregroundColors)) {
+        if (!self::isValidColor($foreground, static::$foregroundColors)) {
             return strlen("\033[m\033[0m") + $formatCode;
         }
 
-        if ($background !== null && !static::isValidColor($background, static::$backgroundColors)) {
+        if ($background !== null && !self::isValidColor($background, static::$backgroundColors)) {
             return strlen("\033[m\033[0m") + $formatCode;
         }
 

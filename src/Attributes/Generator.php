@@ -35,11 +35,6 @@ final class Generator
     private array $routes = [];
 
     /**
-     * @var string $namespace
-    */
-    private string $namespace;
-
-    /**
      * @var bool $cli
     */
     private bool $cli = false;
@@ -48,11 +43,6 @@ final class Generator
      * @var bool $cache
     */
     private static bool $cache = false;
-
-    /**
-     * @var string $baseGroup
-    */
-    private string $baseGroup;
 
     /**
      * @var array<string,RecursiveIteratorIterator> $files
@@ -66,10 +56,12 @@ final class Generator
      * @param string $baseGroup Base group for route patterns.
      * @param bool $cli Flag indicating if running in CLI mode.
      */
-    public function __construct(string $namespace, string $baseGroup = '', bool $cli = false)
+    public function __construct(
+        private string $namespace, 
+        private string $baseGroup = '', 
+        bool $cli = false
+    )
     {
-        $this->namespace = $namespace;
-        $this->baseGroup = $baseGroup;
         $this->cli = $cli;
         self::$cache = (bool) env('feature.route.cache.attributes', false);
     }
@@ -96,7 +88,7 @@ final class Generator
             $fileName = $file->getBasename();
             $fileName = pathinfo($fileName, PATHINFO_FILENAME);
            
-            if ($fileName) {
+            if ($fileName !== '' && $fileName !== '0') {
                 try{
                     $class = new ReflectionClass("{$this->namespace}{$fileName}");
  
@@ -112,6 +104,7 @@ final class Generator
                     */
                     foreach ($class->getAttributes(Error::class) as $context) {
                         $ctx = $context->newInstance();
+                        //if($ctx->onError === null || $ctx->context !== $prefix && $ctx->context !== 'web'){
                         if($ctx->onError === null || !($ctx->context === $prefix || $ctx->context === 'web')){
                             continue;
                         }
@@ -195,7 +188,7 @@ final class Generator
             $fileName = $file->getBasename();
             $fileName = pathinfo($fileName, PATHINFO_FILENAME);
            
-            if ($fileName) {
+            if ($fileName !== '' && $fileName !== '0') {
                 try{
                     $class = new ReflectionClass("{$this->namespace}{$fileName}");
  
@@ -253,7 +246,7 @@ final class Generator
             $fileName = $file->getBasename();
             $fileName = pathinfo($fileName, PATHINFO_FILENAME);
            
-            if ($fileName) {
+            if ($fileName !== '' && $fileName !== '0') {
                 try{
                     $class = new ReflectionClass("{$this->namespace}{$fileName}");
  

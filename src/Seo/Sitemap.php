@@ -116,6 +116,7 @@ final class Sitemap
 
         $urls = self::getUrls($url);
         $app = app();
+        
         if($urls === false || $urls === []){
             return false;
         }

@@ -9,6 +9,7 @@
 */
 namespace Luminova\Template;
 
+use \Luminova\Application\Foundation;
 use \Luminova\Optimization\Minification;
 use \Luminova\Cache\ViewCache;
 use \DateTimeInterface;
@@ -46,7 +47,7 @@ class Helper
         bool $copy = false,
     ): Minification
     {
-        if(self::$min === null){
+        if(!self::$min instanceof Minification){
             self::$min = new Minification();
         }
 
@@ -71,7 +72,7 @@ class Helper
         DateTimeInterface|int|null $expiry = 0, 
     ): ViewCache
     {
-        if(self::$viewCache === null){
+        if(!self::$viewCache instanceof ViewCache){
             self::$viewCache = new ViewCache();
         }
 
@@ -91,7 +92,7 @@ class Helper
     */
     public static function bothTrim(string $path): string 
     {
-        return  trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
     }
 
     /** 
@@ -104,8 +105,7 @@ class Helper
     {
         $level = 0;
         if(isset($_SERVER['REQUEST_URI'])){
-            $length = isset($_SERVER['SCRIPT_NAME']) ? strlen(dirname($_SERVER['SCRIPT_NAME'])) : 0;
-            $url = substr(rawurldecode($_SERVER['REQUEST_URI']), $length);
+            $url = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen(Foundation::getBase()));
 
             if (($pos = strpos($url, '?')) !== false) {
                 $url = substr($url, 0, $pos);

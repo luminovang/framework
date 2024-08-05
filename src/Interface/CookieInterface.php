@@ -9,7 +9,7 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Base\BaseConfig;
+use \App\Config\Cookie as CookieConfig;
 
 interface CookieInterface
 {
@@ -21,7 +21,7 @@ interface CookieInterface
   public const NONE = 'none';
 
   /**
-   * Cookies are not sent on normal cross-site subrequests (for example to
+   * Cookies are not sent on normal cross-site sub-requests (for example to
    * load images or frames into a third-party site), but are sent when a
    * user is navigating to the origin site (i.e., when following a link).
    */
@@ -44,11 +44,11 @@ interface CookieInterface
   /**
    * Set cookie options.
    * 
-   * @param class-object<BaseConfig>|array $options An array of cookie options or cookie config class object.
+   * @param CookieConfig|array $options An array of cookie options or cookie config class object.
    * 
    * @return CookieInterface This Cookie instance.
    */
-  public function setOptions(BaseConfig|array $options): self;
+  public function setOptions(CookieConfig|array $options): self;
 
   /**
    * Create a new Cookie instance from a `Set-Cookie` header.

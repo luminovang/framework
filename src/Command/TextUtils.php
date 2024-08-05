@@ -94,8 +94,8 @@ final class TextUtils
         $horizontal= '─';
         $vertical = '│';
     
-        $horizontalBorder = $topLeft . str_repeat($horizontal, (int) $padding) . $topRight . PHP_EOL;
-        $bottomBorder = $bottomLeft . str_repeat($horizontal, (int) $padding) . $bottomRight . PHP_EOL;
+        $horizontalBorder = $topLeft . str_repeat($horizontal, $padding) . $topRight . PHP_EOL;
+        $bottomBorder = $bottomLeft . str_repeat($horizontal, $padding) . $bottomRight . PHP_EOL;
 
         return $horizontalBorder . $vertical . $text . $vertical . PHP_EOL . $bottomBorder;
     }
@@ -115,9 +115,7 @@ final class TextUtils
         $leftPadding = floor($size / 2);
         $rightPadding = ceil($size / 2);
 
-        $centered = str_repeat(' ', (int) $leftPadding) . $text . str_repeat(' ', (int) $rightPadding);
-
-        return $centered;
+        return str_repeat(' ', (int) $leftPadding) . $text . str_repeat(' ', (int) $rightPadding);
     }
 
     /**

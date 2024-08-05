@@ -23,8 +23,6 @@ class ArrayObject
             return array_column($values, $property);
         }
 
-        return array_map(function($object) use ($property) {
-            return $object->$property;
-        }, (array) $values);
+        return array_map(fn($object) => $object->$property, (array) $values);
     }
 }

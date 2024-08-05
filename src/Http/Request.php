@@ -19,6 +19,7 @@ use \Luminova\Functions\Normalizer;
 use \App\Config\Security;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
+use \JsonException;
 
 /**
  * Request HTTP getter method 
@@ -109,7 +110,7 @@ final class Request
      */
     public function __construct()
     {
-        $this->server = new Server((array) $_SERVER);
+        $this->server = new Server($_SERVER);
         $this->header = new Header();
         $this->httpBody['GET'] = $_GET;
         $this->httpBody['POST'] = $_POST;
@@ -173,20 +174,22 @@ final class Request
     public function getArray(string $method, string $key, array $default = []): array
     {
         $method = strtoupper($method);
-        if(in_array($method, $this->methods, true)){
-            if(isset($this->httpBody[$method][$key])) {
-                $result = $this->httpBody[$method][$key];
-                
-                if(is_string($result)) {
-                    $decode = json_decode($result, true);
+        if (in_array($method, $this->methods, true) && isset($this->httpBody[$method][$key])) {
+            $result = $this->httpBody[$method][$key];
+    
+            if(is_string($result)) {
+                try{
+                    $decode = json_decode($result, true, 512, JSON_THROW_ON_ERROR);
 
                     if ($decode !== null || $decode !== false) {
                         return (array) $decode ?? $default;
                     }
+                }catch(JsonException){
+                    return $default;
                 }
-                
-                return (array) $result ?? $default;
             }
+            
+            return (array) $result ?? $default;
         }
         
         throw new InvalidArgumentException("Request method '$method' is not supported, supported methods are [" . implode(', ', $this->methods) . "]");
@@ -211,29 +214,31 @@ final class Request
    /**
      * Get the uploaded file information.
      * 
-     * @param string $name File name.
+     * @param string $name The input file name.
      * 
-     * @return File|false Uploaded file information or false if file not found.
+     * @return File|null Return uploaded file instance or null if file not found.
      */
-    public function getFile(string $name): File|bool
+    public function getFile(string $name): ?File
     {
         if (isset($_FILES[$name])) {
             return $this->parseFile($_FILES[$name]);
         }
 
-        return false;
+        return null;
     }
 
     /**
      * Get the uploaded files information.
      *
-     * @return false|array<int,File> Uploaded files information or false if no files found.
+     * @return array<int,File>|false Uploaded files information or false if no files found.
     */
     public function getFiles(): array|bool
     {
         $files = [];
         foreach ($_FILES as $index => $fileInfo) {
-            $files[] = $this->parseFile($fileInfo, $index);
+            if(($file = $this->parseFile($fileInfo, $index)) !== false){
+                $files[] = $file;
+            }
         }
 
         if($files === []){
@@ -302,10 +307,8 @@ final class Request
      */
     public function getAuth(): ?string
     {
-        if(!$auth = $this->header->get('Authorization')){
-            if(!$auth = $this->server->get('HTTP_AUTHORIZATION')){
-                $auth = $this->server->get('REDIRECT_HTTP_AUTHORIZATION');
-            }
+        if(!$auth = $this->header->get('Authorization') && !$auth = $this->server->get('HTTP_AUTHORIZATION')){
+            $auth = $this->server->get('REDIRECT_HTTP_AUTHORIZATION');
         }
 
         if($auth === null){
@@ -463,11 +466,9 @@ final class Request
     */
     public function getHostname(bool $extension = false, bool $port = true): ?string
     {
-        if (!$hostname = $this->server->get('HTTP_HOST')) {
-            if (!$hostname = $this->header->get('HOST')) {
-                if (!$hostname = $this->server->get('SERVER_NAME')) {
-                    $hostname = $this->server->get('SERVER_ADDR', '');
-                }
+        if (!$hostname = $this->server->get('HTTP_HOST') && !$hostname = $this->header->get('HOST')) {
+            if (!$hostname = $this->server->get('SERVER_NAME')) {
+                $hostname = $this->server->get('SERVER_ADDR', '');
             }
         }
 
@@ -539,10 +540,8 @@ final class Request
     */
     public function getPort(): int|string|null
     {
-        if (!$port = $this->server->get('HTTP_X_FORWARDED_PORT')) {
-            if (!$port = $this->server->get('X_FORWARDED_PORT')) {
-                return $this->server->get('SERVER_PORT');
-            }
+        if (!$port = $this->server->get('HTTP_X_FORWARDED_PORT') && !$port = $this->server->get('X_FORWARDED_PORT')) {
+            return $this->server->get('SERVER_PORT');
         }
         
         $pos = ('[' === $port[0]) ? strpos($port, ':', strrpos($port, ']')) : strrpos($port, ':');
@@ -591,7 +590,7 @@ final class Request
      */
     public function getUserAgent(?string $useragent = null): UserAgent
     {
-        if($this->agent === null){
+        if(!$this->agent instanceof UserAgent){
             $this->agent = new UserAgent($useragent);
         }
 
@@ -701,11 +700,7 @@ final class Request
             return false;
         }
 
-        if(static::isTrusted($domain, 'origin')){
-            return true;
-        }
-
-        return false;
+        return static::isTrusted($domain, 'origin');
     }
 
     /**
@@ -729,8 +724,7 @@ final class Request
 
             // To only use path and query remove the fragment.
             $uri = strtok($uri, '#');
-
-            if (strpos($uri, '?') !== false) {
+            if (str_contains($uri, '?')) {
                 // Remove the fragment if exists
                 $uri = strtok($uri, '#');
             }
@@ -778,17 +772,16 @@ final class Request
         if ($method === null || $this->getMethod() === $method) {
             $input = file_get_contents('php://input');
             $type = $this->getContentType();
-            if ($type !== '' && strpos($type, 'multipart/form-data') !== false) {
+
+            if ($type !== '' && str_contains($type, 'multipart/form-data')) {
                 $body = array_merge($_FILES, $_POST);
                
                 if ($input !== false) {
                     parse_str($input, $fields);
                     $body = array_merge($body, $fields);
                 }
-            } else {
-                if ($input !== false) {
-                    parse_str($input, $body);
-                }
+            } elseif ($input !== false) {
+                parse_str($input, $body);
             }
         }
 
@@ -805,7 +798,7 @@ final class Request
      */
     protected function parseFile(array $file, int $index = 0): File|bool
     {
-        if(empty($file)){
+        if($file === []){
             return false;
         }
 
@@ -823,9 +816,9 @@ final class Request
             $file['type'] ?? null,
             (int) ($file['size'] ?? 0),
             ($mime === false ? null : $mime),
-            (empty($extension) ? '' : strtolower($extension)),
+            (($extension === '' || $extension === null) ? '' : strtolower($extension)),
             $file['tmp_name'] ?? null,
-            $file['error'] ?? 0
+            $file['error'] ?? UPLOAD_ERR_OK
         );
     }
 }

@@ -57,11 +57,7 @@ final class Schema
      */
     public static function getInstance(): static
     {
-        if (static::$instance === null) {
-            static::$instance = new static();
-        }
-
-        return static::$instance;
+        return static::$instance ??= new static();
     }
 
     /**

@@ -205,7 +205,7 @@ class Connection
         throw new DatabaseLimitException("Database connection limit has reached it limit per user.");
       }
 
-      if (!empty($this->pools)) {
+      if ($this->pools !== []) {
         $connection = array_pop($this->pools);
 
         if (isset($connection) && $connection->isConnected()) {

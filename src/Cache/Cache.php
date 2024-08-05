@@ -73,12 +73,12 @@ final class Cache
     /**
      * Create an instance of the cache engine based on the provided engine type.
      *
-     * @param string $engine The cache engine to create (e.g., self::FILE or self::MEM).
+     * @param int $engine The cache engine to create (e.g., self::FILE or self::MEM).
      *
      * @return FileCache|MemoryCache Return the cache engine instance.
      * @throws ClassException When the Memcached class is not available for the MemoryCache.
      */
-    private static function newInstance(string $engine): FileCache|MemoryCache
+    private static function newInstance(int $engine): FileCache|MemoryCache
     {
         switch ($engine) {
             case static::MEM:

@@ -12,18 +12,12 @@ namespace Luminova\Routing;
 class Segments 
 {
     /**
-     * @var array $segments
-    */
-    private array $segments = [];
-
-    /**
      * Initializes class.
      * 
-     * @param array<int,string> Array list of url segments.
+     * @param array<int,string> array list of url segments.
     */
-    public function __construct(array $segments)
+    public function __construct(private array $segments = [])
     {
-        $this->segments = $segments;
     }
 
     /**

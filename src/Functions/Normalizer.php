@@ -45,11 +45,11 @@ class Normalizer
 			$target = "target='{$target}'";
 			$link = $matches[1];
 
-			if (strpos($link, APP_HOSTNAME) === 0) {
+			if (str_starts_with($link, APP_HOSTNAME)) {
 				return '<a href="' . $link . '" ' . $target . '>' . $link . '</a>';
-			} else {
-				return '<a href="' . APP_URL . '?redirect=' . urlencode($link) . '" ' . $target . '>' . $link . '</a>';
 			}
+
+			return '<a href="' . APP_URL . '?redirect=' . urlencode($link) . '" ' . $target . '>' . $link . '</a>';
 		}, $text);
 
 		// Replace mentions, excluding email-like patterns
@@ -278,11 +278,7 @@ class Normalizer
 			return true;
 		}
 
-		if(preg_match("/^([a-zA-Z0-9])+([a-zA-Z0-9\._-])*@([a-zA-Z0-9_-])+([a-zA-Z0-9\._-]+)+$/", $email)){
-			return true;
-		}
-
-		return false;
+		return (bool) preg_match("/^([a-zA-Z0-9])+([a-zA-Z0-9\._-])*@([a-zA-Z0-9_-])+([a-zA-Z0-9\._-]+)+$/", $email);
 	}
 
 	/** 
@@ -393,11 +389,9 @@ class Normalizer
 		];
 
 		$pattern = $patterns[$type] ?? $patterns['default'];
-
 		$format = preg_replace($pattern, $replacement, $string);
-		$format = trim($format);
 
-		return $format;
+		return trim($format);
 	}
 
 	/**
@@ -444,7 +438,7 @@ class Normalizer
 	{
 		$domain = '';
 
-		if (strpos($url, '.') !== false) {
+		if (str_contains($url, '.')) {
 			$parts = explode('.', $url, 4);
 
 			if (count($parts) >= 3) {
@@ -544,12 +538,12 @@ class Normalizer
 			return substr($string, 0, ($visibleCount * -1)) . str_repeat($masker, $visibleCount);
 		}
 
-		$hiddenCount = (int) $length - ($visibleCount * 2);
+		$hiddenCount = (int) ($length - ($visibleCount * 2));
 
 		if ($position === 'left') {
 			return str_repeat($masker, $visibleCount) . substr($string, $visibleCount, $hiddenCount) . substr($string, ($visibleCount * -1), $visibleCount);
 		}
 
-		return substr($string, 0, $visibleCount) . str_repeat($masker, $hiddenCount) . substr($string, (int) ($visibleCount * -1), $visibleCount);
+		return substr($string, 0, $visibleCount) . str_repeat($masker, $hiddenCount) . substr($string, $visibleCount * -1, $visibleCount);
 	}
 }

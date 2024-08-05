@@ -35,7 +35,7 @@ final class Modules
                     $namespace = rtrim($namespace, '\\') . '\\';
                     $baseDir = path('library') . trim($baseDir, '/') . '/';
 
-                    if (strpos($class, $namespace) === 0) {
+                    if (str_starts_with($class, $namespace)) {
                         $relativeClass = substr($class, strlen($namespace));
                         $file = $baseDir . str_replace('\\', '/', $relativeClass) . '.php';
 

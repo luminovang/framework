@@ -78,7 +78,7 @@ class Context extends BaseConsole
     private function installContext(mixed $name, bool $noError = false): int 
     {
         if(empty($name)){
-            $this->error('Context name is required');
+            $this->error('Route prefix name is required');
             $this->beeps();
 
             return STATUS_ERROR;
@@ -98,12 +98,12 @@ class Context extends BaseConsole
         \$router->get('/', '$controller');
         PHP;
 
-        $newContext = <<<PHP
-            new Context('$name', $onError)
+        $newPrefix = <<<PHP
+            new Prefix('$name', $onError)
         PHP;
 
         $position = strpos($indexContent, 'Boot::http()->router->context(') + strlen('Boot::http()->router->context(');
-        $content = substr_replace($indexContent, "\n$newContext,", $position, 0);
+        $content = substr_replace($indexContent, "\n$newPrefix,", $position, 0);
 
         if (strpos($name, ' ') !== false) {
             $this->writeln('Your context name contains space characters', 'red');
@@ -113,9 +113,13 @@ class Context extends BaseConsole
 
         if (has_uppercase($name)) {
             $this->beeps();
-            $input = $this->chooser('Your context name contains uppercase character, are you sure you want to continue?', ['Continue', 'Abort'], true);
+            $input = $this->prompt(
+                'Your context name contains uppercase character, are you sure you want to continue?', 
+                ['yes', 'no'], 
+                'required|in_array(yes,no)'
+            );
 
-            if($input == 0){
+            if($input === 'yes'){
                 if(write_content($index, $content)){
                     write_content(root('routes') . $name . '.php', $handler);
                     $this->writeln("Route context installed: {$name}", 'green');
@@ -148,6 +152,8 @@ class Context extends BaseConsole
     private function clearAttributes(): int 
     {
         $backup = root('/writeable/caches/routes/');
+        $deleted = 0;
+        
         FileManager::remove($backup, false, $deleted);
         
         if ($deleted > 0) {
@@ -173,7 +179,7 @@ class Context extends BaseConsole
         $apiContents = '';
         $cliContents = '';
         $cliHeader = '';
-        $newContext = '';
+        $newPrefix = '';
 
         foreach($collector->getRoutes() as $ctx => $groups){
 
@@ -247,18 +253,18 @@ class Context extends BaseConsole
         make_dir($path);
 
         if ($httpContents !== '' && write_content($path . 'web.php', $head . $httpContents)) {
-            $newContext .= "    new Context(Context::WEB, [ViewErrors::class, 'onWebError']),\n";
+            $newPrefix .= "    new Prefix(Prefix::WEB, [ViewErrors::class, 'onWebError']),\n";
         }
 
         if ($apiContents !== '' && write_content($path . 'api.php', $head . $apiContents)) {
-            $newContext .= "    new Context(Context::API, [ViewErrors::class, 'onApiError']),\n";
+            $newPrefix .= "    new Prefix(Prefix::API, [ViewErrors::class, 'onApiError']),\n";
         }
 
         if ($cliContents !== '' && write_content($path . 'cli.php', $head . $cliHeader . $cliContents)) {
-            $newContext .= "    new Context(Context::CLI),\n";
+            $newPrefix .= "    new Prefix(Prefix::CLI),\n";
         }
 
-        if ($newContext !== '') {
+        if ($newPrefix !== '') {
             $index = root('public') . 'index.php';
             $indexContent = get_content($index);
             $search = "Boot::http()->router->context(";
@@ -274,8 +280,8 @@ class Context extends BaseConsole
                     $afterContext = substr($indexContent, $endPos);
 
                     // Construct the new content
-                    $newContextContent = rtrim("\n$newContext", ",\n") . "\n";
-                    $newIndexContent = $beforeContext . $newContextContent . $afterContext;
+                    $newPrefixContent = rtrim("\n$newPrefix", ",\n") . "\n";
+                    $newIndexContent = $beforeContext . $newPrefixContent . $afterContext;
                     
                     if(write_content($index, $newIndexContent)){
                         $this->writeln("Routes exported successfully.", 'green');

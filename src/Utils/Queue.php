@@ -105,10 +105,10 @@ class Queue
             $pid = pcntl_fork();
             if ($pid === -1) {
                 // Fork failed
-                $className = is_callable($job) && is_array($job) ? get_class($job[0]) : null;
+                $className = (is_callable($job) && is_array($job)) ? $job[0]::class : null;
                 $message = 'Queue could not fork.' . ($className ? ' Class: ' . $className : '');
                 logger('debug', $message);
-            } elseif ($pid) {
+            } elseif ($pid !== 0) {
                 // Parent process
                 // In the parent, we can continue without waiting for the child to finish
             } else {
@@ -145,7 +145,7 @@ class Queue
      */
     public function isEmpty(): bool
     {
-        return empty($this->jobs);
+        return $this->jobs === [];
     }
 
     /**
@@ -155,7 +155,7 @@ class Queue
      */
     public function hasQueue(): bool
     {
-        return !$this->isEmpty() && count(array_filter($this->jobs, [$this, 'isCallable'])) > 0;
+        return !$this->isEmpty() && array_filter($this->jobs, fn($job): bool => $this->isCallable($job)) !== [];
     }
 
     /**

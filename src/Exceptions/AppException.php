@@ -11,10 +11,11 @@ namespace Luminova\Exceptions;
 
 use \Luminova\Application\Foundation;
 use \Luminova\Interface\ExceptionInterface;
+use \Stringable;
 use \Exception;
 use \Throwable;
 
-abstract class AppException extends Exception implements ExceptionInterface
+abstract class AppException extends Exception implements ExceptionInterface, Stringable
 {
   /**
     * {@inheritdoc}

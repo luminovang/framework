@@ -33,7 +33,7 @@ class LoggerAware implements LoggerInterface, LoggerAwareInterface
     */
     public function __construct(?LoggerInterface $logger = null)
     {
-        if($logger !== null){
+        if($logger instanceof LoggerInterface){
             static::$logger = $logger;
         }
     }

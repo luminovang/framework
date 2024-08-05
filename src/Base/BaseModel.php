@@ -118,6 +118,21 @@ abstract class BaseModel
     private static ?SearchInstance $searchInstance = null;
 
     /**
+     * Search flags.
+     * 
+     * @var array<string,string> $searchFlags
+    */
+    private static array $searchFlags = [
+        'start' => SearchInstance::START_WITH_QUERY,
+        'end' => SearchInstance::END_WITH_QUERY,
+        'any' => SearchInstance::HAVE_ANY_QUERY,
+        'second' => SearchInstance::HAVE_SECOND_QUERY,
+        'length2' => SearchInstance::START_WITH_QUERY_2LENGTH,
+        'length3' => SearchInstance::START_WITH_QUERY_3LENGTH,
+        'startend' => SearchInstance::START_END_WITH_QUERY,
+    ];
+
+    /**
      * Constructor for the Model class.
      * If null is passed framework will initialize builder lass instance.
      * 
@@ -371,7 +386,7 @@ abstract class BaseModel
         $search->setQuery($query)->split();
         $queries = $search->getQuery();
 
-        if(empty($queries)){
+        if($queries === ''){
             return false;
         }
 
@@ -383,7 +398,7 @@ abstract class BaseModel
         $tbl->cache($cache_key, $this->table . '_doSearch', $this->expiry, static::$cacheFolder);
         $result = $tbl->execute();
 
-        if(empty($result)){
+        if($result === false || empty($result)){
             return false;
         }
 
@@ -423,24 +438,12 @@ abstract class BaseModel
     */
     protected function searchInstance(string $flag): SearchInstance
     {
-        if(!class_uses(SearchInstance::class)){
+        if(self::$searchInstance === null && !class_uses(SearchInstance::class)){
             throw new RuntimeException('The search controller library is not installed. Please run the composer command "composer require peterujah/php-search-controller" to install it.');
         }
 
-        $flags = [
-            'start' => SearchInstance::START_WITH_QUERY,
-            'end' => SearchInstance::END_WITH_QUERY,
-            'any' => SearchInstance::HAVE_ANY_QUERY,
-            'second' => SearchInstance::HAVE_SECOND_QUERY,
-            'length2' => SearchInstance::START_WITH_QUERY_2LENGTH,
-            'length3' => SearchInstance::START_WITH_QUERY_3LENGTH,
-            'startend' => SearchInstance::START_END_WITH_QUERY,
-        ];
-
-        $flag = $flags[$flag] ?? SearchInstance::HAVE_ANY_QUERY;
-
         self::$searchInstance ??= new SearchInstance();
-        self::$searchInstance->setOperators($flag);
+        self::$searchInstance->setOperators(self::$searchFlags[$flag] ?? SearchInstance::HAVE_ANY_QUERY);
         self::$searchInstance->setParameter($this->searchable);
 
         return self::$searchInstance;

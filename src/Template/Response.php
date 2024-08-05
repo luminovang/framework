@@ -19,11 +19,6 @@ use \Exception;
 class Response 
 {
     /**
-     * @var int $status
-    */
-    private int $status = 200; 
-
-    /**
      * @var bool $encode
     */
     private bool $encode = true;
@@ -34,18 +29,17 @@ class Response
     private bool $minify = false;
 
     /**
-     * @var Minification|null $minifier
+     * @var Minification|null $min
     */
-    private static ?Minification $minifier = null;
+    private static ?Minification $min = null;
 
     /**
      * Response constructor.
      *
      * @param int $status HTTP status code (default: 200 OK)
      */
-    public function __construct(int $status = 200)
+    public function __construct(private int $status = 200)
     {
-        $this->status = $status;
         $this->encode = (bool) env('enable.encoding', true);
         $this->minify = (bool) env('page.minification', false);
     }
@@ -122,13 +116,13 @@ class Response
         $length = false;
        
         if($minify && str_contains($headers['Content-Type'], 'text/html')){
-            if(self::$minifier === null){
-                self::$minifier = new Minification();
-                self::$minifier->codeblocks(false);
-                self::$minifier->copyable(false);
+            if(self::$min === null){
+                self::$min = new Minification();
+                self::$min->codeblocks(false);
+                self::$min->copyable(false);
             }
 
-            $instance = self::$minifier->compress($content, $headers['Content-Type']);
+            $instance = self::$min->compress($content, $headers['Content-Type']);
             $content = $instance->getContent();
             $length = $instance->getLength();
         }

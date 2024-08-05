@@ -21,6 +21,7 @@ use \Luminova\Http\Request;
 use \Luminova\Http\UserAgent;
 use \Luminova\Cookies\Cookie;
 use \Luminova\Sessions\Session;
+use \Luminova\Interface\SessionManagerInterface;
 use \Luminova\Interface\ValidationInterface;
 use \Luminova\Template\Response;
 use \Luminova\Template\Layout;
@@ -376,18 +377,19 @@ if(!function_exists('session')) {
     /**
      * Return session data if key is present else return session instance.
      *
-     * @param string $key Key to retrieve the data.
-     * @param bool $shared Use shared instance (default: true).
+     * @param string $key Optional key to retrieve the data (default: null).
+     * @param bool $shared Weather to use shared instance (default: true).
+     * @param class-object<SessionManagerInterface> $manager The session manager interface to use (default: SessionManager).
      *
      * @return Session|mixed Return session instance or value if key is present.
     */
-    function session(?string $key = null, bool $shared = true): mixed
+    function session(?string $key = null, bool $shared = true, ?SessionManagerInterface $manager = null): mixed
     {
         if ($key !== null && $key !== '') {
-            return Factory::session($shared)->get($key);
+            return Factory::session($manager, $shared)->get($key);
         }
 
-        return Factory::session($shared);
+        return Factory::session($manager, $shared);
     }
 }
 
@@ -793,22 +795,30 @@ if (!function_exists('get_column')) {
 if (!function_exists('is_nested')) {
     /**
      * Check if array is a nested array.
+     * If recursive is false it only checks one level of depth.
      * 
-     * @param array $array Array to check.
+     * @param array $array The array to check.
+     * @param bool $recursive Determines whether to check nested array values (default: false).
      * 
      * @return bool Return true if array is a nested array.
     */
-    function is_nested(array $array): bool 
+    function is_nested(array $array, bool $recursive = false): bool 
     {
         if ($array === []) {
             return false;
         }
 
         foreach ($array as $value) {
-            if (is_array($value)) return true;
+            if(!is_array($value)){
+                return false;
+            }
+
+            if ($recursive && !is_nested($value, true)){
+                return false;
+            }
         }
 
-        return false; 
+        return true; 
     }
 }
 
@@ -834,25 +844,24 @@ if (!function_exists('is_associative')) {
     }
 }
 
-if (!function_exists('is_json')) {
+if (!function_exists('json_validate')) {
     /**
      * Check if the input is a valid JSON object.
      *
      * @param mixed $input The input to check.
+     * @param int $depth Maximum nesting depth of the structure being decoded (default: 512).
+     * @param int $flags Optional flags (default: 0).
      *
      * @return bool Returns true if the input is valid JSON; false otherwise.
      */
-    function is_json(mixed $input): bool
+    function json_validate(mixed $input, int $depth = 512, int $flags = 0): bool
     {
         if (!is_string($input)) {
             return false;
         }
-
-        try{
-            return is_array(json_decode($input, true, 512, JSON_THROW_ON_ERROR));
-        }catch(JsonException){
-            return false;
-        }
+     
+        json_decode($input, null, $depth, $flags);
+        return json_last_error() === JSON_ERROR_NONE;
     }
 }
 
@@ -860,7 +869,7 @@ if (!function_exists('array_is_list')) {
     /**
      * Check if array is list.
      * 
-     * @param array $array Array to check.
+     * @param array $array The array to check.
      * 
      * @return bool Return true if array is sequential, false otherwise.
     */
@@ -905,7 +914,7 @@ if (!function_exists('to_object')) {
     /**
      * Convert an array or string list to json object.
      *
-     * @param array|string $input Array or String list to convert.
+     * @param array|string $input The array or string list to convert.
      * 
      * @return object|false $object Return JSON object, otherwise false.
     */
@@ -917,7 +926,8 @@ if (!function_exists('to_object')) {
 
         if (is_string($input)) {
             $input = list_to_array($input);
-            if(!is_array($input)){
+
+            if($input === false){
                 return false;
             }
         }
@@ -936,7 +946,7 @@ if (!function_exists('list_to_array')) {
     /**
      * Convert string list to array.
      * 
-     * @param string $list The string list.
+     * @param string $list The string list to convert.
      * 
      * @return array|false Return array, otherwise false.
      * 
@@ -1006,7 +1016,7 @@ if (!function_exists('is_list')) {
     /**
      * Check if string is a valid list format.
      * 
-     * @param string $input string to check.
+     * @param string $input The string to check.
      * @param bool $trim Trim whitespace around the values.
      * 
      * @return bool Return true or false on failure.
@@ -1152,7 +1162,6 @@ if (!function_exists('get_class_name')) {
         return get_class_name(get_class($from));
     }
 }
-
 
 if (!function_exists('is_command')) {
     /**
@@ -1470,4 +1479,4 @@ if (!function_exists('shared')) {
 
         return $default;
     }
- }
+}

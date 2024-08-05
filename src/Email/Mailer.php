@@ -62,14 +62,14 @@ class Mailer
             $interface = new $interface(!PRODUCTION);
         }
 
-        if (!$interface instanceof MailerInterface) {
-            throw MailerException::throwWith('invalid_client', get_class($interface));
-        }
-
         if($interface === null){
             throw MailerException::throwWith('no_client', $interface);
         }
 
+        if (!$interface instanceof MailerInterface) {
+            throw MailerException::throwWith('invalid_client', $interface::class);
+        }
+        
         $this->client = $interface;
         $this->initialize();
     }

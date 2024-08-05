@@ -256,7 +256,7 @@ class Terminal
             ? false : (is_array($validationRules) && $validationRules !== []
             ? "in_array('" .  implode("', '", $validationRules) . "')" : $validationRules));
 
-        if ($validationRules && strpos($validationRules, 'required') !== false) {
+        if ($validationRules && str_contains($validationRules, 'required')) {
             $default = '';
         }
 
@@ -315,7 +315,7 @@ class Terminal
                     $password = shell_exec("cscript //nologo " . escapeshellarg($vbscript));
                 }
     
-                if (empty($password)) {
+                if ($password === '' || $password === false || $password === null) {
                     $password = shell_exec('powershell -Command "Read-Host -AsSecureString | ConvertFrom-SecureString"');
                 }
 
@@ -350,7 +350,7 @@ class Terminal
                             static::error("Error: Timeout exceeded. No input provided.");
                         }, $timeout);
     
-                        if ($result === true) {
+                        if ($result) {
                             if ($continue === 'yes') {
                                 static::visibility(true);
                             }
@@ -429,8 +429,7 @@ class Terminal
      */
     protected static final function visibility(bool $visibility = true): bool
     {
-        $command = ($visibility === true) ? 'stty echo' : 'stty -echo';
-        
+        $command = ($visibility) ? 'stty echo' : 'stty -echo';
         return shell_exec($command) !== null;
     }
 
@@ -493,10 +492,7 @@ class Terminal
             }
         } while (!static::validate($input, ['input' => $validationRules]));
 
-        $inputArray = list_to_array($input);
-        $input = self::getInputValues($inputArray, $optionValues);
-
-        return $input;
+        return self::getInputValues(list_to_array($input), $optionValues);
     }
 
     /**
@@ -604,9 +600,8 @@ class Terminal
             $length = max(0, $largest - TextUtils::strlen($line));
             $text .= ' ' . $line . str_repeat(' ', $length) . ' '  . PHP_EOL;
         }
-        $text .= str_repeat(' ', $largest + 2);
-
-        return $text;
+    
+        return $text . str_repeat(' ', $largest + 2);
     }
 
     /**
@@ -688,11 +683,8 @@ class Terminal
             echo $prompt;
         }
 
-        if ($useFopen) {
-            $input  = fgets(fopen(STDIN, 'rb'));
-        } else {
-            $input = fgets(STDIN);
-        }
+    
+        $input = $useFopen ? fgets(fopen(STDIN, 'rb')) : fgets(STDIN);
 
         return ($input === false) ? '' : trim($input);
     }
@@ -1040,9 +1032,7 @@ class Terminal
                 $result['command'] = $arguments[0]??'';
             }
         }else{
-            $hasSpace = array_reduce($arguments, function ($carry, $item) {
-                return $carry || strpos($item, ' ') !== false;
-            }, false);
+            $hasSpace = array_reduce($arguments, fn($carry, $item) => $carry || str_contains($item, ' '), false);
 
             $callerCommend = $arguments;
             if ($hasSpace) {
@@ -1087,20 +1077,18 @@ class Terminal
             if ($arg[0] !== '-') {
                 if ($optionValue) {
                     $optionValue = false;
-                } else {
-                    if($controller && strpos($arg, '=') !== false){
-                        [$arg, $value] = explode('=', $arg);
-                        $result['arguments'][] = $arg;
-                        $result['arguments'][] = $value;
-                    }else{
-                        $result['arguments'][] = $arg;
-                    }
+                } elseif ($controller && str_contains($arg, '=')) {
+                    [$arg, $value] = explode('=', $arg);
+                    $result['arguments'][] = $arg;
+                    $result['arguments'][] = $value;
+                }else{
+                    $result['arguments'][] = $arg;
                 }
             } else {
                 $arg = ltrim($arg, '-');
                 $value = null;
 
-                if(strpos($arg, '=') !== false){
+                if(str_contains($arg, '=')){
                     [$arg, $value] = explode('=', $arg);
                 }
 
@@ -1125,11 +1113,7 @@ class Terminal
     */
     public static final function getArgument(int $index): mixed
     {
-        if(isset(static::$commandsOptions['arguments'][$index - 1])){
-            return static::$commandsOptions['arguments'][$index - 1];
-        }
-
-        return null;
+        return static::$commandsOptions['arguments'][$index - 1] ?? null;
     }
 
     /**
@@ -1139,7 +1123,7 @@ class Terminal
     */
     public static final function getArguments(): array
     {
-        return static::$commandsOptions['arguments']??[];
+        return static::$commandsOptions['arguments'] ?? [];
     }
 
     /**
@@ -1236,11 +1220,7 @@ class Terminal
     */
     public static final function getQuery(string $name): mixed
     {
-        if(isset(static::$commandsOptions[$name])){
-            return static::$commandsOptions[$name];
-        }
-        
-        return null;
+        return static::$commandsOptions[$name] ?? null;
     }
 
     /**
@@ -1363,11 +1343,7 @@ class Terminal
         if(is_array($command)){
             $command = $command['options'] ?? $command;
 
-            if(array_key_exists('help', $command) || array_key_exists('h', $command)){
-                return true;
-            }
-
-            return false;
+            return array_key_exists('help', $command) || array_key_exists('h', $command);
         }
 
         return preg_match('/^(-h|--help|)$/', $command);

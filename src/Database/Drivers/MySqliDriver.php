@@ -266,11 +266,7 @@ final class MySqliDriver implements DatabaseInterface
 
         if ($this->stmt !== null || $this->stmt !== false) {
             $this->executed = true;
-            if (str_starts_with($query, 'SELECT')) {
-                $this->rowCount = $this->stmt->num_rows;
-            } else {
-                $this->rowCount = $this->connection->affected_rows;
-            }
+            $this->rowCount = str_starts_with($query, 'SELECT') ? $this->stmt->num_rows : $this->connection->affected_rows;
         }
         
         return $this;
@@ -415,9 +411,9 @@ final class MySqliDriver implements DatabaseInterface
         try {
             $bindParams = ($this->bindParams ?: $this->bindValues);
 
-            if(!empty($bindParams)){
+            if($bindParams !== []){
                 $params = null;
-                $bindType = (empty($this->bindParams)) ? 'values' : 'params';
+                $bindType = ($this->bindParams === []) ? 'values' : 'params';
 
                 $this->parseParams($bindParams, $bindType);
             }
@@ -578,12 +574,7 @@ final class MySqliDriver implements DatabaseInterface
         }
 
         $msqliMode = null;
-
-        if($type === 'next'){
-            $method = ($mode === FETCH_OBJ) ? 'fetch_object' : 'fetch_assoc';
-        }else{
-            $method = 'fetch_all';
-        }
+        $method = (($type === 'next') ? (($mode === FETCH_OBJ) ? 'fetch_object' : 'fetch_assoc') : 'fetch_all');
 
         if($method === 'fetch_all'){
             $mapping = [
@@ -614,11 +605,7 @@ final class MySqliDriver implements DatabaseInterface
         if($mode === FETCH_COLUMN){
             $columns = [];
             foreach ($response as $column) {
-                if(is_array($column) || is_object($column)){
-                    $columns[] = reset($column);
-                }else{
-                    $columns[] = $column;
-                }
+                $columns[] = (is_array($column) || is_object($column)) ? reset($column) : $column;
             }
 
             return $columns;

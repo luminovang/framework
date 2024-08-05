@@ -56,7 +56,7 @@ class CronJobs extends BaseConsole
     public function run(?array $params = null): int
     {
         $this->explain($params);
-        setenv('throw.cli.exceptions', true);
+        setenv('throw.cli.exceptions', 'true');
         $command = trim($this->getCommand());
         $force = $this->getAnyOption('force', 'f', false);
 

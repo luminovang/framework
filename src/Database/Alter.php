@@ -227,7 +227,7 @@ class Alter
      * @param string $database The database type.
      * @param string $table The name of the table.
      * @param string $column The name of the column.
-     * @param mixed $value The default value.
+     * @param mixed $default The default value.
      * @return string The SQL statement.
      */
     public static function setDefault(

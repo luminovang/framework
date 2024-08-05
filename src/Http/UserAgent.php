@@ -10,6 +10,7 @@
 namespace Luminova\Http;
 
 use \App\Config\Browser;
+use \Stringable;
 
 /**
  * Getter method for retrieving the browser information.
@@ -23,7 +24,7 @@ use \App\Config\Browser;
  * @method string getReferrer() Get the referrer hostname, if available.
  * @method string getPlatformVersion() Get the platform/operating system version.
  */
-class UserAgent
+class UserAgent implements Stringable
 {
     /**
      * The full User Agent string.
@@ -127,6 +128,7 @@ class UserAgent
     {
         $useragent ??= trim($_SERVER['HTTP_USER_AGENT']??'');
         self::$config ??= new Browser();
+
         $this->replace($useragent);
         $this->isReferral();
     }
@@ -196,7 +198,7 @@ class UserAgent
     {
         $userAgent ??= trim($_SERVER['HTTP_USER_AGENT']??'');
        
-        if (!empty($userAgent)) {
+        if ($userAgent !== '') {
             if (preg_match('/^(.*?)\/([\d.]+) \(([^;]+); ([^;]+); ([^)]+)\) (.+)$/', $userAgent, $matches)) {
                 return self::extract($matches, $return_array, true);
             }
@@ -358,7 +360,7 @@ class UserAgent
     */
     public function isTrusted(): bool
     {
-        if (!$this->useragent) {
+        if ($this->useragent === '' || $this->useragent === '0') {
             return false;
         }
 
@@ -392,16 +394,10 @@ class UserAgent
     {
         if($lookup === null && $pattern = preg_replace('/(^\/|\/$|\/[imsxADSUXJu]*)/', '', $name)){
             return preg_match('/' . $pattern . '/i', $this->useragent);
-            //return preg_match('/' . preg_quote($pattern, '/') . '/i', $this->useragent);
         }
 
         $lookup = $this->{$lookup} ?? false;
-
-        if($lookup && stripos($lookup, $name) !== false){
-            return true;
-        }
-
-        return false;
+        return $lookup && stripos($lookup, $name) !== false;
     }
 
     /**

@@ -21,7 +21,7 @@ interface EncryptionInterface
      * Constructor, optional pass a blank key string and `setKey()` later before encrypt/decrypt.
      *
      * @param string $key The encryption key.
-     * @param string $method The encryption cypher method.
+     * @param string $method The encryption cipher method.
      * @param int $size Key size for encryption.
      * 
      * @throws InvalidException If the method or block size is invalid while using openssl.
@@ -43,16 +43,16 @@ interface EncryptionInterface
     public function setKey(string $key): void;
 
     /**
-     * Set nonce for encription and decryption, if null random nonce will be generated.
+     * Set nonce for encryption and decryption, if null random nonce will be generated.
      *
-     * @param string|null $nonce The nonce for encription.
+     * @param string|null $nonce The nonce for encryption.
      */
     public function setNonce(?string $nonce = null): void;
 
     /**
      * Set the encryption method and block size for openssl.
      *
-     * @param string $method The encryption cypher method.
+     * @param string $method The encryption cipher method.
      * @param int $size Key size for encryption.
      *
      * @throws EncryptionException If the method or block size is invalid.

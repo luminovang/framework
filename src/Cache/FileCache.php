@@ -149,7 +149,7 @@ final class FileCache
         $this->setExtension(self::JSON);
         $this->setPath(root('/writeable/caches/') . $folder);
 
-        if( $storage !== null){
+        if($storage !== null){
             $this->storageHashed = static::hashStorage($storage);
             $this->create();
         }
@@ -591,7 +591,7 @@ final class FileCache
     {
         $serialize = serialize($data);
 
-        if ($serialize === '' || $serialize === null) {
+        if ($serialize === '') {
             ErrorException::throwException("Failed to create cache file!");
             return false;
         }
@@ -641,7 +641,7 @@ final class FileCache
             return [];
         }
 
-        $content = unserialize(self::unlock($content));
+        $content = unserialize($this->unlock($content));
 
         if ($content === null) {
             unlink($filepath);
@@ -675,7 +675,7 @@ final class FileCache
      * 
      * @return string Return cache content without the first PHP security line.
      */
-    private static function unlock(string $str): string 
+    private function unlock(string $str): string 
     {
         $position = strpos($str, PHP_EOL);
         if ($position === false){

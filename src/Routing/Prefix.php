@@ -12,38 +12,38 @@ namespace Luminova\Routing;
 use \Luminova\Exceptions\RuntimeException;
 use \Closure;
 
-final class Context 
+final class Prefix 
 {
     /** 
-     * Default WEB controller type
+     * Default WEB controller type.
      * 
      * @var string WEB
     */
     public const WEB = 'web';
 
     /** 
-     * Default API controller type
+     * Default API controller type.
      * 
      * @var string API
     */
     public const API = 'api';
 
     /** 
-     * Default CLI controller type
+     * Default CLI controller type.
      * 
      * @var string CLI
     */
     public const CLI = 'cli';
 
      /** 
-     * Default CONSOLE controller type
+     * Default CONSOLE controller type.
      * 
      * @var string CONSOLE
     */
     public const CONSOLE = 'console';
 
      /** 
-     * Default WEBHOOK controller type
+     * Default WEBHOOK controller type.
      * 
      * @var string WEBHOOK
     */
@@ -55,7 +55,7 @@ final class Context
     private string $name = '';
 
     /**
-     * @var null|Closure|array<int,string>$onError
+     * @var Closure|array<int,string>|null $onError
     */
     private Closure|array|null $onError = null;
 
@@ -65,10 +65,11 @@ final class Context
     private static array $contexts = [];
 
     /**
-     * Initialize Constructor
+     * Initialize constructor to register a router prefix.
+     * This constructor serves as a url prefix locator for your application routing.
      * 
-     * @param string $name Route content name.
-     * @param Closure|array<int,string>|null $onError Context error handling method.
+     * @param string $name The route url prefix name (e.g, `blog`).
+     * @param Closure|array<int,string>|null $onError Optional prefix context error handler.
      *      - array - Method name in [ViewErrors::class, 'methodname']; to handle error.
      *      - Closure - Closure(class-string<\T> $arguments [, mixed $... ]): int.
      * 
@@ -79,7 +80,7 @@ final class Context
         $this->name = $name;
 
         if($onError !== null && !($onError instanceof Closure) && !(is_array($onError) && count($onError) === 2)){
-            throw new RuntimeException('Invalid error handler method. Expected either a Closure or a list array with two elements, where the first element is the class name and the second element is the method to handle the error', E_USER_WARNING);
+            throw new RuntimeException('Invalid error handler. Expected either a Closure or a callable array, where the first element is the class name and the second element is the method to handle the error', E_USER_WARNING);
         }
 
         $this->onError = $onError;
@@ -90,9 +91,9 @@ final class Context
     }
 
     /**
-     * Get context route name
+     * Get route prefix name.
      * 
-     * @return string $this->name route instance type.
+     * @return string Return route prefix name.
      * @internal
     */
     public function getName(): string 
@@ -101,9 +102,9 @@ final class Context
     }
 
     /**
-     * Get context controller error callback handler
+     * Get route prefix error handler.
      * 
-     * @return null|callable|array<int,string> Return error handlers.
+     * @return callable|array<int,string>|null Return router error handlers.
      * @internal
     */
     public function getErrorHandler(): Closure|array|null
@@ -112,9 +113,9 @@ final class Context
     }
 
     /**
-     * Get context registered custom instance
+     * Get route registered prefixes.
      * 
-     * @return array<string,string> Return registered context
+     * @return array<string,string> Return registered route prefixes.
      * @internal
     */
     public static function getPrefixes(): array 

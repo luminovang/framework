@@ -9,14 +9,14 @@
  */
 namespace Luminova\Cookies;
 
-use \Luminova\Base\BaseConfig;
 use \App\Config\Cookie as CookieConfig;
 use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
 use \Luminova\Interface\CookieInterface;
 use \Luminova\Exceptions\CookieException;
+use \Stringable;
 
-class Cookie implements CookieInterface
+class Cookie implements CookieInterface, Stringable
 {
     /**
      * @var string $prefix Cookie prefix
@@ -144,9 +144,9 @@ class Cookie implements CookieInterface
     /**
      * {@inheritdoc}
     */
-    public function setOptions(BaseConfig|array $options): self
+    public function setOptions(CookieConfig|array $options): self
     {
-        if ($options instanceof BaseConfig) {
+        if ($options instanceof CookieConfig) {
             $options = [
                 'expires'  => $options->expiration,
                 'path'     => $options->cookiePath,
@@ -266,11 +266,7 @@ class Cookie implements CookieInterface
             return true;
         }
 
-        if (isset($_COOKIE[$key])) {
-            return true;
-        }
-
-        return false;
+        return isset($_COOKIE[$key]);
     }
 
     /** 
@@ -340,7 +336,7 @@ class Cookie implements CookieInterface
     {
         $maxAge = ($this->expires - Time::now()->getTimestamp());
 
-        return $maxAge >= 0 ? $maxAge : 0;
+        return max($maxAge, 0);
     }
 
     /** 
@@ -442,7 +438,7 @@ class Cookie implements CookieInterface
         unset($part);
 
         foreach ($parts as $part) {
-            if (strpos($part, '=') !== false) {
+            if (str_contains($part, '=')) {
                 [$attr, $val] = explode('=', $part);
             } else {
                 $attr = $part;
@@ -462,15 +458,11 @@ class Cookie implements CookieInterface
     {
         $name ??= $this->name;
 
-        if (strpos($name, '__Secure-') === 0) {
+        if (str_starts_with($name, '__Secure-')) {
             return true;
         }
 
-        if (strpos($name, '__Host-') === 0) {
-            return true;
-        }
-
-        return false;
+        return str_starts_with($name, '__Host-');
     }
   
     /**
@@ -566,11 +558,11 @@ class Cookie implements CookieInterface
      */
     private function validatePrefix(): void
     {
-        if (strpos($this->prefix, '__Secure-') === 0 && !$this->secure) {
+        if (str_starts_with($this->prefix, '__Secure-') && !$this->secure) {
             throw CookieException::throwWith('invalid_secure_prefix');
         }
 
-        if (strpos($this->prefix, '__Host-') === 0 && (!$this->secure || $this->domain !== '' || $this->path !== '/')) {
+        if (str_starts_with($this->prefix, '__Host-') && (!$this->secure || $this->domain !== '' || $this->path !== '/')) {
             throw CookieException::throwWith('invalid_host_prefix');
         }
     }
@@ -592,11 +584,11 @@ class Cookie implements CookieInterface
 
         $sameSite = strtolower($sameSite);
 
-        if (!in_array(strtolower($sameSite), ['none', 'lax', 'strict'], true)) {
+        if (!in_array($sameSite, ['none', 'lax', 'strict'], true)) {
             throw CookieException::throwWith('invalid_same_site', $sameSite);
         }
 
-        if (strtolower($sameSite) === 'none' && !$this->secure) {
+        if ($sameSite === 'none' && !$this->secure) {
             throw CookieException::throwWith('invalid_same_site_none');
         }
     }
@@ -618,9 +610,7 @@ class Cookie implements CookieInterface
             }
         }
 
-        $finalValue = (string) $value;
-
-        return $finalValue;
+        return (string) $value;
     }
 
     /**
@@ -657,7 +647,7 @@ class Cookie implements CookieInterface
                 return $_COOKIE[$name];
             }
 
-            if (is_json($_COOKIE[$name])) {
+            if (json_validate($_COOKIE[$name])) {
                return json_decode($_COOKIE[$name], true) ?? [];
             }
 
@@ -682,10 +672,7 @@ class Cookie implements CookieInterface
 
         if($options === []){
             $options = $this->options;
-            //$options['expires'] = (($expiry === null) ? time() + $this->options['expires'] : $expiry);
-            $options['expires'] = (($expiry === null) ? $this->options['expires'] : $expiry);
-        }else{
-            $options = $this->options;
+            $options['expires'] = ($expiry ?? $this->options['expires']);
         }
 
         $isRaw = $options['raw'];

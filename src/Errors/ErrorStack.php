@@ -28,14 +28,6 @@ final class ErrorStack
     private int $line = 0;
 
     /** 
-     * The error message.
-     * 
-     * @var mixed $message
-     * 
-    */
-    private mixed $message = '';
-
-    /** 
      * The error name.
      * 
      * @var mixed $name
@@ -43,21 +35,6 @@ final class ErrorStack
     */
     private mixed $name = 'ERROR';
 
-    /** 
-     * The error code.
-     * 
-     * @var int $code
-     * 
-    */
-    private int $code = 0;
-
-     /** 
-     * The previous error exception.
-     * 
-     * @var Throwable|null $previous
-     * 
-    */
-    private ?Throwable $previous = null;
 
     /**
      * Error constructor.
@@ -65,11 +42,8 @@ final class ErrorStack
      * @param int $code The error code (default: 0).
      * @param Throwable|null $previous Register previous error exception.
      */
-    public function __construct(string $message, int $code = 0, ?Throwable $previous = null)
+    public function __construct(private string $message, private int $code = 0, private ?Throwable $previous = null)
     {
-        $this->message = $message;
-        $this->code = $code;
-        $this->previous = $previous;
     }
 
     /**

@@ -165,19 +165,14 @@ class Header
      */
     public static function getHeaders(): array
     {
-        $headers = [];
-
-        if (function_exists('apache_request_headers')) {
-            $headers = apache_request_headers();
-
-            if ($headers !== false) {
-                return $headers;
-            }
+        if (function_exists('apache_request_headers') && ($headers = apache_request_headers()) !== false) {
+            return $headers;
         }
 
+        $headers = [];
         // If PHP function apache_request_headers() is not available or went wrong: manually extract headers
         foreach ($_SERVER as $name => $value) {
-            if (substr($name, 0, 5) == 'HTTP_' || $name == 'CONTENT_TYPE' || $name == 'CONTENT_LENGTH') {
+            if (str_starts_with($name, 'HTTP_') || $name == 'CONTENT_TYPE' || $name == 'CONTENT_LENGTH') {
                 $header = str_replace([' ', 'Http'], ['-', 'HTTP'], ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))));
                 $headers[$header] = $value;
             }
@@ -284,6 +279,7 @@ class Header
         if (Foundation::isApiContext()) {
             self::initConfig();
             $origin = static::server('HTTP_ORIGIN');
+            
             if($origin){
                 if (!isset($headers['Access-Control-Allow-Origin']) && !empty(self::$config->allowOrigins)) {
                     $allowed = null;
@@ -369,6 +365,8 @@ class Header
     */
     public static function getContentTypes(string $type, int|null $index = 0): array|string|null
     {
+        $type = ($type === 'txt') ? 'text' : $type;
+
         if($index === null){
             return self::$contentTypes[$type] ?? null;
         }

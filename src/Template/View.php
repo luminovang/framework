@@ -173,7 +173,7 @@ trait View
      * 
      * @var string[] $supportedTypes
     */
-    private static array $supportedTypes = ['html', 'json', 'text', 'xml', 'js', 'css', 'rdf', 'atom', 'rss'];
+    private static array $supportedTypes = ['html', 'json', 'text', 'txt', 'xml', 'js', 'css', 'rdf', 'atom', 'rss'];
 
     /** 
      * Initialize template view configuration.
@@ -416,7 +416,7 @@ trait View
      * 
      * - html Html content.
      * - json Json content.
-     * - text Plain text content.
+     * - text|txt Plain text content.
      * - xml  Xml content.
      * - js   JavaScript content.
      * - css  CSS content.

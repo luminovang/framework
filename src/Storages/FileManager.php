@@ -329,10 +329,10 @@ class FileManager
 
         try {
             $include = ($flags & FILE_USE_INCLUDE_PATH) !== 0;
-            $mode = ($flags & FILE_APPEND) ? 'a' : 'w';
+            $mode = (($flags & FILE_APPEND) !== 0) ? 'a' : 'w';
             $file = new SplFileObject($filename, $mode, $include, $context);
 
-            if ($flags & (LOCK_EX | LOCK_NB | LOCK_SH | LOCK_UN)) {
+            if (($flags & (LOCK_EX | LOCK_NB | LOCK_SH | LOCK_UN)) !== 0) {
                 $file->flock($flags);
                 $result = $file->fwrite($content);
                 $file->flock(LOCK_UN);
@@ -371,7 +371,7 @@ class FileManager
         error_clear_last();
 
         try {
-            $mode = ($flags & FILE_APPEND) ? 'a' : 'w';
+            $mode = (($flags & FILE_APPEND) !== 0) ? 'a' : 'w';
             $include = ($flags & FILE_USE_INCLUDE_PATH) !== 0;
             $file = new SplFileObject($filename, $mode, $include, $context);
 
@@ -473,7 +473,9 @@ class FileManager
 	 */
 	public static function copy(string $origin, string $dest, int &$copied = 0): bool
 	{
-		make_dir($dest);
+		if(!make_dir($dest)){
+            return false;
+        }
 
 		$dir = opendir($origin);
 
@@ -490,10 +492,8 @@ class FileManager
 					if(static::copy($srcFile, $destFile, $copied)){
                         $copied++;
                     }
-				} else {
-					if(copy($srcFile, $destFile)){
-                        $copied++;
-                    }
+				} elseif(copy($srcFile, $destFile)){
+					$copied++;
 				}
 			}
 		}
@@ -514,7 +514,9 @@ class FileManager
      */
     public static function move(string $origin, string $dest, int &$moved = 0): bool
     {
-        make_dir($dest);
+        if(!make_dir($dest)){
+            return false;
+        }
 
         $dir = opendir($origin);
 
@@ -531,10 +533,8 @@ class FileManager
                     if (static::move($srcFile, $destFile, $moved)) {
                         $moved++;
                     }
-                } else {
-                    if (rename($srcFile, $destFile)) {
-                        $moved++;
-                    }
+                } elseif(rename($srcFile, $destFile)) {
+                    $moved++;
                 }
             }
         }
@@ -586,8 +586,6 @@ class FileManager
         } elseif (is_string($content)) {
             $typeOf = 'string';
             $length = strlen($content);
-        } else {
-            return false;
         }
         
         if (!$length) {
@@ -614,6 +612,7 @@ class FileManager
 
         if (isset($_SERVER['HTTP_RANGE'])) {
             [$length, $offset, $limit, $rangeHeader] = self::getHttpContentRange($length);
+            
             if ($rangeHeader !== null) {
                 $isPartialContent = true;
                 $headers["Content-Range"] = $rangeHeader;
@@ -695,8 +694,8 @@ class FileManager
         $httpRange = $_SERVER['HTTP_RANGE'] ?? false;
 
         if ($httpRange && preg_match('/bytes=(\d+)-(\d+)?/', $httpRange, $matches)) {
-            $offset = intval($matches[1]);
-            $limit = isset($matches[2]) ? intval($matches[2]) : $filesize - 1;
+            $offset = (int) $matches[1];
+            $limit = isset($matches[2]) ? (int) $matches[2] : $filesize - 1;
             
             $limit = min($limit, $filesize - 1);
             $length = ($limit - $offset) + 1;
@@ -925,9 +924,9 @@ class FileManager
         if ($filesize > 5 * 1024 * 1024) {
             if (preg_match('/^(text\/.*|application\/json|application\/xml)$/i', $mime)) {
                 return self::readText($handler, $filesize, $length);
-            } else {
-                return self::readBinary($handler, $length);
             }
+            
+            return self::readBinary($handler, $length);
         }
 
         $read = fpassthru($handler);

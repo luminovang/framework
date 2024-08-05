@@ -74,7 +74,7 @@ class Storage extends Adapters
         $this->adapter = strtolower($adapter);
         $this->config = self::getConfigs($this->adapter);
 
-        if($this->filesystem === null){
+        if(!$this->filesystem instanceof Filesystem){
             parent::isInstalled($this->adapter);
             $this->filesystem = new Filesystem(
                 parent::getAdapter($this->adapter, $this->config),
@@ -218,7 +218,7 @@ class Storage extends Adapters
         if($this->symbolic($target, $link)){
             try {
                 return $this->url($target);
-            } catch (Exception $e) {
+            } catch (Exception) {
                 return false;
             }
         }

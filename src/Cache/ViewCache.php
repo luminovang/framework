@@ -17,13 +17,6 @@ use \DateTimeInterface;
 final class ViewCache
 {
     /**
-     * The directory where cached files will be stored.
-     * 
-     * @var string $directory 
-     */
-    private string $directory;
-
-    /**
      * The expiration time for cached 
      * 
      * @var int $expiration 
@@ -51,16 +44,18 @@ final class ViewCache
      * @param DateTimeInterface|int $expiration The expiration time for cached files in seconds (default: 0).
      * @param string $directory The directory where cached files will be stored (default: 'cache').
      */
-    public function __construct(DateTimeInterface|int $expiration = 0, string $directory = 'cache')
+    public function __construct(
+        DateTimeInterface|int $expiration = 0, 
+        private string $directory = 'cache'
+    )
     {
-        $this->directory = $directory;
         $this->setExpiry($expiration);
     }
 
     /**
      * Set cache expiration in seconds.
      *  
-     * @param DateTimeInterface|int $expiration Expiry
+     * @param DateTimeInterface|int $expiration The cache expiration.
      * 
      * @return self Return class instance.
     */
@@ -265,9 +260,9 @@ final class ViewCache
      * 
      * @param string|null $type The type of cached content to check (default: null).
      * 
-     * @return string|null Return cached contents, null otherwise.
+     * @return string|int|null Return cached contents, 404 for mismatched, null otherwise.
     */
-    public function get(?string $type = null): ?string
+    public function get(?string $type = null): string|int|null
     {
         if($this->lockFile === [] && $this->init() === false){
             return null;
@@ -321,11 +316,7 @@ final class ViewCache
         $pageContent .= $content;
         $pageContent .= "<?php }?>\n";
 
-        if(write_content($this->getFilename(), $pageContent)){
-            return true;
-        }
-
-        return false;
+        return write_content($this->getFilename(), $pageContent);
     }
 
     /**
@@ -343,7 +334,7 @@ final class ViewCache
             
             if (isset($_SERVER['HTTP_ACCEPT_ENCODING'])) {
                 $encoding = strtolower($encoding);
-                if (strpos($_SERVER['HTTP_ACCEPT_ENCODING'], $encoding) !== false) {
+                if (str_contains($_SERVER['HTTP_ACCEPT_ENCODING'], $encoding)) {
                     return $encoding;
                 }
             }

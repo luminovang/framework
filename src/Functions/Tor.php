@@ -54,11 +54,11 @@ final class Tor
      * Checks if the given IP address is a Tor exit node.
      * 
      * @param string $ip The Ip address to check.
-     * @param int $expiration The expiration time to request for new exit nodes from tor api (default: 2592000).
+     * @param int $expiration The expiration time to request for new exit nodes from tor api (default: 2_592_000).
      * 
      * @return bool true if the IP address is a Tor exit node otherwise false.
     */
-    public static function isTor(string $ip, int $expiration = 2592000): bool 
+    public static function isTor(string $ip, int $expiration = 2_592_000): bool 
     {
         $result = self::fetchTorExitNodeList($expiration);
         

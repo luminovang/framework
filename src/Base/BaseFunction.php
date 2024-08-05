@@ -82,14 +82,18 @@ abstract class BaseFunction extends Normalizer
      * @throws BadMethodCallException When the called method does not exist.
      * @throws RuntimeException When the string is not valid UTF-8 or cannot be converted.
      */
-    public static final function escape(string|array $input, string $context = 'html', string|null $encoding = 'utf-8'): array|string
+    public static final function escape(
+        string|array $input, 
+        string $context = 'html', 
+        string|null $encoding = 'utf-8'
+    ): array|string
     {
         if (is_array($input)) {
             array_walk_recursive($input, function (&$value, $key) use ($context, $encoding) {
                 $context = is_string($key) ? $key : $context;
                 $value = static::escape($value, $context, $encoding);
             });
-        } elseif(is_string($input)) {
+        } else {
             $context = strtolower($context);
 
             if ($context === 'raw') {
@@ -97,7 +101,7 @@ abstract class BaseFunction extends Normalizer
             }
 
             if (!in_array($context, ['html', 'js', 'css', 'url', 'attr'], true)) {
-                throw new InvalidArgumentException('Invalid escape context provided.');
+                throw new InvalidArgumentException(sprintf('Invalid escape context provided %s.', $context));
             }
 
             $method = ($context === 'attr') ? 'escapeHtmlAttr' : 'escape' . ucfirst($context);

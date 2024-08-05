@@ -79,7 +79,7 @@ abstract class BaseController
     */
     public function __isset(string $key): bool
     {
-        return isset($this->{$key});
+        return property_exists($this, $key);
     }
 
     /**
@@ -89,7 +89,7 @@ abstract class BaseController
     */
     protected final function request(): Request
     {
-        if($this->request === null){
+        if(!$this->request instanceof Request){
             $this->request = new Request();
         }
 
@@ -103,7 +103,7 @@ abstract class BaseController
     */
     protected final function validate(): Validation
     {
-        if($this->validate === null){
+        if(!$this->validate instanceof Validation){
             $this->validate = new Validation();
         }
         
@@ -117,7 +117,7 @@ abstract class BaseController
     */
     protected final function app(): Application
     {
-        if($this->app === null){
+        if(!$this->app instanceof Application){
             $this->app = Application::getInstance();
         }
         

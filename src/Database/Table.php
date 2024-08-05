@@ -14,6 +14,107 @@ use \Luminova\Exceptions\DatabaseException;
 
 final class Table 
 {
+     /**
+     * Default field value none.
+     * 
+     * @var string DEFAULT_NONE
+    */
+    public const DEFAULT_NONE = '__NONE__';
+
+    /**
+     * Default field value timestamp.
+     * 
+     * @var string DEFAULT_TIMESTAMP
+    */
+    public const DEFAULT_TIMESTAMP = 'CURRENT_TIMESTAMP';
+
+    /**
+     * Default field value null.
+     * 
+     * @var string DEFAULT_NULL
+    */
+    public const DEFAULT_NULL = 'NULL';
+
+    /**
+     * Primary key.
+     * 
+     * @var string INDEX_PRIMARY_KEY
+    */
+    public const INDEX_PRIMARY_KEY = 'PRIMARY KEY';
+
+    /**
+     * Foreign key.
+     * 
+     * @var string INDEX_FOREIGN_KEY
+    */
+    public const INDEX_FOREIGN_KEY = 'FOREIGN KEY';
+   
+    /**
+     * Uniqu table index.
+     * 
+     * @var string INDEX_UNIQUE
+    */
+    public const INDEX_UNIQUE = 'UNIQUE';
+
+    /**
+     * Indexd table index.
+     * 
+     * @var string INDEX_DEFAULT
+    */
+    public const INDEX_DEFAULT = 'INDEX';
+
+    /**
+     * Full text table index.
+     * 
+     * @var string INDEX_FULLTEXT
+    */
+    public const INDEX_FULLTEXT = 'FULLTEXT';
+
+    /**
+     * Spatial table index.
+     * 
+     * @var string INDEX_SPATIAL
+    */
+    public const INDEX_SPATIAL = 'SPATIAL';
+
+    /**
+     * Generate schema for mysql database.
+     * 
+     * @var string MYSQL
+    */
+    public const MYSQL = 'mysql';
+
+    /**
+     * Generate schema for sql server database.
+     * 
+     * @var string SQL_SERVER
+    */
+    public const SQL_SERVER = 'sql-server';
+
+    /**
+     * Generate schema for ms access database.
+     * 
+     * @var string MS_ACCESS
+    */
+    public const MS_ACCESS = 'ms-access';
+
+    /**
+     * Generate schema for oracle database.
+     * 
+     * @var string ORACLE
+    */
+    public const ORACLE = 'oracle';
+
+    /**
+     * Replaces format to column name.
+     * 
+     * @var string COLUMN_NAME
+    */
+    public const COLUMN_NAME = '{__REPLACE_COLUMN_NAME__}';
+
+    /**
+     * Reference to table trait.
+    */
     use TableTrait;
     
     /**
@@ -517,10 +618,9 @@ final class Table
     {
         if ($constraint) {
             $primaries = $this->getTableOptions('primary');
-            if (!empty($primaries)) {
-                if(in_array($this->getColumnName(), $primaries)){
-                    throw new DatabaseException('Cannot add primary key constraint when multiple columns are designated as primary key.');
-                }
+
+            if ($primaries !== null && $primaries !== [] && in_array($this->getColumnName(), $primaries)) {
+                throw new DatabaseException('Cannot add primary key constraint when multiple columns are designated as primary key.');
             }
 
             return $this->add('pkConstraint', self::COLUMN_NAME, false);
@@ -589,16 +689,10 @@ final class Table
      */
     public function virtual(string $expression): self
     {
-        switch ($this->database) {
-            case self::SQL_SERVER:
-            case self::MS_ACCESS:
-                return $this->attribute("AS {$expression}");
-
-            case self::MYSQL:
-            case self::ORACLE:
-            default:
-                return $this->attribute("GENERATED ALWAYS AS ({$expression}) VIRTUAL");
-        }
+        return match ($this->database) {
+            self::SQL_SERVER, self::MS_ACCESS => $this->attribute("AS {$expression}"),
+            default => $this->attribute("GENERATED ALWAYS AS ({$expression}) VIRTUAL")
+        };
     }
 
     /**

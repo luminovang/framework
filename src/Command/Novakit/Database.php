@@ -60,16 +60,16 @@ class Database extends BaseConsole
     {
         $this->explain($options);
         // Temporarily enable cli exception
-        setenv('throw.cli.exceptions', true);
+        setenv('throw.cli.exceptions', 'true');
         try{
-            static::$builder ??= Builder::getInstance();
+            self::$builder ??= Builder::getInstance();
         }catch(AppException|Exception $e){
             $this->writeln("Database Connection Error: " . $e->getMessage(), 'white', 'red');
             return STATUS_ERROR;
         }
 
-        static::$isDebug = (bool) $this->getAnyOption('debug', 'b', false);
-        shared('SHOW_QUERY_DEBUG', static::$isDebug);
+        self::$isDebug = (bool) $this->getAnyOption('debug', 'b', false);
+        shared('SHOW_QUERY_DEBUG', self::$isDebug);
 
         return match(trim($this->getCommand())){
             'db:clear' => $this->clearLocks(),
@@ -108,7 +108,7 @@ class Database extends BaseConsole
       
         $noTransaction = $this->getAnyOption('no-transaction', 'n', false);
  
-        if(static::$builder->table($table)->truncate(!$noTransaction)){
+        if(self::$builder->table($table)->truncate(!$noTransaction)){
             $this->writeln("Success: Table '{$table}' was truncated successfully.", 'white', 'green');
             return STATUS_SUCCESS;
         }
@@ -235,7 +235,7 @@ class Database extends BaseConsole
         $executed = 0; 
         $path = root('/app/Database/Migrations/');
 
-        if(!$noBackup && !static::$isDebug){
+        if(!$noBackup && !self::$isDebug){
             $backup = root('/writeable/database/Migrations/');
             if(file_exists($lockfile = $backup . 'migrations.lock')){
                 $lock = get_content($lockfile);
@@ -253,7 +253,7 @@ class Database extends BaseConsole
             sleep(1);
             $instance->alter();
 
-            if(static::$isDebug){
+            if(self::$isDebug){
                 return STATUS_SUCCESS;
             }
 
@@ -261,7 +261,7 @@ class Database extends BaseConsole
                 $executed++;
 
                 if(!$noBackup && ($lock === [] || !$this->guardVersion($migrateClass, $lock, $path, $backup, null, true))){
-                    static::lockFile($lock, $migrateClass, $path, $backup);
+                    self::lockFile($lock, $migrateClass, $path, $backup);
                 }
             }
 
@@ -347,7 +347,7 @@ class Database extends BaseConsole
     
                         $executed++;
                         if(!$noBackup){
-                            static::lockFile($lock, $seed, $path, $backup, true);
+                            self::lockFile($lock, $seed, $path, $backup, true);
                         }
                     }
                 }
@@ -369,7 +369,7 @@ class Database extends BaseConsole
 
                     $executed++;
                     if(!$noBackup){
-                        static::lockFile($lock, $seed, $path, $backup, true);
+                        self::lockFile($lock, $seed, $path, $backup, true);
                     }
                 }
             }
@@ -384,10 +384,10 @@ class Database extends BaseConsole
                 */
                 $seeder = new $seed();
                 if($this->doSeeding($seeder)){
-                    $seeder->run(static::$builder);
+                    $seeder->run(self::$builder);
                     $executed++;
                     if(!$noBackup){
-                        static::lockFile($lock, $seed, $path, $backup, true);
+                        self::lockFile($lock, $seed, $path, $backup, true);
                     }
                 }
             }
@@ -424,7 +424,7 @@ class Database extends BaseConsole
         $noBackup = $this->getAnyOption('no-backup', 'n', false);
         $invokes = $this->getAnyOption('invoke', 'i', false);
         if(!$drop && $this->getAnyOption('rollback', 'r', false)){
-            static::$isDebug = false;
+            self::$isDebug = false;
             return $this->rollbackMigration($class, $noBackup, $invokes);
         }
 
@@ -437,12 +437,12 @@ class Database extends BaseConsole
         $backup = null; 
         $executed = 0; 
         $drop ??= $this->getAnyOption('drop', 'd', false);
-        static::$isDebug = $drop ? false : static::$isDebug;
+        self::$isDebug = $drop ? false : self::$isDebug;
         $path = root('/app/Database/Migrations/');
-        $shouldGuard = (static::$isDebug === false && $drop === false);
+        $shouldGuard = (self::$isDebug === false && $drop === false);
         $namespace = '\\App\\Database\\Migrations';
 
-        if(!static::$isDebug && $noBackup === false){
+        if(!self::$isDebug && $noBackup === false){
             $backup = root('/writeable/database/Migrations/');
             if(file_exists($lockfile = $backup . 'migrations.lock')){
                 $lock = get_content($lockfile);
@@ -463,7 +463,7 @@ class Database extends BaseConsole
                         $executed++;
 
                         if($noBackup === false){
-                            static::lockFile($lock, $migrate, $path, $backup, false, $drop);
+                            self::lockFile($lock, $migrate, $path, $backup, false, $drop);
                         }
                     }
                 }
@@ -478,7 +478,7 @@ class Database extends BaseConsole
                     $executed++;
 
                     if($noBackup === false){
-                        static::lockFile($lock, $migrate, $path, $backup, false, $drop);
+                        self::lockFile($lock, $migrate, $path, $backup, false, $drop);
                     }
                 }
             }
@@ -492,12 +492,12 @@ class Database extends BaseConsole
                     $executed++;
 
                     if($noBackup === false){
-                        static::lockFile($lock, $migrate, $path, $backup, false, $drop);
+                        self::lockFile($lock, $migrate, $path, $backup, false, $drop);
                     }
                 }
             }
 
-            if(static::$isDebug){
+            if(self::$isDebug){
                 return STATUS_SUCCESS;
             }
 
@@ -547,7 +547,7 @@ class Database extends BaseConsole
          */
         $instance = new $namespace();
 
-        if(static::$isDebug){
+        if(self::$isDebug){
             $instance->up();
             return false;
         }
@@ -603,7 +603,7 @@ class Database extends BaseConsole
     private function doSeeding(Seeder $seeder): bool 
     {
         try{
-            $seeder->run(static::$builder);
+            $seeder->run(self::$builder);
             $this->writeln("[" . $this->color(get_class_name($seeder), 'green') . "] Execution completed.");
             return true;
         } catch (Exception|AppException $e) {
@@ -680,7 +680,7 @@ class Database extends BaseConsole
                                 $executions++;
 
                                 if(!$noBackup){
-                                    static::updateLockFile($lock, (int) $input, $class, $migrateClass, $migrationPath, $backupPath);
+                                    self::updateLockFile($lock, (int) $input, $class, $migrateClass, $migrationPath, $backupPath);
                                 }
 
                                 foreach ($migrants as $migrate) {
@@ -776,7 +776,7 @@ class Database extends BaseConsole
                         }
 
                         if($table !== true && $table !== false){
-                            if(static::$builder->table($table)->temp()){
+                            if(self::$builder->table($table)->temp()){
                                $truncated = $this->doTruncate($table) === STATUS_SUCCESS;
                             }else{
                                 $this->writeln("Error: Unable to create backup table '{$table}'. Recovery of seed records may be impossible if rollback fails.", 'red');
@@ -797,7 +797,7 @@ class Database extends BaseConsole
                             if($this->doSeeding($seeder)){
                                 $executions++;
                                 if(!$noBackup){
-                                    static::updateLockFile($lock, (int) $input, null, $seederClass, $path, $backupPath, true);
+                                    self::updateLockFile($lock, (int) $input, null, $seederClass, $path, $backupPath, true);
                                 }
                             
                                 if($invokes === true){
@@ -805,7 +805,7 @@ class Database extends BaseConsole
                                         if($this->doSeeding(new $seed())){
                                             $executions++;
                                             if(!$noBackup){
-                                                static::updateLockFile($lock, (int) $input, null, $seed, $path, $backupPath, true);
+                                                self::updateLockFile($lock, (int) $input, null, $seed, $path, $backupPath, true);
                                             }
                                         }
                                     }
@@ -830,7 +830,7 @@ class Database extends BaseConsole
             }
         }
 
-        if($truncated && static::$builder->exec("INSERT INTO {$table} SELECT * FROM temp_{$table}") > 0){
+        if($truncated && self::$builder->exec("INSERT INTO {$table} SELECT * FROM temp_{$table}") > 0){
             $this->writeln("Table: '{$table}' records has been restored to last version");
         }
 
@@ -1046,7 +1046,7 @@ class Database extends BaseConsole
             return false;
         }
 
-        if(!static::versionChanged($path . $className . '.php', $backup . $last['backup'])){
+        if(!self::versionChanged($path . $className . '.php', $backup . $last['backup'])){
             if(!$alter){
                 $this->writeln("Skipped: No changed was applied to {$namespace}.", 'black', 'yellow');
             }

@@ -12,7 +12,7 @@ namespace Luminova\Routing;
 use \App\Application;
 use \Luminova\Http\Header;
 use \Luminova\Command\Terminal;
-use \Luminova\Routing\Context;
+use \Luminova\Routing\Prefix;
 use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Base\BaseApplication;
@@ -183,13 +183,13 @@ final class Router
      * Define URI prefixes and error handlers for specific URI prefix names.
      * Ensures only required routes for handling requests are loaded based on the URI prefix.
      * 
-     * @param Context|array<string,mixed>|null ...$contexts [, Context $... ] Arguments containing routing context or array of arguments.
+     * @param Prefix|array<string,mixed>|null ...$contexts [, Prefix $... ] Arguments containing routing prefix object or array of arguments.
      *              Pass `NULL` only when using route attributes.
      * 
      * @return self Returns the router instance.
      * @throws RouterException Throws if not context arguments was passed and route attribute is disabled.
      */
-    public function context(Context|array|null ...$contexts): self 
+    public function context(Prefix|array|null ...$contexts): self 
     {
         self::$isCli = is_command();
         self::$method  = self::getRoutingMethod();
@@ -221,15 +221,15 @@ final class Router
         }
 
         // When using default context manager.
-        if(empty($contexts)){
+        if($contexts === []){
             RouterException::throwWith('no_context', E_ERROR);
         }
         
         if (isset(self::$httpMethods[self::$method])) {
             $first = self::getFirst();
             $current = $this->baseGroup;
-            $fromArray = !($contexts[0] instanceof Context);
-            $prefixes = $fromArray ? self::getArrayPrefixes($contexts) : Context::getPrefixes();
+            $fromArray = !($contexts[0] instanceof Prefix);
+            $prefixes = $fromArray ? self::getArrayPrefixes($contexts) : Prefix::getPrefixes();
 
             foreach ($contexts as $context) {
                 $name = $fromArray ? ($context['prefix'] ?? '') : $context->getName();
@@ -763,7 +763,7 @@ final class Router
     {
         $prefixes = [];
         foreach ($contexts as $item) {
-            if ($item['prefix'] === Context::WEB || $item['prefix'] === null || $item['prefix'] === '') {
+            if ($item['prefix'] === Prefix::WEB || $item['prefix'] === null || $item['prefix'] === '') {
                 continue;
             }
 
@@ -791,7 +791,7 @@ final class Router
     ): bool|int
     {
         if($first === $name) {
-            if ($name === Context::CLI){
+            if ($name === Prefix::CLI){
                 if(!self::$isCli) {
                     return 2;
                 }
@@ -832,7 +832,7 @@ final class Router
     */
     private static function isWeContext(string $result, ?string $first = null): bool 
     {
-        return ($first === null || $first === '' || $result === Context::WEB) && $result !== Context::CLI && $result !== Context::API;
+        return ($first === null || $first === '' || $result === Prefix::WEB) && $result !== Prefix::CLI && $result !== Prefix::API;
     }
 
     /**
@@ -842,11 +842,7 @@ final class Router
     */
     private static function terminal(): Terminal
     {
-        if(self::$term === null){
-            self::$term = new Terminal();
-        }
-
-        return self::$term;
+        return self::$term ??= new Terminal();
     }
 
     /**
@@ -1133,79 +1129,6 @@ final class Router
     }
 
     /**
-     * Create a new instance of a class.
-     *
-     * @param string $class The class name.
-     * 
-     * @return object|null The new instance of the class, or null if the class is not found.
-     * @throws Exception Throws if the class does not exist or requires arguments to initialize.
-     */
-    private static function newInstance(string $class): ?object 
-    {
-        return match ($class) {
-            Application::class => self::$application ?? null,
-            self::class => self::$application?->router ?? null,
-            Terminal::class => self::$term ?? self::terminal(),
-            Factory::class => factory(),
-            'Closure' => fn(mixed ...$arguments): mixed => null,
-            default => new $class()
-        };
-    }
-
-    /**
-     * Get union types as array or string.
-     *
-     * @param ReflectionNamedType[]|ReflectionIntersectionType[] $unions The union types.
-     * 
-     * @return array Return the union types.
-     */
-    private static function getUnionTypes(array $unions): array
-    {
-        $types = [];
-        foreach ($unions as $type) {
-            if (!$type->isBuiltin()) {
-                return ['inject' => $type->getName()];
-            }
-
-            if ($type->allowsNull()) {
-                return ['builtin' => 'null'];
-            }
-
-            $types[$type->getName()] = $type->getName();
-        }
-
-        return [
-            'builtin' => $types['string'] ?? 'mixed'
-        ];
-    }
-
-    /**
-     * Cast a value to a specific type.
-     *
-     * @param string $type The type to cast to.
-     * @param mixed $value The value to cast.
-     * 
-     * @return mixed Return the casted value.
-     */
-    private static function typeCasting(string $type, mixed $value): mixed 
-    {
-        return match ($type) {
-            'bool' => (bool) $value,
-            'int' => (int) $value,
-            'float' => (float) $value,
-            'double' => (double) $value,
-            'null' => null,
-            'false' => false,
-            'true' => true,
-            'string' => (string) $value,
-            'array' => (array) $value,
-            'object' => (object) $value,
-            'callable' => fn(mixed ...$arguments):mixed => $value,
-            default => $value,
-        };
-    }
-
-    /**
     * Execute router HTTP callback class method with the given parameters using instance callback or reflection class.
     *
     * @param Closure|string|array<int,string> $callback Class public callback method eg: UserController:update.
@@ -1222,9 +1145,9 @@ final class Router
     ): bool
     {
         if ($callback instanceof Closure) {
-            $arguments = ((isset($arguments['command']) && self::$isCli) ?  ($arguments['params'] ?? []) : $arguments);
-            return status_code(call_user_func_array(
-                $callback, 
+            $arguments = ((self::$isCli && isset($arguments['command'])) ? ($arguments['params'] ?? []) : $arguments);
+            
+            return status_code(call_user_func_array($callback, 
                 self::injection($callback, $arguments, $injection)
             ), false);
         }
@@ -1234,7 +1157,7 @@ final class Router
             return self::reflection($callback[0], $callback[1], $arguments, $injection);
         }
 
-        if (stripos($callback, '::') !== false) {
+        if (str_contains($callback, '::')) {
             [$controller, $method] = explode('::', $callback);
 
             return self::reflection(
@@ -1388,16 +1311,88 @@ final class Router
     */
     private static function uriCapture(string $pattern, string $uri, mixed &$matches): bool
     {
-        error_clear_last();
         $matches = [];
         $pattern = '#^' . preg_replace('/\/{(.*?)}/', '/(.*?)', $pattern) . '$#';
         $result = (bool) preg_match_all($pattern, $uri, $matches, PREG_OFFSET_CAPTURE);
     
-        if ($result === false || preg_last_error() !== PREG_NO_ERROR) {
+        if (!$result || preg_last_error() !== PREG_NO_ERROR) {
             return false;
         }
 
         return $result;
+    }
+
+    /**
+     * Create a new instance of a class.
+     *
+     * @param class-string<\T> $class The class name to inject.
+     * 
+     * @return class-object<\T>|null The new instance of the class, or null if the class is not found.
+     * @throws Exception|AppException Throws if the class does not exist or requires arguments to initialize.
+     */
+    private static function newInstance(string $class): ?object 
+    {
+        return match ($class) {
+            Application::class => self::$application ?? null,
+            self::class => self::$application?->router ?? null,
+            Terminal::class => self::terminal(),
+            Factory::class => factory(),
+            Closure::class => fn(mixed ...$arguments): mixed => null,
+            default => new $class()
+        };
+    }
+
+    /**
+     * Get union types as array or string.
+     *
+     * @param ReflectionNamedType[]|ReflectionIntersectionType[] $unions The union types.
+     * 
+     * @return array Return the union types.
+     */
+    private static function getUnionTypes(array $unions): array
+    {
+        $types = [];
+        foreach ($unions as $type) {
+            if (!$type->isBuiltin()) {
+                return ['inject' => $type->getName()];
+            }
+
+            if ($type->allowsNull()) {
+                return ['builtin' => 'null'];
+            }
+
+            $types[$type->getName()] = $type->getName();
+        }
+
+        return [
+            'builtin' => $types['string'] ?? 'mixed'
+        ];
+    }
+
+    /**
+     * Cast a value to a specific type.
+     *
+     * @param string $type The type to cast to.
+     * @param mixed $value The value to cast.
+     * 
+     * @return mixed Return the casted value.
+     */
+    private static function typeCasting(string $type, mixed $value): mixed 
+    {
+        return match ($type) {
+            'bool' => (bool) $value,
+            'int' => (int) $value,
+            'float' => (float) $value,
+            'double' => (double) $value,
+            'null' => null,
+            'false' => false,
+            'true' => true,
+            'string' => (string) $value,
+            'array' => (array) $value,
+            'object' => (object) $value,
+            'callable' => fn(mixed ...$arguments):mixed => $value,
+            default => $value,
+        };
     }
 
     /**
@@ -1421,11 +1416,7 @@ final class Router
 
         $input = str_replace(array_keys($patterns), array_values($patterns), $input);
 
-        if (!str_starts_with($input, '/')) {
-            $input = '/' . $input;
-        }
-
-        return $input;
+        return '/' . ltrim($input, '/');
     }
 
     /**
@@ -1443,7 +1434,7 @@ final class Router
     }
 
     /**
-     * Get the current command controller views
+     * Get the current command controller views.
      * 
      * @return array<string,mixed> $views Return array of command routes parameters as URI.
     */

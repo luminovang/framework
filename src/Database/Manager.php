@@ -16,25 +16,17 @@ use \Luminova\Storages\FileManager;
 final class Manager 
 {
     /**
-     * @var null|DatabaseInterface $db 
-    */
-    private ?DatabaseInterface $db = null;
-
-    /**
-     * @var null|string $table 
-    */
-    private ?string $table = null;
-    
-    /**
-     * Initializes contractor 
+     * Initializes contractor.
      * 
-     * @param DatabaseInterface $db
-     * @param null|string $table
+     * @param DatabaseInterface $db The database connection driver instance.
+     * @param string|null $table The database table name (default: null).
     */
-    public function __construct(DatabaseInterface $db, ?string $table = null)
+    public function __construct(
+        private DatabaseInterface $db, 
+        private ?string $table = null
+    )
     {
-        $this->table = $table;
-        $this->db = $db;
+       
     }
 
     /**

@@ -47,7 +47,7 @@ final class Caller
                 try{
                     $fileName = pathinfo($file->getBasename(), PATHINFO_FILENAME);
                     $class = new ReflectionClass("{$namespace}\\{$fileName}");
-                }catch(ReflectionException $e){
+                }catch(ReflectionException){
                     continue;
                 }
 

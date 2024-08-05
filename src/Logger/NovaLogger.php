@@ -17,19 +17,14 @@ use \Luminova\Exceptions\FileException;
 class NovaLogger extends AbstractLogger
 {
     /**
-     * @var string $path log path
+     * @var string|null $path log path.
     */
-    protected string $path = '';
+    protected ?string $path = null;
 
     /**
-     * @var string $extension log file dot file extension
-    */
-    protected string $extension = '.log';
-
-    /**
-     * Error log levels
+     * Error log levels.
      * 
-     * @var array<string, string> $levels
+     * @var array<string,string> $levels
     */
     protected static array $levels = [
         'emergency' => LogLevel::EMERGENCY,
@@ -49,10 +44,9 @@ class NovaLogger extends AbstractLogger
      * 
      * @param string $extension log file dot file extension
     */
-    public function __construct(string $extension = '.log')
+    public function __construct(protected string $extension = '.log')
     {
-        $this->path = path('logs');
-        $this->extension = $extension;
+        $this->path ??= root('/writeable/logs/');
     }
 
     /**

@@ -267,7 +267,7 @@ final class Validation implements ValidationInterface
                 'binary' => ctype_print($value) && !preg_match('/[^\x20-\x7E\t\r\n]/', $value),
                 'hexadecimal' => ctype_xdigit($value),
                 'array' => is_array($value) || is_array(json_decode($value, true, 512, JSON_THROW_ON_ERROR)),
-                'json' => is_json($value),
+                'json' => is_string($value) && json_validate($value),
                 'path', 'scheme' => self::validatePath($ruleName, $value, $param),
                 default => self::validateOthers($ruleName, $value, $param)
             };

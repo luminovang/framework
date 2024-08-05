@@ -48,9 +48,9 @@ final class Encoder
                     break;
                 }
 
-                if ($handler !== null && function_exists($handler) && strpos($_SERVER['HTTP_ACCEPT_ENCODING'], $encoding) !== false) {
-                
+                if ($handler !== null && function_exists($handler) && str_contains($_SERVER['HTTP_ACCEPT_ENCODING'], $encoding)) {
                     $compressed = $handler($content, $compression);
+                    
                     if ($compressed !== false) {
                         return [$encoding, $compressed];
                     }

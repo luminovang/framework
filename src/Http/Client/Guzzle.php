@@ -69,6 +69,7 @@ class Guzzle implements HttpClientInterface
                 if ($previous instanceof GuzzleException) {
                     throw new RequestException($previous->getMessage(), $previous->getCode(), $previous);
                 }
+                
                 throw new RequestException($e->getMessage(), $e->getCode(), $e);
             }
         } catch (GuzzleException $e) {

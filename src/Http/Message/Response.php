@@ -12,31 +12,6 @@ namespace Luminova\Http\Message;
 class Response
 {
     /**
-     * @var int Status code of the response.
-     */
-    private int $statusCode = 0;
-
-    /**
-     * @var array Response headers.
-     */
-    private array $headers = [];
-
-    /**
-     * @var mixed Response body.
-     */
-    private mixed $body = null;
-
-    /**
-     * @var mixed Response contents.
-     */
-    private mixed $bodyContents = null;
-
-    /**
-     * @var array Response info.
-     */
-    private array $info = [];
-
-    /**
      * Initializes a new Response instance.
      *
      * @param int $statusCode The HTTP status code.
@@ -46,13 +21,15 @@ class Response
      * @param array $info The response info.
      * @ignore
      */
-    public function __construct(int $statusCode, array $headers, mixed $body, mixed $contents, array $info = [])
+    public function __construct(
+        private int $statusCode = 0, 
+        private array $headers = [], 
+        private mixed $body = null, 
+        private mixed $contents = null, 
+        private array $info = []
+    )
     {
-        $this->statusCode = $statusCode;
-        $this->headers = $headers;
-        $this->body = $body;
-        $this->bodyContents = $contents;
-        $this->info = $info;
+        
     }
 
     /**
@@ -92,7 +69,7 @@ class Response
      */
     public function getContents(): mixed
     {
-        return $this->bodyContents;
+        return $this->contents;
     }
 
     /**

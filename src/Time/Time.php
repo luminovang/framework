@@ -16,9 +16,10 @@ use \DateTime;
 use \IntlDateFormatter;
 use \DateTimeInterface;
 use \DateInterval;
+use \Stringable;
 use \Exception;
 
-class Time extends DateTimeImmutable
+class Time extends DateTimeImmutable implements Stringable
 {
     /**
      * Timezone instance.
@@ -666,8 +667,8 @@ class Time extends DateTimeImmutable
         
         // If $end is 0, set it to the current year
         $end = ($end === 0) ? date('Y') : $end;
-        $start = is_numeric($start) ? intval($start) : intval(date('Y'));
-        $end = is_numeric($end) ? intval($end) : intval(date('Y'));
+        $start = is_numeric($start) ? (int) $start : (int) date('Y');
+        $end = is_numeric($end) ? (int) $end : (int) date('Y');
 
         $years = [];
         if ($start <= $end) {
@@ -692,15 +693,9 @@ class Time extends DateTimeImmutable
      */
     public static function hours(int $interval = 30): array 
     {
-        $stepSize = $interval * 60;
-        $maxOneDay = 24 * 60 * 60; 
-        $steps = range(0, $maxOneDay, $stepSize);
+        $steps = range(0, 24 * 60 * 60, $interval * 60);
 
-        $timeHours = array_map(function ($timestamp) {
-            return date('g:iA', $timestamp);
-        }, $steps);
-
-        return $timeHours;
+        return array_map(fn($timestamp) => date('g:iA', $timestamp), $steps);
     }
 
     /**
@@ -911,11 +906,7 @@ class Time extends DateTimeImmutable
     */
     public static function isAbsolute(string $datetime): bool
     {
-        if (preg_match('/\d{4}-\d{1,2}-\d{1,2}/', $datetime)) {
-            return true;
-        }
-
-        return false;
+        return (bool) preg_match('/\d{4}-\d{1,2}-\d{1,2}/', $datetime);
     }
 
     /**
