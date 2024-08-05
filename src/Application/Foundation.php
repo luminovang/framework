@@ -19,7 +19,7 @@ final class Foundation
      * 
     * @var string VERSION
     */
-    public const VERSION = '3.2.1';
+    public const VERSION = '3.2.2';
 
     /**
      * Minimum required php version.
@@ -48,13 +48,6 @@ final class Foundation
      * @var ?string $segments
     */
     private static ?string $segments = null;
-
-    /**
-     * Enable performance profiling.
-     * 
-     * @var bool $profiling 
-    */
-    private static bool $profiling = false;
 
     /**
      * Stack cached errors
@@ -232,7 +225,23 @@ final class Foundation
     */
     public static function getBase(): string
     {
-        return static::$base ??= dirname($_SERVER['SCRIPT_NAME'] ?? '') . '/';
+        if (static::$base !== null) {
+            return static::$base;
+        }
+
+        static::$base = ($_SERVER['SCRIPT_NAME'] ?? DIRECTORY_SEPARATOR);
+
+        if(static::$base === DIRECTORY_SEPARATOR){
+            return static::$base;
+        }
+
+        if (($last = strrpos(static::$base, DIRECTORY_SEPARATOR)) !== false && $last > 0) {
+            static::$base = substr(static::$base, 0, $last) . DIRECTORY_SEPARATOR;
+            return static::$base;
+        }
+
+        static::$base = '/';
+        return static::$base;
     }
 
     /**
@@ -245,17 +254,17 @@ final class Foundation
     public static function toAbsoluteUrl(string $path): string
     {
         if(NOVAKIT_ENV === null && !PRODUCTION){
-            $base = rtrim(static::getBase(), 'public/');
+            $base = rtrim(static::getBase(), 'public' . DIRECTORY_SEPARATOR);
             
             if (($basePos = strpos($path, $base)) !== false) {
-                $path = trim(substr($path, $basePos + strlen($base)), '/');
+                $path = trim(substr($path, $basePos + strlen($base)), DIRECTORY_SEPARATOR);
             }
         }else{
-            $path = trim(static::filterPath($path), '/');
+            $path = trim(static::filterPath($path), DIRECTORY_SEPARATOR);
         }
 
-        if(str_starts_with($path, 'public/')){
-            $path = ltrim($path, 'public/');
+        if(str_starts_with($path, 'public' . DIRECTORY_SEPARATOR)){
+            $path = ltrim($path, 'public' . DIRECTORY_SEPARATOR);
         }
  
         if(PRODUCTION){
