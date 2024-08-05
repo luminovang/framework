@@ -246,20 +246,21 @@ final class IP
    *
    * @param string|null $ip The IP address to convert.
    *
-   * @return int|string Return numeric representation of the IP address, or an empty string on error.
+   * @return string|false Return numeric representation of the IP address, otherwise false.
    */
-   public static function toNumeric(?string $ip = null): int|string
+   public static function toNumeric(?string $ip = null): string|bool
    {
       $ip ??= static::get();
-      $ip = false;
 
       if (static::isValid($ip, 4)) {
-         $ip = ip2long($ip);
-      }elseif (static::isValid($ip, 6)) {
-         $ip = inet_pton($ip);
+         return (string) ip2long($ip);
       }
 
-      return ($ip === false) ? '' : $ip;
+      if (static::isValid($ip, 6) && ($ip = inet_pton($ip)) !== false) {
+         return bin2hex($ip);
+      }
+
+      return false;
    }
 
   /**
@@ -267,20 +268,24 @@ final class IP
    *
    * @param int|string $numeric The numeric IP address to convert.
    *
-   * @return string IP address in string format or empty string on error.
+   * @return string|false Return original IP address, otherwise false on error.
    */
-   public static function toAddress(int|string $numeric = null): string
+   public static function toAddress(int|string|null $numeric = null): string|bool
    {
-      $ip = ''; 
-      $numeric ??= static::toNumeric();
+      $numeric ??= static::toNumeric(); 
 
       if (is_numeric($numeric)) {
-         $ip = long2ip($numeric);
-      }elseif (is_string($numeric)) {
-         $ip = inet_ntop($numeric);
+         // If it's a valid IPv4 numeric representation
+         if (filter_var($numeric, FILTER_VALIDATE_INT) !== false && $numeric <= 0xFFFFFFFF) {
+               return long2ip((int) $numeric);
+         }
+         
+      } elseif (is_string($numeric) && ($numeric = hex2bin($numeric)) !== false) {
+         // If it's a valid IPv6 hexadecimal string representation
+         return inet_ntop($numeric);
       }
 
-      return ($ip === false) ? '' : $ip;
+      return false;
    }
 
    /**
