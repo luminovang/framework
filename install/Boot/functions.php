@@ -13,6 +13,7 @@ declare(strict_types=1);
 use \App\Application;
 use \App\Config\Files;
 use \Luminova\Base\BaseFunction;
+use \Luminova\Base\BaseApplication;
 use \Luminova\Application\Foundation;
 use \Luminova\Application\Factory;
 use \Luminova\Application\Services;
@@ -82,7 +83,7 @@ if (!function_exists('app')) {
     /**
      * Get application container class shared instance or new instance if not shared. 
      * 
-     * @return Application Return application shared instance.
+     * @return Application|BaseApplication Return application shared instance.
     */
     function app(): Application 
     {
@@ -1204,7 +1205,7 @@ if (!function_exists('response')) {
     * Initiate a new view response object.
     *
     * @param int $status int $status HTTP status code (default: 200 OK).
-    * @param array<string,mixed> $headers Additional response headers.
+    * @param array<string,mixed>|null $headers Additional response headers (default: null).
     * @param bool $encode Enable content encoding like gzip, deflate (default: true).
     * @param bool $shared Weather to return shared instance (default: true).
     *
@@ -1212,7 +1213,7 @@ if (!function_exists('response')) {
     */
     function response(
         int $status = 200, 
-        array $headers = [], 
+        ?array $headers = null, 
         bool $encode = true,
         bool $shared = true
     ): Response
@@ -1220,7 +1221,7 @@ if (!function_exists('response')) {
         return Factory::response($status, [], $shared)
             ->setStatus($status)
             ->encode($encode)
-            ->headers($headers);
+            ->headers($headers ?? []);
     }
 }
 

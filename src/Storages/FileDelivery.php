@@ -22,7 +22,7 @@ final class FileDelivery
     /**
      * Constructor to initialize the file path and ETag option.
      * 
-     * @param string $path Path to the private storage (e.g: /writeable/storages/images/).
+     * @param string $path The base path to file storage (e.g: /writeable/storages/images/).
      * @param bool $eTag Whether to generate ETag headers (default: true).
     */
     public function __construct(
@@ -175,7 +175,7 @@ final class FileDelivery
     */
     public function url(string $basename, int $expiry = 3600): string|bool
     {
-        $filename = $this->filepath . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
+        $filename = $this->path . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
   
         if (!file_exists($filename)) {
             return false;
@@ -199,7 +199,7 @@ final class FileDelivery
      */
     private function assertOutputHead(string $basename, int $expiry, array &$headers): string|bool
     {
-        $filename = $this->filepath . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
+        $filename = $this->path . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
   
         if (!file_exists($filename)) {
             return static::expiredHeader(404);

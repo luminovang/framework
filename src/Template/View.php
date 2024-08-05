@@ -877,7 +877,7 @@ trait View
         array $options, 
         ?ViewCache $_lmv_cache = null, 
         bool $_lmv_return = false,
-        array $customHeaders
+        array $customHeaders = []
     ): bool|string
     {
         $lmv_view_type = $options['viewType']??'html';

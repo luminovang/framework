@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework routing.
+ * Luminova Framework Routing.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter

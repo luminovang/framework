@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework bootstrapping.
+ * Luminova Framework Bootstrapping.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
