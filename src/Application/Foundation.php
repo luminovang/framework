@@ -19,7 +19,7 @@ final class Foundation
      * 
     * @var string VERSION
     */
-    public const VERSION = '3.2.0';
+    public const VERSION = '3.2.1';
 
     /**
      * Minimum required php version.
@@ -91,7 +91,7 @@ final class Foundation
     ];
 
     /**
-     * System paths
+     * System paths for filtering.
      * 
      * @var array<int,string> $systemPaths
     */
