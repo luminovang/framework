@@ -256,8 +256,8 @@ final class IP
          return (string) ip2long($ip);
       }
 
-      if (static::isValid($ip, 6) && ($ip = inet_pton($ip)) !== false) {
-         return bin2hex($ip);
+      if (static::isValid($ip, 6)) {
+         return inet_pton($ip);
       }
 
       return false;
@@ -280,9 +280,66 @@ final class IP
                return long2ip((int) $numeric);
          }
          
-      } elseif (is_string($numeric) && ($numeric = hex2bin($numeric)) !== false) {
+      } elseif (is_string($numeric)) {
          // If it's a valid IPv6 hexadecimal string representation
          return inet_ntop($numeric);
+      }
+
+      return false;
+   }
+
+   /**
+   * Convert IP address to binary representation (IPv4 or IPv6).
+   *
+   * @param string $ip The IP address to convert.
+   *
+   * @return string|false Return binary representation of an IP address, otherwise false on error.
+   */
+   public static function toBinary(?string $ip = null): string|false
+   {
+      $ip ??= static::toNumeric(); 
+
+      if (static::isValid($ip, 4)) {
+         if(($ip = ip2long($ip)) !== false){
+            return str_pad(pack('N', $ip), 16, "\0", STR_PAD_LEFT);
+         }
+
+         return false;
+      } 
+      
+      if (static::isValid($ip, 6)) {
+         return inet_pton($ip);
+      }
+
+      return false;
+   }
+
+   /**
+    * Convert a binary representation of an IP address to its original IP address.
+    *
+    * @param string $binary The binary representation of the IP address.
+    * @param bool $ipv6 Optional flag to specify if the IP address is IPv6 (default: false). 
+    *                If true, assumes the address is IPv6.
+    *
+    * @return string|false Returns the original IP address as a string, or false if the conversion fails.
+    */
+   public static function fromBinary(string $binary, bool $ipv6 = false): string|false
+   {
+      $length = strlen($binary);
+
+      if (!$ipv6 && ($length === 4 || $length === 16)) {
+         // Handle IPv4 case (when padding makes it longer)
+         if ($length === 16) {
+            // Extract last 4 bytes for IPv4
+            $binary = substr($binary, -4); 
+         }
+
+         $binary = unpack('N', $binary);
+         return ($binary !== false) ? long2ip((int) $binary[1]) : false;
+      }
+
+      if ($length === 16) {
+         return inet_ntop($binary);
       }
 
       return false;
