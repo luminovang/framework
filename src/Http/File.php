@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework
+ * File represents an uploaded file.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -13,9 +13,6 @@ use \Luminova\Functions\Maths;
 use \Luminova\Exceptions\StorageException;
 use \stdClass;
 
-/**
- * Represents an uploaded file.
- */
 class File
 {
     /**

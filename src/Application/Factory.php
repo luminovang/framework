@@ -27,6 +27,7 @@ use \Luminova\Logger\Logger;
 use \Luminova\Security\Validation;
 use \Luminova\Notifications\Firebase\Notification;
 use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\AppException;
 use \Exception;
 use \Throwable;
 
@@ -46,8 +47,8 @@ use \Throwable;
  * @method static Request             request(bool $shared = true)                               HTTP Request class.
  * @method static Network             network(?\Luminova\Interface\HttpClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
  * @method static Caller              caller(bool $shared = true)                                Class caller class.
- * @method static Notification        notification(bool $shared = true, string $serviceAccount = 'serviceAccount.json')                              Firebase cloud message notification class.
- * @method static Escape              escaper(bool $shared = true, string|null $encoding = 'utf-8')                              Input escaper class instance.
+ * @method static Notification        notification(string $serviceAccount = 'serviceAccount.json', bool $shared = true)                              Firebase cloud message notification class.
+ * @method static Escape              escaper(string|null $encoding = 'utf-8', bool $shared = true)                              Input escaper class instance.
 */
 final class Factory 
 {
@@ -251,7 +252,11 @@ final class Factory
 
             return $instance;
         } catch (Throwable|Exception $e) {
-            throw new RuntimeException("Failed to instantiate factory method '{$alias}', " . $e->getMessage(), $e->getCode(), $e);
+            if($e instanceof AppException){
+                throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+            }
+
+            throw new RuntimeException("Failed to instantiate factory class: '{$alias}', " . $e->getMessage(), $e->getCode(), $e);
         }
     }
 

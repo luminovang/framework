@@ -42,28 +42,28 @@ trait View
     protected static string $KEY_NOT_FOUND = '__nothing__';
 
     /** 
-     * Holds the project document root
+     * Framework project document root.
      * 
-     * @var string|null $documentRoot
+     * @var string|null $root
     */
-    private static ?string $documentRoot = null;
+    private static ?string $root = null;
 
     /** 
-     * Holds the project template filename
+     * View template filename.
      * 
      * @var string $templateFile 
     */
     private string $templateFile = '';
 
     /**
-     * Holds the project template directory
+     * Holds the project template directory.
      * 
      * @var string $templateDir 
     */
     private string $templateDir = '';
 
     /**
-     * Type of view content
+     * Type of view content.
      * 
      * @var string $viewType 
     */
@@ -77,35 +77,35 @@ trait View
     private static string $viewFolder = 'resources/views';
 
     /** 
-     * The project sub view directory
+     * The project sub view directory.
      * 
      * @var string $subViewFolder 
     */
     private string $subViewFolder = '';
 
     /** 
-     * Holds the router active page name
+     * Holds the router active page name.
      * 
      * @var string $activeView 
     */
     private string $activeView = '';
 
     /** 
-     * Holds the array attributes
+     * Holds the array attributes.
      * 
      * @var array $publicOptions 
     */
     private static array $publicOptions = [];
 
     /** 
-     * Holds the array classes
+     * Holds the array classes.
      * 
      * @var array<string,mixed> $publicClasses 
     */
     private static array $publicClasses = [];
 
     /** 
-     * Ignore or allow view optimization
+     * Ignore or allow view optimization.
      * 
      * @var array<string,array> $cacheOption
     */
@@ -119,7 +119,7 @@ trait View
     private bool $forceCache = false;
 
     /**
-     * Response cache expiry ttl
+     * Response cache expiry ttl.
      * 
      * @var DateTimeInterface|int|null $cacheExpiry 
     */
@@ -183,9 +183,9 @@ trait View
     protected final function initialize(): void
     {
         self::$config ??= new TemplateConfig();
-        self::$documentRoot ??= root();
+        self::$root ??= root();
         self::$minifyContent = (bool) env('page.minification', false);
-        self::$cacheFolder = self::withViewFolder(self::trimDir(self::$config->cacheFolder) . 'default');
+        self::$cacheFolder = self::getSystemPath(self::trimDir(self::$config->cacheFolder) . 'default');
         $this->cacheView = (bool) env('page.caching', false);
         $this->cacheExpiry = (int) env('page.cache.expiry', 0);
     }
@@ -210,7 +210,7 @@ trait View
     /** 
      * Set if HTML codeblock tags should be ignore during page minification.
      *
-     * @param bool $minify Indicate if codeblocks should be minified (default: false)
+     * @param bool $minify Indicate if codeblocks should be minified.
      * @param bool $button Indicate if codeblock tags should include a copy button (default: false).
      *
      * @return self Returns the instance of the View class or BaseApplication, depending on where it's called.
@@ -469,7 +469,7 @@ trait View
             ));
         }
 
-        $this->templateDir = self::withViewFolder(self::$viewFolder);
+        $this->templateDir = self::getSystemPath(self::$viewFolder);
 
         if($this->subViewFolder !== ''){
             $this->templateDir .= $this->subViewFolder . DIRECTORY_SEPARATOR;
@@ -613,13 +613,13 @@ trait View
      *
      * @return string Return the application root directory.
     */
-    private static function viewRoot(): string
+    private static function getSystemRoot(): string
     {
-        if(self::$documentRoot === null){
-            self::$documentRoot = APP_ROOT;
+        if(self::$root === null){
+            self::$root = APP_ROOT;
         }
 
-        return self::$documentRoot;
+        return self::$root;
     }
 
     /** 
@@ -728,14 +728,6 @@ trait View
     {
         defined('ALLOW_ACCESS') || define('ALLOW_ACCESS', true);
 
-        if (MAINTENANCE) {
-            Header::headerNoCache(503);
-            header('Retry-After: ' . env('app.maintenance.retry', '3600'));
-            include self::getErrorFolder('maintenance');
-
-            return false;
-        }
-
         if (!file_exists($this->templateFile)) {
             Header::headerNoCache(404);
             throw new ViewNotFoundException(sprintf(
@@ -781,7 +773,7 @@ trait View
         static $instance = null;
 
         if($instance === null){
-            $instance = Smarty::getInstance(self::$config, self::viewRoot());
+            $instance = Smarty::getInstance(self::$config, self::getSystemRoot());
         }
 
         try{
@@ -837,7 +829,7 @@ trait View
         static $instance = null;
 
         if($instance === null){
-            $instance = Twig::getInstance(self::$config, self::viewRoot(), $templateDir, [
+            $instance = Twig::getInstance(self::$config, self::getSystemRoot(), $templateDir, [
                 'caching' => $shouldCache,
                 'charset' => env('app.charset', 'utf-8'),
                 'strict_variables' => true,
@@ -911,7 +903,7 @@ trait View
     /**
      * Render without in isolation mode.
      * 
-     * @param string $_lmv_viewfile View template file.
+     * @param string $_lmv_view_file View template file.
      * @param array $options View options.
      * @param ViewCache|null $_lmv_cache Cache instance if should cache page contents.
      * @param bool $_lmv_ignore Ignore html codeblock during minimizing.
@@ -923,7 +915,7 @@ trait View
      * @throws RuntimeException Throw if error occurred.
     */
     private static function renderIsolation(
-        string $_lmv_viewfile, 
+        string $_lmv_view_file, 
         array $options,
         ?ViewCache $_lmv_cache = null,
         bool $_lmv_ignore = true, 
@@ -942,7 +934,7 @@ trait View
             extract($options, ($_lmv_prefix ? EXTR_PREFIX_ALL : EXTR_OVERWRITE), '');
         }
 
-        include_once $_lmv_viewfile;
+        include_once $_lmv_view_file;
         $_lmv_contents = ob_get_clean();
         self::inlineErrors($_lmv_contents);
 
@@ -1021,6 +1013,7 @@ trait View
         if ($content !== false && $content !== '') {
             $headers = null;
             if (self::$minifyContent && $type === 'html') {
+                
                 $minify = Helper::getMinification(
                     $content, 
                     $type, 
@@ -1096,9 +1089,9 @@ trait View
     private static function handleException(ExceptionInterface $exception, array $options = []): void 
     {
         if(PRODUCTION){
-            $view = self::getErrorFolder('404');
+            $view = self::getSystemError('404');
         }else{
-            $view = self::getErrorFolder('view.error');
+            $view = self::getSystemError('view.error');
             $trace = SHOW_DEBUG_BACKTRACE ? debug_backtrace() : [];
         }
 
@@ -1168,7 +1161,7 @@ trait View
      */
     private static function inlineErrors(string $contents): void
     {
-        if (PRODUCTION || !(bool) env('debug.catch.inline.errors', false)) {
+        if (PRODUCTION || !env('debug.catch.inline.errors', false)) {
             return;
         }
 
@@ -1230,9 +1223,9 @@ trait View
      *
      * @return string Return view file directory.
     */
-    private static function withViewFolder(string $path): string 
+    private static function getSystemPath(string $path): string 
     {
-        return self::viewRoot() . trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return self::getSystemRoot() . trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
     }
 
     /** 
@@ -1241,9 +1234,10 @@ trait View
      * @param string $filename file name.
      *
      * @return string Return error directory.
+     * @internal
     */
-    private static function getErrorFolder(string $filename): string 
+    public static function getSystemError(string $filename): string 
     {
-        return self::withViewFolder(self::$viewFolder) . 'system_errors' . DIRECTORY_SEPARATOR . $filename . '.php';
+        return self::getSystemPath(self::$viewFolder) . 'system_errors' . DIRECTORY_SEPARATOR . $filename . '.php';
     }
 }

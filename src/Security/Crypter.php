@@ -100,7 +100,7 @@ final class Crypter
         return new $encryption($key, $method, $size);
     }
 
-     /**
+    /**
      * Determine if the given key and cipher method are valid.
      *
      * @param string $key The encryption key.
@@ -124,7 +124,7 @@ final class Crypter
      *
      * @param string $data The data to encrypt.
      * 
-     * @return string|bool The encrypted data, or false if encryption fails.
+     * @return string|bool Return the encrypted data, or false if encryption fails.
      * 
      * @throws EncryptionException Throws when invalid encryption data is passed.
     */
@@ -216,11 +216,13 @@ final class Crypter
 	}
 
     /**
-     * Generate a random key string using your default encryption handler.
+     * Generate a random encryption key string using your default encryption handler.
      * For private key, or public key generation it uses openssl rsa.
      *
      * @param string $type The type of key to generate: (e.g, 'random', 'private', or 'public').
-     * @param array $options Additional options for key generation.
+     * @param array<string,mixed> $options Additional options for key generation.
+     * 
+     * @return string|array<string,string>|false Return the generated key(s), an array of private and public key, or false on failure. 
      * 
      * Options Keys: 
      *      - For 'random' type, use key 'length' to specifies the length of the random string.
@@ -228,8 +230,6 @@ final class Crypter
      *        and 'private_key_type (default: OPENSSL_KEYTYPE_RSA)' specifies the type of the private key (e.g., OPENSSL_KEYTYPE_RSA).
      *      - For 'public' type, use key 'private_key' to specify the private key string from which to derive the public key
      *        if the key private_key is not specified, it generate a new private key to use.
-     * 
-     * @return string|array<string,string>|false Return the generated key(s), an array of private and public key, or false on failure. 
     */
     public static function generate_key(string $type = 'random', array $options = []): array|string|bool
     {

@@ -30,6 +30,16 @@ class Response
     private bool $minify = false;
 
     /**
+     * @var bool $minifyCodeblocks
+    */
+    private bool $minifyCodeblocks = false;
+
+    /**
+     * @var bool $codeblockButton
+    */
+    private bool $codeblockButton = false;
+
+    /**
      * @var Minification|null $min
     */
     private static ?Minification $min = null;
@@ -87,6 +97,22 @@ class Response
     public function minify(bool $minify): self 
     {
         $this->minify = $minify;
+
+        return $this;
+    }
+
+    /** 
+     * Set if HTML codeblock tags should be ignore during content minification.
+     *
+     * @param bool $minify Indicate if codeblocks should be minified (default: false).
+     * @param bool $button Indicate if codeblock tags should include a copy button (default: false).
+     *
+     * @return self Return response class instance.
+    */
+    public function codeblock(bool $minify, bool $button = false): self 
+    {
+        $this->minifyCodeblocks = $minify;
+        $this->codeblockButton = $button;
 
         return $this;
     }
@@ -185,8 +211,8 @@ class Response
        
         if($minify && str_contains($headers['Content-Type'], 'text/html')){
             self::$min ??= new Minification();
-            self::$min->codeblocks(false);
-            self::$min->copyable(false);
+            self::$min->codeblocks($this->minifyCodeblocks);
+            self::$min->copyable($this->codeblockButton);
             
             $instance = self::$min->compress($content, $headers['Content-Type']);
             $content = $instance->getContent();
@@ -288,7 +314,7 @@ class Response
      * @param string|null $name Optional Name to be used for the downloaded file (default: null).
      * @param array $headers Optional download headers.
      * 
-     * @return bool True if the download was successful, false otherwise.
+     * @return bool Return true if the download was successful, false otherwise.
      */
     public function download(string $fileOrContent, ?string $name = null, array $headers = []): bool 
     {
@@ -318,10 +344,10 @@ class Response
     }
 
     /** 
-    * redirect to url
+    * Redirect to another url.
     *
-    * @param string $url url location
-    * @param int $response_code response status code
+    * @param string $url The new url location.
+    * @param int $response_code The response status code.
     *
     * @return void
     */

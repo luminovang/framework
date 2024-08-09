@@ -97,10 +97,10 @@ final class Maths
     /**
      * Calculate the average of a giving numbers.
      *
-     * @param int|float ...$numbers Input arguments integers or float values to calculate the average
-     *      - @example average(10, 20, 30, 40, 50) - return 30 as the average.
+     * @param int|float ...$numbers Input arguments integers or float values to calculate the average.
      * 
      * @return float|null The average of the passed numbers.
+     * @example average(10, 20, 30, 40, 50) - return 30 as the average.
     */
     public static function average(int|float ...$numbers): ?float 
     {
@@ -118,10 +118,11 @@ final class Maths
 	 * @param int $reviews Total number of reviews.
 	 * @param float $rating Total sum of rating points.
 	 * @param bool $round Whether to round the average to 2 decimal places.
-     * 
-     *  - @example averageRating(5, 42.5, true) The average rating is: 8.50
 	 * 
 	 * @return float The average rating.
+     * 
+     * @example - The average rating is: 8.50:
+     * ```Math::rating(5, 42.5, true) ``
 	*/
 	public static function rating(int $reviews = 0, float $rating = 0, bool $round = false): float 
 	{
@@ -170,7 +171,7 @@ final class Maths
     }
 
     /**
-     * Convert a number to cryptocurrency.
+     * Format a number to it's cryptocurrency length.
      *
      * @param int|float|string $amount The amount to convert.
      * @param string $network The cryptocurrency code (e.g., 'BTC', 'ETH', 'LTC').
@@ -227,10 +228,10 @@ final class Maths
             return false;
         }
 
-        $lat1 = deg2rad($origin_lat);
-        $lng1 = deg2rad($origin_lng);
-        $lat2 = deg2rad($dest_lat);
-        $lng2 = deg2rad($dest_lng);
+        $lat1 = deg2rad((float) $origin_lat);
+        $lng1 = deg2rad((float) $origin_lng);
+        $lat2 = deg2rad((float) $dest_lat);
+        $lng2 = deg2rad((float) $dest_lng);
 
         $deltaLat = $lat2 - $lat1;
         $deltaLon = $lng2 - $lng1;
@@ -250,7 +251,7 @@ final class Maths
 	 * @param float|int|string $number The number you want to format.
 	 * @param int|null $decimals The number of decimal places (null for no rounding).
 	 * 
-	 * @return string The formatted number.
+	 * @return string Return the formatted and rounded number.
 	 */
 	public static function fixed(float|int|string $number, ?int $decimals = null): string 
 	{
@@ -285,7 +286,7 @@ final class Maths
      * @param float|int|string $total The amount to which interest will be added.
      * @param float|int|string $rate The interest rate as a percentage (float or int).
      * 
-     * @return float The total amount after adding interest.
+     * @return float Return he total amount with an interest rate.
      */
     public static function interest(float|int|string $total, float|int|string $rate = 0): float 
     {

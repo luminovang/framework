@@ -9,16 +9,25 @@
  */
 namespace Luminova\Functions;
 
+
 use \Laminas\Escaper\Escaper;
 use \Luminova\Exceptions\BadMethodCallException;
 use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\InvalidArgumentException;
 
 class Escape
 {
     /**
-     * @var class-object<Escaper> $escaper Escaper object
+     * @var Escaper $escaper Escaper object
     */
-    private ?object $escaper = null;
+    private ?Escaper $escaper = null;
+
+    /**
+     * Determine whether Escaper class is available.
+     * 
+     * @var bool $isEscaper
+    */
+    private static bool $isEscaper = false;
 
     /**
      * @var string $encoding Escaper encoding
@@ -74,22 +83,14 @@ class Escape
      * Input escaper constructor.
      * 
      * @param string|null $encoding The character encoding to use (default: 'utf-8').
+     * 
+     * @throws InvalidArgumentException Throws if unsupported encoding or empty string is provided.
      */
     public function __construct(string|null $encoding = 'utf-8')
     {
-        if($encoding !== null && $encoding !== 'utf-8'){
-            $encoding = strtolower($encoding);
-            if (!in_array($encoding, $this->supportedEncodings)) {
-                $encoding = 'utf-8';
-            }
-
-            $this->encoding = $encoding;
-        }
-        $this->encodingFlags = ENT_QUOTES | ENT_SUBSTITUTE;
-
-        if (class_exists(Escaper::class)) {
-            $this->escaper = new Escaper($encoding);
-        }
+        $encoding ??= 'utf-8';
+        static::$isEscaper = class_exists(Escaper::class);
+        $this->setEncoding($encoding);
     }
 
     /**
@@ -103,7 +104,7 @@ class Escape
      */
     public function __call(string $name, array $arguments): mixed
     {
-        if ($this->escaper === null) {
+        if (!$this->escaper instanceof Escaper || !static::$isEscaper) {
             if (method_exists($this, $name)) {
                 return $this->{$name}(...$arguments);
             }
@@ -119,11 +120,70 @@ class Escape
     /**
      * Get the character encoding used by the escaper.
      * 
-     * @return string The character encoding.
+     * @return string Return the character encoding.
      */
     protected function getEncoding(): string
     {
         return $this->encoding;
+    }
+
+    /**
+     * Set escaper encoding type.
+     * If set encoding is called when using `Laminas Escaper` library, new instance of Laminas Escaper will be created.
+     * 
+     * @param string $encoding The character encoding to use (e.g: 'utf-8').
+     * 
+     * @return self Return instance of escape class.
+     * @throws InvalidArgumentException Throws if unsupported encoding or empty string is provided.
+     */
+    public function setEncoding(string $encoding): self
+    {
+        if($encoding === ''){
+            throw new InvalidArgumentException('Invalid encoding, expected non empty string for encoding.');
+        }
+
+        $encoding = strtolower($encoding);
+
+        if (!in_array($encoding, $this->supportedEncodings)) {
+            throw new InvalidArgumentException(sprintf(
+                'Unsupported encoding %s specified. Supported encodings are: %s',
+                $encoding,
+                implode(', ', $this->supportedEncodings)
+            ));
+        }
+
+        $this->encoding = $encoding;
+
+        if (static::$isEscaper) {
+            if($this->escaper instanceof Escaper && $this->escaper->getEncoding() === $encoding) {
+                return $this;
+            }
+            
+            $this->escaper = new Escaper($this->encoding);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Escape a string using custom escape rules.
+     *
+     * @param string $input The string to escape.
+     * @param array $rules Associative array of custom escape rules where keys are regex patterns and values are replacement strings.
+     * 
+     * @return string Return the escaped string.
+     */
+    public static function escapeWith(string $input, array $rules): string
+    {
+        if($rules === '' || $rules === []){
+            return $input;
+        }
+
+        foreach ($rules as $pattern => $replacement) {
+            $input = preg_replace($pattern, $replacement, $input);
+        }
+
+        return $input;
     }
 
     /**
@@ -176,6 +236,19 @@ class Escape
     protected function escapeCss(string $string): string
     {
         return preg_replace('/[^\w\s]/i', '\\\$0', $string);
+    }
+
+    /**
+     * Escape a string for the URI or Parameter contexts. 
+     * This should not be used to escape an entire URI - only a sub-component being inserted. 
+     * 
+     * @param string $string The URL to be escaped.
+     *
+     * @return string Return the escaped URL.
+     */
+    public function escapeUrl(string $string): string
+    {
+        return rawurlencode($string);
     }
 
     /**

@@ -10,10 +10,11 @@
 namespace Luminova\Http;
 
 use \Luminova\Application\Foundation;
-use \Luminova\Functions\Normalizer;
+use \Luminova\Functions\Func;
 use \App\Config\Apis;
+use \Countable;
 
-class Header
+class Header implements Countable
 {
     /**
      * All allowed HTTP request methods, must be in upper case.
@@ -243,14 +244,24 @@ class Header
      * @return void 
      * @internal Used in router and template.
      */
-    public static function headerNoCache(int $status = 200, string|false|null $contentType = null): void 
+    public static function headerNoCache(
+        int $status = 200, 
+        string|bool|null $contentType = null, 
+        int|string|null $retry = null
+    ): void 
     {
-        static::parseHeaders([
+        $headers = [
             'X-Powered-By' => Foundation::copyright(),
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
             'Expires' => '0',
             'Content-Type' => $contentType ?? 'text/html'
-        ], $status);
+        ];
+
+        if($retry !== null){
+            $headers['Retry-After'] = $retry;
+        }
+
+        static::parseHeaders($headers, $status);
     }
 
    /**
@@ -286,7 +297,7 @@ class Header
                     if (self::$config->allowOrigins === '*' || self::$config->allowOrigins === 'null') {
                         $allowed = '*';
                     } else {
-                        foreach ([$origin, Normalizer::mainDomain($origin)] as $value) {
+                        foreach ([$origin, Func::mainDomain($origin)] as $value) {
                             if (in_array($value, (array) self::$config->allowOrigins)) {
                                 $allowed = $value;
                                 break;

@@ -9,7 +9,9 @@
  */
 namespace Luminova\Http;
 
-class Server
+use \Countable;
+
+class Server implements Countable
 {
     /**
      * Initializes the server constructor.

@@ -15,7 +15,7 @@ use \Luminova\Http\Server;
 use \Luminova\Http\File;
 use \Luminova\Http\UserAgent;
 use \Luminova\Functions\IP;
-use \Luminova\Functions\Normalizer;
+use \Luminova\Functions\Func;
 use \App\Config\Security;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
@@ -622,7 +622,7 @@ final class Request
         }
 
         if ($subdomains) {
-            return Normalizer::mainDomain($origin) === APP_HOSTNAME;
+            return Func::mainDomain($origin) === APP_HOSTNAME;
         }
 
         return false;

@@ -196,6 +196,11 @@ final class Router
         self::$method  = self::getRoutingMethod();
         self::$uri = self::getUriSegments();
 
+         // If application is undergoing maintenance.
+         if(MAINTENANCE && self::systemMaintenance()){
+            return $this;
+        }
+
         // If the view uri ends with `.extension`, then try serving the cached static version.
         if(self::$uri !== '/cli' && self::serveStaticCache()){
             return $this;
@@ -922,6 +927,23 @@ final class Router
 
         static::triggerError();
         return STATUS_ERROR;
+    }
+
+    /**
+     * Load application is undergoing maintenance.
+     * 
+     * @return bool Return true.
+    */
+    private static function systemMaintenance(): bool 
+    {
+        self::$terminate = true;
+        
+        Header::headerNoCache(503, null, env('app.maintenance.retry', '3600'));
+        if(file_exists($path = self::$application->getSystemError('maintenance'))){
+            include_once $path;
+        }
+
+        return true;
     }
 
     /**

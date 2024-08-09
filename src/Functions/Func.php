@@ -11,7 +11,7 @@ namespace Luminova\Functions;
 
 use \Luminova\Exceptions\InvalidArgumentException;
 
-class Normalizer
+class Func
 {
 	/**
 	 * Format text before display by matching links, email, phone, 
@@ -111,10 +111,10 @@ class Normalizer
 	}
 
 	/** 
-	 * Create a random integer based on minimum and maximum
+	 * Create a random integer based on minimum and maximum.
 	 * 
-	 * @param int $min Minimum number.
-	 * @param int $max Maximin number.
+	 * @param int $min The minimum number.
+	 * @param int $max The maximin number.
 	 * 
 	 * @return string String representation of big integer.
 	*/
@@ -501,7 +501,7 @@ class Normalizer
 	 * @param string $email Email address to mask.
 	 * @param string $masker  Mask character (default is "*").
 	 * 
-	 * @return string Masked email address or null.
+	 * @return string Masked email address.
 	 */
 	public static function maskEmail(string $email, string $masker = '*'): string 
 	{

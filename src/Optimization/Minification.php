@@ -15,25 +15,11 @@ use \JsonException;
 final class Minification 
 {
     /** 
-     * Ignore html code block tag `<code></code>`. 
-     * 
-     * @var bool $codeblocks
-     */
-    private bool $codeblocks = false;
-
-    /** 
 	 *  Minified content.
      *
 	 * @var mixed $contents
 	*/
     private mixed $contents = '';
-
-    /** 
-	 * Allow copying of code blocks.
-     *  
-	 * @var bool $copyable
-	*/
-    private bool $copyable = false;
 
     /** 
 	 * Minified content headers.
@@ -71,8 +57,14 @@ final class Minification
     /**
      * Class constructor.
      * Initializes default settings for the response headers and cache control.
+     * 
+     * @param bool $codeblocks Weather to ignore html code block tag `<code></code>` (default: false). 
+     * @param bool $copyable Weather to include a copy button to code blocks (default: false).
      */
-    public function __construct() {}
+    public function __construct(
+        private bool $codeblocks = false,
+        private bool $copyable = false
+    ) {}
     
     /**
      * sets ignore minifying code block.
@@ -162,7 +154,7 @@ final class Minification
         $content = ($this->codeblocks ? static::minify($content) : static::minifyIgnore($content, $this->copyable));
 
         // Resolve content type if it's a shorthand
-        if (strpos($contentType, '/') === false) {
+        if (!str_contains($contentType, '/')) {
             $contentType = Header::getContentTypes($contentType);
         }
 
@@ -239,11 +231,21 @@ final class Minification
 
         // Restore the code blocks back to its original state
         $content = preg_replace_callback('/' . $ignorePattern . '/', function () use (&$ignores, $button) {
-            return preg_replace(
-                '/<pre([^>]*)class="([^"]*)"([^>]*)>/i', 
-                '<pre$1class="$2 pre-codeblock"$3>' . ($button ? '<button type="button" class="copy-snippet">copy</button>' : ''),
+            $formatter = '';
+            if ($button) {
+                $formatter .= '<div class="lmv-snippet-header">';
+                $formatter .= '<button type="button" class="lmv-copy-snippet" title="Copy this snippet" aria-label="Copy code snippet"><span>Copy</span></button>';
+                $formatter .= '</div>';
+            }
+
+            $formatter .= '<pre $1 class="lmv-pre-block $2" $3 data-info="code sample">';
+            $formatter =  preg_replace(
+                '/<pre\b(?:\s+([^=>\s]+)="[^"]*")*\s*(?:class="([^"]*)")?(.*?)(?:\s+([^=>\s]+)="[^"]*")*\s*>/i',
+                $formatter,
                 array_shift($ignores)
             );
+
+            return "<div class='lmv-snippet-container'>{$formatter}</div>";
         }, static::minify($content));
 
         return $content;
