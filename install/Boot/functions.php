@@ -749,9 +749,9 @@ if (!function_exists('path')) {
     /**
      * Get system or application path, converted to `unix` or `windows` directory separator style.
      * 
-     * @param string $file Path file name to return.
+     * @param string $name The path name to return.
      * 
-     * Storage Context Names.
+     * Path Names.
      *      - app.
      *      - system.
      *      - plugins.
