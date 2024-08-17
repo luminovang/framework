@@ -24,7 +24,7 @@ class Handler
 
     public function getSavePath(?string $idFile = null): string 
     {
-        return $this->savePath . (($idFile === null) ? '' : ltrim($idFile, DIRECTORY_SEPARATOR));
+        return $this->savePath . (($idFile === null) ? '' : ltrim($idFile, TRIM_DS));
     }
 
     public function read(string $token)

@@ -721,7 +721,7 @@ class FileManager
 		}
 		
 		$files = is_dir($location) ? 
-			glob(rtrim($location, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '*', GLOB_MARK) : 
+			glob(rtrim($location, TRIM_DS) . DIRECTORY_SEPARATOR . '*', GLOB_MARK) : 
 			glob($location . '*');
 
 		foreach ($files as $file) {
@@ -961,7 +961,7 @@ class FileManager
     */
     public static function toCompatible(string $path): string 
     {
-        return str_replace('/', DIRECTORY_SEPARATOR, $path);
+        return str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
     } 
 
     /**

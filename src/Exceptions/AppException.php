@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework base exception class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -9,6 +9,7 @@
  */
 namespace Luminova\Exceptions;
 
+use \Luminova\Logger\Logger;
 use \Luminova\Application\Foundation;
 use \Luminova\Interface\ExceptionInterface;
 use \Stringable;
@@ -18,15 +19,42 @@ use \Throwable;
 abstract class AppException extends Exception implements ExceptionInterface, Stringable
 {
   /**
-    * {@inheritdoc}
+   * @var Logger|null $logger 
   */
-  public function __construct(string $message, int $code = 0, Throwable $previous = null)
+  private static ?Logger $logger = null;
+
+  /**
+   * @var string|null $strCode 
+  */
+  private ?string $strCode = null;
+
+  /**
+   * {@inheritdoc}
+  */
+  public function __construct(string $message, int $code = 0, ?Throwable $previous = null)
   {
     parent::__construct($message, $code, $previous);
   }
 
   /**
-    * {@inheritdoc}
+   * {@inheritdoc}
+  */
+  public function getCodeString(): ?string 
+  {
+    return $this->strCode;
+  }
+
+  /**
+   * {@inheritdoc}
+  */
+  public function setCodeString(string $code): self
+  {
+    $this->strCode = $code;
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
   */
   public function __toString(): string
   {
@@ -34,21 +62,16 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
   }
 
   /**
-    * {@inheritdoc}
+   * {@inheritdoc}
   */
   public function handle(): void
   {
     if(Foundation::isCommand()){
-      if((bool) env('throw.cli.exceptions', false)){
+      if(env('throw.cli.exceptions', false)){
         throw $this;
       }
 
-      $display = function(AppException $exception): int {
-        include_once path('views') . 'system_errors' . DIRECTORY_SEPARATOR . 'cli.php';
-        return STATUS_ERROR;
-      };
-
-      exit($display($this));
+      exit(self::display($this));
     }
 
     if(PRODUCTION && !Foundation::isFatal($this->code)) {
@@ -60,18 +83,38 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
   }
 
   /**
-    * {@inheritdoc}
+   * {@inheritdoc}
   */
-  public static function throwException(string $message, int|string $code = 0, Throwable $previous = null): void
+  public static function throwException(string $message, int|string $code = 0, ?Throwable $previous = null): void
   {
-    (new static($message, is_int($code) ? $code : 0, $previous))->handle();
+    if(is_int($code)){
+      (new static($message, $code , $previous))->handle();
+      return;
+    }
+   
+    (new static($message, 0, $previous))->setCodeString($code)->handle();
   }
 
   /**
-    * {@inheritdoc}
+   * {@inheritdoc}
   */
   public function log(string $level = 'exception'): void
   {
-    logger($level, $this->__toString());
+    self::$logger ??= new Logger(); 
+    self::$logger->log($level, $this->__toString());
+  }
+
+  /**
+   * Display custom exception page.
+   * 
+   * @param AppException|Exception $exception The current exception thrown.
+   * 
+   * @return int Return status code for error.
+  */
+  private static function display(AppException|Exception $exception): int 
+  {
+    include_once path('views') . 'system_errors' . DIRECTORY_SEPARATOR . 'cli.php';
+
+    return STATUS_ERROR;
   }
 }

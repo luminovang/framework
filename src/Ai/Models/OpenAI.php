@@ -338,13 +338,13 @@ class OpenAI implements AiInterface
                 self::error($content['error']['message'] ?? null);
             }
 
-            $path = rtrim($options['path'] ?? root('writeable/ai/speech'), DIRECTORY_SEPARATOR);
+            $path = rtrim($options['path'] ?? root('writeable/ai/speech'), TRIM_DS);
             $filename = uniqid() . '.' . ($options['response_format'] ?? 'mp3');
             $destination = $path . DIRECTORY_SEPARATOR . $filename;
             
             if(write_content($destination, $content)){
                 if(isset($options['symlink'])){
-                    $symlink = rtrim($options['symlink'], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
+                    $symlink = rtrim($options['symlink'], TRIM_DS) . DIRECTORY_SEPARATOR . $filename;
                     FileManager::symbolic($destination, $symlink);
 
                     return absolute_url($symlink);

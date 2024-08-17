@@ -19,9 +19,9 @@ class InvalidObjectException extends AppException
      *
      * @param string     $key   The exception key as message
      * @param int        $code      The exception code (default: 500).
-     * @param Throwable $previous  The previous exception if applicable (default: null).
+     * @param Throwable|null $previous  The previous exception if applicable (default: null).
      */
-    public function __construct(string $key, int $code = 500, Throwable $previous = null)
+    public function __construct(string $key, int $code = 500, ?Throwable $previous = null)
     {
         parent::__construct(
             sprintf('Invalid argument type: "%s". A valid object is expected.', gettype($key)), 

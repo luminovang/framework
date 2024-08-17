@@ -219,7 +219,7 @@ final class Uploader
             return false;
         }
 
-        $path = rtrim($path ?? $config->uploadPath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $path = rtrim($path ?? $config->uploadPath, TRIM_DS) . DIRECTORY_SEPARATOR;
         make_dir($path);
 
         $filename = basename($file->getName());
@@ -234,7 +234,7 @@ final class Uploader
             }
         }
 
-        $symlink = (isset($config->symlink) ? rtrim($config->symlink, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename : null);
+        $symlink = (isset($config->symlink) ? rtrim($config->symlink, TRIM_DS) . DIRECTORY_SEPARATOR . $filename : null);
 
         return $destination;
     }

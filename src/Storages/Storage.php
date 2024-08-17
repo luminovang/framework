@@ -126,13 +126,13 @@ class Storage extends Adapters
     */
     public function chdir(string $directory = './'): self 
     {
-        if($directory === '' || $directory === '.' || $directory === './'){
+        if($directory === '' || $directory === '.' || $directory === './' || $directory === '.\\'){
             $this->directory = '';
             return $this;
         }
 
-        $directory = trim($directory, DIRECTORY_SEPARATOR);
-        $this->directory = rtrim($this->directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $directory . DIRECTORY_SEPARATOR;
+        $directory = trim($directory, TRIM_DS);
+        $this->directory = rtrim($this->directory, TRIM_DS) . DIRECTORY_SEPARATOR . $directory . DIRECTORY_SEPARATOR;
 
         return $this;
     }
@@ -191,8 +191,8 @@ class Storage extends Adapters
             return false;
         }
 
-        $target = $this->config['base'] . ltrim($this->getDisk($target), DIRECTORY_SEPARATOR);
-        $link = rtrim($this->config['assets'], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($link, DIRECTORY_SEPARATOR);
+        $target = $this->config['base'] . ltrim($this->getDisk($target), TRIM_DS);
+        $link = rtrim($this->config['assets'], TRIM_DS) . DIRECTORY_SEPARATOR . ltrim($link, TRIM_DS);
 
         return FileManager::symbolic($target, $link);
     }
@@ -658,12 +658,8 @@ class Storage extends Adapters
     */
     private static function getConfigs(string $context = 'local'): array 
     {
-        if(self::$configs === []){
-            $path = root('/app/Config/') . 'Storage.php';
-
-            if (file_exists($path)) {
-                self::$configs = require_once $path;
-            }
+        if(self::$configs === [] && ($config = configs('Storage')) !== null){
+            self::$configs = $config;
         }
 
         return self::$configs[$context] ?? [];
@@ -678,6 +674,6 @@ class Storage extends Adapters
     */
     private function getDisk(string $file): string 
     {
-        return $this->directory . ltrim($file, DIRECTORY_SEPARATOR);
+        return $this->directory . ltrim($file, TRIM_DS);
     }
 }

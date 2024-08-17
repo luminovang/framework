@@ -43,7 +43,7 @@ final class FileDelivery
     */
     public static function storage(string $path, bool $eTag = true): static
     {
-        return new self(root('writeable/storages/' . trim($path, DIRECTORY_SEPARATOR)), $eTag);
+        return new self(root('writeable/storages/' . trim($path, TRIM_DS)), $eTag);
     }
 
     /**
@@ -175,7 +175,7 @@ final class FileDelivery
     */
     public function url(string $basename, int $expiry = 3600): string|bool
     {
-        $filename = $this->path . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
+        $filename = $this->path . DIRECTORY_SEPARATOR . ltrim($basename, TRIM_DS);
   
         if (!file_exists($filename)) {
             return false;
@@ -199,7 +199,7 @@ final class FileDelivery
      */
     private function assertOutputHead(string $basename, int $expiry, array &$headers): string|bool
     {
-        $filename = $this->path . DIRECTORY_SEPARATOR . ltrim($basename, DIRECTORY_SEPARATOR);
+        $filename = $this->path . DIRECTORY_SEPARATOR . ltrim($basename, TRIM_DS);
   
         if (!file_exists($filename)) {
             return static::expiredHeader(404);

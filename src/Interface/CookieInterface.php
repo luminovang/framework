@@ -14,34 +14,6 @@ use \App\Config\Cookie as CookieConfig;
 interface CookieInterface
 {
   /**
-   * Cookies will be sent in all contexts, i.e., in responses to both
-   * third-party and cross-origin requests. If `SameSite=None` is set,
-   * the cookie `Secure` attribute must also be set (or the cookie will be blocked).
-   */
-  public const NONE = 'none';
-
-  /**
-   * Cookies are not sent on normal cross-site sub-requests (for example to
-   * load images or frames into a third-party site), but are sent when a
-   * user is navigating to the origin site (i.e., when following a link).
-   */
-  public const LAX = 'lax';
-
-  /**
-   * Cookies will only be sent in a third-party context and not be sent
-   * along with requests initiated by third-party websites.
-   */
-  public const STRICT = 'strict';
-
-  /**
-   * Expires date string format.
-   *
-   * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Date
-   * @see https://tools.ietf.org/html/rfc7231#section-7.1.1.2
-   */
-  public const EXPIRES_FORMAT = 'D, d-M-Y H:i:s T';
-
-  /**
    * Set cookie options.
    * 
    * @param CookieConfig|array $options An array of cookie options or cookie config class object.

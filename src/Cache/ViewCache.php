@@ -61,7 +61,7 @@ final class ViewCache
     */
     public function setExpiry(DateTimeInterface|int $expiration): self
     {
-        $this->expiration = is_int($expiration) ? $expiration : Timestamp::ttlToSeconds($expiration);
+        $this->expiration = ($expiration instanceof DateTimeInterface) ? Timestamp::ttlToSeconds($expiration) : $expiration;
 
         return $this;
     }
@@ -121,7 +121,7 @@ final class ViewCache
      */
     public function getLocation(): string
     {
-        return rtrim($this->directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return rtrim($this->directory, TRIM_DS) . DIRECTORY_SEPARATOR;
     }
 
     /**
@@ -316,7 +316,7 @@ final class ViewCache
         $pageContent .= $content;
         $pageContent .= "<?php }?>\n";
 
-        return write_content($this->getFilename(), $pageContent);
+        return FileManager::write($this->getFilename(), $pageContent);
     }
 
     /**

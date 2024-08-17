@@ -60,12 +60,11 @@ class Header implements Countable
     /**
      * Initializes the header constructor.
      * 
-     * @param array<string, mixed> $variables.
+     * @param array<string,mixed> $variables The header variables key-pair.
     */
     public function __construct(?array $variables = null)
     {
-        $variables ??= static::getHeaders();
-        $this->variables = $variables;
+        $this->variables = $variables ?? static::getHeaders();
     }
 
     /**
@@ -183,9 +182,9 @@ class Header implements Countable
     }
 
     /** 
-     * Get output headers
+     * Get output headers.
      * 
-     * @return array<string, mixed> $info
+     * @return array<string,mixed> Return output headers.
     */
     public static function requestHeaders(): array
     {

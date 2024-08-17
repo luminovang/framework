@@ -87,7 +87,7 @@ final class Layout
     public function layout(string $layout): self
     {
         self::$layouts ??= root('/resources/views/layouts/');
-        self::$file = self::$layouts . trim($layout, DIRECTORY_SEPARATOR) . '.php';
+        self::$file = self::$layouts . trim($layout, TRIM_DS) . '.php';
 
         if (!file_exists(self::$file)) {
             throw new RuntimeException('Layout not found: ' . filter_paths(self::$file));

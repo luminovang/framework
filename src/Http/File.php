@@ -228,7 +228,7 @@ class File
         foreach (self::$configurations as $key => $name) {
             if (isset($config[$key])) {
                 if($key === 'upload_path'){
-                    $this->config->{$name} = rtrim($config[$key], DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+                    $this->config->{$name} = rtrim($config[$key], TRIM_DS) . DIRECTORY_SEPARATOR;
                 }else{
                     $this->config->{$name} = $config[$key];
                 }

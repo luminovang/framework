@@ -236,7 +236,7 @@ trait View
     */
     public final function setFolder(string $path): self
     {
-        $this->subViewFolder = trim($path, DIRECTORY_SEPARATOR);
+        $this->subViewFolder = trim($path, TRIM_DS);
 
         return $this;
     }
@@ -1213,7 +1213,7 @@ trait View
     */
     private static function trimDir(string $path): string 
     {
-        return  rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return rtrim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
     }
 
     /** 
@@ -1225,7 +1225,7 @@ trait View
     */
     private static function getSystemPath(string $path): string 
     {
-        return self::getSystemRoot() . trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return self::getSystemRoot() . trim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
     }
 
     /** 

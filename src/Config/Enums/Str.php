@@ -1,4 +1,4 @@
-<?php 
+<?php
 /**
  * Luminova Framework
  *
@@ -7,8 +7,9 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Interface;
+namespace Luminova\Config\Enums;
 
-interface CacheInterface
+enum Str: string
 {
+    case DEFAULT_STORAGE = 'default';
 }

@@ -65,7 +65,7 @@ class Connection
    * @throws DatabaseLimitException When the maximum connection limit is reached.
    * @throws DatabaseException If an invalid connection configuration or driver is passed.
    */
-  public final function __construct()
+  public function __construct()
   {
     $this->maxConnections = (int) env('database.max.connections', 3);
     $this->pool = (bool) env('database.connection.pool', false);
@@ -320,7 +320,7 @@ class Connection
   {
     $var = (PRODUCTION ? 'database' : 'database.development');
     $sqlite = env("{$var}.sqlite.path", '');
-    $sqlite = ($sqlite !== '') ? APP_ROOT . trim($sqlite, DIRECTORY_SEPARATOR) : null;
+    $sqlite = ($sqlite !== '') ? APP_ROOT . trim($sqlite, TRIM_DS) : null;
  
     return self::newConfig([
       'port' => env('database.port'),

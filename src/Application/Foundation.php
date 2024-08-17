@@ -19,7 +19,7 @@ final class Foundation
      * 
     * @var string VERSION
     */
-    public const VERSION = '3.2.3';
+    public const VERSION = '3.2.4';
 
     /**
      * Minimum required php version.
@@ -232,14 +232,15 @@ final class Foundation
             return static::$base;
         }
 
-        static::$base = ($_SERVER['SCRIPT_NAME'] ?? DIRECTORY_SEPARATOR);
+        static::$base = ($_SERVER['SCRIPT_NAME'] ?? '/');
 
-        if(static::$base === DIRECTORY_SEPARATOR){
+        if(static::$base === '/'){
             return static::$base;
         }
 
-        if (($last = strrpos(static::$base, DIRECTORY_SEPARATOR)) !== false && $last > 0) {
-            static::$base = substr(static::$base, 0, $last) . DIRECTORY_SEPARATOR;
+        static::$base = str_replace(['/', '\\'], '/', static::$base);
+        if (($last = strrpos(static::$base, '/')) !== false && $last > 0) {
+            static::$base = substr(static::$base, 0, $last) . '/';
             return static::$base;
         }
 
@@ -257,17 +258,17 @@ final class Foundation
     public static function toAbsoluteUrl(string $path): string
     {
         if(NOVAKIT_ENV === null && !PRODUCTION){
-            $base = rtrim(static::getBase(), 'public' . DIRECTORY_SEPARATOR);
+            $base = rtrim(static::getBase(), 'public/');
             
             if (($basePos = strpos($path, $base)) !== false) {
-                $path = trim(substr($path, $basePos + strlen($base)), DIRECTORY_SEPARATOR);
+                $path = trim(substr($path, $basePos + strlen($base)), TRIM_DS);
             }
         }else{
-            $path = trim(static::filterPath($path), DIRECTORY_SEPARATOR);
+            $path = trim(static::filterPath($path), TRIM_DS);
         }
 
-        if(str_starts_with($path, 'public' . DIRECTORY_SEPARATOR)){
-            $path = ltrim($path, 'public' . DIRECTORY_SEPARATOR);
+        if(str_starts_with($path, 'public/')){
+            $path = ltrim($path, 'public/');
         }
  
         if(PRODUCTION){
@@ -439,7 +440,7 @@ final class Foundation
     }
 
     /**
-     * Handle shutdown errors 
+     * Handle shutdown errors.
      * 
      * @return void
     */

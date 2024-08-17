@@ -699,6 +699,7 @@ final class Router
     ): void 
     {
         Header::headerNoCache($status);
+        
         if($message){
             echo "<html><title>{$header}</title><body><h1>{$header}</h1><p>{$message}</p></body></html>";
         }

@@ -18,6 +18,7 @@ class Lists
      * Determines if a string is a valid list based on the expected list format.
      *
      * @param string $list The string to check.
+     * 
      * @return bool Return true if the string is a valid list; otherwise, false.
      */
     public static function isList(string $list): bool
@@ -62,7 +63,7 @@ class Lists
     /**
      * Builds a string representation of an array.
      *
-     * @param array $array The input array to convert.
+     * @param array $input The input array to convert.
      * @param string $delimiter The delimiter to use between (default: ',').
      *      - For none nested array use `,`.
      *      - For nested array use `;`.
@@ -72,14 +73,14 @@ class Lists
      * 
      * > Recommended to leave the default delimiter to automatically decide which one to use.
      */
-    public static function toList(array $array, string $delimiter = ','): string
+    public static function toList(array $input, string $delimiter = ','): string
     {
         if($delimiter !== ',' && $delimiter !== ';'){
             throw new InvalidArgumentException('Invalid delimiter specified, supported delimiters are "," for none nested array, or ";" for nested arrays.');
         }
 
         $list = '';
-        foreach($array as $key => $value){
+        foreach($input as $key => $value){
             if (is_array($value)) {
                 $line = '[' . self::toList($value, ';') . ']';
             } elseif (is_bool($value)) {

@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework
+ * Luminova Framework database builder class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -11,6 +11,7 @@ namespace Luminova\Database;
 
 use \Luminova\Time\Time;
 use \Luminova\Cache\FileCache;
+use \Luminova\Cache\MemoryCache;
 use \Luminova\Database\Connection;
 use \Luminova\Database\Manager;
 use \Luminova\Interface\DatabaseInterface;
@@ -157,9 +158,9 @@ final class Builder extends Connection
     /**
      * Cache class instance.
      * 
-     * @var FileCache $cache 
+     * @var FileCache|MemoryCache|null $cache 
     */
-    private ?FileCache $cache = null;
+    private FileCache|MemoryCache|null $cache = null;
 
     /**
      * Result return type.
@@ -204,11 +205,27 @@ final class Builder extends Connection
     private string $buildQuery = '';
 
     /**
+     * Query builder caching driver.
+     * 
+     * @var string $cacheDriver 
+    */
+    private string $cacheDriver = '';
+
+    /**
      * Query statement handler.
      * 
      * @var DatabaseInterface|bool|null $handler
     */
     private static DatabaseInterface|bool|null $handler = null;
+
+    /**
+     * Initialize database builder class.
+    */
+    public function __construct()
+    {
+        parent::__construct();
+        $this->cacheDriver = env('database.caching.driver', 'filesystem');
+    }
 
     /**
      * Reset query properties before cloning.
@@ -835,7 +852,7 @@ final class Builder extends Connection
      * @param string $key The storage cache key.
      * @param string $storage Private storage name hash name (optional): but is recommended to void storing large data in one file.
      * @param DateTimeInterface|int $expiry The cache expiry time in seconds (default: 7 days).
-     * @param string|null $folder Optionally set a folder name to store caches.
+     * @param string|null $subfolder Optionally set a folder name to store caches.
      * 
      * @return self Return instance of builder class.
      * @throws ErrorException If the file cannot be saved or an error occurs.
@@ -844,16 +861,20 @@ final class Builder extends Connection
         string $key, 
         string $storage = null, 
         DateTimeInterface|int $expiry = 7 * 24 * 60 * 60, 
-        ?string $folder = null
+        ?string $subfolder = null
     ): self
     {
         if($this->caching){
             $storage ??=  'database_' . ($this->tableName ?? 'capture');
-            $folder = ($folder === null) ? '' : DIRECTORY_SEPARATOR . trim($folder, DIRECTORY_SEPARATOR);
-            $this->cache = FileCache::getInstance(null, 'database' . $folder);
-            $this->cache->setStorage($storage);
-            $this->cache->setExpire($expiry);
-            $this->cache->create();
+            
+            if($this->cacheDriver === 'memcached'){
+                $this->cache = MemoryCache::getInstance(null, 'database');
+            }else{
+                $this->cache = FileCache::getInstance(null);
+                $this->cache->setFolder('database' . ($subfolder === null) ? '' : DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS));
+            }
+
+            $this->cache->setStorage($storage)->setExpire($expiry);
             $this->cacheKey = md5($key);
 
             // Check if the cache exists and handle expiration
@@ -953,6 +974,7 @@ final class Builder extends Connection
 
         if($mode !== RETURN_STMT && $this->cache !== null && $this->hasCache){
             $response = $this->cache->getItem($this->cacheKey);
+
             if($response !== null){
                 $this->cacheKey = '';
                 $this->reset();
@@ -968,11 +990,16 @@ final class Builder extends Connection
         $this->bindValues = $placeholder;
 
         try {
+            $response = $this->returnExecute($this->buildQuery, $mode);
+
             if($mode === RETURN_STMT || $this->cache === null){
-                return $this->returnExecute($this->buildQuery, $mode);
+                return $response;
             }
 
-            return $this->cache->onExpired($this->cacheKey, fn() => $this->returnExecute($this->buildQuery, $mode));
+            $this->cache->set($this->cacheKey, $response);
+            $this->cache = null;
+
+            return $response;
         } catch (DatabaseException|Exception $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
@@ -1113,9 +1140,9 @@ final class Builder extends Connection
         static::$handler = null;
         if(!$this->printQuery && $return !== 'stmt' && $this->cache !== null && $this->hasCache){
             $response = $this->cache->getItem($this->cacheKey);
+
             if($response !== null){
                 $this->cacheKey = '';
-
                 $this->reset();
                 return $response;
             }
@@ -1143,11 +1170,16 @@ final class Builder extends Connection
         }
     
         try {
+            $response = $this->returnExecutedResult($sqlQuery, $return, $result, $mode);
+
             if($this->printQuery || $return === 'stmt' || $this->cache === null){
-                return $this->returnExecutedResult($sqlQuery, $return, $result, $mode);
+                return $response;
             }
 
-            return $this->cache->onExpired($this->cacheKey, fn() => $this->returnExecutedResult($sqlQuery, $return, $result, $mode));
+            $this->cache->set($this->cacheKey, $response);
+            $this->cache = null;
+
+            return $response;
         } catch (DatabaseException|Exception $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
@@ -2326,7 +2358,6 @@ final class Builder extends Connection
         $this->andConditions = [];
         $this->querySetValues = [];
         $this->hasCache = false;
-        $this->cache = null;
         $this->printQuery = false;
         $this->bindValues = [];
         $this->buildQuery = '';

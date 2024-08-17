@@ -11,6 +11,7 @@ namespace Luminova\Arrays;
 
 use \Countable;
 use \Stringable;
+use \ArrayIterator;
 use \Luminova\Arrays\Lists;
 use \Luminova\Exceptions\JsonException;
 use \Luminova\Exceptions\RuntimeException;
@@ -24,8 +25,7 @@ class Arrays implements Countable, Stringable
      * @param array<string|int,mixed> $array The array to initialize.
      */
     public function __construct(private array $array = [])
-    {
-    }
+    {}
 
     /**
      * Create or Update the current array from a json string.
@@ -276,6 +276,18 @@ class Arrays implements Countable, Stringable
     public function values(): array
     {
         return array_values($this->array);
+    }
+
+    /**
+     * Return array iterator object for the current array.
+     * 
+     * @param int $flags Optional flags to control the behavior of the ArrayObject object (default: 0).
+     * 
+     * @return ArrayIterator Return a new instance of array iterator containing the current array elements.
+     */
+    public function iterator(int $flags = 0): ArrayIterator
+    {
+        return new ArrayIterator($this->array, $flags);
     }
 
     /**

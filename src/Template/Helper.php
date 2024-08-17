@@ -92,7 +92,7 @@ class Helper
     */
     public static function bothTrim(string $path): string 
     {
-        return trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return trim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
     }
 
     /** 

@@ -15,11 +15,11 @@ use \Throwable;
 class FileException extends AppException
 {
     /**
-     * Handle file excption.
+     * Handle file exception.
      * 
      * @param string $file Filename. 
      * @param string $message Exception message.
-     * @param Throwable $previous Exception thrown.
+     * @param Throwable|null $previous Exception thrown.
      * 
      * @throws static Throws exception.
     */
@@ -29,11 +29,11 @@ class FileException extends AppException
     }
 
     /**
-     * Handle file excption.
+     * Handle file exception.
      * 
      * @param string $file Filename. 
      * @param string $message Exception message.
-     * @param Throwable $previous Exception thrown.
+     * @param Throwable|null $previous Exception thrown.
      * 
      * @throws static Throws exception.
     */
@@ -43,11 +43,11 @@ class FileException extends AppException
     }
 
     /**
-     * Handle directory excption.
+     * Handle directory exception.
      * 
      * @param string $path File path.
      * @param string $message Exception message.
-     * @param Throwable $previous Exception thrown.
+     * @param Throwable|null $previous Exception thrown.
      * 
      * @throws static Throws exception.
     */
@@ -57,11 +57,11 @@ class FileException extends AppException
     }
 
     /**
-     * Handle file permission excption.
+     * Handle file permission exception.
      * 
      * @param string $path File path.
      * @param string $message Exception message.
-     * @param Throwable $previous Exception thrown.
+     * @param Throwable|null $previous Exception thrown.
      * 
      * @throws static Throws exception
     */

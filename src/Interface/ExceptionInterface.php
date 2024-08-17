@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework Exception interface.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -18,9 +18,25 @@ interface ExceptionInterface extends Throwable
      *
      * @param string message  The exception error message.
      * @param int $code  The exception code (default: 0).
-     * @param Throwable $previous  The previous exception if applicable (default: null).
+     * @param Throwable|null $previous  The previous exception if applicable (default: null).
     */
-    public function __construct(string $message, int $code = 0, Throwable $previous = null);
+    public function __construct(string $message, int $code = 0, ?Throwable $previous = null);
+
+    /**
+     * Get the exception code string.
+     *
+     * @return string|null Return exception code string, otherwise null if not string exception code.
+    */
+    public function getCodeString(): ?string;
+
+    /**
+     * Set an exception code string.
+     *
+     * @param string $code The exception string code.
+     * 
+     * @return self Return exception class instance.
+    */
+    public function setCodeString(string $code): self;
 
     /**
      * Get a string representation of the exception.
@@ -30,9 +46,9 @@ interface ExceptionInterface extends Throwable
     public function __toString(): string;
 
     /**
-     * Logs an exception message
+     * Logs an exception message to file.
      *
-     * @param string $level Exception log level.
+     * @param string $level The log level to use (default: `exception`).
      * 
      * @return void
     */
@@ -41,6 +57,7 @@ interface ExceptionInterface extends Throwable
     /**
      * Handle exception gracefully based on environment and exception error code.
      * 
+     * @return void 
      * @throws self Throws an exception if on development or fatal, otherwise log the exception.
     */
     public function handle(): void;
@@ -50,10 +67,10 @@ interface ExceptionInterface extends Throwable
      *
      * @param string $message The exception message.
      * @param int|string $code The exception code (default: 0).
-     * @param Throwable $previous  The previous exception if applicable (default: null).
+     * @param Throwable|null $previous  The previous exception if applicable (default: null).
      * 
      * @return void 
      * @throws static Throws the exception from the called class. 
     */
-    public static function throwException(string $message, int|string $code = 0, Throwable $previous = null): void;
+    public static function throwException(string $message, int|string $code = 0, ?Throwable $previous = null): void;
 }
