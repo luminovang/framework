@@ -11,66 +11,92 @@ namespace Luminova\Interface;
 
 use \Throwable;
 
-interface ExceptionInterface extends Throwable
+interface ExceptionInterface
 {
     /**
-     * Constructor for BaseException.
+     * Constructor for the exception.
      *
-     * @param string message  The exception error message.
-     * @param int $code  The exception code (default: 0).
-     * @param Throwable|null $previous  The previous exception if applicable (default: null).
-    */
-    public function __construct(string $message, int $code = 0, ?Throwable $previous = null);
+     * @param string $message The exception error message.
+     * @param string|int $code The exception code (default: 0).
+     * @param Throwable|null $previous The previous exception, if available (default: null).
+     */
+    public function __construct(string $message, string|int $code = 0, ?Throwable $previous = null);
 
     /**
-     * Get the exception code string.
+     * Set the exception code as a string.
      *
-     * @return string|null Return exception code string, otherwise null if not string exception code.
-    */
-    public function getCodeString(): ?string;
-
-    /**
-     * Set an exception code string.
-     *
-     * @param string $code The exception string code.
+     * @param string|int $code The string representation of the exception code.
      * 
-     * @return self Return exception class instance.
-    */
-    public function setCodeString(string $code): self;
+     * @return self Returns the instance of the exception.
+     */
+    public function setCode(string|int $code): self;
+
+    /**
+     * Sets the file where the error occurred.
+     * 
+     * @param string $file The file where the error occurred.
+     * 
+     * @return self Returns the instance of the exception.
+     */
+    public function setFile(string $file): self;
+
+    /**
+     * Sets the line number where the error occurred.
+     * 
+     * @param int $line The line number where the error occurred.
+     * 
+     * @return self Returns the instance of the exception.
+     */
+    public function setLine(int $line): self;
+
+    /**
+     * Gets filtered error message without the file.
+     * 
+     * @return string Return the filtered error message.
+     */
+    public function getFilteredMessage(): string;
+
+    /**
+     * Get debug trace.
+     * If no custom trace was set, then the default trace is returned.
+     * 
+     * @return array Returns the debug tracer for the exception thrown.
+     */
+    public function getDebugTrace(): array;
 
     /**
      * Get a string representation of the exception.
      *
-     * @return string A formatted error message.
-    */
+     * @return string A formatted error message that represents the exception.
+     */
     public function __toString(): string;
 
     /**
-     * Logs an exception message to file.
+     * Logs the exception message to a file.
      *
-     * @param string $level The log level to use (default: `exception`).
+     * @param string $level The log level to use (default: 'exception').
      * 
      * @return void
-    */
+     */
     public function log(string $level = 'exception'): void;
     
     /**
-     * Handle exception gracefully based on environment and exception error code.
+     * Handles the exception gracefully based on the environment and error code.
      * 
-     * @return void 
-     * @throws self Throws an exception if on development or fatal, otherwise log the exception.
-    */
+     * @return void
+     * @throws self If in a development environment or if the exception is fatal, the exception is thrown, otherwise, it is logged.
+     */
     public function handle(): void;
 
     /**
-     * Create and handle a exception gracefully.
+     * Create and handle an exception gracefully.
      *
      * @param string $message The exception message.
-     * @param int|string $code The exception code (default: 0).
-     * @param Throwable|null $previous  The previous exception if applicable (default: null).
+     * @param string|int $code The exception code (default: 0).
+     * @param Throwable|null $previous The previous exception, if available (default: null).
      * 
-     * @return void 
-     * @throws static Throws the exception from the called class. 
-    */
-    public static function throwException(string $message, int|string $code = 0, ?Throwable $previous = null): void;
+     * @return void
+     * @throws static Throws the exception from the called class.
+     */
+    public static function throwException(string $message, string|int $code = 0, ?Throwable $previous = null): void;
 }

@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework PDO database driver extension.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -12,44 +12,52 @@ namespace Luminova\Database\Drivers;
 use \Luminova\Base\BaseDatabase;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Interface\DatabaseInterface;
-use \Luminova\Database\Conn\pdoConn as PDO;
 use \Luminova\Interface\ConnInterface;
+use \PDO;
 use \PDOStatement;
 use \PDOException;
 
 final class PdoDriver implements DatabaseInterface 
 {
     /**
-     * PDO Database connection instance
+     * PDO Database connection instance.
      * 
      * @var PDO $connection 
     */
     private ?PDO $connection = null; 
 
     /**
-     * Pdo statement object
+     * PDO statement object.
      * 
-     * @var PDOStatement $stmt
+     * @var PDOStatement|null $stmt
     */
     private ?PDOStatement $stmt = null;
 
     /**
-     * @var bool $onDebug debug mode flag
+     * Debug mode flag.
+     * 
+     * @var bool $onDebug
     */
     private bool $onDebug = false;
 
     /**
-     * @var bool $connected connection status flag
+     * Connection status flag.
+     * 
+     * @var bool $connected 
     */
     private bool $connected = false;
 
     /**
-     * @var BaseDatabase|null $config Database configuration
+     * Database configuration.
+     * 
+     * @var BaseDatabase|null $config 
     */
     private ?BaseDatabase $config = null; 
 
     /**
-     * @var bool $parseParams Using bind and param parsing.
+     * Using bind and param parsing.
+     * 
+     * @var bool $parseParams
     */
     private bool $parseParams = false;
 
@@ -71,7 +79,7 @@ final class PdoDriver implements DatabaseInterface
             $this->connected = true;
         }catch(PDOException|DatabaseException $e){
             $this->connected = false;
-            DatabaseException::throwException($e->getMessage(), 0, $e);
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -102,8 +110,8 @@ final class PdoDriver implements DatabaseInterface
      * This method is called internally and should not be called directly.
      * 
      * @return void 
-     * @throws DatabaseException If no driver is specified
-     * @throws PDOException
+     * @throws DatabaseException If no driver is specified.
+     * @throws PDOException Throws if pdo error occurs.
     */
     private function newConnection(): void
     {
@@ -114,8 +122,11 @@ final class PdoDriver implements DatabaseInterface
         $driver = strtolower($this->config->pdo_engine);
         $dns = $this->dnsConnection($driver);
 
-        if ($dns === '' || ($driver === "sqlite" && $this->config->sqlite_path === '')) {
-            throw new DatabaseException("No PDO database driver found for: '{$driver}'");
+        if ($dns === '' || ($driver === 'sqlite' && $this->config->sqlite_path === '')) {
+            throw new DatabaseException(
+                sprintf('Unsupported PDO driver, no driver found for: "%s"', $driver),
+                1403
+            );
         }
 
         $username = $password = null;
@@ -166,7 +177,7 @@ final class PdoDriver implements DatabaseInterface
      * Cli or Force: Use Unix socket connection
      * Http: Use TCP/IP connection
      * 
-     * @return string
+     * @return string Return database connection dns string.
     */
     private function mysqlDns(): string
     {
@@ -192,17 +203,25 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function raw(): ?ConnInterface 
+    public function raw(): ConnInterface 
     {
-        return  $this->connection;
-    }
+        return new class($this->connection) implements ConnInterface 
+        {
+            /**
+             * {@inheritdoc}
+            */
+            public function __construct(private ?PDO $conn = null){}
+            
+            /**
+             * {@inheritdoc}
+            */
+            public function close(): void {$this->conn = null;}
 
-    /**
-     * {@inheritdoc}
-    */
-    public function statement(): PDOStatement|bool|null 
-    {
-        return $this->stmt;
+            /**
+             * {@inheritdoc}
+            */
+            public function getConn(): ?PDO { return $this->conn;}
+        };
     }
 
     /**
@@ -308,7 +327,7 @@ final class PdoDriver implements DatabaseInterface
             $readonly = $this->connection->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
             
             if ($readonly === false) {
-                DatabaseException::throwException("Failed to set transaction isolation level for read-only.");
+                DatabaseException::throwException('Failed to set transaction isolation level for read-only.');
             }
         }
 
@@ -320,7 +339,7 @@ final class PdoDriver implements DatabaseInterface
         if ($name !== null) {
             $name = $this->connection->quote("tnx_{$name}");
             if ($name === false) {
-                DatabaseException::throwException("Failed to create savepoint name.");
+                DatabaseException::throwException('Failed to create savepoint name.');
             }
 
             $savepoint = $this->connection->exec("SAVEPOINT {$name}") !== false;
@@ -354,7 +373,7 @@ final class PdoDriver implements DatabaseInterface
         $name = $this->connection->quote("tnx_{$name}");
 
         if ($name === false) {
-            DatabaseException::throwException("Failed to create savepoint name.");
+            DatabaseException::throwException('Failed to create savepoint name.');
         }
 
         return $this->connection->exec("ROLLBACK TO SAVEPOINT {$name}") !== false;
@@ -409,7 +428,7 @@ final class PdoDriver implements DatabaseInterface
     public function execute(?array $params = null): bool 
     {
         if($this->stmt === null || $this->stmt === false){
-            DatabaseException::throwException("Database operation error: Statement execution failed");
+            DatabaseException::throwException('Database operation error: Statement execution failed.');
             return false;
         }
 
@@ -419,7 +438,7 @@ final class PdoDriver implements DatabaseInterface
            $this->executed = $this->stmt->execute(($this->parseParams ? null : $params));
            $this->parseParams = false;
         } catch (PDOException $e) {
-            DatabaseException::throwException($e->getMessage(), 0, $e);
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
 
         return $this->executed;
@@ -436,7 +455,7 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function getItem(int $mode = RETURN_ALL, string $fetch = 'object'): mixed 
+    public function getResult(int $mode = RETURN_ALL, string $fetch = 'object'): mixed 
     {
         return match ($mode) {
             RETURN_NEXT => $this->getNext($fetch),
@@ -501,14 +520,6 @@ final class PdoDriver implements DatabaseInterface
         return $response;
     }
 
-     /**
-     * {@inheritdoc}
-    */
-    public function getStatement(): PDOStatement|\mysqli_stmt|\mysqli_result|bool|null
-    {
-        return $this->stmt;
-    }
-
     /**
      * {@inheritdoc}
     */
@@ -539,6 +550,14 @@ final class PdoDriver implements DatabaseInterface
         }
 
         return (int) $integers ?? 0;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getStatement(): PDOStatement|bool|null
+    {
+        return $this->stmt;
     }
 
     /**
@@ -578,7 +597,7 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */ 
-    public function fetchObject(string|null $class = "stdClass", array $arguments = []): object|bool 
+    public function fetchObject(string|null $class = 'stdClass', mixed ...$arguments): object|bool 
     {
         return $this->stmt->fetchObject($class, $arguments);
     }
@@ -586,9 +605,9 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function getLastInsertId(): string 
+    public function getLastInsertId(?string $name = null): string|int|null|bool
     {
-        return (string) $this->connection->lastInsertId();
+        return $this->connection->lastInsertId($name);
     }
 
     /**

@@ -37,13 +37,13 @@ class RouterException extends AppException
      * Thrown router exception.
      *
      * @param string $type The type of error.
-     * @param int $code Exception code.
+     * @param string|int $code Exception code.
      * @param array $values Message placeholders.
      * 
      * @return void
      * @throws static Exception message.
     */
-    public static function throwWith(string $type, int $code = 0, array $values = []): void
+    public static function throwWith(string $type, string|int $code = 0, array $values = []): void
     {
         throw new static(static::withMessage($type, ...$values), $code);
     }

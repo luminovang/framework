@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework Base controller class, for handing web, api's rendering.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -18,7 +18,7 @@ abstract class BaseController
     /**
      * HTTP request object.
      * 
-     * @var Request|null $request 
+     * @var Request|null $request
     */
     protected ?Request $request = null;
  
@@ -32,12 +32,13 @@ abstract class BaseController
     /**
      * Application instance.
      * 
-     * @var Application|null $app 
+     * @var Application|null $app
     */
     protected ?Application $app = null;
 
     /**
-     * Initialize BaseController class instance and make $this->app available to controller classes.
+     * Initialize the BaseController instance 
+     * and pre-initialize classes `$this->app`, `$this->validate` and `$this->request` to make them accessible instantly within controller class.
     */
     public function __construct()
     {
@@ -48,7 +49,8 @@ abstract class BaseController
     }
 
     /**
-     * Uninitialized controller instance.
+     * Clean up the controller instance.
+     * 
      * @ignore 
     */
     public function __destruct() 
@@ -59,9 +61,10 @@ abstract class BaseController
     /**
      * Property getter.
      *
-     * @param string $key property key.
+     * @param string $key The property key.
      * 
-     * @return ?mixed Return property value, otherwise null.
+     * @return mixed|null Return the property value, or null if not found.
+     * 
      * @ignore 
     */
     public function __get(string $key): mixed
@@ -70,11 +73,12 @@ abstract class BaseController
     }
     
      /**
-     * Check if property is set.
+     * Check if a property is set.
      *
-     * @param string $key The property key,
+     * @param string $key The property key.
      * 
-     * @return bool Return true if property is set, otherwise false.
+     * @return bool Return true if the property is set, otherwise false.
+     * 
      * @ignore 
     */
     public function __isset(string $key): bool
@@ -83,13 +87,13 @@ abstract class BaseController
     }
 
     /**
-     * Initializes the http request class instance.
+     * Initialize the HTTP request instance.
      * 
-     * @return Request Return http request instance. 
+     * @return Request Return the HTTP request instance.
     */
     protected final function request(): Request
     {
-        if(!$this->request instanceof Request){
+        if (!$this->request instanceof Request) {
             $this->request = new Request();
         }
 
@@ -97,13 +101,13 @@ abstract class BaseController
     }
 
     /**
-     * Initializes the input validator class instance.
+     * Initialize the input validation instance.
      * 
-     * @return Validation Return input validation instance.
+     * @return Validation Return the input validation instance.
     */
     protected final function validate(): Validation
     {
-        if(!$this->validate instanceof Validation){
+        if (!$this->validate instanceof Validation) {
             $this->validate = new Validation();
         }
         
@@ -111,13 +115,13 @@ abstract class BaseController
     }
 
     /**
-     * Initializes the application class instance.
+     * Initialize the application instance.
      * 
-     * @return Application Return application instance.
+     * @return Application Return the application instance.
     */
     protected final function app(): Application
     {
-        if(!$this->app instanceof Application){
+        if (!$this->app instanceof Application) {
             $this->app = Application::getInstance();
         }
         
@@ -125,66 +129,85 @@ abstract class BaseController
     }
 
     /**
-     * Shorthand to render view in controller class.
+     * Render a view within the controller.
      *
-     * @param string $view The view file name without extension type like: [`.php`, `.tpl`, `.twg`],  (e.g, `index`).
-     * @param array<string,mixed> $options Optional options to be passed to view template.
-     * @param string $type The view content extension type (default: `html`).
+     * @param string $view The view file name without the extension (e.g., `index`).
+     * @param array<string,mixed> $options Optional data to pass to the view.
+     * @param string $type The content type (default: `html`).
      * 
-     * @return int Return STATUS_SUCCESS on success, otherwise STATUS_ERROR failure.
+     * @return int Return STATUS_SUCCESS on success, otherwise STATUS_ERROR.
      * 
-     * View Types: 
+     * Supported content types:
      * 
-     * - html Html content.
-     * - json Json content.
-     * - text Plain text content.
-     * - xml  Xml content.
-     * - js   JavaScript content.
-     * - css  CSS content.
-     * - rdf  RDF content.
-     * - atom Atom content.
-     * - rss  RSS feed content.
+     * - html: HTML content
+     * - json: JSON content
+     * - text: Plain text content
+     * - xml: XML content
+     * - js: JavaScript content
+     * - css: CSS content
+     * - rdf: RDF content
+     * - atom: Atom feed content
+     * - rss: RSS feed content
+     * 
+     * This method is equivalent to:
+     * 
+     * ```
+     * $this->app->view('view-name', 'html')->render([...]);
+     * ```
     */
-    protected final function view(string $view, array $options = [], string $type = 'html'): int
+    protected final function view(
+        string $view, 
+        array $options = [], 
+        string $type = 'html'
+    ): int
     {
         return $this->app->view($view, $type)->render($options);
     }
 
     /**
-     * Shorthand to respond view contents in controller class.
+     * Respond with view content as a string.
      *
-     * @param string $view The view file name without extension type like: [`.php`, `.tpl`, `.twg`],  (e.g, `index`).
-     * @param array<string,mixed> $options Optional options to be passed to view template.
-     * @param string $type The view content extension type (default: `html`).
+     * @param string $view The view file name without the extension (e.g., `index`).
+     * @param array<string,mixed> $options Optional data to pass to the view.
+     * @param string $type The content type (default: `html`).
      * 
-     * @return string Return view contents which is ready to be rendered.
+     * @return string Return the rendered view content.
      * 
-     * View Types: 
+     * Supported content types:
+     * - html: HTML content
+     * - json: JSON content
+     * - text: Plain text content
+     * - xml: XML content
+     * - js: JavaScript content
+     * - css: CSS content
+     * - rdf: RDF content
+     * - atom: Atom feed content
+     * - rss: RSS feed content
      * 
-     * - html Html content.
-     * - json Json content.
-     * - text Plain text content.
-     * - xml  Xml content.
-     * - js   JavaScript content.
-     * - css  CSS content.
-     * - rdf  RDF content.
-     * - atom Atom content.
-     * - rss  RSS feed content.
+     * This method is equivalent to:
+     * 
+     * ```
+     * $this->app->view('view-name', 'html')->respond([...]);
+     * ```
     */
-    protected final function respond(string $view, array $options = [], string $type = 'html'): string
+    protected final function respond(
+        string $view, 
+        array $options = [], 
+        string $type = 'html'
+    ): string
     {
         return $this->app->view($view, $type)->respond($options);
     }
 
     /**
-     * Controller onCreate method an alternative to __construct.
+     * Controller initialization method, an alternative to __construct.
      * 
      * @return void 
     */
     protected function onCreate(): void {}
 
     /**
-     * Controller onDestroy method an alternative to __distruct.
+     * Controller destruction method, an alternative to __destruct.
      * 
      * @return void 
     */

@@ -92,7 +92,7 @@ class Terminal
      * @example $this->waiting(0, false); show waiting message till user press any key.
      * @example $this->waiting(20, false); show waiting for 20 seconds with a freezed screen.
      */
-    protected static final function waiting(
+    public static final function waiting(
         int $seconds, 
         bool $countdown = false, 
         string $message = 'Press any key to continue...'
@@ -133,7 +133,7 @@ class Terminal
      * @example $this->progress(1, 10, true); Show progress bar line with beep when completed.
      * @example $this->progress(1, 10, false); Show progress bar line without beep when completed.
     */
-    protected static final function progress(int|bool $progressLine = 1, ?int $progressCount = 10, bool $beep = true): int|float
+    public static final function progress(int|bool $progressLine = 1, ?int $progressCount = 10, bool $beep = true): int|float
     {
         if ($progressLine === false || $progressCount === null) {
             if($beep){
@@ -175,7 +175,7 @@ class Terminal
      * 
      * @example $this->watcher(100, Closure, Closure, true) Show 100 lines of progress bar with a callbacks and beep on finish.
     */
-    protected static final function watcher(
+    public static final function watcher(
         int $limit, 
         ?Closure $onFinish = null, 
         ?Closure $onProgress = null, 
@@ -219,24 +219,44 @@ class Terminal
 
     /**
      * Prompt user to type something, optionally pass an array of options for user to enter any.
-     * Optionally, you can make a colored options by using the array key for color name ["green" => "YES","red" => "NO"].
+     * Optionally, you can make a colored options by using the array key for color name (e.g,`['green' => 'YES', 'red' => 'NO']`).
      *
      *
      * @param string $message The message to prompt.
      * @param array $options  Optional array options to prompt for selection.
      * @param string|null $validations Optional validation rules to ensure only the listed options are allowed.
+     *                      If null the options values will be used for validation `required|in_array(...values)`.
+     *                      To disable validation pass `none` as the value.
      * @param bool $silent Weather to print validation failure message if wrong option was selected (default: false).
      *
      * @return string Return user input value.
      * 
-     * Examples
+     * @example Prompt examples:
      *
-     * @example $name = $this->prompt('What is your name?'); Prompt user to enter their name.
-     * @example $color = $this->prompt('Are you sure you want to continue?', ["green" => "YES","red" => "NO"]); Prompt user to choose any option and specify each option color in array key.
-     * @example $color = $this->prompt('What is your gender?', ['male','female']); Prompt user to select their gender, no colored text will be used.
-     * @example $email = $this->prompt('Are you sure you want to continue?', ["YES", "NO], 'required|in_array(YES,NO)'); Prompt user to choose any option and pass a validation.
+     * Prompt user to enter their name:
+     * 
+     * ```
+     * $name = $this->prompt('What is your name?');
+     * ```
+     * Prompt user to choose any option and specify each option color in array key:
+     * 
+     * ```
+     * $color = $this->prompt('Are you sure you want to continue?', ['green' => 'YES', 'red' => 'NO']);
+     * ```
+     * 
+     * Prompt user to select their gender or skip, no colored text will be used:
+     * 
+     * ```
+     * $color = $this->prompt('What is your gender?', ['male','female'], 'none');
+     * ```
+     * 
+     * Prompt user to choose any option with a custom validation to pass.
+     * ```
+     * $email = $this->prompt('Are you sure you want to continue?', ['YES', 'NO'], 'required|in_array(YES,NO)');
+     * ```
+     * @see https://luminova.ng/docs/0.0.0/security/validation
     */
-    protected static final function prompt(string $message, array $options = [], ?string $validations = null, bool $silent = false): string
+    public static final function prompt(string $message, array $options = [], ?string $validations = null, bool $silent = false): string
     {
         $default = '';
         $placeholder = '';
@@ -253,8 +273,8 @@ class Terminal
 
         $validationRules = $validations ?? $textOptions;
         $validationRules = ($validations === 'none' 
-            ? false : (is_array($validationRules) && $validationRules !== []
-            ? "in_array('" .  implode("', '", $validationRules) . "')" : $validationRules));
+            ? false : ($validationRules !== [] && is_array($validationRules)
+            ? "required|in_array(" .  implode(",", $validationRules) . ")" : $validationRules));
 
         if ($validationRules && str_contains($validationRules, 'required')) {
             $default = '';
@@ -276,6 +296,71 @@ class Terminal
     }
 
     /**
+     * Prompt user with multiple option selection.
+     * Display array index key as the option identifier to select.
+     * If you use associative array users will still see index key instead.
+     *
+     *
+     * @param string $text  The chooser description message to prompt.
+     * @param array  $options The list of options to prompt (e.g, ['male' => 'Male', 'female' => 'Female] or ['male', 'female']).
+     * @param bool $required Require user to choose any option else the first array will be return as default.
+     *
+     * @return array<string|int,mixed> $options The selected array keys and values.
+     * @throws InvalidArgumentException Throw if options is not specified or an empty array.
+     * 
+     * @example Examples of chooser:
+     *
+     *  Prompt multiple chooser, using PHP as default if user didn't select anything before hit return.
+     * 
+     * ```
+     * $array = $this->chooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML']);
+     * ```
+     * Prompt multiple chooser, persisting that user must choose an option.
+     * ```
+     * $array = $this->chooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML'], true); 
+     * ```
+    */
+    public static final function chooser(string $text, array $options, bool $required = false): array
+    {
+        if ($options == []) {
+            throw new InvalidArgumentException('Invalid argument, $options is required for chooser.');
+        }
+
+        $lastIndex = 0;
+        $placeholder = 'To specify multiple values, separate them with commas.';
+        $validationRules = '';
+        $optionValues = [];
+        $index = 0;
+        foreach ($options as $key => $value) {
+            $optionValues[$index] = [
+                'key' => $key,
+                'value' => $value
+            ];
+
+            $validationRules .= $index . ',';
+            $lastIndex = $index;
+            $index++;
+        }
+        
+        $validationRules = $required ? "required|keys_exist(" . rtrim($validationRules, ',')  . ")" : 'nullable';
+        static::writeln($text);
+        self::writeOptions($optionValues, strlen((string) $lastIndex));
+        static::writeln($placeholder);
+
+        do {
+            if (isset($input)) {
+                static::fwrite('Required, please select an option to continue.');
+                static::newLine();
+            }
+
+            $input = static::input();
+            $input = ($input === '') ? '0' : $input;
+        } while ($required && !static::validate($input, ['input' => $validationRules]));
+
+        return self::getInputValues(list_to_array($input), $optionValues);
+    }
+
+    /**
      * Prompts the user to enter a password, with options for retry attempts and a timeout.
      *
      * @param string $message The message to display when prompting for the password.
@@ -284,7 +369,7 @@ class Terminal
      *
      * @return string Return the entered password.
      */
-    protected static final function password(
+    public static final function password(
         string $message = 'Enter Password', 
         int $retry = 3, 
         int $timeout = 0
@@ -312,11 +397,11 @@ class Terminal
                 }
     
                 if (file_put_contents($vbscript, $inputBox) !== false) {
-                    $password = shell_exec("cscript //nologo " . escapeshellarg($vbscript));
+                    $password = static::_shell("cscript //nologo " . escapeshellarg($vbscript));
                 }
     
                 if ($password === '' || $password === false || $password === null) {
-                    $password = shell_exec('powershell -Command "Read-Host -AsSecureString | ConvertFrom-SecureString"');
+                    $password = static::_shell('powershell -Command "Read-Host -AsSecureString | ConvertFrom-SecureString"');
                 }
 
                 $password = ($password === false || $password === null) ? '' : trim($password);
@@ -324,7 +409,7 @@ class Terminal
                 unlink($vbscript);
             } else {
                 $command = "/usr/bin/env bash -c 'echo OK'";
-                $continue = shell_exec($command);
+                $continue = static::_shell($command);
                 $continue = ($continue === false || $continue === null) ? 'ERR' : trim($continue);
     
                 if ($continue !== 'OK') {
@@ -364,7 +449,7 @@ class Terminal
                         static::visibility(true);
                     } elseif ($continue === 'OK') {
                         $command = "/usr/bin/env bash -c 'read -s inputPassword && echo \$inputPassword'";
-                        $password = shell_exec($command);
+                        $password = static::_shell($command);
                         $password = ($password === false || $password === null) ? '' : trim($password);
                     }
                 }
@@ -400,7 +485,7 @@ class Terminal
      * 
      * @return bool Returns true if the timeout occurred and callback was executed, otherwise false.
      */
-    protected static final function timeout(Closure $callback, int $timeout = 0, mixed $stream = STDIN): bool
+    public static final function timeout(Closure $callback, int $timeout = 0, mixed $stream = STDIN): bool
     {
         if ($timeout <= 0) {
             $callback();
@@ -421,96 +506,74 @@ class Terminal
     }
 
     /**
+     * Execute a system command.
+     * 
+     * @param string $command The command to execute.
+     * 
+     * @return array|false The output of the command as an array of lines, or false on failure.
+     */
+    public final function execute(string $command): array|bool
+    {
+        $result_code = STATUS_ERROR;
+        $output = [];
+
+        exec($command, $output, $result_code);
+        
+        if ($result_code === STATUS_SUCCESS) {
+            return $output;
+        }
+
+        return false;
+    }
+
+    /**
+     * Executes a command via `exec` and redirect error output to null based on the platform (Windows or Unix-like).
+     * 
+     * @param string $command The command to execute.
+     * @param array &$output Output lines of the executed command (default: []).
+     * @param int &$result_code The exit status of the executed command (default: STATUS_ERROR).
+     * 
+     * @return string|bool The last line of the command output, or false on failure.
+     */
+    public static function _exec(string $command, array &$output = [], int &$result_code = STATUS_ERROR): string|bool
+    {
+        $devNull = is_platform('windows') ? '2>NUL' : '2>/dev/null';
+        return exec("{$command} {$devNull}", $output, $result_code);
+    }
+
+    /**
+     * Executes a shell command via `shell_exec` and return the complete output as a string.
+     * Also it redirects error output to null based on the platform (Windows or Unix-like).
+     * 
+     * @param string $command The command to execute.
+     * 
+     * @return string|bool|null The output of the command, or null on error.
+     */
+    public static function _shell(string $command): string|bool|null
+    {
+        $devNull = is_platform('windows') ? '2>NUL' : '2>/dev/null';
+        return shell_exec("{$command} {$devNull}");
+    }
+
+    /**
      * Toggles the terminal visibility of user input.
      *
      * @param bool $visibility True to show input, False to hide input.
      * 
      * @return bool Return true if visibility toggling was successful, false otherwise.
      */
-    protected static final function visibility(bool $visibility = true): bool
+    public static final function visibility(bool $visibility = true): bool
     {
-        $command = ($visibility) ? 'stty echo' : 'stty -echo';
-        return shell_exec($command) !== null;
-    }
-
-    /**
-     * Prompt user with multiple selection options.
-     * Display array index key as the option identifier to select.
-     * If you use associative array users will still see index key instead.
-     *
-     *
-     * @param string $text  Display text description for your multiple options.
-     * @param array  $options A list of options ['male' => 'Male', 'female' => 'Female] or ['male', 'female'].
-     * @param bool $required Require user to choose any option else the first array will be return as default.
-     *
-     * @return array<string|int,mixed> $options The selected array keys and values.
-     * @throws InvalidArgumentException Throw if options is an empty array.
-     * 
-     * Examples:
-     *
-     * @example $array = $this->chooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML']); Prompt multiple chooser, using PHP as default if user didn't select anything before hit return.
-     * @example $array = $this->chooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML'], true); Prompt multiple chooser, persisting that user must choose an option.
-    */
-    protected static final function chooser(string $text, array $options, bool $required = false): array
-    {
-        if ($options == []) {
-            throw new InvalidArgumentException('No options to select from were provided');
+        if (is_platform('windows')) {
+            // Windows command for toggling input visibility
+            $command = ($visibility) ? 'echo on' : 'echo off';
+        } else {
+            // Unix-based systems command for toggling input visibility
+            $command = ($visibility) ? 'stty echo' : 'stty -echo';
         }
 
-        $lastIndex = 0;
-        $defaultInput = ($required ? '__strictly_required__' : 0);
-        $placeholder = 'To specify multiple values, separated by commas.';
-        $validationRules = '';
-        $optionValues = [];
-        $index = 0;
-        foreach ($options as $key => $value) {
-            $optionValues[$index] = [
-                'key' => $key,
-                'value' => $value
-            ];
-            $validationRules .= $index . "','";
-            $lastIndex = $index;
-            $index++;
-        }
-
-        $validationRules = "keys_exist('" . rtrim($validationRules, ",'")  . "')";
-        $lastIndex = (string) $lastIndex;
-
-        static::writeln($text);
-        self::writeOptions($optionValues, strlen($lastIndex));
-        static::writeln($placeholder);
-
-        do {
-            if (isset($input)) {
-                static::fwrite("Please select correct options from list.");
-                static::newLine();
-            }
-
-            $input = static::input();
-            if($input === ''){
-                $input = $defaultInput;
-            }
-        } while (!static::validate($input, ['input' => $validationRules]));
-
-        return self::getInputValues(list_to_array($input), $optionValues);
-    }
-
-    /**
-     * Execute a system command.
-     * 
-     * @param string $command The command to execute.
-     * 
-     * @return array|int The output of the command as an array of lines, or false on failure.
-     */
-    public final function execute(string $command): array|int
-    {
-        exec($command, $output, $returnCode);
-        
-        if ($returnCode === STATUS_SUCCESS) {
-            return $output;
-        }
-
-        return STATUS_ERROR;
+        // Execute the command and return whether it was successful
+        return static::_shell($command) !== null;
     }
 
     /**
@@ -611,7 +674,7 @@ class Terminal
      * 
      * @return int Return terminal window width or default.
     */
-    protected static final function getWidth(int $default = 80): int
+    public static final function getWidth(int $default = 80): int
     {
         if (static::$width === null) {
             self::calculateVisibleWindow();
@@ -627,7 +690,7 @@ class Terminal
      * 
      * @return int Return terminal window height or default.
     */
-    protected static final function getHeight(int $default = 24): int
+    public static final function getHeight(int $default = 24): int
     {
         if (static::$height === null) {
             self::calculateVisibleWindow();
@@ -647,20 +710,28 @@ class Terminal
             return;
         }
 
-        if (is_platform('windows') && (getenv('TERM') || getenv('SHELL'))) {
-            static::$height = (int) exec('tput lines');
-            static::$width  = (int) exec('tput cols');
+        if (is_platform('windows')) {
+            // Use PowerShell to get console size on Windows
+            $size = static::_shell('powershell -command "Get-Host | ForEach-Object { $_.UI.RawUI.WindowSize.Height; $_.UI.RawUI.WindowSize.Width }"');
+
+            if ($size) {
+                $dimensions = explode("\n", trim($size));
+                static::$height = (int) $dimensions[0];
+                static::$width = (int) $dimensions[1];
+            }
         } else {
-            $size = exec('stty size');
-            if (preg_match('/(\d+)\s+(\d+)/', $size, $matches)) {
+            // Fallback for Unix-like systems
+            $size = static::_exec('stty size');
+            if ($size && preg_match('/(\d+)\s+(\d+)/', $size, $matches)) {
                 static::$height = (int) $matches[1];
                 static::$width  = (int) $matches[2];
             }
         }
 
+        // As a fallback, if still not set, default to standard size
         if (static::$height === null || static::$width === null) {
-            static::$height = (int) exec('tput lines');
-            static::$width  = (int) exec('tput cols');
+            static::$height = (int) static::_exec('tput lines');
+            static::$width  = (int) static::_exec('tput cols');
         }
     }
 
@@ -673,7 +744,7 @@ class Terminal
      * 
      * @return string Return user input string.
     */
-    protected static final function input(?string $prompt = null, bool $useFopen = false): string
+    public static final function input(?string $prompt = null, bool $useFopen = false): string
     {
         if (static::$isReadline && ENVIRONMENT !== 'testing') {
             return @readline($prompt);
@@ -684,8 +755,7 @@ class Terminal
         }
 
     
-        $input = $useFopen ? fgets(fopen(STDIN, 'rb')) : fgets(STDIN);
-
+        $input = ($useFopen ? fgets(fopen(STDIN, 'rb')) : fgets(STDIN));
         return ($input === false) ? '' : trim($input);
     }
 
@@ -697,7 +767,7 @@ class Terminal
      * 
      * @return bool Return true if validation succeeded, false if validation failed.
     */
-    protected static final function validate(string $value, array $rules): bool
+    public static final function validate(string $value, array $rules): bool
     {
         static $validation = null;
         $validation ??= new Validation();
@@ -829,7 +899,7 @@ class Terminal
      *
      * @return void
     */
-    protected static final function fwrite(string $text, mixed $handle = STDOUT): void
+    public static final function fwrite(string $text, mixed $handle = STDOUT): void
     {
         if (!is_command()) {
             echo $text;
@@ -1004,6 +1074,22 @@ class Terminal
     }
 
     /**
+     * Convert executed command array arguments to their original string form.
+     * 
+     * @param array $arguments The command arguments from $_SERVER['argv'].
+     * 
+     * @return string|null Returns the parsed command arguments as a string, or null if the array is empty.
+     */
+    public static function toString(array $arguments): ?string
+    {
+        if ($arguments !== []) {
+            return implode(' ', $arguments);
+        }
+
+        return null;
+    }
+
+    /**
      * Parse command line queries.
      * 
      * @param array $arguments The command arguments from $_SERVER['argv'].
@@ -1020,6 +1106,7 @@ class Terminal
             'group' => '',
             'arguments' => [],
             'options' => [],
+            'exe_string' => self::toString($arguments),
         ];
         if ($caller === 'novakit' || $caller === 'php' || preg_match('/^.*\.php$/', $caller)) {
             array_shift($arguments); //Remove the front controller file

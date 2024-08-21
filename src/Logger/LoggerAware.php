@@ -159,6 +159,17 @@ class LoggerAware implements LoggerInterface, LoggerAwareInterface
     }
 
     /**
+     * Log an performance metric.
+     *
+     * @param string $message The php message to log.
+     * @param array $context Additional context data (optional).
+     */
+    public function metrics($message, array $context = []): void
+    {
+        $this->log(LogLevel::METRICS, $message, $context);
+    }
+
+    /**
      * Log a message at a specified log level.
      *
      * @param string $level The log level (e.g., "emergency," "error," "info").

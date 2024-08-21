@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework
+ * Luminova Framework template view class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -49,18 +49,18 @@ trait View
     private static ?string $root = null;
 
     /** 
-     * View template filename.
+     * View template full filename.
      * 
-     * @var string $templateFile 
+     * @var string $filepath 
     */
-    private string $templateFile = '';
+    private string $filepath = '';
 
     /**
-     * Holds the project template directory.
+     * View template directory.
      * 
-     * @var string $templateDir 
+     * @var string $viewsDirectory 
     */
-    private string $templateDir = '';
+    private string $viewsDirectory = '';
 
     /**
      * Type of view content.
@@ -77,11 +77,11 @@ trait View
     private static string $viewFolder = 'resources/views';
 
     /** 
-     * The project sub view directory.
+     * The view sub directory.
      * 
-     * @var string $subViewFolder 
+     * @var string $subfolder 
     */
-    private string $subViewFolder = '';
+    private string $subfolder = '';
 
     /** 
      * Holds the router active page name.
@@ -236,7 +236,7 @@ trait View
     */
     public final function setFolder(string $path): self
     {
-        $this->subViewFolder = trim($path, TRIM_DS);
+        $this->subfolder = trim($path, TRIM_DS);
 
         return $this;
     }
@@ -469,17 +469,17 @@ trait View
             ));
         }
 
-        $this->templateDir = self::getSystemPath(self::$viewFolder);
+        $this->viewsDirectory = self::getSystemPath(self::$viewFolder);
 
-        if($this->subViewFolder !== ''){
-            $this->templateDir .= $this->subViewFolder . DIRECTORY_SEPARATOR;
+        if($this->subfolder !== ''){
+            $this->viewsDirectory .= $this->subfolder . DIRECTORY_SEPARATOR;
         }
 
-        $this->templateFile = $this->templateDir . $viewName . self::dot();
+        $this->filepath = $this->viewsDirectory . $viewName . self::dot();
 
-        if (PRODUCTION && !file_exists($this->templateFile)) {
+        if (PRODUCTION && !file_exists($this->filepath)) {
             $viewName = '404';
-            $this->templateFile = $this->templateDir . $viewName . self::dot();
+            $this->filepath = $this->viewsDirectory . $viewName . self::dot();
         }
 
         $this->viewType = $viewType;
@@ -673,7 +673,7 @@ trait View
                 if ($engine === 'smarty' || $engine === 'twig') {
                     return self::{'render' . $engine}(
                         $this->activeView . self::dot(), 
-                        $this->templateDir, 
+                        $this->viewsDirectory, 
                         $options, 
                         $cacheable,
                         Timestamp::ttlToSeconds($this->cacheExpiry),
@@ -696,7 +696,7 @@ trait View
 
                 if(self::$config->templateIsolation){
                     return self::renderIsolation(
-                        $this->templateFile, 
+                        $this->filepath, 
                         $options,
                         $cache,
                         $this->minifyCodeblocks, 
@@ -726,20 +726,19 @@ trait View
     */
     private function assertSetup(int $status = 200): bool
     {
-        defined('ALLOW_ACCESS') || define('ALLOW_ACCESS', true);
-
-        if (!file_exists($this->templateFile)) {
+        if (!file_exists($this->filepath)) {
             Header::headerNoCache(404);
             throw new ViewNotFoundException(sprintf(
                 'The view "%s" could not be found in the view directory "%s".', 
                 $this->activeView, 
-                filter_paths($this->templateDir)
+                filter_paths($this->viewsDirectory)
             ), 404);
         } 
 
         FileManager::permission('rw');
         http_response_code($status);
-        
+        defined('ALLOW_ACCESS') || define('ALLOW_ACCESS', true);
+
         return true;
     }
 
@@ -747,7 +746,7 @@ trait View
      * Render with smarty engine.
      * 
      * @param string $view View file name.
-     * @param string $templateDir View template directory.
+     * @param string $viewsDirectory View template directory.
      * @param array $options View options.
      * @param bool $caching Should cache page contents.
      * @param int $cacheExpiry Cache expiration.
@@ -760,7 +759,7 @@ trait View
     */
     private static function rendersmarty(
         string $view, 
-        string $templateDir, 
+        string $viewsDirectory, 
         array $options = [], 
         bool $caching = false,
         int $cacheExpiry = 3600,
@@ -778,7 +777,7 @@ trait View
 
         try{
             $instance->headers($customHeaders);
-            $instance->setPath($templateDir);
+            $instance->setPath($viewsDirectory);
             $instance->minify(self::$minifyContent, [
                 'codeblock' => $minify,
                 'copyable' => $copy,
@@ -803,7 +802,7 @@ trait View
      * Render with twig engine.
      * 
      * @param string $view View file name.
-     * @param string $templateDir View template directory.
+     * @param string $viewsDirectory View template directory.
      * @param array $options View options.
      * @param bool $shouldCache Should cache page contents.
      * @param int $cacheExpiry Cache expiration.
@@ -816,7 +815,7 @@ trait View
     */
     private static function rendertwig(
         string $view, 
-        string $templateDir, 
+        string $viewsDirectory, 
         array $options = [], 
         bool $shouldCache = false,
         int $cacheExpiry = 3600,
@@ -829,7 +828,7 @@ trait View
         static $instance = null;
 
         if($instance === null){
-            $instance = Twig::getInstance(self::$config, self::getSystemRoot(), $templateDir, [
+            $instance = Twig::getInstance(self::$config, self::getSystemRoot(), $viewsDirectory, [
                 'caching' => $shouldCache,
                 'charset' => env('app.charset', 'utf-8'),
                 'strict_variables' => true,
@@ -839,7 +838,7 @@ trait View
 
         try{
             $instance->headers($customHeaders);
-            $instance->setPath($templateDir);
+            $instance->setPath($viewsDirectory);
             $instance->minify(self::$minifyContent, [
                 'codeblock' => $minify,
                 'copyable' => $copy,
@@ -877,7 +876,7 @@ trait View
             self::extract($options);
         }
 
-        include_once $this->templateFile;
+        include_once $this->filepath;
         $_lmv_contents = ob_get_clean();     
         self::inlineErrors($_lmv_contents);
 
@@ -1086,20 +1085,18 @@ trait View
      *
      * @return void 
     */
-    private static function handleException(ExceptionInterface $exception, array $options = []): void 
+    private static function handleException(
+        ExceptionInterface $exception, 
+        array $options = []
+    ): void 
     {
-        if(PRODUCTION){
-            $view = self::getSystemError('404');
-        }else{
-            $view = self::getSystemError('view.error');
-            $trace = SHOW_DEBUG_BACKTRACE ? debug_backtrace() : [];
-        }
-
         extract($options);
         unset($options);
 
-        include_once $view;
-        $exception->log();
+        include_once PRODUCTION ? self::getSystemError('404') : self::getSystemError('view.error');
+        if(PRODUCTION){
+            $exception->log();
+        }
         exit(STATUS_SUCCESS);
     }
 
@@ -1118,18 +1115,10 @@ trait View
         }
 
         $prefix = (self::$config->variablePrefixing ? '_' : '');
+
         foreach ($attributes as $name => $value) {
-            self::assertValidKey($name);           
             $key = (is_int($name) ? '_' . $name : $prefix . $name);
-
-            if ($key === '_' || $key === '') {
-                throw new RuntimeException("Invalid option key: '{$key}'. View option key must be non-empty strings.");
-            }
-
-            if (isset(self::$publicClasses[$key])) {
-                throw new RuntimeException("Class with the same option name: '{$key}' already exists. Use a different name or enable variable prefixing to retain the name.");
-            }
-
+            self::assertValidOptionKey($key);           
             self::$publicOptions[$key] = $value;
         }
     }
@@ -1142,10 +1131,24 @@ trait View
      * 
      * @return void
     */
-    private static function assertValidKey(string $key): void 
+    private static function assertValidOptionKey(string $key): void 
     {
+        if ($key === '_' || $key === '') {
+            throw new RuntimeException(
+                sprintf('Invalid option key: "%s".  View option key must be non-empty strings.', $key)
+            );
+        }
+
         if (preg_match('/[^a-zA-Z0-9_]/', $key)) {
-            throw new RuntimeException("Invalid option key: '{$key}'. Only letters, numbers, and underscores are allowed in variable names.");
+            throw new RuntimeException(
+                sprintf('Invalid option key: "%s". Only letters, numbers, and underscores are allowed in variable names.', $key)
+            );
+        }
+
+        if (isset(self::$publicClasses[$key])) {
+            throw new RuntimeException(
+                sprintf('Class with the same option name: "%s". already exists. Use a different name or enable variable prefixing to retain the name.', $key)
+            );
         }
     }
 
@@ -1167,7 +1170,7 @@ trait View
 
         if (preg_match('/error<\/b>:(.+?) in <b>(.+?)<\/b> on line <b>(\d+)<\/b>/', $contents, $matches)) {
             throw new RuntimeException(sprintf(
-                "PHP Inline Error: %s in %s on line %d",
+                'DocumentInlineError: %s in %s on line %d',
                 trim($matches[1]),
                 filter_paths($matches[2]),
                 $matches[3]

@@ -16,7 +16,7 @@ use \Luminova\Arrays\Lists;
 use \Luminova\Exceptions\JsonException;
 use \Luminova\Exceptions\RuntimeException;
 
-class Arrays implements Countable, Stringable
+class ArrayUtil implements Countable, Stringable
 {
     /**
      * Constructor to initialize array instance.
@@ -24,8 +24,7 @@ class Arrays implements Countable, Stringable
      * 
      * @param array<string|int,mixed> $array The array to initialize.
      */
-    public function __construct(private array $array = [])
-    {}
+    public function __construct(private array $array = []){}
 
     /**
      * Create or Update the current array from a json string.
@@ -219,6 +218,25 @@ class Arrays implements Countable, Stringable
     }
 
     /**
+     * Compares the current array with one or more arrays and returns the difference.
+     * The values from the current array that are not present in any of the passed arrays.
+     * 
+     * @param ArrayUtil|array ...$arrays One or more arrays or ArrayUtil instances to compare.
+     * 
+     * @return array Returns an array containing all the entries from the current array that are not present in any of the other arrays.
+     */
+    public function diff(ArrayUtil|array ...$arrays): array
+    {
+        $compares = [];
+
+        foreach ($arrays as $array) {
+            $compares[] = ($array instanceof ArrayUtil) ? $array->get() : $array;
+        }
+
+        return array_diff($this->array, ...$compares);
+    }
+
+    /**
      * Sort the current array elements.
      * 
      * @param int $flags The array sort flags (default: SORT_REGULAR).
@@ -296,11 +314,11 @@ class Arrays implements Countable, Stringable
      * @param string|int|null $property The column to extract.
      * @param string|int|null $index The index to use for extraction.
      * 
-     * @return Arrays Return a new instance of Arrays containing the extracted column.
+     * @return ArrayUtil Return a new instance of ArrayUtil containing the extracted column.
      */
-    public function column(string|int|null $property, string|int|null $index = null): Arrays
+    public function column(string|int|null $property, string|int|null $index = null): ArrayUtil
     {
-        return new Arrays(array_column($this->array, $property, $index));
+        return new ArrayUtil(array_column($this->array, $property, $index));
     }
 
     /**
@@ -308,9 +326,9 @@ class Arrays implements Countable, Stringable
      *
      * @param string $property The key or property name to pluck values from.
      * 
-     * @return Arrays Return a new instance of Arrays containing the values corresponding to the specified property name.
+     * @return ArrayUtil Return a new instance of ArrayUtil containing the values corresponding to the specified property name.
      */
-    public function pluck(string $property): Arrays
+    public function pluck(string $property): ArrayUtil
     {
         $result = [];
 
@@ -322,7 +340,7 @@ class Arrays implements Countable, Stringable
             }
         }
 
-        return new Arrays($result);
+        return new ArrayUtil($result);
     }
 
     /**
@@ -347,12 +365,13 @@ class Arrays implements Countable, Stringable
     /**
      * Merge another array with the current array.
      * 
-     * @param array<string|int,mixed> $array The array to merge with the current array.
+     * @param ArrayUtil|array<string|int,mixed> $array The array to merge with the current array.
      * 
      * @return self Return the updated instance with the merged array.
      */
-    public function merge(array $array): self
+    public function merge(ArrayUtil|array $array): self
     {
+        $array = ($array instanceof ArrayUtil) ? $array->get() : $array;
         $this->array = array_merge($this->array, $array);
         return $this;
     }
@@ -360,20 +379,21 @@ class Arrays implements Countable, Stringable
     /**
      * Recursively merges multiple arrays. Values from later arrays will overwrite values from earlier arrays, including merging nested arrays.
      * 
-     * @param array<string|int,mixed> $array The array to merge with the current array.
-     * @param bool $distinct The array to merge with the current array (default: false).
+     * @param ArrayUtil|array<string|int,mixed> $array The array to merge with the current array.
+     * @param bool $distinct Weather to ensure unique values in nested arrays (default: false).
      * 
      * @return self Return the updated instance with the merged array.
      */
-    public function deepMerge(array $array, bool $distinct = false): self
+    public function mergeRecursive(ArrayUtil|array $array, bool $distinct = false): self
     {
+        $array = ($array instanceof ArrayUtil) ? $array->get() : $array;
+
         if($distinct){
-            $this->array = self::recursiveDistinctMerge($this->array, $array);
+            $this->array = array_merge_recursive_distinct($this->array, $array);
             return $this;
         }
 
         $this->array = array_merge_recursive($this->array, $array);
-
         return $this;
     }
 
@@ -383,11 +403,11 @@ class Arrays implements Countable, Stringable
      * @param callable|null $callback The filter callback function (default: null).
      * @param int $mode The array filter mode to use (default: 0).
      * 
-     * @return Arrays Return a new instance of Arrays containing the filters.
+     * @return ArrayUtil Return a new instance of ArrayUtil containing the filters.
      */
-    public function filter(?callable $callback = null, int $mode = 0): Arrays
+    public function filter(?callable $callback = null, int $mode = 0): ArrayUtil
     {
-        return new Arrays(array_filter($this->array, $callback, $mode));
+        return new ArrayUtil(array_filter($this->array, $callback, $mode));
     }
 
     /**
@@ -396,11 +416,11 @@ class Arrays implements Countable, Stringable
      * @param callable $callback The filter callback function (default: null).
      * @param array ...$arguments The array arguments to map.
      * 
-     * @return Arrays Return a new instance of Arrays containing the elements after applying callback.
+     * @return ArrayUtil Return a new instance of ArrayUtil containing the elements after applying callback.
      */
-    public function map(callable $callback, array ...$arguments): Arrays
+    public function map(callable $callback, array ...$arguments): ArrayUtil
     {
-        return new Arrays(array_map($callback, $this->array, ...$arguments));
+        return new ArrayUtil(array_map($callback, $this->array, ...$arguments));
     }
 
     /**
@@ -437,11 +457,11 @@ class Arrays implements Countable, Stringable
      * @param int $size The split chunk size.
      * @param bool $preserve_keys Weather to preserve the array keys or reindex the chunk numerically (default: false).
      * 
-     * @return Arrays Return a new instance of Arrays containing the chunked array.
+     * @return ArrayUtil Return a new instance of ArrayUtil containing the chunked array.
      */
-    public function chunk(int $size, bool $preserve_keys = false): Arrays
+    public function chunk(int $size, bool $preserve_keys = false): ArrayUtil
     {
-        return new Arrays(array_chunk($this->array, $size, $preserve_keys));
+        return new ArrayUtil(array_chunk($this->array, $size, $preserve_keys));
     }
 
     /**
@@ -454,11 +474,11 @@ class Arrays implements Countable, Stringable
      *                  - If it is omitted, then the sequence will have everything from offset up until the end of the array.
      * @param bool $preserve_keys Weather to preserve the array keys or to reorder and reset the array numeric keys (default: false).
      * 
-     * @return Arrays Return a new instance of Arrays containing the slice of array.
+     * @return ArrayUtil Return a new instance of ArrayUtil containing the slice of array.
      */
-    public function slice(int $offset, ?int $length = null, bool $preserve_keys = false): Arrays
+    public function slice(int $offset, ?int $length = null, bool $preserve_keys = false): ArrayUtil
     {
-        return new Arrays(array_slice($this->array, $offset, $length, $preserve_keys));
+        return new ArrayUtil(array_slice($this->array, $offset, $length, $preserve_keys));
     }
 
     /**
@@ -554,29 +574,5 @@ class Arrays implements Countable, Stringable
 
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
-    }
-
-    /**
-     * Recursively merges two arrays, ensuring unique values in nested arrays.
-     * This first array will be updated with values from the second array.
-     *
-     * @param array<string|int,mixed> &$array1 The first array to merge, passed by reference.
-     * @param array<string|int,mixed> &$array2 The second array to merge into the first array, passed by reference.
-     * 
-     * @return array Return the merged array with unique values.
-     */
-    public static function recursiveDistinctMerge(array &$array1, array &$array2): array
-    {
-        foreach ($array2 as $key => $value) {
-            if (is_array($value) && isset($array1[$key]) && is_array($array1[$key])) {
-                // Recursively merge nested arrays
-                $array1[$key] = self::recursiveDistinctMerge($array1[$key], $value);
-            } else {
-                // Directly set value or replace existing value
-                $array1[$key] = $value;
-            }
-        }
-
-        return $array1;
     }
 }

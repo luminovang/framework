@@ -14,53 +14,52 @@ use \Luminova\Command\Terminal;
 abstract class BaseCommand extends Terminal 
 {
     /**
-     * The group name for current command controller class.
+     * Command group name for the current controller class.
      * 
-     * @var string $group Command group name.
-     * > The group name will be used in registering command routes.
-     * > Only methods that belong to same group will be registered in one group method.
-     * > E.g `php index.php <command-group-name> <command> <arguments>`.
+     * @var string $group
+     * The group name is used for registering command routes.
+     * Only methods within the same group are registered together.
+     * Example: `php index.php <command-group-name> <command> <arguments>`.
      */
     protected string $group = '';
 
     /**
-     * The execution command name for current controller class.
+     * Command name for the current controller class.
      * 
-     * @var string $name Command name.
-     * > The command name will be used internally to build information of your command 
-     * which can be used in display command helps.
+     * @var string $name
+     * The command name is used internally to generate command information, 
+     * such as for displaying help.
      */
     protected string $name = '';
 
     /**
-     * The command usages. 
-     * Use the array key for command usage and the value for description.
+     * Command usage instructions.
+     * Keys represent the command usage, and values describe the usage.
      * 
-     * @var string|array<string|int,string> $usage command usages.
+     * @var string|array<string|int,string> $usage
      */
     protected string|array $usage = '';
 
     /**
-     * The command available options.
-     * Use the key for the options (e.g ['-f, --foo' => 'Foo description']).
+     * Available command options.
+     * Keys represent the options (e.g., `'-f, --foo' => 'Foo description'`).
      * 
-     * @var array<string|int,string> $options command options.
+     * @var array<string|int,string> $options
      */
     protected array $options = [];
 
     /**
-     * The examples on how to use command.
-     * This allows you to show full example on how commands can be used.
+     * Examples demonstrating command usage.
      * 
-     * @var array<string|int,string> $examples show command examples.
+     * @var array<string|int,string> $examples
      */
     protected array $examples = [];
 
     /**
-     * The full command description.
-     * Tell more information what the command does.
+     * Full description of the command.
+     * Provides detailed information about the command's purpose.
      * 
-     * @var string $description command description.
+     * @var string $description
      */
     protected string $description = '';
 
@@ -74,53 +73,49 @@ abstract class BaseCommand extends Terminal
     }
 
     /**
-     * Allow access to protected static methods
+     * Allows access to protected static methods.
      *
-     * @param string $method method name to call.
-     * @param array<int,mixed> $arguments arguments to pass to method.
+     * @param string $method The method name to call.
+     * @param array<int,mixed> $arguments The arguments to pass to the method.
      * 
-     * @return mixed Return value of method.
+     * @return mixed The return value of the method, or null if the method doesn't exist.
      * @ignore 
     */
     public static function __callStatic(string $method, array $arguments): mixed
     {
-        if (method_exists(static::class, $method)) {
-            return static::{$method}(...$arguments);
-        }
-
-        return null;
+        return method_exists(static::class, $method) ? static::{$method}(...$arguments) : null;
     }
 
     /**
-     * Override the default help display implementation.
-     * Return STATUS_SUCCESS success if you implemented your own help display otherwise return STATUS_ERROR.
+     * Override the default help display.
+     * Implement custom help display, returning STATUS_SUCCESS on success, otherwise return STATUS_ERROR.
      *
-     * @param array<string,mixed> $helps Helps information about command:
-     *      - class: The class name of the command (Note: this key may not be available if you extend BaseConsole).
-     *      - group :The group name of the command.
-     *      - name: The name of the command.
-     *      - description: The description of the command.
-     *      - usages: The usages of the command.
-     *      - options: The available options for the command.
-     *      - examples: The examples of the command.
+     * @param array<string,mixed> $helps Information about the command:
+     *      - class: The class name (may not be available if extending BaseConsole).
+     *      - group: The group name.
+     *      - name: The command name.
+     *      - description: The command description.
+     *      - usages: Command usage examples.
+     *      - options: Available command options.
+     *      - examples: Command usage examples.
      * 
-     * @return int Return status code success as implemented, error using default implementation.
+     * @return int Return STATUS_SUCCESS when custom help is implemented, STATUS_ERROR when using default implementation.
     */
     abstract public function help(array $helps): int;
 
     /**
-     * Command on create method, an alternative method to __construct()
+     * An alternative to the __construct method, called during object creation.
      * 
      * @return void 
     */
     protected function onCreate(): void {}
 
     /**
-     * Property getter
+     * Getter for protected properties.
      *
-     * @param string $key property key
+     * @param string $key The property name.
      * 
-     * @return mixed return property else null
+     * @return mixed The property value, or null if it doesn't exist.
      * @ignore
     */
     public function __get(string $key): mixed
@@ -129,11 +124,11 @@ abstract class BaseCommand extends Terminal
     }
     
     /**
-     * Check if property is set
+     * Checks if a property is set.
      *
-     * @param string $key property key
+     * @param string $key The property name.
      * 
-     * @return bool 
+     * @return bool True if the property exists, otherwise false.
      * @ignore
     */
     public function __isset(string $key): bool

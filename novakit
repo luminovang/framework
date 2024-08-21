@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework NovaKit Command Line Tool.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter

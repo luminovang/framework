@@ -1,24 +1,21 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework mysqli database driver extension.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Database\Drivers;
 
 use \Luminova\Base\BaseDatabase;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Interface\DatabaseInterface;
-use \Luminova\Database\Conn\mysqliConn;
 use \Luminova\Interface\ConnInterface;
-use \PDOStatement;
+use \mysqli;
 use \mysqli_stmt;
 use \mysqli_result;
-use \stdClass;
 use \mysqli_sql_exception;
 use \TypeError;
 use \Exception;
@@ -28,51 +25,65 @@ use \ReflectionException;
 final class MySqliDriver implements DatabaseInterface 
 {
     /**
-     * Mysqli Database connection instance
+     * Mysqli Database connection instance.
      * 
-     * @var mysqliConn|null $connection 
+     * @var mysqli|null $connection 
     */
-    private ?mysqliConn $connection = null; 
+    private ?mysqli $connection = null; 
 
     /**
-     * mysqli statement, result object or false
+     * mysqli statement, result object or false.
      * 
      * @var mysqli_stmt|mysqli_result|bool $stmt 
     */
     private mysqli_stmt|mysqli_result|bool $stmt = false;
 
     /**
-     * @var bool $onDebug debug mode flag
+     * Debug mode flag.
+     * 
+     * @var bool $onDebug
     */
     private bool $onDebug = false;
 
     /**
-     * @var BaseDatabase|null $config Database configuration
+     * Database configuration.
+     * 
+     * @var BaseDatabase|null $config
     */
     private ?BaseDatabase $config = null;  
 
     /**
-     * @var array $bindParams Database queries bind params
+     * Database queries bind params.
+     * 
+     * @var array $bindParams
     */
     private array $bindParams = [];
 
-     /**
-     * @var array $bindValues Database queries bind values
+    /**
+     * Database queries bind values.
+     * 
+     * @var array $bindValues
     */
     private array $bindValues = [];
 
     /**
-     * @var int $rowCount last row count
+     * Last row count. 
+     * 
+     * @var int $rowCount
     */
     private int $rowCount = 0;
 
     /**
-     * @var bool $isSelect is select query
+     * Is select query.
+     * 
+     * @var bool $isSelect
     */
     private bool $isSelect = false;
 
     /**
-     * @var bool $connected Connection status flag
+     * Connection status flag.
+     * 
+     * @var bool $connected
     */
     private bool $connected = false;
 
@@ -102,7 +113,7 @@ final class MySqliDriver implements DatabaseInterface
             $this->connected = true;
         }catch(Exception|DatabaseException $e){
             $this->connected = false;
-            DatabaseException::throwException($e->getMessage(), 0, $e);
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -132,7 +143,7 @@ final class MySqliDriver implements DatabaseInterface
      * Initializes the database connection.
      * This method is called internally and should not be called directly.
      * 
-     * @throws DatabaseException If no driver is specified
+     * @throws DatabaseException If no driver is specified.
     */
     private function newConnection(): void 
     {
@@ -147,7 +158,7 @@ final class MySqliDriver implements DatabaseInterface
                 $socket = (($this->config->socket_path === '' || $this->config->socket_path === null) ? ini_get('mysqli.default_socket') : $this->config->socket_path);
             }
          
-            $this->connection = new mysqliConn(
+            $this->connection = new mysqli(
                 $this->config->host,
                 $this->config->username,
                 $this->config->password,
@@ -165,7 +176,7 @@ final class MySqliDriver implements DatabaseInterface
                 $this->connection->set_charset($this->config->charset);
             }
         }catch(Exception|mysqli_sql_exception $e){
-            DatabaseException::throwException($e->getMessage(), 0, $e);
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -180,17 +191,25 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function raw(): ConnInterface|null 
+    public function raw(): ConnInterface 
     {
-        return $this->connection;
-    }
+        return new class($this->connection) implements ConnInterface 
+        {
+            /**
+             * {@inheritdoc}
+            */
+            public function __construct(private ?mysqli $conn = null){}
+            
+            /**
+             * {@inheritdoc}
+            */
+            public function close(): void {$this->conn = null;}
 
-    /**
-     * {@inheritdoc}
-    */
-    public function statement(): mysqli_stmt|mysqli_result|bool|null
-    {
-        return $this->stmt;
+            /**
+             * {@inheritdoc}
+            */
+            public function getConn(): ?mysqli {return $this->conn;}
+        };
     }
 
     /**
@@ -403,7 +422,7 @@ final class MySqliDriver implements DatabaseInterface
     {
         $this->executed = false;
         if($this->stmt === null || $this->stmt === false){
-            DatabaseException::throwException("Database operation error: Statement execution failed");
+            DatabaseException::throwException('Database operation error: Statement execution failed.');
             return false;
         }
 
@@ -425,8 +444,8 @@ final class MySqliDriver implements DatabaseInterface
             }
             $this->executed = true;
             $this->rowCount = $this->isSelect ? $this->stmt->num_rows : $this->stmt->affected_rows;
-        } catch (mysqli_sql_exception | TypeError $e) {
-            DatabaseException::throwException($e->getMessage(), 0, $e);
+        } catch (mysqli_sql_exception|TypeError $e) {
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
         
         $this->bindParams = [];
@@ -454,7 +473,7 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function getItem(int $mode = RETURN_ALL, string $fetch = 'object'): mixed 
+    public function getResult(int $mode = RETURN_ALL, string $fetch = 'object'): mixed 
     {
         return match ($mode) {
             RETURN_NEXT => $this->getNext($fetch),
@@ -508,20 +527,6 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function getResult(string $fetch = 'object'): array|stdClass
-    {
-        $response = $this->fetch('all', ($fetch === 'object') ? FETCH_NUM_OBJ : FETCH_ASSOC);
-
-        if ($response === null || $response === false) {
-            return ($fetch === 'object') ? new stdClass : [];
-        }
-
-        return $response;
-    }
-
-    /**
-     * {@inheritdoc}
-    */
     public function getColumns(int $mode = FETCH_COLUMN): array 
     {
         $response = $this->fetch('all', $mode);
@@ -536,7 +541,7 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function getStatement(): PDOStatement|mysqli_stmt|mysqli_result|bool|null
+    public function getStatement(): mysqli_stmt|mysqli_result|bool|null
     {
         return $this->stmt;
     }
@@ -562,7 +567,7 @@ final class MySqliDriver implements DatabaseInterface
         ];
 
         if (!isset($modes[$mode])) {
-            throw new DatabaseException("Unsupported fetch mode: $mode");
+            throw new DatabaseException(sprintf('Unsupported databse fetch mode: %d', $mode));
         }
 
         if ($this->stmt instanceof mysqli_stmt) {
@@ -586,7 +591,6 @@ final class MySqliDriver implements DatabaseInterface
         }
 
         $response = $msqliMode === null ? $this->stmt->$method() : $this->stmt->$method($msqliMode);
-        //$this->stmt->close();
 
         if(empty($response) || $response === false){
             return false;
@@ -617,7 +621,7 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */ 
-    public function fetchObject(string|null $class = "stdClass", array $arguments = []): object|bool 
+    public function fetchObject(string|null $class = 'stdClass', mixed ...$arguments): object|bool 
     {
         $response = $this->fetch('all', FETCH_ASSOC);
         $objects = [];
@@ -684,9 +688,9 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
     */
-    public function getLastInsertId(): string 
+    public function getLastInsertId(?string $name = null): string|int|null|bool
     {
-        return (string) $this->connection->insert_id;
+        return $this->connection->insert_id;
     }
 
     /**
@@ -703,8 +707,6 @@ final class MySqliDriver implements DatabaseInterface
         } elseif($this->stmt instanceof mysqli_stmt) {
             $this->stmt->free_result();
         }
-
-        //$this->stmt->close();
         
         $this->stmt = false;
     }

@@ -9,7 +9,7 @@
  */
 namespace Luminova\Application;
 
-use \Luminova\Errors\ErrorStack;
+use \Luminova\Errors\ErrorHandler;
 use \Luminova\Debugger\Performance;
 
 final class Foundation 
@@ -19,7 +19,7 @@ final class Foundation
      * 
     * @var string VERSION
     */
-    public const VERSION = '3.2.4';
+    public const VERSION = '3.2.5';
 
     /**
      * Minimum required php version.
@@ -50,18 +50,11 @@ final class Foundation
     private static ?string $segments = null;
 
     /**
-     * Stack cached errors
-     * 
-     * @var array<int,ErrorStack> $errors
-    */
-    private static array $errors = [];
-
-    /**
      * Error codes
      * 
-     * @var array<int,string> $errorsNames
+     * @var array<int,string> $errors
     */
-    private static array $errorsNames = [
+    private static array $errors = [
         E_ERROR             => 'ERROR',
         E_PARSE             => 'PARSE ERROR',
         E_CORE_ERROR        => 'CORE ERROR',
@@ -128,13 +121,14 @@ final class Foundation
      * Start or stop application profiling.
      * 
      * @param string $action The name of the action (e.g, start or stop).
+     * @param array|null $context Additional information to pass to profiling (default: null).
      * 
      * @return void
     */
-    public static final function profiling(string $action): void
+    public static final function profiling(string $action, ?array $context = null): void
     {
         if(!PRODUCTION && env('debug.show.performance.profiling', false)){
-            ($action === 'start' ? Performance::start() : Performance::stop());
+            ($action === 'start' ? Performance::start() : Performance::stop(null, $context));
         }
     }
 
@@ -145,13 +139,6 @@ final class Foundation
     */
     public static function initialize(): void 
     {
-        $display = (!PRODUCTION && env('debug.display.errors', false)) ? '1' : '0';
-        $reporting = PRODUCTION 
-            ? E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_STRICT & ~E_USER_NOTICE & ~E_USER_DEPRECATED 
-            : E_ALL;
-
-        error_reporting($reporting);
-        ini_set('display_errors', $display);
         set_error_handler([static::class, 'handle']);
         register_shutdown_function([static::class, 'shutdown']);
     }
@@ -165,7 +152,7 @@ final class Foundation
     */
     public static function getName(int $errno): string 
     {
-        return static::$errorsNames[$errno] ?? 'UNKNOWN ERROR';
+        return static::$errors[$errno] ?? 'UNKNOWN ERROR';
     }
 
     /**
@@ -177,27 +164,32 @@ final class Foundation
     */
     public static function getLevel(int $errno): string 
     {
-        return match($errno){
-            E_WARNING, E_CORE_WARNING, E_COMPILE_WARNING, E_USER_WARNING  => 'warning',
-            E_NOTICE, E_USER_DEPRECATED, E_DEPRECATED, E_STRICT  => 'notice',
-            E_USER_ERROR, E_RECOVERABLE_ERROR  => 'error',
-            default => 'critical',
+        return match ($errno) {
+            E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR => 'critical',
+            E_WARNING, E_CORE_WARNING, E_COMPILE_WARNING, E_USER_WARNING => 'warning',
+            E_PARSE => 'emergency',
+            E_NOTICE, E_USER_NOTICE => 'notice',
+            E_STRICT => 'info',
+            E_DEPRECATED, E_USER_DEPRECATED => 'debug',
+            E_RECOVERABLE_ERROR => 'error',
+            E_ALL, 0 => 'exception',
+            default => 'php_errors'
         };
     }
 
     /**
-     * Display system errors based on the given ErrorStack.
+     * Display system errors based on the given error.
      *
      * This method includes an appropriate error view based on the environment and request type.
      *
-     * @param ErrorStack|null $stack The error stack containing errors to display.
+     * @param ErrorHandler|null $stack The error stack containing errors to display.
      * @return void
      */
-    private static function display(?ErrorStack $stack = null): void 
+    private static function display(?ErrorHandler $stack = null): void 
     {
         $path = APP_ROOT . 'resources' . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . 'system_errors' . DIRECTORY_SEPARATOR;
 
-        if(!$stack instanceof ErrorStack){
+        if(!$stack instanceof ErrorHandler){
             $view = 'info.php';
         }elseif (static::isCommand()) {
             $view = 'cli.php';
@@ -430,12 +422,15 @@ final class Foundation
             return false;
         }
 
-        $stack = new ErrorStack($errstr, $errno);
-        $stack->setFile(static::filterPath($errFile));
-        $stack->setLine($errLine);
-        $stack->setName(static::getName($errno));
-       
-        self::$errors[] = $stack;
+        self::log(static::getLevel($errno), sprintf(
+            "[%s (%s)] %s File: %s Line: %s.", 
+            static::getName($errno),
+            (string) $errno ?? 1,
+            $errstr,
+            static::filterPath($errFile),
+            (string) $errLine
+        ));
+
         return true;
     }
 
@@ -449,7 +444,7 @@ final class Foundation
         if (($error = error_get_last()) === null || !isset($error['type'])) {
             return;
         }
-
+ 
         $isFatal = static::isFatal($error['type']);
         $isDisplay = ini_get('display_errors');
         $errName = static::getName($error['type']);
@@ -458,14 +453,14 @@ final class Foundation
         // Display custom error page.
         if(!$isDisplay || PRODUCTION){
 
-            $stack = null;
-
-            if($isFatal){
-                $stack = new ErrorStack($error['message'], $error['type']);
-                $stack->setFile($error['file']);
-                $stack->setLine($error['line']);
-                $stack->setName($errName);
-            }
+            $stack = $isFatal ? new ErrorHandler(
+                $error['message'], 
+                $error['type'],
+                null,
+                $error['file'],
+                $error['line'],
+                $errName
+            ) : null;
 
             static::display($stack);
         }
@@ -473,42 +468,57 @@ final class Foundation
         // If message is not empty and is not fatal error or on projection
         // Log the error message.
         if(!$isFatal || PRODUCTION){
-            $level = static::getLevel($error['type']);
-            $message = sprintf(
-                "[%s (%s)] %s File: %s Line: %s\n", 
+            self::log(static::getLevel($error['type']), sprintf(
+                "[%s (%s)] %s File: %s Line: %s.", 
                 $errName,
                 (string) $error['type'] ?? 1,
                 $error['message'],
                 $error['file'],
                 (string) $error['line']
-            );
-
-            // If the error allowed framework to boot,
-            // Then we use logger to log the error
-            if(defined('IS_UP')){
-                logger($level, $message);
-                return;
-            }
-
-            // If not create a customer logger.
-            $message = sprintf("[%s] [%s] {$message}",  $level, date('Y-m-d\TH:i:sP'));
-            $log =  APP_ROOT. 'writeable' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR. "{$level}.log";
-
-            if (@file_put_contents($log, rtrim($message, "\n"), FILE_APPEND | LOCK_EX) === false) {
-                @chmod($log, 0666);
-            }
+            ));
         }
     }
 
     /**
-     * Check if error is fatal
+     * Check if error is fatal.
      * 
-     * @param int $errno Error code
+     * @param int $errno The error code.
      * 
-     *@return bool Return true if is fatal, otherwise false.
+     * @return bool Return true if is fatal, otherwise false.
+     * 
+     * - Fatal run-time errors.
+     * - Fatal errors that occur during PHP's initial startup.
+     * - Fatal compile-time errors.
+     * - Compile-time parse errors.
     */
     public static function isFatal(int $errno): bool 
     {
-        return in_array($errno, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR]);
+        return in_array($errno, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true);
+    }
+
+    /**
+     * Gracefully log error.
+     * 
+     * @param string $level The error log level.
+     * @param string $message The error message to log.
+     * 
+     * @return void 
+    */
+    private static function log(string $level, string $message): void 
+    {
+        // If the error allowed framework to boot,
+        // Then we use logger to log the error
+        if(defined('IS_UP')){
+            logger($level, $message);
+            return;
+        }
+
+        // If not create a customer logger.
+        $message = sprintf("[%s] [%s] {$message}",  $level, date('Y-m-d\TH:i:sP'));
+        $log =  APP_ROOT. 'writeable' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR. "{$level}.log";
+
+        if (@file_put_contents($log, $message . PHP_EOL, FILE_APPEND | LOCK_EX) === false) {
+            @chmod($log, 0666);
+        }
     }
 }

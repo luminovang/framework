@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework Interface for encryption and decryption operations.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -12,17 +12,14 @@ namespace Luminova\Interface;
 use \Luminova\Exceptions\InvalidException;   
 use \Luminova\Exceptions\EncryptionException;
 
-/**
- * Interface for encryption and decryption operations.
- */
 interface EncryptionInterface
 {
     /**
      * Constructor, optional pass a blank key string and `setKey()` later before encrypt/decrypt.
      *
-     * @param string $key The encryption key.
-     * @param string $method The encryption cipher method.
-     * @param int $size Key size for encryption.
+     * @param string $key The encryption key (default: null).
+     * @param string $method The encryption cipher method (default: null).
+     * @param int $size Key size for encryption (default: 16).
      * 
      * @throws InvalidException If the method or block size is invalid while using openssl.
     */
@@ -39,13 +36,17 @@ interface EncryptionInterface
      * Set the encryption key.
      *
      * @param string $key The encryption key.
+     * 
+     * @return void 
      */
     public function setKey(string $key): void;
 
     /**
      * Set nonce for encryption and decryption, if null random nonce will be generated.
      *
-     * @param string|null $nonce The nonce for encryption.
+     * @param string|null $nonce The nonce for encryption (default: null).
+     * 
+     * @return void 
      */
     public function setNonce(?string $nonce = null): void;
 
@@ -53,8 +54,9 @@ interface EncryptionInterface
      * Set the encryption method and block size for openssl.
      *
      * @param string $method The encryption cipher method.
-     * @param int $size Key size for encryption.
+     * @param int $size Key size for encryption (default: 16).
      *
+     * @return void
      * @throws EncryptionException If the method or block size is invalid.
      */
     public function setMethod(string $method, int $size = 16): void;
@@ -64,15 +66,14 @@ interface EncryptionInterface
      *
      * @param string|null $string The string to extract the nonce from.
      * 
-     * @return string The nonce string.
+     * @return string Return the nonce string.
      */
     public function nonce(?string $string = null): string;
 
     /**
      * Encrypt data.
      *
-     * @return string|bool The encrypted data, or false if encryption fails.
-     *
+     * @return string|bool Return the encrypted data, or false if encryption fails.
      * @throws InvalidException If encryption fails due to invalid parameters.
      */
     public function encrypt(): string|bool;
@@ -80,8 +81,7 @@ interface EncryptionInterface
     /**
      * Decrypt data.
      *
-     * @return string|bool The decrypted data, or false if decryption fails.
-     *
+     * @return string|bool Return the decrypted data, or false if decryption fails.
      * @throws InvalidException If decryption fails due to invalid parameters.
      */
     public function decrypt(): string|bool;

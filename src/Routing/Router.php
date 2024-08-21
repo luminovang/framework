@@ -135,6 +135,13 @@ final class Router
     private static bool $terminate = false;
 
     /**
+     * Information about command execution.
+     * 
+     * @var array $commands
+    */
+    private static array $commands = [];
+
+    /**
      * @var BaseApplication|null $application 
     */
     private static ?BaseApplication $application = null;
@@ -205,6 +212,13 @@ final class Router
         if(self::$uri !== '/cli' && self::serveStaticCache()){
             return $this;
         }
+
+        // Application start event.
+        self::$application->__on('onStart', [
+            'cli' => self::$isCli ,
+            'method' => self::$method,
+            'uri' => self::$uri
+        ]);
 
         // When using attribute for routes.
         if((bool) env('feature.route.attributes', false)){
@@ -471,9 +485,11 @@ final class Router
             exit(STATUS_SUCCESS);
         }
 
+        $context = null;
         if(self::$method === 'CLI'){
             self::terminal();
             $exitCode = self::runAsCommand();
+            $context = ['commands' => self::$commands];
         }else{
             $exitCode = self::runAsHttp();
 
@@ -483,7 +499,10 @@ final class Router
         }
 
         self::$application->__on('onFinish');
-        Foundation::profiling('stop');
+        if($exitCode === STATUS_SUCCESS){
+            Foundation::profiling('stop', $context);
+        }
+
         exit($exitCode);
     }
 
@@ -733,7 +752,6 @@ final class Router
 
         $pattern = $this->baseGroup . '/' . trim($pattern, '/');
         $pattern = ($this->baseGroup !== '') ? rtrim($pattern, '/') : $pattern;
-
         $pipes = explode('|', $methods);
 
         foreach ($pipes as $method) {
@@ -1027,24 +1045,24 @@ final class Router
     */
     private static function handleCommand(array $routes): bool
     {
-        $commands = self::$term->parseCommands($_SERVER['argv'] ?? [], true);
+        self::$commands = self::$term->parseCommands($_SERVER['argv'] ?? [], true);
         $queries = self::getArguments();
         $isHelp = self::$term->isHelp(self::getArgument(2));
         
         foreach ($routes as $route) {
             if($route['middleware']){
-                return self::call($route['callback'], $commands);
+                return self::call($route['callback'], self::$commands);
             }
 
             $matches = [];
 
             if (self::uriCapture($route['pattern'], $queries['view'], $matches)) {
-                $commands['params'] = self::matchesToArray((array) $matches);
-                return self::call($route['callback'], $commands);
+                self::$commands['params'] = self::matchesToArray((array) $matches);
+                return self::call($route['callback'], self::$commands);
             } 
             
             if ($queries['view'] === $route['pattern'] || $isHelp) {
-                return self::call($route['callback'], $commands);
+                return self::call($route['callback'], self::$commands);
             }
         }
 

@@ -83,4 +83,11 @@ final class LogLevel
      * @var string PHP
      */
     public const PHP       = 'php_errors';
+
+    /**
+     * PHP level: Performance metrics, specifically for api or production level.
+     * 
+     * @var string METRICS
+     */
+    public const METRICS       = 'metrics';
 }

@@ -37,6 +37,7 @@ class NovaLogger extends AbstractLogger
         'debug' => LogLevel::DEBUG,
         'exception' => LogLevel::EXCEPTION,
         'php_errors' => LogLevel::PHP,
+        'metrics' => LogLevel::METRICS,
     ];
 
     /**

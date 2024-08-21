@@ -1,13 +1,12 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework bastract model.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Base;
 
 use \Luminova\Database\Builder;
@@ -15,6 +14,7 @@ use \Luminova\Security\Validation;
 use \Luminova\Storages\FileManager;
 use \Peterujah\NanoBlock\SearchController as SearchInstance;
 use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\InvalidArgumentException;
 use \DateTimeInterface;
 
 abstract class BaseModel
@@ -41,13 +41,6 @@ abstract class BaseModel
     protected bool $cacheable = true; 
 
     /**
-     * Database cache expiration time in seconds.
-     * 
-     * @var DateTimeInterface|int $expiry
-    */
-    protected DateTimeInterface|int $expiry = 7 * 24 * 60 * 60;
-
-    /**
      * Custom folder for model caches.
      * 
      * @var string $cacheFolder
@@ -55,7 +48,8 @@ abstract class BaseModel
     protected static string $cacheFolder = '';
 
     /**
-     * Specify whether the model's table is updatable, deletable, and insertable.
+     * Specify whether the model's table is updatable, 
+     * deletable, and insertable.
      * 
      * @var bool $readOnly
     */
@@ -97,6 +91,13 @@ abstract class BaseModel
     protected array $messages = [];
 
     /**
+     * Database cache expiration time in seconds.
+     * 
+     * @var DateTimeInterface|int $expiry
+    */
+    protected DateTimeInterface|int $expiry = 7 * 24 * 60 * 60;
+
+    /**
      * Database query builder class instance.
      * 
      * @var Builder $builder
@@ -115,21 +116,21 @@ abstract class BaseModel
      * 
      * @var SearchInstance $searchInstance
     */
-    private static ?SearchInstance $searchInstance = null;
+    private static ?object $searchInstance = null;
 
     /**
      * Search flags.
      * 
-     * @var array<string,string> $searchFlags
+     * @var array<string,string> $searchFilters
     */
-    private static array $searchFlags = [
-        'start' => SearchInstance::START_WITH_QUERY,
-        'end' => SearchInstance::END_WITH_QUERY,
-        'any' => SearchInstance::HAVE_ANY_QUERY,
-        'second' => SearchInstance::HAVE_SECOND_QUERY,
-        'length2' => SearchInstance::START_WITH_QUERY_2LENGTH,
-        'length3' => SearchInstance::START_WITH_QUERY_3LENGTH,
-        'startend' => SearchInstance::START_END_WITH_QUERY,
+    private static array $searchFilters = [
+        'start'     => 'query%',
+        'end'       => '%query',
+        'any'       => '%query%',
+        'second'    => '_query%',
+        'length2'   => 'query_%',
+        'length3'   => 'query__%',
+        'startend'  => 'query%query'
     ];
 
     /**
@@ -137,7 +138,6 @@ abstract class BaseModel
      * If null is passed framework will initialize builder lass instance.
      * 
      * @param Builder|null $builder Query builder class instance.
-     * 
     */
     public function __construct(?Builder $builder = null)
     {
@@ -173,7 +173,7 @@ abstract class BaseModel
             return 0;
         }
 
-        $this->assertIsAllowed($this->insertable, $values);
+        $this->assertAllowedColumns($this->insertable, $values, 'insert');
         return $this->builder->table($this->table)->insert($values) > 0;
     }
 
@@ -193,7 +193,7 @@ abstract class BaseModel
             return 0;
         }
 
-        $this->assertIsAllowed($this->updatable, $data);
+        $this->assertAllowedColumns($this->updatable, $data, 'update');
         $tbl = $this->builder->table($this->table);
         $tbl->max($max);
 
@@ -218,12 +218,11 @@ abstract class BaseModel
 
         if(is_array($key)){
             $tbl->in($this->primaryKey, $key);
-            $cache_key = md5(json_encode($key));
         }else{
             $tbl->where($this->primaryKey, '=', $key);
-            $cache_key = $key;
         }
 
+        $cache_key = static::cacheKey($key, $fields, 'find');
         $tbl->cache($cache_key, $this->table . '_find', $this->expiry, static::$cacheFolder);
         return $tbl->find($fields);
     }
@@ -246,8 +245,7 @@ abstract class BaseModel
     ): mixed 
     {
         $tbl = $this->builder->table($this->table);
-        $cache_key = 'select';
-        if($key !== null){
+        if($key){
             if(is_array($key)){
                 $tbl->in($this->primaryKey, $key);
             }else{
@@ -255,9 +253,13 @@ abstract class BaseModel
             }
         }
         
-        $cache_key = static::cacheKey($key, $fields);
         $tbl->limit($limit, $offset);
-        $tbl->cache($cache_key, $this->table . '_select', $this->expiry, static::$cacheFolder);
+        $tbl->cache(
+            static::cacheKey($key, $fields, 'select'), 
+            $this->table . '_select', 
+            $this->expiry, 
+            static::$cacheFolder
+        );
         return $tbl->select($fields);
     }
 
@@ -306,7 +308,7 @@ abstract class BaseModel
      * 
      * @param string|array<int,mixed> $key The key?s to find total number of matched.
      * 
-     * @return int|bool  Return the number of records.
+     * @return int|bool Return the number of records.
     */
     public function count(string|array $key): int|bool 
     {
@@ -318,8 +320,12 @@ abstract class BaseModel
             $tbl->where($this->primaryKey, '=', $key);
         }
 
-        $cache_key = static::cacheKey($key);
-        $tbl->cache('count_' . $cache_key, $this->table . '_total', $this->expiry, static::$cacheFolder);
+        $tbl->cache(
+            static::cacheKey($key, [], 'count'), 
+            $this->table . '_total', 
+            $this->expiry, 
+            static::$cacheFolder
+        );
         return $tbl->total();
     }
 
@@ -340,7 +346,7 @@ abstract class BaseModel
         }
 
         $query = strtolower($query);
-        $cache_key = static::cacheKey($query, $fields);
+        $cache_key = static::cacheKey($query, $fields, 'search');
         $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
         $columns = 'WHERE';
 
@@ -390,7 +396,7 @@ abstract class BaseModel
             return false;
         }
 
-        $cache_key = static::cacheKey($query, $fields);
+        $cache_key = static::cacheKey($query, $fields, 'doSearch');
         $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
         $sql = "SELECT {$fields} FROM {$this->table} {$queries} LIMIT {$offset}, {$limit}";
 
@@ -406,109 +412,21 @@ abstract class BaseModel
     }
 
     /**
-     * Extract cache key from query key(s) and return fields.
-     * This ensures that the cache key is unique based on select statement return columns and primary key or keys.
+     * Deletes all cache entries related to the current model.
      * 
-     * @param string|array $key The query lookup key or keys to extract from.
-     * @param array $fields The optional query fields to extract from.
+     * This method removes all cache files for the model from the cache directory.
+     * The path is constructed based on the model's class name and is expected to be within the filesystem cache directory.
      * 
-     * @return string Hashed cache key.
+     * @return bool Returns true if the cache files are successfully deleted, false otherwise.
      */
-    protected static function cacheKey(string|array $key, array $fields = []): string 
-    {
-        $key = is_array($key) ? $key : [$key];
-
-        sort($key);
-        sort($fields);
-
-        $fields = ($fields === ['*'] || $fields === []) ? '*' : implode(', ', $fields);
-        $keyString = implode(', ', $key);
-        $combined = $fields . '|' . $keyString;
-
-        return md5($combined);
-    }
-
-    /**
-     * Return search controller class instance. 
-     * 
-     * @param string $flag Search matching flag (e.g. `any`).
-     * 
-     * @return SearchInstance Search controller instance.
-     * @throws RuntimeException If the third party search controller class is not installed.
-    */
-    protected function searchInstance(string $flag): SearchInstance
-    {
-        if(self::$searchInstance === null && !class_uses(SearchInstance::class)){
-            throw new RuntimeException('The search controller library is not installed. Please run the composer command "composer require peterujah/php-search-controller" to install it.');
-        }
-
-        self::$searchInstance ??= new SearchInstance();
-        self::$searchInstance->setOperators(self::$searchFlags[$flag] ?? SearchInstance::HAVE_ANY_QUERY);
-        self::$searchInstance->setParameter($this->searchable);
-
-        return self::$searchInstance;
-    }
-
-    /**
-     * Delete all model database caches.
-     * 
-     * @return bool Return true if all caches are deleted, false otherwise.
-    */
     public function purge(): bool 
     {
         if(static::$cacheFolder === ''){
             return false;
         }
 
-        $path = root('writeable/caches/database/' . static::$cacheFolder);
+        $path = root('/writeable/caches/filesystem/database/' . static::$cacheFolder);
         return FileManager::remove($path) > 0;
-    }
-
-    /**
-     * Initialize and ser validation class object.
-     *
-     * @return Validation Validation class instance.
-     * > After first initialization you can then use `static::$validation` to access the object.
-    */
-    protected function validation(): Validation
-    {
-        static::$validation ??= new Validation();
-
-        if($this->rules !== []){
-            static::$validation->rules = $this->rules;
-        }
-
-        if($this->messages !== []){
-            static::$validation->messages = $this->messages;
-        }
-
-        return static::$validation;
-    }
-
-    /**
-     * Check if insert, update or select columns are in allowed list.
-     * 
-     * @param array<int,string> $allowed The allowed list of columns.
-     * @param array<string,mixed> $columns The column keys and value to check.
-     * 
-     * @return void 
-     * @throws RuntimeException Throws if columns contains un-allowed key.
-    */
-    protected function assertIsAllowed(array $allowed, array $columns): void 
-    {
-        if ($allowed === []) {
-            return;
-        }
-
-        $columns = array_keys($columns);
-        $unsupported = array_diff($columns, $allowed);
-
-        if($unsupported === []){
-            return;
-        }
-
-        $unsupported = implode(', ', $unsupported);
-        throw new RuntimeException("The data contains unsupported columns: $unsupported");
     }
 
     /**
@@ -549,5 +467,133 @@ abstract class BaseModel
     public function isReadOnly(): bool
     {
         return $this->readOnly;
+    }
+
+    /**
+     * Initialize and ser validation class object.
+     *
+     * @return Validation Validation class instance.
+     * > After first initialization you can then use `static::$validation` to access the object.
+    */
+    protected function validation(): Validation
+    {
+        static::$validation ??= new Validation();
+
+        if($this->rules !== []){
+            static::$validation->rules = $this->rules;
+        }
+
+        if($this->messages !== []){
+            static::$validation->messages = $this->messages;
+        }
+
+        return static::$validation;
+    }
+
+    /**
+     * Generate a unique cache key based on the query key(s) and fields.
+     * This ensures that the cache key reflects the select statement's return columns and primary key(s).
+     * 
+     * @param string|array|null $key The query lookup key(s).
+     * @param array $fields The optional query fields to include in the cache key.
+     * @param string $prefix An optional prefix to prepend to the cache key.
+     * 
+     * @return string Return hashed cache key.
+     */
+    protected static function cacheKey(string|array|null $key, array $fields = [], string $prefix = ''): string 
+    {
+        // Handle fields: if no fields are specified or '*' is used, set it as '__any__'
+        if($fields === ['*'] || $fields === []){
+            $prefix .= '__any__';
+        }else{
+            sort($fields);
+            $prefix .= implode(',', $fields);
+        }
+
+        if ($key !== null && $key !== '' && $key !== []) {
+            // Convert $key to an array if it's not already one
+            $key = (array) $key;
+            sort($key);
+            $prefix .= implode(',', $key);
+        }else{
+            // Handle key: if $key is null or an empty string, use '__all__'
+            $prefix .= '__all__';
+        }
+   
+        return $prefix;
+    }
+
+    /**
+     * Get an instance of search controller class.
+     * 
+     * @param string $filter The search matching filter (e.g. `any`).
+     * 
+     * @return SearchInstance Return search controller instance.
+     * @throws RuntimeException If the third-party search controller class is not installed.
+     * @throws InvalidArgumentException If invalid search filter is provided.
+     * 
+     * This method provides a search instance configured with the specified filter.
+     * The following filters are available:
+     * 
+     * - **start**: Matches queries starting with the specified term.
+     * - **end**: Matches queries ending with the specified term.
+     * - **any**: Matches queries containing the specified term anywhere.
+     * - **second**: Matches queries where the term starts with an underscore followed by the specified term.
+     * - **length2**: Matches queries where the term is exactly two characters long, followed by the specified term.
+     * - **length3**: Matches queries where the term is exactly three characters long, followed by the specified term.
+     * - **startend**: Matches queries starting with the specified term and ending with the term.
+     */
+    protected function searchInstance(string $filter = 'any'): object
+    {
+        if(self::$searchInstance === null && !class_uses(SearchInstance::class)){
+            throw new RuntimeException('The search controller library is not installed. Run composer command "composer require peterujah/php-search-controller" to install it.');
+        }
+
+        $filterLike = self::$searchFilters[$filter] ?? false;
+
+        if($filterLike === false){
+            throw new InvalidArgumentException(sprintf(
+                'Invalid unsupported search filter: "%s", expected filters are [%s]',
+                $filter,
+                implode(', ', self::$searchFilters)
+            ));
+        }
+
+        self::$searchInstance ??= new SearchInstance();
+        self::$searchInstance->setOperators($filterLike);
+        self::$searchInstance->setParameter($this->searchable);
+
+        return self::$searchInstance;
+    }
+    
+    /**
+     * Check if insert, update or select columns are in allowed list.
+     * 
+     * @param array<int,string> $allowed The allowed list of columns.
+     * @param array<string,mixed> $columns The column keys and value to check.
+     * 
+     * @return void 
+     * @throws RuntimeException Throws if columns contains unsupported keys.
+    */
+    protected function assertAllowedColumns(array $allowed, array $columns, string $from = ''): void 
+    {
+        if ($allowed === []) {
+            return;
+        }
+
+        $columns = array_keys($columns);
+        $unsupported = array_diff($columns, $allowed);
+
+        if($unsupported === []){
+            return;
+        }
+
+        $unsupported = implode(', ', $unsupported);
+        throw new RuntimeException(sprintf(
+            'The %s %s contains unsupported columns: [%s].',
+            $from,
+            ($from === 'insert' ? 'values' : 'data'),
+            $unsupported
+        ));
     }
 }

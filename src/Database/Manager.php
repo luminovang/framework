@@ -24,10 +24,7 @@ final class Manager
     public function __construct(
         private DatabaseInterface $db, 
         private ?string $table = null
-    )
-    {
-       
-    }
+    ){}
 
     /**
      * Set the database table to backup.

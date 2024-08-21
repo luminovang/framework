@@ -11,6 +11,7 @@ namespace Luminova\Database;
 
 use \Luminova\Time\Time;
 use \Luminova\Cache\FileCache;
+use \Luminova\Base\BaseCache;
 use \Luminova\Cache\MemoryCache;
 use \Luminova\Database\Connection;
 use \Luminova\Database\Manager;
@@ -158,9 +159,9 @@ final class Builder extends Connection
     /**
      * Cache class instance.
      * 
-     * @var FileCache|MemoryCache|null $cache 
+     * @var BaseCache|null $cache 
     */
-    private FileCache|MemoryCache|null $cache = null;
+    private ?BaseCache $cache = null;
 
     /**
      * Result return type.
@@ -852,7 +853,7 @@ final class Builder extends Connection
      * @param string $key The storage cache key.
      * @param string $storage Private storage name hash name (optional): but is recommended to void storing large data in one file.
      * @param DateTimeInterface|int $expiry The cache expiry time in seconds (default: 7 days).
-     * @param string|null $subfolder Optionally set a folder name to store caches.
+     * @param string|null $subfolder Optionally set a folder name to store caches on file system cache (default: null).
      * 
      * @return self Return instance of builder class.
      * @throws ErrorException If the file cannot be saved or an error occurs.
@@ -865,13 +866,13 @@ final class Builder extends Connection
     ): self
     {
         if($this->caching){
-            $storage ??=  'database_' . ($this->tableName ?? 'capture');
+            $storage ??= 'database_' . ($this->tableName ?? 'capture');
             
             if($this->cacheDriver === 'memcached'){
-                $this->cache = MemoryCache::getInstance(null, 'database');
+                $this->cache ??= MemoryCache::getInstance(null, 'database');
             }else{
-                $this->cache = FileCache::getInstance(null);
-                $this->cache->setFolder('database' . ($subfolder === null) ? '' : DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS));
+                $this->cache ??= FileCache::getInstance(null);
+                $this->cache->setFolder(($subfolder === null) ? 'database' : 'database' . DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS));
             }
 
             $this->cache->setStorage($storage)->setExpire($expiry);
@@ -1407,7 +1408,7 @@ final class Builder extends Connection
         }
 
         $response = (static::$handler->ok() ? 
-            (($mode === RETURN_STMT) ? static::$handler : static::$handler->getItem($mode, $this->returnType)) : false);
+            (($mode === RETURN_STMT) ? static::$handler : static::$handler->getResult($mode, $this->returnType)) : false);
         $this->reset();
 
         return $response;

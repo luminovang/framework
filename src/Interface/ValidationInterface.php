@@ -1,18 +1,14 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework Interface for validating input data against defined rules.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Interface;
 
-/**
- * Interface for validating input data against defined rules.
- */
 interface ValidationInterface 
 {
   /**

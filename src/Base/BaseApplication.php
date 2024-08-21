@@ -15,47 +15,43 @@ use \Luminova\Template\View;
 abstract class BaseApplication
 {
     /**
-     * Inherit helper class for handling view template rendering and response.
+     * Utilize the View trait for handling template rendering and responses.
      *
      * @see https://luminova.ng/docs/0.0.0/templates/views
     */
     use View;
 
     /**
-     * Base Application instance.
+     * Singleton instance of the BaseApplication.
      *
      * @var static|null $instance
     */
     private static ?self $instance = null;
 
     /**
-     * @var Router $router Router class instance.
+     * Instance of the Router class.
+     *
+     * @var Router|null $router
     */
     public ?Router $router = null;
 
     /**
-     * Initialize the base application constructor.
+     * BaseApplication constructor.
+     * Initializes the router, sets the controller namespace, and sets up the template engine.
      */
     public function __construct() 
     {
-        // Initialize the router instance
         $this->router ??= new Router($this);
-
-        // Set application controller class namespace
         $this->router->addNamespace('\\App\\Controllers\\');
-
-        // Initialize the template engine
         $this->initialize();
-
-        // Initialize onCreate method
         $this->onCreate();
     }
 
     /**
-     * Trigger application events listeners.
+     * Trigger an application event listener.
      * 
      * @param string $event The event method name to trigger.
-     * @param mixed $arguments [mixed ...$] Optional event method arguments.
+     * @param mixed ...$arguments Optional arguments for the event method.
      * 
      * @return void
     */
@@ -65,51 +61,59 @@ abstract class BaseApplication
     }
 
     /**
-     * Application on create method, an alternative method to __construct().
+     * Method called during object creation, alternative to __construct().
      * 
      * @return void 
     */
     protected function onCreate(): void {}
 
     /**
-     * Application on finish even, which triggers once application router has finished handling request.
-     * This trigger weather error occurs or not.
+     * Called when the application starts handling a request, regardless of success or failure.
+     * 
+     * @param array<string,mixed> $info The request state information.
+     * 
+     * @return void 
+    */
+    protected function onStart(array $info): void {}
+
+    /**
+     * Called after the application finishes handling a request, regardless of success or failure.
      * 
      * @return void 
     */
     protected function onFinish(): void {}
 
     /**
-     * Application on context installed, which triggers once application route context has successfully registered request context.
+     * Triggered after a route context is successfully registered.
      *  
-     * @param string $context The context name that was registered.
+     * @param string $context The name of the registered context.
      * 
      * @return void 
     */
     protected function onContextInstalled(string $context): void {}
 
     /**
-     * Application on view presented event, which is triggered after view controller method was called.
+     * Triggered after a view controller method is called.
      * 
-     * @param string $uri The view URI that was presented.
+     * @param string $uri The URI of the presented view.
      * 
      * @return void 
     */
     protected function onViewPresent(string $uri): void {}
 
     /**
-     * Application on command presented event, which is triggered after command controller was called.
+     * Triggered after a command controller is called.
      * 
-     * @param array $options The command options that was presented.
+     * @param array $options The presented command options.
      * 
      * @return void 
     */
     protected function onCommandPresent(array $options): void {}
 
     /**
-     * Get the base application instance shared singleton class instance.
+     * Retrieve the singleton instance of the application.
      * 
-     * @return static Return application shared instance.
+     * @return static The shared application instance.
      */
     public static final function getInstance(): static 
     {
@@ -117,9 +121,9 @@ abstract class BaseApplication
     }
 
     /**
-     * Get the current segments relative uri.
+     * Get the current URI segments.
      *
-     * @return string URI of the current request.
+     * @return string The URI of the current request.
      */
     public final function getView(): string 
     {
@@ -127,18 +131,18 @@ abstract class BaseApplication
     }
 
     /**
-     * Get protected property from template class options or exported classes.
+     * Retrieve a protected property from template options or exported classes.
      *
-     * @param string $key property or class alias name.
+     * @param string $key The property or class alias name.
      * 
-     * @return ?mixed return property otherwise null if not found.
+     * @return mixed|null The property value or null if not found.
      * @ignore
     */
     public function __get(string $key): mixed
     {
         $value = static::attrGetter($key);
 
-        if($value === static::$KEY_NOT_FOUND) {
+        if ($value === static::$KEY_NOT_FOUND) {
             return $this->{$key} ?? static::${$key} ?? null;
         }
 
