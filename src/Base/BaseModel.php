@@ -116,7 +116,7 @@ abstract class BaseModel
      * 
      * @var SearchInstance $searchInstance
     */
-    private static ?object $searchInstance = null;
+    private static ?SearchInstance $searchInstance = null;
 
     /**
      * Search flags.
