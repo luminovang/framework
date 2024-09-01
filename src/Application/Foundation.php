@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework foundation.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -15,72 +15,52 @@ use \Luminova\Debugger\Performance;
 final class Foundation 
 {
     /**
+     * Framework version code.
+     * 
+     * @var string VERSION
+     */
+    public const VERSION = '3.2.6';
+
+    /**
      * Framework version name.
      * 
-    * @var string VERSION
-    */
-    public const VERSION = '3.2.5';
+     * @var string VERSION_NAME
+     */
+    public const VERSION_NAME = 'Sweetie';
 
     /**
      * Minimum required php version.
      * 
-    * @var string MIN_PHP_VERSION 
-    */
+     * @var string MIN_PHP_VERSION 
+     */
     public const MIN_PHP_VERSION = '8.0';
 
     /**
-     * Command line tool version
+     * Command line tool version.
      * 
      * @var string NOVAKIT_VERSION
-    */
+     */
     public const NOVAKIT_VERSION = '2.9.7';
 
     /**
-     * Server base path for router
+     * Server base path for router.
      * 
      * @var ?string $base
-    */
+     */
     private static ?string $base = null;
 
     /**
      * Request url segments.
      * 
      * @var ?string $segments
-    */
+     */
     private static ?string $segments = null;
-
-    /**
-     * Error codes
-     * 
-     * @var array<int,string> $errors
-    */
-    private static array $errors = [
-        E_ERROR             => 'ERROR',
-        E_PARSE             => 'PARSE ERROR',
-        E_CORE_ERROR        => 'CORE ERROR',
-        E_COMPILE_ERROR     => 'COMPILE ERROR',
-
-        E_WARNING           => 'WARNING',
-        E_CORE_WARNING      => 'CORE WARNING',
-        E_COMPILE_WARNING   => 'COMPILE WARNING',
-        E_USER_WARNING      => 'USER WARNING',
-
-        E_NOTICE            => 'NOTICE',
-        E_USER_NOTICE       => 'USER NOTICE',
-        E_STRICT            => 'STRICT NOTICE',
-
-        E_USER_ERROR        => 'USER ERROR',
-        E_RECOVERABLE_ERROR => 'RECOVERABLE ERROR',
-
-        E_DEPRECATED        => 'DEPRECATED',
-        E_USER_DEPRECATED   => 'USER DEPRECATED'
-    ];
 
     /**
      * System paths for filtering.
      * 
      * @var array<int,string> $systemPaths
-    */
+     */
     private static array $systemPaths = [
         'public',
         'bin',
@@ -95,13 +75,19 @@ final class Foundation
     ];
 
     /**
-     * Get the framework copyright information
+     * Get the framework copyright information.
      *
-     * @return string Return framework copyright message.
+     * @param bool $userAgent Weather to return user-agent information instead (default: false).
+     * 
+     * @return string Return framework copyright message or user agent string.
      * @internal
-    */
-    public static final function copyright(): string
+     */
+    public static final function copyright(bool $userAgent = false): string
     {
+        if($userAgent){
+            return 'LuminovaFramework/' . self::VERSION . ' (PHP; ' . PHP_VERSION . '; ' . PHP_OS_FAMILY . ')  - https://luminova.ng';
+        }
+
         return 'PHP Luminova (' . self::VERSION . ')';
     }
 
@@ -111,7 +97,7 @@ final class Foundation
      * @param bool $integer Return version code or version name (default: name).
      * 
      * @return string|int Return version name or code.
-    */
+     */
     public static final function version(bool $integer = false): string|int
     {
         return $integer ? (int) strict(self::VERSION, 'int') : self::VERSION;
@@ -124,7 +110,7 @@ final class Foundation
      * @param array|null $context Additional information to pass to profiling (default: null).
      * 
      * @return void
-    */
+     */
     public static final function profiling(string $action, ?array $context = null): void
     {
         if(!PRODUCTION && env('debug.show.performance.profiling', false)){
@@ -136,7 +122,7 @@ final class Foundation
      * Initializes error display.
      * 
      * @return void 
-    */
+     */
     public static function initialize(): void 
     {
         set_error_handler([static::class, 'handle']);
@@ -144,25 +130,13 @@ final class Foundation
     }
 
     /**
-     * Get error type.
-     * 
-     * @param int $errno The error code.
-     * 
-     * @return string Return Error name by error code.
-    */
-    public static function getName(int $errno): string 
-    {
-        return static::$errors[$errno] ?? 'UNKNOWN ERROR';
-    }
-
-    /**
      * Get error logging level.
      * 
-     * @param int $errno The error code.
+     * @param string|int $errno The error code.
      * 
      * @return string Return error log level by error code.
-    */
-    public static function getLevel(int $errno): string 
+     */
+    public static function getLevel(string|int $errno): string 
     {
         return match ($errno) {
             E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR => 'critical',
@@ -198,18 +172,22 @@ final class Foundation
         } else {
             $view = 'errors.php';
         }
-
+    
+        // Get tracer for php error if not available
+        if(SHOW_DEBUG_BACKTRACE && !ErrorHandler::getBacktrace()){
+            ErrorHandler::setBacktrace(debug_backtrace());
+        }
+        
+        if (ob_get_level() > 0) {
+            ob_end_clean();
+        }
         if(file_exists($path . $view)){
             include_once $path . $view;
             return;
         }
 
-        if($view === 'cli.php'){
-            echo 'An error is stopping application from running correctly.';
-            return;
-        }
-
-        echo '<h1>Application Error!</h2><p>An error is stopping application from running correctly.</p>';
+        $error = 'An error is stopping application from running correctly.';
+        echo ($view === 'cli.php') ? $error : '<h1>Application Error!</h2><p>' . $error . '</p>';
     }
 
     /**
@@ -305,7 +283,7 @@ final class Foundation
     /**
      * Get the current view segments as array.
      * 
-     * @return array<int,string> The array list of url segments.
+     * @return array<int,string> Return the array list of url segments.
     */
     public static function getSegments(): array
     {
@@ -422,10 +400,11 @@ final class Foundation
             return false;
         }
 
+        $errorCode = ErrorHandler::getErrorCode($errstr, $errno);
         self::log(static::getLevel($errno), sprintf(
             "[%s (%s)] %s File: %s Line: %s.", 
-            static::getName($errno),
-            (string) $errno ?? 1,
+            ErrorHandler::getErrorName($errorCode),
+            (string) $errorCode,
             $errstr,
             static::filterPath($errFile),
             (string) $errLine
@@ -447,15 +426,14 @@ final class Foundation
  
         $isFatal = static::isFatal($error['type']);
         $isDisplay = ini_get('display_errors');
-        $errName = static::getName($error['type']);
-
+        $errorCode = ErrorHandler::getErrorCode($error['message'], $error['type']);
+        $errName = ErrorHandler::getErrorName($errorCode);
         // If error display is not enabled or error occurred on production
         // Display custom error page.
         if(!$isDisplay || PRODUCTION){
-
             $stack = $isFatal ? new ErrorHandler(
                 $error['message'], 
-                $error['type'],
+                $errorCode,
                 null,
                 $error['file'],
                 $error['line'],
@@ -471,7 +449,7 @@ final class Foundation
             self::log(static::getLevel($error['type']), sprintf(
                 "[%s (%s)] %s File: %s Line: %s.", 
                 $errName,
-                (string) $error['type'] ?? 1,
+                (string) $errorCode,
                 $error['message'],
                 $error['file'],
                 (string) $error['line']
@@ -482,7 +460,7 @@ final class Foundation
     /**
      * Check if error is fatal.
      * 
-     * @param int $errno The error code.
+     * @param string|int $errno The error code.
      * 
      * @return bool Return true if is fatal, otherwise false.
      * 
@@ -491,7 +469,7 @@ final class Foundation
      * - Fatal compile-time errors.
      * - Compile-time parse errors.
     */
-    public static function isFatal(int $errno): bool 
+    public static function isFatal(string|int $errno): bool 
     {
         return in_array($errno, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true);
     }

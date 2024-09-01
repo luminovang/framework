@@ -10,7 +10,7 @@
 namespace Luminova\Command\Novakit;
 
 use \Luminova\Base\BaseConsole;
-use \Luminova\Command\TextUtils;
+use \Luminova\Command\Utils\Text;
 use \Luminova\Command\Novakit\Commands;
 
 class Lists extends BaseConsole 
@@ -62,7 +62,7 @@ class Lists extends BaseConsole
         foreach ($groupedCommands as $group => $list) {
             self::writeln($group);
             foreach ($list as $command) {
-                self::writeln('   ' . self::color(TextUtils::padEnd($command['name'], 25), 'green') . $command['description']);
+                self::writeln('   ' . self::color(Text::padEnd($command['name'], 25), 'green') . $command['description']);
             }
 
             self::newLine();

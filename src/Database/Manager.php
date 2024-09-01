@@ -16,47 +16,47 @@ use \Luminova\Storages\FileManager;
 final class Manager 
 {
     /**
-     * Initializes contractor.
+     * Initializes the Manager class.
      * 
      * @param DatabaseInterface $db The database connection driver instance.
-     * @param string|null $table The database table name (default: null).
-    */
+     * @param string|null $table The name of the database table to export (default: null).
+     */
     public function __construct(
         private DatabaseInterface $db, 
         private ?string $table = null
     ){}
 
     /**
-     * Set the database table to backup.
+     * Set the database table to back up.
      * 
-     * @param string $table
+     * @param string $table The name of the database table name.
      * @return void 
-    */
+     */
     public function setTable(string $table): void 
     {
         $this->table = $table;
     }
 
     /**
-     * Export database table and download it to browser as JSON or CSV format.
+     * Export the database table and download it as JSON or CSV format.
      * 
-     * @param string $as Export as csv or json format.
-     * @param string $filename Filename to download it as.
-     * @param array $columns Table columns to export (default: all)
+     * @param string $as Export format: 'csv' or 'json'.
+     * @param string|null $filename Filename for the download.
+     * @param array $columns Table columns to export (default: all).
      * 
-     * @throws DatabaseException If invalid format is provided.
-     * @throws DatabaseException If unable to create export temp directory.
-     * @throws DatabaseException If failed to create export.
-    */
+     * @throws DatabaseException If the format is invalid or export fails.
+     * @return bool Returns true on success, false on failure.
+     */
     public function export(string $as = 'csv', ?string $filename = null, array $columns = ['*']): bool 
     {
         $filename ??= $this->table;
         $as = strtolower($as);
+
         if(!in_array($as, ['csv', 'json'], true)){
-            throw new DatabaseException("Unsupported export format: {$as} allowed formats [csv, json]");
+            throw new DatabaseException("Unsupported export format: {$as}. Allowed formats: [csv, json]");
         }
 
-        $directory = path('writeable') . 'temps' . DIRECTORY_SEPARATOR;
+        $directory = root('writeable/temps');
 
         if (!make_dir($directory)) {
             return false;
@@ -65,6 +65,7 @@ final class Manager
         $count = 0;
         $filepath = $directory . $filename . '.' . $as;
         $handle = fopen($filepath, 'w');
+
         if (!$handle) {
             throw new DatabaseException("Failed to open file for writing: $filepath");
         }
@@ -103,22 +104,62 @@ final class Manager
     }
 
     /**
-     * Backup database.
+     * Backup the database.
      * 
-     * @param string $filename Filename to store backup as.
+     * @param string|null $filename Filename for the backup.
+     * @param bool $forTable Whether to create a backup for the specified table or the entire database (default: false).
      * 
-     * @throws DatabaseException If unable to create backup directory.
-     * @throws DatabaseException If failed to create backup.
-    */
-    public function backup(?string $filename = null): bool 
+     * @throws DatabaseException If unable to create backup directory or backup fails.
+     * @return bool Returns true on success, false on failure.
+     */
+    public function backup(?string $filename = null, bool $forTable = false): bool 
     {
-        $filename ??= uniqid();
-        $directory = path('writeable') . 'backups' . DIRECTORY_SEPARATOR;
+        $filename ??= ($forTable  ? $this->table : uniqid());
+        $directory = root('writeable/backups');
 
         if (!make_dir($directory)) {
             return false;
         }
 
+        return $forTable 
+            ? $this->backupDatabaseTable($filename, $directory) 
+            : $this->backupDatabase($filename, $directory);
+    }
+
+    /**
+     * Create a backup for database table.
+     * 
+     * @param string $filename The backup filename.
+     * @param string $directory The backup directory.
+     * 
+     * @return bool Return true if the backup was created successfully, false otherwise.
+    */
+    private function backupDatabaseTable(string $filename, string $directory): bool
+    {
+        $filepath = $directory . $filename . '-' . date('d-m-Y-h-i-sa') . '-tbl.sql';
+        $handle = fopen($filepath, 'w');
+
+        if (!$handle) {
+            throw new DatabaseException("Failed to open file for writing backup: $filepath");
+        }
+
+        $this->writeTableStructure($handle, $this->table);
+        //$this->writeTriggers($handle);
+
+        fclose($handle);
+        return true;
+    }
+
+    /**
+     * Create a backup for database.
+     * 
+     * @param string $filename The backup filename.
+     * @param string $directory The backup directory.
+     * 
+     * @return bool Return true if the backup was created successfully, false otherwise.
+    */
+    private function backupDatabase(string $filename, string $directory): bool
+    {
         $var = (PRODUCTION ? 'database' : 'database.development');
         $database = env("{$var}.name");
         $filepath = $directory . $filename . '-' . date('d-m-Y-h-i-sa') . '-db.sql';
@@ -133,10 +174,53 @@ final class Manager
         fwrite($handle, "-- Database structure\n\n");
         fwrite($handle, "$structure;\n\n");
 
-
         $tables = $this->db->query("SHOW FULL TABLES WHERE Table_Type = 'BASE TABLE'")->fetch('all', FETCH_COLUMN);
 
         foreach ($tables as $table) {
+            $this->writeTableStructure($handle, $table);
+        }
+
+        $this->writeTriggers($handle);
+        fclose($handle);
+
+        return true;
+    }
+
+    /**
+     * Write datable triggers.
+     * 
+     * @param resource $handle The resource handler.
+     * 
+     * @return void
+    */
+    private function writeTriggers($handle): void
+    {
+        if ($handle && $this->db instanceof DatabaseInterface) {
+            $triggers = $this->db->query("SHOW TRIGGERS")->fetch('all', FETCH_ASSOC);
+
+            if (!empty($triggers)) {
+                fwrite($handle, "-- Triggers\n\n");
+                foreach ($triggers as $trigger) {
+                    fwrite($handle, "DELIMITER //\n");
+                    fwrite($handle, $trigger['SQL Original Statement']);
+                    fwrite($handle, "//\n\n");
+                    fwrite($handle, "DELIMITER ;\n\n");
+                }
+            }
+        }
+    }
+
+    /**
+     * Write datable table strectures.
+     * 
+     * @param resource $handle The resource handler.
+     * @param string $table The name of the database table name.
+     * 
+     * @return void
+    */
+    private function writeTableStructure($handle, string $table): void
+    {
+        if ($handle && $this->db instanceof DatabaseInterface) {
             $tableStructure = $this->db->query("SHOW CREATE TABLE $table")->fetch('next', FETCH_ASSOC)['Create Table'];
 
             fwrite($handle, "-- Table structure for $table\n\n");
@@ -147,35 +231,12 @@ final class Manager
             if ($rows) {
                 fwrite($handle, "-- Data for $table\n\n");
                 foreach ($rows as $row) {
-                    $escapedRow = array_map(function ($value) {
-                        if (is_string($value)) {
-                            return addslashes($value);
-                        }
-
-                        return $value;
-                    }, $row);
-
+                    $escapedRow = array_map(fn($value) => is_string($value) ? addslashes($value) : $value, $row);
                     $rowValues = implode("', '", $escapedRow);
                     fwrite($handle, "INSERT INTO $table VALUES ('$rowValues');\n");
                 }
                 fwrite($handle, "\n");
             }
         }
-
-        $triggers = $this->db->query("SHOW TRIGGERS")->fetch('all', FETCH_ASSOC);
-
-        if (!empty($triggers)) {
-            fwrite($handle, "-- Triggers\n\n");
-            foreach ($triggers as $trigger) {
-                fwrite($handle, "DELIMITER //\n");
-                fwrite($handle, $trigger['SQL Original Statement']);
-                fwrite($handle, "//\n\n");
-                fwrite($handle, "DELIMITER ;\n\n");
-            }
-        }
-
-        fclose($handle);
-
-        return true;
     }
 }

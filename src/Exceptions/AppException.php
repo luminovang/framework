@@ -12,12 +12,20 @@ namespace Luminova\Exceptions;
 use \Luminova\Logger\Logger;
 use \Luminova\Application\Foundation;
 use \Luminova\Interface\ExceptionInterface;
+use \Luminova\Errors\ErrorHandler;
+use \Luminova\Config\Enums\ErrorCodes;
 use \Stringable;
 use \Exception;
 use \Throwable;
 
 abstract class AppException extends Exception implements ExceptionInterface, Stringable
 {
+    /**
+     * The `ErrorCodes` class defines constants for various error types,
+     * including PHP error types, SQLSTATE codes, and custom database error codes.
+     */
+    use ErrorCodes;
+
     /**
      * PSR Logger instance.
      *
@@ -35,15 +43,15 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     )
     {
         // Only pass integer error code to parent constructor.
-        parent::__construct($message, is_int($code) ? $code : 0, $previous);
+        parent::__construct($message, is_numeric($code) ? (int) $code : 0, $previous);
 
-        // Set the code directly in case if it's a string error code.
+        // Set the code directly after parent initialized in case if it's a string error code.
         $this->code = $code;
 
         // If debug tracing is enabled then store it in shared memory
         // In other to access it when error handler is called, since there is no way to access trace information.
         if(SHOW_DEBUG_BACKTRACE){
-            shared('__ERROR_DEBUG_BACKTRACE__', $this->getTrace() ?: debug_backtrace());
+            ErrorHandler::setBacktrace($this->getTrace() ?: debug_backtrace());
         }
     }
 
@@ -77,12 +85,20 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     /**
      * {@inheritdoc}
      */
+    public function getName(): string
+    {
+        return ErrorHandler::getErrorName($this->code);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function getFilteredMessage(): string
     {
         $position = strpos($this->message, APP_ROOT);
         $message = ($position !== false) ? 
             substr($this->message, 0, $position) : 
-                $this->message;
+            $this->message;
 
         return trim($message, ' in');
     }
@@ -90,9 +106,9 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     /**
      * {@inheritdoc}
      */
-    public function getDebugTrace(): array 
+    public function getBacktrace(): array 
     {
-        return $this->getTrace() ?: shared('__ERROR_DEBUG_BACKTRACE__', null, []);
+        return $this->getTrace() ?: ErrorHandler::getBacktrace();
     }
 
     /**
@@ -154,13 +170,13 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     /**
      * Display a custom exception info in CLI mode.
      * 
-     * @param AppException|Exception $exception The current exception thrown.
+     * @param AppException<\T>|Exception $exception The current exception thrown.
      * 
      * @return int Return status code for error.
      */
     private static function display(AppException|Exception $exception): int 
     {
-        include_once path('views') . 'system_errors' . DIRECTORY_SEPARATOR . 'cli.php';
+        include_once root('/resources/views/system_errors/') . 'cli.php';
 
         return STATUS_ERROR;
     }

@@ -9,7 +9,7 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Base\BaseDatabase;
+use \Luminova\Core\CoreDatabase;
 use \Luminova\Interface\ConnInterface;
 use \Luminova\Exceptions\DatabaseException;
 use \PDOStatement;
@@ -21,11 +21,11 @@ interface DatabaseInterface
     /**
      * Initialize database driver constructor.
      *
-     * @param BaseDatabase $config The database connection configuration.
+     * @param CoreDatabase $config The database connection configuration.
      * 
      * @throws DatabaseException If the database connection fails.
      */
-    public function __construct(BaseDatabase $config);
+    public function __construct(CoreDatabase $config);
 
     /**
      * Get the name of the database connection driver.
@@ -327,4 +327,26 @@ interface DatabaseInterface
      * @return int|string|false|null Returns the last inserted ID, or null/false on failure.
      */
     public function getLastInsertId(?string $name = null): string|int|null|bool;
+
+    /**
+     * Retrieves the total query execution time.
+     *
+     * This method returns the accumulated time spent on executing queries
+     * in either float or integer format, depending on the internal state
+     * of the query time.
+     *
+     * @return float|int Return the total query execution time in seconds.
+     */
+    public function getQueryTime(): float|int;
+
+    /**
+     * Retrieves the last query execution time.
+     *
+     * This method returns the time spent on the last query execution
+     * in either float or integer format, depending on the internal state
+     * of the query time.
+     *
+     * @return float|int Return the last query execution time in seconds.
+     */
+    public function getLastQueryTime(): float|int;
 }

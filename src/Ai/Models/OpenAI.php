@@ -130,7 +130,9 @@ class OpenAI implements AiInterface
                 $options = $this->getParams($prompt, $options);
             }
 
-            $content = self::$network->post($url, $options)->getContents();
+            $content = self::$network->post($url, [
+                'body' => $options
+            ])->getContents();
             $content = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
 
             if(isset($content['error'])){
@@ -161,7 +163,9 @@ class OpenAI implements AiInterface
     {
         $url = self::getUrl('chatCompletions');
         try {
-            $content = self::$network->post($url, $this->getParams($prompt, $options, true))->getContents();
+            $content = self::$network->post($url, [
+                'body' => $this->getParams($prompt, $options, true)
+            ])->getContents();
             $content = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
 
             if(isset($content['error'])){
@@ -189,11 +193,13 @@ class OpenAI implements AiInterface
         $url = self::getUrl('embeddings');
         try {
             $content = self::$network->post($url, [
-                'model' => $options['model'] ?? 'text-embedding-ada-002',
-                'dimensions' => $options['dimensions'] ?? '',
-                'encoding_format' => $options['encoding_format'] ?? 'float',
-                'user' => $options['user'] ?? '',
-                'input' => $input
+                'body' => [
+                    'model' => $options['model'] ?? 'text-embedding-ada-002',
+                    'dimensions' => $options['dimensions'] ?? '',
+                    'encoding_format' => $options['encoding_format'] ?? 'float',
+                    'user' => $options['user'] ?? '',
+                    'input' => $input
+                ]
             ])->getContents();
             $content = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
 
@@ -217,9 +223,11 @@ class OpenAI implements AiInterface
         $url = self::getUrl('fineTune');
         try {
             $content = self::$network->post($url, [
-                'model' => $options['model'] ?? 'gpt-3.5-turbo',
-                'training_file' => $trainingFile,
-                'validation_file' => $options['validation_file'] ?? ''
+                'body' => [
+                    'model' => $options['model'] ?? 'gpt-3.5-turbo',
+                    'training_file' => $trainingFile,
+                    'validation_file' => $options['validation_file'] ?? ''
+                ]
             ])->getContents();
             $content = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
 
@@ -243,12 +251,14 @@ class OpenAI implements AiInterface
         $url = self::getUrl('images');
         try {
             $content = self::$network->post($url, [
-                'model' => $options['model'] ?? 'dall-e-3',
-                'size' => $options['size'] ?? '1024x1024',
-                'n' => $options['n'] ?? 1,
-                'response_format' => $options['response_format'] ?? 'url',
-                'user' => $options['user'] ?? '',
-                'prompt' => $prompt
+               'body' => [
+                    'model' => $options['model'] ?? 'dall-e-3',
+                    'size' => $options['size'] ?? '1024x1024',
+                    'n' => $options['n'] ?? 1,
+                    'response_format' => $options['response_format'] ?? 'url',
+                    'user' => $options['user'] ?? '',
+                    'prompt' => $prompt
+               ]
             ])->getContents();
 
             if(isset($content['error'])){
@@ -297,14 +307,16 @@ class OpenAI implements AiInterface
         $url = self::getUrl('imageEdit');
         try {
             $content = self::$network->post($url, [
-                'model' => $options['model'] ?? 'dall-e-2',
-                'image' => new CurlFile($options['image']),
-                'mask' => new CurlFile($options['mask']),
-                'n' => $options['n'] ?? 1,
-                'size' => $options['size'] ?? '1024x1024',
-                'response_format' => $options['response_format'] ?? 'url',
-                'user' => $options['user'] ?? '',
-                'prompt' => $prompt
+                'body' => [
+                    'model' => $options['model'] ?? 'dall-e-2',
+                    'image' => new CurlFile($options['image']),
+                    'mask' => new CurlFile($options['mask']),
+                    'n' => $options['n'] ?? 1,
+                    'size' => $options['size'] ?? '1024x1024',
+                    'response_format' => $options['response_format'] ?? 'url',
+                    'user' => $options['user'] ?? '',
+                    'prompt' => $prompt
+                ]
             ])->getContents();
 
             if (isset($content['error'])) {
@@ -327,11 +339,13 @@ class OpenAI implements AiInterface
         $url = self::getUrl('speech');
         try {
             $content = self::$network->post($url, [
-                'model' => $options['model'] ?? 'tts-1',
-                'voice' => $options['voice'] ?? 'alloy',
-                'response_format' => $options['format'] ?? 'mp3',
-                'speed' => $options['speed'] ?? 1.0,
-                'input' => $text
+                'body' => [
+                    'model' => $options['model'] ?? 'tts-1',
+                    'voice' => $options['voice'] ?? 'alloy',
+                    'response_format' => $options['format'] ?? 'mp3',
+                    'speed' => $options['speed'] ?? 1.0,
+                    'input' => $text
+                ]
             ])->getContents();
 
             if(isset($content['error'])){
@@ -394,15 +408,17 @@ class OpenAI implements AiInterface
         $url = self::getUrl('transcriptions');
         try {
             $content = self::$network->post($url, [
-                'model' => $options['model'] ?? 'whisper-1',
-                'prompt' => $options['prompt'] ?? '',
-                'language' => $options['language'] ?? '',
-                'response_format' => $options['response_format'] ?? 'json',
-                'temperature' => $options['temperature'] ?? 0,
-                'file' => $this->fileInstance
-            ], 
-            [
-                'Content-Type' => 'multipart/form-data'
+                'headers' => [
+                    'Content-Type' => 'multipart/form-data'
+                ],
+                'body' => [
+                    'model' => $options['model'] ?? 'whisper-1',
+                    'prompt' => $options['prompt'] ?? '',
+                    'language' => $options['language'] ?? '',
+                    'response_format' => $options['response_format'] ?? 'json',
+                    'temperature' => $options['temperature'] ?? 0,
+                    'file' => $this->fileInstance
+                ]
             ])->getContents();
             $content = json_decode($content, true);
 

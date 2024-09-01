@@ -8,7 +8,6 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Time;
 
 use \Luminova\Time\Time;

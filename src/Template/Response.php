@@ -20,24 +20,9 @@ use \Exception;
 class Response 
 {
     /**
-     * @var bool $encode
-    */
-    private bool $encode = true;
-
-    /**
      * @var bool $minify
     */
     private bool $minify = false;
-
-    /**
-     * @var bool $minifyCodeblocks
-    */
-    private bool $minifyCodeblocks = false;
-
-    /**
-     * @var bool $codeblockButton
-    */
-    private bool $codeblockButton = false;
 
     /**
      * @var Minification|null $min
@@ -49,13 +34,18 @@ class Response
      *
      * @param int $status HTTP status code (default: 200 OK).
      * @param array<string,mixed> $headers The header key-pair.
+     * @param bool $encode Weather to encode content using encoding like `gzip`.
+     * @param bool $minifyCodeblocks Indicate if codeblocks should be minified (default: false).
+     * @param bool $codeblockButton Indicate if codeblock tags should include a copy button (default: false).
      */
     public function __construct(
         private int $status = 200, 
-        private array $headers = []
+        private array $headers = [],
+        private bool $encode = false,
+        private bool $minifyCodeblocks = false,
+        private bool $codeblockButton = false
     )
     {
-        $this->encode = (bool) env('enable.encoding', false);
         $this->minify = (bool) env('page.minification', false);
     }
 

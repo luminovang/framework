@@ -335,7 +335,8 @@ final class MemoryCache extends BaseCache
         $content = $this->enSerialize($content);
 
         if (!$content) {
-            throw new ErrorException('Failed to serialize cache data.');
+            CacheException::throwException('Failed to serialize cache data.');
+            return false;
         }
 
         if ($expiration !== null) {

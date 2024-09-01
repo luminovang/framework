@@ -123,13 +123,8 @@ final class FileCache extends BaseCache
     }
 
     /**
-     * Set cache storage sub directory path to store cache items.
-     * 
-     * @param string $subfolder The cache storage root directory.
-     * 
-     * @return self Return instance of file cache class.
-     * @throws InvalidArgumentException Throws if invalid sub directory is provided.
-     */
+     * {@inheritdoc}
+    */
     public function setFolder(string $subfolder): self 
     {
         if (str_starts_with($subfolder, self::$root)) {

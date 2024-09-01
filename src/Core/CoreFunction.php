@@ -7,7 +7,7 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Base;
+namespace Luminova\Core;
 
 use \Luminova\Functions\IP;
 use \Luminova\Storages\FileManager;
@@ -15,7 +15,7 @@ use \Luminova\Functions\Tor;
 use \Luminova\Functions\Maths;
 use \Luminova\Functions\Func;
 
-abstract class BaseFunction extends Func
+abstract class CoreFunction extends Func
 {
     /**
      * @var array $instance method instances.

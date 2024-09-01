@@ -1,35 +1,44 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework HTTP network request class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Http;
 
-use \Luminova\Interface\HttpClientInterface;
+use \Luminova\Interface\NetworkClientInterface;
 use \Luminova\Interface\NetworkInterface;
 use \Luminova\Http\Message\Response;
-use \GuzzleHttp\Promise\PromiseInterface;
-use \GuzzleHttp\Client;
 use \Luminova\Http\Client\Curl;
-use \GuzzleHttp\Psr7\Request;
+use \Psr\Http\Message\RequestInterface;
+use \Psr\Http\Message\UriInterface;
+use \Psr\Http\Message\ResponseInterface;
+use \Psr\Http\Client\ClientInterface;
+use \GuzzleHttp\Promise\PromiseInterface;
+use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
+use \GuzzleHttp\Exception\GuzzleException;
+use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\Http\RequestException;
+use \Luminova\Exceptions\BadMethodCallException;
+use \Exception;
 
 class Network implements NetworkInterface
 {
     /**
-     * @var HttpClientInterface|null $client
+     * The network client interface to use.
+     * This must be luminova NetworkClientInterface only.
+     * 
+     * @var NetworkClientInterface|null $client
      */
-    private ?HttpClientInterface $client = null;
+    private ?NetworkClientInterface $client = null;
 
     /**
      * {@inheritdoc}
     */
-    public function __construct(?HttpClientInterface $client = null)
+    public function __construct(?NetworkClientInterface $client = null)
     {
         $this->client = $client ?? new Curl();
     }
@@ -37,60 +46,161 @@ class Network implements NetworkInterface
     /**
      * {@inheritdoc}
     */
-    public function getClient(): HttpClientInterface
+    public function __call(string $method, $arguments): mixed
     {
-        return $this->client;
-    }
+        $client = $this->getClient();
 
-    /**
-     * {@inheritdoc}
-    */
-    public function send(string $method, string $url, array $data = [], array $headers = []): Response
-    {
-        return $this->client->request($method, $url, $data, $headers);
-    }
-
-    /**
-     * {@inheritdoc}
-    */
-    public function get(string $url, array $data = [], array $headers = []): Response
-    {
-        return $this->client->request('GET', $url, $data, $headers);
-    }
+        if (!method_exists($client, $method)) {
+            $message = $client instanceof ClientInterface
+                ? 'Bad method call: method "%s(...)" is not supported in Curl client, use Guzzle client instead.'
+                : 'Bad method call: method "%s(...)" does not exist.';
+            throw new BadMethodCallException(sprintf($message, $method));
+        }
     
-    /**
-     * {@inheritdoc}
-    */
-    public function fetch(string $url, array $headers = []): Response
-    {
-        return $this->client->request('GET', $url, [], $headers);
+        try {
+            return $client->{$method}(...$arguments);
+        } catch (GuzzleRequestException $e) {
+            return $this->handleGuzzleRequestException($e);
+        } catch (AppException $e) {
+            return $this->handleAppException($e);
+        } catch (GuzzleException|Exception $e) {
+            throw new ConnectException($e->getMessage(), $e->getCode(), $e);
+        }
     }
 
     /**
      * {@inheritdoc}
     */
-    public function post(string $url, array $data = [], array $headers = []): Response
+    public function getClient(): ClientInterface|Curl|null
     {
-        return $this->client->request('POST', $url, $data, $headers);
+        return $this->client->getClient();
     }
 
     /**
      * {@inheritdoc}
     */
-    public function request(string $method, string $url, array $data = [], array $headers = []): Response
+    public function get(
+        string $url, 
+        array $options = []
+    ): ResponseInterface|Response
     {
-        return $this->client->request($method, $url, $data, $headers);
+        return $this->client->request('GET', $url, $options);
     }
 
     /**
      * {@inheritdoc}
     */
-    public function sendAsync(Request $request): PromiseInterface
+    public function post(
+        string $url, 
+        array $options = []
+    ): ResponseInterface|Response
     {
-        if($this->client instanceof Client){
-            return $this->client->sendAsync($request);
+        return $this->client->request('POST', $url, $options);
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function request(
+        string $method, 
+        string $url, 
+        array $options = []
+    ): ResponseInterface|Response
+    {
+        return $this->client->request($method, $url, $options);
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function sendAsync(
+        RequestInterface $request, 
+        array $options = []
+    ): PromiseInterface
+    {
+        if(!$this->getClient() instanceof ClientInterface){
+            throw new RequestException('Request sendAsync is not supported in Curl client, use Guzzle client instead.');
         }
 
-        throw new RequestException('Request sendAsync is not supported in Curl client, use Guzzle client instead.');
+        try{
+            return $this->getClient()->sendAsync($request, $options);
+        }catch (GuzzleRequestException $e) {
+            return $this->handleGuzzleRequestException($e);
+        } catch (GuzzleException|Exception $e) {
+            throw new RequestException($e->getMessage(), $e->getCode(), $e);
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function requestAsync(
+        string $method, 
+        UriInterface|string $uri = '', 
+        array $options = []
+    ): PromiseInterface
+    {
+        if(!$this->getClient() instanceof ClientInterface){
+            throw new RequestException('Request requestAsync is not supported in Curl client, use Guzzle client instead.');
+        }
+
+        try{
+            return $this->getClient()->requestAsync($method, $uri, $options);
+        }catch (GuzzleRequestException $e) {
+            return $this->handleGuzzleRequestException($e);
+        } catch (GuzzleException|Exception $e) {
+            throw new RequestException($e->getMessage(), $e->getCode(), $e);
+        }
+    }
+
+    /**
+     * Handles a GuzzleRequestException by returning the response if available.
+     *
+     * This method processes a Guzzle request exception, checking if a valid response is present.
+     * If a response is available, it returns the ResponseInterface; otherwise, it returns null.
+     *
+     * @param GuzzleRequestException $e The exception thrown during a Guzzle request.
+     *
+     * @return ResponseInterface|null Returns the response if present, or null if no response is available.
+     * @throws RequestException $e Throw the exception encountered during a request.
+     */
+    private function handleGuzzleRequestException(GuzzleRequestException $e): ?ResponseInterface
+    {
+        $response = $e->getResponse();
+
+        if ($response instanceof ResponseInterface) {
+            return $response;
+        }
+
+        $previous = $e->getPrevious();
+        if ($previous instanceof GuzzleException) {
+            throw new RequestException($previous->getMessage(), $previous->getCode(), $previous);
+        }
+
+        throw new RequestException($e->getMessage(), $e->getCode(), $e);
+    }
+
+    /**
+     * Handles an AppException by throwing a RequestException or re-throwing the original exception.
+     *
+     * This method processes an AppException. If the exception is an instance of AppException,
+     * it rethrows it; otherwise, it wraps the exception in a RequestException and throws it.
+     *
+     * @param AppException $e The application-specific exception.
+     *
+     * @return never This method does not return a value and will always throw an exception.
+     */
+    private function handleAppException(AppException $e): never
+    {
+        if ($e instanceof AppException) {
+            throw $e;
+        }
+
+        $previous = $e->getPrevious();
+        if ($previous instanceof AppException) {
+            throw new RequestException($previous->getMessage(), $previous->getCode(), $previous);
+        }
+
+        throw new RequestException($e->getMessage(), $e->getCode(), $e);
     }
 }

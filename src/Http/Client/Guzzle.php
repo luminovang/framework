@@ -9,70 +9,82 @@
  */
 namespace Luminova\Http\Client;
 
-use \GuzzleHttp\Client;
-use \Luminova\Interface\HttpClientInterface;
-use \Luminova\Http\Message\Response;
+use \Luminova\Application\Foundation;
+use \GuzzleHttp\Client as GuzzleClient;
+use \Luminova\Interface\NetworkClientInterface;
+use \Psr\Http\Client\ClientInterface;
+use \Psr\Http\Message\ResponseInterface;
 use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
 use \GuzzleHttp\Exception\GuzzleException;
 use \Luminova\Exceptions\Http\RequestException;
 use \Luminova\Exceptions\Http\ConnectException;
+use \Exception;
 
-class Guzzle implements HttpClientInterface
+class Guzzle implements NetworkClientInterface
 {
     /**
-     * @var Client $client guzzle client
+     * HTTP guzzle client.
+     * 
+     * @var GuzzleClient $client
     */
-    private Client $client;
+    private ?GuzzleClient $client = null;
 
     /**
      * {@inheritdoc}
-     * 
     */
-    public function __construct(array $config = [])
+    public function __construct(private array $config = [])
     {
-        $this->client = new Client($config);
+        $this->config['headers']['X-Powered-By'] = $this->config['headers']['X-Powered-By'] ?? Foundation::copyright();
+        $this->config['headers']['User-Agent'] = $this->config['headers']['User-Agent'] ?? Foundation::copyright(true);
+        $this->client = new GuzzleClient($this->config);
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getClient(): ?ClientInterface
+    {
+        return $this->client;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getConfig(?string $option = null): mixed
+    {
+        return $this->client->getConfig($option);
     }
 
     /**
      * {@inheritdoc}
      */
-    public function request(string $method, string $url, array $data = [], array $headers = []): Response
+    public function request(
+        string $method, 
+        string $url, 
+        array $options = []
+    ): ResponseInterface
     {
-        $options = ($headers === [] ? [] : ['headers' => $headers]);
-
         if ($method === 'POST') {
-            $options['form_params'] = $data;
+            $options['form_params'] = $options['form_params'] ?? [];
         }
 
-        try {
-            $response = $this->client->request($method, $url, $options);
-            $body = $response->getBody();
+        //$options = array_extend_default($this->config, $options);
 
-            return new Response(
-                $response->getStatusCode(),
-                $response->getHeaders(),
-                $body,
-                $body->getContents()
-            );
+        try {
+            return $this->client->request($method, $url, $options);
         } catch (GuzzleRequestException $e) {
             $response = $e->getResponse();
-            if ($response !== null) {
-                $body = $response->getBody();
-                return new Response(
-                    $response->getStatusCode(),
-                    $response->getHeaders(),
-                    $body,
-                    $body->getContents()
-                );
-            } else {
-                $previous = $e->getPrevious();
-                if ($previous instanceof GuzzleException) {
-                    throw new RequestException($previous->getMessage(), $previous->getCode(), $previous);
-                }
-                
-                throw new RequestException($e->getMessage(), $e->getCode(), $e);
+            if ($response instanceof ResponseInterface) {
+                return $response;
             }
-        } catch (GuzzleException $e) {
+
+            $previous = $e->getPrevious();
+            if ($previous instanceof GuzzleException) {
+                throw new RequestException($previous->getMessage(), $previous->getCode(), $previous);
+            }
+            
+            throw new RequestException($e->getMessage(), $e->getCode(), $e);
+        } catch (GuzzleException|Exception $e) {
             throw new ConnectException($e->getMessage(), $e->getCode(), $e);
         }
     }

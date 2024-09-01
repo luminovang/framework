@@ -12,5 +12,4 @@ namespace Luminova\Interface;
 
 interface RouterInterface 
 {
-
 }

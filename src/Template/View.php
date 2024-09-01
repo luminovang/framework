@@ -14,8 +14,8 @@ use \Luminova\Template\Smarty;
 use \Luminova\Template\Twig;
 use \Luminova\Http\Header;
 use \Luminova\Application\Foundation; 
-use \Luminova\Exceptions\AppException; 
 use \Luminova\Interface\ExceptionInterface; 
+use \Luminova\Exceptions\AppException; 
 use \Luminova\Exceptions\ViewNotFoundException; 
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Time\Time;
@@ -24,6 +24,8 @@ use \Luminova\Template\Helper;
 use \Luminova\Cache\ViewCache;
 use \App\Config\Template as TemplateConfig;
 use \DateTimeInterface;
+use \DateTimeImmutable;
+use \DateTimeZone;
 
 trait View
 { 
@@ -128,9 +130,9 @@ trait View
      /**
      * Default cache path.
      * 
-     * @var string $cacheFolder 
+     * @var string|null $cacheFolder 
     */
-    private static string $cacheFolder = 'writeable/caches/default';
+    private static ?string $cacheFolder = null;
 
     /**
      * Minify page content.
@@ -213,7 +215,7 @@ trait View
      * @param bool $minify Indicate if codeblocks should be minified.
      * @param bool $button Indicate if codeblock tags should include a copy button (default: false).
      *
-     * @return self Returns the instance of the View class or BaseApplication, depending on where it's called.
+     * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
     */
     public final function codeblock(bool $minify, bool $button = false): self 
     {
@@ -228,7 +230,7 @@ trait View
      *
      * @param string $path folder name to search for view.
      *
-     * @return self Returns the instance of the View class or BaseApplication, depending on where it's called.
+     * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
      * 
      * - If called in controller `onCreate` or `__construct` method, the entire controller view will be searched in the specified folder.
      * - If called in application `onCreate` or `__construct` method, the entire application view will be searched in the specified folder.
@@ -246,7 +248,7 @@ trait View
      *
      * @param string|string[] $viewName A single view name or an array of view names to exclude from caching.
      *
-     * @return self Returns the instance of the View class or BaseApplication, depending on where it's called.
+     * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
      * 
      * > It is recommended to use this method within the `onCreate` or `__construct` methods of your application.
     */
@@ -266,7 +268,7 @@ trait View
      *
      * @param string|string[] $viewName A single view name or an array of view names to cache.
      *
-     * @return self Returns the instance of the View class or BaseApplication, depending on where it's called.
+     * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
      * 
      * > It is recommended to invoke this method within the `onCreate` or `__construct` methods of your application.
      */
@@ -287,7 +289,7 @@ trait View
      *
      * @param bool $allow Weather to allow caching of views.
      *
-     * @return self Return instance of View or BaseApplication depending on where its called,
+     * @return self Return instance of View or CoreApplication depending on where its called,
      * 
      * - If set in controller `onCreate` or `__construct`, the entire views within the controller will not be cached.
      * - If set in application class, the entire application views will not be cached.
@@ -337,7 +339,7 @@ trait View
      * 
      * @param DateTimeInterface|int|null $expiry Cache expiration default, set to null to use default expiration from .env file.
      * 
-     * @return self Returns the instance of the View class or BaseApplication, depending on where it's called.
+     * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
      * 
      * @example - Usage example with cache.
      * ```
@@ -409,7 +411,7 @@ trait View
      * @param string $key The header key.
      * @param mixed $value The header value for key.
      * 
-     * @return self Return instance of View or BaseApplication depending on where its called.
+     * @return self Return instance of View or CoreApplication depending on where its called.
      */
     public function header(string $key, mixed $value): self 
     {
@@ -423,7 +425,7 @@ trait View
      *
      * @param array<string,mixed> $headers The headers key-pair.
      * 
-     * @return self Return instance of View or BaseApplication depending on where its called.
+     * @return self Return instance of View or CoreApplication depending on where its called.
      */
     public function headers(array $headers): self 
     {
@@ -451,7 +453,7 @@ trait View
      * - atom Atom content.
      * - rss  RSS feed content.
      *
-     * @return self Return instance of View or BaseApplication depending on where its called.
+     * @return self Return instance of View or CoreApplication depending on where its called.
      * @throws RuntimeException Throw if invalid or unsupported view type specified.
     */
     public final function view(string $viewName, string $viewType = 'html'): self 
@@ -671,12 +673,15 @@ trait View
                 $engine = self::engine();
 
                 if ($engine === 'smarty' || $engine === 'twig') {
-                    return self::{'render' . $engine}(
+                    $expires = ($this->cacheExpiry instanceof DateTimeInterface) 
+                        ? Timestamp::ttlToSeconds($this->cacheExpiry)
+                        : $this->cacheExpiry;
+                    return self::{$engine . 'TemplateEngine'}(
                         $this->activeView . self::dot(), 
                         $this->viewsDirectory, 
                         $options, 
                         $cacheable,
-                        Timestamp::ttlToSeconds($this->cacheExpiry),
+                        $expires,
                         $this->minifyCodeblocks, 
                         $this->codeblockButton,
                         $return,
@@ -695,7 +700,7 @@ trait View
                 }
 
                 if(self::$config->templateIsolation){
-                    return self::renderIsolation(
+                    return self::isolateTemplateEngine(
                         $this->filepath, 
                         $options,
                         $cache,
@@ -706,7 +711,7 @@ trait View
                     );
                 }
 
-                return $this->renderDefault($options, $cache, $return, $this->headers);
+                return $this->defaultTemplateEngine($options, $cache, $return, $this->headers);
             }
         } catch (ExceptionInterface $e) {
             self::handleException($e, $options);
@@ -732,7 +737,7 @@ trait View
                 'The view "%s" could not be found in the view directory "%s".', 
                 $this->activeView, 
                 filter_paths($this->viewsDirectory)
-            ), 404);
+            ));
         } 
 
         FileManager::permission('rw');
@@ -749,7 +754,7 @@ trait View
      * @param string $viewsDirectory View template directory.
      * @param array $options View options.
      * @param bool $caching Should cache page contents.
-     * @param int $cacheExpiry Cache expiration.
+     * @param int|null $cacheExpiry Cache expiration.
      * @param bool $minify Should minify.
      * @param bool $copy Should include code copy button.
      * @param bool $return Should return content instead of render.
@@ -757,12 +762,12 @@ trait View
      * 
      * @return bool|string Return true on success, false on failure.
     */
-    private static function rendersmarty(
+    private static function smartyTemplateEngine(
         string $view, 
         string $viewsDirectory, 
         array $options = [], 
         bool $caching = false,
-        int $cacheExpiry = 3600,
+        int|null $cacheExpiry = 3600,
         bool $minify = false,
         bool $copy = false,
         bool $return = false,
@@ -805,7 +810,7 @@ trait View
      * @param string $viewsDirectory View template directory.
      * @param array $options View options.
      * @param bool $shouldCache Should cache page contents.
-     * @param int $cacheExpiry Cache expiration.
+     * @param int|null $cacheExpiry Cache expiration.
      * @param bool $minify Should minify.
      * @param bool $copy Should include code copy button.
      * @param bool $return Should return content instead of render.
@@ -813,12 +818,12 @@ trait View
      * 
      * @return bool|string Return true on success, false on failure.
     */
-    private static function rendertwig(
+    private static function twigTemplateEngine(
         string $view, 
         string $viewsDirectory, 
         array $options = [], 
         bool $shouldCache = false,
-        int $cacheExpiry = 3600,
+        int|null $cacheExpiry = 3600,
         bool $minify = false,
         bool $copy = false,
         bool $return = false,
@@ -864,7 +869,7 @@ trait View
      * 
      * @return bool|string Return true on success, false on failure.
     */
-    private function renderDefault(
+    private function defaultTemplateEngine(
         array $options, 
         ?ViewCache $_lmv_cache = null, 
         bool $_lmv_return = false,
@@ -913,7 +918,7 @@ trait View
      * @return bool|string Return true on success, false on failure.
      * @throws RuntimeException Throw if error occurred.
     */
-    private static function renderIsolation(
+    private static function isolateTemplateEngine(
         string $_lmv_view_file, 
         array $options,
         ?ViewCache $_lmv_cache = null,
@@ -1035,14 +1040,17 @@ trait View
         }
 
         $headers['default_headers'] = true;
-        $headers = array_merge($customHeaders, $headers);
-        return [$headers, $content];
+        return [
+            $customHeaders + $headers, 
+            $content
+        ];
     }
     
     /** 
      * Check if view should be optimized page caching or not.
      *
      * @return bool Return true if view should be cached, otherwise false.
+     * > The check order is important.
     */
     private function shouldCache(): bool
     {
@@ -1050,7 +1058,7 @@ trait View
             return true;
         }
 
-        if (!$this->cacheView || $this->emptyTtl()) {
+        if (!$this->cacheView || $this->isTtlExpired()) {
             return false;
         }
 
@@ -1067,14 +1075,24 @@ trait View
         return !in_array($this->activeView, $this->cacheOption['ignore'] ?? [], true);
     }
 
-    /** 
-     * Check if cache expiry is empty.
+    /**
+     * Check if the cache expiration (TTL) is empty or expired.
      *
-     * @return bool Return true if no cache expiration found.
-    */
-    private function emptyTtl(): bool 
+     * @return bool Returns true if no cache expiration is found or if the TTL has expired.
+     */
+    private function isTtlExpired(): bool 
     {
-        return ($this->cacheExpiry === null || (is_int($this->cacheExpiry) && $this->cacheExpiry < 1));
+        if ($this->cacheExpiry === null) {
+            return true;
+        }
+
+        static $timezone = null;
+        if ($this->cacheExpiry instanceof DateTimeInterface) {
+            $timezone ??= new DateTimeZone(date_default_timezone_get());
+            return $this->cacheExpiry < new DateTimeImmutable('now', $timezone);
+        }
+
+        return false;
     }
 
     /** 

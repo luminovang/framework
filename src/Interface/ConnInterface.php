@@ -19,7 +19,7 @@ interface ConnInterface
      * 
      * @param PDO|mysqli|null $conn The database connection object.
     */
-    public function __construct(private PDO|mysqli|null $conn = null);
+    public function __construct(PDO|mysqli|null $conn = null);
 
     /**
      * Retrieve the connection object.

@@ -9,7 +9,7 @@
  */
 namespace Luminova\Database\Drivers;
 
-use \Luminova\Base\BaseDatabase;
+use \Luminova\Core\CoreDatabase;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Interface\ConnInterface;
@@ -48,9 +48,9 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * Database configuration.
      * 
-     * @var BaseDatabase|null $config
+     * @var CoreDatabase|null $config
     */
-    private ?BaseDatabase $config = null;  
+    private ?CoreDatabase $config = null;  
 
     /**
      * Database queries bind params.
@@ -102,9 +102,37 @@ final class MySqliDriver implements DatabaseInterface
     private bool $inTransaction = false;
 
     /**
+     * Show Query Execution profiling.
+     * 
+     * @var bool $showProfiling
+    */
+    private static bool $showProfiling = false;
+
+    /**
+     * Total Query Execution time.
+     * 
+     * @var float|int $queryTime
+    */
+    protected float|int $queryTime = 0;
+
+    /**
+     * Last Query Execution time.
+     * 
+     * @var float|int $lastQueryTime
+    */
+    protected float|int $lastQueryTime = 0;
+
+    /**
+     * Start Execution time.
+     * 
+     * @var float|int $startTime
+    */
+    private static float|int $startTime = 0;
+
+    /**
      * {@inheritdoc}
     */
-    public function __construct(BaseDatabase $config) 
+    public function __construct(CoreDatabase $config) 
     {
         $this->config = $config;
 
@@ -115,6 +143,8 @@ final class MySqliDriver implements DatabaseInterface
             $this->connected = false;
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
+
+        self::$showProfiling = ($this->connected && !PRODUCTION && env('debug.show.performance.profiling', false));
     }
 
     /**
@@ -196,9 +226,16 @@ final class MySqliDriver implements DatabaseInterface
         return new class($this->connection) implements ConnInterface 
         {
             /**
+             * @var ?mysqli $conn
+            */
+            private ?mysqli $conn = null;
+
+            /**
              * {@inheritdoc}
             */
-            public function __construct(private ?mysqli $conn = null){}
+            public function __construct(?mysqli $conn = null){
+                $this->conn = $conn;
+            }
             
             /**
              * {@inheritdoc}
@@ -262,14 +299,58 @@ final class MySqliDriver implements DatabaseInterface
     }
 
     /**
+     * Profiles the execution time of a database queries.
+     *
+     * @param bool $start Indicates whether to start or stop profiling.
+     * 
+     * @return void
+     */
+    private function profiling(bool $start = true): void
+    {
+        if(self::$showProfiling){
+         
+            if ($start) {
+                self::$startTime = microtime(true);
+                return;
+            }
+
+            $end = microtime(true);
+            $this->lastQueryTime = ($end - self::$startTime);
+            $this->queryTime += $this->lastQueryTime;
+
+            // Store it in a shared memory to retrieve later when needed.
+            shared('__DB_QUERY_EXECUTION_TIME__', $this->queryTime);
+            self::$startTime = 0;
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getQueryTime(): float|int 
+    {
+        return $this->queryTime;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getLastQueryTime(): float|int 
+    {
+        return $this->lastQueryTime;
+    }
+
+    /**
      * {@inheritdoc}
     */
     public function prepare(string $query): self 
     {
+        $this->profiling(true);
         $query = preg_replace('/:([a-zA-Z0-9_]+)/', '?', $query);
         $this->rowCount = 0;
         $this->stmt = $this->connection->prepare($query);
         $this->isSelect = str_starts_with($query, 'SELECT');
+        $this->profiling(false);
 
         return $this;
     }
@@ -279,6 +360,7 @@ final class MySqliDriver implements DatabaseInterface
     */
     public function query(string $query): self 
     {
+        $this->profiling(true);
         $this->executed = false;
         $this->rowCount = 0;
         $this->stmt = $this->connection->query($query);
@@ -287,6 +369,7 @@ final class MySqliDriver implements DatabaseInterface
             $this->executed = true;
             $this->rowCount = str_starts_with($query, 'SELECT') ? $this->stmt->num_rows : $this->connection->affected_rows;
         }
+        $this->profiling(false);
         
         return $this;
     }
@@ -296,7 +379,9 @@ final class MySqliDriver implements DatabaseInterface
     */
     public function exec(string $query): int 
     {
+        $this->profiling(true);
         $this->query($query);
+        $this->profiling(false);
 
         if ($this->stmt == null || $this->stmt === false) {
             return 0;
@@ -412,7 +497,6 @@ final class MySqliDriver implements DatabaseInterface
 
         array_unshift($params, $types);
         $this->stmt->bind_param(...$params);
-        //call_user_func_array([$this->stmt, 'bind_param'], $params);
     }
   
     /**
@@ -422,7 +506,10 @@ final class MySqliDriver implements DatabaseInterface
     {
         $this->executed = false;
         if($this->stmt === null || $this->stmt === false){
-            DatabaseException::throwException('Database operation error: Statement execution failed.');
+            DatabaseException::throwException(
+                'Database execution error, no statment to execute.', 
+                DatabaseException::NO_STATEMENT_TO_EXECUTE
+            );
             return false;
         }
 
@@ -567,7 +654,10 @@ final class MySqliDriver implements DatabaseInterface
         ];
 
         if (!isset($modes[$mode])) {
-            throw new DatabaseException(sprintf('Unsupported databse fetch mode: %d', $mode));
+            throw new DatabaseException(
+                sprintf('Unsupported databse fetch mode: %d', $mode),
+                DatabaseException::NOT_SUPPORTED
+            );
         }
 
         if ($this->stmt instanceof mysqli_stmt) {

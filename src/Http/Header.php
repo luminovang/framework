@@ -20,7 +20,7 @@ class Header implements Countable
      * All allowed HTTP request methods, must be in upper case.
      * @usages Router
      * 
-     * @var array<int,string> $httpMethods
+     * @var string[] $httpMethods
     */
     public static array $httpMethods = ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS', 'HEAD'];
 
@@ -46,7 +46,7 @@ class Header implements Countable
     /**
      * Header variables.
      * 
-     * @var array $variables
+     * @var array<string,mixed> $variables
     */
     protected array $variables = [];
 
@@ -100,7 +100,7 @@ class Header implements Countable
      * Set server variable.
      * 
      * @param string $key The server variable key to set.
-     * @param string $value The server variable value.
+     * @param mixed $value The server variable value.
      * 
      * @return void
     */
@@ -113,6 +113,8 @@ class Header implements Countable
      * Removes a server variable by key
      * 
      * @param string $key The key to remove.
+     * 
+     * @return void 
     */
     public function remove(string $key): void
     {
@@ -134,7 +136,7 @@ class Header implements Countable
      /**
      * Get the total number of server variables.
      * 
-     * @return int Number of server variables
+     * @return int Return total number of server variables.
      */
     public function count(): int
     {
@@ -146,7 +148,7 @@ class Header implements Countable
      *
      * @param string $key Key name of the server variable.
      *
-     * @return mixed The value of the specified server variable, or all server variables if $name is null.
+     * @return mixed Return the value of the specified server variable, or all server variables if $name is null.
      * @internal
      */
     public static function server(string $key): mixed
@@ -159,9 +161,9 @@ class Header implements Countable
     }
 
     /**
-     * Get all request headers.
+     * Extract all request headers from apache_request_headers or _SERVER variables.
      *
-     * @return array<string,string> The request headers.
+     * @return array<string,string> Return the request headers.
      */
     public static function getHeaders(): array
     {
@@ -181,32 +183,33 @@ class Header implements Countable
         return $headers;
     }
 
-    /** 
-     * Get output headers.
+    /**
+     * Retrieves specific HTTP headers from the current request, 
+     * filtering for content-related headers.
      * 
-     * @return array<string,mixed> Return output headers.
-    */
+     * @return array Return n associative array containing 'Content-Type', 
+     * 'Content-Length', and 'Content-Encoding' headers.
+     */
     public static function requestHeaders(): array
     {
         $headers = headers_list();
         $info = [];
 
         foreach ($headers as $header) {
+            $header = trim($header);
+
+            if (!str_starts_with($header, 'Content-')) {
+                continue;
+            }
+
             [$name, $value] = explode(':', $header, 2);
-
-            $name = trim($name);
             $value = trim($value);
+            $key = trim($name);
 
-            switch ($name) {
-                case 'Content-Type':
-                    $info['Content-Type'] = $value;
-                    break;
-                case 'Content-Length':
-                    $info['Content-Length'] = (int) $value;
-                    break;
-                case 'Content-Encoding':
-                    $info['Content-Encoding'] = $value;
-                    break;
+            if ($key === 'Content-Type' || $key === 'Content-Encoding') {
+                $info[$key] = $value;
+            } elseif ($key === 'Content-Length') {
+                $info[$key] = (int) $value;
             }
         }
 
@@ -246,7 +249,7 @@ class Header implements Countable
     public static function headerNoCache(
         int $status = 200, 
         string|bool|null $contentType = null, 
-        int|string|null $retry = null
+        string|int|null $retry = null
     ): void 
     {
         $headers = [
@@ -356,7 +359,7 @@ class Header implements Countable
      * @param string $extension The file extension.
      * @param string $charset The character set.
      *
-     * @return string The content type.
+     * @return string Return the content type and optional charset.
      */
     public static function getContentType(string $extension = 'html', ?string $charset = null): string
     {

@@ -123,7 +123,7 @@ final class IP
       $ip ??= static::get();
       $path ??= root('/writeable/caches/ip/');
       $filename =  "{$path}ip_info_{$ip}.json";
-      $headers = [];
+      $settings = [];
       $url = 'http://';
 
       if (file_exists($filename) && ($response = get_content($filename)) !== false) {
@@ -139,14 +139,18 @@ final class IP
          $url .= self::$config->ipHubVersion . ".api.iphub.info/ip/{$ip}";
 
          if(self::$config->apiKey !== ''){
-            $headers = ['X-Key' => self::$config->apiKey];
+            $settings = [
+               'headers' => [
+                  'X-Key' => self::$config->apiKey
+               ]
+            ];
          }
       }else{
          return self::error(sprintf('Invalid ip address ip api provider: "%s".', self::$config->apiProvider), 700);
       }
 
       try {
-         $response = (new Network())->get($url, [], $headers);
+         $response = (new Network())->get($url, $settings);
          $statusCode = $response->getStatusCode();
          $content = $response->getContents();
 
@@ -295,7 +299,7 @@ final class IP
    *
    * @return string|false Return binary representation of an IP address, otherwise false on error.
    */
-   public static function toBinary(?string $ip = null): string|false
+   public static function toBinary(?string $ip = null): string|bool
    {
       $ip ??= static::toNumeric(); 
 
@@ -323,7 +327,7 @@ final class IP
     *
     * @return string|false Returns the original IP address as a string, or false if the conversion fails.
     */
-   public static function fromBinary(string $binary, bool $ipv6 = false): string|false
+   public static function fromBinary(string $binary, bool $ipv6 = false): string|bool
    {
       $length = strlen($binary);
 

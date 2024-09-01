@@ -10,10 +10,23 @@
 namespace Luminova\Exceptions;
 
 use \Luminova\Exceptions\AppException;
+use \Throwable;
 
 class ViewNotFoundException extends AppException
 {
     /**
      * Constructor for ViewNotFoundException.
-    */
+     *
+     * @param string  $message The exception message.
+     * @param string|int $code  The exception code (default: 404).
+     * @param Throwable|null $previous The previous exception if applicable (default: null).
+     */
+    public function __construct(
+        string $message, 
+        string|int $code = self::VIEW_NOT_FOUND, 
+        ?Throwable $previous = null
+    )
+    {
+        parent::__construct($message, $code, $previous);
+    }
 }

@@ -16,11 +16,9 @@ class Server implements Countable
     /**
      * Initializes the server constructor.
      * 
-     * @param array<string, mixed> $variables.
+     * @param array<string,mixed> $variables An Associative array of server variables to initialize with.
     */
-    public function __construct(protected array $variables = [])
-    {
-    }
+    public function __construct(protected array $variables = []){}
 
    /**
      * Get server variables.
@@ -47,7 +45,7 @@ class Server implements Countable
      * Set server variable.
      * 
      * @param string $key The server variable key to set.
-     * @param string $value The server variable value.
+     * @param mixed $value The server variable value.
      * 
      * @return void
     */
@@ -115,7 +113,7 @@ class Server implements Countable
      /**
      * Get the total number of server variables.
      * 
-     * @return int Number of server variables
+     * @return int Return the umber of server variables
      */
     public function count(): int
     {

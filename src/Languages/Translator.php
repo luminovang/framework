@@ -1,13 +1,12 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework translation module.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Languages;
 
 use \Luminova\Exceptions\NotFoundException;

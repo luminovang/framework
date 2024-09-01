@@ -7,9 +7,9 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Command;
+namespace Luminova\Command\Utils;
 
-final class TextUtils 
+final class Text
 {
     /**
      * ansi character reset flag.
@@ -49,7 +49,7 @@ final class TextUtils
     /**
      * Pads string left
      *
-     * @param string $text String to pad.
+     * @param string $text The string to pad.
      * @param int $length Maximum length of padding.
      * @param string $char Padding character (default: ' ').
      * 
@@ -63,7 +63,7 @@ final class TextUtils
     /**
      * Pads string right
      *
-     * @param string $text String to pad.
+     * @param string $text The string to pad.
      * @param int $length Maximum length of padding.
      * @param string $char Padding character (default: ' ').
      * 
@@ -78,7 +78,7 @@ final class TextUtils
      * Create a border around text.
      *
      * @param string $text The string to pad.
-     * @param int $padding Padding location default is both left and right.
+     * @param int $padding Additional optional padding to apply (default: null).
      * 
      * @return string Return text with border round.
     */
@@ -103,8 +103,8 @@ final class TextUtils
     /**
      * Create a centered text.
      *
-     * @param string $text string to pad.
-     * @param int|null $padding maximum padding.
+     * @param string $text The string to pad.
+     * @param int|null $padding Additional optional padding to apply (default: null).
      * 
      * @return string Return centered text.
     */
@@ -121,25 +121,30 @@ final class TextUtils
     /**
      * Pads string both left and right.
      *
-     * @param string $text string to pad.
+     * @param string $text The string to pad.
      * @param int $length Maximum length of padding.
      * @param string $char Padding character (default: ' ').
-     * @param int $pad The padding position (default: STR_PAD_BOTH).
+     * @param int $position The position to apply padding (e.g, `STR_PAD_*`), (default: STR_PAD_BOTH).
      * 
      * @return string Return padded string.
     */
-    public static function padding(string $text, int $length, string $char = ' ', int $pad = STR_PAD_BOTH): string 
+    public static function padding(
+        string $text, 
+        int $length, 
+        string $char = ' ', 
+        int $position = STR_PAD_BOTH
+    ): string 
     {
-        return str_pad($text, $length, $char, $pad);
+        return str_pad($text, $length, $char, $position);
     }
 
     /**
      * Pads string to fit same length.
      *
      * @param string $text string to pad.
-     * @param int $max maximum padding.
+     * @param int $max The maximum padding to apply.
      * @param int $extra How many extra spaces to add at the end.
-     * @param int $indent Optional indent.
+     * @param int $indent Optional indent to apply (default: 0).
      * 
      * @return string Return fitted string.
     */
@@ -151,12 +156,13 @@ final class TextUtils
     }
 
     /**
-     * Get the length of characters in a string and ignore styles 
+     * Get the length of characters in a string and ignore ANSI that was applied to the text.
      *
-     * @param string $string Optional string
-     * @param string $encoding Text encoding
+     * @param string $string The string to calculate it's length.
+     * @param string $encoding Text encoding to use (default: `UTF-8`).
      * 
-     * @return int The number of characters in the string
+     * @return int Return the number of characters in the string.
+     * > It replace all ANSI color codes and styles with an empty string.
     */
     public static function strlen(?string $string = null, string $encoding = 'UTF-8'): int
     {
@@ -164,83 +170,83 @@ final class TextUtils
             return 0;
         }
 
-        // Replace all ANSI color codes and styles with an empty string
         $string = preg_replace('/\033\[[0-9;]*m/', '', $string);
-
-        return mb_strlen($string, $encoding);
+        return $string ? mb_strlen($string, $encoding) : 0;
     }
 
     /**
-     * Apply style format on text string
+     * Apply ANSI style formatting to a text string.
      *
-     * @param string $text Text to style
-     * @param int|null $format  Style to apply text.
-     * @param bool $formatted Return a formatted string or string with style code
-     * 
+     * @param string $text The text to which the style will be applied.
+     * @param int|null $format The ANSI style constant (e.g., `Text::ANSI_*`) to apply.
+     * @param bool $formatted Whether to return the styled text or just the ANSI code (default: true).
      *
-     * @return string A style formatted ansi string 
-    */
-    public static function style(string $text, ?int $format = null, bool $formatted = true): string
+     * @return string Returns the styled text or the ANSI code.
+     */
+    public static function style(
+        string $text, 
+        ?int $format = null, 
+        bool $formatted = true
+    ): string
     {
         if ($text === '' || static::hasAnsi($text)) {
             return $text;
         }
 
         $formatCode = match ($format) {
-            self::ANSI_UNDERLINE => ';4',
-            self::ANSI_BOLD => ';1',
-            self::ANSI_ITALIC => ';3',
-            self::ANSI_STRIKETHROUGH => ';9',
-            self::ANSI_RESET => ';0',
+            self::ANSI_UNDERLINE => '4',
+            self::ANSI_BOLD => '1',
+            self::ANSI_ITALIC => '3',
+            self::ANSI_STRIKETHROUGH => '9',
+            self::ANSI_RESET => '0',
             default => '',
         };
 
-        if($formatted){
-            return "\033[{$formatCode};m{$text}\033[0m";
-        }
-
-        return $formatCode;
+        return $formatted ? "\033[{$formatCode}m{$text}\033[0m" : $formatCode;
     }
 
-     /**
-     * Check if text already has ANSI method in place
+
+    /**
+     * Determine if the given text contains ANSI escape sequences.
      * 
-     * @param string $text Text string
+     * @param string $text The text to check for ANSI codes.
      * 
-     * @return bool true or false
-    */
+     * @return bool Returns true if the text contains ANSI codes, otherwise false.
+     */
     public static function hasAnsi(string $text): bool
     {
-        $pattern = '/\033\[[0-9;]*m/u';
-
-        return preg_match($pattern, $text) === 1;
+        return preg_match('/\033\[[0-9;]*m/u', $text) === 1;
     }
 
-     /**
-     * Get the largest line from text
+    /**
+     * Get the longest line from a text string that may contain various newline formats.
      * 
-     * @param string $text Text to process.
+     * @param string $text The text to process.
      * 
-     * @return array<int, mixed> Return largest line from text and it length.
-    */
-    public static function largest(string $text): array 
+     * @return array<int,mixed> Returns the longest line as the first element and its length as the second element.
+     */
+    public static function largest(string $text): array
     {
-        $lines = explode("\n", $text);
+        $normalized = preg_replace('/\r\n|\r/', "\n", $text);
+        $lines = explode("\n", $normalized);
+
         $longestLine = '';
         $maxLength = 0;
-    
+
         foreach ($lines as $line) {
             $trimmedLine = trim($line);
             $lineLength = mb_strlen($trimmedLine);
+
             if ($lineLength > $maxLength) {
                 $longestLine = $trimmedLine;
                 $maxLength = $lineLength;
             }
         }
-    
+
         return [
             $longestLine,
-            $maxLength
+            $maxLength,
         ];
     }
+
 }

@@ -10,7 +10,7 @@
 namespace Luminova\Application;
 
 use \Luminova\Time\Task;
-use \Luminova\Base\BaseFunction;
+use \Luminova\Core\CoreFunction;
 use \Luminova\Application\Caller;
 use \Luminova\Sessions\Session;
 use \Luminova\Cookies\Cookie;
@@ -34,7 +34,7 @@ use \Throwable;
 /**
  * Factory methods classes.
  *
- * @method static BaseFunction        functions(bool $shared = true)                             Utility function helper class.
+ * @method static CoreFunction        functions(bool $shared = true)                             Utility function helper class.
  * @method static Session             session(?\Luminova\Interface\SessionManagerInterface $manager = null, bool $shared = true)                   Server-side user session class, if manager is null `\Luminova\Sessions\SessionManager` will be used instead.
  * @method static Cookie              cookie(string $name, mixed $value = '', array $options = [], bool $shared = true)                    Client-side cookie class
  * @method static Task                task(bool $shared = true)                      Time task utility class.
@@ -45,7 +45,7 @@ use \Throwable;
  * @method static Validation          validate(bool $shared = true)                              Input validation class.
  * @method static Response            response(int $status = 200, array $headers = [], bool $shared = true)           Render response class.
  * @method static Request             request(bool $shared = true)                               HTTP Request class.
- * @method static Network             network(?\Luminova\Interface\HttpClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
+ * @method static Network             network(?\Luminova\Interface\NetworkClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
  * @method static Caller              caller(bool $shared = true)                                Class caller class.
  * @method static Notification        notification(string $serviceAccount = 'serviceAccount.json', bool $shared = true)                              Firebase cloud message notification class.
  * @method static Escape              escaper(string|null $encoding = 'utf-8', bool $shared = true)                              Input escaper class instance.
@@ -68,7 +68,7 @@ final class Factory
         'task'          => Task::class,
         'session'       => Session::class,
         'cookie'        => Cookie::class,
-        'functions'     => 'BaseFunction',
+        'functions'     => 'CoreFunction',
         'escaper'       => Escape::class,
         'modules'       => Modules::class,
         'language'      => Translator::class,
@@ -244,7 +244,7 @@ final class Factory
     private static function create(string $class, ?string $alias = null, bool $shared = true, mixed ...$arguments): object
     {
         try {
-            $instance = ($class === 'BaseFunction') ? new class extends BaseFunction{} : new $class(...$arguments);
+            $instance = ($class === 'CoreFunction') ? new class extends CoreFunction{} : new $class(...$arguments);
             
             if ($shared && $alias) {
                 self::$instances[$alias] = $instance;

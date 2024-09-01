@@ -12,9 +12,8 @@ namespace Luminova\Database;
 use \Luminova\Database\Drivers\MySqliDriver;
 use \Luminova\Database\Drivers\PdoDriver;
 use \Luminova\Interface\DatabaseInterface;
-use \Luminova\Base\BaseDatabase;
+use \Luminova\Core\CoreDatabase;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Exceptions\DatabaseLimitException;
 use \App\Config\Database;
 use \Countable;
 use \Exception;
@@ -62,9 +61,7 @@ class Connection implements Countable
      * Sets maxConnections and pool properties from .env values.
      * Establishes the initial database connection.
      *
-     * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
-     * @throws DatabaseLimitException If the maximum connection limit is reached.
-     * @throws DatabaseException If an invalid connection configuration or driver is provided.
+     * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
      */
     public function __construct()
     {
@@ -121,9 +118,7 @@ class Connection implements Countable
     * Retrieves the shared singleton instance of the Connection class.
     *
     * @return static Return the singleton instance of the Connection class.
-    * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
-    * @throws DatabaseLimitException If the maximum connection limit is reached.
-    * @throws DatabaseException If an invalid connection configuration or driver is provided.
+    *@throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
     */
     public static function getInstance(): static 
     {
@@ -135,14 +130,12 @@ class Connection implements Countable
     *
     * If no configuration is provided, the default configuration will be used.
     *
-    * @param BaseDatabase|null $config Database configuration (default: null).
+    * @param CoreDatabase|null $config Database configuration (default: null).
     *
     * @return DatabaseInterface|null Return the database driver instance, or null if connection fails.
-    * @throws DatabaseException If all retry attempts fail, an error occurs during connection, or an invalid driver interface is detected.
-    * @throws DatabaseLimitException If the maximum connection limit is reached.
-    * @throws DatabaseException If an invalid database driver is provided.
+    * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
     */
-    public static function newInstance(?BaseDatabase $config = null): ?DatabaseInterface
+    public static function newInstance(?CoreDatabase $config = null): ?DatabaseInterface
     {
         $config ??= self::getDefaultConfig();
         $drivers = [
@@ -155,7 +148,7 @@ class Connection implements Countable
         if ($driver === null) {
             throw new DatabaseException(
                 sprintf('Invalid database connection driver: "%s", use (mysql or pdo).', $config->connection),
-                1406
+                DatabaseException::INVALID_DATABASE_DRIVER
             );
         }
 
@@ -164,7 +157,7 @@ class Connection implements Countable
         if (!$connection instanceof DatabaseInterface) {
             throw new DatabaseException(
                 sprintf('The selected driver class: "%s" does not implement: %s.', $driver, DatabaseInterface::class), 
-                1501
+                DatabaseException::DATABASE_DRIVER_NOT_AVAILABLE
             );
         }
         
@@ -180,9 +173,7 @@ class Connection implements Countable
     * @param int|null $retry Number of retry attempts (default: 1).
     *
     * @return DatabaseInterface|null Return the database driver instance (either MySqliDriver or PdoDriver), or null if connection fails.
-    * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
-    * @throws DatabaseLimitException If the maximum connection limit is reached.
-    * @throws DatabaseException If an invalid connection configuration or driver is provided.
+    * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
     */
     public function connect(): ?DatabaseInterface
     {
@@ -192,7 +183,7 @@ class Connection implements Countable
         if (!$connection instanceof DatabaseInterface) {
             throw new DatabaseException(
                 'Failed all attempts to establish a database connection', 
-                1503
+                DatabaseException::FAILED_ALL_CONNECTION_ATTEMPTS
             );
         }
 
@@ -208,9 +199,7 @@ class Connection implements Countable
     * @param int|null $retry Number of retry attempts (default: 1).
     *
     * @return DatabaseInterface|null Return connection instance or null if all retry attempts fail.
-    * @throws DatabaseException If all retry attempts fail or an error occurs during connection.
-    * @throws DatabaseLimitException If the maximum connection limit is reached.
-    * @throws DatabaseException If an invalid connection configuration or driver is provided.
+    * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
     */
     public function retry(int|null $retry = 1): ?DatabaseInterface
     {
@@ -220,9 +209,9 @@ class Connection implements Countable
 
         if ($this->pool) {
             if (count($this->pools) >= $this->maxConnections) {
-                throw new DatabaseLimitException(
+                throw new DatabaseException(
                     'Database connection limit has reached it limit per user.',
-                    1509
+                    DatabaseException::CONNECTION_LIMIT_EXCEEDED
                 );
             }
 
@@ -249,7 +238,8 @@ class Connection implements Countable
                     logger('critical', 'Failed to connect to backup database: ' . $e->getMessage(), [
                         'host' => $config['host'],
                         'port' => $config['port'],
-                        'database' => $config['database']
+                        'database' => $config['database'],
+                        'errorCode' => $e->getCode()
                     ]);
                 }
 
@@ -340,9 +330,9 @@ class Connection implements Countable
    /**
     * Gets the database configuration based on environment and settings.
     *
-    * @return BaseDatabase Return the database configuration object.
+    * @return CoreDatabase Return the database configuration object.
     */
-    private static function getDefaultConfig(): BaseDatabase
+    private static function getDefaultConfig(): CoreDatabase
     {
         $var = (PRODUCTION ? 'database' : 'database.development');
         $sqlite = env("{$var}.sqlite.path", '');
@@ -371,14 +361,14 @@ class Connection implements Countable
     * 
     * @param array<string,mixed> $config Database configuration.
     * 
-    * @return BaseDatabase Return based database instance with loaded configuration
+    * @return CoreDatabase<\anonymous> Return based database instance with loaded configuration
     */
-   private static function newConfig(array $config): BaseDatabase
+   private static function newConfig(array $config): CoreDatabase
    {
-        return new class($config) extends BaseDatabase 
+        return new class($config) extends CoreDatabase 
         { 
             public function __construct(array $config) {
-            parent::__construct($config);
+                parent::__construct($config);
             }
         };
    }

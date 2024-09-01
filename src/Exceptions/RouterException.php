@@ -23,7 +23,7 @@ class RouterException extends AppException
         'invalid_namespace' => 'Invalid namespace. Only namespaces starting with "\App\Controllers\" are allowed.',
         'invalid_context' => 'The application environment is not configured correctly. The route context "%s" may be missing or incorrect.',
         'invalid_context_log' => 'The view context "%s" is missing create view context to register your application routes /routes/%s.php',
-        'invalid_controller' => 'Invalid class "%s". Only subclasses of BaseCommand, BaseController, BaseViewController, ViewErrors, or BaseApplication are allowed.',
+        'invalid_controller' => 'Invalid class "%s". Only subclasses of BaseCommand, BaseController, BaseViewController, ViewErrors, or CoreApplication are allowed.',
         'invalid_class' => 'Class "%s" does not exist in the App\Controllers namespace.',
         'invalid_method' => 'Invalid method "%s" in controller. Only public non-static methods are allowed.',
         'invalid_cli_middleware' => 'The before middleware is not used in cli context, use middleware() instead',
@@ -34,16 +34,36 @@ class RouterException extends AppException
     ];
 
     /**
+     * Constructor for RouterException.
+     *
+     * @param string  $message The exception message.
+     * @param string|int $code  The exception code (default: 4161).
+     * @param Throwable|null $previous The previous exception if applicable (default: null).
+     */
+    public function __construct(
+        string $message, 
+        string|int $code = self::ROUTING_ERROR, 
+        ?Throwable $previous = null
+    )
+    {
+        parent::__construct($message, $code, $previous);
+    }
+
+    /**
      * Thrown router exception.
      *
      * @param string $type The type of error.
-     * @param string|int $code Exception code.
+     * @param string|int $code Exception code (default: 4161).
      * @param array $values Message placeholders.
      * 
      * @return void
-     * @throws static Exception message.
+     * @throws static Throw the exception message.
     */
-    public static function throwWith(string $type, string|int $code = 0, array $values = []): void
+    public static function throwWith(
+        string $type, 
+        string|int $code = self::ROUTING_ERROR, 
+        array $values = []
+    ): void
     {
         throw new static(static::withMessage($type, ...$values), $code);
     }

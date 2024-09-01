@@ -100,7 +100,7 @@ class Sodium implements EncryptionInterface
                 return false;
             }
 
-            $cypher = base64_encode(json_encode([
+            $cipher = base64_encode(json_encode([
                 'nonce' => base64_encode($this->nonce),
                 'hash' => null,
                 'encrypted' => base64_encode($encrypted),
@@ -109,7 +109,7 @@ class Sodium implements EncryptionInterface
             sodium_memzero($encrypted);
             $this->free();
 
-            return $cypher;
+            return $cipher;
         }catch(SodiumException $e){
             EncryptionException::throwException($e->getMessage(), $e->getCode(), $e->getPrevious());
         }
@@ -179,8 +179,6 @@ class Sodium implements EncryptionInterface
             if(isset($this->nonce)){
                 sodium_memzero($this->nonce);
             }
-        }catch(SodiumException){
-           
-        }
+        }catch(SodiumException){}
     }
 }

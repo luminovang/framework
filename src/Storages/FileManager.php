@@ -121,30 +121,34 @@ class FileManager
      * 
      * @param string $permission File access permission.
      * @param string|null $file File name or file path to check permissions (default: writeable dir).
-     * @param bool $quiet Indicate whether to throws an exception if permission is not granted.
+     * @param bool $throw Indicate whether to throws an exception if permission is not granted.
      * 
      * @return bool Returns true if permission is granted otherwise false.
      * @throws FileException If permission is not granted and quiet is not passed true.
      */
-    public static function permission(string $permission = 'rw', ?string $file = null, bool $quiet = false): bool
+    public static function permission(string $permission = 'rw', ?string $file = null, bool $throw = false): bool
     {
         $file ??= root('writeable');
-
+        
         if ($permission === 'rw' && (!is_readable($file) || !is_writable($file))) {
             $error = "Read and Write permission denied for '%s, please grant 'read' and 'write' permission.";
+            $code = FileException::READ_WRITE_PERMISSION_DENIED;
         } elseif ($permission === 'r' && !is_readable($file)) {
             $error = "Read permission denied for '%s', please grant 'read' permission.";
+            $code = FileException::READ_PERMISSION_DENIED;
         } elseif ($permission === 'w' && !is_writable($file)) {
             $error = "Write permission denied for '%s', please grant 'write' permission.";
+            $code = FileException::WRITE_PERMISSION_DENIED;
         } else {
             return true;
         }
 
-        if ($quiet) {
+        if (PRODUCTION && !$throw) {
+            logger('critical', sprintf($error, $file));
             return false;
         }
 
-        throw new FileException(sprintf($error, $file));
+        throw new FileException(sprintf($error, $file), $code);
     }
 
     /**
@@ -365,7 +369,10 @@ class FileManager
         }
 
         if (!static::isResource($resource, 'stream')) {
-            throw new FileException('Invalid stream provided, expected stream resource, received ' . gettype($resource));
+            throw new FileException(sprintf(
+                'Invalid stream provided, expected stream resource, received: %s.', 
+                gettype($resource)
+            ));
         }
 
         error_clear_last();

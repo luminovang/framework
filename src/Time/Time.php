@@ -277,7 +277,7 @@ class Time extends DateTimeImmutable implements Stringable
 
     /**
      * Return string datetime of this format 'yyyy-mm-dd H:i:s'.
-     * @param null|DateTimeZone|string $timezone Optional timezone string.
+     * @param DateTimeZone|string|null $timezone Optional timezone string.
      * 
      * @return string Returns datetime string.
     */
@@ -820,7 +820,7 @@ class Time extends DateTimeImmutable implements Stringable
 	 * @return bool True if the specified minutes have passed, false otherwise.
      * @throws DateTimeException If invalid datetime was passed.
 	 */
-	public static function passed(string|int|Time|DateTimeImmutable $datetime, int $minutes, null|DateTimeZone|string $timezone = 'UTC'): bool 
+	public static function passed(string|int|Time|DateTimeImmutable $datetime, int $minutes, DateTimeZone|string|null $timezone = 'UTC'): bool 
 	{
         if (is_numeric($datetime)) {
             if ($datetime < $minutes) {

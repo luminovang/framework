@@ -9,10 +9,8 @@
  */
 namespace Luminova\Database;
 
-
 class Alter 
 {
-
     public static function getIncrement(
         string $database, 
         string $table, 

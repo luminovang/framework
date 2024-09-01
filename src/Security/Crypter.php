@@ -7,7 +7,6 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-
 namespace Luminova\Security;
 
 use \App\Config\Encryption;
@@ -81,7 +80,7 @@ final class Crypter
         $handler = static::handler();
         
         if ($handler === false) {
-            throw new EncryptionException('Invalid encryption handler or OpenSSL or Sodium extension is not loaded in your envirnment.');
+            throw new EncryptionException('Invalid encryption handler or OpenSSL or Sodium extension is not loaded in your environment.');
         }
 
         if ($handler === 'sodium' && version_compare(SODIUM_LIBRARY_VERSION, '1.0.14', '<')) {

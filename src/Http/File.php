@@ -10,7 +10,7 @@
 namespace Luminova\Http;
 
 use \Luminova\Functions\Maths;
-use \Luminova\Exceptions\StorageException;
+use \Luminova\Exceptions\ErrorException;
 use \stdClass;
 
 class File
@@ -188,17 +188,17 @@ class File
      * 
      * @return self Return instance of self.
      * 
-     * @throws StorageException If the filename contains paths or does not have a valid file extension type.
+     * @throws ErrorException If the filename contains paths or does not have a valid file extension type.
      */
     public function setName(string $name): self
     {
         if (str_contains($name, DIRECTORY_SEPARATOR)) {
-            throw new StorageException('Filename cannot contain paths.');
+            throw new ErrorException('Filename cannot contain paths.');
         }
 
         $extension = pathinfo($name, PATHINFO_EXTENSION);
         if ($extension === '') {
-            throw new StorageException('Filename does not have a valid file extension type.');
+            throw new ErrorException('Filename does not have a valid file extension type.');
         }
 
         $this->extension = strtolower($extension);

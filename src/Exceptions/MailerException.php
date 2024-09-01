@@ -10,6 +10,7 @@
 namespace Luminova\Exceptions;
 
 use \Luminova\Exceptions\AppException;
+use \Throwable;
 
 class MailerException extends AppException
 {
@@ -24,15 +25,35 @@ class MailerException extends AppException
     ];
 
     /**
+     * Constructor for MailerException.
+     *
+     * @param string  $message The exception message.
+     * @param string|int $code  The exception code (default: 4499).
+     * @param Throwable|null $previous The previous exception if applicable (default: null).
+     */
+    public function __construct(
+        string $message, 
+        string|int $code = self::MAILER_ERROR, 
+        ?Throwable $previous = null
+    )
+    {
+        parent::__construct($message, $code, $previous);
+    }
+
+    /**
      * Thrown when a cookie-related error occurs.
      *
      * @param string $type The type of error.
      * @param mixed|null $name The cookie name associated with the error (if applicable).
-     * @param string|int $code Exception code.
+     * @param string|int $code The exception code (default: 4499).
      * 
      * @return static Return new static exception class.
      */
-    public static function throwWith(string $type, mixed $name = null, string|int $code = 0): static
+    public static function throwWith(
+        string $type, 
+        mixed $name = null, 
+        string|int $code = self::MAILER_ERROR
+    ): static
     {
         $message = self::$types[$type] ?? 'Unknown error occurred while creating email';
         return new static($name === null ? $message : sprintf($message, $name), $code);

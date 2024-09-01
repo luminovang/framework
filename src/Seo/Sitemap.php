@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework sitemap generator.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -10,9 +10,10 @@
 namespace Luminova\Seo;  
 
 use \App\Config\Sitemap as SitemapConfig;
-use \Luminova\Base\BaseApplication;
-use \Luminova\Base\BaseConsole;
-use \Luminova\Command\TextUtils;
+use \Luminova\Core\CoreApplication;
+use \Luminova\Base\BaseCommand;
+use \Luminova\Command\Terminal;;
+use \Luminova\Command\Utils\Text;
 use \Luminova\Functions\Maths;
 use \Luminova\Exceptions\RuntimeException;
 use \DOMDocument;
@@ -20,40 +21,46 @@ use \DOMDocument;
 final class Sitemap
 {
     /**
-     * Visited links 
+     * Visited links.
+     * 
      * @var array $visited  
     */
     private static array $visited = [];
 
     /**
-     * Failed connections 
+     * Failed connections.
+     * 
      * @var array $failed  
     */
     private static array $failed = [];
 
     /**
-     * Extracted urls  
+     * Extracted urls.
+     * 
      * @var array $urls  
     */
     private static array $urls = [];
 
     /**
-     * Extracted urls count  
+     * Extracted urls count .
+     * 
      * @var int $counts   
     */
     private static int $counts = 0;
 
     /**
-     * Extracted urls count  
+     * Extracted urls count.
+     * 
      * @var int $skipped   
     */
     private static int $skipped = 0;
 
     /**
-     * Command instance 
-     * @var BaseConsole $cli  
+     * Command instance.
+     * 
+     * @var Terminal|BaseCommand|null $cli  
     */
-    private static ?BaseConsole $cli = null;
+    private static Terminal|BaseCommand|null $cli = null;
 
     /**
      * Sitemap configuration.
@@ -63,21 +70,36 @@ final class Sitemap
     private static ?SitemapConfig $config = null;
 
     /**
-     * Set maximum memory usage threshold (in bytes)
+     * Set maximum memory usage threshold (in bytes).
+     * 
      * @var int $memoryThreshold  
     */
     private static int $memoryThreshold = 0;
 
     /**
-     * Generate site map 
+     * Application HTTPS url.
      * 
-     * @param null|string $url 
-     * @param null|BaseConsole $cli
+     * @var string $https  
+    */
+    private static string $https = '';
+
+    /**
+     * Application HTTP url.
      * 
-     * @return bool 
+     * @var string $http  
+    */
+    private static string $http = '';
+
+    /**
+     * Generate site map.
+     * 
+     * @param string|null $url The url to generate site map of (default: null)
+     * @param Terminal|BaseCommand|null $cli The terminal instance, to use when generating site map in cli (default: null).
+     * 
+     * @return bool Return true if successful, false otherwise.
      * @throws RuntimeException If tries to call in none cli environment.
     */
-    public static function generate(?string $url = null, ?BaseConsole $cli = null): bool 
+    public static function generate(?string $url = null, Terminal|BaseCommand|null $cli = null): bool  
     {
         set_time_limit(300);
         $totalMemory = ini_get('memory_limit');
@@ -87,7 +109,7 @@ final class Sitemap
         }
 
         if ($totalMemory === '-1') {
-            self::$cli?->error('No memory limit is enforced');
+            self::_print('No memory limit is enforced', 'error');
             return false;
         }
 
@@ -110,6 +132,8 @@ final class Sitemap
         self::$urls = [];
         self::$counts = 0;
         self::$skipped = 0;
+        self::$https = 'https://' . APP_HOSTNAME;
+        self::$http = 'http://' . APP_HOSTNAME;
 
         // Start memory usage tracking
         self::$memoryThreshold = round(Maths::toBytes($totalMemory) * 0.7);
@@ -121,30 +145,28 @@ final class Sitemap
             return false;
         }
 
+        $url = rtrim($url, '/');
         foreach ($urls as $page) {
-            $link = str_replace(rtrim($url, '/') . '/', APP_URL . '/', $page['link']);
-            if($link === APP_URL . '/public'){
-                $link = APP_URL;
-            }
-
+            $link = self::toHttps($page['link'], $url);
             $xml .= '   <url>' . PHP_EOL;
             $xml .= '       <loc>' . htmlspecialchars($link) . '</loc>' . PHP_EOL;
             $xml .= '       <lastmod>'. ($page['lastmod'] ?? self::getLastModified($link, $app)) .'</lastmod>' . PHP_EOL;
-            $xml .= '       <priority>' . ($url === $page['link'] ? '1.00' : '0.8' ) . '</priority>' . PHP_EOL;
+            $xml .= '       <priority>' . (($url === $page['link'] || $link === $url) ? '1.00' : '0.8' ) . '</priority>' . PHP_EOL;
             $xml .= '   </url>' . PHP_EOL;
         }
 
         $xml .= '</urlset>';
 
-        $index = root('public');
-
-        if(write_content($index . 'sitemap.xml', $xml)){
-            self::$cli?->writeln();
-            self::$cli?->header();
-            self::$cli?->writeln(TextUtils::border('Your sitemap was completed successfully'), 'green');
-            self::$cli?->writeln(TextUtils::padEnd('Extracted:', 20) . self::$cli?->color('[' .self::$counts  . ']', 'green'));
-            self::$cli?->writeln(TextUtils::padEnd('Skipped:', 20) . self::$cli?->color('[' .self::$skipped  . ']', 'yellow'));
-            self::$cli?->writeln(TextUtils::padEnd('Failed:', 20) . self::$cli?->color('[' . count(self::$failed) . ']', 'red'));
+        if(write_content(root('public') . 'sitemap.xml', $xml)){
+            if(self::$cli !== null){
+                self::_print('');
+                self::_print('header');
+                self::_print(Text::border('Your sitemap was completed successfully'), 'green');
+                self::_print(Text::padEnd('Extracted:', 20) . self::_color('[' .self::$counts  . ']', 'green'));
+                self::_print(Text::padEnd('Skipped:', 20) . self::_color('[' .self::$skipped  . ']', 'yellow'));
+                self::_print(Text::padEnd('Failed:', 20) . self::_color('[' . count(self::$failed) . ']', 'red'));
+            }
+        
             gc_mem_caches();
             return true;
         }
@@ -156,34 +178,111 @@ final class Sitemap
      * Get the last modified timestamp for a given URL based on view patterns.
      *
      * @param string $url The URL to check for last modified timestamp.
-     * @param BaseApplication $app The application instance or relevant context.
+     * @param CoreApplication $app The application instance or relevant context.
      * 
-     * @return string The last modified timestamp in ISO 8601 format, or current timestamp if not found.
+     * @return string Return the last modified timestamp in ISO 8601 format, or current timestamp if not found.
      */
-    private static function getLastModified(string $url, ?BaseApplication $app = null): string
+    private static function getLastModified(string $url, CoreApplication $app): string
     {
-        $url = str_replace(APP_URL, '', $url);
-        $lastmod = null;
+        $url = str_replace(self::$https, '', $url);
+        $modified = null;
         
         foreach (self::$config->viewUrlPatterns as $view => $pattern) {
             $regex = '#^' . preg_replace('/\/{(.*?)}/', '/(.*?)', $pattern) . '$#';
 
             if (preg_match($regex, rtrim($url)) === 1) {
                 $viewInfo = $app->view($view)->viewInfo();
-                $lastmod = $viewInfo['modified'] ?? null;
+                $modified = $viewInfo['modified'] ?? null;
                 break; 
             }
         }
         
-        return date('Y-m-d\TH:i:sP', strtotime($lastmod ?? date('Y-m-d H:i:s')));
+        return date('Y-m-d\TH:i:sP', strtotime($modified ?? date('Y-m-d H:i:s')));
     }
 
     /**
-     * Trim url and add slash 
+     * Apply a color formatting to a message for CLI output.
+     *
+     * @param string $message The message to be formatted.
+     * @param string|null $color The color to apply (optional).
      * 
-     * @param string $url url to trim.
+     * @return string The formatted message, or the original message if color is not applied.
+     */
+    private static function _color(string $message, ?string $color = null): string 
+    {
+        if (self::$cli instanceof Terminal || self::$cli instanceof BaseCommand) {
+            return self::$cli->color($message, $color);
+        }
+
+        return $message; 
+    }
+
+    /**
+     * Print a message to the CLI with optional color formatting.
+     *
+     * Action types:
+     * - If the message is an empty string, it outputs a new line.
+     * - If the message is 'header', it calls the CLI's header method.
+     * - If the message is 'flush', it triggers the CLI's flush method.
+     * - If the color is 'error', it prints the message as an error.
+     * - Otherwise, it writes the message to the CLI with the specified color.
+     *
+     * @param string $message The message to print.
+     * @param string|null $color The color to apply to the message (optional).
+     * @return void
+     */
+    private static function _print(string $message, ?string $color = null): void 
+    {
+        if (self::$cli instanceof Terminal || self::$cli instanceof BaseCommand) {
+ 
+            if ($message === '') {
+                self::$cli->newLine();
+                return;
+            }
+
+            if ($message === 'header') {
+                self::$cli->header();
+                return;
+            }
+
+            if ($message === 'flush') {
+                self::$cli->flush(); 
+                return;
+            }
+
+            if ($color === 'error') {
+                self::$cli->error($message); 
+                return;
+            }
+
+            self::$cli->writeln($message, $color);
+        }
+    }
+
+    /**
+     * Replace url HTTP to HTTPS
      * 
-     * @return string URL
+     * @param string $url The url to replace.
+     * 
+     * @return string Return https url.
+    */
+    private static function toHttps(string $url, string $search): string 
+    {
+        $url = str_starts_with($url, self::$https) ? $url : str_replace($search, self::$https, $url);
+ 
+        if($url === self::$https . '/public' || $url === self::$http . '/public'){
+            return self::$https;
+        }
+
+        return $url;
+    }
+
+    /**
+     * Trim url and add slash.
+     * 
+     * @param string $url The url to trim.
+     * 
+     * @return string Return trimmed url.
     */
     private static function toUrl(string $url): string 
     {
@@ -193,9 +292,10 @@ final class Sitemap
     /**
      * Check if url is acceptable and not a hash nor in ignore list.
      * 
-     * @param string $href to check.
+     * @param string $href The URL to check.
+     * @param string $startUrl The start url.
      * 
-     * @return bool
+     * @return bool Return true if url is acceptable and not in ignore list, otherwise false.
     */
     private static function isAcceptable(string $href): bool
     {
@@ -203,19 +303,31 @@ final class Sitemap
             return false;
         }
 
-        if(self::matchesIgnore($href)){
+        if (preg_match('/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//', $href) && !self::isPrefix($href)) {
             return false;
         }
 
-        return true;
+        return !self::matchesIgnore($href);
+    }
+
+    /**
+     * Check if url is matched the start url prefix.
+     * 
+     * @param string $href The URL to check.
+     * 
+     * @return bool Return true if url is matched, false otherwise.
+    */
+    private static function isPrefix(string $href): bool 
+    {
+        return str_starts_with($href, self::startUrl() . trim(self::$config->scanUrlPrefix, '/'));
     }
 
     /**
      * Check if URL ignore pattern matches URL.
      * 
-     * @param string $url
+     * @param string $url The URL to check.
      * 
-     * @return bool
+     * @return bool Return true if URL is in ignore pattern, false otherwise.
     */
     private static function matchesIgnore(string $url): bool 
     {
@@ -232,9 +344,9 @@ final class Sitemap
     }
 
     /**
-     * Get the default host and base application 
+     * Get the default host and base application.
      * 
-     * @return string
+     * @return string Return the start URL ensuring it's a valid url.
     */
     private static function startUrl(): string 
     {
@@ -242,11 +354,11 @@ final class Sitemap
     }
 
     /**
-     * Replace url and remove excessive dots.
+     * Replace a relative url to absolute url.
      * 
-     * @param string $url URL to replace.
+     * @param string $url The URL to replace.
      * 
-     * @return string
+     * @return string Return an absolute url.
     */
     private static function replaceUrls(string $url): string 
     {
@@ -254,28 +366,27 @@ final class Sitemap
             return $url;
         }
 
-        $url = str_replace(['../', './'], '', $url);
-        $url = trim($url, '/');
+        $url = trim(str_replace(['../', './'], '', $url), '/');
         $root = trim(basename(root()), '/') . '/public';
 
         if (str_starts_with($url, $root)) {
-            return str_replace($root, rtrim(self::startUrl(), '/'), $url);
+            return rtrim(self::startUrl(), '/') . substr($url, strlen($root));
         }
 
         if (str_starts_with($url, 'public/')) {
-            return str_replace('public/', self::startUrl(), $url);
+            return  self::startUrl() . '/' . substr($url, strlen('public/'));
         }
-
+        
         return self::startUrl() . $url;
     }
 
     /**
-     * Open connection and process urls 
+     * Open connection and process URLs.
      * 
-     * @param string $url to browse.
+     * @param string $url The to browse.
      * @param bool $deep is connection a deep scan.
      * 
-     * @return bool|array<string, mixed> extracted urls
+     * @return bool|array<string,mixed> Return the extracted URLs.
     */
     private static function getUrls(string $url, bool $deep = false): array|bool
     {
@@ -284,23 +395,23 @@ final class Sitemap
         }
 
         if (memory_get_usage() >= self::$memoryThreshold) {
-            self::$cli?->error('Memory usage exceeded limit. Stopping extraction.');
-            self::$cli?->newLine();
+            self::_print('Memory usage exceeded limit. Stopping extraction.', 'error');
+            self::_print('');
 
             return self::$urls;
         }
-
+     
         $url = self::replaceUrls($url);
         $found = 0;
         $deepScans = [];
     
-        self::$cli?->writeln('[Progress] ' . $url);
+        self::_print('[Progress] ' . $url);
         $html = self::connection($url);
-        self::$cli?->flush();
+        self::_print('flush');
     
         if ($html === false) {
             self::$failed[] = $url;
-            self::$cli?->writeln('[Failed] ' . $url);
+            self::_print('[Failed] ' . $url);
 
             if($deep){
                 return false;
@@ -309,10 +420,13 @@ final class Sitemap
             return self::$urls;
         }
     
-        self::$cli?->writeln('[Done] ' . $url);
+        self::_print('[Done] ' . $url);
     
         $dom = new DOMDocument();
         @$dom->loadHTML($html['document']);
+        /**
+         * @var DOMNodeList
+        */
         $links = $dom->getElementsByTagName('a');
         $length = $links->count(); 
     
@@ -320,7 +434,7 @@ final class Sitemap
         foreach ($links as $link) {
             if (memory_get_usage() >= self::$memoryThreshold) {
                 self::$skipped += $length;
-                self::$cli?->error('Memory usage exceeded limit. Stopping extraction.');
+                self::_print('Memory usage exceeded limit. Stopping extraction.', 'error');
                 return self::$urls;
             }
     
@@ -331,18 +445,20 @@ final class Sitemap
     
             $href = $link->getAttribute('href');
 
-            if (self::isAcceptable($href)) {
-                $href = rtrim(self::replaceUrls($href), '/');
+            if (!self::isAcceptable($href)) {
+                continue;
+            }
 
-                if (str_starts_with($href, self::startUrl()) && filter_var($href, FILTER_VALIDATE_URL) && !isset(self::$urls[$href])) {
-                    self::$counts++;
-                    $found++;
-                    $deepScans[$href] = $href;
-                    self::$urls[$href] = [
-                        'link' => $href,
-                        'lastmod' => $html['lastmod'],
-                    ];
-                }
+            $href = rtrim(self::replaceUrls($href), '/');
+
+            if (self::isPrefix($href) && filter_var($href, FILTER_VALIDATE_URL) && !isset(self::$urls[$href])) {
+                self::$counts++;
+                $found++;
+                $deepScans[$href] = $href;
+                self::$urls[$href] = [
+                    'link' => $href,
+                    'lastmod' => $html['lastmod'],
+                ];
             }
         }
     
@@ -355,7 +471,7 @@ final class Sitemap
             
             $link = self::toUrl($scan);
 
-            if(!in_array($link, self::$visited) && str_starts_with($link, self::startUrl())){
+            if(!in_array($link, self::$visited) && self::isPrefix($link)){
                 $subUrls = self::getUrls($link, true);
 
                 if($subUrls !== false){
@@ -368,44 +484,51 @@ final class Sitemap
     }
 
     /**
-     * Open a connection to url and extract document body and file-time if header is set
+     * cURL browser to open a connection to url and extract document body and file-time if header is set.
      * 
-     * @param string $url url to load
+     * @param string $url The url to load it contents.
      * 
-     * @return bool|array<string, string>
+     * @return bool|array<string,string> Return array containing the page content and file-time.
     */
     private static function connection(string $url): array|bool 
     {
         $url = self::toUrl($url);
-        $ch = curl_init();
+        $ch = curl_init($url);
 
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_FILETIME, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        $document = curl_exec($ch);
-        $info = curl_getinfo($ch);
-
-        if (curl_errno($ch) !== 0) {
-            self::$cli?->writeln('[Error] ' . curl_error($ch), 'red');
+        if($ch === false){
+            self::_print('[Error] Failed to open cURL connection.', 'red');
             return false;
         }
 
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_FILETIME => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HEADER => false
+        ]);
+        $document = curl_exec($ch);
+
+        if (curl_errno($ch) !== 0) {
+            curl_close($ch);
+            self::_print('[Error] ' . curl_error($ch), 'red');
+            return false;
+        }
+
+        $modified = curl_getinfo($ch, CURLINFO_FILETIME);
         curl_close($ch);
 
-        if ($document === false || $document === '') {
-            self::$cli?->writeln('[Empty] ' . $url, 'red');
+        if ($document === false || empty($document)) {
+            self::_print('[Empty] ' . $url, 'red');
             return false;
         }
 
         self::$visited[] = $url;
-        $lastmod = $info['filetime'] ?? -1;
 
         return [
             'document' => $document, 
-            'lastmod' => ($lastmod != -1 ? date("Y-m-d\TH:i:sP", $lastmod) : null)
+            'lastmod' => ($modified != -1 ? date("Y-m-d\TH:i:sP", $modified) : null),
         ];
     }
 }

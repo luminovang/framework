@@ -9,7 +9,6 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Exceptions\InvalidException;   
 use \Luminova\Exceptions\EncryptionException;
 
 interface EncryptionInterface
@@ -21,7 +20,7 @@ interface EncryptionInterface
      * @param string $method The encryption cipher method (default: null).
      * @param int $size Key size for encryption (default: 16).
      * 
-     * @throws InvalidException If the method or block size is invalid while using openssl.
+     * @throws EncryptionException If the method or block size is invalid while using openssl.
     */
     public function __construct(?string $key = null, ?string $method = null, int $size = 16);
 
@@ -74,7 +73,7 @@ interface EncryptionInterface
      * Encrypt data.
      *
      * @return string|bool Return the encrypted data, or false if encryption fails.
-     * @throws InvalidException If encryption fails due to invalid parameters.
+     * @throws EncryptionException If encryption fails due to invalid parameters.
      */
     public function encrypt(): string|bool;
 
@@ -82,7 +81,7 @@ interface EncryptionInterface
      * Decrypt data.
      *
      * @return string|bool Return the decrypted data, or false if decryption fails.
-     * @throws InvalidException If decryption fails due to invalid parameters.
+     * @throws EncryptionException If decryption fails due to invalid parameters.
      */
     public function decrypt(): string|bool;
 

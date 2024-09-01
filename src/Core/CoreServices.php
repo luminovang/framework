@@ -7,12 +7,12 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Base;
+namespace Luminova\Core;
 
 use \Luminova\Interface\ServicesInterface;
 use \Luminova\Exceptions\RuntimeException;
 
-abstract class BaseServices implements ServicesInterface
+abstract class CoreServices implements ServicesInterface
 {
     /**
      * Service queue.

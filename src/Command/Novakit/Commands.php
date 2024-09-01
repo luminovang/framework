@@ -70,6 +70,25 @@ final class Commands
             'options' => [],
             'examples' => [],
         ],
+        'log' => [
+            'name' => 'log',
+            'group' => 'Logs',
+            'description' => 'Manage and interact with application log files.',
+            'usages' => [
+                'php novakit log',
+            ],
+            'options' => [
+                '-l, --level' => 'Specify the log level (e.g., notice, debug) to read or clear.',
+                '-s, --start' => 'Specify the starting line offset for reading logs.',
+                '-e, --end' => 'Specify the maximum number of lines to read from the log.',
+                '-c, --clear' => 'Clear the contents of the specified log level.',
+            ],
+            'examples' => [
+                'php novakit log --level=notice --start=20 --end=50' => 'Show logs starting from 20 limit 50.',
+                'php novakit log --level=notice --end=10' => 'Show most 10 recent logs.',
+                'php novakit log --level=debug --clear' => 'Clear the entire logs in specified level.',
+            ],
+        ],
         'server' => [
             'name' => 'server',
             'group' => 'Server',
@@ -448,5 +467,62 @@ final class Commands
     public static function has(string $key): bool
     {
         return self::get($key) !== [];
+    }
+
+    /**
+     * Search the closest command match.
+     *
+     * This is responsible for providing suggestions for command names 
+     * based on a given input string. It utilizes the Levenshtein distance algorithm 
+     * to find the closest match from a list of available commands, helping users 
+     * identify the intended command when a typo or similar mistake is made.
+     * 
+     * @param string $input The user input to find a close match for.
+     * 
+     * @return string|null Return the closest matching command name, or null if no close match is found.
+     */
+    public static function search(string $input): ?string
+    {
+        $input = strtolower($input);
+        $suggestion = null;
+        $shortestDistance = -1;
+
+        foreach (self::$commands as $command) {
+            $name = strtolower($command['name']);
+
+            if (str_starts_with($name, $input)) {
+                return $command['name'];
+            }
+
+            $distance = levenshtein($input, $name);
+
+            if ($distance === 0) {
+                return $command['name'];
+            }
+
+            //$distance = $distance + (abs(strlen($input) - strlen($name)));
+            if ($distance < $shortestDistance || $shortestDistance < 0) {
+                $suggestion = $command['name'];
+                $shortestDistance = $distance;
+            }
+        }
+
+        return $suggestion;
+    }
+
+    /**
+     * Suggest a similar command name.
+     * 
+     *
+     * @param string $input The user input to suggest a close match for.
+     * 
+     * @return string Return a formatted suggestion string, or an empty string if no suggestion is found.
+     */
+    public static function suggest(string $input): string
+    {
+        $suggestion = self::search($input);
+        return $suggestion 
+            ? "Do you mean \"\033[0;36m{$suggestion}\033[0m\"?"
+            : '';
     }
 }

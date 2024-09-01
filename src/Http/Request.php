@@ -73,28 +73,28 @@ final class Request
     /**
      * Http server instance.
      *
-     * @var null|Server $server
+     * @var Server|null $server
      */
     public ?Server $server = null;
 
     /**
      * Http request header instance.
      *
-     * @var null|Header $header
+     * @var Header|null $header
     */
     public ?Header $header = null;
 
     /**
      * Browser request user-agent information.
      *
-     * @var null|UserAgent $agent
+     * @var UserAgent|null $agent
      */
     public ?UserAgent $agent = null;
 
     /**
      * Request security configuration.
      *
-     * @var Security $config
+     * @var Security|null$config
      */
     private static ?Security $config = null;
 
@@ -162,11 +162,11 @@ final class Request
     }
 
     /**
-     * Get a value from the request method context array.
+     * Get a value from the request body as an array.
      *
-     * @param string $method HTTP request method context.
-     * @param string $key    Request body key.
-     * @param array $default Default value.
+     * @param string $method The HTTP request method (e.g, `GET`, `POST`, etc..).
+     * @param string $key The request body name to return.
+     * @param array $default Optional default value to return.
      * 
      * @return array Return array of HTTP request method key values.
      * @throws InvalidArgumentException Throws if unsupported HTTP method was passed.
@@ -177,7 +177,7 @@ final class Request
         if (in_array($method, $this->methods, true) && isset($this->httpBody[$method][$key])) {
             $result = $this->httpBody[$method][$key];
     
-            if(is_string($result)) {
+            if(is_string($result) && json_validate($result)) {
                 try{
                     $decode = json_decode($result, true, 512, JSON_THROW_ON_ERROR);
 
@@ -192,11 +192,15 @@ final class Request
             return (array) $result ?? $default;
         }
         
-        throw new InvalidArgumentException("Request method '$method' is not supported, supported methods are [" . implode(', ', $this->methods) . "]");
+        throw new InvalidArgumentException(sprintf(
+            'Request method" "%s" is not supported, supported methods are: [%s]',
+            $method,
+            implode(', ', $this->methods))
+        );
     }
 
     /**
-     * Get the request body as an array or json object.
+     * Get the entire request body as an array or json object.
      * 
      * @param bool $object Whether to return an array or a json object (default: false).
      * 
@@ -208,25 +212,27 @@ final class Request
     }
 
    /**
-     * Get the uploaded file information.
+     * Get an uploaded file object.
      * 
      * @param string $name The input file name.
      * 
-     * @return File|null Return uploaded file instance or null if file not found.
+     * @return File|null Return uploaded file instance or null if file input name not found.
+     * @see https://luminova.ng/docs/3.0.2/http/file-object
      */
     public function getFile(string $name): ?File
     {
         if (isset($_FILES[$name])) {
-            return $this->parseFile($_FILES[$name]);
+            return $this->parseFile($_FILES[$name])?: null;
         }
 
         return null;
     }
 
     /**
-     * Get the uploaded files information.
+     * Get array of all uploaded files object.
      *
-     * @return array<int,File>|false Uploaded files information or false if no files found.
+     * @return File[]|false Return an array containing uploaded files information or false if no files found.
+     * @see https://luminova.ng/docs/3.0.2/http/file-object
     */
     public function getFiles(): array|bool
     {
@@ -245,7 +251,7 @@ final class Request
     }
 
     /**
-     * Get the request method.
+     * Get the current request method.
      *
      * @return string Return the request method in lowercased.
     */
@@ -277,7 +283,7 @@ final class Request
     /**
      * Check if the request method is the provided method.
      *
-     * @param string $method The method to check against.
+     * @param string $method The method to check against (e.g, `POST`, `GET`).
      * 
      * @return bool Returns true if the request method matches the provided method, false otherwise.
     */
@@ -289,7 +295,7 @@ final class Request
     /**
      * Get the request content type.
      *
-     * @return string The request content type.
+     * @return string Return the request content type or blank string if not available.
      */
     public function getContentType(): string
     {
@@ -297,7 +303,7 @@ final class Request
     }
 
     /**
-     * Get request header authorization header [HTTP_AUTHORIZATION, Authorization].
+     * Get request header authorization header from (e.g, `HTTP_AUTHORIZATION`, `Authorization` or `REDIRECT_HTTP_AUTHORIZATION`).
      * 
      * @return string|null Return the authorization header value or null if no authorization header was sent.
      */
@@ -320,6 +326,8 @@ final class Request
      * Check to see if a request was made from the command line.
      *
      * @return bool Return true if the request was made from the command line.
+     * @ignore
+     * @deprecated This method is deprecated and will be removed in a future release.
      */
     public function isCommand(): bool
     {
@@ -339,7 +347,7 @@ final class Request
     /**
      * Check if request is ajax request, see if a request contains the HTTP_X_REQUESTED_WITH header.
      * 
-     * @return bool Return true if request is ajax request, false otherwise
+     * @return bool Return true if request is ajax request, false otherwise.
      */
     public function isAJAX(): bool
     {
@@ -359,9 +367,9 @@ final class Request
     }
     
     /**
-     * Get the request url query string.
+     * Get the request URL query string.
      *
-     * @return string Return url query string.
+     * @return string Return the request URL query parameters as string.
     */
     public function getQuery(): string
     {
@@ -375,9 +383,9 @@ final class Request
     }
 
     /**
-     * Get current url query parameters as an array.
+     * Get current URL query parameters as an associative array using the parameter name as key.
      * 
-     * @return array<string, mixed> Url query parameters.
+     * @return array<string,mixed> Return the request URL query parameters as an array.
     */
     public function getQueries(): ?array
     {
@@ -400,9 +408,9 @@ final class Request
     }
 
     /**
-     * Get current request url
+     * Get current request URL including the scheme, host and query parameters.
      * 
-     * @return string Return request url or null if not set.
+     * @return string Return the request full URL.
     */
     public function getUri(): string
     {
@@ -410,9 +418,9 @@ final class Request
     }
 
     /**
-     * Get current request url path information
+     * Get current request URL path information.
      * 
-     * @return string Return request url paths.
+     * @return string Return the request URL paths.
     */
     public function getPaths(): string
     {
@@ -426,9 +434,9 @@ final class Request
     }
 
     /**
-     * Returns the requested URI (path and query string).
+     * Returns undecoded request URI, path and query string.
      *
-     * @return string Return raw URI (i.e. not URI decoded)
+     * @return string Return the raw request URI (i.e. URI not decoded).
     */
     public function getRequestUri(): string
     {
@@ -438,10 +446,10 @@ final class Request
     /**
      * Get current hostname without port, if allowed host is set it will check if host is in allowed list or patterns.
      * 
-     * @param bool $exception Should throw an exception if invalid host or not allowed host (default: false).
+     * @param bool $exception Weather to throw an exception if invalid host or not allowed host (default: false).
      * 
-     * @return string Return hostname.
-     * @throws SecurityException If host is invalid or not allowed.
+     * @return string Return the request hostname.
+     * @throws SecurityException Throw if host is invalid or not allowed.
     */
     public function getHost(bool $exception = false): ?string
     {
@@ -452,10 +460,10 @@ final class Request
      * Get current hostname with port if port is available. 
      * If allowed host is set it will check if host is in allowed list or patterns.
      * 
-     * @param bool $exception Should throw an exception if invalid host or not allowed host (default: false).
-     * @param bool $port Should return hostname with port (default: true).
+     * @param bool $exception Weather to throw an exception if invalid host or not allowed host (default: false).
+     * @param bool $port Weather to return hostname with port (default: true).
      * 
-     * @return string Return hostname.
+     * @return string Return request hostname and port.
      * @throws SecurityException If host is invalid or not allowed.
     */
     public function getHostname(bool $exception = false, bool $port = true): ?string
@@ -496,10 +504,10 @@ final class Request
     }
 
     /**
-     * Get the origin domain if list of trusted origin domains are specified.
-     * It will check if the origin is a trusted origin domain.
+     * Get the request origin domain, if the list of trusted origin domains are specified, 
+     * it will check if the origin is a trusted origin domain.
      * 
-     * @return string|null Origin domain if found and trusted, otherwise null.
+     * @return string|null Return the request origin domain if found and trusted, otherwise null.
     */
     public function getOrigin(): ?string
     {
@@ -528,17 +536,17 @@ final class Request
     }
 
     /**
-     * Get the request origin port.
+     * Get the request origin port from `X_FORWARDED_PORT` or `SERVER_PORT` if available.
      *
-     * @return int|string|null Can be a string if fetched from the server bag
+     * @return int|string|null Return either a string if fetched from the server available, or integer, otherwise null.
      * 
      * > Check if X-Forwarded-Port header exists and use it, if available.
      * > If not available check for server-port header if also not available return NULL as default.
     */
     public function getPort(): int|string|null
     {
-        if (!$port = $this->server->get('HTTP_X_FORWARDED_PORT')) {
-            if(!$port = $this->server->get('X_FORWARDED_PORT')){
+        if (!($port = $this->server->get('HTTP_X_FORWARDED_PORT'))) {
+            if(!($port = $this->server->get('X_FORWARDED_PORT'))){
                 return $this->server->get('SERVER_PORT');
             }
         }
@@ -553,7 +561,9 @@ final class Request
     }
 
     /**
-     * Gets the request's scheme.
+     * Gets the request scheme name.
+     * 
+     * @return string Return request scheme, if secured return `https` otherwise `http`.
     */
     public function getScheme(): string
     {
@@ -561,15 +571,19 @@ final class Request
     }
 
     /**
-     * Gets the request server protocol (e.g: HTTP/1.1).
+     * Gets the request server protocol (e.g: `HTTP/1.1`).
+     * 
+     * @param string $default The default server protocol to return if no available (default: `HTTP/1.1`)
+     * 
+     * @return string Return Request protocol name and version, if available, otherwise default is return `HTTP/1.1`.
     */
-    public function getProtocol(): string
+    public function getProtocol(string $default = 'HTTP/1.1'): string
     {
-        return $this->server->get('SERVER_PROTOCOL', 'HTTP/1.1');
+        return $this->server->get('SERVER_PROTOCOL', $default);
     }
  
     /**
-     * Get user browser information.
+     * Get the request browser name and platform from user-agent information.
      * 
      * @return string Return browser name and platform.
      */
@@ -581,11 +595,11 @@ final class Request
     }
 
     /**
-     * Get browser user-agent information.
+     * Get request browser user-agent information.
      * 
-     * @param string|null $useragent The User Agent string. If not provided, it defaults to $_SERVER['HTTP_USER_AGENT'].
+     * @param string|null $useragent The User Agent string, if not provided, it defaults to (`HTTP_USER_AGENT`).
      * 
-     * @return UserAgent Return user agent instance.
+     * @return UserAgent Return instance user-agent class containing browser information.
      */
     public function getUserAgent(?string $useragent = null): UserAgent
     {
@@ -597,13 +611,13 @@ final class Request
     }
 
     /**
-     * Check if the request's origin matches the current host.
+     * Check if the request origin matches the current application host.
      *
-     * @param bool $subdomains Whether to consider subdomains or not. Default is true.
+     * @param bool $subdomains Whether to consider subdomains or not (default: false).
      * 
-     * @return bool Returns true if the request's origin matches the current host, false otherwise.
+     * @return bool Returns true if the request origin matches the current host, false otherwise.
      */
-    public function isSameOrigin(bool $subdomains = true): bool
+    public function isSameOrigin(bool $subdomains = false): bool
     {
         $origin = $this->server->get('HTTP_ORIGIN');
 
@@ -629,18 +643,24 @@ final class Request
     }
 
     /**
-     * Check if the given (hostname's, origins, proxy ip or subnet) matches any of the trusted patterns.
+     * Validates if the given (hostname's, origins, proxy ip or subnet) matches any of the trusted patterns.
+     * This will consider the defined configuration in `App\Config\Security` during validation.
      * 
      * @param string $input The domain, origin or ip address to check.
-     * @param string $context The context to check (hostname, origin or proxy).
+     * @param string $context The context to check input for (e.g, `hostname`).
      * 
      * @return bool Return true if the input is trusted, false otherwise.
      * @throws InvalidArgumentException If invalid context is provided.
+     * 
+     * Supported Context:
+     * - hostname - Validates a host name.
+     * - origin - Validates an origin hostname.
+     * - proxy Validates an IP address or proxy.
      */
     public static function isTrusted(string $input, string $context = 'hostname'): bool
     {
         if($context !== 'hostname' && $context !== 'origin' && $context !== 'proxy'){
-            throw new InvalidArgumentException(sprintf('Invalid Context "%s".', $context));
+            throw new InvalidArgumentException(sprintf('Invalid Context name: "%s".', $context));
         }
 
         if($context === 'proxy'){

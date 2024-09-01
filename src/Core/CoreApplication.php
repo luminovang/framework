@@ -7,12 +7,12 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Base;
+namespace Luminova\Core;
 
 use \Luminova\Routing\Router;
 use \Luminova\Template\View;
 
-abstract class BaseApplication
+abstract class CoreApplication
 {
     /**
      * Utilize the View trait for handling template rendering and responses.
@@ -22,9 +22,9 @@ abstract class BaseApplication
     use View;
 
     /**
-     * Singleton instance of the BaseApplication.
+     * Singleton instance of the CoreApplication.
      *
-     * @var static|null $instance
+     * @var self|null $instance
     */
     private static ?self $instance = null;
 
@@ -36,7 +36,7 @@ abstract class BaseApplication
     public ?Router $router = null;
 
     /**
-     * BaseApplication constructor.
+     * CoreApplication constructor.
      * Initializes the router, sets the controller namespace, and sets up the template engine.
      */
     public function __construct() 
@@ -117,7 +117,7 @@ abstract class BaseApplication
      */
     public static final function getInstance(): static 
     {
-        return self::$instance ??= new static();
+        return static::$instance ??= new static();
     }
 
     /**

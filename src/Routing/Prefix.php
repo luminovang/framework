@@ -80,7 +80,7 @@ final class Prefix
         $this->name = $name;
 
         if($onError !== null && !($onError instanceof Closure) && !(is_array($onError) && count($onError) === 2)){
-            throw new RuntimeException('Invalid error handler. Expected either a Closure or a callable array, where the first element is the class name and the second element is the method to handle the error', E_USER_WARNING);
+            throw new RuntimeException('Invalid error handler. Expected either a Closure or a callable array, where the first element is the class name and the second element is the method to handle the error');
         }
 
         $this->onError = $onError;

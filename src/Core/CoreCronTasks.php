@@ -7,7 +7,7 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Base;
+namespace Luminova\Core;
 
 use \Luminova\Time\Time;
 use \Luminova\Time\CronInterval;
@@ -15,7 +15,7 @@ use \Luminova\Base\BaseCommand;
 use \Luminova\Exceptions\RuntimeException;
 use \Closure;
 
-abstract class BaseCron
+abstract class CoreCronTasks
 {
     /**
      * Array to store cron job configurations.

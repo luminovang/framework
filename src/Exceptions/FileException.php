@@ -9,23 +9,25 @@
  */
 namespace Luminova\Exceptions;
 
-use Luminova\Exceptions\AppException;
+use \Luminova\Exceptions\AppException;
 use \Throwable;
 
 class FileException extends AppException
 {
     /**
-     * Handle file exception.
-     * 
-     * @param string $file Filename. 
-     * @param string $message Exception message.
-     * @param Throwable|null $previous Exception thrown.
-     * 
-     * @throws static Throws exception.
-    */
-    public static function handleFile(string $file, string $message = '', ?Throwable $previous = null): void 
+     * Constructor for FileException.
+     *
+     * @param string  $message The exception message.
+     * @param string|int $code  The exception code (default: 6204).
+     * @param Throwable|null $previous The previous exception if applicable (default: null).
+     */
+    public function __construct(
+        string $message, 
+        string|int $code = self::FILESYSTEM_ERROR, 
+        ?Throwable $previous = null
+    )
     {
-        static::throwException('Unable to write file: "' . $file . '", ' . $message, 0, $previous);
+        parent::__construct($message, $code, $previous);
     }
 
     /**
@@ -37,9 +39,39 @@ class FileException extends AppException
      * 
      * @throws static Throws exception.
     */
-    public static function handleReadFile(string $file, string $message = '', ?Throwable $previous = null): void 
+    public static function handleFile(
+        string $file, 
+        string $message = '', 
+        ?Throwable $previous = null
+    ): void 
     {
-        static::throwException('Unable to open file: "' . $file . '", ' . $message, 0, $previous);
+        static::throwException(
+            'Unable to write file: "' . $file . '", ' . $message, 
+            self::WRITE_PERMISSION_DENIED, 
+            $previous
+        );
+    }
+
+    /**
+     * Handle file exception.
+     * 
+     * @param string $file Filename. 
+     * @param string $message Exception message.
+     * @param Throwable|null $previous Exception thrown.
+     * 
+     * @throws static Throws exception.
+    */
+    public static function handleReadFile(
+        string $file, 
+        string $message = '', 
+        ?Throwable $previous = null
+    ): void 
+    {
+        static::throwException(
+            'Unable to open file: "' . $file . '", ' . $message, 
+            self::READ_PERMISSION_DENIED, 
+            $previous
+        );
     }
 
     /**
@@ -51,9 +83,17 @@ class FileException extends AppException
      * 
      * @throws static Throws exception.
     */
-    public static function handleDirectory(string $path, string $message = '', ?Throwable $previous = null): void 
+    public static function handleDirectory(
+        string $path, 
+        string $message = '', 
+        ?Throwable $previous = null
+    ): void 
     {
-        static::throwException('Unable to create a directory: "' . $path . '", ' . $message, 0, $previous);
+        static::throwException(
+            'Unable to create a directory: "' . $path . '", ' . $message, 
+            self::CREATE_DIR_FAILED, 
+            $previous
+        );
     }
 
     /**
@@ -65,8 +105,16 @@ class FileException extends AppException
      * 
      * @throws static Throws exception
     */
-    public static function handlePermission(string $path, string $message = '', ?Throwable $previous = null): void 
+    public static function handlePermission(
+        string $path, 
+        string $message = '', 
+        ?Throwable $previous = null
+    ): void 
     {
-        static::throwException('Unable to set permission for file: "' . $path . '", ' . $message, 0, $previous);
+        static::throwException(
+            'Unable to set permission for file: "' . $path . '", ' . $message, 
+            self::SET_PERMISSION_FAILED, 
+            $previous
+        );
     }
 }

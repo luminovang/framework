@@ -7,11 +7,11 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Base;
+namespace Luminova\Core;
 
-abstract class BaseDatabase
+abstract class CoreDatabase
 {
-     /**
+    /**
      * The port to connect to the database.
      * 
      * @var int|null $port 
@@ -138,9 +138,9 @@ abstract class BaseDatabase
     protected static array $databaseBackups = [];
 
     /**
-     * Initialize database config 
+     * Initialize database configuration with backup connection details.
      * 
-     * @param array<string,mixed> $config Database configuration.
+     * @param array<string,mixed> $config The database configuration.
     */
     public function __construct(array $config = [])
     {

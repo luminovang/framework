@@ -9,7 +9,7 @@
  */
 namespace Luminova\Database\Drivers;
 
-use \Luminova\Base\BaseDatabase;
+use \Luminova\Core\CoreDatabase;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Interface\ConnInterface;
@@ -50,9 +50,9 @@ final class PdoDriver implements DatabaseInterface
     /**
      * Database configuration.
      * 
-     * @var BaseDatabase|null $config 
+     * @var CoreDatabase|null $config 
     */
-    private ?BaseDatabase $config = null; 
+    private ?CoreDatabase $config = null; 
 
     /**
      * Using bind and param parsing.
@@ -69,9 +69,37 @@ final class PdoDriver implements DatabaseInterface
     private bool $executed = false;
 
     /**
+     * Show Query Execution profiling.
+     * 
+     * @var bool $showProfiling
+    */
+    private static bool $showProfiling = false;
+
+    /**
+     * Total Query Execution time.
+     * 
+     * @var float|int $queryTime
+    */
+    protected float|int $queryTime = 0;
+
+    /**
+     * Last Query Execution time.
+     * 
+     * @var float|int $lastQueryTime
+    */
+    protected float|int $lastQueryTime = 0;
+
+    /**
+     * Start Execution time.
+     * 
+     * @var float|int $startTime
+    */
+    private static float|int $startTime = 0;
+
+    /**
      * {@inheritdoc}
     */
-    public function __construct(BaseDatabase $config) 
+    public function __construct(CoreDatabase $config) 
     {
         $this->config = $config;
         try{
@@ -81,6 +109,8 @@ final class PdoDriver implements DatabaseInterface
             $this->connected = false;
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
+
+        self::$showProfiling = ($this->connected && !PRODUCTION && env('debug.show.performance.profiling', false));
     }
 
     /**
@@ -106,6 +136,22 @@ final class PdoDriver implements DatabaseInterface
     }
 
     /**
+     * {@inheritdoc}
+    */
+    public function getQueryTime(): float|int 
+    {
+        return $this->queryTime;
+    }
+
+    /**
+     * {@inheritdoc}
+    */
+    public function getLastQueryTime(): float|int 
+    {
+        return $this->lastQueryTime;
+    }
+
+    /**
      * Initializes the database connection.
      * This method is called internally and should not be called directly.
      * 
@@ -125,7 +171,7 @@ final class PdoDriver implements DatabaseInterface
         if ($dns === '' || ($driver === 'sqlite' && $this->config->sqlite_path === '')) {
             throw new DatabaseException(
                 sprintf('Unsupported PDO driver, no driver found for: "%s"', $driver),
-                1403
+                DatabaseException::DATABASE_DRIVER_NOT_AVAILABLE
             );
         }
 
@@ -208,9 +254,16 @@ final class PdoDriver implements DatabaseInterface
         return new class($this->connection) implements ConnInterface 
         {
             /**
+             * @var ?PDO $conn
+            */
+            private ?PDO $conn = null;
+
+            /**
              * {@inheritdoc}
             */
-            public function __construct(private ?PDO $conn = null){}
+            public function __construct(?PDO $conn = null){
+                $this->conn = $conn;
+            }
             
             /**
              * {@inheritdoc}
@@ -275,11 +328,39 @@ final class PdoDriver implements DatabaseInterface
     }
 
     /**
+     * Profiles the execution time of a database queries.
+     *
+     * @param bool $start Indicates whether to start or stop profiling.
+     * 
+     * @return void
+     */
+    private function profiling(bool $start = true): void
+    {
+        if(self::$showProfiling){
+         
+            if ($start) {
+                self::$startTime = microtime(true);
+                return;
+            }
+
+            $end = microtime(true);
+            $this->lastQueryTime = ($end - self::$startTime);
+            $this->queryTime += $this->lastQueryTime;
+
+            // Store it in a shared memory to retrieve later when needed.
+            shared('__DB_QUERY_EXECUTION_TIME__', $this->queryTime);
+            self::$startTime = 0;
+        }
+    }
+
+    /**
      * {@inheritdoc}
     */
     public function prepare(string $query): self 
     {
+        $this->profiling(true);
         $this->stmt = $this->connection->prepare($query);
+        $this->profiling(false);
 
         return $this;
     }
@@ -289,6 +370,7 @@ final class PdoDriver implements DatabaseInterface
     */
     public function query(string $query): self
     {
+        $this->profiling(true);
         $this->executed = false;
         $this->stmt = $this->connection->query($query);
 
@@ -296,6 +378,7 @@ final class PdoDriver implements DatabaseInterface
             $this->executed = true;
         }
 
+        $this->profiling(false);
         return $this;
     }
 
@@ -304,8 +387,10 @@ final class PdoDriver implements DatabaseInterface
     */
     public function exec(string $query): int 
     {
+        $this->profiling(true);
         $this->executed = false;
         $executed = $this->connection->exec($query);
+        $this->profiling(false);
 
         if($executed !== false){
             $this->executed = true;
@@ -327,7 +412,10 @@ final class PdoDriver implements DatabaseInterface
             $readonly = $this->connection->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
             
             if ($readonly === false) {
-                DatabaseException::throwException('Failed to set transaction isolation level for read-only.');
+                DatabaseException::throwException(
+                    'Failed to set transaction isolation level for read-only.', 
+                    DatabaseException::DATABASE_TRANSACTION_READONLY_FAILED
+                );
             }
         }
 
@@ -339,7 +427,10 @@ final class PdoDriver implements DatabaseInterface
         if ($name !== null) {
             $name = $this->connection->quote("tnx_{$name}");
             if ($name === false) {
-                DatabaseException::throwException('Failed to create savepoint name.');
+                DatabaseException::throwException(
+                    'Failed to create savepoint name.', 
+                    DatabaseException::TRANSACTION_SAVEPOINT_FAILED
+                );
             }
 
             $savepoint = $this->connection->exec("SAVEPOINT {$name}") !== false;
@@ -373,7 +464,10 @@ final class PdoDriver implements DatabaseInterface
         $name = $this->connection->quote("tnx_{$name}");
 
         if ($name === false) {
-            DatabaseException::throwException('Failed to create savepoint name.');
+            DatabaseException::throwException(
+                'Failed to create savepoint name.', 
+                DatabaseException::TRANSACTION_SAVEPOINT_FAILED
+            );
         }
 
         return $this->connection->exec("ROLLBACK TO SAVEPOINT {$name}") !== false;
@@ -428,7 +522,10 @@ final class PdoDriver implements DatabaseInterface
     public function execute(?array $params = null): bool 
     {
         if($this->stmt === null || $this->stmt === false){
-            DatabaseException::throwException('Database operation error: Statement execution failed.');
+            DatabaseException::throwException(
+                'Database operation error: Statement execution failed.', 
+                DatabaseException::NO_STATEMENT_TO_EXECUTE
+            );
             return false;
         }
 

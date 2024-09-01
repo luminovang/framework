@@ -9,6 +9,7 @@
  */
 namespace Luminova\Base;
 
+use \Luminova\Time\Timestamp;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\CacheException;
 use \Closure;
@@ -139,15 +140,15 @@ abstract class BaseCache
      *  - For Memcached: A unique persistent connection ID. If null, the default ID from environment variables is used, or "default" if not set.
      *  - For Filesystem Cache: A subdirectory within the cache directory. If null, defaults to the base cache directory.
      * 
-     * @return static The singleton instance of the cache.
+     * @return self The singleton instance of the cache.
      * @throws CacheException If there is an issue initializing the cache.
      * @throws InvalidArgumentException If an invalid subdirectory is provided for the filesystem cache.
      */
     abstract public static function getInstance(
         ?string $storage = null, 
         ?string $idOrSubfolder = null
-    ): static;
- 
+    ): self;
+
     /**
      * Get the cache storage name.
      * 
@@ -170,6 +171,19 @@ abstract class BaseCache
     abstract public function setStorage(string $storage): self;
 
     /**
+     * Set cache storage sub directory path to store cache items.
+     * 
+     * @param string $subfolder The cache storage root directory.
+     * 
+     * @return self Return instance of file cache class.
+     * @throws InvalidArgumentException Throws if invalid sub directory is provided.
+     */
+    public function setFolder(string $subfolder): self
+    {
+        return $this;
+    }
+
+    /**
      * Generate hash storage name for cache.
      * This method will generate a hash value of storage name which is same as the one used in storing cache items.
      * 
@@ -185,7 +199,6 @@ abstract class BaseCache
         }
 
         $storage = preg_replace('/[^a-zA-Z0-9-_]/', '-', $storage);
-        //return hash('sha256', $storage);
         return md5($storage);
     }
 

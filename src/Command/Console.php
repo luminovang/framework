@@ -22,6 +22,7 @@ use \Luminova\Command\Novakit\Builder;
 use \Luminova\Command\Novakit\Context;
 use \Luminova\Command\Novakit\Commands;
 use \Luminova\Command\Novakit\CronJobs;
+use \Luminova\Command\Novakit\Logs;
 
 final class Console 
 {
@@ -94,12 +95,18 @@ final class Console
             'generate:key','generate:sitemap','env:add','env:remove' => System::class,
             'build:project' => Builder::class,
             'context' => Context::class,
+            'log' => Logs::class,
             'cron:create', 'cron:run' => CronJobs::class,
             default => ''
         };
 
         if ($newCommand === '') {
-            return $terminal::oops($command);
+            $terminal::oops($command);
+            if(($suggest = Commands::suggest($command)) !== ''){
+                $terminal->write($suggest);
+            }
+            
+            return STATUS_ERROR;
         } 
 
         if($terminal::isHelp($options['options'])){

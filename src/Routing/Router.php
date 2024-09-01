@@ -10,12 +10,13 @@
 namespace Luminova\Routing;
 
 use \App\Application;
+use \App\Config\Template;
 use \Luminova\Http\Header;
 use \Luminova\Command\Terminal;
 use \Luminova\Routing\Prefix;
 use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseCommand;
-use \Luminova\Base\BaseApplication;
+use \Luminova\Core\CoreApplication;
 use \Luminova\Attributes\Generator;
 use \Luminova\Base\BaseViewController;
 use \Luminova\Base\BaseController;
@@ -142,16 +143,16 @@ final class Router
     private static array $commands = [];
 
     /**
-     * @var BaseApplication|null $application 
+     * @var CoreApplication|null $application 
     */
-    private static ?BaseApplication $application = null;
+    private static ?CoreApplication $application = null;
 
     /**
      * Initialize router class.
      * 
-     * @param BaseApplication $application Instance of application class.
+     * @param CoreApplication $application Instance of application class.
     */
-    public function __construct(BaseApplication $application)
+    public function __construct(CoreApplication $application)
     {
         self::$application = $application;
         Foundation::profiling('start');
@@ -169,17 +170,18 @@ final class Router
      *  - Closure|string $callback Handle callback for router.
      * 
      * @return mixed Return value of method.
-     * @throws RouterException If method does not exist.
+     * @throws RouterException Throw if method does not exist.
     */
     public function __call(string $name, array $arguments): mixed
     {
         $method = strtoupper($name);
 
         if ($method !== 'CLI' && isset(self::$httpMethods[$method])) {
-            return $this->capture($method, ...$arguments);
+            $this->capture($method, ...$arguments);
+            return null;
         }
 
-        RouterException::throwWith('no_method', E_ERROR, [
+        RouterException::throwWith('no_method', RouterException::INVALID_REQUEST_METHOD, [
             self::class,
             $name,
         ]);
@@ -242,7 +244,7 @@ final class Router
 
         // When using default context manager.
         if($contexts === []){
-            RouterException::throwWith('no_context', E_ERROR);
+            RouterException::throwWith('no_context', RouterException::RUNTIME_ERROR);
         }
         
         if (isset(self::$httpMethods[self::$method])) {
@@ -292,7 +294,7 @@ final class Router
     public function middleware(string $methods, string $pattern, Closure|string $callback): void
     {
         if ($methods === '') {
-            RouterException::throwWith('empty_argument', 0, [
+            RouterException::throwWith('empty_argument', RouterException::INVALID_ARGUMENTS, [
                 '$methods'
             ]);
             return;
@@ -314,7 +316,7 @@ final class Router
     public function after(string $methods, string $pattern, Closure|string $callback): void
     {
         if ($methods === '') {
-            RouterException::throwWith('empty_argument', 0, [
+            RouterException::throwWith('empty_argument', RouterException::INVALID_ARGUMENTS, [
                 '$methods'
             ]);
             return;
@@ -336,7 +338,7 @@ final class Router
     public function capture(string $methods, string $pattern, Closure|string $callback): void
     {
         if ($methods === '') {
-            RouterException::throwWith('empty_argument', 0, [
+            RouterException::throwWith('empty_argument', RouterException::INVALID_ARGUMENTS, [
                '$methods'
             ]);
             return;
@@ -455,7 +457,7 @@ final class Router
     public function addNamespace(string $namespace): void
     {
         if($namespace === '') {
-            RouterException::throwWith('empty_argument', 0, [
+            RouterException::throwWith('empty_argument', RouterException::INVALID_ARGUMENTS, [
                 '$namespace'
             ]);
 
@@ -465,7 +467,7 @@ final class Router
         $namespace = '\\' . trim($namespace, '\\') . '\\';
 
         if(!str_starts_with($namespace, '\\App\\Controllers\\')) {
-            RouterException::throwWith('invalid_namespace');
+            RouterException::throwWith('invalid_namespace', RouterException::NOT_ALLOWED);
             return;
         }
 
@@ -593,7 +595,7 @@ final class Router
      *
      * @param string $context Route context name.
      * @param Router $router  Make router instance available in route.
-     * @param BaseApplication $app Make application instance available in route.
+     * @param CoreApplication $app Make application instance available in route.
      * 
      * @return void
      * @throws RouterException
@@ -601,7 +603,7 @@ final class Router
     private static function bootContext(
         string $context, 
         Router $router, 
-        BaseApplication $app
+        CoreApplication $app
     ): void 
     {
         $__lmv_context = APP_ROOT . 'routes' . DIRECTORY_SEPARATOR . $context . '.php';
@@ -984,9 +986,10 @@ final class Router
 
         // Supported extension types to match.
         $types = env('page.caching.statics', false);
-
+        static $cachePath = null;
         if ($types && $types !== '' && preg_match('/\.(' . $types . ')$/i', self::$uri, $matches)) {
-            $cache = (new ViewCache(0, root('writeable/caches/default')))->setKey(Foundation::cacheKey());
+            $cachePath ??= root(rtrim((new Template())->cacheFolder, TRIM_DS) . '/default/');
+            $cache = (new ViewCache(0, $cachePath))->setKey(Foundation::cacheKey());
 
             // If expiration return mismatched int code 404 ignore and do not try to replace to actual url.
             $expired = $cache->expired($matches[1]);
@@ -1112,7 +1115,7 @@ final class Router
             $caller = (($caller instanceof ReflectionMethod) ? $caller : new ReflectionFunction($caller));
 
             if ($caller->getNumberOfParameters() === 0 && ($found = count($arguments)) > 0) {
-                RouterException::throwWith('bad_method', E_COMPILE_ERROR, [
+                RouterException::throwWith('bad_method', RouterException::BAD_METHOD_CALL, [
                     ($caller->isClosure() ? $caller->getName() : $caller->getDeclaringClass()->getName() . '->' . $caller->getName()),
                     $found,
                     filter_paths($caller->getFileName()),
@@ -1231,7 +1234,7 @@ final class Router
     ): bool 
     {
         if ($className === '') {
-            RouterException::throwWith('invalid_class', -1, [
+            RouterException::throwWith('invalid_class', RouterException::CLASS_NOT_FOUND, [
                 $className
             ]);
             return false;
@@ -1245,7 +1248,7 @@ final class Router
                 $class->isSubclassOf(BaseViewController::class) ||
                 $class->isSubclassOf(BaseController::class) ||
                 $class->implementsInterface(RouterInterface::class)))) {
-                RouterException::throwWith('invalid_controller', 1, [
+                RouterException::throwWith('invalid_controller', RouterException::INVALID_CONTROLLER, [
                     $className
                 ]);
                 return false;
@@ -1276,16 +1279,15 @@ final class Router
                 return status_code($result, false);
             }
         } catch (ReflectionException $e) {
-            if($e->getCode() === 1){
-                throw new RouterException($e->getMessage(), 1, $e);
+            if($e->getCode() === RouterException::INVALID_CONTROLLER){
+                throw new RouterException($e->getMessage(), $e->getCode(), $e);
             }
 
             RouterException::throwException($e->getMessage(), $e->getCode(), $e);
-
             return false;
         }
 
-        RouterException::throwWith('invalid_method', 1, [$method]);
+        RouterException::throwWith('invalid_method', RouterException::INVALID_METHOD, [$method]);
         return false;
     }
 
@@ -1485,12 +1487,14 @@ final class Router
             'view' => '',
             'options' => [],
         ];
-       
-        if (isset($_SERVER['argv'][2])) {
-            $result = self::$term->extract(array_slice($_SERVER['argv'], 2), true);
-            $views['view'] = '/' . implode('/', $result['arguments']);
-            $views['options'] = $result['options'];
+
+        if (!isset($_SERVER['argv'][2])) {
+            return $views;
         }
+
+        $result = self::$term->extract(array_slice($_SERVER['argv'], 2), true);
+        $views['view'] = '/' . implode('/', $result['arguments']);
+        $views['options'] = $result['options'];
 
         return $views;
     }

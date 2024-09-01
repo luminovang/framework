@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework
+ * Luminova Framework CLI Terminal class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -10,9 +10,9 @@
 namespace Luminova\Command;
 
 use \Luminova\Application\Foundation;
-use \Luminova\Command\Colors;
 use \Luminova\Command\Console;
-use \Luminova\Command\TextUtils;
+use \Luminova\Command\Utils\Text;
+use \Luminova\Command\Utils\Color;
 use \Luminova\Security\Validation;
 use \Luminova\Command\Novakit\Commands;
 use \Luminova\Exceptions\InvalidArgumentException;
@@ -23,30 +23,30 @@ class Terminal
     /**
      * Height of terminal visible window
      *
-     * @var int|null $height
+     * @var int|null $windowHeight
     */
-    protected static ?int $height = null;
+    protected static ?int $windowHeight = null;
 
     /**
      * Width of terminal visible window
      *
-     * @var int|null $width
+     * @var int|null $windowWidth
     */
-    protected static ?int $width = null;
+    protected static ?int $windowWidth = null;
 
     /**
      * Is the readline library on the system.
      *
-     * @var bool $isReadline
+     * @var bool $isReadLine
      */
-    public static bool $isReadline = false;
+    public static bool $isReadLine = false;
 
     /**
      * Write in a new line enabled.
      *
-     * @var bool $isNewline
+     * @var bool $isNewLine
     */
-    protected static bool $isNewline = false;
+    protected static bool $isNewLine = false;
 
     /**
      * Is colored text supported.
@@ -71,110 +71,158 @@ class Terminal
         defined('STDIN')  || define('STDIN', 'php://stdin');
         defined('STDERR') || define('STDERR', 'php://stderr');
         
-        static::$isReadline = extension_loaded('readline');
+        static::$isReadLine = extension_loaded('readline');
         static::$commandsOptions  = [];
         static::$isColored = static::isColorSupported(STDOUT);
     }
 
     /**
-     * Show a waiting countdown, intentionally freeze screen while waiting.
-     * Or ask user for a key press to continue.
+     * Displays a countdown timer in the console, with a custom message pattern, 
+     * or prompts the user to press any key to continue.
      *
-     * @param int  $seconds Number of seconds for waiting.
-     * @param bool $countdown Show waiting countdown.
-     * @param string $message Waiting message instruction.
+     * @param int $seconds The number of seconds to wait before continuing (default: 0 seconds).
+     * @param string $pattern A custom message pattern to display during the waiting countdown (default: `Waiting...(%d seconds)`). 
+     *                        Use '%d' as a placeholder for the remaining seconds.
      *
      * @return void
-     * 
-     * Examples:
-     * 
-     * @example $this->waiting(20, true); show waiting for 20 seconds with countdown message.
-     * @example $this->waiting(0, false); show waiting message till user press any key.
-     * @example $this->waiting(20, false); show waiting for 20 seconds with a freezed screen.
+     * > **Note:** 
+     * > During count down, the CLI screen will be wiped out of any output.
+     * > If number of seconds is less than 1, it will prompt message `Press any key to continue...`.
      */
     public static final function waiting(
-        int $seconds, 
-        bool $countdown = false, 
-        string $message = 'Press any key to continue...'
+        int $seconds = 0, 
+        string $pattern = 'Waiting...(%d seconds)'
     ): void
     {
         if ($seconds <= 0) {
-            if (!$countdown) {
-                static::writeln($message);
-                static::input();
+            static::writeln('Press any key to continue...');
+            static::input();
+            return;
+        }
+
+        for ($time = $seconds; $time > 0; $time--) {
+            static::fwrite(sprintf("\r{$pattern}", $time));
+            sleep(1);
+            static::clear();
+        }
+        static::fwrite(sprintf("\r{$pattern}", 0));
+    }
+
+    /**
+     * Freeze and pause execution for a specified number of seconds, optionally clear the screen and the user input during the freeze.
+     *
+     * @param int $seconds The number of seconds to freeze execution (default: 10).
+     * @param bool $clear Weather to clear the console screen and input while freezing (default: false).
+     *
+     * @return void
+     */
+    public static final function freeze(int $seconds = 10, bool $clear = true): void
+    {
+        if ($clear) {
+            static::clear();
+            for ($time = 0; $time < $seconds; $time++) {
+                sleep(1);
+                static::clear();
+                flush();
             }
             return;
         }
 
-        if ($countdown) {
-            for ($time = $seconds; $time > 0; $time--) {
-                static::fwrite("Waiting... ($time seconds) "  . PHP_EOL);
-                static::clear();
-                sleep(1);
-            }
-            static::clear();
-            static::writeln("Waiting... (0 seconds)"  . PHP_EOL);
-        } else {
-            sleep($seconds);
+        sleep($seconds);
+    }
+
+    /**
+     * Displays a rotating spinner animation in the CLI.
+     *
+     * @param array $spinners An array of characters representing each frame of the spinner animation. 
+     *                        Default is ['-', '\\', '|', '/'].
+     * @param int $spins The number of full rotations (i.e., cycles through the spinner array) to display (default: 10).
+     * @param int $sleep The delay in microseconds between each frame of the spinner animation to control animation speed, default is `100,000 (0.1 seconds)`.
+     * @param Closure|bool|null $onComplete A callback or boolean indicating what should happen after the spinner finishes (default: null).
+     *                                  If true, it outputs "Done!\n". If a Closure is provided, it will be executed.
+     *
+     * @return void
+     */
+    public static final function spinner(
+        array $spinners = ['-', '\\', '|', '/'], 
+        int $spins = 10, 
+        int $sleep = 100000, 
+        Closure|bool|null $onComplete = null
+    ): void
+    {
+        $count = count($spinners);
+        $iterations = $count * $spins;
+    
+        for ($i = 0; $i < $iterations; $i++) {
+            $current = $spinners[$i % $count];
+            static::fwrite("\r$current");
+            flush();
+            usleep($sleep);
+        }
+    
+        static::fwrite("\r"); 
+        if ($onComplete === true) {
+            static::fwrite("Done!\n");
+        } elseif ($onComplete instanceof Closure) {
+            $onComplete();
         }
     }
 
     /**
-     * Displays a progress bar on the CLI, this method should be called in a loop.
+     * Displays a progress bar in the console for a given number of steps.
      *
-     * @param int|bool $progressLine Current loop index number or false to terminate the progress bar.
-     * @param int|null $progressCount Total count of progress bar to show or null to on termination.
-     * @param bool $beep Weather to beep when progress is completed (default: true).
-     *
-     * @return float|int Return the progress step percentage.
+     * @param int|false $step The current step in the progress, set to false to indicate completion.
+     * @param int $steps The total number of steps for the progress.
+     * @param bool $beep Whether to beep when the progress is complete (default: true).
      * 
-     * Examples:
-     * 
-     * @example $this->progress(1, 10, true); Show progress bar line with beep when completed.
-     * @example $this->progress(1, 10, false); Show progress bar line without beep when completed.
-    */
-    public static final function progress(int|bool $progressLine = 1, ?int $progressCount = 10, bool $beep = true): int|float
+     * @return float|int Return the percentage of completion between (0-100) or 100 if completed.
+     */
+    public static final function progress(
+        int|bool $step = 1, 
+        int $steps = 10, 
+        bool $beep = true
+    ): float|int
     {
-        if ($progressLine === false || $progressCount === null) {
-            if($beep){
-                static::beeps(1);
-            }
-            return 100;
+        $percent = 100;
+        if ($step === false || $step >= $steps) {
+            static::fwrite("\r\033[32m[##########] 100%\033[0m\n");
+        }else{
+            $step = max(0, $step);
+            $steps = max(1, $steps);
+            $percent = min(100, max(0, ($step / $steps) * 100));
+            $barWidth = (int) round($percent / 10);
+            $progressBar = '[' . str_repeat('#', $barWidth) . str_repeat('.', 10 - $barWidth) . ']';
+            $progressText = sprintf(' %3d%%', $percent);
+            static::fwrite("\r\033[32m" . $progressBar . "\033[0m" . $progressText);
         }
 
-        $progressLine = max(0, $progressLine);
-        $progressCount = max(1, $progressCount);
-        $percent = min(100, max(0, ($progressLine / $progressCount) * 100));
-        $barWidth = (int) round($percent / 10);
-        $progressBar = '[' . str_repeat('#', $barWidth) . str_repeat('.', 10 - $barWidth) . ']';
-        $progressText = sprintf(' %3d%% Complete', $percent);
-
-        static::fwrite("\033[32m" . $progressBar . "\033[0m" . $progressText . PHP_EOL);
-
-        if ($progressLine <= $progressCount) {
-            static::clear();
+        flush();
+        if($beep && $percent >= 100){
+            static::beeps(1);
         }
-
+        
         return $percent;
     }
 
     /**
-     * Displays a progress bar on the CLI with an optional callback functions.
-     * This method shouldn't be called in a loop, pass your function to execute in `$stepCallback` Closure function.
-     * 
-     * This is useful when you just want to display a progress bar and execute next method when it finish counting.
+     * Displays a progress bar on the console and executes optional callbacks at each step and upon completion.
      *
-     * @param int $limit Total count of progress bar to show.
-     * @param Closure|null $onFinish(): void Execute callback when progress finished.
-     * @param Closure|null $onProgress(int $progress):void Execute callback on each progress step.
-     * @param bool $beep Weather to beep when progress is completed (default: true).
+     * This method is designed to be called without a loop, as it handles the iteration internally.
+     * It is useful for showing progress while performing a task and executing subsequent actions when complete.
      *
+     * @param int $limit The total number of progress steps to display.
+     * @param Closure|null $onFinish A callback to execute when the progress reaches 100% (default: null).
+     * @param Closure|null $onProgress A callback to execute at each progress step (default: null). 
+     * @param bool $beep Indicates whether to emit a beep sound upon completion. Defaults to true.
+     *
+     * Progress Callback Signature:
+     * Receiving the current progress percentage.
+     * ```php
+     * function(float|int $step): void {
+     * }
+     * ```
      * @return void
-     * 
-     * Examples:
-     * 
-     * @example $this->watcher(100, Closure, Closure, true) Show 100 lines of progress bar with a callbacks and beep on finish.
-    */
+     */
     public static final function watcher(
         int $limit, 
         ?Closure $onFinish = null, 
@@ -182,29 +230,24 @@ class Terminal
         bool $beep = true
     ): void 
     {
-        $progress = 0;
-    
-        for ($step = 1; $step <= $limit; $step++) {
-            if ($progress < 100) {
-                $progress = static::progress($step, $limit);
-                if ($onProgress instanceof Closure) {
-                    $onProgress($progress);
-                }
+        for ($step = 0; $step <= $limit; $step++) {
+            $progress = static::progress($step, $limit, $beep);
+
+            if ($onProgress instanceof Closure) {
+                $onProgress($progress);
             }
-    
+
             usleep(100000); 
             if ($progress >= 100) {
                 break;
             }
         }
 
-        static::progress(false, null, $beep);
         if ($onFinish instanceof Closure) {
-            static::newLine();
             $onFinish();
         }
     }
-  
+
     /**
      * Beep or make a bell sound for a certain number of time.
      * 
@@ -224,44 +267,27 @@ class Terminal
      *
      * @param string $message The message to prompt.
      * @param array $options  Optional array options to prompt for selection.
-     * @param string|null $validations Optional validation rules to ensure only the listed options are allowed.
+     * @param string|false|null $validations Optional validation rules to ensure only the listed options are allowed.
      *                      If null the options values will be used for validation `required|in_array(...values)`.
-     *                      To disable validation pass `none` as the value.
+     *                      To disable validation pass `false` as the value.
      * @param bool $silent Weather to print validation failure message if wrong option was selected (default: false).
      *
-     * @return string Return user input value.
+     * @return string Return the client input value.
      * 
-     * @example Prompt examples:
-     *
-     * Prompt user to enter their name:
-     * 
-     * ```
-     * $name = $this->prompt('What is your name?');
-     * ```
-     * Prompt user to choose any option and specify each option color in array key:
-     * 
-     * ```
-     * $color = $this->prompt('Are you sure you want to continue?', ['green' => 'YES', 'red' => 'NO']);
-     * ```
-     * 
-     * Prompt user to select their gender or skip, no colored text will be used:
-     * 
-     * ```
-     * $color = $this->prompt('What is your gender?', ['male','female'], 'none');
-     * ```
-     * 
-     * Prompt user to choose any option with a custom validation to pass.
-     * ```
-     * $email = $this->prompt('Are you sure you want to continue?', ['YES', 'NO'], 'required|in_array(YES,NO)');
-     * ```
-     * @see https://luminova.ng/docs/0.0.0/security/validation
+     * @see https://luminova.ng/docs/0.0.0/security/validation - Read the input validation documentation.
     */
-    public static final function prompt(string $message, array $options = [], ?string $validations = null, bool $silent = false): string
+    public static final function prompt(
+        string $message, 
+        array $options = [], 
+        string|bool|null $validations = null, 
+        bool $silent = false
+    ): string
     {
         $default = '';
         $placeholder = '';
         $textOptions = [];
-        
+        $validations = ($validations === false) ? 'none' : $validations;
+
         if($options !== []){
             foreach($options as $color => $text){
                 $textOptions[] = $text;
@@ -279,7 +305,7 @@ class Terminal
         if ($validationRules && str_contains($validationRules, 'required')) {
             $default = '';
         }
-
+        
         do {
             if(!$silent){
                 if (isset($input)) {
@@ -305,20 +331,8 @@ class Terminal
      * @param array  $options The list of options to prompt (e.g, ['male' => 'Male', 'female' => 'Female] or ['male', 'female']).
      * @param bool $required Require user to choose any option else the first array will be return as default.
      *
-     * @return array<string|int,mixed> $options The selected array keys and values.
+     * @return array<string|int,mixed> Return the client selected array keys and values.
      * @throws InvalidArgumentException Throw if options is not specified or an empty array.
-     * 
-     * @example Examples of chooser:
-     *
-     *  Prompt multiple chooser, using PHP as default if user didn't select anything before hit return.
-     * 
-     * ```
-     * $array = $this->chooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML']);
-     * ```
-     * Prompt multiple chooser, persisting that user must choose an option.
-     * ```
-     * $array = $this->chooser('Choose your programming languages?', ['PHP', 'JAVA', 'SWIFT', 'JS', 'SQL', 'CSS', 'HTML'], true); 
-     * ```
     */
     public static final function chooser(string $text, array $options, bool $required = false): array
     {
@@ -367,7 +381,7 @@ class Terminal
      * @param int $retry The number of retry attempts if the user provides an empty password (default: 3).
      * @param int $timeout The number of seconds to wait for user input before displaying an error message (default: 0).
      *
-     * @return string Return the entered password.
+     * @return string Return the client inputted password.
      */
     public static final function password(
         string $message = 'Enter Password', 
@@ -477,6 +491,24 @@ class Terminal
     }
 
     /**
+     * Terminates the script execution with an optional message and status code.
+     *
+     * @param string|null $message  Optional message to display before termination.
+     * @param int $exitCode  An exit status code to terminate the script with (default: STATUS_SUCCESS).
+     *
+     * @return never
+     */
+    final public static function terminate(?string $message = null, int $exitCode = STATUS_SUCCESS): void
+    {
+        if ($message !== null) {
+            static::writeln($message);
+        }
+
+        exit($exitCode);
+    }
+
+
+    /**
      * Execute a callback function after a specified timeout when no input or output is received.
      *
      * @param Closure $callback The callback function to execute on timeout.
@@ -510,7 +542,7 @@ class Terminal
      * 
      * @param string $command The command to execute.
      * 
-     * @return array|false The output of the command as an array of lines, or false on failure.
+     * @return array|false Return the output of executed command as an array of lines, or false on failure.
      */
     public final function execute(string $command): array|bool
     {
@@ -530,12 +562,16 @@ class Terminal
      * Executes a command via `exec` and redirect error output to null based on the platform (Windows or Unix-like).
      * 
      * @param string $command The command to execute.
-     * @param array &$output Output lines of the executed command (default: []).
-     * @param int &$result_code The exit status of the executed command (default: STATUS_ERROR).
+     * @param array &$output Output lines of the executed command (default: `[]`).
+     * @param int &$result_code The exit status of the executed command, passed by reference (default: `STATUS_ERROR`).
      * 
-     * @return string|bool The last line of the command output, or false on failure.
+     * @return string|false Return the last line of the command output, or false on failure.
      */
-    public static function _exec(string $command, array &$output = [], int &$result_code = STATUS_ERROR): string|bool
+    public static function _exec(
+        string $command, 
+        array &$output = [], 
+        int &$result_code = STATUS_ERROR
+    ): string|bool
     {
         $devNull = is_platform('windows') ? '2>NUL' : '2>/dev/null';
         return exec("{$command} {$devNull}", $output, $result_code);
@@ -547,7 +583,7 @@ class Terminal
      * 
      * @param string $command The command to execute.
      * 
-     * @return string|bool|null The output of the command, or null on error.
+     * @return string|false|null Return the output of the command, or null on error.
      */
     public static function _shell(string $command): string|bool|null
     {
@@ -564,15 +600,10 @@ class Terminal
      */
     public static final function visibility(bool $visibility = true): bool
     {
-        if (is_platform('windows')) {
-            // Windows command for toggling input visibility
-            $command = ($visibility) ? 'echo on' : 'echo off';
-        } else {
-            // Unix-based systems command for toggling input visibility
-            $command = ($visibility) ? 'stty echo' : 'stty -echo';
-        }
+        $command = is_platform('windows') 
+            ? ($visibility ? 'echo on' : 'echo off')
+            : ($visibility ? 'stty echo' : 'stty -echo');
 
-        // Execute the command and return whether it was successful
         return static::_shell($command) !== null;
     }
 
@@ -607,7 +638,7 @@ class Terminal
     private static function writeOptions(array $options, int $max): void
     {
         foreach ($options as $key => $value) {
-            $name = TextUtils::padEnd('  [' . $key . ']  ', $max, ' ');
+            $name = Text::padEnd('  [' . $key . ']  ', $max, ' ');
             static::writeln(static::color($name, 'green') . static::wrap($value['value'], 125, $max));
         }
         static::newLine();
@@ -617,14 +648,14 @@ class Terminal
      * Wrap a text with padding left and width to a maximum number.
      * 
      * @param string|null $text The text to wrap.
-     * @param int $max The maximum width to use.
-     * @param int $leftPadding The left padding to apply.
+     * @param int $max The maximum width to use for wrapping.
+     * @param int $leftPadding Additional left padding to apply.
      * 
      * @return string Return wrapped text with padding left and width.
     */
     public static final function wrap(?string $text = null, int $max = 0, int $leftPadding = 0): string
     {
-        if ($text === null || $text === '') {
+        if (!$text) {
             return '';
         }
         $max = min($max, static::getWidth());
@@ -655,12 +686,12 @@ class Terminal
         $padding = (int) min($width, $padding);
 
         $text = static::wrap($text, $padding);
-        $largest = TextUtils::largest($text)[1];
+        $largest = Text::largest($text)[1];
         $lines = explode(PHP_EOL, $text);
         $text = str_repeat(' ', $largest + 2) . PHP_EOL;
 
         foreach ($lines as $line) {
-            $length = max(0, $largest - TextUtils::strlen($line));
+            $length = max(0, $largest - Text::strlen($line));
             $text .= ' ' . $line . str_repeat(' ', $length) . ' '  . PHP_EOL;
         }
     
@@ -676,11 +707,11 @@ class Terminal
     */
     public static final function getWidth(int $default = 80): int
     {
-        if (static::$width === null) {
+        if (static::$windowWidth === null) {
             self::calculateVisibleWindow();
         }
 
-        return static::$width ?: $default;
+        return static::$windowWidth ?: $default;
     }
 
     /**
@@ -692,11 +723,11 @@ class Terminal
     */
     public static final function getHeight(int $default = 24): int
     {
-        if (static::$height === null) {
+        if (static::$windowHeight === null) {
             self::calculateVisibleWindow();
         }
 
-        return static::$height ?: $default;
+        return static::$windowHeight ?: $default;
     }
 
     /**
@@ -706,7 +737,7 @@ class Terminal
     */
     private static function calculateVisibleWindow(): void
     {
-        if (static::$height !== null && static::$width !== null) {
+        if (static::$windowHeight !== null && static::$windowWidth !== null) {
             return;
         }
 
@@ -716,22 +747,22 @@ class Terminal
 
             if ($size) {
                 $dimensions = explode("\n", trim($size));
-                static::$height = (int) $dimensions[0];
-                static::$width = (int) $dimensions[1];
+                static::$windowHeight = (int) $dimensions[0];
+                static::$windowWidth = (int) $dimensions[1];
             }
         } else {
             // Fallback for Unix-like systems
             $size = static::_exec('stty size');
             if ($size && preg_match('/(\d+)\s+(\d+)/', $size, $matches)) {
-                static::$height = (int) $matches[1];
-                static::$width  = (int) $matches[2];
+                static::$windowHeight = (int) $matches[1];
+                static::$windowWidth  = (int) $matches[2];
             }
         }
 
         // As a fallback, if still not set, default to standard size
-        if (static::$height === null || static::$width === null) {
-            static::$height = (int) static::_exec('tput lines');
-            static::$width  = (int) static::_exec('tput cols');
+        if (static::$windowHeight === null || static::$windowWidth === null) {
+            static::$windowHeight = (int) static::_exec('tput lines');
+            static::$windowWidth  = (int) static::_exec('tput cols');
         }
     }
 
@@ -739,14 +770,14 @@ class Terminal
      * Get user input from the shell, after requesting for user to type or select an option.
      *
      * @param string|null $prompt Optional message to prompt the user after they have typed.
-     * @param bool $useFopen Optional use file-read, this opens `STDIN` stream in read-only binary mode (default: false). 
+     * @param bool $useFopen Weather to use `fopen`, this opens `STDIN` stream in read-only binary mode (default: false). 
      *                      This creates a new file resource.
      * 
      * @return string Return user input string.
     */
     public static final function input(?string $prompt = null, bool $useFopen = false): string
     {
-        if (static::$isReadline && ENVIRONMENT !== 'testing') {
+        if (static::$isReadLine && ENVIRONMENT !== 'testing') {
             return @readline($prompt);
         }
 
@@ -785,7 +816,7 @@ class Terminal
     }
 
     /**
-     * Display error text on CLI .
+     * Display card error message using red background and white text as default.
      *
      * @param string $text The text to output.
      * @param string|null $foreground Foreground color name.
@@ -793,7 +824,11 @@ class Terminal
      * 
      * @return void
     */
-    public static final function error(string $text, string|null $foreground = 'white', ?string $background = 'red'): void
+    public static final function error(
+        string $text, 
+        string|null $foreground = 'white', 
+        ?string $background = 'red'
+    ): void
     {
         $stdout = static::$isColored;
         static::$isColored = static::isColorSupported(STDERR);
@@ -808,7 +843,7 @@ class Terminal
     }
 
     /**
-     * Display success text on CLI.
+     * Display card success message, using green background and white text as default.
      *
      * @param string $text The text to output.
      * @param string|null $foreground Foreground color name.
@@ -816,7 +851,11 @@ class Terminal
      * 
      * @return void
     */
-    public static final function success(string $text, string|null $foreground = 'white', ?string $background = 'green'): void
+    public static final function success(
+        string $text, 
+        string|null $foreground = 'white', 
+        ?string $background = 'green'
+    ): void
     {
         $stdout = static::$isColored;
         static::$isColored = static::isColorSupported(STDERR);
@@ -831,7 +870,7 @@ class Terminal
     }
 
     /**
-     * Print text to CLI with newline.
+     * Print text to in a newline using stream `STDOUT`.
      * 
      * @param string $text The text to write.
      * @param string|null $foreground Optional foreground color name.
@@ -839,22 +878,26 @@ class Terminal
      *
      * @return void
     */
-    public static final function writeln(string $text = '', ?string $foreground = null, ?string $background = null): void
+    public static final function writeln(
+        string $text = '', 
+        ?string $foreground = null, 
+        ?string $background = null
+    ): void
     {
         if ($foreground || $background) {
             $text = static::color($text, $foreground, $background);
         }
 
-        if (!static::$isNewline) {
+        if (!static::$isNewLine) {
             $text = PHP_EOL . $text;
-            static::$isNewline = true;
+            static::$isNewLine = true;
         }
 
         static::fwrite($text . PHP_EOL);
     }
 
     /**
-     * Print text to CLI without a newline.
+     * Print text to without a newline applied using stream `STDOUT`.
      * 
      * @param string $text The text to write.
      * @param string|null $foreground Optional foreground color name.
@@ -862,19 +905,23 @@ class Terminal
      *
      * @return void
     */
-    public static final function write(string $text = '', ?string $foreground = null, ?string $background = null): void
+    public static final function write(
+        string $text = '', 
+        ?string $foreground = null, 
+        ?string $background = null
+    ): void
     {
      
         if ($foreground || $background) {
             $text = static::color($text, $foreground, $background);
         }
 
-        static::$isNewline = false;
+        static::$isNewLine = false;
         static::fwrite($text);
     }
 
     /**
-     * Print a message to CLI using echo.
+     * Print a message to using using `echo`.
      *
      * @param string $text The text to print.
      * @param string|null $foreground Optional foreground color name.
@@ -882,7 +929,11 @@ class Terminal
      *
      * @return void
     */
-    public static final function print(string $text, ?string $foreground = null, ?string $background = null): void
+    public static final function print(
+        string $text, 
+        ?string $foreground = null, 
+        ?string $background = null
+    ): void
     {
         if ($foreground || $background) {
             $text = static::color($text, $foreground, $background);
@@ -892,10 +943,11 @@ class Terminal
     }
 
     /**
-     * Write text to resource handler or output text if not in cli mode.
+     * Write text to stream resource with any handler as needed,
+     * If called in non-command context, it will output text using `echo`.
      *
      * @param string $text The text to output or write.
-     * @param resource $handle The resource handler to use (e.g. STDOUT, STDIN, STDERR).
+     * @param resource $handle The resource handler to use (e.g. `STDOUT`, `STDIN`, `STDERR` etc...).
      *
      * @return void
     */
@@ -910,7 +962,7 @@ class Terminal
     }
 
     /**
-     * Clears the screen of output.
+     * Clears all the output in console screen.
      *
      * @return void
     */
@@ -932,14 +984,14 @@ class Terminal
     }
 
     /**
-     * Returns the given text with the correct color codes for a foreground and optionally a background color.
+     * Apply color and text formatting to the given text if color is supported.
      *
      * @param string $text The text to apply color to.
      * @param string|null $foreground The foreground color name.
      * @param string|null $background Optional background color name.
      * @param int|null $format Optionally apply text formatting style.
      *
-     * @return string A colored text if color is supported
+     * @return string Return colored text if color is supported, otherwise return default text.
     */
     public static final function color(
         string $text, 
@@ -952,13 +1004,13 @@ class Terminal
             return $text;
         }
 
-        return Colors::apply($text, $format, $foreground, $background);
+        return Color::apply($text, $format, $foreground, $background);
     }
 
     /**
-     * Create and print new lines based on count passed.
+     * Print new lines based on specified count.
      *
-     * @param int $count The count of new lines to print.
+     * @param int $count The number of new lines to print.
      * 
      * @return void 
     */
@@ -970,10 +1022,10 @@ class Terminal
     }
 
     /**
-     * Oops! Show an error message for unknown command.
+     * Oops! command, show an error message for unknown executed command.
      *
-     * @param string $command The executed command.
-     * @param string|null $color Text color for the command.
+     * @param string $command The command that was executed.
+     * @param string|null $color Text color for the command (default: red).
      * 
      * @return int Return status code STATUS_ERROR.
     */
@@ -985,7 +1037,7 @@ class Terminal
     }
 
     /**
-     * Prints a formatted table header and rows to the console.
+     * Generate and print a formatted table header and rows to the console.
      *
      * @param array<int,string> $headers The headers for the table columns.
      * @param array<string,string> $rows The rows of data to display in the table.
@@ -1005,7 +1057,7 @@ class Terminal
         $colorLength = 0;
 
         if($headerColor !== null){
-            $colorLength = Colors::length(null, $headerColor, null) + $headerPadding;
+            $colorLength = Color::length(null, $headerColor, null) + $headerPadding;
         }
 
         $columnWidths = array_map(function($header) use ($rows) {
@@ -1061,7 +1113,8 @@ class Terminal
     }
 
     /**
-     * Register command line queries to make it available using getOptions() etc.
+     * Register command line queries to make it available using `getOptions` etc.
+     * The explain command exposes executed command information making it ready to be accessed withing the class context.
      * 
      * @param array $values The command arguments.
      * 
@@ -1279,11 +1332,11 @@ class Terminal
     }
 
     /**
-     * Returns the command controller class method.
+     * Returns the command controller class method name.
      * 
-     * @return string|null The command controller class method or null.
+     * @return string|null Return the command controller class method or null.
     */
-    public static final function getMethod(): string|null
+    public static final function getMethod(): ?string
     {
         return static::getQuery('classMethod');
     }
@@ -1291,7 +1344,7 @@ class Terminal
     /**
      * Returns the array of options.
      * 
-     * @return array static::$options['options'].
+     * @return array Return array of executed command options.
     */
     public static final function getOptions(): array
     {
@@ -1303,7 +1356,7 @@ class Terminal
      *
      * @param string $name Option key name.
      * 
-     * @return mixed Command option query value.
+     * @return mixed Return command option query value.
     */
     public static final function getQuery(string $name): mixed
     {
@@ -1311,9 +1364,9 @@ class Terminal
     }
 
     /**
-     * Returns the raw array of requested query commands.
+     * Returns the entire command associative that was executed.
      * 
-     * @return array static::$commandsOptions.
+     * @return array Return an associative array of the entire command information
     */
     public static final function getQueries(): array
     {
@@ -1437,7 +1490,7 @@ class Terminal
     }
 
     /**
-     * Print help Used by system only.
+     * Print command help information.
      *
      * @param array|null $helps Pass the command protected properties as an array.
      * @param bool $all Indicate whether you are printing all help commands or not.
@@ -1522,10 +1575,10 @@ class Terminal
 
         foreach($options as $info => $values){
             if(is_string($info)){
-                static::writeln(TextUtils::padStart('', 8 - $minus) . static::color($info, $color));
-                static::writeln(TextUtils::padStart('', 11 - $minus) . $values);
+                static::writeln(Text::padStart('', 8 - $minus) . static::color($info, $color));
+                static::writeln(Text::padStart('', 11 - $minus) . $values);
             }else{
-                static::writeln(TextUtils::padStart('', 8 - $minus) . $values);
+                static::writeln(Text::padStart('', 8 - $minus) . $values);
             }
         }
         static::newLine();

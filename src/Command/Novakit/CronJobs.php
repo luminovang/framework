@@ -219,7 +219,9 @@ class CronJobs extends BaseConsole
         if($task['pingOn' . $event] && isset($instance['pingOn' . $event])){
             self::$network ??= new Network();
             try{
-                self::$network->get($instance['pingOn' . $event], $task);
+                self::$network->get($instance['pingOn' . $event], [
+                    'query' => $task
+                ]);
                 $logger .= $event ? "Failure ping succeeded\n" : "Completed ping succeeded\n";
             } catch(Exception|AppException $e){
                 $logger .= $event ? "Failure ping failed: " : "Completed ping failed: ";

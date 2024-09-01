@@ -10,118 +10,140 @@
 namespace Luminova\Interface;
 
 use \Luminova\Http\Message\Response;
-use \Luminova\Interface\HttpClientInterface;
+use \Luminova\Interface\NetworkClientInterface;
+use \Luminova\Http\Client\Curl;
 use \GuzzleHttp\Promise\PromiseInterface;
-use \GuzzleHttp\Psr7\Request;
+use \Psr\Http\Client\ClientInterface;
+use \Psr\Http\Message\RequestInterface;
+use \Psr\Http\Message\UriInterface;
+use \Psr\Http\Message\ResponseInterface;
 use \Luminova\Exceptions\Http\RequestException;
 use \Luminova\Exceptions\Http\ConnectException;
 use \Luminova\Exceptions\Http\ClientException;
 use \Luminova\Exceptions\Http\ServerException;
 
-interface NetworkInterface 
+interface NetworkInterface
 {
     /**
-     * Constructor for NetworkInterface.
+     * Initializes the NetworkInterface with an optional HTTP client instance.
      *
-     * @param HttpClientInterface|null $client The HTTP client instance.
-     */
-    public function __construct(?HttpClientInterface $client = null);
-
-    /**
-     * Get the HTTP client instance.
+     * @param NetworkClientInterface<\T>|null $client The HTTP client instance to use for making requests.
+     *                                         If null, a `Curl` client will be used by default.
+     *
+     * This constructor accepts an implementation of the `NetworkClientInterface`. If no client is provided,
+     * the `Curl` client will be instantiated and used by default. The `NetworkClientInterface` must be compatible
+     * with the Luminova framework.
      * 
-     * @return HttpClientInterface The HTTP client instance.
-    */
-    public function getClient(): HttpClientInterface;
+     * Available Clients:
+     * 
+     * - `\Luminova\Http\Client\Curl` - Luminova HTTP CURL client.
+     * - `\Luminova\Http\Client\Guzzle` - Guzzle HTTP client.
+     */
+    public function __construct(?NetworkClientInterface $client = null);
 
     /**
-     * Send a request.
+     * Dynamically calls any method from the client object.
+     * This enables direct invocation of methods from either the `CURL` or `Guzzle` client.
      *
-     * @param string $method The HTTP method (GET, POST, etc.).
-     * @param string $url The URL to send the request to.
-     * @param array $data The request body data.
-     * @param array $headers The request headers.
+     * @param string $method The name of the method to call.
+     * @param array $arguments Optional arguments to pass to the method.
      *
-     * @return Response The response from the request.
-     *
-     * @throws RequestException If there is an error making the request.
-     * @throws ConnectException If there is an error connecting to the server.
-     * @throws ClientException If there is an error on the client side.
-     * @throws ServerException If there is an error on the server side.
+     * @return mixed|Response|ResponseInterface<\T> Returns the result of the method call.
+     * @throws RequestException If an error occurs during the request.
+     * @throws ConnectException If a connection to the server cannot be established.
+     * @throws ClientException If the client encounters a 4xx HTTP error.
+     * @throws ServerException If the server encounters a 5xx HTTP error.
      */
-    public function send(string $method, string $url, array $data = [], array $headers = []): Response;
+    public function __call(string $method, array $arguments): mixed;
 
     /**
-     * Perform a GET request.
+     * Retrieves the current HTTP client instance.
+     * 
+     * This method returns the Luminova `CURL` class object if it is being used; otherwise, it returns the client interface object.
      *
-     * @param string $url The URL to send the request to.
-     * @param array $data The request body data.
-     * @param array $headers The request headers.
-     *
-     * @return Response The response from the request.
-     *
-     * @throws RequestException If there is an error making the request.
-     * @throws ConnectException If there is an error connecting to the server.
-     * @throws ClientException If there is an error on the client side.
-     * @throws ServerException If there is an error on the server side.
+     * @return ClientInterface<\T>|Curl|null Returns the instance of the HTTP client used for requests,
+     * such as `GuzzleHttpClient`, `LuminovaCurlClient`, or any other client that implements the `PSR` ClientInterface.
      */
-    public function get(string $url, array $data = [], array $headers = []): Response;
+    public function getClient(): ClientInterface|Curl|null;
 
     /**
-     * Fetch data using a GET request.
+     * Executes a GET request to the specified URL with optional data and headers.
      *
-     * @param string $url The URL to send the request to.
-     * @param array $headers The request headers.
+     * @param string $url The URL to send the GET request to.
+     * @param array $data The data to be sent in the query string (default: empty array).
+     * @param array $headers An array of headers to include in the request (default: empty array).
      *
-     * @return Response The response from the request.
+     * @return Response|ResponseInterface<\T> Return the server's response to the GET request.
      *
-     * @throws RequestException If there is an error making the request.
-     * @throws ConnectException If there is an error connecting to the server.
-     * @throws ClientException If there is an error on the client side.
-     * @throws ServerException If there is an error on the server side.
+     * @throws RequestException If an error occurs while making the request.
+     * @throws ConnectException If a connection to the server cannot be established.
+     * @throws ClientException If the client encounters an error (4xx HTTP status codes).
+     * @throws ServerException If the server encounters an error (5xx HTTP status codes).
      */
-    public function fetch(string $url, array $headers = []): Response;
+    public function get(string $url, array $options = []): ResponseInterface|Response;
 
     /**
-     * Perform a POST request.
+     * Executes a POST request to the specified URL with the provided data and headers.
      *
-     * @param string $url The URL to send the request to.
-     * @param array $data The request body data.
-     * @param array $headers The request headers.
+     * @param string $url The URL to send the POST request to.
+     * @param array $data The data to be sent in the request body.
+     * @param array $headers An array of headers to include in the request (default: empty array).
      *
-     * @return Response The response from the request.
+     * @return Response|ResponseInterface<\T> Return the server's response to the POST request.
      *
-     * @throws RequestException If there is an error making the request.
-     * @throws ConnectException If there is an error connecting to the server.
-     * @throws ClientException If there is an error on the client side.
-     * @throws ServerException If there is an error on the server side.
+     * @throws RequestException If an error occurs while making the request.
+     * @throws ConnectException If a connection to the server cannot be established.
+     * @throws ClientException If the client encounters an error (4xx HTTP status codes).
+     * @throws ServerException If the server encounters an error (5xx HTTP status codes).
      */
-    public function post(string $url, array $data = [], array $headers = []): Response;
+    public function post(string $url, array $options = []): ResponseInterface|Response;
 
     /**
-     * Perform a request.
+     * Performs an HTTP request with the specified method, URL, data, and headers.
      *
-     * @param string $method The HTTP method (GET, POST, etc.).
-     * @param string $url The URL to send the request to.
-     * @param array $data The request body data.
-     * @param array $headers The request headers.
+     * @param string $method The HTTP method to use (e.g., `GET`, `POST`, `PUT`, `DELETE`).
+     * @param string $url The target URL for the request.
+     * @param array $data The data to be sent in the request body (default: empty array).
+     * @param array $headers An array of headers to include in the request (default: empty array).
      *
-     * @return Response The response from the request.
+     * @return Response|ResponseInterface<\T> Return the response returned by the server.
      *
-     * @throws RequestException If there is an error making the request.
-     * @throws ConnectException If there is an error connecting to the server.
-     * @throws ClientException If there is an error on the client side.
-     * @throws ServerException If there is an error on the server side.
+     * @throws RequestException If an error occurs while making the request.
+     * @throws ConnectException If a connection to the server cannot be established.
+     * @throws ClientException If the client encounters an error (4xx HTTP status codes).
+     * @throws ServerException If the server encounters an error (5xx HTTP status codes).
      */
-    public function request(string $method, string $url, array $data = [], array $headers = []): Response;
+    public function request(string $method, string $url, array $options = []): ResponseInterface|Response;
 
     /**
-     * Send a request asynchronously.
+     * Sends an HTTP request asynchronously using a request object.
      *
-     * @param Request $request The request object to send.
+     * @param RequestInterface<\T> $request The request object that contains all necessary details for the request.
+     * @param array $options Request options to apply to the given
+     *                       request and to the transfer. See \GuzzleHttp\RequestOptions.
      *
-     * @return PromiseInterface A promise that resolves with the response.
-     * @throws RequestException Throws if called method while using Curl client.
+     * @return PromiseInterface<\T> Return a promise that resolves to the server's response.
+     *
+     * @throws RequestException Throws if an error occurs or when called with a method that is incompatible with the underlying HTTP client (e.g., Curl).
      */
-    public function sendAsync(Request $request): PromiseInterface;
+    public function sendAsync(RequestInterface $request, array $options = []): PromiseInterface;
+
+    /**
+     * Sends an HTTP request asynchronously using a UriInterface object or string.
+     *
+     * Use an absolute path to override the base path of the client, or a
+     * relative path to append to the base path of the client. The URL can
+     * contain the query string as well. Use an array to provide a URL
+     * template and additional variables to use in the URL template expansion.
+     *
+     * @param string $method The HTTP method to use.
+     * @param UriInterface|string $uri The request URI object or string (default: '').
+     * @param array $options Additional request options to apply (default: []). 
+     * 
+     * @see \GuzzleHttp\RequestOptions.
+     * 
+     * @return PromiseInterface<\T> Return a promise that resolves to the server's response.
+     * @throws RequestException Throws if an error occurs or when called with a method that is incompatible with the underlying HTTP client (e.g., Curl).
+     */
+    public function requestAsync(string $method, UriInterface|string $uri = '', array $options = []): PromiseInterface;
 }

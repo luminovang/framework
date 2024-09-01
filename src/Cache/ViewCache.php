@@ -19,9 +19,9 @@ final class ViewCache
     /**
      * The expiration time for cached 
      * 
-     * @var int $expiration 
+     * @var int|null $expiration 
      */
-    private int $expiration;
+    private int|null $expiration = 0;
 
     /**
      * @var string $key Cache key
@@ -45,7 +45,7 @@ final class ViewCache
      * @param string $directory The directory where cached files will be stored (default: 'cache').
      */
     public function __construct(
-        DateTimeInterface|int $expiration = 0, 
+        DateTimeInterface|int|null $expiration = 0, 
         private string $directory = 'cache'
     )
     {
@@ -55,11 +55,13 @@ final class ViewCache
     /**
      * Set cache expiration in seconds.
      *  
-     * @param DateTimeInterface|int $expiration The cache expiration.
+     * @param DateTimeInterface|int|null $expiration The cache expiration.
+     *          If set to 0, the content will never expire.
+     *          If set to null, the content will expire imidominally
      * 
      * @return self Return class instance.
     */
-    public function setExpiry(DateTimeInterface|int $expiration): self
+    public function setExpiry(DateTimeInterface|int|null $expiration): self
     {
         $this->expiration = ($expiration instanceof DateTimeInterface) ? Timestamp::ttlToSeconds($expiration) : $expiration;
 
@@ -144,18 +146,21 @@ final class ViewCache
      */
     public function expired(?string $type = null): bool|int
     {
-        // Initialize and validate the cache
+        // Validate initialization and ensure lockFile is not empty
         if (!$this->init() || $this->lockFile === []) {
             return true;
         }
 
-        // If content extension type doesn't match with cached version.
+        /// Check if content type matches the cached version
         if($type !== null && ($this->lockFile['viewType']??'') !== $type){
             return 404;
         }
 
         // Check if cache has expired
-        return time() >= (int) ($this->lockFile['Expiry'] ?? 0);
+        $exporation = (int) ($this->lockFile['Expiry'] ?? 0);
+        return ($exporation === 0 || ($this->lockFile['CacheImmutable'] ?? false)) 
+            ? false 
+            : time() >= $$exporation;
     }
 
     /**
@@ -220,11 +225,12 @@ final class ViewCache
 
         $func = ($this->lockFile['Func']??false);
         if ($func && function_exists($func)) {
+            $immutable = ($this->lockFile['CacheImmutable'] ?? false) ? ', immutable' : '';
             $headers = ['default_headers' => true];
             $headers['ETag'] =  '"' . $this->lockFile['ETag'] . '"';
             $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T',  $this->lockFile['Expiry']);
             $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T',  $this->lockFile['Modify']);
-            $headers['Cache-Control'] = 'public, max-age=' . $this->lockFile['MaxAge'];
+            $headers['Cache-Control'] = 'public, max-age=' . $this->lockFile['MaxAge'] . $immutable;
             $headers['ETag'] =  '"' . $this->lockFile['ETag'] . '"';
     
             $ifNoneMatch = trim($_SERVER['HTTP_IF_NONE_MATCH']??'');
@@ -292,13 +298,14 @@ final class ViewCache
      */
     public function saveCache(string $content, array $headers = [], string $type = 'html'): bool
     {
-        if(!make_dir($this->getLocation())){
+        if($this->expiration === null || !make_dir($this->getLocation())){
             return false;
         }   
 
         $headers['Content-Encoding'] =  static::whichEncode();
         $headers['viewType'] = $type;
         $headers['MaxAge'] = $this->expiration;
+        $headers['CacheImmutable'] = env('page.caching.immutable', false);
         $headers['Expiry'] = time() + $this->expiration;
         $headers['Date'] = date('D, d M Y H:i:s \G\M\T');
         $headers['Modify'] = time();

@@ -14,7 +14,6 @@ use \Luminova\Security\Crypter;
 use \Luminova\Storages\FileManager;
 use \Peterujah\NanoBlock\NanoImage;
 use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\StorageException;
 use \Exception;
 
 final class FileDelivery
@@ -92,8 +91,7 @@ final class FileDelivery
      * @param array<string,mixed> $headers An associative array for additional headers to set.
      * 
      * @return bool Returns true if file output is successfully, false otherwise.
-     * @throws RuntimeException Throws if NanoImage image is not installed.
-     * @throws StorageException Throws if error occurred during image processing.
+     * @throws RuntimeException Throws if NanoImage image is not installed or if error occurred during image processing.
      * 
      * > By default `304`, `404` and `500` headers will be set based file status and cache control.
      */
@@ -131,7 +129,7 @@ final class FileDelivery
 
             $img->free();
         }catch(Exception $e){
-            throw new StorageException($e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
         return true;

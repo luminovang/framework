@@ -16,7 +16,7 @@ use \Luminova\Cache\MemoryCache;
 use \Luminova\Database\Connection;
 use \Luminova\Database\Manager;
 use \Luminova\Interface\DatabaseInterface;
-use \Luminova\Exceptions\ErrorException;
+use \Luminova\Exceptions\CacheException;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \DateTimeInterface;
@@ -161,7 +161,7 @@ final class Builder extends Connection
      * 
      * @var BaseCache|null $cache 
     */
-    private ?BaseCache $cache = null;
+    private static ?BaseCache $cache = null;
 
     /**
      * Result return type.
@@ -721,46 +721,72 @@ final class Builder extends Connection
             throw new InvalidArgumentException('Invalid argument $list, expected non-empty array list.');
         }
 
-        $values = static::quotedValues($list);
         $this->andConditions[] = [
             'type' => 'IN', 
             'column' => $column, 
-            'values' => $values
+            'values' => $list
         ];
 
         return $this;
     }
 
     /**
-     * Set query to search using `FIND_IN_SET()` expression.
+     * Add a `FIND_IN_SET` condition to the query.
+     *
+     * @param string $search The search value or column name depending on `$isSearchColumn`.
+     * @param string $operator The operator for matching (e.g., `exists`, `first`, `>= foo`, `<= bar`).
+     * @param array<int,mixed>|string $list The comma-separated values or a column name containing the list.
+     * @param bool $isSearchColumn Whether the `$search` argument is a column name (default: false).
      * 
-     * @param string $search The search value.
-     * @param string $operator allow specifying the operator for matching (e.g., > or =).
-     * @param array<int,mixed> $list The expression values.
+     * @return self Returns the instance of the builder class.
+     * @throws InvalidArgumentException Throws if list value is not empty.
      * 
-     * @return self Return instance of builder class.
-     * @throws InvalidArgumentException If values is not provided.
+     * Default Operators:
      * 
-     * @example Using `=` Operator is same as `SELECT * FROM fruits WHERE FIND_IN_SET('apple', 'apple,banana,orange')`.
+     * - `exists|>` - Check if exists or match any in the list.
+     * - `first|=` - Check if it's the first in the list.
+     * - `last` - Check if it's the first in the list.
+     * - `position` - Position in the list (as inset_position).
+     * - `contains` - Check if it contains the search term (uses the `$search` as the search value).
+     * - `none` - No match in the list.
+     * 
+     * @example - Usage Examples:
+     * 
+     * **Using the `custom` Operator:**
+     * ```php
+     * $builder->table('fruits')->inset('banana', '= 2', ['apple','banana','orange']);
      * ```
-     * $builder->table('fruits')->inset('apple', '=', ['apple','banana','orange']);
+     * **Using the `exists` Operator with a column:**
+     * ```php
+     * $builder->table('employees')->inset('PHP', 'exists', 'column_language_skills');
      * ```
-     * @example Using `>` Operator is same as `SELECT * FROM employees WHERE FIND_IN_SET('2', skills) > 0`.
+     * 
+     * **Using the `exists` Operator with a search column:**
+     * ```php
+     * $builder->table('employees')->inset('department', 'exists', 'HR,Finance,Marketing', true);
      * ```
-     * $builder->table('employees')->inset('2', '>', [1,2,3]);
-     * ```
-    */
-    public function inset(string $search, string $operator, array $list): self
+     */
+    public function inset(
+        string $search, 
+        string $operator, 
+        array|string $list,
+        bool $isSearchColumn = false
+    ): self
     {
-        if($list === []){
-            throw new InvalidArgumentException('Invalid argument $list, expected non-empty array list.');
+        if($list === [] || $list === ''){
+            throw new InvalidArgumentException('Invalid argument $list, expected non-empty array or string.');
         }
+
+        $isList = is_array($list);
+        $listString = $isList ? implode(',', $list) : $list;
 
         $this->andConditions[] = [
             'type' => 'IN_SET', 
-            'list' => implode(',', $list), 
+            'list' => $listString, 
+            'isList' => $isList,
             'search' => $search, 
-            'operator' => $operator
+            'isSearchColumn' => $isSearchColumn,
+            'operator' => $operator,
         ];
 
         return $this;
@@ -848,60 +874,109 @@ final class Builder extends Connection
     }
 
     /**
-     * Cache the query result using a specified storage.
+     * Deletes the cached data associated with current table or a specific database table.
+     * 
+     * @param string|null $table The name of the table for which to delete the cache (default: null).
+     * @param string|null $subfolder Optional file-based caching feature, the subfolder name used while storing the cache if any (default: null).
+     * 
+     * @return bool Returns true if the cache was successfully cleared; otherwise, false.
+     */
+    public function cacheDelete(
+        ?string $table = null, 
+        ?string $subfolder = null
+    ): bool
+    {
+        if (!(self::$cache instanceof BaseCache)) {
+            self::$cache = ($this->cacheDriver === 'memcached') 
+                ? MemoryCache::getInstance(null, '__database_builder__') 
+                : FileCache::getInstance(null);
+        }
+
+        if (self::$cache instanceof FileCache) {
+            self::$cache->setFolder('database' . ($subfolder ? DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS) : ''));
+        }
+
+        return self::$cache->setStorage('database_' . ($table ?? $this->tableName ?? 'capture'))->clear();
+    }
+
+    /**
+     * Deletes all cached items for the specified subfolder or the default database cache.
      *
-     * @param string $key The storage cache key.
-     * @param string $storage Private storage name hash name (optional): but is recommended to void storing large data in one file.
-     * @param DateTimeInterface|int $expiry The cache expiry time in seconds (default: 7 days).
-     * @param string|null $subfolder Optionally set a folder name to store caches on file system cache (default: null).
+     * @param string|null $subfolder Optional file-based caching feature, the subfolder name used while storing caches if any (default: null).
+     * 
+     * @return bool Returns true if the cache was successfully flushed, false otherwise.
+     */
+    public function cacheDeleteAll(?string $subfolder = null): bool
+    {
+        if (!(self::$cache instanceof BaseCache)) {
+            self::$cache = ($this->cacheDriver === 'memcached') 
+                ? MemoryCache::getInstance(null, '__database_builder__') 
+                : FileCache::getInstance(null);
+        }
+
+        if (self::$cache instanceof FileCache) {
+            self::$cache->setFolder('database' . ($subfolder ? DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS) : ''));
+        }
+
+        return self::$cache->flush();
+    }
+
+    /**
+     * Configures and manages caching for database queries or operations.
+     * 
+     * This method sets up the caching mechanism based on the provided parameters.
+     * It supports both memory-based caching (e.g., Memcached) and file-based caching.
+     * The method determines if the cache for the given key exists and whether it has expired.
+     * 
+     * @param string $key The unique key identifying the cache item.
+     * @param string|null $storage Optional storage name for the cache. Defaults to the current table name or 'capture' if not specified.
+     * @param DateTimeInterface|int $expiry The cache expiration time (default: to 7 days).
+     * @param string|null $subfolder Optional file-based caching feature, to set subfolder within the cache root directory (default: `database`).
+     * @param string|null $persistent_id Optional memory-based caching feature, to set a unique persistent connection ID (default: `__database_builder__`).
      * 
      * @return self Return instance of builder class.
-     * @throws ErrorException If the file cannot be saved or an error occurs.
-    */
+     * @throws CacheException If an error occurs while creating cache or reading expired cache.
+     */
     public function cache(
         string $key, 
-        string $storage = null, 
+        ?string $storage = null, 
         DateTimeInterface|int $expiry = 7 * 24 * 60 * 60, 
-        ?string $subfolder = null
+        ?string $subfolder = null,
+        ?string $persistent_id = null
     ): self
     {
         if($this->caching){
-            $storage ??= 'database_' . ($this->tableName ?? 'capture');
-            
             if($this->cacheDriver === 'memcached'){
-                $this->cache ??= MemoryCache::getInstance(null, 'database');
+                self::$cache ??= MemoryCache::getInstance(null, $persistent_id ?? '__database_builder__');
             }else{
-                $this->cache ??= FileCache::getInstance(null);
-                $this->cache->setFolder(($subfolder === null) ? 'database' : 'database' . DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS));
+                self::$cache ??= FileCache::getInstance(null);
+                self::$cache->setFolder('database' . ($subfolder ? DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS) : ''));
             }
 
-            $this->cache->setStorage($storage)->setExpire($expiry);
+            self::$cache->setStorage('database_' . ($storage ?? $this->tableName ?? 'capture'))->setExpire($expiry);
             $this->cacheKey = md5($key);
-
-            // Check if the cache exists and handle expiration
-            if ($this->cache->hasItem($this->cacheKey)) {
-                $this->hasCache = true;
-                if ($this->cache->hasExpired($this->cacheKey)) {
-                    $this->cache->deleteItem($this->cacheKey);
-                    $this->hasCache = false;
-                }
-            }
+            // Check if the cache exists and not expired
+            $this->hasCache = (self::$cache->hasItem($this->cacheKey) && !self::$cache->hasExpired($this->cacheKey));
         }
 
         return $this;
     }
 
     /**
-     * Insert records into table.
+     * Insert records into a specified database table.
      * 
-     * @param array<int,array<string,mixed>> $values An associative arrays, 
-     * each containing column names and corresponding values to insert into the table.
-     * @param bool $prepare Use bind values and execute prepare statement instead of query (default: true).
+     * This method allows for inserting multiple records at once by accepting an array of associative arrays.
+     * Each associative array should contain the column names as keys and their corresponding values as values.
      * 
-     * @return int Return number of affected rows or 0 if none was inserted.
-     * @throws DatabaseException If an error occurs or insert values are not associative array.
-     * @throws JsonException If an error occurs while encoding array values.
-    */
+     * @param array<int,array<string,mixed>> $values An array of associative arrays,
+     *      where each associative array represents a record to be inserted into the table.
+     * @param bool $prepare If set to true, uses prepared statements with bound values for the insert operation.
+     *      If false, executes a raw query instead (default: true).
+     * 
+     * @return int Returns the number of affected rows, 0 if no rows were inserted.
+     * @throws DatabaseException If an error occurs during the insert operation or if the provided values are not associative arrays.
+     * @throws JsonException If an error occurs while encoding array values to JSON format.
+     */
     public function insert(array $values, bool $prepare = true): int
     {
         if ($values === []) {
@@ -913,7 +988,10 @@ final class Builder extends Connection
         }
         
         if (!is_associative($values[0])) {
-            DatabaseException::throwException('Invalid insert values, values must be an associative array.');
+            DatabaseException::throwException(
+                'Invalid insert values, values must be an associative array.', 
+                DatabaseException::VALUE_FORBIDDEN
+            );
             return 0;
         }
 
@@ -940,12 +1018,12 @@ final class Builder extends Connection
      * @param string $query The SQL query string.
      * 
      * @return self Returns an instance of the builder class.
-     * @throws DatabaseException If the query is empty string.
+     * @throws InvalidArgumentException If the query is empty string.
      */
     public function query(string $query): self 
     {
         if ($query === '') {
-            throw new DatabaseException("Builder operation without a query condition is not allowed.");
+            throw new InvalidArgumentException('Invalid: The parameter $query requires a valid and non-empty SQL query string.');
         }
 
         $this->buildQuery = $query;
@@ -973,8 +1051,8 @@ final class Builder extends Connection
         $placeholder ??= [];
         static::$handler = null;
 
-        if($mode !== RETURN_STMT && $this->cache !== null && $this->hasCache){
-            $response = $this->cache->getItem($this->cacheKey);
+        if($mode !== RETURN_STMT && $this->hasCache && (self::$cache instanceof BaseCache)){
+            $response = self::$cache->getItem($this->cacheKey);
 
             if($response !== null){
                 $this->cacheKey = '';
@@ -985,7 +1063,10 @@ final class Builder extends Connection
         }
 
         if($this->buildQuery === ''){
-            throw new DatabaseException("Execute operation without a query condition is not allowed. call query() before execute()");
+            throw new DatabaseException(
+                'Execute operation without a query condition is not allowed. call query() before execute()', 
+                DatabaseException::VALUE_FORBIDDEN
+            );
         }
 
         $this->bindValues = $placeholder;
@@ -993,12 +1074,12 @@ final class Builder extends Connection
         try {
             $response = $this->returnExecute($this->buildQuery, $mode);
 
-            if($mode === RETURN_STMT || $this->cache === null){
+            if($mode === RETURN_STMT || !(self::$cache instanceof BaseCache)){
                 return $response;
             }
 
-            $this->cache->set($this->cacheKey, $response);
-            $this->cache = null;
+            self::$cache->set($this->cacheKey, $response);
+            self::$cache = null;
 
             return $response;
         } catch (DatabaseException|Exception $e) {
@@ -1071,7 +1152,10 @@ final class Builder extends Connection
     public function find(array $columns = ['*']): mixed 
     {
         if ($this->whereCondition === []) {
-            throw new DatabaseException('Find cannot be called without a where method being called first.');
+            throw new DatabaseException(
+                'Find cannot be called without a where method being called first.', 
+                DatabaseException::VALUE_FORBIDDEN
+            );
         }
         
         return $this->createQueryExecution('', 'find', $columns);
@@ -1093,7 +1177,10 @@ final class Builder extends Connection
             return $this->createQueryExecution('', 'fetch', $columns, $result, $mode);
         }
 
-        throw new DatabaseException('Invalid fetch result type, expected "all or next".');
+        throw new DatabaseException(
+            'Invalid fetch result type, expected "all or next".', 
+            DatabaseException::VALUE_FORBIDDEN
+        );
     }
 
     /**
@@ -1139,8 +1226,8 @@ final class Builder extends Connection
     ): mixed
     {
         static::$handler = null;
-        if(!$this->printQuery && $return !== 'stmt' && $this->cache !== null && $this->hasCache){
-            $response = $this->cache->getItem($this->cacheKey);
+        if(!$this->printQuery && $return !== 'stmt' && $this->hasCache && (self::$cache instanceof BaseCache)){
+            $response = self::$cache->getItem($this->cacheKey);
 
             if($response !== null){
                 $this->cacheKey = '';
@@ -1173,12 +1260,12 @@ final class Builder extends Connection
         try {
             $response = $this->returnExecutedResult($sqlQuery, $return, $result, $mode);
 
-            if($this->printQuery || $return === 'stmt' || $this->cache === null){
+            if($this->printQuery || $return === 'stmt' || !(self::$cache instanceof BaseCache)){
                 return $response;
             }
 
-            $this->cache->set($this->cacheKey, $response);
-            $this->cache = null;
+            self::$cache->set($this->cacheKey, $response);
+            self::$cache = null;
 
             return $response;
         } catch (DatabaseException|Exception $e) {
@@ -1206,18 +1293,19 @@ final class Builder extends Connection
         int $mode = FETCH_OBJ
     ): mixed
     {
-        $isBided = false;
+        // When using IN as WHERE and it has other ANDs ORs as binding.
+        $isBided = $this->andConditions !== [];
         $isOrdered = false;
         $response = false;
-
+        
         if ($this->whereCondition === []) {
-            // When using IN as WHERE and it has other ANDs ORs as binding.
-            $isBided = $this->andConditions !== [];
-            $this->buildAndConditions($sqlQuery, $isBided);
+            //buildAndConditions
+            $this->buildConditions($sqlQuery, $isBided);
         }else{
             $isBided = true;
             $sqlQuery .= $this->whereCondition['query'];
-            $this->buildWhereConditions($sqlQuery, $isBided);
+            //buildWhereConditions
+            $this->buildConditions($sqlQuery, $isBided, false);
         }
 
         if($this->queryGroup !== []){
@@ -1248,7 +1336,7 @@ final class Builder extends Connection
             if ($this->whereCondition !== []) {
                 static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
             }
-            $this->bindConditions(static::$handler);
+            $this->bindConditions(static::$handler, $isBided);
             static::$handler->execute();
         }else{
             static::$handler = $this->db->query($sqlQuery);
@@ -1284,21 +1372,31 @@ final class Builder extends Connection
         static::$handler = null;
 
         if ($columns === []) {
-            throw new DatabaseException('Update operation without SET values is not allowed. Set update values directly with update method or use set method instead.');
+            throw new DatabaseException(
+                'Update operation without SET values is not allowed. Set update values directly with update method or use set method instead.', 
+                DatabaseException::VALUE_FORBIDDEN
+            );
         }
 
         if ($this->whereCondition === []) {
-            throw new DatabaseException('Update operation without a WHERE condition is not allowed. Use where method set set update condition.');
+            throw new DatabaseException(
+                'Update operation without a WHERE condition is not allowed. Use where method set set update condition.', 
+                DatabaseException::VALUE_FORBIDDEN
+            );
         }
 
         if(isset($columns[0])){
-            throw new DatabaseException('Invalid update values, values must be an associative array, key-value pairs, where the key is the column name and the value to update.');
+            throw new DatabaseException(
+                'Invalid update values, values must be an associative array, key-value pairs, where the key is the column name and the value to update.', 
+                DatabaseException::VALUE_FORBIDDEN
+            );
         }
 
         $updateColumns = static::buildPlaceholder($columns, true);
         $updateQuery = "UPDATE {$this->tableName} SET {$updateColumns}";
         $updateQuery .= $this->whereCondition['query'];
-        $this->buildWhereConditions($updateQuery);
+        //buildWhereConditions
+        $this->buildConditions($updateQuery, true, false);
 
         if($this->maxLimit > 0){
             $updateQuery .= " LIMIT {$this->maxLimit}";
@@ -1313,7 +1411,10 @@ final class Builder extends Connection
             static::$handler = $this->db->prepare($updateQuery);
             foreach($columns as $key => $value){
                 if(!is_string($key) || $key === '?'){
-                    throw new DatabaseException("Invalid update key {$key}, update key must be a valid table column name.");
+                    throw new DatabaseException(
+                        "Invalid update key {$key}, update key must be a valid table column name.", 
+                        DatabaseException::VALUE_FORBIDDEN
+                    );
                 }
 
                 $value = is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
@@ -1345,12 +1446,16 @@ final class Builder extends Connection
         static::$handler = null;
 
         if ($this->whereCondition === []) {
-            throw new DatabaseException('Delete operation without a WHERE condition is not allowed.');
+            throw new DatabaseException(
+                'Delete operation without a WHERE condition is not allowed.', 
+                DatabaseException::VALUE_FORBIDDEN
+            );
         }
 
         $deleteQuery = "DELETE FROM {$this->tableName}";
         $deleteQuery .= $this->whereCondition['query'];
-        $this->buildWhereConditions($deleteQuery);
+        //buildWhereConditions
+        $this->buildConditions($deleteQuery, true, false);
 
         if($this->maxLimit > 0){
             $deleteQuery .= " LIMIT {$this->maxLimit}";
@@ -1399,7 +1504,10 @@ final class Builder extends Connection
             static::$handler = $this->db->prepare($buildQuery);
             foreach ($this->bindValues as $key => $value) {
                 if(!is_string($key) || $key === '?'){
-                    throw new DatabaseException("Invalid bind placeholder {$key}, placeholder key must be same with your table mapped column key, example :foo");
+                    throw new DatabaseException(
+                        "Invalid bind placeholder {$key}, placeholder key must be same with your table mapped column key, (e.g, :foo, :bar).", 
+                        DatabaseException::VALUE_FORBIDDEN
+                    );
                 }
 
                 static::$handler->bind(static::trimPlaceholder($key), $value);
@@ -1490,7 +1598,10 @@ final class Builder extends Connection
             $transaction = ($transaction && $driverName !== 'sqlite');
 
             if ($transaction && !$this->db->beginTransaction()) {
-                DatabaseException::throwException('Failed: Unable to start transaction');
+                DatabaseException::throwException(
+                    'Failed: Unable to start transaction', 
+                    DatabaseException::DATABASE_TRANSACTION_FAILED
+                );
                 return false;
             }
 
@@ -1570,7 +1681,10 @@ final class Builder extends Connection
     public function temp(bool $transaction = true): bool 
     {
         if($this->tableName === ''){
-            throw new DatabaseException('You must specify a table name before creating temporal table.');
+            throw new DatabaseException(
+                'You must specify a table name before creating temporal table.', 
+                DatabaseException::VALUE_FORBIDDEN
+            );
         }
 
         try {
@@ -1578,7 +1692,10 @@ final class Builder extends Connection
             AS (SELECT * FROM {$this->tableName} WHERE 1 = 0)";
             
             if($transaction && !$this->db->beginTransaction()){
-                DatabaseException::throwException('Failed: Unable to start transaction');
+                DatabaseException::throwException(
+                    'Failed: Unable to start transaction', 
+                    DatabaseException::DATABASE_TRANSACTION_FAILED
+                );
                 return false;
             }
 
@@ -1628,10 +1745,16 @@ final class Builder extends Connection
      * @param string $query Query string to execute.
      * 
      * @return int Return number affected rows.
+     * 
+     * @throws InvalidArgumentException Thrown if query string is empty.
      * @throws DatabaseException Throws if error occurs.
     */
     public function exec(string $query): int 
     {
+        if ($query === '') {
+            throw new InvalidArgumentException('Invalid: The parameter $query requires a valid and non-empty SQL query string.');
+        }
+
         try {
             return $this->db->exec($query);
         } catch (DatabaseException|Exception $e) {
@@ -1679,12 +1802,18 @@ final class Builder extends Connection
     private function dropTable(bool $isTempTable = false, bool $transaction = false): bool
     {
         if ($this->tableName === '') {
-            throw new DatabaseException('You must specify a table name before dropping a temporary table.');
+            throw new DatabaseException(
+                'You must specify a table name before dropping a temporary table.', 
+                DatabaseException::VALUE_FORBIDDEN
+            );
         }
 
         try {
             if ($transaction && !$this->db->beginTransaction()) {
-                DatabaseException::throwException('Failed: Unable to start transaction for drop table.');
+                DatabaseException::throwException(
+                    'Failed: Unable to start transaction for drop table.', 
+                    DatabaseException::DATABASE_TRANSACTION_FAILED
+                );
                 return false;
             }
 
@@ -1815,52 +1944,36 @@ final class Builder extends Connection
 
         $this->reset();
         return $count;
-    } 
-
-    /**
-     * Build query conditions.
-     *
-     * @param string $query The SQL query string to which conditions passed by reference.
-     * @param bool $isBided Wether the param is bind params (default: true).
-     * 
-     * @return void
-    */
-    private function buildWhereConditions(string &$query, bool $isBided = true): void
-    {
-        if ($this->andConditions === []) {
-            return;
-        }
-
-        foreach ($this->andConditions as $index => $condition) {
-            $query .= match ($condition['type']) {
-                'GROUP_OR' => " AND " . self::buildGroupConditions($condition['conditions'], $index, $isBided, 'OR'),
-                'GROUP_AND' => " AND " . self::buildGroupConditions($condition['conditions'], $index, $isBided, 'AND'),
-                'BIND_OR' => " AND " . self::buildGroupBindConditions($condition['X'], $condition['Y'], $index, $isBided, 'OR', $condition['bind']),
-                'BIND_AND' => " AND " . self::buildGroupBindConditions($condition['X'], $condition['Y'], $index, $isBided, 'AND', $condition['bind']),
-                default => self::buildSingleWhereConditions($condition, $index, $isBided),
-            };
-        }
     }
 
     /**
-     * Build query for ands conditions.
+     * Build query conditions based on the specified type.
      *
-     * @param string $query The SQL query string to which search conditions passed by reference.
-     * @param bool $isBided Wether the param is bind params (default: true).
+     * @param string $query The SQL query string to which conditions passed by reference.
+     * @param bool $isBided Whether the params are bind params (default: true).
+     * @param bool $addWhereOperator Whether the where conditions should be added 
+     *                          and if false treat it as AND (default: true).
      * 
      * @return void
-    */
-    private function buildAndConditions(string &$query, bool $isBided = true): void
+     */
+    private function buildConditions(
+        string &$query, 
+        bool $isBided = true, 
+        bool $addWhereOperator = true
+    ): void
     {
         if ($this->andConditions === []) {
             return;
         }
 
-        $query .= ' WHERE ';
+        if ($addWhereOperator) {
+            $query .= ' WHERE ';
+        }
+
         $firstCondition = true;
 
         foreach ($this->andConditions as $index => $condition) {
-            if (!$firstCondition) {
+            if ($addWhereOperator && !$firstCondition) {
                 $query .= ($condition['type'] === 'OR') ? ' OR' : ' AND';
             }
 
@@ -1869,41 +1982,11 @@ final class Builder extends Connection
                 'GROUP_AND' => self::buildGroupConditions($condition['conditions'], $index, $isBided, 'AND'),
                 'BIND_OR' => self::buildGroupBindConditions($condition['X'], $condition['Y'], $index, $isBided, 'OR', $condition['bind']),
                 'BIND_AND' => self::buildGroupBindConditions($condition['X'], $condition['Y'], $index, $isBided, 'AND', $condition['bind']),
-                default => self::buildSingleAndCondition($condition, $index, $isBided),
+                default => self::buildSingleConditions($condition, $index, $isBided, !$addWhereOperator),
             };
 
             $firstCondition = false;
         }
-    }
-
-    /**
-     * Constructs a single ANDs condition query string with placeholders for binding values.
-     *
-     * @param array   $condition  An array representing the search condition.
-     * @param int     $index      The index to append to the placeholder names.
-     * @param bool    $isBided    Indicates whether placeholders should be used for binding values (default: true).
-     *
-     * @return string Return query string representation of the single AND condition.
-     */
-    private static function buildSingleAndCondition(array $condition, int $index, bool $isBided = true): string
-    {
-        $operator = $condition['operator'] ?? '=';
-        $column = $condition['column'];
-        $placeholder = ($isBided ? 
-            (($condition['type'] === 'AGAINST') ? ":match_column_{$index}" : static::trimPlaceholder($column)) : 
-            addslashes($condition['value'])
-        );
-
-        return match ($condition['type']) {
-            'IN' => " {$column} IN ({$condition['values']})",
-            'AGAINST' => " MATCH($column) AGAINST ({$placeholder} {$operator})",
-            'AND', 'OR' => " $column $operator $placeholder",
-            'IN_SET' => ($operator === '>') ?
-                " FIND_IN_SET('{$condition['search']}', '{$condition['list']}') > 0" :
-                " FIND_IN_SET('{$condition['search']}', '{$condition['list']}')",
-            'LIKE' => " $column LIKE ?",
-            default => '',
-        };
     }
 
     /**
@@ -1912,29 +1995,119 @@ final class Builder extends Connection
      * @param array   $condition  An array representing the condition.
      * @param int     $index      The index to append to the placeholder names.
      * @param bool    $isBided    Indicates whether placeholders should be used for binding values (default: true).
+     * @param bool    $addOperator      Indicates whether is for to add AND OR operator (default: true).
+     *                                  Constructs a single ANDs condition query string with placeholders for binding values.
      *
      * @return string Return query string representation of the single condition.
      */
-    private static function buildSingleWhereConditions(array $condition, int $index, $isBided = true): string
+    private static function buildSingleConditions(
+        array $condition, 
+        int $index, 
+        bool $isBided = true,
+        bool $addOperator = true
+    ): string
     {
-        $column = $condition['column'];
         $operator = $condition['operator'] ?? '=';
-        $placeholder = ($isBided ? 
-            (($condition['type'] === 'AGAINST') ? ":match_column_{$index}" : static::trimPlaceholder($column)) : 
-            addslashes($condition['value'])
-        );
+        $column = $condition['column'] ?? '';
+        $prefix = $addOperator ? (($condition['type'] === 'OR') ? 'OR ' : 'AND ') : '';
+        $placeholder = $isBided 
+            ? ($condition['type'] === 'AGAINST' 
+                ? ":match_column_{$index}" 
+                : static::trimPlaceholder($column))
+            : addslashes($condition['value']);
 
         return match ($condition['type']) {
-            'AND' => " AND $column $operator $placeholder",
-            'OR' => " OR $column $operator $placeholder",
-            'IN' => " AND $column IN ({$condition['values']})",
-            'AGAINST' => " AND MATCH($column) AGAINST ({$placeholder} {$operator})",
-            'IN_SET' => ($operator === '>') ?
-                " AND FIND_IN_SET('{$condition['search']}', '{$condition['list']}') > 0" :
-                " AND FIND_IN_SET('{$condition['search']}', '{$condition['list']}')",
-            'LIKE' => " AND $column LIKE ?",
+            'AND' => " {$prefix}$column $operator $placeholder",
+            'OR' => " {$prefix}$column $operator $placeholder",
+            'IN' => " {$prefix}$column IN (" . (
+                $isBided 
+                ? rtrim(self::bindInConditions($condition['values'], $column), ', ')
+                : static::quotedValues($condition['values'])
+            ) . ')',
+            'AGAINST' => " {$prefix}MATCH($column) AGAINST ({$placeholder} {$operator})",
+            'IN_SET' => self::insetQuery($condition, $prefix, $operator),
+            'LIKE' => " {$prefix}$column LIKE ?",
             default => '',
         }; 
+    }
+
+    /**
+     * Builds the `FIND_IN_SET` condition for the query.
+     *
+     * @param array $condition The condition array containing search, list, and operator details.
+     * @param string $prefix The prefix to be applied before the clause (e.g., `AND`, `OR`).
+     * @param string $operator The operator for comparison or position alias.
+     * 
+     * @return string Return the generated SQL string for find in set function.
+     */
+    private static function insetQuery(
+        array $condition, 
+        string $prefix, 
+        string $operator
+    ): string 
+    {
+        // Sanitize the search term to prevent SQL injection if is not column name
+        $search = $condition['isSearchColumn'] 
+            ? $condition['search'] 
+            : "'". addslashes($condition['search'])  . "'";
+        
+        // Sanitize the list or assume it's a column
+        $values = $condition['isList'] ? "'". addslashes($condition['list']) . "'" : $condition['list'];
+        $operator = match($operator) {
+            'position' => 'AS inset_position',
+            '>', 'exists' => '> 0',
+            '=', 'first' => '= 1',
+            'last' => "= (LENGTH({$values}) - LENGTH(REPLACE({$values}, ',', '')) + 1)",
+            'none' => '= 0',
+            'contains' => "LIKE '%{$search}%'",
+            default => $operator,   
+        };
+        
+        return " {$prefix}FIND_IN_SET({$search}, {$values}) {$operator}";
+    }    
+
+    /**
+     * Bind query where conditions.
+     * 
+     * @param DatabaseInterface &$handler Database handler passed by reference.
+     * @param bool $isBided Whether the value is bound.
+     * 
+     * @return void
+    */
+    private function bindConditions(DatabaseInterface &$handler, bool $isBided = false): void 
+    {
+        foreach ($this->andConditions as $index => $bindings) {
+            switch ($bindings['type']) {
+                case 'AGAINST':
+                    $handler->bind(":match_column_{$index}", $bindings['value']);
+                break;
+                case 'GROUP_OR':
+                case 'GROUP_AND':
+                    self::bindGroupConditions($bindings['conditions'], $handler, $index);
+                break;
+                case 'BIND_OR':
+                case 'BIND_AND':
+                    $last = 0;
+                    self::bindGroupConditions($bindings['X'], $handler, $index, $last);
+                    self::bindGroupConditions($bindings['Y'], $handler, $index, $last);
+                break;
+                case 'IN_SET':
+                    // skip
+                break;
+                case 'IN':
+                    if($isBided){
+                        self::bindInConditions($bindings['values'], $bindings['column'], $handler);
+                    }
+                break;
+                default:
+                    $handler->bind(static::trimPlaceholder($bindings['column']), $bindings['value']);
+                break;
+            }
+        }
+
+        foreach($this->queryMatchOrder as $idx => $order){
+            $handler->bind(":match_order_{$idx}", $order['value']);
+        }
     }
 
     /**
@@ -2009,39 +2182,32 @@ final class Builder extends Connection
         return "({$groupX} {$bind} {$groupY})";
     }
 
-     /**
-     * Bind query where conditions.
+    /**
+     * Bind query in conditions.
      * 
+     * @param array  $values  The column array values.
+     * @param string $column  The column placeholder names.
      * @param DatabaseInterface &$handler Database handler passed by reference.
      * 
-     * @return void
+     * @return string
     */
-    private function bindConditions(DatabaseInterface &$handler): void 
+    private static function bindInConditions(
+        array $values, 
+        string $column,
+        ?DatabaseInterface &$handler = null,
+    ): string 
     {
-        foreach ($this->andConditions as $index => $bindings) {
-            switch ($bindings['type']) {
-                case 'AGAINST':
-                    $handler->bind(":match_column_{$index}", $bindings['value']);
-                break;
-                case 'GROUP_OR':
-                case 'GROUP_AND':
-                    self::bindGroupConditions($bindings['conditions'], $handler, $index);
-                break;
-                case 'BIND_OR':
-                case 'BIND_AND':
-                    $last = 0;
-                    self::bindGroupConditions($bindings['X'], $handler, $index, $last);
-                    self::bindGroupConditions($bindings['Y'], $handler, $index, $last);
-                break;
-                default:
-                    $handler->bind(static::trimPlaceholder($bindings['column']), $bindings['value']);
-                break;
+        $placeholders = '';
+        foreach ($values as $idx => $value) {
+            $placeholder = static::trimPlaceholder("{$column}_in_{$idx}");
+            if($handler instanceof DatabaseInterface){
+                $handler->bind($placeholder, $value);
+            }else{
+                $placeholders .= "{$placeholder}, ";
             }
         }
 
-        foreach($this->queryMatchOrder as $idx => $order){
-            $handler->bind(":match_order_{$idx}", $order['value']);
-        }
+        return $placeholders;
     }
 
     /**
@@ -2054,7 +2220,7 @@ final class Builder extends Connection
      *
      * @return void
      */
-    private function bindGroupConditions(
+    private static function bindGroupConditions(
         array $bindings, 
         DatabaseInterface &$handler, 
         int $index, 
@@ -2169,7 +2335,7 @@ final class Builder extends Connection
      * 
      * @return void
      */
-    private function bindDebugGroupConditions(array $bindings, int $index, array &$params = [], int &$last = 0): void 
+    private static function bindDebugGroupConditions(array $bindings, int $index, array &$params = [], int &$last = 0): void 
     {
         $count = 0;
         foreach ($bindings as $idx => $bind) {
@@ -2194,52 +2360,53 @@ final class Builder extends Connection
     {
         static $manager = null;
         $manager ??= new Manager($this->db);
-
+        $manager->setTable($this->tableName);
         return $manager;
     }
 
     /**
-     * Exports a database table and downloads it to the browser as JSON or CSV format.
+     * Exports the database table and downloads it to the browser as JSON or CSV format.
      * 
      * @param string $as Export as csv or json format.
      * @param string|null $filename Filename to download.
      * @param array $columns Table columns to export (default: all).
      * 
-     * @return bool True if export is successful, false otherwise.
+     * @return bool Return true if export is successful, false otherwise.
      * 
      * @throws DatabaseException If an invalid format is provided or if unable to create the export.
      */
     public function export(string $as = 'csv', ?string $filename = null, array $columns = ['*']): bool 
     {
-        $manager = $this->manager();
-        $manager->setTable($this->tableName);
-
-        return $manager->export($as, $filename, $columns);
+        return  $this->manager()->export($as, $filename, $columns);
     }
 
     /**
-     * Creates a backup of the database.
+     * Creates a backup of the database table.
      * 
-     * @param string|null $filename Filename to store the backup.
+     * @param string|null $filename Optional name of the backup file (default: null). If not provided, table name and timestamp will be used.
      * 
-     * @return bool True if backup is successful, false otherwise.
+     * @return bool Return true if backup is successful, false otherwise.
      * 
      * @throws DatabaseException If unable to create the backup directory or if failed to create the backup.
      */
     public function backup(?string $filename = null): bool 
     {
-        return $this->manager()->backup($filename);
+        return $this->manager()->backup($filename, true);
     }
 
     /**
      * Trim placeholder and remove`()` if present
      *
-     * @param string $input 
+     * @param string|null $input The column name to convert to placeholder.
      * 
-     * @return string $placeholder
+     * @return string Return column placeholder.
     */
-    private static function trimPlaceholder(string $input): string 
+    private static function trimPlaceholder(string|null $input): string 
     {
+        if(!$input){
+            return '';
+        }
+
         if (preg_match('/\(([^)]+)\)/', $input, $matches)) {
             $input = $matches[1];
         }
