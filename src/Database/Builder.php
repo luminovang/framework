@@ -924,10 +924,6 @@ final class Builder extends Connection
     /**
      * Configures and manages caching for database queries or operations.
      * 
-     * This method sets up the caching mechanism based on the provided parameters.
-     * It supports both memory-based caching (e.g., Memcached) and file-based caching.
-     * The method determines if the cache for the given key exists and whether it has expired.
-     * 
      * @param string $key The unique key identifying the cache item.
      * @param string|null $storage Optional storage name for the cache. Defaults to the current table name or 'capture' if not specified.
      * @param DateTimeInterface|int $expiry The cache expiration time (default: to 7 days).
@@ -964,9 +960,6 @@ final class Builder extends Connection
 
     /**
      * Insert records into a specified database table.
-     * 
-     * This method allows for inserting multiple records at once by accepting an array of associative arrays.
-     * Each associative array should contain the column names as keys and their corresponding values as values.
      * 
      * @param array<int,array<string,mixed>> $values An array of associative arrays,
      *      where each associative array represents a record to be inserted into the table.
@@ -1012,8 +1005,6 @@ final class Builder extends Connection
 
     /**
      * Build a custom SQL query string to execute when calling the execute method.
-     * This method also supports caching and uses prepared statements if array values are passed to the execute method.
-     * Otherwise, it uses query execution to execute the query, so ensure that values passed directly to the query are escaped.
      * 
      * @param string $query The SQL query string.
      * 

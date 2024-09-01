@@ -363,7 +363,7 @@ final class Sitemap
     private static function replaceUrls(string $url): string 
     {
         if (str_starts_with($url, 'http')) {
-            return $url;
+           return rtrim($url, '/');
         }
 
         $url = trim(str_replace(['../', './'], '', $url), '/');
@@ -374,7 +374,7 @@ final class Sitemap
         }
 
         if (str_starts_with($url, 'public/')) {
-            return  self::startUrl() . '/' . substr($url, strlen('public/'));
+            return  self::startUrl() . substr($url, strlen('public/'));
         }
         
         return self::startUrl() . $url;
@@ -400,7 +400,7 @@ final class Sitemap
 
             return self::$urls;
         }
-     
+        
         $url = self::replaceUrls($url);
         $found = 0;
         $deepScans = [];
