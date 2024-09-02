@@ -14,6 +14,7 @@ use \App\Config\Template as TemplateConfig;
 use \App\Config\Templates\Smarty\Classes;
 use \App\Config\Templates\Smarty\Modifiers;
 use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Application\Foundation;
 use \Luminova\Template\Helper;
 use \Exception;
 use \SmartyException;
@@ -221,7 +222,7 @@ class Smarty
     */
     public function isCached(string $view): bool
     {
-        return $this->smarty->isCached($view, Helper::cacheKey());
+        return $this->smarty->isCached($view, Foundation::getCacheId());
     }
 
     /**
@@ -288,9 +289,8 @@ class Smarty
     */
     public function display(string $view, bool $return = false): bool|string
     {
-        $cache_id = Helper::cacheKey();
         try{
-            $content = $this->smarty->fetch($view, $cache_id);
+            $content = $this->smarty->fetch($view, Foundation::getCacheId());
 
             if($this->minify){
                 $content = Helper::getMinification(

@@ -26,6 +26,7 @@ use \App\Config\Template as TemplateConfig;
 use \DateTimeInterface;
 use \DateTimeImmutable;
 use \DateTimeZone;
+use \Closure;
 
 trait View
 { 
@@ -324,7 +325,7 @@ trait View
             throw new RuntimeException("Class with the same name: '{$alias}' already exists.");
         }
 
-        if (is_string($class) && $initialize) {
+        if ($initialize && is_string($class)) {
             self::$publicClasses[$alias] = new $class();
             return true;
         }
@@ -374,7 +375,7 @@ trait View
     */
     public final function expired(string|null $viewType = 'html'): bool
     {
-        $expired = Helper::getCache(self::$cacheFolder, Foundation::cacheKey())->expired($viewType);
+        $expired = Helper::getCache(self::$cacheFolder, Foundation::getCacheId())->expired($viewType);
 
         if($expired === 404){
             throw new RuntimeException('Invalid mismatch view type: ' . $viewType);
@@ -387,7 +388,7 @@ trait View
      * Render cached content if cache exist.
      * 
      * @return int Returns status code success if cache exist and rendered else return error.
-     * @throws RuntimeException Throws if called without calling `cache` method or if cache file os not found.
+     * @throws RuntimeException Throws if called without calling `cache` method.
     */
     public final function reuse(): int
     {
@@ -396,13 +397,35 @@ trait View
         }
 
         $this->forceCache = false;
-        $cache = Helper::getCache(self::$cacheFolder, Foundation::cacheKey(), $this->cacheExpiry);
+        $cache = Helper::getCache(self::$cacheFolder, Foundation::getCacheId(), $this->cacheExpiry);
 
-        if ($cache->read()) {
-            return STATUS_SUCCESS;
+        return $cache->read() ? STATUS_SUCCESS : STATUS_ERROR;
+    }
+
+    /**
+     * Handle cache expiration and renewal.
+     *
+     * This method checks if the cached content for a specific view type has expired. 
+     * If the content is expired, it executes the provided callback function to 
+     * regenerate the content and renew the cache. If the content is still valid, 
+     * it forces the use of the existing cached content.
+     *
+     * @param string $viewType The type of view content to check, such as 'html' or 'json'.
+     * @param Closure $renewCache A callback function that will be executed if the cached 
+     *                            content has expired. This function should return in (`0` or `1`).
+     * @param mixed ...$arguments Optional arguments to pass to the callback function, none dependency injection supported.
+     *
+     * @return int Return the status code of the cache renewal callback if the cache has expired, 
+     *             otherwise the status code from reusing the existing cache.
+     */
+    public final function onExpired(string $viewType, Closure $renewCache, mixed ...$arguments): int
+    {
+        if ($this->shouldCache() && !$this->expired($viewType)) {
+            $this->forceCache = true;
+            return $this->reuse();
         }
 
-        throw new RuntimeException('No cache not found to reuse.');
+        return $renewCache(...$arguments);
     }
 
     /**
@@ -664,7 +687,7 @@ trait View
      * @return bool|string  Return true on success, false on failure.
      * @throws ViewNotFoundException Throw if view file is not found.
     */
-    private function call(array $options = [], int $status = 200, bool $return = false): bool|string 
+    private function call(array $options = [], int $status = 200, bool $return = false): string|bool
     {
         $options = $this->parseOptions($options);
         try {
@@ -692,7 +715,7 @@ trait View
                 $cache = null;
 
                 if ($cacheable) {
-                    $cache = Helper::getCache(self::$cacheFolder, Foundation::cacheKey(), $this->cacheExpiry);
+                    $cache = Helper::getCache(self::$cacheFolder, Foundation::getCacheId(), $this->cacheExpiry);
    
                     if ($cache->expired($options['viewType']) === false) {
                         return $return ? $cache->get() : $cache->read();
@@ -885,12 +908,11 @@ trait View
         $_lmv_contents = ob_get_clean();     
         self::inlineErrors($_lmv_contents);
 
-        [$_lmv_headers, $_lmv_contents] = self::assertMinifyAndSaveCache(
+        [$_lmv_headers, $_lmv_contents, $_lmv_is_cacheable] = self::doContentMinification(
             $_lmv_contents,
             $lmv_view_type,
             $this->minifyCodeblocks, 
             $this->codeblockButton,
-            $_lmv_cache,
             $customHeaders
         );
 
@@ -898,8 +920,14 @@ trait View
             return $_lmv_contents;
         }
 
+        $_lmv_headers['default_headers'] = true;
         Header::parseHeaders($_lmv_headers);
         echo $_lmv_contents;
+
+        if($_lmv_is_cacheable && $_lmv_cache instanceof ViewCache){
+            $_lmv_cache->setFile($this->filepath);
+            $_lmv_cache->saveCache($_lmv_contents, $_lmv_headers, $lmv_view_type);
+        }
 
         return true;
     }
@@ -942,12 +970,11 @@ trait View
         $_lmv_contents = ob_get_clean();
         self::inlineErrors($_lmv_contents);
 
-        [$_lmv_headers, $_lmv_contents] = self::assertMinifyAndSaveCache(
+        [$_lmv_headers, $_lmv_contents, $_lmv_is_cacheable] = self::doContentMinification(
             $_lmv_contents,
             $lmv_view_type,
             $_lmv_ignore, 
             $_lmv_copy,
-            $_lmv_cache,
             $customHeaders
         );
 
@@ -955,8 +982,14 @@ trait View
             return $_lmv_contents;
         }
 
+        $_lmv_headers['default_headers'] = true;
         Header::parseHeaders($_lmv_headers);
         echo $_lmv_contents;
+        
+        if($_lmv_is_cacheable && $_lmv_cache instanceof ViewCache){
+            $_lmv_cache->setFile($_lmv_view_file);
+            $_lmv_cache->saveCache($_lmv_contents, $_lmv_headers, $lmv_view_type);
+        }
 
         return true;
     }
@@ -1005,19 +1038,18 @@ trait View
      * 
      * @return array<int,mixed> Return array of contents and headers.
     */
-    private function assertMinifyAndSaveCache(
+    private function doContentMinification(
         string|false $content, 
         string $type, 
         bool $ignore, 
         bool $copy, 
-        ?ViewCache $cache = null,
         array $customHeaders = []
     ): array 
     {
+        $canCacheContent = false;
+        $headers = null;
         if ($content !== false && $content !== '') {
-            $headers = null;
             if (self::$minifyContent && $type === 'html') {
-                
                 $minify = Helper::getMinification(
                     $content, 
                     $type, 
@@ -1030,19 +1062,15 @@ trait View
                 $headers = ['Content-Type' => Header::getContentTypes($type)];
             }
 
-            $headers ??= Header::requestHeaders();
-
-            if ($cache !== null) {
-                $cache->saveCache($content, $headers, $type);
-            }
-        }else{
-            $headers = Header::requestHeaders();
+            $canCacheContent = $content !== '';
         }
 
-        $headers['default_headers'] = true;
+        $headers ??= Header::requestHeaders();
+
         return [
             $customHeaders + $headers, 
-            $content
+            $content,
+            $canCacheContent,
         ];
     }
     

@@ -172,7 +172,7 @@ class CronJobs extends BaseConsole
                             }
                         }
                     }catch(Exception $e){
-                        $logger .= 'Exception Error: ' . $$e->getMessage();
+                        $logger .= 'Exception Error: ' . $e->getMessage();
                     }
 
                     if($task['log'] !== null && $logger !== ''){

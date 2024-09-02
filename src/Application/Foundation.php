@@ -19,7 +19,7 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.2.6';
+    public const VERSION = '3.2.7';
 
     /**
      * Framework version name.
@@ -303,11 +303,11 @@ final class Foundation
     }
 
     /**
-     * Generate cache key for storing and serving static pages.
+     * Generate cache id for storing and serving static pages.
      * 
-     * @return string Return MD5 hashed page cache key.
+     * @return string Return cache id.
      */
-    public static function cacheKey(): string 
+    public static function getCacheId(): string 
     {
         $url = $_SERVER['REQUEST_METHOD'] ?? 'CLI';
         $url .= $_SERVER['REQUEST_URI'] ?? 'index';
@@ -319,7 +319,8 @@ final class Foundation
             '#' => '-'
         ]);
 
-        // Remove static cache extension to avoid creating 2 versions of same cache.
+        // Remove static cache extension to avoid creating 2 versions of same cache
+        // while serving static content (e.g, .html).
         if($types = env('page.caching.statics', false)){
             $url = preg_replace('/\.(' . $types . ')$/i', '', $url);
         }

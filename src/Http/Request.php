@@ -323,18 +323,6 @@ final class Request
     }
 
     /**
-     * Check to see if a request was made from the command line.
-     *
-     * @return bool Return true if the request was made from the command line.
-     * @ignore
-     * @deprecated This method is deprecated and will be removed in a future release.
-     */
-    public function isCommand(): bool
-    {
-        return is_command();
-    }
-
-    /**
      * Check if the current connection is secure
      * 
      * @return bool Return true if the connection is secure false otherwise.

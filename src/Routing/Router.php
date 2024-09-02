@@ -989,7 +989,7 @@ final class Router
         static $cachePath = null;
         if ($types && $types !== '' && preg_match('/\.(' . $types . ')$/i', self::$uri, $matches)) {
             $cachePath ??= root(rtrim((new Template())->cacheFolder, TRIM_DS) . '/default/');
-            $cache = (new ViewCache(0, $cachePath))->setKey(Foundation::cacheKey());
+            $cache = (new ViewCache(0, $cachePath))->setKey(Foundation::getCacheId());
 
             // If expiration return mismatched int code 404 ignore and do not try to replace to actual url.
             $expired = $cache->expired($matches[1]);

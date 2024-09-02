@@ -959,7 +959,8 @@ final class Builder extends Connection
     }
 
     /**
-     * Insert records into a specified database table.
+     * Insert records into a specified database table, this allows for inserting multiple records at once by accepting an array of associative arrays.
+     * Each associative array should contain the column names as keys and their corresponding values as values.
      * 
      * @param array<int,array<string,mixed>> $values An array of associative arrays,
      *      where each associative array represents a record to be inserted into the table.
@@ -1005,6 +1006,8 @@ final class Builder extends Connection
 
     /**
      * Build a custom SQL query string to execute when calling the execute method.
+     * This method also supports caching and uses prepared statements if array values are passed to the execute method.
+     * Otherwise, it uses query execution to execute the query, so ensure that values passed directly to the query are escaped.
      * 
      * @param string $query The SQL query string.
      * 
@@ -1288,16 +1291,14 @@ final class Builder extends Connection
         $isBided = $this->andConditions !== [];
         $isOrdered = false;
         $response = false;
+        $withWhere = $this->whereCondition === [];
         
-        if ($this->whereCondition === []) {
-            //buildAndConditions
-            $this->buildConditions($sqlQuery, $isBided);
-        }else{
+        if (!$withWhere) {
             $isBided = true;
             $sqlQuery .= $this->whereCondition['query'];
-            //buildWhereConditions
-            $this->buildConditions($sqlQuery, $isBided, false);
         }
+
+        $this->buildConditions($sqlQuery, $isBided, $withWhere);
 
         if($this->queryGroup !== []){
             $sqlQuery .= ' GROUP BY ' . rtrim(implode(', ', $this->queryGroup), ', ');
@@ -1386,7 +1387,7 @@ final class Builder extends Connection
         $updateColumns = static::buildPlaceholder($columns, true);
         $updateQuery = "UPDATE {$this->tableName} SET {$updateColumns}";
         $updateQuery .= $this->whereCondition['query'];
-        //buildWhereConditions
+ 
         $this->buildConditions($updateQuery, true, false);
 
         if($this->maxLimit > 0){
@@ -1445,7 +1446,7 @@ final class Builder extends Connection
 
         $deleteQuery = "DELETE FROM {$this->tableName}";
         $deleteQuery .= $this->whereCondition['query'];
-        //buildWhereConditions
+
         $this->buildConditions($deleteQuery, true, false);
 
         if($this->maxLimit > 0){
