@@ -21,7 +21,7 @@ class Mailer
     /**
      * Mailer singleton instance
      * 
-     * @var self $mailer
+     * @var self $instance
     */
     private static ?self $instance = null;
 

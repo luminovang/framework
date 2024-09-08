@@ -260,6 +260,9 @@ final class ErrorHandler
             4976 => 'HTTP REQUEST ERROR',
             4977 => 'HTTP SERVER ERROR',
             1200 => 'TERMINATED',
+            1201 => 'ERROR TIMEOUT',
+            1202 => 'PROCESS ERROR',
+            
             
             // SQLite Error Codes
             6 => 'DATABASE LOCKED',

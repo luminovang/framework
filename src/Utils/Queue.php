@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Luminova Framework
  *
@@ -15,23 +14,12 @@ use \Closure;
 class Queue
 {
     /**
-     * Queue to execute
-     * 
-     * @var array<int, Closure|mixed>
-     */
-    private array $jobs = [];
-
-    /**
      * Constructor to initialize the queue with jobs if provided.
      * 
-     * @param array|null $jobs Array of jobs to initialize the queue.
+     * @param array<int,Closure|mixed> $jobs Array of jobs to initialize the queue.
      */
-    public function __construct(array $jobs = [])
-    {
-        if ($jobs !== []) {
-            $this->jobs = $jobs;
-        }
-    }
+    public function __construct(private array $jobs = [])
+    {}
 
     /**
      * Magic method to get a property.
@@ -113,7 +101,7 @@ class Queue
             } else {
                 // Child process
                 $this->callQueue($job);
-                exit(); // Child process exits immediately
+                exit(); 
             }
         } else {
             $this->callQueue($job);
@@ -220,7 +208,7 @@ class Queue
      * 
      * @param array $job Jobs to initialize the new Queue instance.
      * 
-     * @return Queue A new Queue instance.
+     * @return Queue Return new Queue instance.
      */
     private function returnInstance(array $job): Queue
     {
@@ -232,7 +220,7 @@ class Queue
      *
      * @param int $index Current job index.
      *
-     * @return Queue A new Queue instance.
+     * @return Queue Return new Queue instance.
      */
     public function getInstance(int $index): Queue
     {
@@ -242,7 +230,7 @@ class Queue
     /**
      * Get the current job from queue and return a new instance.
      * 
-     * @return Queue A new Queue instance.
+     * @return Queue Return new Queue instance.
      */
     public function current(): Queue
     {
@@ -252,7 +240,7 @@ class Queue
     /**
      * Get the next job from queue and return a new instance.
      * 
-     * @return Queue A new Queue instance.
+     * @return Queue Return new Queue instance.
      */
     public function next(): Queue
     {
@@ -262,7 +250,7 @@ class Queue
     /**
      * Get the last job from queue and return a new instance.
      * 
-     * @return Queue A new Queue instance.
+     * @return Queue Return new Queue instance.
      */
     public function last(): Queue
     {

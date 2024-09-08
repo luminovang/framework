@@ -92,18 +92,20 @@ final class Commands
         'server' => [
             'name' => 'server',
             'group' => 'Server',
-            'description' => "Starts Luminova PHP development server.",
+            'description' => 'Starts the Luminova PHP development server.',
             'usages' => [
                 'php novakit server',
             ],
             'options' => [
-                '-b, --php'  => 'Specify the PHP Binary location to use.',
-                '-h, --host' => 'Specify the HTTP Hostname to use.',
-                '-p, --port' => 'Specify the HTTP Host port to use.',
+                '-b, --php'   => 'Specify the PHP binary location.',
+                '-h, --host'  => 'Specify the development hostname.',
+                '-p, --port'  => 'Specify the port for the development server.',
+                '-t, --testing' => 'Start the server with the network address for testing on other devices.',
             ],
             'examples' => [
-                'php novakit server',
-                'php novakit server --host=localhost --port=8080 --php="PHP-BINARY-PATH"',
+                'php novakit server' => 'Start the development server on localhost.',
+                'php novakit server --port=8080 --testing' => 'Start the server on port 8080 for testing on other devices.',
+                'php novakit server --host=localhost --port=8080 --php=<PHP-BINARY-PATH>' => 'Start the server using a specified PHP binary.',
             ],
         ],
         'build:project' => [

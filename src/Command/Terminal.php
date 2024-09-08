@@ -507,6 +507,19 @@ class Terminal
         exit($exitCode);
     }
 
+    /**
+     * Highlights url as clickable link in terminal.
+     *
+     * @param string $url The url to be highlighted.
+     * @param string|null $title Optional title to be displayed (default: null).
+     *
+     * @return never
+     */
+    final public static function link(string $url, ?string $title = null): void 
+    {
+        $title ??= $url;
+        static::write(static::isAnsiSupported() ? "\033]8;;{$url}\033\\{$title}\033]8;;\033\\" : $url);
+    }
 
     /**
      * Execute a callback function after a specified timeout when no input or output is received.
@@ -816,6 +829,58 @@ class Terminal
     }
 
     /**
+     * Escape command arguments.
+     * 
+     * @param string|array $argument The command argument to escape.
+     * 
+     * @return string Return the escaped command string.
+    */
+    public static final function escape(?string $argument): string
+    {
+        if ($argument === '' || $argument === null) {
+            return '""';
+        }
+
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            return "'" . str_replace("'", "'\\''", $argument) . "'";
+        }
+
+        if (str_contains($argument, "\0")) {
+            $argument = str_replace("\0", '?', $argument);
+        }
+
+        if (preg_match('/[\/()%!^"<>&|\s]/', $argument)) {
+            $argument = preg_replace('/(\\\\+)$/', '$1$1', $argument);
+            return '"' . str_replace(['"', '^', '%', '!', "\n"], ['""', '"^^"', '"^%"', '"^!"', '!LF!'], $argument) . '"';
+        }
+
+        return $argument;
+    }
+
+    /**
+     * Replace command placeholders.
+     * 
+     * @param string $command The command to replace.
+     * @param array $env The environment variables to replace.
+     * @param bool $escape Weather escape command after replacements (default: false)
+     * 
+     * @return string Return replaced command string to be executed.
+     * @throws InvalidArgumentException Throws if an error occurs.
+     */
+    public static final function replace(string $command, array $env, bool $escape = false): string
+    {
+        return preg_replace_callback('/\$\{:([_a-zA-Z][\w]*)\}/', function ($matches) use ($command, $env, $escape) {
+            $key = $matches[1];
+
+            if (!array_key_exists($key, $env) || $env[$key] === false) {
+                throw new InvalidArgumentException(sprintf('Missing value for parameter "%s" in command: %s', $key, $command));
+            }
+
+            return $escape ? self::escape($env[$key]) : $env[$key];
+        }, $command);
+    }
+
+    /**
      * Display card error message using red background and white text as default.
      *
      * @param string $text The text to output.
@@ -1096,23 +1161,6 @@ class Terminal
     }
 
     /**
-     * Checks whether the current stream resource supports or refers to a valid terminal type device.
-     *
-     * @param string $function Function name to check.
-     * @param resource|string $resource Resource to handle (e.g. STDIN, STDOUT).
-     * 
-     * @return bool Return true if stream resource is supported, otherwise false.
-    */
-    public static final function streamSupports(string $function, mixed $resource): bool
-    {
-        if (ENVIRONMENT === 'testing') {
-            return function_exists($function);
-        }
-
-        return function_exists($function) && @$function($resource);
-    }
-
-    /**
      * Register command line queries to make it available using `getOptions` etc.
      * The explain command exposes executed command information making it ready to be accessed withing the class context.
      * 
@@ -1374,27 +1422,98 @@ class Terminal
     }
 
     /**
-     * Check if the stream resource supports colors.
-     *
-     * @param resource|string $resource STDIN/STDOUT.
+     * Determines if the terminal supports colored output.
      * 
-     * @return bool Return true if the resource supports colors.
-    */
+     * @param mixed $resource The resource to check (default is STDOUT).
+     * 
+     * @return bool Return true if color output is supported, false otherwise.
+     */
     public static final function isColorSupported(mixed $resource = STDOUT): bool
     {
+        static $colorResult = [];
+
+        if (isset($colorResult[$resource])) {
+            return $colorResult[$resource];
+        }
+
         if (self::isColorDisabled()) {
-            return false;
+            return $colorResult[$resource] = false;
         }
 
         if (is_platform('mac')) {
-            return static::isMacTerminal();
+            return $colorResult[$resource] = static::isMacTerminal();
         }
 
         if (is_platform('windows')) {
-            return static::isWindowsTerminal($resource);
+            return $colorResult[$resource] = static::isWindowsTerminal($resource);
         }
 
-        return static::streamSupports('stream_isatty', $resource);
+        return $colorResult[$resource] = static::streamSupports('stream_isatty', $resource);
+    }
+
+    /**
+     * Checks if the current terminal supports ANSI escape sequences.
+     *
+     * @return bool Return true if ANSI is supported, false otherwise.
+     */
+    public static final function isAnsiSupported(): bool
+    {
+        static $ansiResult = null;
+
+        if ($ansiResult !== null) {
+            return $ansiResult;
+        }
+
+        if (is_platform('windows')) {
+            return $ansiResult = getenv('ANSICON') === 'ON' || getenv('WT_SESSION') !== false;
+        }
+
+        $term = getenv('TERM');
+        if ($term !== false) {
+            $ansiTerminals = ['xterm', 'xterm-color', 'screen', 'screen-256color', 'tmux', 'linux'];
+            foreach ($ansiTerminals as $terminal) {
+                if (str_contains($term, $terminal)) {
+                    return $ansiResult = true;
+                }
+            }
+        }
+
+        return $ansiResult = false;
+    }
+
+    /**
+     * Determines if PTY (Pseudo-Terminal) is supported on the current system.
+     *
+     * @return bool Return true if PTY is supported, false otherwise.
+     */
+    public static final function isPtySupported(): bool
+    {
+        static $ptyResult;
+
+        if (null !== $ptyResult) {
+            return $ptyResult;
+        }
+
+        if ('\\' === DIRECTORY_SEPARATOR) {
+            return $ptyResult = false;
+        }
+
+        return $ptyResult = (
+            self::streamSupports('posix_isatty', STDOUT) || 
+            (bool) @proc_open('echo 1 >/dev/null', [['pty'], ['pty'], ['pty']], $pipes)
+        );
+    }
+
+    /**
+     * Checks if the current system supports TTY (Teletypewriter).
+     *
+     * @return bool Return true if TTY is supported, false otherwise.
+     */
+    public static final function isTtySupported(): bool
+    {
+        static $ttyResult;
+
+        return $ttyResult ??= ('/' === DIRECTORY_SEPARATOR && static::streamSupports('stream_isatty', STDOUT));
     }
 
     /**
@@ -1408,16 +1527,56 @@ class Terminal
     }
 
     /**
-     * Checks whether the current terminal is mac terminal.
+     * Determines if the current terminal is a supported macOS terminal.
      *
-     * @return bool Return true if is mac, otherwise false.
-    */
+     * @return bool Return true if the terminal is a supported macOS terminal, false otherwise.
+     */
     public static final function isMacTerminal(): bool
     {
+        static $macResult = null;
+
+        if ($macResult !== null) {
+            return $macResult;
+        }
+
         $termProgram = getenv('TERM_PROGRAM');
-        return in_array($termProgram, ['Hyper', 'Apple_Terminal']) ||
-            ($termProgram === 'iTerm' && version_compare(getenv('TERM_PROGRAM_VERSION'), '3.4', '>='));
+        if ($termProgram) {
+            $macResult = in_array($termProgram, ['Hyper', 'Apple_Terminal']) || (
+                $termProgram === 'iTerm' &&
+                version_compare(getenv('TERM_PROGRAM_VERSION'), '3.4', '>=')
+            );
+        } else {
+            $macResult = false;
+        }
+
+        return $macResult;
     }
+
+    /**
+     * Determines if the current terminal is a supported Linux terminal.
+     *
+     * @return bool Return true if the terminal is a supported Linux terminal, false otherwise.
+     */
+    public static function isLinuxTerminal(): bool
+    {
+        static $unixResult = null;
+
+        if ($unixResult !== null) {
+            return $unixResult;
+        }
+
+        if (stripos(PHP_OS, 'Linux') === 0) {
+            return $unixResult = true;
+        }
+
+        $termProgram = getenv('TERM_PROGRAM');
+        if ($termProgram !== false) {
+            return $unixResult = in_array(strtolower($termProgram), ['xterm', 'gnome-terminal', 'konsole', 'terminator']);
+        } 
+        
+        return $unixResult = false;
+    }
+
 
     /**
      * Checks whether the stream resource on windows is terminal.
@@ -1426,12 +1585,32 @@ class Terminal
      * 
      * @return bool return true if is windows terminal, false otherwise.
     */
-    public static final function isWindowsTerminal(mixed $resource): bool
+    public static final function isWindowsTerminal(mixed $resource = STDIN): bool
     {
-        return static::streamSupports('sapi_windows_vt100_support', $resource) ||
-            isset($_SERVER['ANSICON']) || getenv('ANSICON') !== false ||
-            getenv('ConEmuANSI') === 'ON' ||
+        static $winResult = [];
+
+        return $winResult[$resource] ??= static::streamSupports('sapi_windows_vt100_support', $resource) ||
+            isset($_SERVER['ANSICON']) || 
+            getenv('ANSICON') !== false || 
+            getenv('ConEmuANSI') === 'ON' || 
             getenv('TERM') === 'xterm';
+    }
+
+    /**
+     * Checks whether the current stream resource supports or refers to a valid terminal type device.
+     *
+     * @param string $function Function name to check.
+     * @param resource|string $resource Resource to handle (e.g. STDIN, STDOUT).
+     * 
+     * @return bool Return true if stream resource is supported, otherwise false.
+    */
+    public static final function streamSupports(string $function, mixed $resource): bool
+    {
+        if (ENVIRONMENT === 'testing') {
+            return function_exists($function);
+        }
+
+        return function_exists($function) && @$function($resource);
     }
 
     /**

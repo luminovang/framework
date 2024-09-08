@@ -34,147 +34,147 @@ trait View
      * Template configuration.
      * 
      * @var TemplateConfig $config
-    */
+     */
     private static ?TemplateConfig $config = null;
 
     /**
      * Flag for key not found.
      * 
      * @var string KEY_NOT_FOUND
-    */
+     */
     protected static string $KEY_NOT_FOUND = '__nothing__';
 
     /** 
      * Framework project document root.
      * 
      * @var string|null $root
-    */
+     */
     private static ?string $root = null;
 
     /** 
      * View template full filename.
      * 
      * @var string $filepath 
-    */
+     */
     private string $filepath = '';
 
     /**
      * View template directory.
      * 
      * @var string $viewsDirectory 
-    */
+     */
     private string $viewsDirectory = '';
 
     /**
      * Type of view content.
      * 
      * @var string $viewType 
-    */
+     */
     private string $viewType = 'html';
 
     /** 
      * The project view file directory.
      * 
      * @var string $viewFolder 
-    */
+     */
     private static string $viewFolder = 'resources/views';
 
     /** 
      * The view sub directory.
      * 
      * @var string $subfolder 
-    */
+     */
     private string $subfolder = '';
 
     /** 
      * Holds the router active page name.
      * 
      * @var string $activeView 
-    */
+     */
     private string $activeView = '';
 
     /** 
      * Holds the array attributes.
      * 
      * @var array $publicOptions 
-    */
+     */
     private static array $publicOptions = [];
 
     /** 
      * Holds the array classes.
      * 
      * @var array<string,mixed> $publicClasses 
-    */
+     */
     private static array $publicClasses = [];
 
     /** 
      * Ignore or allow view optimization.
      * 
      * @var array<string,array> $cacheOption
-    */
+     */
     private array $cacheOption = [];
 
     /**
      * Force use of cache response.
      * 
      * @var bool $forceCache 
-    */
+     */
     private bool $forceCache = false;
 
     /**
      * Response cache expiry ttl.
      * 
      * @var DateTimeInterface|int|null $cacheExpiry 
-    */
+     */
     private DateTimeInterface|int|null $cacheExpiry = 0;
 
-     /**
+    /**
      * Default cache path.
      * 
      * @var string|null $cacheFolder 
-    */
+     */
     private static ?string $cacheFolder = null;
 
     /**
      * Minify page content.
      * 
      * @var bool $minifyContent 
-    */
+     */
     private static bool $minifyContent = false;
 
     /**
      * Should cache view base.
      * 
      * @var bool $cacheView
-    */
+     */
     private bool $cacheView = false;
 
     /**
      * Should minify codeblock tags.
      * 
      * @var bool $minifyCodeblocks 
-    */
+     */
     private bool $minifyCodeblocks = false;
 
     /**
      * Allow copy codeblock.
      * 
      * @var bool $codeblockButton 
-    */
+     */
     private bool $codeblockButton = false;
 
     /**
      * Supported view types.
      * 
      * @var string[] $supportedTypes
-    */
+     */
     private static array $supportedTypes = ['html', 'json', 'text', 'txt', 'xml', 'js', 'css', 'rdf', 'atom', 'rss'];
 
     /**
      * View headers.
      * 
      * @var array<string,mixed> $headers
-    */
+     */
     private array $headers = [];
 
     /** 
@@ -182,7 +182,7 @@ trait View
      *
      * @return void
      * @internal 
-    */
+     */
     protected final function initialize(): void
     {
         self::$config ??= new TemplateConfig();
@@ -200,7 +200,7 @@ trait View
      *
      * @return mixed Return option value or class object.
      * @internal 
-    */
+     */
     protected static final function attrGetter(string $key): mixed 
     {
         if (array_key_exists($key, self::$publicOptions)) {
@@ -217,7 +217,7 @@ trait View
      * @param bool $button Indicate if codeblock tags should include a copy button (default: false).
      *
      * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
-    */
+     */
     public final function codeblock(bool $minify, bool $button = false): self 
     {
         $this->minifyCodeblocks = $minify;
@@ -236,7 +236,7 @@ trait View
      * - If called in controller `onCreate` or `__construct` method, the entire controller view will be searched in the specified folder.
      * - If called in application `onCreate` or `__construct` method, the entire application view will be searched in the specified folder.
      * - If called with the controller method before rendering view, only the method view will be searched in the specified folder.
-    */
+     */
     public final function setFolder(string $path): self
     {
         $this->subfolder = trim($path, TRIM_DS);
@@ -252,7 +252,7 @@ trait View
      * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
      * 
      * > It is recommended to use this method within the `onCreate` or `__construct` methods of your application.
-    */
+     */
     public final function noCaching(array|string $viewName): self
     {
         if(is_string($viewName)){
@@ -294,7 +294,7 @@ trait View
      * 
      * - If set in controller `onCreate` or `__construct`, the entire views within the controller will not be cached.
      * - If set in application class, the entire application views will not be cached.
-    */
+     */
     public final function cacheable(bool $allow): self
     {
         $this->cacheView = $allow;
@@ -312,7 +312,7 @@ trait View
      * @return true Return true on success, false on failure.
      * @throws RuntimeException If the class does not exist or failed.
      * @throws RuntimeException If there is an error during registration.
-    */
+     */
     public final function export(string|object $class, ?string $alias = null, bool $initialize = true): bool 
     {
         if ($class === '' || $alias === '') {
@@ -352,7 +352,7 @@ trait View
      * }else{
      *      $cache->reuse();
      * }```
-    */
+     */
     public final function cache(DateTimeInterface|int|null $expiry = null): self 
     {
         $this->forceCache = true;
@@ -365,6 +365,32 @@ trait View
     }
 
     /**
+     * Deletes the cache entry for the current request view.
+     *
+     * @param string|null $version Optional. Specify the application version to delete (default: null).
+     * 
+     * @return bool Return true if the cache entry was deleted; false otherwise.
+     */
+    public function delete(?string $version = null): bool 
+    {
+        return Helper::getCache(self::$cacheFolder, Foundation::getCacheId())
+                    ->delete($version);
+    }
+
+    /**
+     * Clears all view cache entries.
+     *
+     * @param string|null $version Optional. Specify the application version to clear (default: null).
+     * 
+     * @return int Return the number of deleted cache entries.
+     */
+    public function clear(?string $version = null): int 
+    {
+        return Helper::getCache(self::$cacheFolder, Foundation::getCacheId())
+                    ->clear($version);
+    }
+
+    /**
      * Check if page cache has expired.
      * Note: the expiration check we use the time used while saving cache.
      * 
@@ -372,10 +398,11 @@ trait View
      * 
      * @return bool Returns true if cache doesn't exist or expired.
      * @throws RuntimeException Throw if the cached version doesn't match with the current view type.
-    */
+     */
     public final function expired(string|null $viewType = 'html'): bool
     {
-        $expired = Helper::getCache(self::$cacheFolder, Foundation::getCacheId())->expired($viewType);
+        $expired = Helper::getCache(self::$cacheFolder, Foundation::getCacheId())
+            ->expired($viewType);
 
         if($expired === 404){
             throw new RuntimeException('Invalid mismatch view type: ' . $viewType);
@@ -389,7 +416,7 @@ trait View
      * 
      * @return int Returns status code success if cache exist and rendered else return error.
      * @throws RuntimeException Throws if called without calling `cache` method.
-    */
+     */
     public final function reuse(): int
     {
         if (!$this->forceCache) {
@@ -478,7 +505,7 @@ trait View
      *
      * @return self Return instance of View or CoreApplication depending on where its called.
      * @throws RuntimeException Throw if invalid or unsupported view type specified.
-    */
+     */
     public final function view(string $viewName, string $viewType = 'html'): self 
     {
         $viewName = trim($viewName, '/');
@@ -553,14 +580,14 @@ trait View
         return $this->call($options, $status, true);
     }
 
-     /** 
+    /** 
      * Redirect to another view url.
      *
      * @param string $view The view name or view path to redirect to.
      * @param int $response_code The redirect response status code (default: 0).
      *
      * @return void
-    */
+     */
     public final function redirect(string $view, int $response_code = 0): void 
     {
         $view = start_url($view);
@@ -583,7 +610,7 @@ trait View
      *    -  'dirname': The directory name of the view file.
      *    -  'extension': The extension of the view file.
      *    -  'filename': The filename (without extension) of the view file.
-    */
+     */
     public final function viewInfo(): array 
     {
         $viewPath = root(self::$viewFolder) . $this->activeView . self::dot();
@@ -621,7 +648,7 @@ trait View
      * @param string $filename Optional view, path or file to prepend to root URL.
      * 
      * @return string Return full url to view or file.
-    */
+     */
     public static final function link(string $filename = ''): string 
     {
         $base = (PRODUCTION ? '/' : Helper::relativeLevel());
@@ -637,7 +664,7 @@ trait View
      * Get application root folder.
      *
      * @return string Return the application root directory.
-    */
+     */
     private static function getSystemRoot(): string
     {
         if(self::$root === null){
@@ -651,7 +678,7 @@ trait View
      * Get template engine file extension.
      *
      * @return string Returns extension type.
-    */
+     */
     private static function dot(): string
     {
         $engine = self::engine();
@@ -671,7 +698,7 @@ trait View
      * Get template engine type.
      *
      * @return string Return template engine name.
-    */
+     */
     private static function engine(): string 
     {
         return strtolower(self::$config->templateEngine ?? 'default');
@@ -686,7 +713,7 @@ trait View
      *
      * @return bool|string  Return true on success, false on failure.
      * @throws ViewNotFoundException Throw if view file is not found.
-    */
+     */
     private function call(array $options = [], int $status = 200, bool $return = false): string|bool
     {
         $options = $this->parseOptions($options);
@@ -751,7 +778,7 @@ trait View
      * @return bool Return true if setup is ready.
      * @throws ViewNotFoundException Throw if view file is not found.
      * @throws RuntimeException Throw of error occurred during rendering.
-    */
+     */
     private function assertSetup(int $status = 200): bool
     {
         if (!file_exists($this->filepath)) {
@@ -784,7 +811,7 @@ trait View
      * @param array $customHeaders Additional headers.
      * 
      * @return bool|string Return true on success, false on failure.
-    */
+     */
     private static function smartyTemplateEngine(
         string $view, 
         string $viewsDirectory, 
@@ -840,7 +867,7 @@ trait View
      * @param array $customHeaders Additional headers.
      * 
      * @return bool|string Return true on success, false on failure.
-    */
+     */
     private static function twigTemplateEngine(
         string $view, 
         string $viewsDirectory, 
@@ -891,7 +918,7 @@ trait View
      * @param array $customHeaders Additional headers.
      * 
      * @return bool|string Return true on success, false on failure.
-    */
+     */
     private function defaultTemplateEngine(
         array $options, 
         ?ViewCache $_lmv_cache = null, 
@@ -945,7 +972,7 @@ trait View
      * 
      * @return bool|string Return true on success, false on failure.
      * @throws RuntimeException Throw if error occurred.
-    */
+     */
     private static function isolateTemplateEngine(
         string $_lmv_view_file, 
         array $options,
@@ -998,7 +1025,7 @@ trait View
      * Initialize self class keyword.
      * 
      * @return class-object Return new instance of anonymous classes.
-    */
+     */
     private static function newSelfInstance(): object 
     {
         return new class(self::$publicClasses) {
@@ -1037,7 +1064,7 @@ trait View
      * @param array $customHeaders Additional headers.
      * 
      * @return array<int,mixed> Return array of contents and headers.
-    */
+     */
     private function doContentMinification(
         string|false $content, 
         string $type, 
@@ -1079,7 +1106,7 @@ trait View
      *
      * @return bool Return true if view should be cached, otherwise false.
      * > The check order is important.
-    */
+     */
     private function shouldCache(): bool
     {
         if ($this->forceCache) {
@@ -1130,7 +1157,7 @@ trait View
      * @param array<string,mixed> $options The view options.
      *
      * @return void 
-    */
+     */
     private static function handleException(
         ExceptionInterface $exception, 
         array $options = []
@@ -1153,7 +1180,7 @@ trait View
      * 
      * @return void
      * @throws RuntimeException If there is an error setting the attributes.
-    */
+     */
     private static function extract(array $attributes): void
     {
         if (self::$config->variablePrefixing === null) {
@@ -1176,7 +1203,7 @@ trait View
      * @throws RuntimeException Throws if key is not a valid PHP variable key.
      * 
      * @return void
-    */
+     */
     private static function assertValidOptionKey(string $key): void 
     {
         if ($key === '_' || $key === '') {
@@ -1230,7 +1257,7 @@ trait View
      * @param array<string,mixed> $options The template options.
      * 
      * @return array<string,mixed> Return the parsed options.
-    */
+     */
     private function parseOptions(array $options = []): array 
     {
         $options['viewType'] = $this->viewType;
@@ -1259,7 +1286,7 @@ trait View
      * @param string Path to trim.
      *
      * @return string Return trimmed directory path.
-    */
+     */
     private static function trimDir(string $path): string 
     {
         return rtrim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
@@ -1271,7 +1298,7 @@ trait View
      * @param string The view directory path. 
      *
      * @return string Return view file directory.
-    */
+     */
     private static function getSystemPath(string $path): string 
     {
         return self::getSystemRoot() . trim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
@@ -1284,7 +1311,7 @@ trait View
      *
      * @return string Return error directory.
      * @internal
-    */
+     */
     public static function getSystemError(string $filename): string 
     {
         return self::getSystemPath(self::$viewFolder) . 'system_errors' . DIRECTORY_SEPARATOR . $filename . '.php';

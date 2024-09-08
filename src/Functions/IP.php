@@ -23,56 +23,56 @@ final class IP
     * Header used by CloudFlare to get the client's IP address.
     *
     * @var string $cloudFlare
-   */
-  private static string $cloudFlare = 'HTTP_CF_CONNECTING_IP';
+    */
+   private static string $cloudFlare = 'HTTP_CF_CONNECTING_IP';
 
   /**
    * List of possible headers to check for the client's IP address.
    *
    * @var array $ipHeaders
-  */
-  private static array $ipHeaders = [
-     'HTTP_CLIENT_IP',
-     'HTTP_X_FORWARDED_FOR',
-     'HTTP_X_FORWARDED',
-     'HTTP_X_CLUSTER_CLIENT_IP',
-     'HTTP_FORWARDED_FOR',
-     'HTTP_FORWARDED',
-     'REMOTE_ADDR',
-  ];
+   */
+   private static array $ipHeaders = [
+      'HTTP_CLIENT_IP',
+      'HTTP_X_FORWARDED_FOR',
+      'HTTP_X_FORWARDED',
+      'HTTP_X_CLUSTER_CLIENT_IP',
+      'HTTP_FORWARDED_FOR',
+      'HTTP_FORWARDED',
+      'REMOTE_ADDR',
+   ];
 
    /**
     * Ip configuration.
     *
     * @var IPConfig $config
-   */
+    */
    private static ?IPConfig $config = null;
 
    /**
     * @var array $errors
-   */
+    */
    private static array $errors = [
       'RateLimited' => 'You have reached your subscription request rate limit allowance.'
    ];
 
    /**
     * Initializes IP
-   */
+    */
    public function __construct(){}
 
    /**
-     * Initializes API configuration.
+    * Initializes API configuration.
     */
-    private static function initConfig(): void
-    {
+   private static function initConfig(): void
+   {
       self::$config ??= new IPConfig();
-    }
+   }
 
    /**
-      * Get the client's IP address.
-      *
-      * @return string Return the client's IP address or '0.0.0.0' if not found.
-   */
+    * Get the client's IP address.
+    *
+    * @return string Return the client's IP address or '0.0.0.0' if not found.
+    */
    public static function get(): string 
    {
       if (isset($_SERVER[self::$cloudFlare])) {
@@ -106,6 +106,71 @@ final class IP
       }
       
       return PRODUCTION ? '0.0.0.0' : $_SERVER['REMOTE_ADDR']; 
+   }
+
+   /**
+   * Get the local IP address of the machine.
+   *
+   * This method first attempts to retrieve the machine's IP address via its hostname. 
+   * If that fails or returns an invalid IP address, it falls back to using platform-specific 
+   * shell commands (`ipconfig` on Windows or `ifconfig` on Linux/macOS) to retrieve the IP.
+   * 
+   * @return string|false Returns the local IP address as a string, or false if unable to retrieve it.
+   */
+   public static function getLocalAddress():string|bool
+   {
+      if (($hostName = getHostName()) !== false) {
+         $ip = getHostByName($hostName);
+         if (filter_var($ip, FILTER_VALIDATE_IP)) {
+            return $ip;
+         }
+      }
+
+      $output = null;
+      $pattern = null;
+
+      if(is_platform('windows')){
+         $output = shell_exec('ipconfig');
+         $pattern = '/IPv4 Address[.\s]*:\s*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/';
+      } else {
+         $output = shell_exec('ifconfig');
+         $pattern = '/inet\s([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/';
+      }
+
+      if ($output && preg_match($pattern, $output, $matches)) {
+         return $matches[1]; 
+      }
+
+      return false;
+   }
+
+   /**
+    * Get the local network IP address (not the loopback address).
+    *
+    * This method attempts to retrieve the machine's IP address on the network, avoiding the
+    * loopback IP (127.0.0.1). It first checks platform-specific network interfaces using
+    * shell commands (`ipconfig` on Windows, `ifconfig` on Linux/macOS).
+    * 
+    * @return string|false Returns the local network IP address as a string, or false if unable to retrieve it.
+    */
+   public static function getLocalNetworkAddress(): string|bool
+   {
+      $output = null;
+      $pattern = null;
+
+      if(is_platform('windows')){
+         $output = shell_exec('ipconfig');
+         $pattern = '/IPv4 Address[.\s]*:\s*(?!127\.0\.0\.1)([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/';
+      } else {
+         $output = shell_exec('ifconfig');
+         $pattern = '/inet\s(?!127\.0\.0\.1)([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/';
+      }
+
+      if ($output && preg_match($pattern, $output, $matches)) {
+         return $matches[1];
+      }
+
+      return false;
    }
 
    /**

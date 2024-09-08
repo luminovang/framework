@@ -131,11 +131,13 @@ final class ViewCache
     /**
      * Get the current version cache filename and path.
      * 
+     * @param string|null Optionally specify application version to retrieve (default: null).
+     * 
      * @return string Return the file path for the cache.
     */
-    public function getFilename(): string
+    public function getFilename(?string $version = null): string
     {
-        return $this->getLocation() . APP_VERSION . DIRECTORY_SEPARATOR . $this->key . '.lmv.php';
+        return $this->getLocation() . ($version ?? APP_VERSION) . DIRECTORY_SEPARATOR . $this->key . '.lmv.php';
     }
 
     /**
@@ -189,21 +191,26 @@ final class ViewCache
     /**
      * Delete a cache entry.
      * 
+     * @param string|null Optionally specify application version to delete (default: null).
+     * 
      * @return bool Return true if the cache entry was deleted, false otherwise.
     */
-    public function delete(): bool 
+    public function delete(?string $version = null): bool 
     {
-        return unlink($this->getFilename());
+        $filename = $this->getFilename($version);
+        return file_exists($filename) && unlink($filename);
     }
 
     /**
      * Clear all cache entries.
      * 
+     * @param string|null Optionally specify application version to clear (default: null).
+     * 
      * @return int Return number of deleted caches.
     */
-    public function clear(): int 
+    public function clear(?string $version = null): int 
     {
-        return FileManager::remove($this->getLocation() .  APP_VERSION . DIRECTORY_SEPARATOR);
+        return FileManager::remove($this->getLocation() . ($version ?? APP_VERSION) . DIRECTORY_SEPARATOR);
     }
 
     /**
