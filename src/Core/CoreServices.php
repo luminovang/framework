@@ -18,7 +18,7 @@ abstract class CoreServices implements ServicesInterface
      * Service queue.
      *
      * @var array<string,array> $serviceQueue
-    */
+     */
     private static array $serviceQueue = [];
 
     /**
@@ -75,7 +75,7 @@ abstract class CoreServices implements ServicesInterface
      * @return array<string,array> Returns an array of queued services.
      * 
      * @internal
-    */
+     */
     public static final function getServices(): array 
     {
         return self::$serviceQueue;

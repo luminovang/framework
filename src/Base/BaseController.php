@@ -200,16 +200,18 @@ abstract class BaseController
     }
 
     /**
-     * Controller initialization method, an alternative to __construct.
+     * onCreate method that gets triggered on object creation, 
+     * designed to be overridden in subclasses for custom initialization.
      * 
-     * @return void 
-    */
+     * @return void
+     */
     protected function onCreate(): void {}
 
     /**
-     * Controller destruction method, an alternative to __destruct.
+     * onDestroy method that gets triggered on object destruction, 
+     * designed to be overridden in subclasses for custom destruction.
      * 
-     * @return void 
-    */
+     * @return void
+     */
     protected function onDestroy(): void {}
 }

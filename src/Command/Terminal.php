@@ -1430,25 +1430,19 @@ class Terminal
      */
     public static final function isColorSupported(mixed $resource = STDOUT): bool
     {
-        static $colorResult = [];
-
-        if (isset($colorResult[$resource])) {
-            return $colorResult[$resource];
-        }
-
         if (self::isColorDisabled()) {
-            return $colorResult[$resource] = false;
+            return false;
         }
 
         if (is_platform('mac')) {
-            return $colorResult[$resource] = static::isMacTerminal();
+            return static::isMacTerminal();
         }
 
         if (is_platform('windows')) {
-            return $colorResult[$resource] = static::isWindowsTerminal($resource);
+            return static::isWindowsTerminal($resource);
         }
 
-        return $colorResult[$resource] = static::streamSupports('stream_isatty', $resource);
+        return static::streamSupports('stream_isatty', $resource);
     }
 
     /**
@@ -1587,9 +1581,7 @@ class Terminal
     */
     public static final function isWindowsTerminal(mixed $resource = STDIN): bool
     {
-        static $winResult = [];
-
-        return $winResult[$resource] ??= static::streamSupports('sapi_windows_vt100_support', $resource) ||
+        return static::streamSupports('sapi_windows_vt100_support', $resource) ||
             isset($_SERVER['ANSICON']) || 
             getenv('ANSICON') !== false || 
             getenv('ConEmuANSI') === 'ON' || 

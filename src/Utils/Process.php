@@ -146,7 +146,7 @@ class Process
      * @param string $executor The process executor type (e.g, `Process::EXECUTOR_*`). 
      *              Can be one of the defined executor constants.
      * @param string|null $cwd Optional working directory (default: null).
-     * @param array<string>|null $envs Optional environment variables (default: null).
+     * @param array<string>|null $env Optional environment variables (default: null).
      */
     public function __construct(
         private mixed $input,
@@ -184,6 +184,8 @@ class Process
 
     /**
      * Cleanup on destruct object.
+     * 
+     * @return void
      */
     public function __destruct()
     {
@@ -192,8 +194,10 @@ class Process
 
     /**
      * Cleanup on clone object.
+     * 
+     * @return void
      */
-    public function __clone()
+    public function __clone(): void
     {
         $this->cleanup();
     }
@@ -201,11 +205,12 @@ class Process
     /**
      * Runs the process based on the provided input and executor.
      *
+     * @return void
      * @throws RuntimeException throws if the process fails to run or any error occurs.
      * @throws BadMethodCallException If trying to called while the process is running.
      * @throws InvalidArgumentException If an invalid command argument is specified.
      */
-    public function run()
+    public function run(): void
     {
         $this->assertStarted(__FUNCTION__);
         $this->isComplete = false;
@@ -221,7 +226,7 @@ class Process
     /**
      * Creates a Process instance with a callback.
      *
-     * @param callable $callable The callable to be executed.
+     * @param callable|Closure $callable The callable to be executed.
      * 
      * @return self Return new static process instance.
      */
@@ -349,6 +354,8 @@ class Process
 
     /**
      * Gets the working directory.
+     * 
+     * @return string Return the working directory.
      */
     public function getWorkingDirectory(): ?string
     {
@@ -399,7 +406,7 @@ class Process
     /**
      * Sets the environment variables.
      *
-     * @param string[] $envs The environment variables.
+     * @param array<string,mixed> $envs The environment variables.
      * 
      * @return self Return the instance of process class.
      * @throws BadMethodCallException If trying to set environment variables while the process is running.
@@ -529,8 +536,10 @@ class Process
      *
      * @param int $timeout Maximum time to wait in seconds (default: 0 for no timeout).
      * @throws RuntimeException If the process has not been started.
+     * 
+     * @return void
      */
-    public function wait(int $timeout = 0)
+    public function wait(int $timeout = 0): void
     {
         if (!$this->open) {
             self::onError('Process not started. You need to call run() first.');
@@ -561,7 +570,7 @@ class Process
     /**
      * Waits for output from a generator process.
      *
-     * @return mixed Current output from the generator.
+     * @return mixed Return the current output from the generator.
      */
     private function waitForGenerator(): mixed
     {
@@ -577,6 +586,8 @@ class Process
 
     /**
      * Reads data from the stream until EOF is reached.
+     * 
+     * @return void
      */
     private function readStream(): void
     {
@@ -595,6 +606,7 @@ class Process
      * Adds response output to the internal response storage.
      *
      * @param mixed $response The response output to add.
+     * 
      * @return void
      */
     private function normalizeResponse(mixed $response): void
@@ -631,6 +643,8 @@ class Process
      * Cleans up the process and its resources.
      * 
      * @param bool $timeout Whether is cleanup for timeout (default: false).
+     * 
+     * @return void
      * @throws RuntimeException Throws if the process timeout is reached.
      */
     private function cleanup(bool $timeout = false): void
@@ -651,7 +665,7 @@ class Process
 
         if($timeout){
             self::onError(
-                "Process not started. You need to call run() first.",
+                'Process not started. You need to call run() first.',
                 RuntimeException::TIMEOUT_ERROR
             );
         }
@@ -753,11 +767,11 @@ class Process
                         $this->normalizeResponse($output);
                     }
                 } else {
-                    self::onError("Invalid stream resource provided.");
+                    self::onError('Invalid stream resource provided.');
                 }
                 break;
             default:
-                self::onError("Invalid execution method specified.");
+                self::onError('Invalid execution method specified.');
         }
     }
 

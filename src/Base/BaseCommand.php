@@ -103,11 +103,12 @@ abstract class BaseCommand extends Terminal
     */
     abstract public function help(array $helps): int;
 
-    /**
-     * An alternative to the __construct method, called during object creation.
+     /**
+     * onCreate method that gets triggered on object creation, 
+     * designed to be overridden in subclasses for custom initialization.
      * 
-     * @return void 
-    */
+     * @return void
+     */
     protected function onCreate(): void {}
 
     /**
