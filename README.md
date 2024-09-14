@@ -66,4 +66,4 @@ composer create-project luminovang/luminova my-project
 
 Then you're welcome here!
 
-To get started with building your application using PHP Luminova, visit our [official documentation](https://luminova.ng/docs) or check out the [GitHub documentation](https://github.com/luminovang/luminova/docs/).
+To get started with building your application using PHP Luminova, visit our [official documentation](https://luminova.ng/docs) or check out the [GitHub documentation](https://github.com/luminovang/documentation/).
