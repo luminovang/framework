@@ -25,7 +25,7 @@ I don't think this is what you intended to install, but if you're feeling advent
 composer install luminovang/framework
 ```
 
-To install the Luminova framework for development, use the following command:
+To install the Luminova framework for [development](https://github.com/luminovang/luminova), use the following command:
 
 ```bash
 composer create-project luminovang/luminova my-project
