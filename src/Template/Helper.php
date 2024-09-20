@@ -79,6 +79,7 @@ class Helper
         self::$viewCache->setExpiry($expiry);
         self::$viewCache->setDirectory($directory);
         self::$viewCache->setKey($key);
+        self::$viewCache->setUri(Foundation::getUriSegments());
 
         return self::$viewCache;
     }

@@ -9,7 +9,6 @@
  */
 namespace Luminova\Functions;
 
-
 use \Laminas\Escaper\Escaper;
 use \Luminova\Exceptions\BadMethodCallException;
 use \Luminova\Exceptions\RuntimeException;
@@ -153,6 +152,7 @@ class Escape
         }
 
         $this->encoding = $encoding;
+        $this->encodingFlags = ENT_QUOTES|ENT_SUBSTITUTE;
 
         if (static::$isEscaper) {
             if($this->escaper instanceof Escaper && $this->escaper->getEncoding() === $encoding) {

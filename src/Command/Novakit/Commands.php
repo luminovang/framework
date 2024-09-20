@@ -207,6 +207,7 @@ final class Commands
                 '--extend' => 'Specify the controller class name to extend.',
                 '--dir' => 'Specify the directory within the `/app/Controllers/` directory to store the controller file.',
                 '--type' => 'Specify the type of controller class you wish to create (e.g. `view`, `command` or `request`).',
+                '--module' => 'Specify the controller class HMVC module (e.g. `user`, `blog`, `admin`, etc...).',
             ],
             'examples' => [
                 'php novakit create:controller TestController',
@@ -223,7 +224,7 @@ final class Commands
                 'php novakit create:view TestView',
             ],
             'options' => [
-                '--dir' => 'Specify the directory within the `resources/views/` directory to store the view file.',
+                '--dir' => 'Specify the directory within the `resources/Views/` directory to store the view file.',
             ],
             'examples' => [
                 'php novakit create:view TestView',

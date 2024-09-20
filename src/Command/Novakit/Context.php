@@ -172,7 +172,8 @@ class Context extends BaseConsole
      */
     private function buildAttributes(): int
     {
-        $collector = (new Generator('\\App\\Controllers\\'))->export('app/Controllers');
+        $hmvc = env('feature.app.hmvc', false);
+        $collector = (new Generator('', false, $hmvc))->export($hmvc ? 'app/Modules' : 'app/Controllers');
 
         $head = "<?php\nuse \Luminova\Routing\Router;\n/** @var \Luminova\Routing\Router \$router */\n/** @var \App\Application \$app */\n\n";
         $httpContents = '';
@@ -181,87 +182,97 @@ class Context extends BaseConsole
         $cliHeader = '';
         $newPrefix = '';
 
-        foreach($collector->getRoutes() as $ctx => $groups){
-
-            foreach($groups as $group => $values){
-                $hasGroup = ($ctx !== 'cli' && $group !== '/' && count($values) > 1);
-
-                if($hasGroup){
-                    $hasGroup = true;
-                    if($ctx === 'http'){
-                        $httpContents .= "\n\$router->bind('/{$group}', static function(Router \$router){\n";
-                    }elseif($ctx === 'api'){
-                        $apiContents .= "\n\$router->bind('/{$group}', static function(Router \$router){\n";
-                    }
-                }elseif($ctx === 'cli'){
-                    $cliContents .= "\n\$router->group('{$group}', static function(Router \$router){\n";
-                }
-
-                foreach($values as $line){
-                    if($ctx === 'http'){
-                        
-                        $pattern = $hasGroup ? substr($line['pattern'], strlen('/' . $group)) : $line['pattern'];
-                        $pattern = '/' . trim($pattern, '/');
-                        $httpContents .= ($hasGroup ? '   ' : '');
-
-                        if($line['middleware'] !== null){
-                            $methods = implode('|', $line['methods']);
-                            $httpContents .= "\$router->middleware('{$methods}', '{$pattern}', '{$line['callback']}');\n";
-                        }else{
-                            $method = $this->getMethodType($line['methods']);
-                            $httpContents .= "\$router->{$method}'{$pattern}', '{$line['callback']}');\n";
-                        }
-                    }elseif($ctx === 'api'){
-                        $pattern = $hasGroup ? substr($line['pattern'], strlen('/api/' . $group)) : ltrim($line['pattern'], 'api/');
-                        $pattern = '/' . trim($pattern, '/');
-                        $apiContents .= ($hasGroup ? '   ' : '');
-
-                        if($line['middleware'] !== null){
-                            $methods = implode('|', $line['methods']);
-                            $apiContents .= "\$router->middleware('{$methods}', '{$pattern}', '{$line['callback']}');\n";
-                        }else{
-                            $method = $this->getMethodType($line['methods']);
-                            $apiContents .= "\$router->{$method}'{$pattern}', '{$line['callback']}');\n";
-                        }
-                    }elseif($ctx === 'cli'){
-                        if($line['middleware'] !== null){
-                            if($line['middleware'] === 'global'){
-                                $cliHeader .= "\$router->before('global', '{$line['callback']}');\n";
-                            }else{
-                                $cliContents .= "   \$router->before('{$group}', '{$line['callback']}');\n";
-                            }
-                        }else{
-                            $cliContents .= "   \$router->command('{$line['pattern']}', '{$line['callback']}');\n";
-                        }
-                    }
-                }
-
-                if($hasGroup){
-                    if($ctx === 'http'){
-                        $httpContents .= "});\n\n";
-                        
-                    }elseif($ctx === 'api'){
-                        $apiContents .= "});\n\n";
-                    }
-                }elseif($ctx === 'cli'){
-                    $cliContents .= "});\n\n";
-                }
-            }
-        }
-
         $path = root('/routes/');
         make_dir($path);
 
-        if ($httpContents !== '' && write_content($path . 'web.php', $head . $httpContents)) {
-            $newPrefix .= "    new Prefix(Prefix::WEB, [ViewErrors::class, 'onWebError']),\n";
-        }
+        foreach($collector->getRoutes() as $ctx => $modules){
+            foreach($modules as $module => $groups){
+                $httpContents = '';
+                $apiContents = '';
+                $cliContents = '';
 
-        if ($apiContents !== '' && write_content($path . 'api.php', $head . $apiContents)) {
-            $newPrefix .= "    new Prefix(Prefix::API, [ViewErrors::class, 'onApiError']),\n";
-        }
+                foreach($groups as $group => $values){
+                    $hasGroup = ($ctx !== 'cli' && $group !== '/' && count($values) > 1);
 
-        if ($cliContents !== '' && write_content($path . 'cli.php', $head . $cliHeader . $cliContents)) {
-            $newPrefix .= "    new Prefix(Prefix::CLI),\n";
+                    if($hasGroup){
+                        $hasGroup = true;
+                        if($ctx === 'http'){
+                            $httpContents .= "\n\$router->bind('/{$group}', static function(Router \$router){\n";
+                        }elseif($ctx === 'api'){
+                            $apiContents .= "\n\$router->bind('/{$group}', static function(Router \$router){\n";
+                        }
+                    }elseif($ctx === 'cli'){
+                        $cliContents .= "\n\$router->group('{$group}', static function(Router \$router){\n";
+                    }
+
+                    foreach($values as $line){
+                        if($ctx === 'http'){
+                            
+                            $pattern = $hasGroup ? substr($line['pattern'], strlen('/' . $group)) : $line['pattern'];
+                            $pattern = '/' . trim($pattern, '/');
+                            $httpContents .= ($hasGroup ? '   ' : '');
+
+                            if($line['middleware'] !== null){
+                                $methods = implode('|', $line['methods']);
+                                $httpContents .= "\$router->middleware('{$methods}', '{$pattern}', '{$line['callback']}');\n";
+                            }else{
+                                $method = $this->getMethodType($line['methods']);
+                                $httpContents .= "\$router->{$method}'{$pattern}', '{$line['callback']}');\n";
+                            }
+                        }elseif($ctx === 'api'){
+                            $pattern = $hasGroup ? substr($line['pattern'], strlen('/api/' . $group)) : ltrim($line['pattern'], 'api/');
+                            $pattern = '/' . trim($pattern, '/');
+                            $apiContents .= ($hasGroup ? '   ' : '');
+
+                            if($line['middleware'] !== null){
+                                $methods = implode('|', $line['methods']);
+                                $apiContents .= "\$router->middleware('{$methods}', '{$pattern}', '{$line['callback']}');\n";
+                            }else{
+                                $method = $this->getMethodType($line['methods']);
+                                $apiContents .= "\$router->{$method}'{$pattern}', '{$line['callback']}');\n";
+                            }
+                        }elseif($ctx === 'cli'){
+                            if($line['middleware'] !== null){
+                                if($line['middleware'] === 'global'){
+                                    $cliHeader .= "\$router->before('global', '{$line['callback']}');\n";
+                                }else{
+                                    $cliContents .= "   \$router->before('{$group}', '{$line['callback']}');\n";
+                                }
+                            }else{
+                                $cliContents .= "   \$router->command('{$line['pattern']}', '{$line['callback']}');\n";
+                            }
+                        }
+                    }
+
+                    if($hasGroup){
+                        if($ctx === 'http'){
+                            $httpContents .= "});\n\n";
+                            
+                        }elseif($ctx === 'api'){
+                            $apiContents .= "});\n\n";
+                        }
+                    }elseif($ctx === 'cli'){
+                        $cliContents .= "});\n\n";
+                    }
+                }
+
+                $webContext = ($module === 'Controllers') ? 'web.php' : $module . '.php';
+                $apiContext = ($module === 'Controllers') ? 'api.php' : $module . '.php';
+                $webPrefix = ($module === 'Controllers') ? 'Prefix::WEB' : "'{$module}'";
+                $apiPrefix = ($module === 'Controllers') ? 'Prefix::API' : "'{$module}'";
+
+                if ($httpContents !== '' && write_content($path . $webContext, $head . $httpContents)) {
+                    $newPrefix .= "    new Prefix($webPrefix, [ViewErrors::class, 'onWebError']),\n";
+                }
+
+                if ($apiContents !== '' && write_content($path . $apiContext, $head . $apiContents)) {
+                    $newPrefix .= "    new Prefix($apiPrefix, [ViewErrors::class, 'onApiError']),\n";
+                }
+
+                if ($cliContents !== '' && write_content($path . 'cli.php', $head . $cliHeader . $cliContents)) {
+                    $newPrefix .= "    new Prefix(Prefix::CLI),\n";
+                }
+            }
         }
 
         if ($newPrefix !== '') {

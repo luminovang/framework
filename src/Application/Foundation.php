@@ -19,14 +19,14 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.2.9';
+    public const VERSION = '3.3.0';
 
     /**
      * Framework version name.
      * 
      * @var string VERSION_NAME
      */
-    public const VERSION_NAME = 'Sweetie';
+    public const VERSION_NAME = 'Nobu';
 
     /**
      * Minimum required php version.

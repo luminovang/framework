@@ -20,17 +20,18 @@ class RouterException extends AppException
     private static array $types = [
         'invalid_argument' => 'Invalid argument "%s", expected "%s", "%s" is given.',
         'empty_argument' => 'Invalid argument "%s", cannot be empty.',
-        'invalid_namespace' => 'Invalid namespace. Only namespaces starting with "\App\Controllers\" are allowed.',
+        'invalid_namespace' => 'Invalid namespace: "%s". Only namespaces starting with "\App\Controllers", "\App\Modules\Controllers\" or "\App\Modules\<Module>\Controllers\" are allowed.',
         'invalid_context' => 'The application environment is not configured correctly. The route context "%s" may be missing or incorrect.',
         'invalid_context_log' => 'The view context "%s" is missing create view context to register your application routes /routes/%s.php',
         'invalid_controller' => 'Invalid class "%s". Only subclasses of BaseCommand, BaseController, BaseViewController, ViewErrors, or CoreApplication are allowed.',
-        'invalid_class' => 'Class "%s" does not exist in the App\Controllers namespace.',
+        'invalid_class' => 'Class "%s" does not exist in any of application registered namespaces: (%s).',
         'invalid_method' => 'Invalid method "%s" in controller. Only public non-static methods are allowed.',
         'invalid_cli_middleware' => 'The before middleware is not used in cli context, use middleware() instead',
         'invalid_middleware' => 'The middleware method is not used in web context, use before() for cli instead',
         'bad_method' => 'Method "%s()" does not accept any arguments, but %d were provided in router patterns called in %s, line: %d',
         'no_method' => 'Call to undefined or inaccessible method %s::%s',
-        'no_context' => 'No router context was provided. Refer to the documentation for context setup.'
+        'no_context' => 'No router context was provided. Refer to the documentation for context setup.',
+        'no_route' => 'No matching route nor method was found to handle request or your routing configuration is incorrect.'
     ];
 
     /**

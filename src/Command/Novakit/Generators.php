@@ -60,12 +60,14 @@ class Generators extends BaseConsole
         $extend = $this->getOption('extend', null);
         $implement = $this->getOption('implement', null);
         $dir = $this->getOption('dir', '');
-
+        $module = strtolower(trim($this->getOption('module', '')));
+        $hmvc = env('feature.app.hmvc', false);
+        
         $runCommand = match($command){
-            'create:controller' => $this->createController($name, $type, $dir),
-            'create:view'       => $this->createView($name, $dir),
+            'create:controller' => $this->createController($name, $type, $dir, $module, $hmvc),
+            'create:view'       => $this->createView($name, $dir, $module, $hmvc),
             'create:class'      => $this->createUtilClass($name, $extend, $implement),
-            'create:model'      => $this->createModel($name, $implement),
+            'create:model'      => $this->createModel($name, $implement, $module, $hmvc),
             default             => 'unknown'
         };
 
@@ -93,9 +95,19 @@ class Generators extends BaseConsole
      * 
      * @return void
      */
-    private function createController(string $name, string $type = 'view', ?string $dir = null): void 
+    private function createController(
+        string $name, 
+        string $type = 'view', 
+        ?string $dir = null, 
+        string $module = '',
+        bool $hmvc = false
+    ): void 
     {
         $view = '';
+        $namespace = $hmvc 
+            ? 'namespace App\Modules\\' . ($module ==='' ? '' : uppercase_words($module) . '\\') . 'Controllers' 
+            : 'namespace App\Controllers';
+
         if($type === 'view'){
             $use = 'use \Luminova\Base\BaseViewController;';
             $extend = 'BaseViewController';
@@ -107,15 +119,15 @@ class Generators extends BaseConsole
             $extend = 'BaseController';
         }
 
-        $name = ucfirst($name);
+        $class = uppercase_words($name);
         if($type === 'view' || $type === 'api'){
             $classContent = <<<PHP
             <?php
-            namespace App\Controllers;
+            $namespace\Http;
             
             $use
             
-            class $name extends $extend
+            class $class extends $extend
             {
                 public function __construct()
                 {
@@ -128,8 +140,7 @@ class Generators extends BaseConsole
             PHP;
 
             if($type === 'view'){
-                $view = strtolower($name);
-                $view = str_replace('controller', '', $view);
+                $view = str_replace('controller', '', strtolower($name));
                 $classContent .= <<<PHP
                     // Class methods goes here
                     public function main(): int
@@ -142,11 +153,11 @@ class Generators extends BaseConsole
         }elseif($type === 'command'){
             $classContent = <<<PHP
             <?php
-            namespace App\Controllers;
+            $namespace\Cli;
             
             $use
             
-            class $name extends $extend
+            class $class extends $extend
             {
                 /**
                  * Override the default help implementation.
@@ -178,12 +189,13 @@ class Generators extends BaseConsole
         }
 
         $classContent .='}';
-
-        $path = "/app/Controllers/";
+        $path = ($hmvc 
+            ? '/app/Modules/' . ($module === '' ? '' : $module . '/') . 'Controllers/' 
+            : '/app/Controllers/') . ($type === 'command') ? 'Cli/' : 'Http/';
         
-        if($this->saveFile($classContent, $path, "{$name}.php")){
+        if($this->saveFile($classContent, $path, "{$class}.php")){
             if($type === 'view'){
-                $this->createView($view, $dir);
+                $this->createView($view, $dir, $module);
             }
         }else{
             $this->writeln("Unable to create class {$name}", 'red');
@@ -198,12 +210,19 @@ class Generators extends BaseConsole
      * 
      * @return void
      */
-    private function createView(string $name, ?string $dir = null): void 
+    private function createView(
+        string $name, 
+        ?string $dir = null, 
+        string $module = '',
+        bool $hmvc = false
+    ): void 
     {
         self::$engine ??= (new Template())->templateEngine;
         $name = strtolower($name);
         $type = (self::$engine === 'smarty') ? '.tpl' : '.php';
-        $path = "/resources/views/";
+        $path = $hmvc 
+            ? 'app/Modules/' . ($module === ''? '' :$module . '/') . 'Views'
+            : '/resources/Views/';
 
         if ($dir !== null) {
             $path .= trim($dir, '/') . '/';
@@ -250,21 +269,29 @@ class Generators extends BaseConsole
      * 
      * @return void
      */
-    private function createModel(string $name, ?string $implement = null): void 
+    private function createModel(
+        string $name, 
+        ?string $implement = null,
+        string $module = '',
+        bool $hmvc = false
+    ): void 
     {
-        $namespace = ($implement !== null) ? "\nuse \\$implement;" : '';
+        $interface = ($implement !== null) ? "\nuse \\$implement;" : '';
+        $namespace = $hmvc 
+            ? 'namespace App\Modules\\' . ($module ==='' ? '' :uppercase_words($module) . '\\') . 'Models\Controllers;' 
+            : 'namespace App\Models;';
         $extends = " extends BaseModel";
         $implement = ($implement !== null) ? " implements $implement" : '';
-        $name = ucfirst($name);
+        $name = uppercase_words($name);
         $table = strtolower($name) . '_table';
 
         $modelContent = <<<PHP
         <?php
-        namespace App\Models;
+        $namespace
 
         use \Luminova\Base\BaseModel;
         use \DateTimeInterface;
-        $namespace
+        $interface
         class $name$extends$implement
         {
             /**
@@ -338,8 +365,10 @@ class Generators extends BaseConsole
             protected array \$messages = [];
         }
         PHP;
-
-        $path = "/app/Models/";
+     
+        $path = $hmvc
+            ? '/app/Modules/' . ($module === ''? '' : $module . '/') . 'Models'
+            : '/app/Models/';
         
         if (!$this->saveFile($modelContent, $path, "{$name}.php")) {
             $this->writeln("Unable to create model {$name}", 'red');
@@ -367,7 +396,7 @@ class Generators extends BaseConsole
 
         $extendString = $extend ? " extends $extend" : '';
         $implementString = $implement ? " implements $implement" : '';
-        $name = ucfirst($name);
+        $name = uppercase_words($name);
 
 
         $classContent = <<<PHP

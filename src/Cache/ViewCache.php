@@ -50,12 +50,16 @@ final class ViewCache
      *
      * @param DateTimeInterface|int $expiration The expiration time for cached files in seconds (default: 0).
      * @param string $directory The directory where cached files will be stored (default: 'cache').
-     * @param int|null $modified The last modified of content (default: 'null').
+     * @param string|null $filename The cache filename (default: 'null').
+     * @param int|null $uri The request uri paths (default: 'null').
+     * @param int|null $prefix The request uri prefix (default: 'null').
      */
     public function __construct(
         DateTimeInterface|int|null $expiration = 0, 
         private string $directory = 'cache',
-        private ?string $filename = null
+        private ?string $filename = null,
+        private ?string $uri = null,
+        private ?string $prefix = null
     )
     {
         $this->setExpiry($expiration);
@@ -78,7 +82,7 @@ final class ViewCache
     }
 
     /**
-     * Set he filename to extract metadata.
+     * Set the filename to extract metadata.
      *  
      * @param string $filename The file to extract metadata.
      * 
@@ -87,6 +91,32 @@ final class ViewCache
     public function setFile(string $filename): self
     {
         $this->filename = $filename;
+        return $this;
+    }
+
+    /**
+     * Set the request uri prefix .
+     *  
+     * @param string $uri The request uri prefix.
+     * 
+     * @return self Return class instance.
+    */
+    public function setPrefix(string $prefix): self
+    {
+        $this->prefix = $prefix;
+        return $this;
+    }
+
+    /**
+     * Set the request uri paths.
+     *  
+     * @param string $uri The request uri paths.
+     * 
+     * @return self Return class instance.
+    */
+    public function setUri(string $url): self
+    {
+        $this->uri = $url;
         return $this;
     }
 
@@ -361,9 +391,17 @@ final class ViewCache
             return true;
         }
 
-        if(($past = env('page.cache.app.versions', [])) !== []){
-            foreach($past as $version){
-                if(file_exists($file = $path . $version . DIRECTORY_SEPARATOR . $filename)){
+        if($this->uri !== null && ($patterns = env('page.cache.latest.content', [])) !== []){
+            foreach($patterns as $pattern){
+                if($this->preferLatestContent($pattern)){
+                    return false;
+                }
+            }
+        }
+
+        if(($pastVersions = env('page.cache.app.versions', [])) !== []){
+            foreach($pastVersions as $past){
+                if(file_exists($file = $path . $past . DIRECTORY_SEPARATOR . $filename)){
                     self::$foundCacheLocation = $file;
                     return true;
                 }
@@ -371,6 +409,24 @@ final class ViewCache
         }
 
         return false;
+    }
+
+    /**
+     * Check if url matches latest contents pattern.
+     * 
+     * @param string $pattern The url pattern to match.
+     * 
+     * @return bool Return true if match otherwise false.
+     */
+    private function preferLatestContent(string $pattern): bool
+    {
+        if($this->uri === $pattern){
+            return true;
+        }
+
+        $pattern = preg_quote($pattern, '/');
+        $pattern = str_replace('\*', '[^\/]+', $pattern);
+        return preg_match('/^' . $pattern . '$/', $this->uri) === 1;
     }
 
     /**

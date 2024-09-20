@@ -27,6 +27,7 @@ use \DateTimeInterface;
 use \DateTimeImmutable;
 use \DateTimeZone;
 use \Closure;
+use \Exception;
 
 trait View
 { 
@@ -77,7 +78,7 @@ trait View
      * 
      * @var string $viewFolder 
      */
-    private static string $viewFolder = 'resources/views';
+    private static string $viewFolder = 'resources/Views';
 
     /** 
      * The view sub directory.
@@ -85,6 +86,13 @@ trait View
      * @var string $subfolder 
      */
     private string $subfolder = '';
+
+    /** 
+     * The HMVC module directory name.
+     * 
+     * @var string $moduleName 
+     */
+    private string $moduleName = '';
 
     /** 
      * Holds the router active page name.
@@ -157,6 +165,13 @@ trait View
     private bool $minifyCodeblocks = false;
 
     /**
+     * Weather its HMVC or MVC module.
+     * 
+     * @var bool $useHmvcModule 
+     */
+    private static bool $useHmvcModule = false;
+
+    /**
      * Allow copy codeblock.
      * 
      * @var bool $codeblockButton 
@@ -188,6 +203,7 @@ trait View
         self::$config ??= new TemplateConfig();
         self::$root ??= root();
         self::$minifyContent = (bool) env('page.minification', false);
+        self::$useHmvcModule = env('feature.app.hmvc', false);
         self::$cacheFolder = self::getSystemPath(self::trimDir(self::$config->cacheFolder) . 'default');
         $this->cacheView = (bool) env('page.caching', false);
         $this->cacheExpiry = (int) env('page.cache.expiry', 0);
@@ -227,20 +243,48 @@ trait View
     }
 
     /** 
-     * Set sub view folder name to look for view file within the `resources/views/`.
+     * Set the view directory or subfolder within the application to search for view files in one of the following locations:
+     * - `resources/Views/`
+     * - `app/Modules/Views/`
+     * - `app/Modules/<Module>/Views/`
      *
-     * @param string $path folder name to search for view.
+     * @param string $path The folder name to search for the view.
      *
-     * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
+     * @return self Returns the instance of the `View` class or `CoreApplication`, depending on the context.
      * 
-     * - If called in controller `onCreate` or `__construct` method, the entire controller view will be searched in the specified folder.
-     * - If called in application `onCreate` or `__construct` method, the entire application view will be searched in the specified folder.
-     * - If called with the controller method before rendering view, only the method view will be searched in the specified folder.
+     * - If called in a controller's `onCreate` or `__construct` method, the entire controller's views will be searched in the specified folder.
+     * - If called in the application's `onCreate` or `__construct` method, the application's views will be searched in the specified folder.
+     * - If called within a specific controller method before rendering, only that method's view will be searched in the specified folder.
      */
     public final function setFolder(string $path): self
     {
         $this->subfolder = trim($path, TRIM_DS);
+        return $this;
+    }
 
+    /** 
+     * Set the module directory name that contains the controller class. This is essential for identifying each HMVC module.
+     *
+     * @param string $module The name of the module folder (e.g., `Blog`).
+     *                    Use a blank string for global controller without a specific module name prefix.
+     *
+     * @return self Returns the instance of the `View` class or `CoreApplication`, depending on the context.
+     * @throws RuntimeException Throws if an invalid module name is specified.
+     * 
+     * > **Note:** This method is HMVC specify feature and should only be called once in the controller's `onCreate` or `__construct` method, before rendering any views.
+     */
+    public final function setModule(string $module): self
+    {
+        $module = trim($module);
+
+        if ($module !== '' && strpbrk($module, '/\\') !== false) {
+            throw new RuntimeException(
+                sprintf('Invalid module name: %s. Only alphanumeric characters and underscores are allowed.', $module),
+                RuntimeException::INVALID_ARGUMENTS
+            );
+        }
+
+        $this->moduleName = $module;
         return $this;
     }
 
@@ -310,19 +354,21 @@ trait View
      * @param bool $initialize Whether to initialize class-string or leave it as static class (default: true).
      * 
      * @return true Return true on success, false on failure.
-     * @throws RuntimeException If the class does not exist or failed.
-     * @throws RuntimeException If there is an error during registration.
+     * @throws RuntimeException If the class does not exist, failed or an error during registration.
      */
     public final function export(string|object $class, ?string $alias = null, bool $initialize = true): bool 
     {
         if ($class === '' || $alias === '') {
-            throw new RuntimeException('Invalid arguments provided, arguments expected a non-blank string.');
+            throw new RuntimeException(
+                'Invalid arguments provided, arguments "$class or $alias" expected a non-blank string.',
+                RuntimeException::INVALID_ARGUMENTS
+            );
         }
 
         $alias ??= get_class_name($class);
 
         if (isset(self::$publicClasses[$alias])) {
-            throw new RuntimeException("Class with the same name: '{$alias}' already exists.");
+            throw new RuntimeException("Exported class with the same name or alias: '{$alias}' already exists.");
         }
 
         if ($initialize && is_string($class)) {
@@ -331,7 +377,6 @@ trait View
         }
         
         self::$publicClasses[$alias] = $class;
-
         return true;
     }
 
@@ -485,7 +530,7 @@ trait View
     }
 
     /** 
-     * Render template view file withing the `resources/views` directory.
+     * Render template view file withing the `resources/Views` directory.
      * Do not include the extension type (e.g, `.php`, `.tpl`, `.twg`), only the file name.
      *
      * @param string $viewName The view file name without extension type (e.g, `index`).
@@ -518,15 +563,10 @@ trait View
                 $viewType, 
                 $viewName,
                 $supported
-            ));
+            ), RuntimeException::INVALID_ARGUMENTS);
         }
 
-        $this->viewsDirectory = self::getSystemPath(self::$viewFolder);
-
-        if($this->subfolder !== ''){
-            $this->viewsDirectory .= $this->subfolder . DIRECTORY_SEPARATOR;
-        }
-
+        $this->viewsDirectory = $this->getViewPath();
         $this->filepath = $this->viewsDirectory . $viewName . self::dot();
 
         if (PRODUCTION && !file_exists($this->filepath)) {
@@ -557,7 +597,9 @@ trait View
      */
     public final function render(array $options = [], int $status = 200): int 
     {
-        return ($this->call($options, $status) ? STATUS_SUCCESS : STATUS_ERROR);
+        return $this->call($options, $status) 
+            ? STATUS_SUCCESS 
+            : STATUS_ERROR;
     }
 
     /**
@@ -613,8 +655,7 @@ trait View
      */
     public final function viewInfo(): array 
     {
-        $viewPath = root(self::$viewFolder) . $this->activeView . self::dot();
-        clearstatcache(true, $viewPath);
+        $viewPath = root($this->getViewPath()) . $this->activeView . self::dot();
         $info = [
             'location' => $viewPath,
             'engine' => self::engine(),
@@ -626,7 +667,9 @@ trait View
             'filename' => null,
         ];
 
-        if (is_file($viewPath)) {
+        if (file_exists($viewPath)) {
+            clearstatcache(true, $viewPath);
+
             $info['size'] = filesize($viewPath);
 
             $timestamp = filemtime($viewPath);
@@ -652,26 +695,9 @@ trait View
     public static final function link(string $filename = ''): string 
     {
         $base = (PRODUCTION ? '/' : Helper::relativeLevel());
-        
-        if($filename === ''){
-            return $base;
-        }
-
-        return $base . ltrim($filename, '/');
-    }
-
-    /** 
-     * Get application root folder.
-     *
-     * @return string Return the application root directory.
-     */
-    private static function getSystemRoot(): string
-    {
-        if(self::$root === null){
-            self::$root = APP_ROOT;
-        }
-
-        return self::$root;
+        return ($filename === '') 
+            ? $base 
+            : $base . ltrim($filename, '/');
     }
 
     /** 
@@ -682,16 +708,10 @@ trait View
     private static function dot(): string
     {
         $engine = self::engine();
-
-        if($engine === 'smarty'){
-            return '.tpl';
-        }
-
-        if($engine === 'twig'){
-            return '.twig';
-        }
-
-        return '.php';
+        return ($engine === 'smarty' 
+            ? '.tpl' 
+            : ($engine === 'twig' ? '.twig' : '.php')
+        );
     }
 
     /** 
@@ -714,7 +734,11 @@ trait View
      * @return bool|string  Return true on success, false on failure.
      * @throws ViewNotFoundException Throw if view file is not found.
      */
-    private function call(array $options = [], int $status = 200, bool $return = false): string|bool
+    private function call(
+        array $options = [], 
+        int $status = 200, 
+        bool $return = false
+    ): string|bool
     {
         $options = $this->parseOptions($options);
         try {
@@ -763,10 +787,14 @@ trait View
 
                 return $this->defaultTemplateEngine($options, $cache, $return, $this->headers);
             }
-        } catch (ExceptionInterface $e) {
-            self::handleException($e, $options);
-        }
+        } catch (ExceptionInterface|Exception $e) {
+            if($e instanceof ExceptionInterface){
+                self::handleException($e, $options);
+                return false;
+            }
 
+            RuntimeException::throwException($e->getMessage(), $e->getCode(), $e);
+        }
         return false;
     }
 
@@ -1031,12 +1059,12 @@ trait View
         return new class(self::$publicClasses) {
             /**
              * @var array<string,mixed> $classes
-            */
+             */
             private static array $classes = [];
 
             /**
              * @var array<string,mixed> $classes
-            */
+             */
             public function __construct(array $classes = [])
             {
                 self::$classes = $classes;
@@ -1045,7 +1073,7 @@ trait View
             /**
              * @var string $class
              * @return object|string|null
-            */
+             */
             public function __get(string $class): mixed 
             {
                 return self::$classes[$class] ?? null;
@@ -1075,6 +1103,7 @@ trait View
     {
         $canCacheContent = false;
         $headers = null;
+
         if ($content !== false && $content !== '') {
             if (self::$minifyContent && $type === 'html') {
                 $minify = Helper::getMinification(
@@ -1105,7 +1134,7 @@ trait View
      * Check if view should be optimized page caching or not.
      *
      * @return bool Return true if view should be cached, otherwise false.
-     * > The check order is important.
+     * > Keep the validation order its important.
      */
     private function shouldCache(): bool
     {
@@ -1302,6 +1331,34 @@ trait View
     private static function getSystemPath(string $path): string 
     {
         return self::getSystemRoot() . trim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
+    }
+
+    /** 
+     * Get application view directory.
+     * 
+     * @return string Return view file directory for default or HMVC module.
+     */
+    private function getViewPath(): string 
+    {
+        $module = self::$useHmvcModule 
+                ? '/app/Modules/' . ($this->moduleName === ''? '' : $this->moduleName . '/') . 'Views/'
+                : self::$viewFolder;
+    
+        return self::getSystemPath($module . ($this->subfolder !== '' ? $this->subfolder : ''));
+    }
+
+    /** 
+     * Get application root folder.
+     *
+     * @return string Return the application root directory.
+     */
+    private static function getSystemRoot(): string
+    {
+        if(self::$root === null){
+            self::$root = APP_ROOT;
+        }
+
+        return self::$root;
     }
 
     /** 

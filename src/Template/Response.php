@@ -20,23 +20,27 @@ use \Exception;
 class Response 
 {
     /**
+     * Indicates if the response content should be minified.
+     * 
      * @var bool $minify
-    */
+     */
     private bool $minify = false;
 
     /**
+     * Handles content minification object.
+     * 
      * @var Minification|null $min
-    */
+     */
     private static ?Minification $min = null;
 
     /**
      * Response constructor.
      *
      * @param int $status HTTP status code (default: 200 OK).
-     * @param array<string,mixed> $headers The header key-pair.
-     * @param bool $encode Weather to encode content using encoding like `gzip`.
-     * @param bool $minifyCodeblocks Indicate if codeblocks should be minified (default: false).
-     * @param bool $codeblockButton Indicate if codeblock tags should include a copy button (default: false).
+     * @param array<string,mixed> $headers HTTP headers as key-value pairs.
+     * @param bool $encode Whether to enable content encoding like gzip.
+     * @param bool $minifyCodeblocks Indicates if code blocks should be minified.
+     * @param bool $codeblockButton Indicates if code blocks should include a copy button.
      */
     public function __construct(
         private int $status = 200, 
@@ -50,11 +54,11 @@ class Response
     }
 
     /**
-     * Set status code.
+     * Set the HTTP status code.
      *
      * @param int $status HTTP status code.
      * 
-     * @return self Return response class instance.
+     * @return self Return instance of the Response class.
      */
     public function setStatus(int $status): self 
     {
@@ -64,11 +68,11 @@ class Response
     }
 
     /**
-     * Set enable content encoding.
+     * Enable or disable content encoding.
      *
-     * @param bool $encode Enable content encoding like gzip.
+     * @param bool $encode Whether to enable content encoding like gzip.
      * 
-     * @return self Return response class instance.
+     * @return self Instance of the Response class.
      */
     public function encode(bool $encode): self 
     {
@@ -78,11 +82,11 @@ class Response
     }
 
     /**
-     * Set enable content minification.
+     * Enable or disable content minification.
      *
-     * @param bool $minify Enable content minification.
+     * @param bool $minify Whether to minify the content.
      * 
-     * @return self Return response class instance.
+     * @return self Instance of the Response class.
      */
     public function minify(bool $minify): self 
     {
@@ -92,13 +96,13 @@ class Response
     }
 
     /** 
-     * Set if HTML codeblock tags should be ignore during content minification.
+     * Configure HTML code block minification and copy button.
      *
-     * @param bool $minify Indicate if codeblocks should be minified (default: false).
-     * @param bool $button Indicate if codeblock tags should include a copy button (default: false).
+     * @param bool $minify Whether to minify code blocks.
+     * @param bool $button Whether to add a copy button to code blocks (default: false).
      *
-     * @return self Return response class instance.
-    */
+     * @return self Instance of the Response class.
+     */
     public function codeblock(bool $minify, bool $button = false): self 
     {
         $this->minifyCodeblocks = $minify;
@@ -108,12 +112,12 @@ class Response
     }
 
     /**
-     * Set response header.
+     * Set an HTTP header.
      *
-     * @param string $key The header key.
-     * @param mixed $value The header value for key.
+     * @param string $key The header name.
+     * @param mixed $value The header value.
      * 
-     * @return self Return response class instance.
+     * @return self Instance of the Response class.
      */
     public function header(string $key, mixed $value): self 
     {
@@ -122,12 +126,12 @@ class Response
         return $this;
     }
 
-    /**
-     * Set response header.
+     /**
+     * Set multiple HTTP headers.
      *
-     * @param array<string,mixed> $headers The headers key-pair.
+     * @param array<string,mixed> $headers Associative array of headers.
      * 
-     * @return self Return response class instance.
+     * @return self Instance of the Response class.
      */
     public function headers(array $headers): self 
     {
@@ -137,9 +141,9 @@ class Response
     }
 
     /**
-     * Get the HTTP status code.
+     * Get the current HTTP status code.
      * 
-     * @return int Return the HTTP status code.
+     * @return int Return the current HTTP status code.
      */
     public function getStatusCode(): int
     {
@@ -147,11 +151,11 @@ class Response
     }
 
     /**
-     * Get a single HTTP header.
+     * Retrieve a specific HTTP header.
      * 
-     * @param string $name Header name.
+     * @param string $name The name of the header.
      * 
-     * @return string|null Return HTTP header.
+     * @return string|null Return the header value, or null if it doesn't exist.
      */
     public function getHeader(string $name): ?string
     {
@@ -159,9 +163,9 @@ class Response
     }
 
     /**
-     * Get all HTTP headers.
+     * Retrieve all HTTP headers.
      * 
-     * @return array Return HTTP headers.
+     * @return array<string,mixed> Return list of all HTTP headers.
      */
     public function getHeaders(): array
     {
@@ -169,16 +173,49 @@ class Response
     }
 
     /**
-     * Render any content format anywhere.
-     *
-     * @param mixed $content Response content.
-     * @param int $status Content type of the response.
-     * @param array $header Additional headers.
-     * @param bool $encode Enable content encoding like gzip.
-     * @param bool $minify Enable content minification and compress.
+     * Clear all previous HTTP headers.
      * 
-     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
-    */
+     * @return void
+     */
+    public function clearHeaders(): void
+    {
+        $this->headers = [];
+    }
+    
+    
+    /**
+     * Clear previous set HTTP header redirects.
+     * 
+     *  @return void
+     */
+    public function clearRedirects(): void
+    {
+        if(isset($this->headers['Location'])) {
+            unset($this->headers['Location']);
+        }
+    }
+    
+    /**
+     * Determine if the response headers has any redirects.
+     * 
+     * @return bool Return true if headers contain any redirect, otherwise false.
+     */
+    public function hasRedirects(): bool
+    {
+        return isset($this->headers['Location']);
+    }
+
+    /**
+     * Send the response content with headers.
+     *
+     * @param string $content The content to send.
+     * @param int $status HTTP status code (default: 200).
+     * @param array<string,mixed> $headers Additional headers (default: []).
+     * @param bool $encode Whether to enable content encoding (default: false).
+     * @param bool $minify Whether to minify content (default: false).
+     * 
+     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
+     */
     public function render(
         string $content, 
         int $status = 200, 
@@ -229,12 +266,32 @@ class Response
         return STATUS_SUCCESS;
     }
 
+    /** 
+     * Send the defined HTTP headers without any body.
+     *
+     * @return void
+     */
+    public function sendHeaders(): void 
+    {
+        Header::parseHeaders($this->headers, $this->status);
+    }
+
+    /**
+     * Send the HTTP status header.
+     * 
+     * @return bool True if the status header was sent, false otherwise.
+     */
+    public function sendStatus(): bool
+    {
+        return http_status_header($this->status);
+    }
+
     /**
      * Send a JSON response.
      *
-     * @param array|object $content Data to be encoded as JSON
+     * @param array|object $content The data to encode as JSON.
      * 
-     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
+     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
      * @throws JsonException Throws if json error occurs.
      */
     public function json(array|object $content): int 
@@ -258,9 +315,9 @@ class Response
     /**
      * Send a plain text response.
      *
-     * @param string $content The text content.
+     * @param string $content The text content to send.
      * 
-     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
+     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
      */
     public function text(string $content): int 
     {
@@ -272,9 +329,9 @@ class Response
     /**
      * Send an HTML response.
      *
-     * @param string $content HTML content.
+     * @param string $content HTML content to send.
      * 
-     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
+     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
      */
     public function html(string $content): int 
     {
@@ -286,9 +343,9 @@ class Response
     /**
      * Send an XML response.
      *
-     * @param string $content XML content.
+     * @param string $content XML content to send.
      * 
-     * @return int Response status code STATUS_SUCCESS or STATUS_ERROR.
+     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
      */
     public function xml(string $content): int 
     {
@@ -298,21 +355,25 @@ class Response
     }
 
     /**
-     * Download a file
+     * Send a file or content to download on browser.
      *
-     * @param string $fileOrContent Path to the file or content to be downloaded.
-     * @param string|null $name Optional Name to be used for the downloaded file (default: null).
+     * @param string $fileOrContent Path to the file or content for download.
+     * @param string|null $name Optional name for the downloaded file.
      * @param array $headers Optional download headers.
      * 
      * @return bool Return true if the download was successful, false otherwise.
      */
-    public function download(string $fileOrContent, ?string $name = null, array $headers = []): bool 
+    public function download(
+        string $fileOrContent, 
+        ?string $name = null, 
+        array $headers = []
+    ): bool 
     {
         return FileManager::download($fileOrContent, $name, $headers);
     }
 
     /**
-     * Streaming large files.
+     * Send large files using stream to read file content.
      *
      * @param string $path The path to file storage (e.g: /writeable/storages/images/).
      * @param string $basename The file name (e.g: image.png).
@@ -334,13 +395,13 @@ class Response
     }
 
     /** 
-    * Redirect to another url.
-    *
-    * @param string $url The new url location.
-    * @param int $response_code The response status code.
-    *
-    * @return void
-    */
+     * Send to another url location.
+     *
+     * @param string $url The new url location.
+     * @param int $response_code The response status code.
+     *
+     * @return void
+     */
     public function redirect(string $url = '/', int $response_code = 0): void 
     {
         header("Location: $url", true, $response_code);

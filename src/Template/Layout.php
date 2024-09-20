@@ -65,28 +65,34 @@ final class Layout
     /**
      * Import a layout file file or section into another layout file.
      *
-     * @param string $layout File name without extension (.php)
-     * @example import(foo) or import(foo/bar).
+     *  @param string $layout File name without extension (e.g, `.php`).
+     * @param string $module The HMVC custom module name (e.g, `Blog`, `User`).
      * 
      * @return static Return the instance of Layout class.
+     * 
+     * @example import(foo) or import(foo/bar).
      */
-    protected static function import(string $layout): self 
+    protected static function import(string $layout, string $module = ''): self 
     {
-        return (new self())->layout($layout);;
+        return (new self())->layout($layout, $module);;
     }
 
     /**
      * Set the layout file name to extend.
      *
-     * @param string $layout File name without extension (.php).
-     * @example import(foo) or import(foo/bar)
+     * @param string $layout File name without extension (e.g, `.php`).
+     * @param string $module The HMVC custom module name (e.g, `Blog`, `User`).
      * 
      * @return self Return the instance of Layout class.
      * @throws RuntimeException Throws when layout file is not found.
+     * 
+     * @example import(foo) or import(foo/bar)
      */
-    public function layout(string $layout): self
+    public function layout(string $layout, string $module = ''): self
     {
-        self::$layouts ??= root('/resources/views/layouts/');
+        self::$layouts ??= root(env('feature.app.hmvc', false) 
+            ? 'app/Modules/'. ($module === '' ? '' : $module . '/'). 'Views/layouts'
+            : '/resources/Views/layouts/');
         self::$file = self::$layouts . trim($layout, TRIM_DS) . '.php';
 
         if (!file_exists(self::$file)) {
@@ -134,6 +140,7 @@ final class Layout
      * End the current layout section.
      *
      * @param string|null $name Optional section name to end.
+     * 
      * @return void
      * @throws RuntimeException Throws when no section to end.
      */
@@ -144,6 +151,7 @@ final class Layout
         }
 
         $name ??= $this->current;
+
         if ($name === null) {
             throw new RuntimeException('No active layout section to end');
         }
@@ -165,9 +173,10 @@ final class Layout
      * Process and extend a section of layout or get all layout sections by passing null.
      *
      * @param string|null $section Section name to extend or pass null to load all sections.
-     * @example extend('foo') or nested extend extend('foo.bar').
      * 
      * @return string Return the extended or inherited layout contents.
+     * 
+     * @example extend('foo') or nested extend extend('foo.bar').
      */
     public function extend(?string $section = null): string
     {
@@ -191,10 +200,6 @@ final class Layout
         require_once self::$file;
         $content = ob_get_clean();
 
-        if($content === false){
-            return '';
-        }
-
-        return $content;
+        return ($content === false) ? '' : $content;
     }
 }

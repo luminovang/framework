@@ -16,6 +16,7 @@ use \Luminova\Base\BaseCommand;
 use \Luminova\Base\BaseController;
 use \Luminova\Base\BaseViewController;
 use \Luminova\Interface\RouterInterface;
+use \Luminova\Exceptions\RouterException;
 use \ReflectionClass;
 use \ReflectionMethod;
 use \ReflectionException;
@@ -24,7 +25,6 @@ use \RecursiveIteratorIterator;
 use \RecursiveCallbackFilterIterator;
 use \FilesystemIterator;
 use \SplFileInfo;
-use \Luminova\Exceptions\RouterException;
 use \Exception;
 
 final class Generator
@@ -33,11 +33,6 @@ final class Generator
      * @var array<string,array> $routes
     */
     private array $routes = [];
-
-    /**
-     * @var bool $cli
-    */
-    private bool $cli = false;
 
     /**
      * @var bool $cache
@@ -52,17 +47,16 @@ final class Generator
     /**
      * Constructor to initialize the Generator.
      *
-     * @param string $namespace Namespace for the classes.
      * @param string $baseGroup Base group for route patterns.
      * @param bool $cli Flag indicating if running in CLI mode.
+     * @param bool $hmvc Flag indicating if running application with hmvc module.
      */
     public function __construct(
-        private string $namespace, 
         private string $baseGroup = '', 
-        bool $cli = false
+        private bool $cli = false,
+        private bool $hmvc = false
     )
     {
-        $this->cli = $cli;
         self::$cache = (bool) env('feature.route.cache.attributes', false);
     }
 
@@ -79,7 +73,7 @@ final class Generator
             return;
         }
 
-        $files = $this->load($path, 'http');
+        $files = $this->load($path . ($this->hmvc ? '' : 'Http'), 'http');
         if($files === true){
             return;
         }
@@ -87,10 +81,15 @@ final class Generator
         foreach ($files as $file) {
             $fileName = $file->getBasename();
             $fileName = pathinfo($fileName, PATHINFO_FILENAME);
+            $module = basename(dirname($file->getPathname(), 2));
            
             if ($fileName !== '' && $fileName !== '0') {
                 try{
-                    $class = new ReflectionClass("{$this->namespace}{$fileName}");
+                    $namespace = $this->hmvc 
+                        ? '\\App\Modules\\' . ($module === 'Controllers' ? '' : uppercase_words($module) . '\\') . 'Controllers\\Http\\'
+                        : '\\App\\Controllers\\Http\\';
+
+                    $class = new ReflectionClass("{$namespace}{$fileName}");
  
                     if (!($class->isInstantiable() && !$class->isAbstract() && ( 
                         $class->isSubclassOf(BaseViewController::class) ||
@@ -179,7 +178,7 @@ final class Generator
             return;
         }
 
-        $files = $this->load($path, 'cli');
+        $files = $this->load($path . ($this->hmvc ? '' : 'Cli'), 'cli');
         if($files === true){
             return;
         }
@@ -187,10 +186,14 @@ final class Generator
         foreach ($files as $file) {
             $fileName = $file->getBasename();
             $fileName = pathinfo($fileName, PATHINFO_FILENAME);
+            $module = basename(dirname($file->getPathname(), 2));
            
             if ($fileName !== '' && $fileName !== '0') {
                 try{
-                    $class = new ReflectionClass("{$this->namespace}{$fileName}");
+                    $namespace = $this->hmvc 
+                        ? '\\App\Modules\\' . ($module === 'Controllers' ? '' : uppercase_words($module) . '\\') . 'Controllers\\Cli\\'
+                        : '\\App\\Controllers\\Cli\\';
+                    $class = new ReflectionClass("{$namespace}{$fileName}");
  
                     if (!($class->isInstantiable() && !$class->isAbstract() && (
                         $class->isSubclassOf(BaseCommand::class)))) {
@@ -234,28 +237,39 @@ final class Generator
 
     /**
      * Extract abd export all routes attributes.
+     * And convert them back to standard php routes using methods.
      * 
      * @param string $path The path to controller classes.
      * 
-     * @return self Return instance of AttributeCollector.
-    */
+     * @return self Return instance of Attribute Generator.
+     */
     public function export(string $path): self
     {
         $files = $this->load($path, 'export');
+
         foreach ($files as $file) {
             $fileName = $file->getBasename();
             $fileName = pathinfo($fileName, PATHINFO_FILENAME);
+            $module = basename(dirname($file->getPathname(), 2));
            
             if ($fileName !== '' && $fileName !== '0') {
+                $namespace = $this->hmvc 
+                    ? '\\App\\Modules\\' . ($module === 'Controllers' ? '' : uppercase_words($module) . '\\') . 'Controllers\\'
+                    : '\\App\\Controllers\\';
+
                 try{
-                    $class = new ReflectionClass("{$this->namespace}{$fileName}");
+                    try {
+                        $class = new ReflectionClass("{$namespace}Http\\{$fileName}");
+                    } catch (ReflectionException $e) {
+                        $class = new ReflectionClass("{$namespace}Cli\\{$fileName}");
+                    }
  
                     if (!($class->isInstantiable() && !$class->isAbstract() && (
                         $class->isSubclassOf(BaseCommand::class) || 
                         $class->isSubclassOf(BaseViewController::class) ||
                         $class->isSubclassOf(BaseController::class) ||
                         $class->implementsInterface(RouterInterface::class)))) {
-                         continue;
+                        continue;
                     }
 
                     foreach ($class->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
@@ -267,7 +281,7 @@ final class Generator
         
                             if($attr->group !== null){
                                 $group = trim($attr->group, '/');
-                                $this->routes['cli'][$group][] = [
+                                $this->routes['cli'][$module][$group][] = [
                                     'group' => $group,
                                     'callback' => $callback,
                                     'pattern' => $attr->pattern,
@@ -281,7 +295,7 @@ final class Generator
 
                                 $context = (str_starts_with($attr->pattern, '/api') || str_starts_with($attr->pattern, 'api')) ? 'api' : 'http';
 
-                                $this->routes[$context][$bind][] = [
+                                $this->routes[$context][$module][$bind][] = [
                                     'bind' => $bind,
                                     'callback' => $callback,
                                     'methods' => $attr->methods,
@@ -311,11 +325,13 @@ final class Generator
      * @param string $path The directory path to search for route files.
      * @param string $context The context used for caching.
      * 
-     * @return RecursiveIteratorIterator|bool An iterator for route files or true if cached routes are loaded.
+     * @return RecursiveIteratorIterator|true Return file iterator for route or true if cached routes are loaded.
      */
     protected function load(string $path, string $context): RecursiveIteratorIterator|bool
     {
-        if (self::$cache && $context !== 'export' && $lock = root('/writeable/caches/routes/')) {
+        if (self::$cache && $context !== 'export') {
+            $lock = root('/writeable/caches/routes/');
+
             if (file_exists($file = $lock . $context . '.php')) {
                 $this->routes = include_once $file;
                 return true;
@@ -325,7 +341,7 @@ final class Generator
         static::$files[$path] ??= new RecursiveIteratorIterator(
             new RecursiveCallbackFilterIterator(
                 new RecursiveDirectoryIterator(root($path), FilesystemIterator::SKIP_DOTS | FilesystemIterator::FOLLOW_SYMLINKS),
-                fn (SplFileInfo $entry) => $entry->isFile() && $entry->getExtension() === 'php' && $entry->getBasename() !== 'Application.php'
+                fn (SplFileInfo $entry) => $this->isValidEntry($entry, $context)
             )
         );
 
@@ -352,7 +368,7 @@ final class Generator
         try{
             if($this->cli){
                 // Catch error on cli
-                setenv('throw.cli.exceptions', true);
+                setenv('throw.cli.exceptions', 'true');
             }
 
             if(make_dir($lock) && $routes = var_export($this->routes, true)){
@@ -381,10 +397,36 @@ final class Generator
     /**
      * Get the collected routes.
      *
-     * @return array Array of collected routes.
+     * @return array Return array of collected routes.
      */
     public function getRoutes(): array
     {
         return $this->routes;
+    }
+
+    /**
+     * Check if the entry is a valid file based on the current context (HMVC or MVC).
+     *
+     * @param SplFileInfo $entry The file entry to validate.
+     * @param string $context The namespace suffix context (e.g., `App\Controller\Http` as `Http`).
+     * 
+     * @return bool Return true if valid, false otherwise.
+     */
+    private function isValidEntry(SplFileInfo $entry, string $context): bool
+    {
+        $context = ucfirst($context);
+        if (!$entry->isFile() || $entry->getExtension() !== 'php') {
+            $allowed = ($context === 'Export')
+                ? ['Controllers', 'Http', 'Cli']
+                : ['Controllers', $context];
+
+            return in_array($entry->getBasename(), $allowed); 
+        }
+
+        $module = basename(dirname($entry->getPathname()));
+        return ($this->hmvc 
+            ? str_contains($entry->getPathname(), '/Controllers/') 
+            : $entry->getBasename() !== 'Application.php'
+        ) && ($context !== 'Export' && $module === $context);
     }
 }

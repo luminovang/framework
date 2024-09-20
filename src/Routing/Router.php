@@ -210,8 +210,10 @@ final class Router
             return $this;
         }
 
+        $prefix = self::getFirst();
+
         // If the view uri ends with `.extension`, then try serving the cached static version.
-        if(self::$uri !== '/cli' && self::serveStaticCache()){
+        if(self::$uri !== '/cli' && self::serveStaticCache($prefix)){
             return $this;
         }
 
@@ -219,65 +221,25 @@ final class Router
         self::$application->__on('onStart', [
             'cli' => self::$isCli ,
             'method' => self::$method,
-            'uri' => self::$uri
+            'uri' => self::$uri,
+            'module' => $prefix
         ]);
 
         // When using attribute for routes.
-        if((bool) env('feature.route.attributes', false)){
-            $collector = new Generator('\\App\\Controllers\\', $this->baseGroup, self::$isCli);
-            if(self::$isCli){
-                $collector->installCli('app/Controllers');
-            }else{
-                $collector->installHttp('app/Controllers', self::getFirst());
-            }
-
-            $current = $this->baseGroup;
-            self::$controllers = array_merge(
-                self::$controllers, 
-                $collector->getRoutes()
-            );
-            
-            $this->baseGroup = $current;
-
-            return $this;
+        if(env('feature.route.attributes', false)){
+           return $this->createWithAttributes($prefix);
         }
 
         // When using default context manager.
-        if($contexts === []){
-            RouterException::throwWith('no_context', RouterException::RUNTIME_ERROR);
+        if($contexts === null || $contexts === []){
+           RouterException::throwWith('no_context', RouterException::RUNTIME_ERROR);
         }
         
         if (isset(self::$httpMethods[self::$method])) {
-            $first = self::getFirst();
-            $current = $this->baseGroup;
-            $fromArray = !($contexts[0] instanceof Prefix);
-            $prefixes = $fromArray ? self::getArrayPrefixes($contexts) : Prefix::getPrefixes();
-
-            foreach ($contexts as $context) {
-                $name = $fromArray ? ($context['prefix'] ?? '') : $context->getName();
-
-                if($name === ''){
-                    continue;
-                }
-                
-                $eHandler = $fromArray ? ($context['error'] ?? null) : $context->getErrorHandler();
-
-                self::reset();
-                $result = $this->installContext($name, $eHandler, $first, $prefixes);
-
-                if($result === 2){
-                    return $this;
-                }
-
-                if($result === true){
-                    self::bootContext($name, $this, self::$application);
-                    break;
-                }
-            }
-
-            $this->baseGroup = $current;
+           return $this->createWithMethods($prefix, $contexts);
         }
         
+        RouterException::throwWith('no_route', RouterException::RUNTIME_ERROR);
         return $this;
     }
 
@@ -290,7 +252,7 @@ final class Router
      * 
      * @return void
      * @throws RouterException Throws when called in wrong context or if blank method is passed.
-    */
+     */
     public function middleware(string $methods, string $pattern, Closure|string $callback): void
     {
         if ($methods === '') {
@@ -312,7 +274,7 @@ final class Router
      * 
      * @return void
      * @throws RouterException Throws if blank method is passed.
-    */
+     */
     public function after(string $methods, string $pattern, Closure|string $callback): void
     {
         if ($methods === '') {
@@ -334,7 +296,7 @@ final class Router
      * 
      * @return void
      * @throws RouterException Throws if blank method is passed.
-    */
+     */
     public function capture(string $methods, string $pattern, Closure|string $callback): void
     {
         if ($methods === '') {
@@ -354,7 +316,7 @@ final class Router
      * @param Closure|string $callback The callback to execute (e.g `ClassBaseName::methodName`).
      * 
      * @return void
-    */
+     */
     public function any(string $pattern, Closure|string $callback): void
     {
         $this->capture(self::HTTP_METHODS, $pattern, $callback);
@@ -367,7 +329,7 @@ final class Router
      * @param Closure|string $callback The callback function to execute (e.g `ClassBaseName::methodName`).
      * 
      * @return void
-    */
+     */
     public function command(string $command, Closure|string $callback): void
     {
         self::$controllers['cli_commands']["CLI"][] = [
@@ -385,7 +347,7 @@ final class Router
      * 
      * @return void
      * @throws RouterException Throws when called in wrong context.
-    */
+     */
     public function before(string $group, Closure|string $callback = null): void
     {
         if(!self::$isCli){
@@ -415,7 +377,7 @@ final class Router
      *      $router->get('/id/([aZ-Az-0-9-])', 'BlogController::blog');
      * });
      * ```
-    */
+     */
     public function bind(string $prefix, Closure $callback): void
     {
         $current = $this->baseGroup;
@@ -440,38 +402,42 @@ final class Router
      *      $router->command('id/(:mixed)', 'BlogController::blog');
      * });
      * ```
-    */
+     */
     public function group(string $group, Closure $callback): void
     {
         self::$controllers['cli_groups'][$group][] = $callback;
     }
 
     /**
-     * Register a controller class namespace to use across the application routing.
+     * Registers module controller class namespace group for use in application routing.
      *
-     * @param string $namespace Class namespace string.
-     * 
-     * @return void
-     * @throws RouterException If namespace string is empty or contains invalid namespace characters.
-    */
-    public function addNamespace(string $namespace): void
+     * @param string $namespace The class namespace to be registered (e.g, `\App\Controllers\Http\`).
+     *
+     * @return self Return instance of router class.
+     * @throws RouterException If the namespace is empty or contains invalid characters.
+     */
+    public function addNamespace(string $namespace): self
     {
         if($namespace === '') {
             RouterException::throwWith('empty_argument', RouterException::INVALID_ARGUMENTS, [
                 '$namespace'
             ]);
 
-            return;
+            return $this;
         }
 
         $namespace = '\\' . trim($namespace, '\\') . '\\';
 
-        if(!str_starts_with($namespace, '\\App\\Controllers\\')) {
-            RouterException::throwWith('invalid_namespace', RouterException::NOT_ALLOWED);
-            return;
+        //if (!preg_match('/^\\\\App\\\\(?:Controllers|Modules(?:\\\\[A-Za-z0-9_]+)?\\\\Controllers)?\\\\/', $namespace)) {
+        if(!str_starts_with($namespace, '\\App\\') || !str_ends_with($namespace, '\Controllers\\')){
+            RouterException::throwWith('invalid_namespace', RouterException::NOT_ALLOWED, [
+                $namespace
+            ]);
+            return $this;
         }
 
         self::$namespace[] = $namespace;
+        return $this;
     }
 
     /**
@@ -480,7 +446,7 @@ final class Router
      * 
      * @return void
      * @throws RouterException Throw if encountered error while executing controller callback.
-    */
+     */
     public function run(): void
     {
         if(self::$terminate){
@@ -515,7 +481,7 @@ final class Router
      * @param Closure|string|array<int,string>|null $callback Optional error callback handler function.
      *  
      * @return void
-    */
+     */
     public function setErrorListener(
         Closure|string|array $match, 
         Closure|array|string|null $callback = null
@@ -534,10 +500,9 @@ final class Router
      * @param int $status HTTP response status code (default: 404).
      * 
      * @return void
-    */
+     */
     public static function triggerError(int $status = 404): void
     {
-     
         foreach (self::$controllers['errors'] as $pattern => $callable) {
             $matches = [];
             if (self::uriCapture($pattern, self::$uri, $matches) && self::call($callable, $matches, true)) {
@@ -559,17 +524,17 @@ final class Router
      *
      * @return array<int,string> Return registered namespaces.
      * @internal
-    */
+     */
     public static function getNamespaces(): array
     {
         return self::$namespace;
     }
 
-     /**
+    /**
      * Get the current segment relative URI.
      * 
      * @return string Return relative paths.
-    */
+     */
     public static function getUriSegments(): string
     {
         if (self::$isCli) {
@@ -583,7 +548,7 @@ final class Router
      * Get segment class instance.
      * 
      * @return Segments Segments instance.
-    */
+     */
     public function getSegment(): Segments 
     {
         return new Segments(self::$isCli ? ['cli'] : Foundation::getSegments());
@@ -599,7 +564,7 @@ final class Router
      * 
      * @return void
      * @throws RouterException
-    */
+     */
     private static function bootContext(
         string $context, 
         Router $router, 
@@ -626,18 +591,24 @@ final class Router
      * 
      * @param string $controller Controller class base name.
      * 
-     * @return string $className
+     * @return class-string Return class name.
     */
     private static function getControllerClass(string $controller): string
     {
-        if (class_exists($controller)) {
-            return $controller;
-        }
+        $prefix = self::$isCli ? 'Cli\\' : 'Http\\';
 
         foreach (self::$namespace as $namespace) {
-            if(class_exists($namespace . $controller)) {
-                return $namespace . $controller;
+            if (class_exists($class = $namespace . $prefix . $controller)) {
+                return $class;
             }
+
+            if (!self::$isCli && class_exists($class = $namespace . 'Errors\\' . $controller)) {
+                return $class;
+            }
+        }
+
+        if (class_exists($controller)) {
+            return $controller;
         }
 
         return '';
@@ -646,9 +617,9 @@ final class Router
     /**
      * Enable encoding of response.
      * 
-     * @param string|null $encoding
+     * @param string|null $encoding The encoding to output.
      * 
-     * @return bool
+     * @return void
      */
     private static function outputEncoding(?string $encoding = null): void
     {
@@ -791,11 +762,13 @@ final class Router
     {
         $prefixes = [];
         foreach ($contexts as $item) {
-            if ($item['prefix'] === Prefix::WEB || $item['prefix'] === null || $item['prefix'] === '') {
+            $prefix = $item['prefix'] ?? null;
+
+            if ($prefix === Prefix::WEB || $prefix === null || $prefix === '') {
                 continue;
             }
 
-            $prefixes[$item['prefix']] = $item['prefix'];
+            $prefixes[$prefix] = $prefix;
         }
 
         return $prefixes;
@@ -971,10 +944,12 @@ final class Router
      * Serve static cached pages.
      * If cache is enabled and the request is not in CLI mode, check if the cache is still valid.
      * If valid, render the cache and terminate further router execution.
+     * 
+     * @param string $prefix Request url prefix.
      *
      * @return bool Return true if cache is rendered, otherwise false.
      */
-    private static function serveStaticCache(): bool
+    private static function serveStaticCache(string $prefix): bool
     {
         if (
             self::$isCli || 
@@ -989,7 +964,9 @@ final class Router
         static $cachePath = null;
         if ($types && $types !== '' && preg_match('/\.(' . $types . ')$/i', self::$uri, $matches)) {
             $cachePath ??= root(rtrim((new Template())->cacheFolder, TRIM_DS) . '/default/');
-            $cache = (new ViewCache(0, $cachePath))->setKey(Foundation::getCacheId());
+            $cache = (new ViewCache(0, $cachePath))
+                ->setKey(Foundation::getCacheId())
+                ->setUri(self::$uri);
 
             // If expiration return mismatched int code 404 ignore and do not try to replace to actual url.
             $expired = $cache->expired($matches[1]);
@@ -1235,7 +1212,8 @@ final class Router
     {
         if ($className === '') {
             RouterException::throwWith('invalid_class', RouterException::CLASS_NOT_FOUND, [
-                $className
+                $className, 
+                implode(',  ', self::$namespace)
             ]);
             return false;
         }
@@ -1289,6 +1267,77 @@ final class Router
 
         RouterException::throwWith('invalid_method', RouterException::INVALID_METHOD, [$method]);
         return false;
+    }
+
+    /**
+     * Initialize and render application routing with PHP attributes.
+     * 
+     * @param string $prefix The application url first prefix.
+     * 
+     * @return self Return router instance.
+     */
+    private function createWithAttributes(string $prefix): self 
+    {
+        $hmvc = env('feature.app.hmvc', false);
+        $collector = new Generator($this->baseGroup, self::$isCli, $hmvc);
+        $path = $hmvc ? 'app/Modules/' : 'app/Controllers/';
+
+        if(self::$isCli){
+            $collector->installCli($path);
+        }else{
+            $collector->installHttp($path, $prefix);
+        }
+
+        $current = $this->baseGroup;
+        self::$controllers = array_merge(
+            self::$controllers, 
+            $collector->getRoutes()
+        );
+        
+        $this->baseGroup = $current;
+
+        return $this;
+    }
+
+    /**
+     * Initialize and render application routing with router methods.
+     * 
+     * @param string $prefix The application url first prefix.
+     * @param Prefix[]|array<int,array<string,mixed>> $contexts The application prefix contexts.
+     * 
+     * @return self Return router instance.
+     */
+    private function createWithMethods(string $prefix, array $contexts): self  
+    {
+        $current = $this->baseGroup;
+        $fromArray = !($contexts[0] instanceof Prefix);
+        $prefixes = $fromArray ? self::getArrayPrefixes($contexts) : Prefix::getPrefixes();
+
+        foreach ($contexts as $context) {
+            $name = $fromArray ? ($context['prefix'] ?? '') : $context->getName();
+
+            if($name === ''){
+                continue;
+            }
+            
+            $eHandler = $fromArray ? ($context['error'] ?? null) : $context->getErrorHandler();
+
+            self::reset();
+            $result = $this->installContext($name, $eHandler, $prefix, $prefixes);
+
+            if($result === 2){
+                return $this;
+            }
+
+            if($result === true){
+                self::bootContext($name, $this, self::$application);
+                break;
+            }
+        }
+
+        $this->baseGroup = $current;
+
+        return $this;
     }
 
     /**

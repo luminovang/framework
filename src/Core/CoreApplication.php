@@ -42,9 +42,18 @@ abstract class CoreApplication
     public function __construct() 
     {
         $this->router ??= new Router($this);
-        $this->router->addNamespace('\\App\\Controllers\\');
+        $this->router->addNamespace('\\App\\Controllers\\') //mvc
+            ->addNamespace('\\App\\Modules\\Controllers\\'); // hmvc
         $this->initialize();
         $this->onCreate();
+    }
+
+    /**
+     * CoreApplication destruct.
+     */
+    public function __destruct()
+    {
+        $this->onDestroy();
     }
 
     /**
@@ -67,6 +76,14 @@ abstract class CoreApplication
      * @return void
      */
     protected function onCreate(): void {}
+
+    /**
+     * onDestroy method that gets triggered on object destruction, 
+     * designed to be overridden in subclasses for custom cleanup.
+     * 
+     * @return void
+     */
+    protected function onDestroy(): void {}
 
     /**
      * Called when the application starts handling a request, regardless of success or failure.

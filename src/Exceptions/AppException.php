@@ -342,7 +342,7 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
      */
     private static function display(AppException|Exception $exception): int 
     {
-        include_once root('/resources/views/system_errors/') . 'cli.php';
+        include_once root('/resources/Views/system_errors/') . 'cli.php';
 
         return STATUS_ERROR;
     }

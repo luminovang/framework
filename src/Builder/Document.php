@@ -9,14 +9,49 @@
  */
 namespace Luminova\Builder;
 
-class Document
+abstract class Document
 {
+    /**
+     * Default html5 elements.
+     * 
+     * @var int HTML5
+     */
+    public const HTML5 = 1;
+
+    /**
+     * Html5 elements with bootstrap template.
+     * 
+     * @var int BOOTSTRAP5
+     */
+    public const BOOTSTRAP5 = 2;
+
+    /**
+     * This property determines whether element tag names should be automatically converted to lowercase.
+     * 
+     * @var bool $xhtmlStrictTagNames
+     */
+    public static bool $xhtmlStrictTagNames = true;
+
+    /**
+     * The input style to use.
+     * 
+     * @var int $template
+     */
+    public static int $template = 1;
+
+    /**
+     * Use encoding for escaping input. 
+     * 
+     * @var string $encoding
+     */
+    public static string $encoding = 'UTF-8';
+
     /**
      * List of html document types.
      *
-     * @var array<string,string> $doctypes
+     * @var array<string,string> $docTypes
     */
-    public static array $doctypes = [
+    public static array $docTypes = [
         'html5'             => '<!DOCTYPE html>',
         'xhtml11'           => '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">',
         'xhtml1-strict'     => '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">',
@@ -39,14 +74,84 @@ class Document
     ];
 
     /**
-     *Generates an html doctype
+     * Supported non-standard HTML5 input types.
+     * 
+     * @var array $invalidInputTypes
+     */
+    protected static array $invalidInputTypes = [
+        'string'   => 'text',
+        'int'      => 'number',
+        'integer'  => 'number',
+        'datetime' => 'datetime-local',
+    ]; 
+
+    /**
+     *Generates an html doctype.
      *
      * @param string $type The html type of your document.
      *
      * @return string|null Returns generated doctype.
     */
-    public static function doctype(string $type = 'html5'): string|null
+    public static function doctype(string $type = 'html5'): ?string
     {
-        return static::$doctypes[$type] ?? null;
+        return self::$docTypes[$type] ?? null;
+    }
+
+    /**
+     * Generate HTML attributes as a string.
+     *
+     * @param array<string,string|int|float> $attributes The attributes as key-value pairs.
+     * 
+     * @return string Return the attributes as a string.
+     */
+    public static function attributes(array $attributes): string
+    {
+        $attr = '';
+        foreach ($attributes as $key => $value) {
+            $attr .= ' ' . self::esc($key) . (($value === null) 
+                ? '' 
+                : '="' . self::getAttrType($value) . '"'
+            );
+        }
+
+        return $attr;
+    }
+
+    /**
+     * Get attribute value type.
+     *
+     * @param mixed $value The value of the attribute.
+     * 
+     * @return string Return the safely escaped string or numeric value.
+     */
+    protected static function getAttrType(mixed $value): string 
+    {
+        if($value === ''){
+            return '';
+        }
+
+        return match($value){
+            true => 'true',
+            false => 'false',
+            default => self::esc($value)
+        };
+    }
+
+    /**
+     * Escapes input for safe output in HTML, including handling numeric values directly.
+     *
+     * @param string|int|float $input  The value to be escaped.
+     * 
+     * @return string Return the safely escaped string or numeric value.
+     * @ignore
+     */
+    public static function esc(string|int|float $input): string
+    {
+        if ($input === '' || is_numeric($input)) {
+            return (string) $input;
+        }
+
+        $input = trim((string) $input);
+        return htmlspecialchars($input, ENT_QUOTES|ENT_SUBSTITUTE, self::$encoding);
     }
 }

@@ -54,6 +54,13 @@ class FileManager
     protected string $controllers = 'app/Controllers/';
 
     /**
+     * Path to the application hmvc modules.
+     * 
+     * @var string $modules
+     */
+    protected string $modules = 'app/Modules/';
+
+    /**
      * Path to the application files.
      * 
      * @var string $app
@@ -96,11 +103,11 @@ class FileManager
     protected string $assets = 'public/assets/';
 
     /**
-     * Path to the template views files.
+     * Path to the hmvc template views files.
      * 
      * @var string $views
      */
-    protected string $views = 'resources/views/';
+    protected string $views = 'resources/Views/';
 
     /**
      * Path to the application routes.

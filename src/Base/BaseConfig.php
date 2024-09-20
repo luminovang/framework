@@ -19,6 +19,11 @@ abstract class BaseConfig
     private array $cspDirectives = [];
 
     /**
+     * @var string|null $nonce 
+     */
+    protected static ?string $nonce = null;
+
+    /**
      * Constructor to initialize the class and trigger onCreate hook.
      */
     public function __construct()
@@ -62,6 +67,19 @@ abstract class BaseConfig
             'string' => (string) $value,
             default => $value,
         };
+    }
+
+    /**
+     * Generate or retrieve a nonce with an optional prefix.
+     *
+     * @param int $length The length of the random bytes to generate (default: 16).
+     * @param string $prefix An optional prefix for the nonce (default: '').
+     * 
+     * @return string Return a cached generated script nonce.
+     */
+    public static final function getNonce(int $length = 16, string $prefix = ''): string
+    {
+        return self::$nonce ??= $prefix . bin2hex(random_bytes($length / 2));
     }
 
     /**
