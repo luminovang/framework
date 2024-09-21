@@ -46,7 +46,7 @@ class Inputs extends Document
      */
     public static function __callStatic(string $method, array $arguments): string
     {
-        $$method = str_replace('_', '-', $method);
+        $method = str_replace('_', '-', $method);
         [$name, $value, $close, $attr] = $arguments + [null, null, false, []];
         
         return self::input($method, $name, $value, $close, $attr);
