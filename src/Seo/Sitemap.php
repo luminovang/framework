@@ -147,12 +147,7 @@ final class Sitemap
 
         $url = rtrim($url, '/');
         foreach ($urls as $page) {
-            $link = self::toHttps($page['link'], $url);
-            $xml .= '   <url>' . PHP_EOL;
-            $xml .= '       <loc>' . htmlspecialchars($link) . '</loc>' . PHP_EOL;
-            $xml .= '       <lastmod>'. ($page['lastmod'] ?? self::getLastModified($link, $app)) .'</lastmod>' . PHP_EOL;
-            $xml .= '       <priority>' . (($url === $page['link'] || $link === $url) ? '1.00' : '0.8' ) . '</priority>' . PHP_EOL;
-            $xml .= '   </url>' . PHP_EOL;
+            $xml .= self::addXml($page, $url, $app);
         }
 
         $xml .= '</urlset>';
@@ -172,6 +167,57 @@ final class Sitemap
         }
         gc_mem_caches();
         return false;
+    }
+
+    /**
+     * Generates XML sitemap entries for a given page.
+     *
+     * If the `includeStaticHtml` config option is enabled, it will append a `.html` extension 
+     * to the URL if necessary.
+     *
+     * @param array $page Page details, including 'link' and optional 'lastmod'.
+     * @param string $url Base URL used to compare the priority.
+     * @param CoreApplication|null $app Optional application instance for fetching last modification date.
+     * 
+     * @return string Return the generated XML string for the sitemap.
+     */
+    private static function addXml(array $page, string $url, ?CoreApplication $app = null): string 
+    {
+        $link = self::toHttps($page['link'], $url);
+        $lastmod = $page['lastmod'] ?? self::getLastModified($link, $app);
+        $priority = ($url === $page['link'] || $link === $url) ? '1.00' : '0.80';
+        $changeFreq = (self::$config->changeFrequently !== null) 
+            ? '       <changefreq>' . self::$config->changeFrequently . '</changefreq>' . PHP_EOL 
+            : '';
+        
+        $xml = '   <url>' . PHP_EOL;
+        $xml .= '       <loc>' . htmlspecialchars($link, ENT_QUOTES | ENT_XML1) . '</loc>' . PHP_EOL;
+        $xml .= '       <lastmod>'. $lastmod .'</lastmod>' . PHP_EOL;
+        $xml .= $changeFreq;
+        $xml .= '       <priority>' . $priority . '</priority>' . PHP_EOL;
+        $xml .= '   </url>' . PHP_EOL;
+
+        // Include static HTML link if configured, and append '.html' where appropriate.
+        if($link !== self::$http && $link !== self::$https && self::$config->includeStaticHtml){
+            if(!self::matchesIgnore($link, self::$config->skipStaticHtml)){
+                $htmlLink = str_contains($link, '.html') 
+                    ? $link
+                    : (str_contains($link, '/#') 
+                        ? str_replace('/#', '.html#', $link) 
+                        : (str_contains($link, '#') 
+                            ? str_replace('#', '.html#', $link) 
+                            : rtrim($link, '/') . '.html'));
+
+                $xml .= '   <url>' . PHP_EOL;
+                $xml .= '       <loc>' . htmlspecialchars($htmlLink, ENT_QUOTES | ENT_XML1) . '</loc>' . PHP_EOL;
+                $xml .= '       <lastmod>'. $lastmod .'</lastmod>' . PHP_EOL;
+                $xml .= $changeFreq;
+                $xml .= '       <priority>' . $priority . '</priority>' . PHP_EOL;
+                $xml .= '   </url>' . PHP_EOL;
+            }
+        }
+
+        return $xml;
     }
 
     /**
@@ -196,8 +242,14 @@ final class Sitemap
                 break; 
             }
         }
+
+        $timestamp = $modified ? strtotime($modified) : false;
+
+        if ($timestamp === false) {
+            $timestamp = time();
+        }
         
-        return date('Y-m-d\TH:i:sP', strtotime($modified ?? date('Y-m-d H:i:s')));
+        return date('Y-m-d\TH:i:sP', $timestamp);
     }
 
     /**
@@ -227,14 +279,19 @@ final class Sitemap
      * - If the color is 'error', it prints the message as an error.
      * - Otherwise, it writes the message to the CLI with the specified color.
      *
-     * @param string $message The message to print.
+     * @param string|null $message The message to print.
      * @param string|null $color The color to apply to the message (optional).
+     * @param string $method The method to call for writing (default: `writeln`).
+     * 
      * @return void
      */
-    private static function _print(string $message, ?string $color = null): void 
+    private static function _print(
+        string|null $message, 
+        ?string $color = null, 
+        string $method = 'writeln'
+    ): void 
     {
         if (self::$cli instanceof Terminal || self::$cli instanceof BaseCommand) {
- 
             if ($message === '') {
                 self::$cli->newLine();
                 return;
@@ -255,7 +312,7 @@ final class Sitemap
                 return;
             }
 
-            self::$cli->writeln($message, $color);
+            self::$cli->{$method}($message, $color);
         }
     }
 
@@ -307,7 +364,7 @@ final class Sitemap
             return false;
         }
 
-        return !self::matchesIgnore($href);
+        return !self::matchesIgnore($href, self::$config->ignoreUrls);
     }
 
     /**
@@ -326,15 +383,18 @@ final class Sitemap
      * Check if URL ignore pattern matches URL.
      * 
      * @param string $url The URL to check.
+     * @param array $patterns The URL patterns to check.
      * 
      * @return bool Return true if URL is in ignore pattern, false otherwise.
     */
-    private static function matchesIgnore(string $url): bool 
+    private static function matchesIgnore(string $url, array $patterns): bool 
     {
-        foreach (self::$config->ignoreUrls as $line) {
-            $pattern = str_replace('/', '\/', $line);
-            $pattern = str_replace('*', '.+?', $pattern);
+        if($patterns === []){
+            return false;
+        }
 
+        foreach ($patterns as $line) {
+            $pattern = str_replace(['/', '*'], ['\/', '.+?'], $line);
             if (preg_match('/^' . $pattern . '$/', $url) || $url === $line) {
                 return true;
             }
@@ -404,14 +464,10 @@ final class Sitemap
         $url = self::replaceUrls($url);
         $found = 0;
         $deepScans = [];
-    
-        self::_print('[Progress] ' . $url);
         $html = self::connection($url);
-        self::_print('flush');
     
         if ($html === false) {
             self::$failed[] = $url;
-            self::_print('[Failed] ' . $url);
 
             if($deep){
                 return false;
@@ -488,17 +544,26 @@ final class Sitemap
      * 
      * @param string $url The url to load it contents.
      * 
-     * @return bool|array<string,string> Return array containing the page content and file-time.
+     * @return array<string,string>|false Return array containing the page content and file-time.
     */
-    private static function connection(string $url): array|bool 
+    private static function connection(string $url): array|bool
     {
         $url = self::toUrl($url);
         $ch = curl_init($url);
 
-        if($ch === false){
-            self::_print('[Error] Failed to open cURL connection.', 'red');
+        if (!$ch) {
+            self::_print('flush');
+            self::_print('[Error] Failed to initialize cURL connection.', 'red');
             return false;
         }
+
+        self::_print('[Scanning] ' . $url, 'cyan');
+        self::$cli->watcher(
+            5, 
+            fn() => self::_print('flush'), 
+            null,
+            false
+        );
 
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -508,27 +573,30 @@ final class Sitemap
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_HEADER => false
         ]);
-        $document = curl_exec($ch);
 
-        if (curl_errno($ch) !== 0) {
-            curl_close($ch);
-            self::_print('[Error] ' . curl_error($ch), 'red');
+        $document = curl_exec($ch);
+        $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $modified = curl_getinfo($ch, CURLINFO_FILETIME);
+        $errorCode = curl_errno($ch);
+        $error = curl_error($ch);
+        curl_close($ch);
+        self::_print('flush');
+
+        if ($document === false || $errorCode !== 0) {
+            self::_print('[Error] ' . ($errorCode ? $error : 'Empty response from ' . $url), 'red');
             return false;
         }
 
-        $modified = curl_getinfo($ch, CURLINFO_FILETIME);
-        curl_close($ch);
-
-        if ($document === false || empty($document)) {
-            self::_print('[Empty] ' . $url, 'red');
+        if ($statusCode === 404) {
+            self::_print('[404] ' . $url, 'red');
             return false;
         }
 
         self::$visited[] = $url;
 
         return [
-            'document' => $document, 
-            'lastmod' => ($modified != -1 ? date("Y-m-d\TH:i:sP", $modified) : null),
+            'document' => $document,
+            'lastmod'  => $modified != -1 ? date("Y-m-d\TH:i:sP", $modified) : null,
         ];
     }
 }

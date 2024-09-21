@@ -1027,25 +1027,34 @@ class Terminal
     }
 
     /**
-     * Clears all the output in console screen.
+     * Clears the entire screen for both Windows and Unix-based systems console.
      *
      * @return void
-    */
+     */
     public static final function clear(): void
     {
-        (is_platform('windows') && !static::streamSupports('sapi_windows_vt100_support', STDOUT))
-            ? static::newLine(40)
-            : static::fwrite("\033[H\033[2J");
+        if (is_platform('windows') && !static::streamSupports('sapi_windows_vt100_support', STDOUT)) {
+            static::fwrite(static::_shell('cls'));
+            static::newLine(40);
+            return;
+        }
+
+        static::fwrite("\033[H\033[2J");
     }
 
     /**
-     * Clears cli output to update new text.
+     * Clears CLI output line and update new text.
      *
      * @return void
-    */
+     */
     public static final function flush(): void
     {
-        static::fwrite("\033[1A");
+        if (is_platform('windows') && !static::streamSupports('sapi_windows_vt100_support', STDOUT)) {
+            static::fwrite("\r"); 
+            return;
+        }
+
+        static::fwrite("\033[1A\033[2K");
     }
 
     /**
@@ -1515,7 +1524,7 @@ class Terminal
      *
      * @return bool Return true if color is disabled, false otherwise.
     */
-    private static function isColorDisabled(): bool
+    public static function isColorDisabled(): bool
     {
         return isset($_SERVER['NO_COLOR']) || getenv('NO_COLOR') !== false;
     }
