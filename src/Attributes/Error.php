@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework Method Class Route Error Attribute
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -15,16 +15,19 @@ use \Closure;
 final class Error
 {
     /**
-     * Route error global handling attribute constructor.
+     * Defines an attribute for handling global route errors.
      *
-     * @param string $context The route context name for URI prefixing.
-     * @param string $pattern The URI route pattern to match for current error handling (e.g. `/`,`/.*`,  `/blog/([0-9-.]+)`).
-     * @param Closure|array|null $onError The error handler, which can be a Closure or an array specifying a class and method.
+     * @param string $context The route context used to categorize the URI,  (defaults: `web`) for generic prefix handling.
+     *                  The context is typically the first segment of the URI (e.g., `api`, `blog`).
+     * @param string $pattern The route pattern to match for current error handling (e.g. `/`, `/.*`, `/blog/([0-9-.]+)` or `/blog/(:placeholder)`).
+     *                  This can be a specific path, a regex-style pattern or placeholder.
+     * @param Closure|array|null $onError The error handler callback, which can either be a Closure or an array containing the class and method responsible for handling the error.
      * 
-     * @example For HTTP Route.
-     *  ```
+     * @example Example usage for defining an error handler on a route.
+     * ```php
      * #[Error('web', pattern: '/', onError: [ViewErrors::class, 'onWebError'])]
-     *  class MyController extends BaseController{}
+     * #[Error('foo', pattern: '/foo/', onError: [ViewErrors::class, 'onWebFooError'])]
+     * class MyController extends BaseController {}
      * ```
      */
     public function __construct(

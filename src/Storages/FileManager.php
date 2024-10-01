@@ -9,6 +9,7 @@
  */
 namespace Luminova\Storages;
 
+use \Luminova\Http\Header;
 use \Luminova\Exceptions\FileException;
 use \Luminova\Exceptions\RuntimeException;
 use \RecursiveIteratorIterator;
@@ -442,6 +443,38 @@ class FileManager
     }
 
     /**
+     * Validate if the provided file path is safe, exists, and is readable.
+     *
+     * @param string $path The file path to validate (relative or absolute).
+     *
+     * @return bool Returns true if the file is accessible and readable.
+     */
+    public static function isAccessible(string $path): bool
+    {
+        if (!self::isPathPermitted($path)) {
+            return false;
+        }
+
+        $readable = is_file($path);
+        if (!str_starts_with($path, '\\\\')) {
+            $readable = $readable && is_readable($path);
+        }
+        return $readable;
+    }
+
+    /**
+     * Verify if the file path follows the allowed format and is not a URL or PHP Archive (Phar).
+     *
+     * @param string $path The file path to check (relative or absolute).
+     *
+     * @return bool Returns true if the path is a valid local file path.
+     */
+    public static function isPathPermitted(string $path): bool
+    {
+        return !preg_match('#^[a-z][a-z\d+.-]*://#i', $path);
+    }
+
+    /**
      * Attempts to create the directory, if it doesn't exist.
      * 
      * @param string $path Directory path to create.
@@ -631,7 +664,7 @@ class FileManager
                 $isPartialContent = true;
                 $headers["Content-Range"] = $rangeHeader;
                 $headers["Content-Length"] = $length;
-                http_response_code(206);
+                Header::sendStatus(206);
             }
         }
 
@@ -639,10 +672,7 @@ class FileManager
             ob_end_clean();
         }
 
-        foreach ($headers as $key => $value) {
-            header("{$key}: {$value}");
-        }
-
+        Header::send($headers, false);
         if ($typeOf === 'file' || $typeOf === 'resource') {
             $handler = ($typeOf === 'file') ? fopen($content, 'rb') : $content;
 

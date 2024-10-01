@@ -11,6 +11,7 @@ namespace Luminova\Storages;
 
 use \Luminova\Application\Foundation;
 use \Luminova\Security\Crypter;
+use \Luminova\Http\Header;
 use \Luminova\Storages\FileManager;
 use \Peterujah\NanoBlock\NanoImage;
 use \Luminova\Exceptions\RuntimeException;
@@ -316,28 +317,13 @@ final class FileDelivery
             return;
         }
         
-        http_response_code($status);
         $headers['X-Powered-By'] = Foundation::copyright();
-        $removeHeaders = [];
 
-        foreach ($headers as $header => $value) {
-            if(!$header){
-                continue;
-            }
-
-            if($value === ''){
-                $removeHeaders[] = $header;
-            }else{
-                header("$header: $value");
-            }
-        }
+        Header::sendStatus($status);
+        Header::send($headers, false, false);
 
         if($cache){
-            $removeHeaders[] = 'Pragma';
-        }
-
-        if($removeHeaders !== []){
-            array_map('header_remove', $removeHeaders);
+            header_remove('Pragma');
         }
     }
 }

@@ -26,101 +26,122 @@ use \JsonException;
 final class Builder extends Connection 
 {  
     /**
+     * Return result as an array.
+     * 
+     * @var string RETURN_ARRAY
+     */
+    public const RETURN_ARRAY = 'array';
+
+    /**
+     * Return result as an object.
+     * 
+     * @var string RETURN_OBJECT
+     */
+    public const RETURN_OBJECT = 'object';
+
+    /**
+     * Return prepared statement.
+     * 
+     * @var string RETURN_STATEMENT
+     */
+    public const RETURN_STATEMENT = 'stmt';
+
+    /**
      * Class instance.
      * 
      * @var Builder|null $instance 
-    */
+     */
     private static ?Builder $instance = null;
 
     /**
      * Database table name to query.
      * 
      * @var string $tableName 
-    */
+     */
     private string $tableName = '';
 
     /**
      * Table name to join query.
      * 
      * @var string $joinTable 
-    */
+     */
     private string $joinTable = '';
 
     /**
      * Table join query type.
      * 
      * @var string $joinType 
-    */
+     */
     private string $joinType = '';
 
     /**
      * Table join bind parameters.
      * 
      * @var array $joinConditions 
-    */
+     */
     private array $joinConditions = [];
 
     /**
      * Table query limit and offset for select method. 
      * 
      * @var string $selectLimit 
-    */
+     */
     private string $selectLimit = '';
 
     /**
      * Table query max limit for update and delete methods.
      * 
      * @var int $maxLimit 
-    */
+     */
     private int $maxLimit = 1;
 
     /**
      * Table query order rows.
      * 
      * @var array<int,string> $queryOrder 
-    */
+     */
     private array $queryOrder = [];
 
     /**
      * Table query match against order rows.
      * 
      * @var array<int,string> $queryMatchOrder 
-    */
+     */
     private array $queryMatchOrder = [];
 
     /**
      * Table query group column by.
      * 
      * @var array<int,string> $queryGroup 
-    */
+     */
     private array $queryGroup = [];
 
     /**
      * Table query where column.
      * 
      * @var array<int,mixed> $whereCondition 
-    */
+     */
     private array $whereCondition = [];
 
     /**
      * Table query and query column.
      * 
      * @var array<int,mixed> $andConditions 
-    */
+     */
     private array $andConditions = [];
 
     /**
      * Table query update set values.
      * 
      * @var array<int,mixed> $querySetValues 
-    */
+     */
     private array $querySetValues = [];
 
     /**
      * Match against modes.
      * 
      * @var array<string,mixed>  $matchModes
-    */
+     */
     private static array $matchModes = [
         'NATURAL_LANGUAGE' => 'IN NATURAL LANGUAGE MODE',
         'BOOLEAN' => 'IN BOOLEAN MODE',
@@ -132,96 +153,96 @@ final class Builder extends Connection
      * Has Cache flag.
      * 
      * @var bool $hasCache 
-    */
+     */
     private bool $hasCache = false;
 
     /**
      * Caching status flag.
      * 
      * @var bool $caching 
-    */
+     */
     private bool $caching = true;
 
     /**
      * Print query string.
      * 
      * @var bool $printQuery 
-    */
+     */
     private bool $printQuery = false;
 
     /**
      * The debug query.
      * 
      * @var array<string,mixed> $debugQuery 
-    */
+     */
     private array $debugQuery = [];
 
     /**
      * Cache class instance.
      * 
      * @var BaseCache|null $cache 
-    */
+     */
     private static ?BaseCache $cache = null;
 
     /**
      * Result return type.
      * 
-     * @var string $returnType 
-    */
-    private string $returnType = 'object';
+     * @var string $resultType 
+     */
+    private string $resultType = 'object';
 
     /**
      * Cache key.
      * 
      * @var string $cacheKey 
-    */
+     */
     private string $cacheKey = "default";
 
     /**
      * Table alias.
      * 
      * @var string $tableAlias 
-    */
+     */
     private string $tableAlias = '';
 
     /**
      * Join table alias.
      * 
      * @var string $jointTableAlias 
-    */
+     */
     private string $jointTableAlias = '';
 
     /**
      * Bind values.
      * 
      * @var array $bindValues 
-    */
+     */
     private array $bindValues = [];
 
     /**
      * Query builder.
      * 
      * @var string $buildQuery 
-    */
+     */
     private string $buildQuery = '';
 
     /**
      * Query builder caching driver.
      * 
      * @var string $cacheDriver 
-    */
+     */
     private string $cacheDriver = '';
 
     /**
      * Query statement handler.
      * 
      * @var DatabaseInterface|bool|null $handler
-    */
+     */
     private static DatabaseInterface|bool|null $handler = null;
 
     /**
      * Initialize database builder class.
-    */
+     */
     public function __construct()
     {
         parent::__construct();
@@ -232,7 +253,7 @@ final class Builder extends Connection
      * Reset query properties before cloning.
      * 
      * @ignore
-    */
+     */
     private function __clone() 
     {
         $this->reset();
@@ -242,7 +263,7 @@ final class Builder extends Connection
      * Get database connection instance.
      * 
      * @return DatabaseInterface|null Return database driver instance.
-    */
+     */
     public function db(): ?DatabaseInterface
     {
         return $this->db;
@@ -253,7 +274,7 @@ final class Builder extends Connection
      *
      * @return static Return new static instance of builder class.
      * @throws DatabaseException If the database connection fails.
-    */
+     */
     public static function getInstance(): static 
     {
         return static::$instance ??= new static();
@@ -267,7 +288,7 @@ final class Builder extends Connection
      * 
      * @return self Returns the instance of builder class.
      * @throws InvalidArgumentException Throws if an invalid table name is provided.
-    */
+     */
     public function table(string $table, ?string $alias = null): self
     {
         if($table === ''){
@@ -301,7 +322,7 @@ final class Builder extends Connection
      * `CROSS` - Returns the Cartesian product of the two tables.
      * `FULL`  - Returns rows with matching values in either table, with NULLs for non-matching rows from either table.
      * `FULL OUTER` - Returns all rows when there is a match in either the left or right table, or NULL from the side that does not have a match.
-    */
+     */
     public function join(string $table, string $type = 'INNER', ?string $alias = null): self
     {
         if($table === '' || $type === ''){
@@ -328,7 +349,7 @@ final class Builder extends Connection
      * @example string $tbl->on('a.column', '=', 'b.column);
      * 
      * @return self Returns the instance of builder class.
-    */
+     */
     public function on(string $condition, string $operator, mixed $value): self
     {
         $this->joinConditions[] = "{$condition} {$operator} {$value}";
@@ -344,7 +365,7 @@ final class Builder extends Connection
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
-    */
+     */
     public function innerJoin(string $table, ?string $alias = null): self
     {
         return $this->join($table, 'INNER', $alias);
@@ -358,7 +379,7 @@ final class Builder extends Connection
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
-    */
+     */
     public function leftJoin(string $table, ?string $alias = null): self
     {
         return $this->join($table, 'LEFT', $alias);
@@ -372,7 +393,7 @@ final class Builder extends Connection
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
-    */
+     */
     public function rightJoin(string $table, ?string $alias = null): self
     {
         return $this->join($table, 'RIGHT', $alias);
@@ -386,7 +407,7 @@ final class Builder extends Connection
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
-    */
+     */
     public function crossJoin(string $table, ?string $alias = null): self
     {
         return $this->join($table, 'CROSS', $alias);
@@ -400,7 +421,7 @@ final class Builder extends Connection
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
-    */
+     */
     public function fullJoin(string $table, ?string $alias = null): self
     {
         return $this->join($table, 'FULL', $alias);
@@ -414,7 +435,7 @@ final class Builder extends Connection
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
-    */
+     */
     public function fullOuterJoin(string $table, ?string $alias = null): self
     {
         return $this->join($table, 'FULL OUTER', $alias);
@@ -444,7 +465,7 @@ final class Builder extends Connection
      * @param int $limit number of records to update or delete.
      * 
      * @return self Return instance of builder class.
-    */
+     */
     public function max(int $limit): self
     {
         $this->maxLimit = max(0, $limit);
@@ -459,7 +480,7 @@ final class Builder extends Connection
      * @param string $order The order algorithm to use (either "ASC" or "DESC").
      * 
      * @return self Returns the instance of the class.
-    */
+     */
     public function order(string $column, string $order = 'ASC'): self 
     {
         $this->queryOrder[] = "{$column} {$order}";
@@ -481,7 +502,7 @@ final class Builder extends Connection
      * @param string $order The order algorithm to use (either "ASC" or "DESC").
      * 
      * @return self Returns the instance of the class.
-    */
+     */
     public function orderByMatch(
         array $columns, 
         string|int|float $value, 
@@ -504,7 +525,7 @@ final class Builder extends Connection
      * @param string $group The column name to group by.
      * 
      * @return self Returns the instance of the class.
-    */
+     */
     public function group(string $group): self 
     {
         $this->queryGroup[] = $group;
@@ -520,7 +541,7 @@ final class Builder extends Connection
      * @param mixed $value The where condition column value.
      * 
      * @return self Return instance of builder class.
-    */
+     */
     public function where(string $column, string $operator, mixed $value): self
     {
         $placeholder = static::trimPlaceholder($column);
@@ -544,7 +565,7 @@ final class Builder extends Connection
      * @param mixed $value The and condition column value.
      * 
      * @return self Return instance of builder class.
-    */
+     */
     public function and(string $column, string $operator, mixed $value): self
     {
         $this->andConditions[] = [
@@ -571,7 +592,7 @@ final class Builder extends Connection
      * @param mixed $value The value to match against.
      * 
      * @return self Return instance of builder class.
-    */
+     */
     public function against(array $columns, string $mode, mixed $value): self
     {
         $this->andConditions[] = [
@@ -591,7 +612,7 @@ final class Builder extends Connection
      * @param mixed $value The column name value to update.
      * 
      * @return self Return instance of builder class.
-    */
+     */
     public function set(string $column, mixed $value): self
     {
         $this->querySetValues[$column] = $value;
@@ -607,7 +628,7 @@ final class Builder extends Connection
      * @param mixed $value The column key value.
      * 
      * @return self Return instance of builder class.
-    */
+     */
     public function or(string $column, string $operator, mixed $value): self
     {
         $this->andConditions[] = [
@@ -714,7 +735,7 @@ final class Builder extends Connection
      * @return self Return instance of builder class.
      * @throws InvalidArgumentException If values is not provided.
      * @throws JsonException If an error occurs while encoding values.
-    */
+     */
     public function in(string $column, array $list): self
     {
         if($list === []){
@@ -799,13 +820,13 @@ final class Builder extends Connection
      * 
      * @return self Return instance of builder class.
      * @throws InvalidArgumentException Throws if an invalid type is provided.
-    */
+     */
     public function returns(string $type): self
     {
         $type = strtolower($type);
 
-        if($type === 'object' || $type === 'array'){
-            $this->returnType = $type;
+        if($type === self::RETURN_OBJECT || $type === self::RETURN_ARRAY){
+            $this->resultType = $type;
             
             return $this;
         }
@@ -865,7 +886,7 @@ final class Builder extends Connection
      * @param bool $enable The caching status action.
      * 
      * @return self Return instance of builder class.
-    */
+     */
     public function caching(bool $enable): self
     {
         $this->caching = $enable;
@@ -1090,7 +1111,7 @@ final class Builder extends Connection
      * 
      * @return int|bool Return total number of records in table, otherwise false if execution failed.
      * @throws DatabaseException If an error occurs.
-    */
+     */
     public function total(string $column = '*'): int|bool 
     {
         return $this->createQueryExecution("SELECT COUNT({$column})");
@@ -1103,7 +1124,7 @@ final class Builder extends Connection
      * 
      * @return int|float|bool Return total sum columns, otherwise false if execution failed.
      * @throws DatabaseException If an error occurs.
-    */
+     */
     public function sum(string $column): int|float|bool
     {
         return $this->createQueryExecution("SELECT SUM({$column}) AS totalCalc", 'sum');
@@ -1122,14 +1143,14 @@ final class Builder extends Connection
         return $this->createQueryExecution("SELECT AVG({$column}) AS totalCalc", 'average');
     }
 
-     /**
+    /**
      * Select multiple records from table.
      * 
      * @param array<int,string> $columns select columns.
      * 
      * @return object|null|array|int|float|bool Return selected rows, otherwise false if execution failed.
      * @throws DatabaseException If an error occurs.
-    */
+     */
     public function select(array $columns = ['*']): mixed 
     {
         return $this->createQueryExecution('', 'select', $columns);
@@ -1142,7 +1163,7 @@ final class Builder extends Connection
      * 
      * @return object|null|array|int|float|bool Return selected single row, otherwise false if execution failed.
      * @throws DatabaseException If where method was not called or an error occurs.
-    */
+     */
     public function find(array $columns = ['*']): mixed 
     {
         if ($this->whereCondition === []) {
@@ -1164,7 +1185,7 @@ final class Builder extends Connection
      * 
      * @return object|null|array|int|float|bool Return selected records, otherwise false if execution failed.
      * @throws DatabaseException If an error occurs.
-    */
+     */
     public function fetch(string $result = 'all', int $mode = FETCH_OBJ, array $columns = ['*']): mixed 
     {
         if ($result === 'all' || $result === 'next') {
@@ -1184,10 +1205,10 @@ final class Builder extends Connection
      * 
      * @return DatabaseInterface Return prepared statement if query is successful otherwise null.
      * @throws DatabaseException If an error occurs.
-    */
+     */
     public function stmt(array $columns = ['*']): DatabaseInterface|null
     {
-        $this->returnType = 'stmt';
+        $this->resultType = 'stmt';
         if($this->createQueryExecution('', 'stmt', $columns)){
             return static::$handler;
         }
@@ -1210,7 +1231,7 @@ final class Builder extends Connection
      * 
      * @return mixed Return result of executed method query.
      * @throws DatabaseException If an error occurs.
-    */
+     */
     private function createQueryExecution(
         string $query, 
         string $return = 'total', 
@@ -1279,7 +1300,7 @@ final class Builder extends Connection
      * 
      * @return mixed Return query result.
      * @throws DatabaseException If an error occurs.
-    */
+     */
     private function returnExecutedResult(
         string $sqlQuery, 
         string $return = 'total', 
@@ -1337,8 +1358,8 @@ final class Builder extends Connection
         if (static::$handler->ok()) {
             $response = match ($return) {
                 'stmt' => true,
-                'select' => static::$handler->getAll($this->returnType),
-                'find' => static::$handler->getNext($this->returnType),
+                'select' => static::$handler->getAll($this->resultType),
+                'find' => static::$handler->getNext($this->resultType),
                 'total' => static::$handler->getCount(),
                 'fetch' => static::$handler->fetch($result, $mode),
                 default => static::$handler->getNext()->totalCalc ?? 0,
@@ -1432,7 +1453,7 @@ final class Builder extends Connection
      * 
      * @return int Return number of affected rows.
      * @throws DatabaseException Throw if error occurs.
-    */
+     */
     public function delete(): int
     {
         static::$handler = null;
@@ -1508,7 +1529,10 @@ final class Builder extends Connection
         }
 
         $response = (static::$handler->ok() ? 
-            (($mode === RETURN_STMT) ? static::$handler : static::$handler->getResult($mode, $this->returnType)) : false);
+            (($mode === RETURN_STMT) 
+                ? static::$handler 
+                : static::$handler->getResult($mode, $this->resultType)) 
+            : false);
         $this->reset();
 
         return $response;
@@ -1518,7 +1542,7 @@ final class Builder extends Connection
      * Get error information.
      * 
      * @return array Return error information.
-    */
+     */
     public function errors(): array 
     {
         return $this->db->errors();
@@ -1740,7 +1764,7 @@ final class Builder extends Connection
      * 
      * @throws InvalidArgumentException Thrown if query string is empty.
      * @throws DatabaseException Throws if error occurs.
-    */
+     */
     public function exec(string $query): int 
     {
         if ($query === '') {
@@ -1763,7 +1787,7 @@ final class Builder extends Connection
      * 
      * @return bool Return true if table was successfully dropped, false otherwise.
      * @throws DatabaseException Throws if error occurs.
-    */
+     */
     public function drop(bool $transaction = false): bool 
     {
         return $this->dropTable(false, $transaction);
@@ -1776,7 +1800,7 @@ final class Builder extends Connection
      * 
      * @return bool Return true if table was successfully dropped, false otherwise.
      * @throws DatabaseException Throws if error occurs.
-    */
+     */
     public function dropTemp(bool $transaction = false): bool 
     {
         return $this->dropTable(true, $transaction);
@@ -1790,7 +1814,7 @@ final class Builder extends Connection
      * 
      * @return bool Return true if table was successfully dropped, false otherwise.
      * @throws DatabaseException Throws if error occurs.
-    */
+     */
     private function dropTable(bool $isTempTable = false, bool $transaction = false): bool
     {
         if ($this->tableName === '') {
@@ -1849,7 +1873,7 @@ final class Builder extends Connection
      * @param bool $isTempTable Whether to drop temporary table (default false).
      * 
      * @return string Return SQL query string based on database type.
-    */
+     */
     private function getDropTableSQL(bool $isTempTable = false): string
     {
         $tablePrefix = $isTempTable ? 'temp_' : '';
@@ -1873,7 +1897,7 @@ final class Builder extends Connection
      * @return int Return number affected row.
      * @throws DatabaseException If an error occurs.
      * @throws JsonException If an error occurs while encoding values.
-    */
+     */
     private function executeInsertQuery(array $columns, array $values): int 
     {
         $inserts = '';
@@ -1907,7 +1931,7 @@ final class Builder extends Connection
      * @return int Return number affected row.
      * @throws DatabaseException If an error occurs.
      * @throws JsonException If an error occurs while encoding values.
-    */
+     */
     private function executeInsertPrepared(array $columns, array $values): int
     {
         $count = 0;
@@ -2065,7 +2089,7 @@ final class Builder extends Connection
      * @param bool $isBided Whether the value is bound.
      * 
      * @return void
-    */
+     */
     private function bindConditions(DatabaseInterface &$handler, bool $isBided = false): void 
     {
         foreach ($this->andConditions as $index => $bindings) {
@@ -2182,7 +2206,7 @@ final class Builder extends Connection
      * @param DatabaseInterface &$handler Database handler passed by reference.
      * 
      * @return string
-    */
+     */
     private static function bindInConditions(
         array $values, 
         string $column,
@@ -2294,7 +2318,7 @@ final class Builder extends Connection
         return false;
     }
 
-     /**
+    /**
      * Orders the query based on the MATCH columns and mode.
      * 
      * @param string &$selectQuery The SQL query string passed by reference.
@@ -2302,7 +2326,7 @@ final class Builder extends Connection
      * @param bool $isOrdered Whether the query has been ordered.
      * 
      * @return void
-    */
+     */
     private function orderAgainstMatch(string &$selectQuery, bool $isBided = true, bool $isOrdered = false): void 
     {
         $orders = $isOrdered ? ' , ' : ' ORDER BY';
@@ -2392,7 +2416,7 @@ final class Builder extends Connection
      * @param string|null $input The column name to convert to placeholder.
      * 
      * @return string Return column placeholder.
-    */
+     */
     private static function trimPlaceholder(string|null $input): string 
     {
         if(!$input){
@@ -2415,7 +2439,7 @@ final class Builder extends Connection
      * @var array $columns Array of column names.
      * 
      * @return array<int,string> Array of insert params and placeholders.
-    */
+     */
     private static function mapParams(array $columns): array 
     {
         $placeholders = '';
@@ -2435,7 +2459,7 @@ final class Builder extends Connection
      * @param bool $implode should implode or just return the array.
      * 
      * @return array|string Return array or string.
-    */
+     */
     private static function buildPlaceholder(array $columns, bool $implode = false): array|string
     {
         $updateColumns = [];
@@ -2490,7 +2514,7 @@ final class Builder extends Connection
      * Debug dump statement information for the last statement execution.
      *
      * @return bool|null trues else false or null.
-    */
+     */
     public function dump(): bool|null
     {
         return $this->db->dumpDebug();
@@ -2500,7 +2524,7 @@ final class Builder extends Connection
      * Reset query conditions and Free database resources
      * 
      * @return void 
-    */
+     */
     public function reset(): void 
     {
         $this->tableName = ''; 
@@ -2521,19 +2545,19 @@ final class Builder extends Connection
         $this->printQuery = false;
         $this->bindValues = [];
         $this->buildQuery = '';
-        if($this->returnType !== 'stmt'){
+        if($this->resultType !== 'stmt'){
             $this->free();
             static::$handler?->free();
             static::$handler = null;
         }
-        $this->returnType = 'object';
+        $this->resultType = 'object';
     }
 
     /**
      * Free database resources
      * 
      * @return void 
-    */
+     */
     public function free(): void 
     {
         $this->db?->free();
@@ -2543,7 +2567,7 @@ final class Builder extends Connection
      * Close database connection
      * 
      * @return void 
-    */
+     */
     public function close(): void 
     {
         $this->db?->close();

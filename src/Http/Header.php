@@ -17,18 +17,10 @@ use \Countable;
 class Header implements Countable
 {
     /**
-     * All allowed HTTP request methods, must be in upper case.
-     * @usages Router
-     * 
-     * @var string[] $httpMethods
-    */
-    public static array $httpMethods = ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS', 'HEAD'];
-
-    /**
      * Content types.
      * 
      * @var array<int,array> $contentTypes
-    */
+     */
     private static array $contentTypes = [
         'html'   => ['text/html', 'application/xhtml+xml'],
         'text'   => ['text/plain'],
@@ -47,32 +39,24 @@ class Header implements Countable
      * Header variables.
      * 
      * @var array<string,mixed> $variables
-    */
-    protected array $variables = [];
+     */
+    protected static array $variables = [];
 
     /**
-     * API configuration.
+     * REST API configuration.
      * 
      * @var Apis $config
-    */
+     */
     private static ?Apis $config = null;
 
     /**
      * Initializes the header constructor.
      * 
-     * @param array<string,mixed> $variables The header variables key-pair.
-    */
+     * @param array<string,mixed>|null $variables The header variables key-pair.
+     */
     public function __construct(?array $variables = null)
     {
-        $this->variables = $variables ?? static::getHeaders();
-    }
-
-    /**
-     * Initializes API configuration.
-    */
-    private static function initConfig(): void
-    {
-        self::$config ??= new Apis();
+        self::$variables = $variables ?? static::getHeaders();
     }
 
    /**
@@ -86,14 +70,10 @@ class Header implements Countable
     public function get(?string $name = null, mixed $default = null): mixed
     {
         if ($name === null || $name === '') {
-            return $this->variables;
+            return self::$variables;
         }
 
-        if($this->has($name)){
-            return $this->variables[$name];
-        }
-
-        return $default;
+        return $this->has($name) ? self::$variables[$name] : $default;
     }
 
     /**
@@ -106,7 +86,7 @@ class Header implements Countable
     */
     public function set(string $key, mixed $value): void
     {
-        $this->variables[$key] = $value;
+        self::$variables[$key] = $value;
     }
 
     /**
@@ -118,7 +98,7 @@ class Header implements Countable
     */
     public function remove(string $key): void
     {
-        unset($this->variables[$key]);
+        unset(self::$variables[$key]);
     }
 
     /**
@@ -130,7 +110,7 @@ class Header implements Countable
     */
     public function has(string $key): bool
     {
-        return array_key_exists($key, $this->variables);
+        return array_key_exists($key, self::$variables);
     }
 
      /**
@@ -140,7 +120,7 @@ class Header implements Countable
      */
     public function count(): int
     {
-        return count($this->variables);
+        return count(self::$variables);
     }
 
      /**
@@ -153,11 +133,9 @@ class Header implements Countable
      */
     public static function server(string $key): mixed
     {
-        if (array_key_exists($key, $_SERVER)) {
-            return $_SERVER[$key];
-        }
-
-        return null;
+        return array_key_exists($key, $_SERVER) 
+            ? $_SERVER[$key] 
+            : null;
     }
 
     /**
@@ -167,6 +145,10 @@ class Header implements Countable
      */
     public static function getHeaders(): array
     {
+        if(self::$variables !== []){
+            return self::$variables;
+        }
+
         if (function_exists('apache_request_headers') && ($headers = apache_request_headers()) !== false) {
             return $headers;
         }
@@ -188,7 +170,7 @@ class Header implements Countable
      * filtering for content-related headers.
      * 
      * @return array Return n associative array containing 'Content-Type', 
-     * 'Content-Length', and 'Content-Encoding' headers.
+     *              'Content-Length', and 'Content-Encoding' headers.
      */
     public static function requestHeaders(): array
     {
@@ -266,23 +248,19 @@ class Header implements Countable
         static::parseHeaders($headers, $status);
     }
 
-   /**
+    /**
      * Parses and modifies the HTTP headers, ensuring necessary headers are set.
      *
-     * @param array $headers An array of HTTP headers.
-     * @param int|null $statusCode HTTP response code (default: NULL)
+     * @param array $headers An associative array of headers to send.
+     * @param int|null $status HTTP response code (default: NULL)
      * 
      * @return void
      * @internal
      */
-    public static function parseHeaders(array $headers, ?int $statusCode = null): void
+    public static function parseHeaders(array $headers, ?int $status = null): void
     {
         if (headers_sent()) {
             return;
-        }
-
-        if ($statusCode !== null) {
-            http_response_code($statusCode);
         }
 
         if (isset($headers['default_headers'])) {
@@ -290,7 +268,7 @@ class Header implements Countable
         }
 
         if (Foundation::isApiContext()) {
-            self::initConfig();
+            self::$config ??= new Apis();
             $origin = static::server('HTTP_ORIGIN');
             
             if($origin){
@@ -308,48 +286,77 @@ class Header implements Countable
                     }
 
                     if ($allowed === null) {
-                        http_response_code(403);
+                        self::sendStatus(403);
                         exit('Origin Forbidden');
                     }
 
-                    header('Access-Control-Allow-Origin: ' . $allowed);
+                    $headers['Access-Control-Allow-Origin'] = $allowed;
                 }
             }elseif(!$origin && self::$config->forbidEmptyOrigin){
-                http_response_code(400);
+                self::sendStatus(400);
                 exit('Bad Origin Request');
             }
 
             if (!isset($headers['Access-Control-Allow-Headers']) && self::$config->allowHeaders !== []) {
-                header('Access-Control-Allow-Headers: ' . implode(', ', self::$config->allowHeaders));
+                $headers['Access-Control-Allow-Headers'] = implode(', ', self::$config->allowHeaders);
             }
 
             if (!isset($headers['Access-Control-Allow-Credentials'])) {
-                header('Access-Control-Allow-Credentials: ' . (self::$config->allowCredentials ? 'true' : 'false'));
+                $headers['Access-Control-Allow-Credentials'] = (self::$config->allowCredentials ? 'true' : 'false');
             }
         }
 
-        $removeHeaders = [];
+        if ($status !== null) {
+            self::sendStatus($status);
+        }
+
+        self::send($headers, false, true);
+    }
+
+    /**
+     * Sends HTTP headers to the client.
+     *
+     * @param array<string,mixed> $headers An associative array of headers to send.
+     * @param bool $ifNotSent Weather to send headers if headers is not already sent (default: true).
+     * @param bool $charset Weather to append default charset from env to `Content-Type` if it doesn't contain it (default: false).
+     * 
+     * @return void
+     */
+    public static function send(array $headers, bool $ifNotSent = true, bool $charset = false): void 
+    {
+        if ($ifNotSent && headers_sent()) {
+            return;
+        }
+
+        $remove = [];
         foreach ($headers as $header => $value) {
             if (!$header || ($header === 'default_headers' || ($header === 'Content-Encoding' && $value === false))) {
                 continue;
             }
 
             if($value === ''){
-                $removeHeaders[] = $header;
-            }else{          
-                $value = ($header === 'Content-Type' && !str_contains($value, 'charset')) ? 
-                    "{$value}; charset=" . env('app.charset', 'utf-8') : $value;
+                $remove[] = $header;
+                continue;
+            }
 
-                header("$header: $value");
+            if (is_array($value)) {
+                foreach ($value as $val) {
+                    header("{$header}: {$val}");
+                }
+            }else{
+                $value = ($charset && $header === 'Content-Type' && !str_contains($value, 'charset')) 
+                    ? "{$value}; charset=" . env('app.charset', 'utf-8') 
+                    : $value;
+                header("{$header}: {$value}");
             }
         }
 
         if (!env('x.powered', true)) {
-            $removeHeaders[] = 'X-Powered-By';
+            $remove[] = 'X-Powered-By';
         }
 
-        if($removeHeaders !== []){
-            array_map('header_remove', $removeHeaders);
+        if($remove !== []){
+            array_map('header_remove', $remove);
         }
     }
 
@@ -375,15 +382,30 @@ class Header implements Countable
      * @param int|null $index The index of content type to return.
      * 
      * @return array<int,array>|string|null Return array, string of content types or null if not found.
-    */
+     */
     public static function getContentTypes(string $type, int|null $index = 0): array|string|null
     {
         $type = ($type === 'txt') ? 'text' : $type;
+        return ($index === null) 
+            ? (self::$contentTypes[$type] ?? null)
+            : (self::$contentTypes[$type][$index] ?? 'text/html');
+    }
 
-        if($index === null){
-            return self::$contentTypes[$type] ?? null;
+    /**
+     * Sends HTTP response status code if it is valid.
+     *
+     * @param int $code The HTTP response status code to send.
+     * 
+     * @return bool Return true if status code is valid and set, false otherwise.
+     */
+    public static function sendStatus(int $code): bool 
+    {
+        if ($code >= 100 && $code < 600) {
+            http_response_code($code);
+            $_SERVER["REDIRECT_STATUS"] = $code;
+            return true;
         }
 
-        return self::$contentTypes[$type][$index] ?? 'text/html';
+        return false;
     }
 }

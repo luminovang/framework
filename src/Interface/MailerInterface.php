@@ -16,31 +16,31 @@ interface MailerInterface
     /**
      * Constructor.
      *
-     * @param bool $exceptions Should we throw external exceptions?
-    */
+     * @param bool $exceptions Weather to throw exceptions if error (default: false).
+     */
     public function __construct(bool $exceptions = false);
 
     /**
      * Initialize mail client configurations.
-    */
+     */
     public function initialize(): void;
 
     /**
      * Send the email.
      *
-     * @return bool True if the email was sent successfully, false otherwise.
+     * @return bool Return true if the email was sent successfully, false otherwise.
      * @throws MailerException
-    */
+     */
     public function send(): bool;
 
     /**
      * Set the email sender's address.
      *
      * @param string $address The email address.
-     * @param string $name    The sender's name (optional).
-     * @param bool   $auto    Whether to automatically add the sender's name (optional).
+     * @param string $name The sender's name (optional).
+     * @param bool   $auto Whether to automatically add the sender's name (optional).
      *
-     * @return bool True if the sender's address was set successfully, false otherwise.
+     * @return bool Return true if the sender's address was set successfully, false otherwise.
      */
     public function setFrom(string $address, string $name = '', bool $auto = true): bool;
 
@@ -48,9 +48,9 @@ interface MailerInterface
      * Add an email address to the recipient list.
      *
      * @param string $address The email address.
-     * @param string $name    The recipient's name (optional).
+     * @param string $name The recipient's name (optional).
      *
-     * @return bool True if the address was added successfully, false otherwise.
+     * @return bool Return true if the address was added successfully, false otherwise.
      */
     public function addAddress(string $address, string $name = ''): bool;
 
@@ -58,9 +58,9 @@ interface MailerInterface
      * Add a reply-to address.
      *
      * @param string $address The email address.
-     * @param string $name    The recipient's name (optional).
+     * @param string $name The recipient's name (optional).
      *
-     * @return bool True if the reply-to address was added successfully, false otherwise.
+     * @return bool Return true if the reply-to address was added successfully, false otherwise.
      */
     public function addReplyTo(string $address, string $name = ''): bool;
 
@@ -68,9 +68,9 @@ interface MailerInterface
      * Add an email address to the recipient list.
      *
      * @param string $address The email address.
-     * @param string $name    The recipient's name (optional).
+     * @param string $name The recipient's name (optional).
      *
-     * @return bool True if the address was added successfully, false otherwise.
+     * @return bool Return true if the address was added successfully, false otherwise.
      */
     public function addCC(string $address, string $name = ''): bool;
 
@@ -78,9 +78,9 @@ interface MailerInterface
      * Add an email address to the recipient list.
      *
      * @param string $address The email address.
-     * @param string $name    The recipient's name (optional).
+     * @param string $name The recipient's name (optional).
      *
-     * @return bool True if the address was added successfully, false otherwise.
+     * @return bool Return true if the address was added successfully, false otherwise.
      */
     public function addBCC(string $address, string $name = ''): bool;
 
@@ -105,7 +105,7 @@ interface MailerInterface
     ): bool;
 
 
-      /**
+    /**
      * Send messages using SMTP.
      * 
      * @return void

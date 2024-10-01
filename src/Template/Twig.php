@@ -15,47 +15,54 @@ use \Twig\Error\RuntimeError;
 use \Twig\Error\SyntaxError;
 use \App\Config\Template as TemplateConfig;
 use \App\Config\Templates\Twig\Extensions;
+use \Luminova\Optimization\Minification;
 use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Template\Helper;
+use \Luminova\Application\Foundation;
 
 class Twig 
 {
     /**
      * @var Environment $twig
-    */
+     */
     private ?Environment $twig = null;
+
+    /**
+     * Page minification instance.
+     * 
+     * @var ?Minification $min
+     */
+    private static ?Minification $min = null;
 
     /**
      * Static instance.
      * 
      * @var self $instance
-    */
+     */
     private static ?self $instance = null;
 
     /**
      * Framework root directory
      * 
      * @var string $root
-    */
+     */
     private static string $root = '';
 
-     /**
-      * Minification options.
-
+    /**
+     * Minification options.
      * @var array $minifyOptions
-    */
+     */
     private array $minifyOptions = [];
 
     /**
      * Minification flag 
      * 
      * @var bool $minify 
-    */
+     */
     private bool $minify = false;
 
     /**
      * @var array<string,mixed> $headers
-    */
+     */
     private array $headers = [];
 
     /**
@@ -67,7 +74,7 @@ class Twig
      * @param array $options Filesystem loader configuration.
      * 
      * @throws RuntimeException
-    */
+     */
     public function __construct(
         TemplateConfig $config, 
         string $root, 
@@ -79,7 +86,7 @@ class Twig
 
         if($options['caching']){
             $suffix = DIRECTORY_SEPARATOR . 'twig';
-            $options['cache'] = $root . Helper::bothTrim($config->cacheFolder) . $suffix;
+            $options['cache'] = $root . Foundation::bothTrim($config->cacheFolder) . $suffix;
         }else{
             $options['cache'] = false;
         }
@@ -197,12 +204,10 @@ class Twig
             $content = $template->render($options);
             
             if($this->minify){
-                $content = Helper::getMinification(
-                    $content, 
-                    $options['viewType'], 
-                    $this->minifyOptions['codeblock'], 
-                    $this->minifyOptions['copyable']
-                )->getContent();
+                self::$min ??= new Minification();
+                self::$min->codeblocks($this->minifyOptions['codeblock']);
+                self::$min->copyable($this->minifyOptions['copyable']);
+                $content = self::$min->compress($content, $options['viewType'])->getContent();
             }
 
             if($return){

@@ -19,7 +19,7 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.3.1';
+    public const VERSION = '3.3.2';
 
     /**
      * Framework version name.
@@ -161,7 +161,7 @@ final class Foundation
      */
     private static function display(?ErrorHandler $stack = null): void 
     {
-        $path = APP_ROOT . 'resources' . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . 'system_errors' . DIRECTORY_SEPARATOR;
+        $path = APP_ROOT . 'resources' . DIRECTORY_SEPARATOR . 'Views' . DIRECTORY_SEPARATOR . 'system_errors' . DIRECTORY_SEPARATOR;
 
         if(!$stack instanceof ErrorHandler){
             $view = 'info.php';
@@ -355,7 +355,7 @@ final class Foundation
         }
 
         return (
-            (empty($_SERVER['REMOTE_ADDR']) && !isset($_SERVER['HTTP_USER_AGENT']) && isset($_SERVER['argv'])) ||
+            (!isset($_SERVER['HTTP_USER_AGENT']) && isset($_SERVER['argv'])) || 
             array_key_exists('SHELL', $_ENV)
         );
     }
@@ -499,5 +499,18 @@ final class Foundation
         if (@file_put_contents($log, $message . PHP_EOL, FILE_APPEND | LOCK_EX) === false) {
             @chmod($log, 0666);
         }
+    }
+
+    /** 
+     * Trim file directory both sides.
+     *
+     * @param string $path The path to trim.
+     *
+     * @return string Return trimmed path.
+     * @internal
+    */
+    public static function bothTrim(string $path): string 
+    {
+        return trim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
     }
 }

@@ -14,6 +14,7 @@ use \Luminova\Application\Foundation;
 use \Luminova\Base\BaseMailer;
 use \App\Config\Preference;
 use \Luminova\Exceptions\MailerException;
+use \Luminova\Exceptions\AppException;
 use \Exception;
 
 class Mailer
@@ -22,29 +23,29 @@ class Mailer
      * Mailer singleton instance
      * 
      * @var self $instance
-    */
+     */
     private static ?self $instance = null;
 
     /**
      * Mail client instance.
      * 
      * @var MailerInterface $client
-    */
+     */
     private ?MailerInterface $client = null;
 
     /**
      * @var string $from 
-    */
+     */
     private string $from = '';
 
     /**
      * @var string $fromName 
-    */
+     */
     private string $fromName = '';
 
     /**
      * @var bool $fromAuto 
-    */
+     */
     private bool $fromAuto = true;
 
     /**
@@ -54,7 +55,7 @@ class Mailer
      * 
      * @throws MailerException Throws if mail client doesn't implement MailerInterface.
      */
-    private function __construct(MailerInterface|string|null $interface = null)
+    public function __construct(MailerInterface|string|null $interface = null)
     {
         $interface ??= (new Preference())->getMailer();
 
@@ -75,13 +76,39 @@ class Mailer
     }
 
     /**
-     * Get the Mailer client instance.
+     * Retrive the mail client object.
      * 
-     * @return MailerInterface The Mailer client instance.
-    */
-    public function getClient(): ?MailerInterface
+     * @param string $method The method to call.
+     * @param array $arguments Optional arguments to pass to the method.
+     * 
+     * @return mixed Return the result of the method.
+     * @throws MailerException Throws if an error occurs.
+     */
+    public function __call(string $method, array $arguments): mixed
     {
-        return $this->client;
+        try{
+            return $this->client->{$method}(...$arguments);
+        }catch(Exception|AppException $e){
+            throw new MailerException($e->getMessage(), $e->getCode(), $e);
+        }
+
+        return null;
+    }
+
+    /**
+     * Initialize and retrieve the singleton instance of the Mailer class.
+     *
+     * @param MailerInterface|string|null $interface The mailer client interface to be used for instantiation.
+     * 
+     * @return Mailer Returns the shared singleton instance of the Mailer class.
+     */
+    public static function getInstance(MailerInterface|string|null $interface = null): Mailer
+    {
+        if (self::$instance === null) {
+            self::$instance = new self($interface);
+        }
+
+        return self::$instance;
     }
 
     /**
@@ -91,16 +118,20 @@ class Mailer
      * 
      * @return self Return new static mailer class instance.
      * @throws MailerException Throws if error occurred while sending email.
-    */
+     */
     public static function to(string $address): self
     {
-        if (self::$instance === null) {
-            self::$instance = new self();
-        }
+        return self::getInstance()->address($address);
+    }
 
-        self::$instance->address($address);
-
-        return self::$instance;
+    /**
+     * Get the Mailer client instance.
+     * 
+     * @return MailerInterface The Mailer client instance.
+     */
+    public function getClient(): ?MailerInterface
+    {
+        return $this->client;
     }
 
     /**
@@ -110,7 +141,7 @@ class Mailer
      * @param string $name    The recipient's name (optional).
      *
      * @return self Return the Mailer class instance.
-    */
+     */
     public function address(string $address, string $name = ''): self
     {
         $this->client->addAddress($address, $name);
@@ -126,14 +157,14 @@ class Mailer
      *
      * @return self Return the Mailer class instance.
      */
-    public function replyTo($address, $name = ''): self
+    public function reply($address, $name = ''): self
     {
         $this->client->addReplyTo($address, $name);
 
         return $this;
     }
 
-     /**
+    /**
      * Add an email address to the recipient list.
      *
      * @param string $address The email address.
@@ -187,7 +218,7 @@ class Mailer
      * @param BaseMailer|string $message The body content of the email.
      * 
      * @return self Return the Mailer class instance.
-    */
+     */
     public function body(BaseMailer|string $message): self 
     {
         if($message instanceof BaseMailer){
@@ -195,8 +226,8 @@ class Mailer
             $this->client->AltBody = $message->getText() ?? '';
             $this->client->Body = $message->getHtml() ?? $message->getText() ?? '';
 
-            if(($attachemts = $message->getFiles()) && $attachemts !== []){
-                foreach($attachemts as $attach){
+            if(($attachments = $message->getFiles()) && $attachments !== []){
+                foreach($attachments as $attach){
                     $this->client->addAttachment(
                         $attach['path'], 
                         $attach['name'] ?? '', 
@@ -221,7 +252,7 @@ class Mailer
      * @param string $message The alternative body content of the email.
      * 
      * @return self Return the Mailer class instance.
-    */
+     */
     public function text(string $message): self 
     {
         $this->client->AltBody = $message;
@@ -235,7 +266,7 @@ class Mailer
      * @param string $subject The subject of the email.
      * 
      * @return self Return the Mailer class instance.
-    */
+     */
     public function subject(string $subject): self 
     {
         $this->client->Subject = $subject;

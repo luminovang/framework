@@ -10,7 +10,7 @@
 namespace Luminova\Command\Novakit;
 
 use \Luminova\Base\BaseConsole;
-use \Luminova\Attributes\Generator;
+use \Luminova\Attributes\AttrCompiler;
 use \Luminova\Storages\FileManager;
 
 class Context extends BaseConsole 
@@ -173,7 +173,7 @@ class Context extends BaseConsole
     private function buildAttributes(): int
     {
         $hmvc = env('feature.app.hmvc', false);
-        $collector = (new Generator('', false, $hmvc))->export($hmvc ? 'app/Modules' : 'app/Controllers');
+        $collector = (new AttrCompiler('', false, $hmvc))->export($hmvc ? 'app/Modules' : 'app/Controllers');
 
         $head = "<?php\nuse \Luminova\Routing\Router;\n/** @var \Luminova\Routing\Router \$router */\n/** @var \App\Application \$app */\n\n";
         $httpContents = '';

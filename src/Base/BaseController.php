@@ -11,6 +11,7 @@ namespace Luminova\Base;
 
 use \App\Application;
 use \Luminova\Http\Request;
+use \Luminova\Interface\HttpRequestInterface;
 use \Luminova\Security\Validation;
 
 abstract class BaseController
@@ -18,28 +19,28 @@ abstract class BaseController
     /**
      * HTTP request object.
      * 
-     * @var Request|null $request
-    */
-    protected ?Request $request = null;
+     * @var HttpRequestInterface|null $request
+     */
+    protected ?HttpRequestInterface $request = null;
  
     /**
      * Input validation object.
      * 
      * @var Validation|null $validate
-    */
+     */
     protected ?Validation $validate = null;
  
     /**
      * Application instance.
      * 
      * @var Application|null $app
-    */
+     */
     protected ?Application $app = null;
 
     /**
      * Initialize the BaseController instance 
      * and pre-initialize classes `$this->app`, `$this->validate` and `$this->request` to make them accessible instantly within controller class.
-    */
+     */
     public function __construct()
     {
         $this->app();
@@ -52,7 +53,7 @@ abstract class BaseController
      * Clean up the controller instance.
      * 
      * @ignore 
-    */
+     */
     public function __destruct() 
     {
         $this->onDestroy();
@@ -66,7 +67,7 @@ abstract class BaseController
      * @return mixed|null Return the property value, or null if not found.
      * 
      * @ignore 
-    */
+     */
     public function __get(string $key): mixed
     {
         return $this->{$key} ?? null;
@@ -80,7 +81,7 @@ abstract class BaseController
      * @return bool Return true if the property is set, otherwise false.
      * 
      * @ignore 
-    */
+     */
     public function __isset(string $key): bool
     {
         return property_exists($this, $key);
@@ -89,11 +90,11 @@ abstract class BaseController
     /**
      * Initialize the HTTP request instance.
      * 
-     * @return Request Return the HTTP request instance.
-    */
-    protected final function request(): Request
+     * @return HttpRequestInterface Return the HTTP request instance.
+     */
+    protected final function request(): HttpRequestInterface
     {
-        if (!$this->request instanceof Request) {
+        if (!$this->request instanceof HttpRequestInterface) {
             $this->request = new Request();
         }
 
@@ -104,7 +105,7 @@ abstract class BaseController
      * Initialize the input validation instance.
      * 
      * @return Validation Return the input validation instance.
-    */
+     */
     protected final function validate(): Validation
     {
         if (!$this->validate instanceof Validation) {
@@ -118,7 +119,7 @@ abstract class BaseController
      * Initialize the application instance.
      * 
      * @return Application Return the application instance.
-    */
+     */
     protected final function app(): Application
     {
         if (!$this->app instanceof Application) {
@@ -151,10 +152,10 @@ abstract class BaseController
      * 
      * This method is equivalent to:
      * 
-     * ```
+     * ```php
      * $this->app->view('view-name', 'html')->render([...]);
      * ```
-    */
+     */
     protected final function view(
         string $view, 
         array $options = [], 
@@ -189,7 +190,7 @@ abstract class BaseController
      * ```
      * $this->app->view('view-name', 'html')->respond([...]);
      * ```
-    */
+     */
     protected final function respond(
         string $view, 
         array $options = [], 

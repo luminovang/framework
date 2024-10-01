@@ -13,7 +13,6 @@ declare(strict_types=1);
 use \App\Application;
 use \App\Config\Files;
 use \Luminova\Core\CoreFunction;
-use \Luminova\Core\CoreApplication;
 use \Luminova\Application\Foundation;
 use \Luminova\Application\Factory;
 use \Luminova\Application\Services;
@@ -26,6 +25,8 @@ use \Luminova\Http\UserAgent;
 use \Luminova\Http\HttpCode;
 use \Luminova\Cookies\Cookie;
 use \Luminova\Sessions\Session;
+use \Luminova\Interface\HttpRequestInterface;
+use \Luminova\Interface\ViewResponseInterface;
 use \Luminova\Interface\SessionManagerInterface;
 use \Luminova\Interface\ValidationInterface;
 use \Luminova\Template\Response;
@@ -89,7 +90,7 @@ if (!function_exists('app')) {
     /**
      * Get application container class shared instance or new instance if not shared. 
      * 
-     * @return Application|CoreApplication<\T> Return application shared instance.
+     * @return Application Return application shared instance.
     */
     function app(): Application 
     {
@@ -102,15 +103,47 @@ if (!function_exists('app')) {
 
 if (!function_exists('request')) {
     /**
-     * Get HTTP request object.
-     * 
+     * Retrieve a shared or new instance of HTTP request object.
+     *
      * @param bool $shared Return a shared instance (default: true).
      * 
-     * @return Request|null Return http request object.
-    */
-    function request(bool $shared = true): ?Request 
+     * @return HttpRequestInterface Returns an incoming HTTP request object.
+     */
+    function request(bool $shared = true): HttpRequestInterface 
     {
-        return Factory::request($shared);
+        static $instance = null;
+
+        if ($shared && $instance !== null) {
+            return $instance;
+        }
+
+        return $instance = new Request();
+    }
+}
+
+if (!function_exists('response')) {
+    /** 
+    * Initiate a new view response object.
+    *
+    * @param int $status int $status HTTP status code (default: 200 OK).
+    * @param array<string,mixed>|null $headers Additional response headers (default: null).
+    * @param bool $shared Weather to return shared instance (default: true).
+    *
+    * @return ViewResponseInterface Return view controller response object. 
+    */
+    function response(
+        int $status = 200, 
+        ?array $headers = null, 
+        bool $shared = true
+    ): ViewResponseInterface
+    {
+        static $instance = null;
+
+        if ($shared && $instance !== null) {
+            return $instance;
+        }
+
+        return $instance = new Response($status, $headers ?? []);
     }
 }
 
@@ -215,11 +248,7 @@ if(!function_exists('kebab_case')){
         $input = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $input);
         $input = trim(str_replace(' ', '-', $input), '-');
 
-        if($toLower){
-		    return strtolower($input);
-        }
-
-        return $input;
+        return ($toLower) ? strtolower($input) : $input;
     }
 }
 
@@ -338,7 +367,7 @@ if(!function_exists('escape')){
         }
 
         if (!in_array($context, ['html', 'js', 'css', 'url'], true)) {
-            throw new InvalidArgumentException(sprintf('Invalid escape context provided %s.', $context));
+            throw new InvalidArgumentException(sprintf('Invalid escape context provided "%s".', $context));
         }
 
         static $escaper = null;
@@ -442,11 +471,9 @@ if(!function_exists('session')) {
     */
     function session(?string $key = null, bool $shared = true, ?SessionManagerInterface $manager = null): mixed
     {
-        if ($key !== null && $key !== '') {
-            return Factory::session($manager, $shared)->get($key);
-        }
-
-        return Factory::session($manager, $shared);
+        return ($key !== null && $key !== '') 
+            ? Factory::session($manager, $shared)->get($key) 
+            : Factory::session($manager, $shared);
     }
 }
 
@@ -660,11 +687,9 @@ if (!function_exists('text2html')) {
     */
     function text2html(?string $text): string
     { 
-        if ($text === null ||  $text === '') {
-            return '';
-        }
-
-        return htmlspecialchars($text, ENT_QUOTES | ENT_HTML5);
+        return ($text === null ||  $text === '') 
+            ? '' 
+            : htmlspecialchars($text, ENT_QUOTES|ENT_HTML5);
     }
 }
 
@@ -1240,31 +1265,6 @@ if (!function_exists('is_dev_server')) {
         }
         
         return false;
-    }
-}
-
-if (!function_exists('response')) {
-    /** 
-    * Initiate a new view response object.
-    *
-    * @param int $status int $status HTTP status code (default: 200 OK).
-    * @param array<string,mixed>|null $headers Additional response headers (default: null).
-    * @param bool $encode Enable content encoding like gzip, deflate (default: true).
-    * @param bool $shared Weather to return shared instance (default: true).
-    *
-    * @return Response Return view response object. 
-    */
-    function response(
-        int $status = 200, 
-        ?array $headers = null, 
-        bool $encode = true,
-        bool $shared = true
-    ): Response
-    {
-        return Factory::response($status, [], $shared)
-            ->setStatus($status)
-            ->encode($encode)
-            ->headers($headers ?? []);
     }
 }
 

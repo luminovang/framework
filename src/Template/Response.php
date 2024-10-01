@@ -9,6 +9,7 @@
 */
 namespace Luminova\Template;
 
+use \Luminova\Interface\ViewResponseInterface;
 use \Luminova\Storages\FileManager;
 use \Luminova\Storages\FileDelivery;
 use \Luminova\Optimization\Minification;
@@ -17,7 +18,7 @@ use \Luminova\Http\Encoder;
 use \Luminova\Exceptions\JsonException;
 use \Exception;
 
-class Response 
+class Response implements ViewResponseInterface
 {
     /**
      * Indicates if the response content should be minified.
@@ -54,11 +55,7 @@ class Response
     }
 
     /**
-     * Set the HTTP status code.
-     *
-     * @param int $status HTTP status code.
-     * 
-     * @return self Return instance of the Response class.
+     * {@inheritdoc}
      */
     public function setStatus(int $status): self 
     {
@@ -68,11 +65,7 @@ class Response
     }
 
     /**
-     * Enable or disable content encoding.
-     *
-     * @param bool $encode Whether to enable content encoding like gzip.
-     * 
-     * @return self Instance of the Response class.
+     * {@inheritdoc}
      */
     public function encode(bool $encode): self 
     {
@@ -82,11 +75,7 @@ class Response
     }
 
     /**
-     * Enable or disable content minification.
-     *
-     * @param bool $minify Whether to minify the content.
-     * 
-     * @return self Instance of the Response class.
+     * {@inheritdoc}
      */
     public function minify(bool $minify): self 
     {
@@ -95,13 +84,8 @@ class Response
         return $this;
     }
 
-    /** 
-     * Configure HTML code block minification and copy button.
-     *
-     * @param bool $minify Whether to minify code blocks.
-     * @param bool $button Whether to add a copy button to code blocks (default: false).
-     *
-     * @return self Instance of the Response class.
+    /**
+     * {@inheritdoc}
      */
     public function codeblock(bool $minify, bool $button = false): self 
     {
@@ -112,12 +96,7 @@ class Response
     }
 
     /**
-     * Set an HTTP header.
-     *
-     * @param string $key The header name.
-     * @param mixed $value The header value.
-     * 
-     * @return self Instance of the Response class.
+     * {@inheritdoc}
      */
     public function header(string $key, mixed $value): self 
     {
@@ -126,12 +105,8 @@ class Response
         return $this;
     }
 
-     /**
-     * Set multiple HTTP headers.
-     *
-     * @param array<string,mixed> $headers Associative array of headers.
-     * 
-     * @return self Instance of the Response class.
+    /**
+     * {@inheritdoc}
      */
     public function headers(array $headers): self 
     {
@@ -141,9 +116,16 @@ class Response
     }
 
     /**
-     * Get the current HTTP status code.
-     * 
-     * @return int Return the current HTTP status code.
+     * {@inheritdoc}
+     */
+    public function send(): void 
+    {
+        Header::sendStatus($this->status);
+        Header::send($this->headers);
+    }
+
+    /**
+     * {@inheritdoc}
      */
     public function getStatusCode(): int
     {
@@ -151,21 +133,15 @@ class Response
     }
 
     /**
-     * Retrieve a specific HTTP header.
-     * 
-     * @param string $name The name of the header.
-     * 
-     * @return string|null Return the header value, or null if it doesn't exist.
+     * {@inheritdoc}
      */
-    public function getHeader(string $name): ?string
+    public function getHeader(string $name): mixed
     {
         return $this->headers[$name] ?? null;
     }
 
     /**
-     * Retrieve all HTTP headers.
-     * 
-     * @return array<string,mixed> Return list of all HTTP headers.
+     * {@inheritdoc}
      */
     public function getHeaders(): array
     {
@@ -173,32 +149,41 @@ class Response
     }
 
     /**
-     * Clear all previous HTTP headers.
-     * 
-     * @return void
+     * {@inheritdoc}
+     */
+    public function getProtocolVersion(): float
+    {
+        $protocol = $_SERVER['SERVER_PROTOCOL'] ?? null;
+
+        if ($protocol && preg_match('/^HTTP\/(\d+\.\d+)$/', $protocol, $matches)) {
+            return (float) $matches[1];
+        }
+
+        return 1.0;
+    }
+
+    /**
+     * {@inheritdoc}
      */
     public function clearHeaders(): void
     {
         $this->headers = [];
     }
     
-    
     /**
-     * Clear previous set HTTP header redirects.
-     * 
-     *  @return void
+     * {@inheritdoc}
      */
-    public function clearRedirects(): void
+    public function clearRedirects(): bool
     {
         if(isset($this->headers['Location'])) {
             unset($this->headers['Location']);
+            return true;
         }
+        return false;
     }
     
     /**
-     * Determine if the response headers has any redirects.
-     * 
-     * @return bool Return true if headers contain any redirect, otherwise false.
+     * {@inheritdoc}
      */
     public function hasRedirects(): bool
     {
@@ -206,15 +191,7 @@ class Response
     }
 
     /**
-     * Send the response content with headers.
-     *
-     * @param string $content The content to send.
-     * @param int $status HTTP status code (default: 200).
-     * @param array<string,mixed> $headers Additional headers (default: []).
-     * @param bool $encode Whether to enable content encoding (default: false).
-     * @param bool $minify Whether to minify content (default: false).
-     * 
-     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
+     * {@inheritdoc}
      */
     public function render(
         string $content, 
@@ -266,10 +243,8 @@ class Response
         return STATUS_SUCCESS;
     }
 
-    /** 
-     * Send the defined HTTP headers without any body.
-     *
-     * @return void
+    /**
+     * {@inheritdoc}
      */
     public function sendHeaders(): void 
     {
@@ -277,9 +252,7 @@ class Response
     }
 
     /**
-     * Send the HTTP status header.
-     * 
-     * @return bool True if the status header was sent, false otherwise.
+     * {@inheritdoc}
      */
     public function sendStatus(): bool
     {
@@ -287,20 +260,15 @@ class Response
     }
 
     /**
-     * Send a JSON response.
-     *
-     * @param array|object $content The data to encode as JSON.
-     * 
-     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
-     * @throws JsonException Throws if json error occurs.
+     * {@inheritdoc}
      */
     public function json(array|object $content): int 
     {
-        if (is_object($content)) {
-            $content = (array) $content;
-        }
         try {
-            $content = json_encode($content, JSON_THROW_ON_ERROR);
+            $content = json_encode(
+                is_object($content) ? (array) $content : $content, 
+                JSON_THROW_ON_ERROR
+            );
 
             return $this->render($content, $this->status, [
                 'Content-Type' => 'application/json'
@@ -313,11 +281,7 @@ class Response
     }
 
     /**
-     * Send a plain text response.
-     *
-     * @param string $content The text content to send.
-     * 
-     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
+     * {@inheritdoc}
      */
     public function text(string $content): int 
     {
@@ -327,11 +291,7 @@ class Response
     }
 
     /**
-     * Send an HTML response.
-     *
-     * @param string $content HTML content to send.
-     * 
-     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
+     * {@inheritdoc}
      */
     public function html(string $content): int 
     {
@@ -341,11 +301,7 @@ class Response
     }
 
     /**
-     * Send an XML response.
-     *
-     * @param string $content XML content to send.
-     * 
-     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
+     * {@inheritdoc}
      */
     public function xml(string $content): int 
     {
@@ -355,13 +311,7 @@ class Response
     }
 
     /**
-     * Send a file or content to download on browser.
-     *
-     * @param string $fileOrContent Path to the file or content for download.
-     * @param string|null $name Optional name for the downloaded file.
-     * @param array $headers Optional download headers.
-     * 
-     * @return bool Return true if the download was successful, false otherwise.
+     * {@inheritdoc}
      */
     public function download(
         string $fileOrContent, 
@@ -373,15 +323,7 @@ class Response
     }
 
     /**
-     * Send large files using stream to read file content.
-     *
-     * @param string $path The path to file storage (e.g: /writeable/storages/images/).
-     * @param string $basename The file name (e.g: image.png).
-     * @param array $headers Optional stream headers.
-     * @param bool $eTag Whether to generate ETag headers (default: true).
-     * @param int $expiry Expiry time in seconds for cache control (default: 0), indicating no cache.
-     * 
-     * @return bool Return true if file streaming was successful, false otherwise.
+     * {@inheritdoc}
      */
     public function stream(
         string $path, 
@@ -394,18 +336,34 @@ class Response
         return (new FileDelivery($path, $eTag))->output($basename, $expiry, $headers);
     }
 
-    /** 
-     * Send to another url location.
-     *
-     * @param string $url The new url location.
-     * @param int $response_code The response status code.
-     *
-     * @return void
+    /**
+     * {@inheritdoc}
      */
-    public function redirect(string $url = '/', int $response_code = 0): void 
+    public function redirect(string $uri, ?string $method = null, ?int $code = null): void
     {
-        header("Location: $url", true, $response_code);
+        if ($method === null && str_contains($_SERVER['SERVER_SOFTWARE'] ?? '', 'Microsoft-IIS')) {
+            $method = 'refresh';
+        } elseif ($method !== 'refresh' && $code === null) {
+            if (
+                isset($_SERVER['SERVER_PROTOCOL'], $_SERVER['REQUEST_METHOD'])
+                && $this->getProtocolVersion() >= 1.1
+            ) {
+                $code = match ($_SERVER['REQUEST_METHOD']) {
+                    'GET' => 302,
+                    'POST', 'PUT', 'DELETE' => 303,
+                    default => 307
+                };
+            }
+        }
 
+        $this->status = $code ?? 302;
+
+        if ($method === 'refresh') {
+            $this->header('Refresh', "0;url={$uri}")->send();
+            exit(0);
+        } 
+
+        $this->header('Location', $uri)->send();
         exit(0);
     }
 }

@@ -12,6 +12,7 @@ namespace Luminova\Base;
 
 use \App\Application;
 use \Luminova\Http\Request;
+use \Luminova\Interface\HttpRequestInterface;
 use \Luminova\Security\Validation;
 
 abstract class BaseViewController
@@ -19,28 +20,28 @@ abstract class BaseViewController
     /**
      * HTTP request object.
      * 
-     * @var Request|null
-    */
-    protected ?Request $request = null;
+     * @var HttpRequestInterface|null
+     */
+    protected ?HttpRequestInterface $request = null;
  
     /**
      * Input validation object.
      * 
      * @var Validation|null
-    */
+     */
     protected ?Validation $validate = null;
  
     /**
      * Application instance.
      * 
      * @var Application|null
-    */
+     */
     protected ?Application $app = null;
 
     /**
      * Initialize the BaseViewController instance 
      * and pre-initialize class `$this->app` to make it accessible instantly within controller class.
-    */
+     */
     public function __construct()
     {
         $this->app();
@@ -51,7 +52,7 @@ abstract class BaseViewController
      * Clean up the controller instance.
      * 
      * @ignore 
-    */
+     */
     public function __destruct() 
     {
         $this->onDestroy();
@@ -65,7 +66,7 @@ abstract class BaseViewController
      * @return mixed|null Return the property value, or null if not found.
      * 
      * @ignore 
-    */
+     */
     public function __get(string $key): mixed
     {
         return $this->{$key} ?? null;
@@ -79,7 +80,7 @@ abstract class BaseViewController
      * @return bool Return true if the property is set, otherwise false.
      * 
      * @ignore 
-    */
+     */
     public function __isset(string $key): bool
     {
         return property_exists($this, $key);
@@ -88,11 +89,11 @@ abstract class BaseViewController
     /**
      * Initialize the HTTP request instance.
      * 
-     * @return Request Return the HTTP request instance.
-    */
-    protected final function request(): Request
+     * @return HttpRequestInterface Return the HTTP request instance.
+     */
+    protected final function request(): HttpRequestInterface
     {
-        if (!$this->request instanceof Request) {
+        if (!$this->request instanceof HttpRequestInterface) {
             $this->request = new Request();
         }
 
@@ -103,7 +104,7 @@ abstract class BaseViewController
      * Initialize the input validation instance.
      * 
      * @return Validation Return the input validation instance.
-    */
+     */
     protected final function validate(): Validation
     {
         if (!$this->validate instanceof Validation) {
@@ -117,7 +118,7 @@ abstract class BaseViewController
      * Initialize the application instance.
      * 
      * @return Application Return the application instance.
-    */
+     */
     protected final function app(): Application
     {
         if (!$this->app instanceof Application) {
@@ -127,7 +128,7 @@ abstract class BaseViewController
         return $this->app;
     }
 
-     /**
+    /**
      * Render a view within the controller.
      *
      * @param string $view The view file name without the extension (e.g., `index`).
@@ -150,10 +151,10 @@ abstract class BaseViewController
      * 
      * This method is equivalent to:
      * 
-     * ```
+     * ```php
      * $this->app->view('view-name', 'html')->render([...]);
      * ```
-    */
+     */
     protected final function view(
         string $view, 
         array $options = [], 
@@ -188,7 +189,7 @@ abstract class BaseViewController
      * ```
      * $this->app->view('view-name', 'html')->respond([...]);
      * ```
-    */
+     */
     protected final function respond(
         string $view, 
         array $options = [], 
@@ -198,7 +199,7 @@ abstract class BaseViewController
         return $this->app->view($view, $type)->respond($options);
     }
 
-     /**
+    /**
      * onCreate method that gets triggered on object creation, 
      * designed to be overridden in subclasses for custom initialization.
      * 

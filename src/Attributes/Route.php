@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework Method Level Route Attribute
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -19,6 +19,7 @@ final class Route
      * @param string $pattern The route pattern for HTTP (e.g. `/`, `/blog/([0-9-.]+)`) 
      * or CLI command pattern (e.g. `blogs`, `blogs/limit/(:int)`).
      * @param array $methods The HTTP methods this route should responds to. (default: ['GET']).
+     *                       Optionally use `[ANY]` for any HTTP methods.
      * @param bool $error Indicates if this is an error handler route for HTTP methods.
      * @param string|null $group The command group name for CLI route (default: NULL).
      * @param string|null $middleware Middleware type (default: NULL).
@@ -26,23 +27,23 @@ final class Route
      *          -   CLI middleware route `global` or `before` for global middleware. Using `after` for command group middleware.
      * 
      * @example For HTTP Route.
-     *  ```
+     *  ```php
      * #[Route('/', methods: ['GET'])]
      * public function index():int {}
      * ```
-     *  ```
+     *  ```php
      * #[Route('/', methods: ['GET'], middleware: 'before')]
      * public function index():int {}
      * ```
      * 
      * @example For CLI Route.
-     * ```
-     *  #[Route('foo', group: 'bar')]
+     * ```php
+     * #[Route('foo', group: 'bar')]
      * public function foo():int {}
      * ```
      * 
-     * ```
-     *  #[Route(group: 'bar', middleware: 'global')]
+     * ```php
+     * #[Route(group: 'bar', middleware: 'global')]
      * public function middleware():int {}
      * ```
      */

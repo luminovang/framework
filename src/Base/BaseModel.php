@@ -19,32 +19,39 @@ use \DateTimeInterface;
 
 abstract class BaseModel
 {
-   /**
+    /**
      * The name of the model's table.
      * 
      * @var string $table
-    */
+     */
     protected string $table = ''; 
 
     /**
      * The default primary key column.
      * 
      * @var string $primaryKey
-    */
+     */
     protected string $primaryKey = ''; 
 
     /**
      *  Enable database caching for query builder.
      * 
      * @var bool $cacheable
-    */
+     */
     protected bool $cacheable = true; 
+
+    /**
+     * Type of result to be returned (e.g, `array` or `object`).
+     * 
+     * @var string $resultType
+     */
+    protected string $resultType = 'object';
 
     /**
      * Custom folder for model caches.
      * 
      * @var string $cacheFolder
-    */
+     */
     protected static string $cacheFolder = '';
 
     /**
@@ -52,77 +59,77 @@ abstract class BaseModel
      * deletable, and insertable.
      * 
      * @var bool $readOnly
-    */
+     */
     protected bool $readOnly = false; 
 
     /**
      * Searchable table column names.
      * 
      * @var array<int,string> $searchable
-    */
+     */
     protected array $searchable = [];
 
     /**
      * Fields that can be inserted.
      * 
      * @var array<int,string> $insertable
-    */
+     */
     protected array $insertable = []; 
 
     /**
      * Fields that can be updated.
      * 
      * @var array<int,string> $updatable
-    */
+     */
     protected array $updatable = []; 
 
     /**
      * Input validation rules.
      * 
      * @var array<string,string> $rules
-    */
+     */
     protected array $rules = [];
 
     /**
      * Input validation error messages for rules.
      * 
      * @var array<string,array> $messages.
-    */
+     */
     protected array $messages = [];
 
     /**
      * Database cache expiration time in seconds.
      * 
      * @var DateTimeInterface|int $expiry
-    */
+     */
     protected DateTimeInterface|int $expiry = 7 * 24 * 60 * 60;
 
     /**
      * Database query builder class instance.
      * 
      * @var Builder $builder
-    */
+     */
     protected ?Builder $builder = null;
 
     /**
      * Input validation class instance.
      * 
      * @var Validation $validation
-    */
+     */
     protected static ?Validation $validation = null;
 
     /**
      * Search database controller instance.
      * 
      * @var SearchInstance $searchInstance
-    */
+     */
     private static ?SearchInstance $searchInstance = null;
 
     /**
      * Search flags.
      * 
      * @var array<string,string> $searchFilters
-    */
+     */
     private static array $searchFilters = [
         'start'     => 'query%',
         'end'       => '%query',
@@ -138,12 +145,13 @@ abstract class BaseModel
      * If null is passed framework will initialize builder lass instance.
      * 
      * @param Builder|null $builder Query builder class instance.
-    */
+     */
     public function __construct(?Builder $builder = null)
     {
         $this->builder ??= ($builder ?? Builder::getInstance());
         $this->builder->caching($this->cacheable);
         $this->builder->table($this->table);
+        $this->builder->returns($this->resultType);
 
         if($this->cacheable && static::$cacheFolder === ''){
             static::$cacheFolder = get_class_name(static::class);
@@ -167,7 +175,7 @@ abstract class BaseModel
      * 
      * @return bool Return true if records was inserted, otherwise false.
      * @throws RuntimeException Throws if insert columns contains column names that isn't defined in `$insertable`.
-    */
+     */
     public function insert(array $values): bool 
     {
         if($this->readOnly){
@@ -181,14 +189,14 @@ abstract class BaseModel
     /**
      * Update current record in the database.
      *
-     * @param string|array<int,mixed> $key The key?s to update its record
+     * @param array<int,mixed>|string|int|float $key The key?s to update its record
      * @param array<string,mixed> $data associative array of columns and values to update.
      * @param int $max The maximum number of records to update.
      * 
      * @return bool Return true if records was updated, otherwise false.
      * @throws RuntimeException Throws if update columns contains column names that isn't defined in `$updatable`.
-    */
-    public function update(string|array $key, array $data, int $max = 1): bool  
+     */
+    public function update(string|int|float|array $key, array $data, int $max = 1): bool  
     {
         if($this->readOnly){
             return 0;
@@ -208,12 +216,12 @@ abstract class BaseModel
     /**
      * Fine next or a single record from the database table.
      *
-     * @param string|array<int,mixed> $key The key?s to find its record
+     * @param array<int,mixed>|string|int|float $key The key?s to find its record
      * @param array<int,string> $fields The fields to retrieve (default is all).
      * 
      * @return mixed Return selected records or false on failure.
-    */
-    public function find(string|array $key, array $fields = ['*']): mixed 
+     */
+    public function find(string|int|float|array $key, array $fields = ['*']): mixed 
     {
         $tbl = $this->builder->table($this->table);
 
@@ -231,15 +239,15 @@ abstract class BaseModel
     /**
      * Select records from the database table.
      *
-     * @param string|array<int,mixed>|null $key The key?s to select its record, if null all record in table will be selected.
+     * @param string|int|float|array<int,mixed>|null $key The key?s to select its record, if null all record in table will be selected.
      * @param array<int,string> $fields The fields to retrieve (default is all).
      * @param int $limit Select result limit (default: 100).
      * @param int $offset Select limit offset (default: 0).
      * 
      * @return mixed Return selected records or false on failure.
-    */
+     */
     public function select(
-        string|array|null $key = null, 
+        string|int|float|array|null $key = null, 
         array $fields = ['*'],  
         int $limit = 100, 
         int $offset = 0
@@ -267,12 +275,12 @@ abstract class BaseModel
     /**
      * Delete a record from the database.
      * 
-     * @param string|array<int,mixed>|null $key The keys to delete, if null all record in table will be deleted.
+     * @param string|int|float|array<int,mixed>|null $key The keys to delete, if null all record in table will be deleted.
      * @param int $max The maximum number of records to delete.
      * 
      * @return bool Return true if the record was successfully deleted otherwise false.
-    */
-    public function delete(string|array|null $key = null, int $max = 1): bool 
+     */
+    public function delete(string|int|float|array|null $key = null, int $max = 1): bool 
     {
         if($this->readOnly){
             return false;
@@ -296,7 +304,7 @@ abstract class BaseModel
      * Get total number of records in the database.
      * 
      * @return int|bool  Return the number of records.
-    */
+     */
     public function total(): int|bool 
     {
         return $this->builder->table($this->table)
@@ -307,11 +315,11 @@ abstract class BaseModel
     /**
      * Get total number of records in the database based on the keys.
      * 
-     * @param string|array<int,mixed> $key The key?s to find total number of matched.
+     * @param string|int|float|array<int,mixed> $key The key?s to find total number of matched.
      * 
      * @return int|bool Return the number of records.
-    */
-    public function count(string|array $key): int|bool 
+     */
+    public function count(string|int|float|array $key): int|bool 
     {
         $tbl = $this->builder->table($this->table);
 
@@ -339,7 +347,7 @@ abstract class BaseModel
      * @param int $offset Search limit offset (default: 0).
      * 
      * @return mixed Return found records or false on failure.
-    */
+     */
     public function search(string $query, array $fields = ['*'], int $limit = 100, int $offset = 0): mixed
     {
         if($query === ''){
@@ -376,7 +384,7 @@ abstract class BaseModel
      * 
      * @return mixed Return search results.  
      * @throws RuntimeException If the third party search controller class is not installed.
-    */
+     */
     public final function doSearch(
         string $query, 
         array $fields = ['*'], 
@@ -434,7 +442,7 @@ abstract class BaseModel
      * Get the name of the database table associated with this model.
      *
      * @return string The name of the database table.
-    */
+     */
     public function getTable(): string
     {
         return $this->table;
@@ -464,7 +472,7 @@ abstract class BaseModel
      * Check if method is read only 
      *
      * @return bool Return true if is read only otherwise false.
-    */
+     */
     public function isReadOnly(): bool
     {
         return $this->readOnly;
@@ -474,8 +482,9 @@ abstract class BaseModel
      * Initialize and ser validation class object.
      *
      * @return Validation Validation class instance.
+     * 
      * > After first initialization you can then use `static::$validation` to access the object.
-    */
+     */
     protected function validation(): Validation
     {
         static::$validation ??= new Validation();
@@ -495,13 +504,13 @@ abstract class BaseModel
      * Generate a unique cache key based on the query key(s) and fields.
      * This ensures that the cache key reflects the select statement's return columns and primary key(s).
      * 
-     * @param string|array|null $key The query lookup key(s).
+     * @param string|int|float|array|null $key The query lookup key(s).
      * @param array $fields The optional query fields to include in the cache key.
      * @param string $prefix An optional prefix to prepend to the cache key.
      * 
      * @return string Return hashed cache key.
      */
-    protected static function cacheKey(string|array|null $key, array $fields = [], string $prefix = ''): string 
+    protected static function cacheKey(string|int|float|array|null $key, array $fields = [], string $prefix = ''): string 
     {
         // Handle fields: if no fields are specified or '*' is used, set it as '__any__'
         if($fields === ['*'] || $fields === []){
@@ -575,7 +584,7 @@ abstract class BaseModel
      * 
      * @return void 
      * @throws RuntimeException Throws if columns contains unsupported keys.
-    */
+     */
     protected function assertAllowedColumns(array $allowed, array $columns, string $from = ''): void 
     {
         if ($allowed === []) {

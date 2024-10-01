@@ -15,7 +15,7 @@ use \App\Config\Templates\Smarty\Classes;
 use \App\Config\Templates\Smarty\Modifiers;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Application\Foundation;
-use \Luminova\Template\Helper;
+use \Luminova\Optimization\Minification;
 use \Exception;
 use \SmartyException;
 
@@ -23,47 +23,57 @@ class Smarty
 {
     /**
      * @var SmartyTemplate $smarty
-    */
+     */
     private ?SmartyTemplate $smarty = null;
 
     /**
      * @var TemplateConfig $config
-    */
+     */
     private static TemplateConfig $config;
 
     /**
+     * Page minification instance.
+     * 
+     * @var ?Minification $min
+     */
+    private static ?Minification $min = null;
+
+    /**
      * @var self $instance static instance 
-    */
+     */
     private static ?self $instance = null;
 
     /**
-     * @var string $root framework root directory
-    */
+     * framework root directory.
+     * 
+     * @var string $root
+     */
     private static string $root = '';
 
     /**
       * Minification options.
+
       * @var array $minifyOptions
-    */
+     */
     private array $minifyOptions = [];
 
     /**
-     * Minification flag 
+     * Minification flag.
      * 
      * @var bool $minify 
-    */
+     */
     private bool $minify = false;
 
     /**
      * view type 
      * 
      * @var string $view
-    */
+     */
     private string $viewType = 'html';
 
     /**
      * @var array<string,mixed> $headers
-    */
+     */
     private array $headers = [];
 
 
@@ -90,9 +100,9 @@ class Smarty
 
         $suffix = DIRECTORY_SEPARATOR . 'smarty';
 
-        $this->smarty->setCompileDir($root . Helper::bothTrim(self::$config->compileFolder) . $suffix);
-        $this->smarty->setConfigDir($root . Helper::bothTrim(self::$config->configFolder) . $suffix);
-        $this->smarty->setCacheDir($root . Helper::bothTrim(self::$config->cacheFolder) . $suffix);
+        $this->smarty->setCompileDir($root . Foundation::bothTrim(self::$config->compileFolder) . $suffix);
+        $this->smarty->setConfigDir($root . Foundation::bothTrim(self::$config->configFolder) . $suffix);
+        $this->smarty->setCacheDir($root . Foundation::bothTrim(self::$config->cacheFolder) . $suffix);
         $this->smarty->addExtension(new Modifiers());
 
         if(PRODUCTION){
@@ -293,12 +303,10 @@ class Smarty
             $content = $this->smarty->fetch($view, Foundation::getCacheId());
 
             if($this->minify){
-                $content = Helper::getMinification(
-                    $content, 
-                    $this->viewType, 
-                    $this->minifyOptions['codeblock'], 
-                    $this->minifyOptions['copyable']
-                )->getContent();
+                self::$min ??= new Minification();
+                self::$min->codeblocks($this->minifyOptions['codeblock']);
+                self::$min->copyable($this->minifyOptions['copyable']);
+                $content = self::$min->compress($content, $this->viewType)->getContent();
             }
 
             if($return){
@@ -306,7 +314,6 @@ class Smarty
             }
 
             echo $content;
-            //ob_end_flush();
 
             return true;
         }catch(Exception | SmartyException $e){
@@ -321,16 +328,18 @@ class Smarty
      */
     private static function makeDirs(): void 
     {
-        $dirs = [
-            self::$config->compileFolder, 
-            self::$config->configFolder, 
+        $directories = [
+            self::$config->compileFolder,
+            self::$config->configFolder,
             self::$config->cacheFolder
         ];
 
-        $notFounds = array_filter($dirs, fn($dir) => !file_exists(self::$root .  Helper::bothTrim($dir) . DIRECTORY_SEPARATOR . 'smarty'));
-
-        foreach ($notFounds as $dir) {
-            make_dir(self::$root . $dir);
+        foreach ($directories as $dir) {
+            $path = self::$root . Foundation::bothTrim($dir) . DIRECTORY_SEPARATOR . 'smarty';
+            
+            if (!file_exists($path)) {
+                make_dir(self::$root . $dir);
+            }
         }
     }
 }

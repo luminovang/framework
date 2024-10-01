@@ -15,8 +15,9 @@ use \Luminova\Http\HttpCode;
 use \Luminova\Functions\Normalizer;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\RuntimeException;
+use \Stringable;
 
-class Response
+class Response implements Stringable
 {
     /**
      * Initialize a new network request response object.
@@ -38,6 +39,44 @@ class Response
         private string $protocolVersion = '1.1',
         private ?Stream $stream = null
     ) {}
+
+    /**
+     * Convert the HTTP response to a formatted string.
+     *
+     * This method generates the complete HTTP response string, including
+     * the status line, headers, and body content. It checks for the
+     * 'Content-Length' header and adds it if not present.
+     *
+     * @return string Returns the complete HTTP response as string suitable for sending over the network.
+     */
+    public function toString(): string 
+    {
+        $version = $this->getProtocolVersion();
+        $phrase = $this->getReasonPhrase();
+        $headers = $this->getHeadersString();
+
+        $response = "HTTP/{$version} {$this->statusCode} {$phrase}\r\n";
+        $response .= $headers;
+
+        if (!str_contains($headers, 'Content-Length')) {
+            $response .= "Content-Length: " . strlen($this->contents) . "\r\n";
+        }
+
+        $response .= "\r\n";
+        $response .= $this->contents;
+
+        return $response; 
+    }
+
+    /**
+     * Convert the HTTP response to a formatted string.
+     *
+     * @return string Returns the complete HTTP response as string suitable for sending over the network.
+     */
+    public function __toString(): string
+    {
+        return $this->toString();
+    }
 
     /**
      * Retrieves the HTTP protocol version (e.g, `1.0`, `1.1`).
@@ -102,6 +141,32 @@ class Response
     public function getHeaders(): array
     {
         return $this->headers;
+    }
+
+    /**
+     * Convert an associative array of headers into a formatted string.
+     *
+     * This method converts the response headers to a string representation suitable for HTTP responses, where each
+     * header is formatted as 'Key: Value' and separated by CRLF.
+     * 
+     * @return string Return a formatted string containing all headers, 
+     *                followed by an additional CRLF to signal the end 
+     *                of the headers section.
+     */
+    public function getHeadersString(): string 
+    {
+        $headers = '';
+        
+        foreach ($this->headers as $key => $value) {
+            
+            if (is_array($value)) {
+                $value = implode(', ', $value);
+            }
+
+            $headers .= "$key: $value\r\n";
+        }
+        
+        return $headers;
     }
 
     /**

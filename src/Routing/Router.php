@@ -17,7 +17,7 @@ use \Luminova\Routing\Prefix;
 use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Core\CoreApplication;
-use \Luminova\Attributes\Generator;
+use \Luminova\Attributes\AttrCompiler;
 use \Luminova\Base\BaseViewController;
 use \Luminova\Base\BaseController;
 use \Luminova\Application\Factory;
@@ -49,18 +49,25 @@ use \Exception;
 final class Router 
 {
     /**
-     * Any HTTP request methods.
+     * Accept any incoming HTTP request methods.
      * 
-     * @var string HTTP_METHODS
+     * @var string ANY_METHODS
+     */
+    public const ANY_METHODS = 'ANY';
+
+    /**
+     * Custom CLI URI.
+     * 
+     * @var string CLI_URI
     */
-    public const HTTP_METHODS = 'GET|POST|PUT|DELETE|OPTIONS|PATCH|HEAD';
+    private const CLI_URI = '__cli__';
     
     /**
-     * Route patterns and handling functions.
+     * Application routes.
      * 
-     * @var array<string,array> $controllers
-    */
-    private static array $controllers = [
+     * @var array<string,array> $routes
+     */
+    private static array $routes = [
         'routes' =>             [], 
         'routes_after' =>       [], 
         'routes_middleware' =>  [], 
@@ -74,7 +81,7 @@ final class Router
      * All allowed HTTP request methods.
      * 
      * @var array<string,string> $httpMethods
-    */
+     */
     private static array $httpMethods = [
         'GET'       => 'GET', 
         'POST'      => 'POST', 
@@ -85,76 +92,106 @@ final class Router
         'HEAD'      => 'HEAD',
         'CLI'       => 'CLI' //Fake a request method for cli
     ];
+
+    /**
+     * Strict placeholder patterns.
+     * 
+     * @var array<string,string> $placeholders
+     */
+    private static array $placeholders = [
+        '(:mixed)'        => '([^/]+)',
+        '(:any)'          => '(.*)',
+        '(:root)'         => '?.*', //?(.*)
+        '(:optional)'     => '?([^/]*)?',
+        '(:alphanumeric)' => '([a-zA-Z0-9-]+)',
+        '(:int)'          => '(\d+)',
+        '(:integer)'      => '(\d+)',
+        '(:number)'       => '([0-9-.]+)',
+        '(:double)'       => '([+-]?\d+(\.\d*)?)',
+        '(:float)'        => '([+-]?\d+\.\d+)',
+        '(:string)'       => '([a-zA-Z0-9\W_-]+)',
+        '(:alphabet)'     => '([a-zA-Z]+)',
+        '(:path)'         => '((.+)/([^/]+)+)'
+    ];
     
     /**
      * Current route base group, used for (sub) route mounting.
      * 
      * @var string $baseGroup
-    */
+     */
     private string $baseGroup = '';
 
     /**
      * The current request method.
      * 
      * @var string $method
-    */
+     */
     private static string $method = '';
 
     /**
      * The current request Uri. 
      * 
      * @var string $uri
-    */
+     */
     private static string $uri = '';
 
     /**
      * Application registered controllers namespace.
      * 
      * @var array $namespace
-    */
+     */
     private static array $namespace = [];
 
     /**
      * Terminal instance.
      * 
      * @var Terminal|null $term 
-    */
+     */
     private static ?Terminal $term = null;
 
     /**
      * Weather router is running in cli mode.
      * 
      * @var bool $isCli 
-    */
+     */
     private static bool $isCli = false;
+
+    /**
+     * Allow Dependency injection.
+     * 
+     * @var bool $di 
+     */
+    private static bool $di = false;
 
     /**
      * Terminate router run when serving static content.
      * 
      * @var bool $terminate 
-    */
+     */
     private static bool $terminate = false;
 
     /**
      * Information about command execution.
      * 
      * @var array $commands
-    */
+     */
     private static array $commands = [];
 
     /**
      * @var CoreApplication|null $application 
-    */
+     */
     private static ?CoreApplication $application = null;
 
     /**
      * Initialize router class.
      * 
      * @param CoreApplication $application Instance of application class.
-    */
+     */
     public function __construct(CoreApplication $application)
     {
         self::$application = $application;
+        self::$di = env('feature.route.dependency.injection', false);
+
         Foundation::profiling('start');
     }
 
@@ -171,7 +208,7 @@ final class Router
      * 
      * @return mixed Return value of method.
      * @throws RouterException Throw if method does not exist.
-    */
+     */
     public function __call(string $name, array $arguments): mixed
     {
         $method = strtoupper($name);
@@ -205,15 +242,15 @@ final class Router
         self::$method  = self::getRoutingMethod();
         self::$uri = self::getUriSegments();
 
-         // If application is undergoing maintenance.
-         if(MAINTENANCE && self::systemMaintenance()){
+        // If application is undergoing maintenance.
+        if(MAINTENANCE && self::systemMaintenance()){
             return $this;
         }
 
         $prefix = self::getFirst();
 
         // If the view uri ends with `.extension`, then try serving the cached static version.
-        if(self::$uri !== '/cli' && self::serveStaticCache($prefix)){
+        if(self::$uri !== self::CLI_URI && self::serveStaticCache($prefix)){
             return $this;
         }
 
@@ -319,7 +356,7 @@ final class Router
      */
     public function any(string $pattern, Closure|string $callback): void
     {
-        $this->capture(self::HTTP_METHODS, $pattern, $callback);
+        $this->capture(self::ANY_METHODS, $pattern, $callback);
     }
 
     /**
@@ -332,9 +369,9 @@ final class Router
      */
     public function command(string $command, Closure|string $callback): void
     {
-        self::$controllers['cli_commands']["CLI"][] = [
+        self::$routes['cli_commands']['CLI'][] = [
             'callback' => $callback,
-            'pattern' => self::parsePatternValue(trim($command, '/')),
+            'pattern' => self::normalizePatterns(trim($command, '/'), true),
             'middleware' => false
         ];
     }
@@ -355,7 +392,7 @@ final class Router
         }
 
         $group = trim($group, '/');
-        self::$controllers['cli_middleware']['CLI'][$group][] = [
+        self::$routes['cli_middleware']['CLI'][$group][] = [
             'callback' => $callback,
             'pattern' => $group,
             'middleware' => true
@@ -372,7 +409,7 @@ final class Router
      * @example - Example blog website binding.
      * 
      * ```
-     * $router->bind('/blog', static function(Router $router){
+     * $router->bind('/blog/', static function(Router $router){
      *      $router->get('/', 'BlogController::blogs');
      *      $router->get('/id/([aZ-Az-0-9-])', 'BlogController::blog');
      * });
@@ -381,7 +418,7 @@ final class Router
     public function bind(string $prefix, Closure $callback): void
     {
         $current = $this->baseGroup;
-        $this->baseGroup .= $prefix;
+        $this->baseGroup .= rtrim($prefix, '/');
 
         $callback(...self::noneParamInjection($callback));
         $this->baseGroup = $current;
@@ -405,7 +442,7 @@ final class Router
      */
     public function group(string $group, Closure $callback): void
     {
-        self::$controllers['cli_groups'][$group][] = $callback;
+        self::$routes['cli_groups'][$group][] = $callback;
     }
 
     /**
@@ -428,7 +465,6 @@ final class Router
 
         $namespace = '\\' . trim($namespace, '\\') . '\\';
 
-        //if (!preg_match('/^\\\\App\\\\(?:Controllers|Modules(?:\\\\[A-Za-z0-9_]+)?\\\\Controllers)?\\\\/', $namespace)) {
         if(!str_starts_with($namespace, '\\App\\') || !str_ends_with($namespace, '\Controllers\\')){
             RouterException::throwWith('invalid_namespace', RouterException::NOT_ALLOWED, [
                 $namespace
@@ -477,10 +513,11 @@ final class Router
     /**
      * Set an error listener callback function.
      *
-     * @param Closure|string|array<int,string> $match Matching route pattern.
+     * @param Closure|string|array<int,string> $match Matching route callback or segment pattern for error handling.
      * @param Closure|string|array<int,string>|null $callback Optional error callback handler function.
      *  
      * @return void
+     * @throws RouterException Throws if callback is specified and `$match` is not a segment pattern.
      */
     public function setErrorListener(
         Closure|string|array $match, 
@@ -488,10 +525,16 @@ final class Router
     ): void
     {
         if ($callback === null) {
-            self::$controllers['errors']['/'] = $match;
-        } else {
-            self::$controllers['errors'][$match] = $callback;
+            self::$routes['errors']['/'] = $match;
+            return;
+        } 
+
+        if(!is_string($match)){
+           throw new RouterException('Invalid arguments, "$match" must be a segment pattern string.', RouterException::INVALID_ARGUMENTS);
         }
+
+        $match = self::normalizePatterns($match);
+        self::$routes['errors'][$match] = $callback;
     }
 
     /**
@@ -503,19 +546,22 @@ final class Router
      */
     public static function triggerError(int $status = 404): void
     {
-        foreach (self::$controllers['errors'] as $pattern => $callable) {
+        foreach (self::$routes['errors'] as $pattern => $callable) {
             $matches = [];
-            if (self::uriCapture($pattern, self::$uri, $matches) && self::call($callable, $matches, true)) {
+            if (
+                self::uriCapture($pattern, self::$uri, $matches) && 
+                self::call($callable, self::matchesToArgs($matches), true)
+            ) {
                 return;
             }
         }
       
-        $error = (self::$controllers['errors']['/'] ?? null);
+        $error = (self::$routes['errors']['/'] ?? null);
 
         if ($error !== null && self::call($error, [], true)) {
             return;
         }
-       
+     
         self::printError('Error file not found', null, $status);
     }
 
@@ -537,11 +583,9 @@ final class Router
      */
     public static function getUriSegments(): string
     {
-        if (self::$isCli) {
-            return '/cli';
-        }
-        
-        return Foundation::getUriSegments();
+        return self::$isCli 
+            ? self::CLI_URI 
+            : Foundation::getUriSegments();
     }
 
     /**
@@ -551,7 +595,7 @@ final class Router
      */
     public function getSegment(): Segments 
     {
-        return new Segments(self::$isCli ? ['cli'] : Foundation::getSegments());
+        return new Segments(self::$isCli ? [self::CLI_URI] : Foundation::getSegments());
     }
 
     /**
@@ -592,7 +636,7 @@ final class Router
      * @param string $controller Controller class base name.
      * 
      * @return class-string Return class name.
-    */
+     */
     private static function getControllerClass(string $controller): string
     {
         $prefix = self::$isCli ? 'Cli\\' : 'Http\\';
@@ -667,7 +711,8 @@ final class Router
         if($method === 'POST'){
             $headers = Header::getHeaders();
             $overrides = ['PUT' => true, 'DELETE' => true, 'PATCH' => true];
-            if (isset($headers['X-HTTP-Method-Override']) && isset($overrides[$headers['X-HTTP-Method-Override']])) {
+            
+            if (isset($headers['X-HTTP-Method-Override'], $overrides[$headers['X-HTTP-Method-Override']])) {
                 $method = $headers['X-HTTP-Method-Override'];
             }
         }
@@ -683,7 +728,7 @@ final class Router
      * @param int $status http status code.
      * 
      * @return void
-    */
+     */
     private static function printError(
         string $header, 
         ?string $message = null, 
@@ -710,7 +755,7 @@ final class Router
      * 
      * @return void
      * @throws RouterException Throws when called in wrong context.
-    */
+     */
     private function addHttpRoute(
         string $to, 
         string $methods, 
@@ -724,11 +769,11 @@ final class Router
         }
 
         $pattern = $this->baseGroup . '/' . trim($pattern, '/');
-        $pattern = ($this->baseGroup !== '') ? rtrim($pattern, '/') : $pattern;
+        $pattern = self::normalizePatterns(($this->baseGroup !== '') ? rtrim($pattern, '/') : $pattern);
         $pipes = explode('|', $methods);
 
         foreach ($pipes as $method) {
-            self::$controllers[$to][$method][] = [
+            self::$routes[$to][$method][] = [
                 'pattern' => $pattern,
                 'callback' => $callback,
                 'middleware' => $terminate
@@ -740,11 +785,11 @@ final class Router
      * Get first segment of current view uri.
      * 
      * @return string First url segment.
-    */
+     */
     private static function getFirst(): string
     {
         if(self::$isCli){
-            return 'cli';
+            return self::CLI_URI;
         }
 
         $segments = Foundation::getSegments();
@@ -757,7 +802,7 @@ final class Router
      * @param array<int,array> $contexts The context arguments as an array.
      * 
      * @return array<string,string> Return array of context prefixes.
-    */
+     */
     private function getArrayPrefixes(array $contexts): array 
     {
         $prefixes = [];
@@ -783,7 +828,7 @@ final class Router
      * @param array<string,string> $prefixes List of context prefix names without web context as web is default.
      * 
      * @return bool|int<2> Return bool if context match was found or 2 if in cli but not in cli mode, otherwise false.
-    */
+     */
     private function installContext(
         string $name, 
         Closure|array|null $eHandler, 
@@ -830,7 +875,7 @@ final class Router
      * @param string $first The first uri segment.
      * 
      * @return bool Return true if the context is a web instance, otherwise false.
-    */
+     */
     private static function isWeContext(string $result, ?string $first = null): bool 
     {
         return ($first === null || $first === '' || $result === Prefix::WEB) && $result !== Prefix::CLI && $result !== Prefix::API;
@@ -840,7 +885,7 @@ final class Router
      * Get terminal instance.
      * 
      * @return Terminal Return instance of Terminal class.
-    */
+     */
     private static function terminal(): Terminal
     {
         return self::$term ??= new Terminal();
@@ -851,7 +896,7 @@ final class Router
      * 
      * @return int Return status success or failure.
      * @throws RouterException
-    */
+     */
     private static function runAsCommand(): int
     {
         $group = self::getArgument();
@@ -863,24 +908,24 @@ final class Router
         }
 
         $command = self::getArgument(2);
-        $global = (self::$controllers['cli_middleware'][self::$method]['global']??null);
+        $global = (self::$routes['cli_middleware'][self::$method]['global']??null);
 
         if($global !== null && !self::handleCommand($global)){
             return STATUS_ERROR;
         }
         
-        $groups = (self::$controllers['cli_groups'][$group] ?? null);
+        $groups = (self::$routes['cli_groups'][$group] ?? null);
         if($groups !== null){
             foreach($groups as $groupCallback){
                 $groupCallback(...self::noneParamInjection($groupCallback));
             }
 
-            $middleware = (self::$controllers['cli_middleware'][self::$method][$group] ?? null);
+            $middleware = (self::$routes['cli_middleware'][self::$method][$group] ?? null);
             if($middleware !== null && !self::handleCommand($middleware)){
                 return STATUS_ERROR;
             }
             
-            $routes = self::$controllers['cli_commands'][self::$method] ?? null;
+            $routes = self::$routes['cli_commands'][self::$method] ?? null;
             if ($routes !== null && self::handleCommand($routes)) {
                 self::$application->__on('onCommandPresent', self::getArguments());
                 return STATUS_SUCCESS;
@@ -897,20 +942,20 @@ final class Router
      *
      * @return int Return status success, status error on failure.
      * @throws RouterException Throws if any error occurs while running HTTP routes.
-    */
+     */
     private static function runAsHttp(): int
     {
-        $middleware = (self::$controllers['routes_middleware'][self::$method] ?? null);
-        if ($middleware !== null && !self::handleWebsite($middleware, self::$uri)) {
+        $middleware = self::getRoutes('routes_middleware'); 
+        if ($middleware !== [] && !self::handleWebsite($middleware, self::$uri)) {
             return STATUS_ERROR;
         }
 
-        $routes = (self::$controllers['routes'][self::$method] ?? null);
+        $routes = self::getRoutes('routes');
 
-        if ($routes !== null && self::handleWebsite($routes, self::$uri)) {
-            $after = (self::$controllers['routes_after'][self::$method] ?? null);
+        if ($routes !== [] && self::handleWebsite($routes, self::$uri)) {
+            $after = self::getRoutes('routes_after');
             
-            if($after !== null){
+            if($after !== []){
                 self::handleWebsite($after, self::$uri);
             }
 
@@ -924,10 +969,26 @@ final class Router
     }
 
     /**
+     * Retrieve the registered HTTP routes for a specific controller.
+     * 
+     * @param string $from The name of the controller for which to retrieve the routes.
+     * 
+     * @return array Return an array of routes registered for the given controller and HTTP method, or an empty array if none are found.
+     */
+    private static function getRoutes(string $from): array 
+    {
+        $anyRoutes = self::$routes[$from][self::ANY_METHODS] ?? null;
+
+        return ($anyRoutes !== null) 
+            ? array_merge(self::$routes[$from][self::$method] ?? [], $anyRoutes)
+            : self::$routes[$from][self::$method] ?? [];
+    }
+
+    /**
      * Load application is undergoing maintenance.
      * 
      * @return bool Return true.
-    */
+     */
     private static function systemMaintenance(): bool 
     {
         self::$terminate = true;
@@ -993,7 +1054,7 @@ final class Router
      *
      * @return bool Return true if controller was handled, otherwise false.
      * @throws RouterException if method is not callable or doesn't exist.
-    */
+     */
     private static function handleWebsite(array $routes, string $uri): bool
     {
         $match = false;
@@ -1003,7 +1064,7 @@ final class Router
             $match = self::uriCapture($route['pattern'], $uri, $matches);
 
             if ($match) {
-                $passed = self::call($route['callback'], self::matchesToArray((array) $matches));
+                $passed = self::call($route['callback'], self::matchesToArgs($matches));
             }
 
             if ((!$match && $route['middleware']) || ($match && $passed)) {
@@ -1015,14 +1076,14 @@ final class Router
     }
 
     /**
-    * Handle C=command router CLI callback class method with the given parameters 
-    * using instance callback or reflection class.
-    *
-    * @param array $routes Command name array values.
-    *
-    * @return bool Return true on success or false on failure.
-    * @throws RouterException if method is not callable or doesn't exist.
-    */
+     * Handle C=command router CLI callback class method with the given parameters 
+     * using instance callback or reflection class.
+     *
+     * @param array $routes Command name array values.
+     *
+     * @return bool Return true on success or false on failure.
+     * @throws RouterException if method is not callable or doesn't exist.
+     */
     private static function handleCommand(array $routes): bool
     {
         self::$commands = self::$term->parseCommands($_SERVER['argv'] ?? [], true);
@@ -1037,7 +1098,7 @@ final class Router
             $matches = [];
 
             if (self::uriCapture($route['pattern'], $queries['view'], $matches)) {
-                self::$commands['params'] = self::matchesToArray((array) $matches);
+                self::$commands['params'] = self::matchesToArgs($matches);
                 return self::call($route['callback'], self::$commands);
             } 
             
@@ -1055,35 +1116,37 @@ final class Router
      * @param array<int,array> $array Matched url parameters.
      * 
      * @return array<int,string> Return matched parameters.
-    */
-    private static function matchesToArray(array $array): array
+     */
+    private static function matchesToArgs(array $array): array
     {
         $params = [];
 
         foreach ($array as $match) {
-            $params[] = isset($match[0][0]) && $match[0][1] !== -1 ? trim($match[0][0], '/') : null;
+            $params[] = (isset($match[0][0]) && $match[0][1] !== -1) 
+                ? trim($match[0][0], '/')
+                : '';
         }
-        
+
         return array_slice($params, 1);
     }
 
     /**
-    * Dependency injection and parameter casting.
-    *
-    * @param Closure|callable-string $caller Class method or callback closure.
-    * @param array<int,string> $arguments Method arguments to pass to callback method.
-    * @param bool $injection Force use of dependency injection.
-    *
-    * @return array<int,mixed> Return method params and arguments-value pairs.
-    * @internal 
-    */
+     * Dependency injection and parameter casting.
+     *
+     * @param Closure|callable-string $caller Class method or callback closure.
+     * @param array<int,string> $arguments Method arguments to pass to callback method.
+     * @param bool $injection Force use of dependency injection.
+     *
+     * @return array<int,mixed> Return method params and arguments-value pairs.
+     * @internal 
+     */
     private static function injection(
         Closure|ReflectionMethod|string $caller, 
         array $arguments = [], 
         bool $injection = false
     ): array
     {
-        if (!$injection && !(bool) env('feature.route.dependency.injection', false)) {
+        if (!$injection && !self::$di) {
             return $arguments;
         }
 
@@ -1098,28 +1161,39 @@ final class Router
                     filter_paths($caller->getFileName()),
                     $caller->getStartLine()
                 ]);
+
+                return [];
             }
             
             foreach ($caller->getParameters() as $parameter) {
                 $type = $parameter->getType();
+                if($type instanceof ReflectionUnionType) {
+                    $types = self::getUnionTypes($type->getTypes());
+                    $builtin = $types['builtin'] ?? null;
+                    $nullable = $types['nullable'] ?? false;
 
-                if ($type instanceof ReflectionNamedType) {
+                    if($builtin !== null){
+                        if($arguments !== []) {
+                            $parameters[] = self::typeCasting(
+                                $builtin, 
+                                $nullable,
+                                array_shift($arguments)
+                            );
+                        }
+                    }else{
+                        $parameters[] = self::newInstance($types['inject'], $nullable);
+                    }
+                }elseif($type instanceof ReflectionNamedType) {
                     if($type->isBuiltin()) {
                         if($arguments !== []) {
-                            $parameters[] = self::typeCasting($type->getName(),  array_shift($arguments));
+                            $parameters[] = self::typeCasting(
+                                $type->getName(), 
+                                $type->allowsNull(),
+                                array_shift($arguments)
+                            );
                         }
                     }else{
-                        $parameters[] = self::newInstance($type->getName());
-                    }
-                } elseif($type instanceof ReflectionUnionType) {
-                    $types = self::getUnionTypes($type->getTypes());
-
-                    if((isset($types['builtin']))){
-                        if($arguments !== []) {
-                            $parameters[] = self::typeCasting($types['builtin'], array_shift($arguments));
-                        }
-                    }else{
-                        $parameters[] = self::newInstance($types['inject']);
+                        $parameters[] = self::newInstance($type->getName(), $type->allowsNull());
                     }
                 }
             }
@@ -1136,15 +1210,16 @@ final class Router
      * @param Closure $callback A closure to inject.
      * 
      * @return array<int,mixed> An array of parameters.
-    */
+     */
     private static function noneParamInjection(Closure $callback): array 
     {
         $params = (new ReflectionFunction($callback))->getParameters();
         $classNames = [];
+
         foreach ($params as $param) {
             $type = $param->getType();
             if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
-                $classNames[] = self::newInstance($type->getName());
+                $classNames[] = self::newInstance($type->getName(), $type->allowsNull());
             }
         }
         
@@ -1152,15 +1227,15 @@ final class Router
     }
 
     /**
-    * Execute router HTTP callback class method with the given parameters using instance callback or reflection class.
-    *
-    * @param Closure|string|array<int,string> $callback Class public callback method eg: UserController:update.
-    * @param array $arguments Method arguments to pass to callback method.
-    * @param bool $injection Force use dependency injection. Default is false.
-    *
-    * @return bool Return true if controller method was executed successfully, false otherwise.
-    * @throws RouterException if method is not callable or doesn't exist.
-    */
+     * Execute router HTTP callback class method with the given parameters using instance callback or reflection class.
+     *
+     * @param Closure|string|array<int,string> $callback Class public callback method eg: UserController:update.
+     * @param array $arguments Method arguments to pass to callback method.
+     * @param bool $injection Force use dependency injection. Default is false.
+     *
+     * @return bool Return true if controller method was executed successfully, false otherwise.
+     * @throws RouterException if method is not callable or doesn't exist.
+     */
     private static function call(
         Closure|string|array $callback, 
         array $arguments = [], 
@@ -1168,7 +1243,9 @@ final class Router
     ): bool
     {
         if ($callback instanceof Closure) {
-            $arguments = ((self::$isCli && isset($arguments['command'])) ? ($arguments['params'] ?? []) : $arguments);
+            $arguments = (self::$isCli && isset($arguments['command'])) 
+                ? ($arguments['params'] ?? []) 
+                : $arguments;
             
             return status_code($callback(...self::injection($callback, $arguments, $injection)), false);
         }
@@ -1279,23 +1356,22 @@ final class Router
     private function createWithAttributes(string $prefix): self 
     {
         $hmvc = env('feature.app.hmvc', false);
-        $collector = new Generator($this->baseGroup, self::$isCli, $hmvc);
+        $attr = new AttrCompiler($this->baseGroup, self::$isCli, $hmvc);
         $path = $hmvc ? 'app/Modules/' : 'app/Controllers/';
 
         if(self::$isCli){
-            $collector->installCli($path);
+            $attr->getAttrFromCli($path);
         }else{
-            $collector->installHttp($path, $prefix);
+            $attr->getAttrFromHttp($path, $prefix, self::$uri);
         }
 
         $current = $this->baseGroup;
-        self::$controllers = array_merge(
-            self::$controllers, 
-            $collector->getRoutes()
+        self::$routes = array_merge(
+            self::$routes, 
+            $attr->getRoutes()
         );
         
         $this->baseGroup = $current;
-
         return $this;
     }
 
@@ -1336,19 +1412,19 @@ final class Router
         }
 
         $this->baseGroup = $current;
-
         return $this;
     }
 
     /**
      * Invoke class using reflection method.
      *
+     * @param BaseCommand $instance Command controller object.
      * @param array $arguments Pass arguments to reflection method.
      * @param string $className Invoking class name.
      * @param ReflectionMethod $caller Controller class method.
      *
      * @return int Return result from command controller method.
-    */
+     */
     private static function invokeCommandArgs(
         BaseCommand $instance,
         array $arguments, 
@@ -1397,40 +1473,62 @@ final class Router
     *
     * @param string $pattern Url current route pattern.
     * @param string $uri The current request uri path.
-    * @param mixed &$matches Url matches passed by reference.
+    * @param array &$matches URI matches passed by reference.
     *
     * @return bool Return true if is match, otherwise false.
     */
-    private static function uriCapture(string $pattern, string $uri, mixed &$matches): bool
+    private static function uriCapture(string $pattern, string $uri, array &$matches): bool
     {
-        $matches = [];
-        $pattern = '#^' . preg_replace('/\/{(.*?)}/', '/(.*?)', $pattern) . '$#';
-        $result = (bool) preg_match_all($pattern, $uri, $matches, PREG_OFFSET_CAPTURE);
-    
-        if (!$result || preg_last_error() !== PREG_NO_ERROR) {
-            return false;
-        }
-
-        return $result;
+        $result = (bool) preg_match_all("#^{$pattern}$#", $uri, $matches, PREG_OFFSET_CAPTURE);
+        return (!$result || preg_last_error() !== PREG_NO_ERROR) 
+            ? false 
+            : $result;
     }
 
     /**
-     * Create a new instance of a class.
+     * Normalizes predefined patterns in the given input string.
+     *
+     * @param string $input The input string containing placeholders for patterns to be normalized.
+     * @param bool $cli Optional. If true, formats the output for CLI usage by prepending a '/' and trimming leading slashes.
+     * 
+     * @return string The normalized string with placeholders replaced by regular expressions.
+     * @ignore
+     * @see https://luminova.ng/docs/3.3.0/router/placeholders
+     */
+    public static function normalizePatterns(string $input, bool $cli = false): string
+    {
+        // Replace strict placeholders like '/(:int)/(:string)/(:foo)'
+        if ($input !== '/' && str_contains($input, '(:')) {
+            $input = str_replace(
+                array_keys(self::$placeholders), 
+                array_values(self::$placeholders), 
+                $input
+            );
+        }
+
+        // Replace regular placeholders like '/{name}/{id}/{foo}'
+        $input = ($input !== '/') ? preg_replace('/\/{(.*?)}/', '/(.*?)', $input) : $input;
+        return $cli ? '/' . ltrim($input, '/') : $input;
+    }
+
+    /**
+     * Create a new instance of the given class or return a default object based on the class type.
      *
      * @param class-string<\T> $class The class name to inject.
+     * @param bool $nullable If true, returns null when the class does not exist (default: false).
      * 
      * @return class-object<\T>|null The new instance of the class, or null if the class is not found.
      * @throws Exception|AppException Throws if the class does not exist or requires arguments to initialize.
      */
-    private static function newInstance(string $class): ?object 
+    private static function newInstance(string $class, bool $nullable = false): ?object 
     {
         return match ($class) {
-            Application::class => self::$application ?? null,
-            self::class => self::$application?->router ?? null,
+            Application::class, CoreApplication::class => self::$application ?? app(),
+            self::class => self::$application->router ?? new self(self::$application ?? app()),
             Terminal::class => self::terminal(),
             Factory::class => factory(),
             Closure::class => fn(mixed ...$arguments): mixed => null,
-            default => new $class()
+            default => $nullable && !class_exists($class) ? null : new $class(),
         };
     }
 
@@ -1443,21 +1541,27 @@ final class Router
      */
     private static function getUnionTypes(array $unions): array
     {
-        $types = [];
+        $types = ['string', 'int', 'float', 'double', 'bool', 'array', 'mixed'];
+
         foreach ($unions as $type) {
             if (!$type->isBuiltin()) {
-                return ['inject' => $type->getName()];
+                return [
+                    'inject' => $type->getName(),
+                    'nullable' => $type->allowsNull()
+                ];
             }
 
-            if ($type->allowsNull()) {
-                return ['builtin' => 'null'];
+            if(in_array($type->getName(), $types)){
+                return [
+                    'builtin' => $type->getName(),
+                    'nullable' => $type->allowsNull()
+                ];
             }
-
-            $types[$type->getName()] = $type->getName();
         }
 
         return [
-            'builtin' => $types['string'] ?? 'mixed'
+            'builtin' => 'string',
+            'nullable' => false
         ];
     }
 
@@ -1469,60 +1573,26 @@ final class Router
      * 
      * @return mixed Return the casted value.
      */
-    private static function typeCasting(string $type, mixed $value): mixed 
+    private static function typeCasting(string $type, bool $nullable, mixed $value): mixed 
     {
+        if($nullable && !$value){
+            return null;
+        }
+
         return match ($type) {
-            'bool' => (bool) $value,
+            'bool' => (($lower = strtolower($value)) && ($lower === '1' || 'true' === $lower)) ? true : false,
             'int' => (int) $value,
             'float' => (float) $value,
             'double' => (double) $value,
+            'string' => (string) $value,
+            'array' => (array) [$value],
+            'object' => (object) [$value],
+            'callable' => fn(mixed ...$arguments):mixed => $value,
             'null' => null,
             'false' => false,
             'true' => true,
-            'string' => (string) $value,
-            'array' => (array) $value,
-            'object' => (object) $value,
-            'callable' => fn(mixed ...$arguments):mixed => $value,
             default => $value,
         };
-    }
-
-    /**
-     * Replace command script filter values match (:value) and replace with actual (pattern).
-     *
-     * @param string $input command script pattern.
-     * 
-     * @return string $output If match return replaced string.
-    */
-    private static function parsePatternValue(string $input): string
-    {
-        $patterns = [
-            '(:mixed)' => '([^/]+)',
-            '(:optional)' => '?([^/]*)',
-            '(:int)' => '(\d+)',
-            '(:float)' => '([+-]?\d+\.\d+)',
-            '(:string)' => '([a-zA-Z0-9_-]+)',
-            '(:alphabet)' => '([a-zA-Z]+)',
-            '(:path)' => '((.+)/([^/]+)+)',
-        ];
-
-        $input = str_replace(array_keys($patterns), array_values($patterns), $input);
-
-        return '/' . ltrim($input, '/');
-    }
-
-    /**
-     * Gets request command name.
-     *
-     * @return string Return command argument index.
-    */
-    private static function getArgument(int $index = 1): string 
-    {
-        if(isset($_SERVER['argv'])){
-            return $_SERVER['argv'][$index] ?? '';
-        }
-
-        return '';
     }
 
     /**
@@ -1547,6 +1617,20 @@ final class Router
 
         return $views;
     }
+
+    /**
+     * Gets request command name.
+     *
+     * @return string Return command argument index.
+    */
+    private static function getArgument(int $index = 1): string 
+    {
+        if(isset($_SERVER['argv'])){
+            return $_SERVER['argv'][$index] ?? '';
+        }
+
+        return '';
+    }
     
     /**
      * Reset register routes to avoid conflicts.
@@ -1555,12 +1639,12 @@ final class Router
     */
     private static function reset(): void
     {
-        self::$controllers['routes'] = [];
-        self::$controllers['routes_after'] = [];
-        self::$controllers['routes_middleware'] = [];
-        self::$controllers['cli_commands'] = [];
-        self::$controllers['cli_middleware'] = [];
-        self::$controllers['errors'] = [];
-        self::$controllers['cli_groups'] = [];
+        self::$routes['routes'] = [];
+        self::$routes['routes_after'] = [];
+        self::$routes['routes_middleware'] = [];
+        self::$routes['cli_commands'] = [];
+        self::$routes['cli_middleware'] = [];
+        self::$routes['errors'] = [];
+        self::$routes['cli_groups'] = [];
     }
 }

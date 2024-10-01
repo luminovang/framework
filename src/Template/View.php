@@ -20,7 +20,7 @@ use \Luminova\Exceptions\ViewNotFoundException;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
-use \Luminova\Template\Helper;
+use \Luminova\Optimization\Minification;
 use \Luminova\Cache\ViewCache;
 use \App\Config\Template as TemplateConfig;
 use \DateTimeInterface;
@@ -37,6 +37,20 @@ trait View
      * @var TemplateConfig $config
      */
     private static ?TemplateConfig $config = null;
+
+    /**
+     * Page minification instance.
+     * 
+     * @var ?Minification $min
+     */
+    private static ?Minification $min = null;
+
+    /**
+     * View cache instance.
+     * 
+     * @var ViewCache $viewCache 
+     */
+    private static ?ViewCache $viewCache  = null;
 
     /**
      * Flag for key not found.
@@ -418,8 +432,7 @@ trait View
      */
     public function delete(?string $version = null): bool 
     {
-        return Helper::getCache(self::$cacheFolder, Foundation::getCacheId())
-                    ->delete($version);
+        return self::getCache()->delete($version);
     }
 
     /**
@@ -431,8 +444,7 @@ trait View
      */
     public function clear(?string $version = null): int 
     {
-        return Helper::getCache(self::$cacheFolder, Foundation::getCacheId())
-                    ->clear($version);
+        return self::getCache()->clear($version);
     }
 
     /**
@@ -446,8 +458,7 @@ trait View
      */
     public final function expired(string|null $viewType = 'html'): bool
     {
-        $expired = Helper::getCache(self::$cacheFolder, Foundation::getCacheId())
-            ->expired($viewType);
+        $expired = self::getCache()->expired($viewType);
 
         if($expired === 404){
             throw new RuntimeException('Invalid mismatch view type: ' . $viewType);
@@ -469,7 +480,7 @@ trait View
         }
 
         $this->forceCache = false;
-        $cache = Helper::getCache(self::$cacheFolder, Foundation::getCacheId(), $this->cacheExpiry);
+        $cache = self::getCache($this->cacheExpiry);
 
         return $cache->read() ? STATUS_SUCCESS : STATUS_ERROR;
     }
@@ -477,27 +488,22 @@ trait View
     /**
      * Handle cache expiration and renewal.
      *
-     * This method checks if the cached content for a specific view type has expired. 
-     * If the content is expired, it executes the provided callback function to 
-     * regenerate the content and renew the cache. If the content is still valid, 
-     * it forces the use of the existing cached content.
-     *
      * @param string $viewType The type of view content to check, such as 'html' or 'json'.
-     * @param Closure $renewCache A callback function that will be executed if the cached 
+     * @param Closure $renew A callback function that will be executed if the cached 
      *                            content has expired. This function should return in (`0` or `1`).
      * @param mixed ...$arguments Optional arguments to pass to the callback function, none dependency injection supported.
      *
      * @return int Return the status code of the cache renewal callback if the cache has expired, 
      *             otherwise the status code from reusing the existing cache.
      */
-    public final function onExpired(string $viewType, Closure $renewCache, mixed ...$arguments): int
+    public final function onExpired(string $viewType, Closure $renew, mixed ...$arguments): int
     {
         if ($this->shouldCache() && !$this->expired($viewType)) {
             $this->forceCache = true;
             return $this->reuse();
         }
 
-        return $renewCache(...$arguments);
+        return $renew(...$arguments);
     }
 
     /**
@@ -694,7 +700,7 @@ trait View
      */
     public static final function link(string $filename = ''): string 
     {
-        $base = (PRODUCTION ? '/' : Helper::relativeLevel());
+        $base = (PRODUCTION ? '/' : self::toRelativeLevel());
         return ($filename === '') 
             ? $base 
             : $base . ltrim($filename, '/');
@@ -766,7 +772,7 @@ trait View
                 $cache = null;
 
                 if ($cacheable) {
-                    $cache = Helper::getCache(self::$cacheFolder, Foundation::getCacheId(), $this->cacheExpiry);
+                    $cache = self::getCache($this->cacheExpiry);
    
                     if ($cache->expired($options['viewType']) === false) {
                         return $return ? $cache->get() : $cache->read();
@@ -819,7 +825,7 @@ trait View
         } 
 
         FileManager::permission('rw');
-        http_response_code($status);
+        Header::sendStatus($status);
         defined('ALLOW_ACCESS') || define('ALLOW_ACCESS', true);
 
         return true;
@@ -1106,7 +1112,7 @@ trait View
 
         if ($content !== false && $content !== '') {
             if (self::$minifyContent && $type === 'html') {
-                $minify = Helper::getMinification(
+                $minify = self::getMinification(
                     $content, 
                     $type, 
                     $ignore, 
@@ -1151,12 +1157,10 @@ trait View
         }
 
         // Check if the view is in the 'only' list
-        if (isset($this->cacheOption['only'])) {
-            return in_array($this->activeView, $this->cacheOption['only'], true);
-        }
-
-        // Check if the view is in the 'ignore' list
-        return !in_array($this->activeView, $this->cacheOption['ignore'] ?? [], true);
+        return isset($this->cacheOption['only']) 
+            ? in_array($this->activeView, $this->cacheOption['only'], true)
+            : !in_array($this->activeView, $this->cacheOption['ignore'] ?? [], true);
+            // Check if the view is in the 'ignore' list
     }
 
     /**
@@ -1299,11 +1303,11 @@ trait View
         }
 
         if(!isset($options['title'])){
-            $options['title'] = Helper::toTitle($options['active'], true);
+            $options['title'] = self::toTitle($options['active'], true);
         }
 
         if(!isset($options['subtitle'])){
-            $options['subtitle'] = Helper::toTitle($options['active']);
+            $options['subtitle'] = self::toTitle($options['active']);
         }
 
         return $options;
@@ -1341,8 +1345,8 @@ trait View
     private function getViewPath(): string 
     {
         $module = self::$useHmvcModule 
-                ? '/app/Modules/' . ($this->moduleName === ''? '' : $this->moduleName . '/') . 'Views/'
-                : self::$viewFolder;
+            ? '/app/Modules/' . ($this->moduleName === ''? '' : $this->moduleName . '/') . 'Views/'
+            : self::$viewFolder . '/';
     
         return self::getSystemPath($module . ($this->subfolder !== '' ? $this->subfolder : ''));
     }
@@ -1372,5 +1376,96 @@ trait View
     public static function getSystemError(string $filename): string 
     {
         return self::getSystemPath(self::$viewFolder) . 'system_errors' . DIRECTORY_SEPARATOR . $filename . '.php';
+    }
+
+    /**
+     * Convert view name to title and add suffix if specified.
+     *
+     * @param string $view  The view name.
+     * @param bool   $suffix Whether to add suffix.
+     *
+     * @return string Return view page title.
+     */
+    public static function toTitle(string $view, bool $suffix = false): string 
+    {
+        $view = strtr($view, ['_' => ' ', '-' => ' ', ',' => '']);
+        $view = ucwords($view);
+
+        if ($suffix && !str_contains($view, ' - ' . APP_NAME)) {
+            $view .= ' - ' . APP_NAME;
+        }
+
+        return $view;
+    }
+
+    /** 
+     * Fixes the broken css,image & links when added additional slash(/) at the router link
+     * The function will add the appropriate relative base based on how many invalid link detected.
+     *
+     * @return string Return relative path.
+     */
+    private static function toRelativeLevel(): string 
+    {
+        $level = 0;
+        if(isset($_SERVER['REQUEST_URI'])){
+            $url = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen(Foundation::getBase()));
+
+            if (($pos = strpos($url, '?')) !== false) {
+                $url = substr($url, 0, $pos);
+            }
+
+            $level = substr_count('/' . trim($url, '/'), '/');
+        }
+
+        $suffix = (NOVAKIT_ENV === null) ? 'public/' : '/';
+        return (($level === 0) ? './' : str_repeat('../', $level)) . $suffix;
+    }
+
+    /** 
+     * Initialize minification instance.
+     *
+     * @param mixed $contents view contents output buffer.
+     * @param string $type The content type.
+     * @param bool $ignore Weather to ignore code blocks minification.
+     * @param bool $copy Weather to include code block copy button.
+     *
+     * @return Minification Return minified instance.
+     */
+    private static function getMinification(
+        mixed $contents, 
+        string $type = 'html', 
+        bool $ignore = true, 
+        bool $copy = false,
+    ): Minification
+    {
+        if(!self::$min instanceof Minification){
+            self::$min = new Minification();
+        }
+
+        self::$min->codeblocks($ignore);
+        self::$min->copyable($copy);
+
+        return self::$min->compress($contents, $type);
+    }
+
+    /** 
+     * Get page view cache instance.
+     *
+     * @param DateTimeInterface|int|null $expiry  Cache expiration ttl (default: 0).
+     *
+     * @return ViewCache Return page view cache instance.
+     */
+    private static function getCache(DateTimeInterface|int|null $expiry = 0): ViewCache
+    {
+        if(!self::$viewCache instanceof ViewCache){
+            self::$viewCache = new ViewCache();
+        }
+
+        self::$viewCache->setExpiry($expiry);
+        self::$viewCache->setDirectory(self::$cacheFolder);
+        self::$viewCache->setKey(Foundation::getCacheId());
+        self::$viewCache->setUri(Foundation::getUriSegments());
+
+        return self::$viewCache;
     }
 }
