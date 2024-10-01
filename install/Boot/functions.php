@@ -1742,7 +1742,9 @@ if (!function_exists('http_status_header')) {
 
         // Determine the protocol version (1.0 or 1.1) based on the server's protocol
         $protocol = ($_SERVER['SERVER_PROTOCOL'] ?? '1.0');
-        $protocol = ($protocol !== '1.0' ? (strcasecmp($protocol, 'HTTP/1.0') ? '1.1' : '1.0') : $protocol);
+        $protocol = ($protocol !== '1.0')
+            ? (strcasecmp($protocol, 'HTTP/1.0') ? '1.1' : '1.0') 
+            : $protocol;
 
         // Send the HTTP header with the specified status and message
         @header("HTTP/$protocol $status {$message}");
@@ -1750,6 +1752,9 @@ if (!function_exists('http_status_header')) {
         // Send the 'Status' header, which is often used for compatibility with older clients
         @header("Status: $status {$message}", true, $status);
 
+        // Set the status code as redirect status
+        $_SERVER["REDIRECT_STATUS"] = $status;
+        
         return true;
     }
 }

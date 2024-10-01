@@ -26,18 +26,18 @@ use \JsonException;
 /**
  * Anonymous methods to retrieve values from HTTP request fields. 
  * 
- * @method mixed getPut(string $key, mixed $default = null)       Get a field value from HTTP PUT request.
- * @method mixed getOptions(string $key, mixed $default = null)   Get a field value from HTTP OPTIONS request.
- * @method mixed getPatch(string $key, mixed $default = null)     Get a field value from HTTP PATCH request.
- * @method mixed getHead(string $key, mixed $default = null)      Get a field value from HTTP HEAD request.
- * @method mixed getConnect(string $key, mixed $default = null)   Get a field value from HTTP CONNECT request.
- * @method mixed getTrace(string $key, mixed $default = null)     Get a field value from HTTP TRACE request.
- * @method mixed getPropfind(string $key, mixed $default = null)  Get a field value from HTTP PROPFIND request.
- * @method mixed getMkcol(string $key, mixed $default = null)     Get a field value from HTTP MKCOL request.
- * @method mixed getCopy(string $key, mixed $default = null)      Get a field value from HTTP COPY request.
- * @method mixed getMove(string $key, mixed $default = null)      Get a field value from HTTP MOVE request.
- * @method mixed getLock(string $key, mixed $default = null)      Get a field value from HTTP LOCK request.
- * @method mixed getUnlock(string $key, mixed $default = null)    Get a field value from HTTP UNLOCK request.
+ * @method mixed getPut(string $field, mixed $default = null)       Get a field value from HTTP PUT request.
+ * @method mixed getOptions(string $field, mixed $default = null)   Get a field value from HTTP OPTIONS request.
+ * @method mixed getPatch(string $field, mixed $default = null)     Get a field value from HTTP PATCH request.
+ * @method mixed getHead(string $field, mixed $default = null)      Get a field value from HTTP HEAD request.
+ * @method mixed getConnect(string $field, mixed $default = null)   Get a field value from HTTP CONNECT request.
+ * @method mixed getTrace(string $field, mixed $default = null)     Get a field value from HTTP TRACE request.
+ * @method mixed getPropfind(string $field, mixed $default = null)  Get a field value from HTTP PROPFIND request.
+ * @method mixed getMkcol(string $field, mixed $default = null)     Get a field value from HTTP MKCOL request.
+ * @method mixed getCopy(string $field, mixed $default = null)      Get a field value from HTTP COPY request.
+ * @method mixed getMove(string $field, mixed $default = null)      Get a field value from HTTP MOVE request.
+ * @method mixed getLock(string $field, mixed $default = null)      Get a field value from HTTP LOCK request.
+ * @method mixed getUnlock(string $field, mixed $default = null)    Get a field value from HTTP UNLOCK request.
  * 
  * @param string $key  The field key to retrieve the value value from.
  * @param mixed $default An optional default value to return if the key is not found.
@@ -116,12 +116,18 @@ final class Request implements HttpRequestInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function __call(string $key, array $arguments): mixed 
+    public function __call(string $method, array $arguments): mixed 
     {
-        $method = strtoupper(substr($key, 3));
-        $body = $this->body[$method] ?? [];
+        $field = $arguments[0] ?? null;
 
-        return $body[$arguments[0]] ?? $arguments[1] ?? null;
+        if($field === null){
+            return null;
+        }
+        
+        $httpMethod = strtoupper(substr($method, 3));
+        $body = $this->body[$httpMethod] ?? [];
+
+        return $body[$field] ?? ($arguments[1] ?? null);
     }
 
     /**
@@ -175,17 +181,17 @@ final class Request implements HttpRequestInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function getGet(string $key, mixed $default = null): mixed
+    public function getGet(string $field, mixed $default = null): mixed
     {
-        return $this->body['GET'][$key] ?? $default;
+        return $this->body['GET'][$field] ?? $default;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getPost(string $key, mixed $default = null): mixed
+    public function getPost(string $field, mixed $default = null): mixed
     {
-        return $this->body['POST'][$key] ?? $default;
+        return $this->body['POST'][$field] ?? $default;
     }
 
     /**
@@ -234,11 +240,11 @@ final class Request implements HttpRequestInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function getArray(string $method, string $key, array $default = []): array
+    public function getArray(string $method, string $field, array $default = []): array
     {
         $method = strtoupper($method);
-        if (isset($this->body[$method][$key])) {
-            $result = $this->getBody()[$key];
+        if (isset($this->body[$method][$field])) {
+            $result = $this->getBody()[$field];
     
             if(is_string($result) && json_validate($result)) {
                 try{

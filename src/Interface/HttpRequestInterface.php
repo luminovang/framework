@@ -17,18 +17,18 @@ use \Luminova\Exceptions\SecurityException;
 /**
  * Anonymous methods to retrieve values from HTTP request fields. 
  * 
- * @method mixed getPut(string $key, mixed $default = null)       Get a field value from HTTP PUT request.
- * @method mixed getOptions(string $key, mixed $default = null)   Get a field value from HTTP OPTIONS request.
- * @method mixed getPatch(string $key, mixed $default = null)     Get a field value from HTTP PATCH request.
- * @method mixed getHead(string $key, mixed $default = null)      Get a field value from HTTP HEAD request.
- * @method mixed getConnect(string $key, mixed $default = null)   Get a field value from HTTP CONNECT request.
- * @method mixed getTrace(string $key, mixed $default = null)     Get a field value from HTTP TRACE request.
- * @method mixed getPropfind(string $key, mixed $default = null)  Get a field value from HTTP PROPFIND request.
- * @method mixed getMkcol(string $key, mixed $default = null)     Get a field value from HTTP MKCOL request.
- * @method mixed getCopy(string $key, mixed $default = null)      Get a field value from HTTP COPY request.
- * @method mixed getMove(string $key, mixed $default = null)      Get a field value from HTTP MOVE request.
- * @method mixed getLock(string $key, mixed $default = null)      Get a field value from HTTP LOCK request.
- * @method mixed getUnlock(string $key, mixed $default = null)    Get a field value from HTTP UNLOCK request.
+ * @method mixed getPut(string $field, mixed $default = null)       Get a field value from HTTP PUT request.
+ * @method mixed getOptions(string $field, mixed $default = null)   Get a field value from HTTP OPTIONS request.
+ * @method mixed getPatch(string $field, mixed $default = null)     Get a field value from HTTP PATCH request.
+ * @method mixed getHead(string $field, mixed $default = null)      Get a field value from HTTP HEAD request.
+ * @method mixed getConnect(string $field, mixed $default = null)   Get a field value from HTTP CONNECT request.
+ * @method mixed getTrace(string $field, mixed $default = null)     Get a field value from HTTP TRACE request.
+ * @method mixed getPropfind(string $field, mixed $default = null)  Get a field value from HTTP PROPFIND request.
+ * @method mixed getMkcol(string $field, mixed $default = null)     Get a field value from HTTP MKCOL request.
+ * @method mixed getCopy(string $field, mixed $default = null)      Get a field value from HTTP COPY request.
+ * @method mixed getMove(string $field, mixed $default = null)      Get a field value from HTTP MOVE request.
+ * @method mixed getLock(string $field, mixed $default = null)      Get a field value from HTTP LOCK request.
+ * @method mixed getUnlock(string $field, mixed $default = null)    Get a field value from HTTP UNLOCK request.
  * 
  * @param string $key  The field key to retrieve the value value from.
  * @param mixed $default An optional default value to return if the key is not found.
@@ -40,13 +40,13 @@ interface HttpRequestInterface
     /**
      * Get a value from any HTTP request method.
      *
-     * @param string $key HTTP request body key (e.g, `$request->getPut('field', 'default value')`).
+     * @param string $method HTTP request body key (e.g, `$request->getPut('field', 'default value')`).
      * @param array $arguments Arguments as the default value (default: blank string).
      * 
      * @return mixed Return value from the HTTP request if set; otherwise, return the default value.
      * @internal
      */
-    public function __call(string $key, array $arguments): mixed;
+    public function __call(string $method, array $arguments): mixed;
 
     /**
      * Converts the request body to a raw string format based on the content type.
@@ -83,7 +83,7 @@ interface HttpRequestInterface
      * 
      * @return mixed Return the value from HTTP request method body based on key.
      */
-    public function getGet(string $key, mixed $default = null): mixed;
+    public function getGet(string $field, mixed $default = null): mixed;
 
     /**
      * Get a field value from HTTP POST request.
@@ -93,19 +93,19 @@ interface HttpRequestInterface
      * 
      * @return mixed Return the value from HTTP request method body based on key.
      */
-    public function getPost(string $key, mixed $default = null): mixed;
+    public function getPost(string $field, mixed $default = null): mixed;
 
     /**
      * Get a field value from HTTP request body as an array.
      *
      * @param string $method The HTTP request method (e.g, `GET`, `POST`, etc..).
-     * @param string $key The request body name to return.
+     * @param string $field The request body field name to return.
      * @param array $default Optional default value to return.
      * 
      * @return array Return array of HTTP request method key values.
      * @throws InvalidArgumentException Throws if unsupported HTTP method was passed.
      */
-    public function getArray(string $method, string $key, array $default = []): array;
+    public function getArray(string $method, string $field, array $default = []): array;
 
     /**
      * Get the entire request body as an array or JSON object.
