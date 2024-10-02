@@ -528,9 +528,9 @@ final class AttrCompiler
     }
 
     /**
-     * Checks if the given pattern represents a home path.
+     * Checks if pattern represents a home path.
      *
-     * A home path is defined as one of the following:
+     * A home path may be defined as one of the following:
      * - The root path ("/")
      * - A wildcard path ("/*" or "/.*")
      * - A path that matches any character or segment ("/?", "/.", "/-", "/_")
