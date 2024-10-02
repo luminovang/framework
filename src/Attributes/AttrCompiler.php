@@ -491,7 +491,7 @@ final class AttrCompiler
     }
 
     /**
-     * Extract the first segment (prefix) from a dynamic pattern.
+     * Extract the first segment (prefix) from a prefix pattern after a leading slash.
      * 
      * @return string|null The first segment (prefix), or null if no valid prefix is found.
      */
@@ -503,13 +503,60 @@ final class AttrCompiler
             return null;
         }
 
-        if($pattern === '/'){
+        if(self::isHome($pattern)){
             return 'web';
         }
         
+        // Remove all regex patterns
+        $pattern = preg_replace('/^#|#$|\/\*\?|\(\?[^\)]+\)/', '', $pattern);
+
+        if(self::isHome($pattern)){
+            return 'web';
+        }
+
+        // Remove all remaining regex patterns
+        $pattern = preg_replace('/\([^\)]+\)|#|\\\|^\^|^\//', '', $pattern);
+        $pattern = '/' . trim($pattern, '/');
+
+        if(self::isHome($pattern)){
+            return 'web';
+        }
+
         $matches = [];
-        preg_match('/^\/([a-zA-Z0-9_-.]+)(?:\/|$)/', $pattern, $matches);
+        preg_match('/^\/([a-zA-Z0-9_.-]+)/', $pattern, $matches);
         return $matches[1] ?? 'web';
+    }
+
+    /**
+     * Checks if the given pattern represents a home path.
+     *
+     * A home path is defined as one of the following:
+     * - The root path ("/")
+     * - A wildcard path ("/*" or "/.*")
+     * - A path that matches any character or segment ("/?", "/.", "/-", "/_")
+     *
+     * @param string $pattern The route pattern to check.
+     * 
+     * @return bool True if the pattern is a home path, false otherwise.
+     */
+    private static function isHome(string $pattern): bool 
+    {
+        return (
+            '/' === $pattern || 
+            '/*' === $pattern || 
+            '/?' === $pattern || 
+            '/.*' === $pattern || 
+            '/?.*' === $pattern || 
+            '/?.*?' === $pattern || 
+            '/?(.*)' === $pattern || 
+            '/?(.*)?' === $pattern || 
+            '/.' === $pattern || 
+            '/-' === $pattern || 
+            '/_' === $pattern ||
+            '.' === $pattern || 
+            '-' === $pattern || 
+            '_' === $pattern
+        );
     }
 
     /**
@@ -597,7 +644,7 @@ final class AttrCompiler
             ? $pattern 
             : Router::normalizePatterns($pattern);
 
-        return ('/' === $normalize && '/' === $uri) 
+        return ('/' === $uri && self::isHome($normalize)) 
             ? true 
             : preg_match("#^{$normalize}(\/.*)?$#", $uri) === 1;
     }
