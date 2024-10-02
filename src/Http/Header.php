@@ -128,14 +128,12 @@ class Header implements Countable
      *
      * @param string $key Key name of the server variable.
      *
-     * @return mixed Return the value of the specified server variable, or all server variables if $name is null.
+     * @return mixed Return the value of the specified server variable.
      * @internal
      */
     public static function server(string $key): mixed
     {
-        return array_key_exists($key, $_SERVER) 
-            ? $_SERVER[$key] 
-            : null;
+        return $_SERVER[$key] ?? null;
     }
 
     /**
