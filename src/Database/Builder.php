@@ -164,6 +164,13 @@ final class Builder extends Connection
     private bool $caching = true;
 
     /**
+     * is cache method is called for current query.
+     * 
+     * @var bool $queryWithCache 
+     */
+    private bool $queryWithCache = false;
+
+    /**
      * Print query string.
      * 
      * @var bool $printQuery 
@@ -970,6 +977,7 @@ final class Builder extends Connection
                 self::$cache->setFolder('database' . ($subfolder ? DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS) : ''));
             }
 
+            $this->queryWithCache = true;
             self::$cache->setStorage('database_' . ($storage ?? $this->tableName ?? 'capture'))->setExpire($expiry);
             $this->cacheKey = md5($key);
             // Check if the cache exists and not expired
@@ -1066,7 +1074,12 @@ final class Builder extends Connection
         $placeholder ??= [];
         static::$handler = null;
 
-        if($mode !== RETURN_STMT && $this->hasCache && (self::$cache instanceof BaseCache)){
+        if(
+            $mode !== RETURN_STMT && 
+            $this->queryWithCache && 
+            $this->hasCache && 
+            (self::$cache instanceof BaseCache)
+        ){
             $response = self::$cache->getItem($this->cacheKey);
 
             if($response !== null){
@@ -1088,13 +1101,17 @@ final class Builder extends Connection
 
         try {
             $response = $this->returnExecute($this->buildQuery, $mode);
-
-            if($mode === RETURN_STMT || !(self::$cache instanceof BaseCache)){
+            if(
+                $mode === RETURN_STMT || 
+                !$this->queryWithCache || 
+                !(self::$cache instanceof BaseCache)
+            ){
                 return $response;
             }
 
             self::$cache->set($this->cacheKey, $response);
             self::$cache = null;
+            $this->queryWithCache = false;
 
             return $response;
         } catch (DatabaseException|Exception $e) {
@@ -1241,7 +1258,13 @@ final class Builder extends Connection
     ): mixed
     {
         static::$handler = null;
-        if(!$this->printQuery && $return !== 'stmt' && $this->hasCache && (self::$cache instanceof BaseCache)){
+        if(
+            !$this->printQuery && 
+            $return !== 'stmt' && 
+            $this->queryWithCache && 
+            $this->hasCache &&
+            (self::$cache instanceof BaseCache)
+        ){
             $response = self::$cache->getItem($this->cacheKey);
 
             if($response !== null){
@@ -1275,12 +1298,18 @@ final class Builder extends Connection
         try {
             $response = $this->returnExecutedResult($sqlQuery, $return, $result, $mode);
 
-            if($this->printQuery || $return === 'stmt' || !(self::$cache instanceof BaseCache)){
+            if(
+                $this->printQuery || 
+                $return === 'stmt' || 
+                !$this->queryWithCache || 
+                !(self::$cache instanceof BaseCache)
+            ){
                 return $response;
             }
 
             self::$cache->set($this->cacheKey, $response);
             self::$cache = null;
+            $this->queryWithCache = false;
 
             return $response;
         } catch (DatabaseException|Exception $e) {
@@ -2543,6 +2572,7 @@ final class Builder extends Connection
         $this->querySetValues = [];
         $this->hasCache = false;
         $this->printQuery = false;
+        $this->queryWithCache = false;
         $this->bindValues = [];
         $this->buildQuery = '';
         if($this->resultType !== 'stmt'){

@@ -167,7 +167,7 @@ final class Foundation
             $view = 'info.php';
         }elseif (static::isCommand()) {
             $view = 'cli.php';
-        } elseif (static::isApiContext()) {
+        } elseif (static::isApiPrefix()) {
             $view = (defined('IS_UP') ? env('app.api.prefix', 'api')  . '.php' : 'api.php');
         } else {
             $view = 'errors.php';
@@ -321,7 +321,7 @@ final class Foundation
 
         // Remove static cache extension to avoid creating 2 versions of same cache
         // while serving static content (e.g, .html).
-        if($types = env('page.caching.statics', false)){
+        if(($types = env('page.caching.statics', false)) !== false){
             $url = preg_replace('/\.(' . $types . ')$/i', '', $url);
         }
         
@@ -329,12 +329,12 @@ final class Foundation
     }
 
     /**
-     * Check if the request URL indicates an API endpoint.
+     * Check if the request URL indicates an API prefix endpoint.
      * This method checks if the URL path starts with '/api' or 'public/api'.
      * 
      * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
     */
-    public static function isApiContext(): bool
+    public static function isApiPrefix(): bool
     {
         return static::getSegments()[0] === (defined('IS_UP') ? env('app.api.prefix', 'api') : 'api');
     }
@@ -346,16 +346,14 @@ final class Foundation
     */
     public static function isCommand(): bool
     {
-        if(isset($_SERVER['REMOTE_ADDR'])){
+        if(isset($_SERVER['REMOTE_ADDR']) || isset($_SERVER['HTTP_USER_AGENT'])){
             return false;
         }
 
-        if(defined('STDIN') || php_sapi_name() === 'cli'){
-            return true;
-        }
-
         return (
-            (!isset($_SERVER['HTTP_USER_AGENT']) && isset($_SERVER['argv'])) || 
+            php_sapi_name() === 'cli' || 
+            isset($_SERVER['argv']) || 
+            defined('STDIN')|| 
             array_key_exists('SHELL', $_ENV)
         );
     }
@@ -378,11 +376,9 @@ final class Foundation
             }
         }
 
-        if ($matching === '') {
-            return $path;
-        }
-
-        return substr($path, strpos($path, $matching));
+        return ($matching === '') 
+            ? $path 
+            : substr($path, strpos($path, $matching));
     }
 
     /**

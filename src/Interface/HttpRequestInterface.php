@@ -17,18 +17,18 @@ use \Luminova\Exceptions\SecurityException;
 /**
  * Anonymous methods to retrieve values from HTTP request fields. 
  * 
- * @method mixed getPut(string $field, mixed $default = null)       Get a field value from HTTP PUT request.
- * @method mixed getOptions(string $field, mixed $default = null)   Get a field value from HTTP OPTIONS request.
- * @method mixed getPatch(string $field, mixed $default = null)     Get a field value from HTTP PATCH request.
- * @method mixed getHead(string $field, mixed $default = null)      Get a field value from HTTP HEAD request.
- * @method mixed getConnect(string $field, mixed $default = null)   Get a field value from HTTP CONNECT request.
- * @method mixed getTrace(string $field, mixed $default = null)     Get a field value from HTTP TRACE request.
- * @method mixed getPropfind(string $field, mixed $default = null)  Get a field value from HTTP PROPFIND request.
- * @method mixed getMkcol(string $field, mixed $default = null)     Get a field value from HTTP MKCOL request.
- * @method mixed getCopy(string $field, mixed $default = null)      Get a field value from HTTP COPY request.
- * @method mixed getMove(string $field, mixed $default = null)      Get a field value from HTTP MOVE request.
- * @method mixed getLock(string $field, mixed $default = null)      Get a field value from HTTP LOCK request.
- * @method mixed getUnlock(string $field, mixed $default = null)    Get a field value from HTTP UNLOCK request.
+ * @method mixed getPut(string|null $field, mixed $default = null)       Get a field value from HTTP PUT request or entire fields if `$field` param is null.
+ * @method mixed getOptions(string|null $field, mixed $default = null)   Get a field value from HTTP OPTIONS request  or entire fields if `$field` param is null.
+ * @method mixed getPatch(string|null $field, mixed $default = null)     Get a field value from HTTP PATCH request or entire fields if `$field` param is null.
+ * @method mixed getHead(string|null $field, mixed $default = null)      Get a field value from HTTP HEAD request or entire fields if `$field` param is null.
+ * @method mixed getConnect(string|null $field, mixed $default = null)   Get a field value from HTTP CONNECT request or entire fields if `$field` param is null.
+ * @method mixed getTrace(string|null $field, mixed $default = null)     Get a field value from HTTP TRACE request or entire fields if `$field` param is null.
+ * @method mixed getPropfind(string|null $field, mixed $default = null)  Get a field value from HTTP PROPFIND request or entire fields if `$field` param is null.
+ * @method mixed getMkcol(string|null $field, mixed $default = null)     Get a field value from HTTP MKCOL request or entire fields if `$field` param is null.
+ * @method mixed getCopy(string|null $field, mixed $default = null)      Get a field value from HTTP COPY request or entire fields if `$field` param is null.
+ * @method mixed getMove(string|null $field, mixed $default = null)      Get a field value from HTTP MOVE request or entire fields if `$field` param is null.
+ * @method mixed getLock(string|null $field, mixed $default = null)      Get a field value from HTTP LOCK request or entire fields if `$field` param is null.
+ * @method mixed getUnlock(string|null $field, mixed $default = null)    Get a field value from HTTP UNLOCK request or entire fields if `$field` param is null.
  * 
  * @param string $key  The field key to retrieve the value value from.
  * @param mixed $default An optional default value to return if the key is not found.
@@ -76,24 +76,24 @@ interface HttpRequestInterface
     public function toMultipart(): string;
 
     /**
-     * Get a field value from HTTP GET request.
+     * Get a field value from HTTP GET request or entire fields if `$field` param is null.
      *
-     * @param string $key The field key to retrieve the value value from.
+     * @param string|null $field The field key to retrieve the value value from.
      * @param mixed $default An optional default value to return if the key is not found (default: null).
      * 
      * @return mixed Return the value from HTTP request method body based on key.
      */
-    public function getGet(string $field, mixed $default = null): mixed;
+    public function getGet(string|null $field, mixed $default = null): mixed;
 
     /**
-     * Get a field value from HTTP POST request.
+     * Get a field value from HTTP POST request or entire fields if `$field` param is null.
      *
-     * @param string $key The field key to retrieve the value value from.
+     * @param string|null $field The field key to retrieve the value value from.
      * @param mixed $default An optional default value to return if the key is not found (default: null).
      * 
      * @return mixed Return the value from HTTP request method body based on key.
      */
-    public function getPost(string $field, mixed $default = null): mixed;
+    public function getPost(string|null $field, mixed $default = null): mixed;
 
     /**
      * Get a field value from HTTP request body as an array.

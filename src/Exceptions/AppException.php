@@ -321,6 +321,11 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
         ?Throwable $previous = null
     ): void
     {
+        if($previous instanceof self){
+            $previous->handle();
+            return;
+        }
+
         (new static($message, $code, $previous))->handle();
     }
 
