@@ -267,7 +267,7 @@ class Header implements Countable
             $headers = array_replace(static::getSystemHeaders(), $headers);
         }
 
-        if (Foundation::isApiContext()) {
+        if (Foundation::isApiPrefix()) {
             self::$config ??= new Apis();
             $origin = static::server('HTTP_ORIGIN');
             
