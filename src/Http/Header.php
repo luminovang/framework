@@ -59,7 +59,7 @@ class Header implements Countable
         self::$variables = $variables ?? static::getHeaders();
     }
 
-   /**
+    /**
      * Get header variables.
      *
      * @param string|null $name Optional name of the server variable.
@@ -113,7 +113,7 @@ class Header implements Countable
         return array_key_exists($key, self::$variables);
     }
 
-     /**
+    /**
      * Get the total number of server variables.
      * 
      * @return int Return total number of server variables.
@@ -123,7 +123,7 @@ class Header implements Countable
         return count(self::$variables);
     }
 
-     /**
+    /**
      * Get server variables.
      *
      * @param string $key Key name of the server variable.
@@ -166,13 +166,13 @@ class Header implements Countable
     }
 
     /**
-     * Retrieves specific HTTP headers from the current request, 
-     * filtering for content-related headers.
+     * Retrieves specific HTTP `Content-Type`, `Content-Encoding` and `Content-Length` headers from sent headers.
      * 
      * @return array Return n associative array containing 'Content-Type', 
      *              'Content-Length', and 'Content-Encoding' headers.
+     * @internal
      */
-    public static function requestHeaders(): array
+    public static function getSentHeaders(): array
     {
         $headers = headers_list();
         $info = [];
@@ -185,13 +185,12 @@ class Header implements Countable
             }
 
             [$name, $value] = explode(':', $header, 2);
-            $value = trim($value);
             $key = trim($name);
 
             if ($key === 'Content-Type' || $key === 'Content-Encoding') {
-                $info[$key] = $value;
-            } elseif ($key === 'Content-Length') {
-                $info[$key] = (int) $value;
+                $info[$key] = trim($value);
+            } elseif($key === 'Content-Length') {
+                $info[$key] = (int) trim($value);
             }
         }
 
@@ -293,15 +292,15 @@ class Header implements Countable
         $origin = static::server('HTTP_ORIGIN');
 
         if(!$origin && self::$config->forbidEmptyOrigin){
-            self::terminateRequest(400, 'Invalid request: missing origin.');
+            self::terminateRequest(400, 'Invalid request: missing origin.', 'forbidEmptyOrigin');
             return false;
         }
 
-        if ($origin && !isset($headers['Access-Control-Allow-Origin']) && !empty(self::$config->allowOrigins)) {
+        if ($origin && self::$config->allowOrigins) {
             $allowed = self::isAllowedOrigin($origin);
             
             if (!$allowed) {
-                self::terminateRequest(403, 'Access denied: origin not allowed.');
+                self::terminateRequest(403, 'Access denied: origin not allowed.', 'allowOrigins');
                 return false;
             }
     
@@ -312,7 +311,7 @@ class Header implements Countable
             $allowed = self::isAllowedHeaders();
 
             if ($allowed !== true) {
-                self::terminateRequest(400, "Invalid header: {$allowed} found in the request.");
+                self::terminateRequest(400, "Invalid header: {$allowed} found in the request.", 'allowHeaders');
                 return false;
             }
 
@@ -338,14 +337,15 @@ class Header implements Countable
             return;
         }
 
-        $remove = [];
-        foreach ($headers as $header => $value) {
-            if (!$header || ($header === 'default_headers' || ($header === 'Content-Encoding' && $value === false))) {
-                continue;
-            }
+        $xPowered = env('x.powered', true);
 
-            if($value === ''){
-                $remove[] = $header;
+        foreach ($headers as $header => $value) {
+            if (
+                !$header || 
+                $value === '' ||
+                ($header === 'X-Powered-By' && !$xPowered) ||
+                ($header === 'default_headers' || ($header === 'Content-Encoding' && $value === false))
+            ) {
                 continue;
             }
 
@@ -359,14 +359,6 @@ class Header implements Countable
                     : $value;
                 header("{$header}: {$value}");
             }
-        }
-
-        if (!env('x.powered', true)) {
-            $remove[] = 'X-Powered-By';
-        }
-
-        if($remove !== []){
-            array_map('header_remove', $remove);
         }
     }
 
@@ -434,6 +426,10 @@ class Header implements Countable
             return '*';
         }
 
+        if ($accept === $origin) {
+            return $origin;
+        }
+
         foreach ([$origin, Func::mainDomain($origin)] as $from) {
             if ($accept === $from || in_array($from, (array) $accept)) {
                 return $from;
@@ -450,7 +446,7 @@ class Header implements Countable
      */
     private static function isAllowedHeaders(): string|bool
     {
-        foreach (getallheaders() as $name => $value) {
+        foreach (self::getHeaders() as $name => $value) {
             if (!in_array($name, self::$config->allowHeaders)) {
                 return $name;
             }
@@ -464,12 +460,18 @@ class Header implements Countable
      *
      * @param int $status HTTP status code.
      * @param string $message Termination message.
+     * @param string $var The configuration variable.
      *
      * @return void
      */
-    private static function terminateRequest(int $status, string $message): void
+    private static function terminateRequest(int $status, string $message, string $var): void
     {
         self::sendStatus($status);
+
+        if (!PRODUCTION) {
+            $message .= "\nCaused by API configuration in '/app/Config/Apis.php' at \App\Config\Apis::\${$var}.";
+        }
+
         exit($message);
     }
 }

@@ -1127,7 +1127,7 @@ trait View
             $canCacheContent = $content !== '';
         }
 
-        $headers ??= Header::requestHeaders();
+        $headers ??= Header::getSentHeaders();
 
         return [
             $customHeaders + $headers, 

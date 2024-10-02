@@ -112,9 +112,8 @@ final class FileDelivery
             return false;
         }
 
+        $img = new NanoImage();
         try{
-            $img = new NanoImage();
-         
             $img->open($filename);
             $img->resize(
                 $options['width'] ?? 200, 
@@ -123,17 +122,15 @@ final class FileDelivery
             );
 
             static::cacheHeaders($headers, $basename, null, $expiry);
-            $image = $img->get($options['quality']??100);
-            if(is_string($image)){
-                echo $image;
-            }
-
+            $result = $img->get($options['quality']??100);
             $img->free();
+
+            return $result;
         }catch(Exception $e){
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
-        return true;
+        return false;
     }
 
     /**
@@ -142,7 +139,7 @@ final class FileDelivery
      * @param string $url_hash The encrypted URL hash.
      * @param array $headers Additional headers to set.
      * 
-     * @return bool True if file output is successful, false otherwise.
+     * @return bool Return true if file output is successful, false otherwise.
      * @throws EncryptionException Throws if decryption failed.
     */
     public function temporal(string $url_hash, array $headers = []): bool
@@ -295,6 +292,7 @@ final class FileDelivery
         }
 
         $headers['Content-Disposition'] = 'inline; filename="' . $basename . '"';
+
         if($filename !== null){
             $headers['Content-Length'] = filesize($filename);
         }
