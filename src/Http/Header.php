@@ -267,50 +267,60 @@ class Header implements Countable
             $headers = array_replace(static::getSystemHeaders(), $headers);
         }
 
-        if (Foundation::isApiPrefix()) {
-            self::$config ??= new Apis();
-            $origin = static::server('HTTP_ORIGIN');
+        if(self::isValidRestFullHeaders($headers)){
+            if ($status !== null) {
+                self::sendStatus($status);
+            }
+
+            self::send($headers, false, true);
+        }
+    }
+
+    /**
+     * Parse and validate REST API headers.
+     * 
+     * @param array<string,mixed> &$headers Headers passed by reference.
+     * 
+     * @return bool Return true if request origin is valid, false otherwise.
+     */
+    public static function isValidRestFullHeaders(array &$headers): bool 
+    {
+        if (!Foundation::isApiPrefix()) {
+            return true;
+        }
+
+        self::$config ??= new Apis();
+        $origin = static::server('HTTP_ORIGIN');
+
+        if(!$origin && self::$config->forbidEmptyOrigin){
+            self::terminateRequest(400, 'Invalid request: missing origin.');
+            return false;
+        }
+
+        if ($origin && !isset($headers['Access-Control-Allow-Origin']) && !empty(self::$config->allowOrigins)) {
+            $allowed = self::isAllowedOrigin($origin);
             
-            if($origin){
-                if (!isset($headers['Access-Control-Allow-Origin']) && !empty(self::$config->allowOrigins)) {
-                    $allowed = null;
-                    if (self::$config->allowOrigins === '*' || self::$config->allowOrigins === 'null') {
-                        $allowed = '*';
-                    } else {
-                        foreach ([$origin, Func::mainDomain($origin)] as $value) {
-                            if (in_array($value, (array) self::$config->allowOrigins)) {
-                                $allowed = $value;
-                                break;
-                            }
-                        }
-                    }
+            if (!$allowed) {
+                self::terminateRequest(403, 'Access denied: origin not allowed.');
+                return false;
+            }
+    
+            $headers['Access-Control-Allow-Origin'] = $allowed;
+        }
+        
+        if (self::$config->allowHeaders !== []) {
+            $allowed = self::isAllowedHeaders();
 
-                    if ($allowed === null) {
-                        self::sendStatus(403);
-                        exit('Origin Forbidden');
-                    }
-
-                    $headers['Access-Control-Allow-Origin'] = $allowed;
-                }
-            }elseif(!$origin && self::$config->forbidEmptyOrigin){
-                self::sendStatus(400);
-                exit('Bad Origin Request');
+            if ($allowed !== true) {
+                self::terminateRequest(400, "Invalid header: {$allowed} found in the request.");
+                return false;
             }
 
-            if (!isset($headers['Access-Control-Allow-Headers']) && self::$config->allowHeaders !== []) {
-                $headers['Access-Control-Allow-Headers'] = implode(', ', self::$config->allowHeaders);
-            }
-
-            if (!isset($headers['Access-Control-Allow-Credentials'])) {
-                $headers['Access-Control-Allow-Credentials'] = (self::$config->allowCredentials ? 'true' : 'false');
-            }
+            $headers['Access-Control-Allow-Headers'] = implode(', ', self::$config->allowHeaders);
         }
 
-        if ($status !== null) {
-            self::sendStatus($status);
-        }
-
-        self::send($headers, false, true);
+        $headers['Access-Control-Allow-Credentials'] = (self::$config->allowCredentials ? 'true' : 'false');
+        return true;
     }
 
     /**
@@ -407,5 +417,59 @@ class Header implements Countable
         }
 
         return false;
+    }
+
+    /**
+     * Get the allowed origin based on the config.
+     * 
+     * @param string $origin The origin to check.
+     * 
+     * @return string|null Return the allowed origin or null if not allowed.
+     */
+    private static function isAllowedOrigin(string $origin): ?string
+    {
+        $accept = self::$config->allowOrigins;
+
+        if ($accept === '*' || $accept === 'null') {
+            return '*';
+        }
+
+        foreach ([$origin, Func::mainDomain($origin)] as $from) {
+            if ($accept === $from || in_array($from, (array) $accept)) {
+                return $from;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Validates request headers against allowed headers.
+     *
+     * @return string|true Return true if all headers are valid, false otherwise.
+     */
+    private static function isAllowedHeaders(): string|bool
+    {
+        foreach (getallheaders() as $name => $value) {
+            if (!in_array($name, self::$config->allowHeaders)) {
+                return $name;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Terminates the request by sending the status and exiting.
+     *
+     * @param int $status HTTP status code.
+     * @param string $message Termination message.
+     *
+     * @return void
+     */
+    private static function terminateRequest(int $status, string $message): void
+    {
+        self::sendStatus($status);
+        exit($message);
     }
 }
