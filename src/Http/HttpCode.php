@@ -15,7 +15,7 @@ final class HttpCode
      * Http status codes and messages.
      * 
      * @var array<int,string> $codes
-    */
+     */
     public static array $codes = [
         0 => 'Invalid',
         
@@ -105,7 +105,7 @@ final class HttpCode
 
     /**
      * Prevent instantiation.
-    */
+     */
     private function __construct() {}
 
     /**
@@ -114,14 +114,12 @@ final class HttpCode
      * @param int|null $code The http status code (e.g, 200, 404 etc) (default: null).
      * 
      * @return array<int,string>string|null Return the status code message, null if code not found or array of status codes if null is passed.
-    */
+     */
     public static function get(?int $code = null): array|string|null
     {
-        if($code === null){
-            return static::$codes;
-        }
-
-        return static::$codes[$code] ?? null;
+        return ($code === null) 
+            ? static::$codes
+            : (static::$codes[$code] ?? null);
     }
 
     /**
@@ -138,7 +136,7 @@ final class HttpCode
      * ```php
      * echo HttpCode::status200();
      * ```
-    */
+     */
     public static function __callStatic(string $name, array $arguments): ?string
     {
         if (preg_match('/^status(\d+)$/', $name, $matches)) {

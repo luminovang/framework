@@ -226,7 +226,7 @@ final class Uploader
         $destination = $path . $filename;
       
         if(file_exists($destination)){
-            if(($config->ifExisted ?? 'overwrite') === 'overwrite'){
+            if(($config->ifExisted ?? File::IF_EXIST_OVERWRITE) === File::IF_EXIST_OVERWRITE){
                 unlink($destination);
             }else{
                 $filename =  uniqid() . '-' . $filename;

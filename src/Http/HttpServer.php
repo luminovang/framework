@@ -21,7 +21,7 @@ class HttpServer
      * Track active child processes
      * 
      * @var int $activeProcesses
-    */
+     */
     private int $activeProcesses = 0; 
 
     /**
@@ -53,7 +53,7 @@ class HttpServer
     private int $microseconds = 0;
 
     /**
-     * The clas client ip address.
+     * Is connected.
      * 
      * @var bool $isConnected
      */
@@ -236,7 +236,7 @@ class HttpServer
      * @param int $microseconds The microseconds part of the timeout to be set (default: 0).
      * 
      * @return self Returns instance of HttpServer.
-    */
+     */
     public function setTimeout(int $timeout, int $microseconds = 0): self
     {
         if($this->isConnected()){

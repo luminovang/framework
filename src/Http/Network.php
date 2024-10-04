@@ -22,6 +22,7 @@ use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
 use \GuzzleHttp\Exception\GuzzleException;
 use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\Http\RequestException;
+use \Luminova\Exceptions\Http\ConnectException;
 use \Luminova\Exceptions\BadMethodCallException;
 use \Exception;
 
@@ -37,7 +38,7 @@ class Network implements NetworkInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function __construct(?NetworkClientInterface $client = null)
     {
         $this->client = $client ?? new Curl();
@@ -45,7 +46,7 @@ class Network implements NetworkInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function __call(string $method, $arguments): mixed
     {
         $client = $this->getClient();
@@ -70,7 +71,7 @@ class Network implements NetworkInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getClient(): ClientInterface|Curl|null
     {
         return $this->client->getClient();
@@ -78,7 +79,7 @@ class Network implements NetworkInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function get(
         string $url, 
         array $options = []
@@ -89,7 +90,7 @@ class Network implements NetworkInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function post(
         string $url, 
         array $options = []
@@ -100,7 +101,7 @@ class Network implements NetworkInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function request(
         string $method, 
         string $url, 
@@ -112,7 +113,7 @@ class Network implements NetworkInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function sendAsync(
         RequestInterface $request, 
         array $options = []
@@ -133,7 +134,7 @@ class Network implements NetworkInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function requestAsync(
         string $method, 
         UriInterface|string $uri = '', 

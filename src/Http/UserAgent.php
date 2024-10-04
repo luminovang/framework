@@ -114,7 +114,7 @@ class UserAgent implements Stringable
      * API configuration.
      * 
      * @var Browser $config
-    */
+     */
     private static ?Browser $config = null;
 
     /**
@@ -303,7 +303,7 @@ class UserAgent implements Stringable
      *  - Pass `NULL` to check if mobile is in array of mobile devices `self::$config->mobileKeywords`.
      * 
      * @return bool True if the user agent represents a mobile device, false otherwise.
-    */
+     */
     public function isMobile(?string $keyword = null): bool 
     {
         if($keyword === null){
@@ -335,7 +335,7 @@ class UserAgent implements Stringable
      *   If `NULL` is passed it will check if the user agent is any valid browser.
      * 
      * @return bool Return true if the user agent belongs to a specific browser, or if the given name matches the browser name or user-agent, false otherwise.
-    */
+     */
     public function isBrowser(?string $name = null): bool
     {
         if (!$this->isBrowser || $this->browser === '') {
@@ -357,7 +357,7 @@ class UserAgent implements Stringable
      * Check if the user agent string is trusted based on allowed browsers.
      * 
      * @return bool Return true if the user agent matches any of the browser name / patterns in allowed browsers, false otherwise.
-    */
+     */
     public function isTrusted(): bool
     {
         if ($this->useragent === '' || $this->useragent === '0') {
@@ -389,7 +389,7 @@ class UserAgent implements Stringable
      *  - `browser`, `mobile` or `robot`
      * 
      * @return bool Return true if matched otherwise false.
-    */
+     */
     public function is(string $name, ?string $lookup = null): bool 
     {
         if($lookup === null && $pattern = preg_replace('/(^\/|\/$|\/[imsxADSUXJu]*)/', '', $name)){
@@ -407,7 +407,7 @@ class UserAgent implements Stringable
      * @param bool $return_array Return type of user agent.
      * 
      * @return array|object User agent information
-    */
+     */
     private static function extract(array $matches, bool $return_array = false, bool $isBrowser = false): array|object
     {
         $browser = [
@@ -424,8 +424,9 @@ class UserAgent implements Stringable
 
     /**
      * Reset user agent information.
+     * 
      * @ignore
-    */
+     */
     protected function reset(): void 
     {
         $this->isBrowser = false;

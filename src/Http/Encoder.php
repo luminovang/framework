@@ -20,7 +20,7 @@ final class Encoder
      *               The encoding type will be 'gzip' or 'deflate' if compression is successful,
      *               otherwise, it will be false. The compressed content is the encoded content
      *               or the original content if compression fails.
-    */
+     */
     public static function encode(string $content): array
     {
         $encoding = env('compression.encoding', false);

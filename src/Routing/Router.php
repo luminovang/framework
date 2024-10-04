@@ -59,8 +59,9 @@ final class Router
      * Custom CLI URI.
      * 
      * @var string CLI_URI
-    */
-    private const CLI_URI = '__cli__';
+     * @internal
+     */
+    public const CLI_URI = '__cli__';
     
     /**
      * Application routes.

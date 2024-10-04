@@ -68,7 +68,7 @@ final class Request implements HttpRequestInterface, Stringable
      * Http request header instance.
      *
      * @var Header|null $header
-    */
+     */
     public ?Header $header = null;
 
     /**
@@ -340,8 +340,9 @@ final class Request implements HttpRequestInterface, Stringable
     public function isAJAX(): bool
     {
         $ajax = $this->header->get('X-Requested-With', $this->server->get('HTTP_X_REQUESTED_WITH', ''));
-
-        return strtolower($ajax) === 'xmlhttprequest';
+        return ($ajax === '')
+            ? false 
+            : strtolower($ajax) === 'xmlhttprequest';
     }
 
     /**
@@ -358,7 +359,9 @@ final class Request implements HttpRequestInterface, Stringable
     public function getQuery(): string
     {
         $queries = $this->getQueries();
-        return ($queries === null) ? '' : http_build_query($queries, '', '&', PHP_QUERY_RFC3986);
+        return ($queries === null) 
+            ? '' 
+            : http_build_query($queries, '', '&', PHP_QUERY_RFC3986);
     }
 
     /**
@@ -387,6 +390,14 @@ final class Request implements HttpRequestInterface, Stringable
      * {@inheritdoc}
      */
     public function getUri(): string
+    {
+        return $this->server->get('REQUEST_URI', '');
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getUrl(): string
     {
         return $this->getScheme() . '://' . $this->getHost() . $this->server->get('REQUEST_URI', '');
     }
@@ -521,7 +532,6 @@ final class Request implements HttpRequestInterface, Stringable
     public function getBrowser(): string
     {
        $agent = $this->getUserAgent();
-
        return $agent->getBrowser() . ' on ' . $agent->getPlatform();
     }
 
@@ -550,7 +560,7 @@ final class Request implements HttpRequestInterface, Stringable
 
         $origin = parse_url($origin, PHP_URL_HOST);
 
-        if (empty($origin)) {
+        if (!$origin) {
             return false;
         }
 
@@ -769,20 +779,16 @@ final class Request implements HttpRequestInterface, Stringable
             ? UPLOAD_ERR_NO_FILE
             : $error;
 
-        $mime = get_mime($temp);
-        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-
-        if ($extension === '' && $mime) {
-            [, $extension] = explode('/', $mime);
-            $name = uniqid('file_') . '.' . strtolower($extension);
-        }
+        $type ??= get_mime($temp);
+        $name ??= uniqid('file_');
+        $extension = pathinfo($name, PATHINFO_EXTENSION);
+        $extension = strtolower(($extension === '' && $type) ? (explode('/', $type, 2)[1] ?? '') : $extension);
 
         return new File(
             $index ?? 0,
             $name,
-            $type,
+            $type ?: null,
             (int) $size,
-            $mime ?: null,
             $extension ?: '',
             $temp,
             $error,

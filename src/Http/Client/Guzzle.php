@@ -26,12 +26,12 @@ class Guzzle implements NetworkClientInterface
      * HTTP guzzle client.
      * 
      * @var GuzzleClient $client
-    */
+     */
     private ?GuzzleClient $client = null;
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function __construct(private array $config = [])
     {
         $this->config['headers']['X-Powered-By'] = $this->config['headers']['X-Powered-By'] ?? Foundation::copyright();
@@ -41,7 +41,7 @@ class Guzzle implements NetworkClientInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getClient(): ?ClientInterface
     {
         return $this->client;
@@ -49,7 +49,7 @@ class Guzzle implements NetworkClientInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getConfig(?string $option = null): mixed
     {
         return $this->client->getConfig($option);

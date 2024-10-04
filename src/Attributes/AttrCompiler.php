@@ -364,7 +364,7 @@ final class AttrCompiler
     protected function load(
         string $path, 
         string $name, 
-        string $prefix = '__cli__', 
+        string $prefix = Router::CLI_URI, 
         string $uri = '/'
     ): RecursiveIteratorIterator|bool
     {

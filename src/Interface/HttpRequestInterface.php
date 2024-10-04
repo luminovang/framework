@@ -223,9 +223,22 @@ interface HttpRequestInterface
     public function getQueries(): ?array;
 
     /**
-     * Get current request URL including the scheme, host and query parameters.
-     * 
-     * @return string Return the request full URL.
+     * Get the full URL of the current request.
+     *
+     * This method returns the complete URL, including the protocol (e.g., http or https),
+     * the domain name, the path, and any query string parameters.
+     *
+     * @return string Return the full URL of the request.
+     */
+    public function getUrl(): string;
+
+    /**
+     * Get the URI (path and query string) of the current request (e.g, `/foo/bar?query=123`).
+     *
+     * This method returns only the URI, which includes the path and query string, 
+     * but excludes the protocol and domain name. 
+     *
+     * @return string Return the URI of the request (path and query string).
      */
     public function getUri(): string;
 

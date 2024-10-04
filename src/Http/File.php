@@ -30,7 +30,21 @@ class File
     public const UPLOAD_ERR_MIN_SIZE = 10;
 
     /**
-     * Error message.
+     * Retain old version and create new version of file if exists.
+     * 
+     * @var string IF_EXIST_RETAIN
+     */
+    public const IF_EXIST_RETAIN = 'retain';
+
+    /**
+     * Overwrite existing file if exists
+     * 
+     * @var string IF_EXIST_OVERWRITE
+     */
+    public const IF_EXIST_OVERWRITE = 'overwrite';
+
+    /**
+     * validation message.
      *
      * @var string|null $message
      */
@@ -65,7 +79,6 @@ class File
      * @param string|null $name The name of the file.
      * @param string|null $type The MIME type of the file.
      * @param int $size The size of the file in bytes.
-     * @param string|null $mime The MIME type of the file.
      * @param string|null $extension The file extension.
      * @param string|null $temp The temporary file path.
      * @param int $error The error code of the file upload (default: UPLOAD_ERR_NO_FILE).
@@ -76,11 +89,10 @@ class File
         protected ?string $name = null,
         protected ?string $type = null,
         protected int $size = 0,
-        protected ?string $mime = null,
         protected ?string $extension = null,
         protected ?string $temp = null,
         protected int $error = UPLOAD_ERR_NO_FILE,
-        protected ?string $content = null,
+        protected ?string $content = null
     ) {
         $this->message = null;
     }
@@ -100,7 +112,7 @@ class File
     /**
      * Gets the index of the file.
      *
-     * @return int The index of the file.
+     * @return int Return the index of the file.
      */
     public function getIndex(): int
     {
@@ -110,7 +122,7 @@ class File
     /**
      * Gets the name of the file.
      *
-     * @return string|null The name of the file.
+     * @return string|null Return the name of the file.
      */
     public function getName(): ?string
     {
@@ -118,19 +130,9 @@ class File
     }
 
     /**
-     * Gets the MIME type of the file.
-     *
-     * @return string|null The MIME type of the file.
-     */
-    public function getType(): ?string
-    {
-        return $this->type;
-    }
-
-    /**
      * Gets the size of the file in bytes.
      *
-     * @return int The size of the file in bytes.
+     * @return int Return the size of the file in bytes.
      */
     public function getSize(): int
     {
@@ -138,19 +140,31 @@ class File
     }
 
     /**
+     * Alias of {@see getType()}.
+     *
      * Gets the MIME type of the file.
      *
-     * @return string|null The MIME type of the file.
+     * @return string|null Return the MIME type of the file.
      */
     public function getMime(): ?string
     {
-        return $this->mime;
+        return $this->getType();
+    }
+
+    /**
+     * Gets the MIME type of the file.
+     *
+     * @return string|null Return the MIME type of the file.
+     */
+    public function getType(): ?string
+    {
+        return $this->type;
     }
 
     /**
      * Gets the file extension.
      *
-     * @return string|null The file extension.
+     * @return string|null Return the file extension.
      */
     public function getExtension(): ?string
     {
@@ -160,7 +174,7 @@ class File
     /**
      * Gets the temporary file path.
      *
-     * @return string|null The temporary file path.
+     * @return string|null Return the temporary file path.
      */
     public function getTemp(): ?string
     {
@@ -180,7 +194,7 @@ class File
     /**
      * Gets the upload error code of the file.
      *
-     * @return int The error code of the file upload.
+     * @return int Return the error code of the file upload.
      */
     public function getError(): int
     {
@@ -234,9 +248,9 @@ class File
     }
 
     /**
-     * Set upload file configurations.
+     * Set file configurations for upload behavior.
      * 
-     * @param array<string,mixed> $config Configuration data for the uploader.
+     * @param array<string,mixed> $config An associative array of file configuration key and value.
      * 
      * @return self Return instance of file object.
      * 
@@ -245,9 +259,9 @@ class File
      * - `upload_path`:    (string) The path where files will be uploaded.
      * - `max_size`:       (int) Maximum allowed file size in bytes.
      * - `min_size`:       (int) Minimum allowed file size in bytes.
-     * - `allowed_types`:  (string) Allowed file types separated by '|'.
+     * - `allowed_types`:  (string|string{}) Array of allowed file types or String separated by pipe symbol (e.g, `png|jpg|gif`).
      * - `chunk_length`:   (int) Length of chunk in bytes (default: 5242880).
-     * - `if_existed`:     (string) How to handle existing files [overwrite or retain] (default: overwrite).
+     * - `if_existed`:     (string) How to handle existing files [`File::IF_EXIST_OVERWRITE` or `File::IF_EXIST_RETAIN`] (default: `File::IF_EXIST_OVERWRITE`).
      * - `symlink`:        (string) Specify a valid path to create a symlink after upload was completed (e.g /public/assets/).
      */
     public function setConfig(array $config): self
@@ -269,7 +283,7 @@ class File
      * Reset file configuration and remove temp file.
      * 
      * @return void 
-    */
+     */
     public function free(): void 
     {
         $this->message = null;
@@ -282,14 +296,13 @@ class File
      * Checks if the file is valid according to the specified configuration.
      * 
      * @return bool Return true if the file is valid, false otherwise.
-    */
+     */
     public function valid(): bool
     {
         if ($this->error !== UPLOAD_ERR_OK) {
             $this->message = 'File upload error occurred.';
             return false;
         }
-
 
         if ($this->size === 0) {
             $this->error = self::UPLOAD_ERR_NO_SIZE;
@@ -315,12 +328,13 @@ class File
             return false;
         }
 
-        if (isset($this->config->allowedTypes) && $this->config->allowedTypes !== '') {
-            $allowed = explode('|', strtolower($this->config->allowedTypes));
+        if (isset($this->config->allowedTypes) && $this->config->allowedTypes) {
+            $isArray = is_array($this->config->allowedTypes);
+            $allowed = $isArray ? $this->config->allowedTypes : explode('|', strtolower($this->config->allowedTypes));
             
-            if (!in_array($this->extension, $allowed)) {
+            if ($allowed !== [] && !in_array($this->extension, $allowed)) {
                 $this->error = UPLOAD_ERR_EXTENSION;
-                $this->message = 'File type is not allowed. Allowed file types: "' . $this->config->allowedTypes . '".';
+                $this->message = 'File type is not allowed. Allowed file types: "[' . ($isArray ? implode('|', $this->config->allowedTypes) : $this->config->allowedTypes) . ']".';
                 return false;
             }
         }

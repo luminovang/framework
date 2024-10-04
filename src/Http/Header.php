@@ -83,7 +83,7 @@ class Header implements Countable
      * @param mixed $value The server variable value.
      * 
      * @return void
-    */
+     */
     public function set(string $key, mixed $value): void
     {
         self::$variables[$key] = $value;
@@ -95,7 +95,7 @@ class Header implements Countable
      * @param string $key The key to remove.
      * 
      * @return void 
-    */
+     */
     public function remove(string $key): void
     {
         unset(self::$variables[$key]);
@@ -107,7 +107,7 @@ class Header implements Countable
      * @param string $key Header key to check.
      * 
      * @return bool Return true if key exists, false otherwise.
-    */
+     */
     public function has(string $key): bool
     {
         return array_key_exists($key, self::$variables);

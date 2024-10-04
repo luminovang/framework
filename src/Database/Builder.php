@@ -1084,6 +1084,7 @@ final class Builder extends Connection
 
             if($response !== null){
                 $this->cacheKey = '';
+                $this->queryWithCache = false;
                 $this->reset();
 
                 return $response;
@@ -1101,17 +1102,12 @@ final class Builder extends Connection
 
         try {
             $response = $this->returnExecute($this->buildQuery, $mode);
-            if(
-                $mode === RETURN_STMT || 
-                !$this->queryWithCache || 
-                !(self::$cache instanceof BaseCache)
-            ){
-                return $response;
-            }
 
-            self::$cache->set($this->cacheKey, $response);
-            self::$cache = null;
-            $this->queryWithCache = false;
+            if($mode !== RETURN_STMT && $this->queryWithCache && (self::$cache instanceof BaseCache)){
+                self::$cache->set($this->cacheKey, $response);
+                self::$cache = null;
+                $this->queryWithCache = false;
+            }
 
             return $response;
         } catch (DatabaseException|Exception $e) {
@@ -1269,6 +1265,7 @@ final class Builder extends Connection
 
             if($response !== null){
                 $this->cacheKey = '';
+                $this->queryWithCache = false;
                 $this->reset();
                 return $response;
             }
@@ -1299,17 +1296,15 @@ final class Builder extends Connection
             $response = $this->returnExecutedResult($sqlQuery, $return, $result, $mode);
 
             if(
-                $this->printQuery || 
-                $return === 'stmt' || 
-                !$this->queryWithCache || 
-                !(self::$cache instanceof BaseCache)
+                !$this->printQuery &&
+                $return !== 'stmt' &&
+                $this->queryWithCache && 
+                (self::$cache instanceof BaseCache)
             ){
-                return $response;
+                self::$cache->set($this->cacheKey, $response);
+                self::$cache = null;
+                $this->queryWithCache = false;
             }
-
-            self::$cache->set($this->cacheKey, $response);
-            self::$cache = null;
-            $this->queryWithCache = false;
 
             return $response;
         } catch (DatabaseException|Exception $e) {
@@ -2572,7 +2567,6 @@ final class Builder extends Connection
         $this->querySetValues = [];
         $this->hasCache = false;
         $this->printQuery = false;
-        $this->queryWithCache = false;
         $this->bindValues = [];
         $this->buildQuery = '';
         if($this->resultType !== 'stmt'){

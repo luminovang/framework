@@ -29,12 +29,12 @@ class Curl implements NetworkClientInterface
      * The extended options.
      * 
      * @var array<string,mixed> $mutable
-    */
+     */
     private ?array $mutable = null;
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function __construct(private array $config = [])
     {
         $this->config['headers']['X-Powered-By'] = $this->config['headers']['X-Powered-By'] ?? Foundation::copyright();
@@ -43,7 +43,7 @@ class Curl implements NetworkClientInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getClient(): self
     {
         return $this;
@@ -51,7 +51,7 @@ class Curl implements NetworkClientInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getConfig(?string $option = null): mixed
     {
         $config = $this->mutable ?? $this->config;
@@ -93,7 +93,7 @@ class Curl implements NetworkClientInterface
      * @param string $url The URL to fetch data from.
      * @param array $headers An array of headers to include in the request (default: empty array).
      *
-     * @return RespoResponse Return the server's response containing the fetched data.
+     * @return Response Return the server's response containing the fetched data.
      *
      * @throws RequestException If an error occurs while making the request.
      * @throws ConnectException If a connection to the server cannot be established.
@@ -109,8 +109,8 @@ class Curl implements NetworkClientInterface
     }
     
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function request(string $method, string $url, array $options = []): Response
     {
         $method = strtoupper($method);
@@ -512,7 +512,7 @@ class Curl implements NetworkClientInterface
      * @param array $headers The headers to convert to string.
      * 
      * @return string Return the string representation.
-    */
+     */
     private static function toHeaderString(array $headers): string
     {
         $line = '';

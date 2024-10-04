@@ -17,10 +17,10 @@ class Server implements Countable
      * Initializes the server constructor.
      * 
      * @param array<string,mixed> $variables An Associative array of server variables to initialize with.
-    */
+     */
     public function __construct(protected array $variables = []){}
 
-   /**
+    /**
      * Get server variables.
      *
      * @param string|null $name Optional name of the server variable.
@@ -48,7 +48,7 @@ class Server implements Countable
      * @param mixed $value The server variable value.
      * 
      * @return void
-    */
+     */
     public function set(string $key, mixed $value): void
     {
         $this->variables[$key] = $value;
@@ -104,13 +104,13 @@ class Server implements Countable
      * @param string $key Header key to check.
      * 
      * @return bool Return true if key exists, false otherwise.
-    */
+     */
     public function has(string $key): bool
     {
         return array_key_exists($key, $this->variables);
     }
 
-     /**
+    /**
      * Get the total number of server variables.
      * 
      * @return int Return the umber of server variables
