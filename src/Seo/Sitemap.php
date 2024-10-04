@@ -476,13 +476,12 @@ final class Sitemap
             return self::$urls;
         }
     
-        self::_print('[Done] ' . $url);
-    
         $dom = new DOMDocument();
         @$dom->loadHTML($html['document']);
+
         /**
          * @var DOMNodeList
-        */
+         */
         $links = $dom->getElementsByTagName('a');
         $length = $links->count(); 
     
@@ -592,6 +591,7 @@ final class Sitemap
             return false;
         }
 
+        self::_print('[Done] ' . $url);
         self::$visited[] = $url;
 
         return [
