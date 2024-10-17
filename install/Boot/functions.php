@@ -1073,7 +1073,7 @@ if (!function_exists('list_in_array')) {
 
         $map = list_to_array($list);
 
-        if( $map === false){
+        if($map === false){
             return false;
         }
 
@@ -1167,6 +1167,31 @@ if (!function_exists('make_dir')) {
     function make_dir(string $path, ?int $permissions = null, bool $recursive = true): bool 
     {
         return FileManager::mkdir($path, ($permissions ?? Files::$dirPermissions ?? 0777), $recursive);
+    }
+}
+
+if (!function_exists('get_temp_dir')) {
+    /**
+     * Returns the directory path used for temporary files or generates a unique temporary file name.
+     * 
+     * @param string $prefix The prefix for the generated temporary filename.
+     * @param string|null $extension Optional file extension for the generated temporary filename.
+     * 
+     * @return string|null Returns the temporary directory path or a unique temporary file name with the specified extension, or null on failure.
+     */
+    function get_temp_dir(string $prefix, ?string $extension = null): ?string
+    {
+        $file = tempnam(sys_get_temp_dir(), $prefix);
+        if ($file === false) {
+            return null;
+        }
+
+        unlink($file);
+        $dir = dirname($file) . DIRECTORY_SEPARATOR;
+
+        return $extension
+            ? $dir . basename($file, '.tmp') . $extension
+            : $dir;
     }
 }
 
@@ -1709,6 +1734,60 @@ if (!function_exists('array_extend_default')) {
         }
 
         return $result;
+    }
+}
+
+if (!function_exists('array_merge_result')) {
+    /**
+     * Merges a response into the provided results variable while optionally preserving the structure of nested arrays.
+     * 
+     * @param mixed &$results The results variable to which the response will be merged or appended.
+     *                       This variable is passed by reference and may be modified.
+     * @param mixed $response The response variable to merge with results. It can be an array, string, 
+     *                       or other types.
+     * @param bool $preserve_nested Optional. Determines whether to preserve the nested structure 
+     *                               of arrays when merging (default: true).
+     *
+     * @return void
+     * @since 3.3.4
+     * @see https://luminova.ng/docs/3.3.0/global/functions#lmv-docs-array-merge-result
+     */
+    function array_merge_result(mixed &$results, mixed $response, bool $preserve_nested = true): void
+    {
+        if ($results === null || $results === []) {
+            $results = $response;
+            return;
+        }
+        
+        if (is_array($results)) {
+            if (!$preserve_nested && is_array($response)) {
+                $results = array_merge($results, $response);
+                return;
+            }
+
+            $results[] = $response;
+            return;
+        } 
+        
+        if (is_string($results)) {
+            $results = is_array($response) 
+                ? ($preserve_nested 
+                    ? array_merge([$results], [$response]) 
+                    : array_merge([$results], $response)
+                )
+                : [$results, $response];
+
+            return;
+        }
+
+        $results = [$results];
+
+        if (!$preserve_nested && is_array($response)) {
+            $results = array_merge($results, $response);
+            return;
+        }
+
+        $results[] = $response;
     }
 }
 

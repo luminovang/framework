@@ -282,13 +282,15 @@ final class Sitemap
      * @param string|null $message The message to print.
      * @param string|null $color The color to apply to the message (optional).
      * @param string $method The method to call for writing (default: `writeln`).
+     * @param string|null $flush The last printed line to flush.
      * 
      * @return void
      */
     private static function _print(
         string|null $message, 
         ?string $color = null, 
-        string $method = 'writeln'
+        string $method = 'writeln',
+        ?string $flush = null
     ): void 
     {
         if (self::$cli instanceof Terminal || self::$cli instanceof BaseCommand) {
@@ -303,7 +305,7 @@ final class Sitemap
             }
 
             if ($message === 'flush') {
-                self::$cli->flush(); 
+                self::$cli->flush($flush); 
                 return;
             }
 
@@ -556,14 +558,8 @@ final class Sitemap
             return false;
         }
 
-        self::_print('[Scanning] ' . $url, 'cyan');
-        self::$cli->watcher(
-            5, 
-            fn() => self::_print('flush'), 
-            null,
-            false
-        );
-
+        $scanning = '[Scanning] ' . $url;
+        self::_print($scanning, 'cyan');
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_SSL_VERIFYPEER => false,
@@ -579,7 +575,15 @@ final class Sitemap
         $errorCode = curl_errno($ch);
         $error = curl_error($ch);
         curl_close($ch);
-        self::_print('flush');
+
+        self::$cli->watcher(
+            max(1, self::$config->scanSpeed), 
+            fn() => self::_print('flush'), 
+            null,
+            false
+        );
+        
+        self::_print('flush', null, 'writeln', $scanning);
 
         if ($document === false || $errorCode !== 0) {
             self::_print('[Error] ' . ($errorCode ? $error : 'Empty response from ' . $url), 'red');

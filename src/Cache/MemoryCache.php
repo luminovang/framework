@@ -50,7 +50,7 @@ final class MemoryCache extends BaseCache
      */
     public function __construct(
         ?string $storage = null, 
-        private ?string $persistent_id = null,
+        private ?string $persistent_id = null
     )
     {
         parent::__construct();
@@ -316,7 +316,9 @@ final class MemoryCache extends BaseCache
         // Auto delete expired caches, so next time we get fresh one.
         $this->deleteIfExpired();
 
-        return $onlyContent ? $this->items[$key]['data'] : $this->items[$key];
+        return $onlyContent 
+            ? ($this->items[$key]['data'] ?? null) 
+            : ($this->items[$key] ?? null);
     }
 
     /**

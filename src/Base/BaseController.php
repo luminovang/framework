@@ -135,6 +135,7 @@ abstract class BaseController
      * @param string $view The view file name without the extension (e.g., `index`).
      * @param array<string,mixed> $options Optional data to pass to the view.
      * @param string $type The content type (default: `html`).
+     * @param int $status HTTP status code (default: 200 OK).
      * 
      * @return int Return STATUS_SUCCESS on success, otherwise STATUS_ERROR.
      * 
@@ -159,10 +160,11 @@ abstract class BaseController
     protected final function view(
         string $view, 
         array $options = [], 
-        string $type = 'html'
+        string $type = 'html',
+        int $status = 200
     ): int
     {
-        return $this->app->view($view, $type)->render($options);
+        return $this->app->view($view, $type)->render($options, $status);
     }
 
     /**
@@ -171,6 +173,7 @@ abstract class BaseController
      * @param string $view The view file name without the extension (e.g., `index`).
      * @param array<string,mixed> $options Optional data to pass to the view.
      * @param string $type The content type (default: `html`).
+     * @param int $status HTTP status code (default: 200 OK).
      * 
      * @return string Return the rendered view content.
      * 
@@ -194,10 +197,11 @@ abstract class BaseController
     protected final function respond(
         string $view, 
         array $options = [], 
-        string $type = 'html'
+        string $type = 'html',
+        int $status = 200
     ): string
     {
-        return $this->app->view($view, $type)->respond($options);
+        return $this->app->view($view, $type)->respond($options, $status);
     }
 
     /**

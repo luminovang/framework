@@ -15,7 +15,7 @@ abstract class BaseConsole extends BaseCommand
 {
     /**
      * {@inheritdoc}
-    */
+     */
     public function __construct()
     {
         parent::__construct();
@@ -27,6 +27,6 @@ abstract class BaseConsole extends BaseCommand
      * @param array<string,mixed>|null $params Command arguments and parameters.
      * 
      * @return int Return status code STATUS_SUCCESS on success else STATUS_ERROR.
-    */
+     */
     abstract public function run(?array $params = null): int;
 }

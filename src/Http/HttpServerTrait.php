@@ -16,11 +16,11 @@ use \Closure;
 
 trait HttpServerTrait 
 {
-     /**
+    /**
      * The server socket resource.
      * 
      * @var resource|false|null $socket
-    */
+     */
     protected mixed $socket = null;
 
     /**
@@ -55,7 +55,7 @@ trait HttpServerTrait
      */
     protected static array $clients = [];
 
-     /**
+    /**
      * The connected clients information.
      * 
      * @var array<string,mixed> $connections
@@ -98,21 +98,21 @@ trait HttpServerTrait
     protected string $endpoint = '';
 
     /**
-     * The clas client ip address.
+     * The client ip address.
      * 
      * @var string $ip
      */
     protected string $ip = '';
 
     /**
-     * Wather clients must connect first before accessing server.
+     * Weather clients must connect first before accessing server.
      * 
      * @var bool $requireConnection
      */
     protected static bool $requireConnection = false;
 
      /**
-     * Wather clients must connect first before accessing server.
+     * Weather clients must connect first before accessing server.
      * 
      * @var bool $acceptWebSocket
      */
@@ -382,6 +382,19 @@ trait HttpServerTrait
         return [null, null];
     }
 
+     /**
+     * Get the last client socket connection index id.
+     *
+     * @return int Return the socket index id.
+     * 
+     * > Call after adding new client connection.
+     */
+    protected function getSid(): int
+    {
+        $idx = array_key_last(self::$sockets);
+        return ($idx === null || is_string($idx)) ? 0 : $idx;
+    }
+
     /**
      * Retrieves the details of an HTTP request from a string or an array format.
      *
@@ -404,7 +417,6 @@ trait HttpServerTrait
             $headers ? $this->parseHeaders($lines) : []
         ];
     }
-
 
     /**
      * Extract the boundary from the Content-Type header.
@@ -464,6 +476,7 @@ trait HttpServerTrait
      *
      * @param resource $client The client socket resource.
      * @param int $length The size of each chunk to read (default: 1024 bytes).
+     * 
      * @return string The complete request data read from the client.
      */
     protected function readRequest($client, int $length = 1024): string 
@@ -703,4 +716,21 @@ trait HttpServerTrait
             echo "[{$func}] {$message}\n"; 
         }
     }    
+
+     /**
+     * Process exit status message.
+     *
+     * @param int $status The status code.
+     * @param int $pid The process id.
+     * 
+     * @return void
+     */
+    protected function exited(int $status, int $pid): void 
+    {
+        $message = pcntl_wifexited($status) 
+            ? "exited with status: " . pcntl_wexitstatus($status)
+            : 'did not exit normally';
+
+        $this->_echo("Child process with PID: {$pid}, {$message}");
+    }
 }

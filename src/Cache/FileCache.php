@@ -220,7 +220,9 @@ final class FileCache extends BaseCache
         // Auto delete expired caches, so next time we get fresh one.
         $this->deleteIfExpired();
 
-        return $onlyContent ? $this->items[$this->storage][$key]['data'] : $this->items[$this->storage][$key];
+        return $onlyContent 
+            ? ($this->items[$this->storage][$key]['data'] ?? null)
+            : ($this->items[$this->storage][$key] ?? null);
     }
 
     /**

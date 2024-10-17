@@ -1043,18 +1043,30 @@ class Terminal
     }
 
     /**
-     * Clears CLI output line and update new text.
+     * Clears the CLI output for the last printed text and prepares the terminal to update with new content.
      *
+     * @param string|null $lastOutput An optional last output printed to the terminal (default: null).
+     * 
      * @return void
      */
-    public static final function flush(): void
+    public static final function flush(?string $lastOutput = null): void
     {
         if (is_platform('windows') && !static::streamSupports('sapi_windows_vt100_support', STDOUT)) {
             static::fwrite("\r"); 
             return;
         }
 
-        static::fwrite("\033[1A\033[2K");
+        if(!$lastOutput){
+            static::fwrite("\033[1A\033[2K");
+            return;
+        }
+        
+        $lines = explode(PHP_EOL, wordwrap($lastOutput, static::getWidth(), PHP_EOL, true));
+        $numLines = count($lines);
+
+        for ($i = 0; $i < $numLines; $i++) {
+            static::fwrite("\033[1A\033[2K");
+        }
     }
 
     /**

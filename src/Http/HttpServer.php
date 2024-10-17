@@ -18,6 +18,13 @@ use \Closure;
 class HttpServer 
 {
     /**
+     * List of PIDs of forked processes.
+     * 
+     * @var array $pids
+     */
+    private array $pids = []; 
+
+    /**
      * Track active child processes
      * 
      * @var int $activeProcesses
@@ -370,7 +377,7 @@ class HttpServer
             $this->endpoint, 
             $errno, 
             $errstr, 
-            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            STREAM_SERVER_BIND|STREAM_SERVER_LISTEN,
             is_array($this->options) ? stream_context_create($this->options) : $this->options
         );
         
@@ -418,11 +425,16 @@ class HttpServer
         $this->_echo("Server running at: {$this->endpoint}.");
         
         $this->running = true;
+        $this->booting = true;
         self::$sockets = [$this->socket];
+        $timeout ??=0;
 
-        $simultaneous 
-            ? $this->listeners($timeout, $sleep) 
-            : $this->listen($timeout, $sleep);
+        if($simultaneous){
+            $this->listeners($timeout, $sleep);
+        }else{
+            $this->listen($timeout, $sleep);
+            $this->waitForConnection();
+        }
 
         if (!$this->running) {
             $this->_echo("Server with ID: {$this->getId()} at {$this->endpoint} has been successfully stopped.");
@@ -460,6 +472,7 @@ class HttpServer
             self::$connections = [];
             self::$clients = [];
             $this->routes = [];
+            $this->pids = [];
 
             if($this->booting){
                 $this->booting = false;
@@ -483,7 +496,9 @@ class HttpServer
             $this->booting = false;
             $this->_echo("Server with ID: {$id} has been successfully shutdown.");
             return;
-        }elseif($kill){
+        }
+
+        if($kill){
             $this->freePortIfStuck();
             return;
         }
@@ -689,100 +704,102 @@ class HttpServer
     /**
      * Monitors incoming client connections and handles requests concurrently.
      *
-     * @param int|null $timeout Optional timeout for the stream select operation (default: null).
+     * @param int $timeout Timeout for the stream select operation (default: null).
      * @param int $sleep Duration to pause between operations in microseconds (default: 0).
      *
      * @return void
      */
-    private function listeners(int|null $timeout, int $sleep): void
+    private function listeners(int $timeout, int $sleep): void
     {
         $this->_echo("Server is now running with ID: {$this->getId()}.");
         while (($this->running && $this->socket !== null && self::$sockets !== [])) {
-            self::$sockets = array_filter(self::$sockets, fn($socket) => is_resource($socket));
+            $code = $this->getRemainingSockets($timeout);
 
-            if (self::$sockets === []) {
-                $this->running = false;
-                $this->_echo("No valid sockets to monitor.");
+            if ($code === 1) {
                 break;
             }
 
-            if (!$this->isReady($timeout)) {
-                $this->_echo("Error while reading socket.");
+            if ($code === -1) {
                 continue;
             }
 
-            if (in_array($this->socket, self::$sockets)) {
-                $client = @stream_socket_accept($this->socket);
+            if ($code === 0 && ($client = @stream_socket_accept($this->socket))) {
+                self::$sockets[] = $client;
+                $sid = $this->getSid();
+                self::$connections[$sid] = $this->setAndGetClient($client, $sid);
 
-                if ($client) {
-                    self::$sockets[] = $client;
-                    $idx = array_key_last(self::$sockets);
-                    self::$connections[$idx] = $this->setAndGetClient($client, $idx);
-
-                    $this->waitForFreeProcess();
-                    $this->forkProcess($client, $idx);
-                }
+                $this->waitForFreeProcess();
+                $this->listening($sid);
+                $this->waitForConnections();
             }
 
             if ($sleep > 0) {
                 usleep($sleep);
             }
         }
-
-        $this->cleanupProcesses();
     }
 
     /**
-     * Listens for incoming client connections and manages socket activity.
+     * Fork a new process to manage a non-simultaneous client request.
      *
-     * @param int|null $timeout Optional timeout for the stream select operation (default: null).
+     * @param int $timeout Timeout for the stream select operation.
      * @param int $sleep Duration to pause between operations in microseconds (default: 0).
      *
      * @return void
      */
-    private function listen(int|null $timeout, int $sleep): void
+    private function listen(int $timeout, int $sleep): void
     {
-        $this->booting = true;
         $pid = pcntl_fork();
 
         if ($pid == -1) {
-            $this->_echo("Failed to fork process for handling request. Use \$server->run() instead.");
+            $this->_echo("Failed to fork process for handling request PID {$pid}.");
             $this->shutdown();
-        } elseif ($pid) {
-            $this->waitAndBootFreeProcess();
-        } else {
-            while (($this->running && $this->socket !== null && self::$sockets !== [])) {
-                self::$sockets = array_filter(self::$sockets, fn($socket) => is_resource($socket));
-     
-                if (self::$sockets === []) {
-                    $this->running = false;
-                    $this->_echo("No valid sockets to monitor.");
-                    break;
-                }
-
-                if (!$this->isReady($timeout)) {
-                    continue;
-                }
-
-                if (in_array($this->socket, self::$sockets, true)) {
-                    $client = @stream_socket_accept($this->socket);
-
-                    if ($client) {
-                        self::$sockets[] = $client;
-                        $idx = array_key_last(self::$sockets);
-                        self::$connections[$idx] = $this->setAndGetClient($client, $idx);
-                        self::$clients[self::$connections[$idx][1]]['pid'] = $pid;
-                        $this->listening();
-                    }
-                }
-
-                if ($sleep > 0) {
-                    usleep($sleep);
-                }
+            return;
+        } 
+        
+        if ($pid !== 0) {
+            $this->pids[0] = [
+                'pid' => $pid,
+                'timeout' => $timeout,
+                'sleep' => $sleep
+            ];
+            
+            if($this->booting){
+                $this->_echo("Server is now running with ID: {$this->getId()}.");
             }
-    
-            exit(0);
+            return;
         }
+
+        exit(0);
+    }
+
+    /**
+     * Fork a new process to manage simultaneous client request listening.
+     * 
+     * @param int $idx The index of the client connection.
+     *
+     * @return void
+     */
+    private function listening(int $idx): void
+    {
+        $pid = pcntl_fork();
+        
+        if ($pid == -1) {
+            $this->_echo("Failed to fork process for handling request PID {$pid}.");
+            $this->removeClient($idx, self::$connections[$idx][1]);
+            return;
+        } 
+        
+        if ($pid !== 0) {
+            $this->activeProcesses++;
+            $this->_echo("Forked child process with PID {$pid}. Active processes: {$this->activeProcesses}.");
+            $this->pids[$idx] = [
+                'pid' => $pid
+            ];
+            return;
+        }
+
+        exit(0);
     }
 
     /**
@@ -805,29 +822,23 @@ class HttpServer
     }
 
     /**
-     * Handles the forking of a new process to manage a client request.
-     *
-     * @param resource $client The client socket resource.
-     * @param int $idx The index of the client connection.
+     * Cleans up any remaining child processes after handling the request.
+     * 
+     * @param bool $simultaneous Weather it's for simultaneous connection.
      *
      * @return void
      */
-    private function forkProcess($client, int $idx): void
+    private function cleanupProcesses(bool $simultaneous = true): void
     {
-        $pid = pcntl_fork();
-        [$id, $address] = self::$connections[$idx];
+        $status = 0;
+        if(!$simultaneous){
+            pcntl_wait($status);
+            return;
+        }
 
-        if ($pid == -1) {
-            $this->_echo("Failed to fork process for handling request PID {$pid}.");
-            $this->removeClient($idx, $address);
-        } elseif ($pid) {
-            $this->activeProcesses++;
-            $this->_echo("Forked child process with PID {$pid}. Active processes: {$this->activeProcesses}.");
-            pcntl_waitpid(-1, $status, WNOHANG);
-        } else {
-            self::$clients[$address]['pid'] = $pid;
-            $this->listening($client);
-            //exit(0);
+        while ($this->activeProcesses > 0) {
+            pcntl_wait($status);
+            $this->activeProcesses--;
         }
     }
 
@@ -847,50 +858,87 @@ class HttpServer
     }
 
     /**
-     * Waits for a free process while booting server.
+     * Waits for forked process id to finish before handling connection request.
+     * 
+     * @param int $pid The process id to wait for.
+     * 
+     * @return int Return the exit status code of the process.
+    */
+    private function waitAsyncProcess(int $pid): int
+    {
+        $status = 0;
+        while (pcntl_waitpid($pid, $status, WNOHANG) == 0) {
+            usleep(10000); 
+        }
+
+        return $status;
+    }
+
+    /**
+     * Waits for all forked child processes to complete and handle connections simultaneously.
      *
      * @return void
      */
-    private function waitAndBootFreeProcess(): void 
+    private function waitForConnections(): void
     {
-        $status = 0;
-        if($this->booting){
-            $start = time();
-            while (($this->booting && $this->running && $this->socket && time() - $start < 10 )) {
-                $pid = pcntl_wait($status, WNOHANG);
-                if ($pid <= 0) {
-                    usleep(100000);
-                } else {
-                    break; 
-                }
-            }
-            $this->_echo("Server is now running with ID: {$this->getId()}.");
+        foreach ($this->pids as $idx => $fork) {
+            $status = $this->waitAsyncProcess($fork['pid']);
+            self::$clients[self::$connections[$idx][1]]['pid'] = $fork['pid'];
+
+            $this->handler();
+            $this->exited($status, $fork['pid']);
+        }
+
+        $this->cleanupProcesses();
+    }
+
+    /**
+     * Waits for forked child process to complete and handle connection.
+     *
+     * @return void
+     */
+    private function waitForConnection(): void 
+    {
+        if($this->pids === []){
             return;
         }
 
-        pcntl_wait($status, WNOHANG);
-    }
+        $status = $this->waitAsyncProcess($this->pids[0]['pid']);
 
-    /**
-     * Cleans up any remaining child processes after exiting the listener loop.
-     *
-     * @return void
-     */
-    private function cleanupProcesses(): void
-    {
-        $status = 0;
-        while ($this->activeProcesses > 0) {
-            pcntl_wait($status);
-            $this->activeProcesses--;
+        while (($this->pids !== [] && $this->running && $this->socket !== null && self::$sockets !== [])) {
+            $code = $this->getRemainingSockets($this->pids[0]['timeout']);
+
+            if ($code === 1) {
+                break;
+            }
+
+            if ($code === -1) {
+                continue;
+            }
+
+            if ($code === 0 && ($client = @stream_socket_accept($this->socket))) {
+                self::$sockets[] = $client;
+                $sid = $this->getSid();
+
+                self::$connections[$sid] = $this->setAndGetClient($client, $sid);
+                self::$clients[self::$connections[$sid][1]]['pid'] = $this->pids[0]['pid'];
+                $this->handler();
+                $this->exited($status, $this->pids[0]['pid']);
+                $this->cleanupProcesses(false);
+            }
+
+            if ($this->pids[0]['sleep'] > 0) {
+                usleep($this->pids[0]['sleep']);
+            }
         }
     }
 
     /**
-     * Listens for incoming client requests and processes them accordingly.
+     * Handler client incoming requests and processes response accordingly.
      *
      * @return void
      */
-    private function listening(): void 
+    private function handler(): void 
     {
         foreach (self::$sockets as $idx => $socket) {
             if ($socket === $this->socket) {
@@ -960,5 +1008,35 @@ class HttpServer
         }
 
         return (self::$isConnected || $isConnecting);
+    }
+
+    /**
+     * Filter the remaining sockets and retrieves status based on available sockets and a timeout.
+     *
+     * - 0: The current socket is valid and ready.
+     * - 1: No valid sockets to monitor.
+     * - 3: The current socket is not found in the available sockets.
+     * - -1: An error occurred while attempting to read the socket.
+     *
+     * @param int $timeout The timeout in seconds to wait for the socket to be ready.
+     * 
+     * @return int Return the status code representing the result.
+     */
+    private function getRemainingSockets(int $timeout): int 
+    {
+        self::$sockets = array_filter(self::$sockets, fn($socket) => is_resource($socket));
+
+        if (self::$sockets === []) {
+            $this->running = false;
+            $this->_echo("No valid sockets to monitor.");
+            return 1;
+        }
+
+        if (!$this->isReady($timeout)) {
+            $this->_echo("Error while reading socket.");
+            return -1;
+        }
+
+        return in_array($this->socket, self::$sockets, true) ? 0 : 3;
     }
 }

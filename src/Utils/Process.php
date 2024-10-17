@@ -16,53 +16,63 @@ use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\BadMethodCallException;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Closure;
+use \Fiber;
+use \FiberError;
+use \Exception;
 use \Generator;
 
 class Process
 {
     /**
+     * Flag indicating whether fiber is supported.
+     * 
+     * @var bool $isFiberSupported
+     */
+    private static bool $isFiberSupported = false;
+
+    /**
      * The process open flag.
      * 
      * @var bool $open
-    */
+     */
     private bool $open = false;
 
     /**
      * The running process.
      * 
      * @var mixed $process
-    */
+     */
     private mixed $process = null;
 
     /**
      * Process response.
      * 
      * @var mixed $response
-    */
+     */
     private mixed $response = null;
 
     /**
      * Process waiting status.
      * 
      * @var bool $isComplete
-    */
+     */
     private bool $isComplete = false;
 
     /**
      * @var float|null $startTime
-    */
+     */
     private ?float $startTime = null;
 
     /**
      * @var array $metadata
-    */
+     */
     private array $metadata = [];
 
     /**
      * Options for proc_open command executor.
      * 
      * @var array $options
-    */
+     */
     private array $options = [
         'suppress_errors'   => true, 
         'bypass_shell'      => true
@@ -72,7 +82,7 @@ class Process
      * Supported options for proc_open command executor.
      * 
      * @var array $supportedOptions
-    */
+     */
     private static array $supportedOptions = [
         'blocking_pipes', 
         'create_process_group', 
@@ -87,56 +97,70 @@ class Process
      * Descriptors for proc_open command executor.
      * 
      * @var array $options
-    */
+     */
     private array $descriptors = [];
+
+    /**
+     * proc_open pipes.
+     * 
+     * @var array $pipes
+     */
+    private array $pipes = [];
+
+    /**
+     * Instance of fiber to resume.
+     * 
+     * @var Fiber|null $fiber
+     */
+    private ?Fiber $fiber = null;
 
     /**
      * Mode for popen command executor.
      * 
      * @var string $mode
-    */
+     */
     private ?string $mode = null;
 
     /**
      * Command execution with popen.
      * 
      * @var string EXECUTOR_POPEN
-    */
+     */
     public const EXECUTOR_POPEN = 'popen';
 
     /**
      * Command execution with exec.
      * 
      * @var string EXECUTOR_EXEC
-    */
+     */
     public const EXECUTOR_EXEC = 'exec';
 
     /**
      * Command execution with shell_exec.
      * 
      * @var string EXECUTOR_SHELL
-    */
+     */
     public const EXECUTOR_SHELL = 'shell_exec';
 
     /**
      * Command execution with proc_open.
      * 
      * @var string EXECUTOR_PROC_OPEN
-    */
+     */
     public const EXECUTOR_PROC_OPEN = 'proc_open';
 
     /**
      * Callback execution flag.
      * 
      * @var string EXECUTOR_CALLBACK
-    */
+     */
     public const EXECUTOR_CALLBACK = 'callback';
 
     /**
      * Stream execution flag.
      * 
      * @var string EXECUTOR_STREAM
-    */
+     */
     public const EXECUTOR_STREAM = 'stream';
 
     /**
@@ -150,7 +174,7 @@ class Process
      */
     public function __construct(
         private mixed $input,
-        private string $executor,
+        private string $executor = self::EXECUTOR_PROC_OPEN,
         private ?string $cwd = null,
         private ?array $env = null
     ) {
@@ -160,6 +184,8 @@ class Process
         ) {
             $this->setWorkingDirectory(getcwd());
         }
+
+        self::$isFiberSupported = (PHP_VERSION_ID >= 80100 && class_exists('Fiber'));
     }
 
     /**
@@ -214,13 +240,49 @@ class Process
     {
         $this->assertStarted(__FUNCTION__);
         $this->isComplete = false;
-        $this->runExecutor();
 
-        if (!$this->process) {
-            self::onError(sprintf("Failed to run process with %s.", $this->executor));
+        if(self::$isFiberSupported){
+            try{
+                $this->fiber = new Fiber([$this, 'runExecutor']);
+                $this->fiber->start();
+
+                if ($this->fiber->isTerminated()) {
+                    $this->fiber = null;
+                }
+                return;
+            }catch(Exception|FiberError){
+                self::$isFiberSupported = false;
+            }
         }
 
-        $this->open = true;
+        $this->runExecutor();
+    }
+
+    /**
+     * Waits for the process response to complete and collects output.
+     *
+     * @param int $timeout Maximum time to wait in seconds (default: 0 for no timeout).
+     * @throws RuntimeException If the process has not been started.
+     * 
+     * @return void
+     */
+    public function wait(int $timeout = 0): void
+    {
+        $this->startTime = microtime(true);
+        if($this->waitForFibers()){
+            if (!$this->open) {
+                self::onError('Process not started. You need to call run() first.');
+            }
+
+            match ($this->executor) {
+                self::EXECUTOR_POPEN => $this->handlePopen($timeout),
+                self::EXECUTOR_EXEC => $this->handleExec(),
+                self::EXECUTOR_PROC_OPEN => $this->handleProcOpen($timeout),
+                self::EXECUTOR_CALLBACK, self::EXECUTOR_SHELL => $this->handleCallbackOrShell($timeout),
+                self::EXECUTOR_STREAM => $this->handleStream($timeout),
+                default => $this->cleanup()
+            };
+        }
     }
 
     /**
@@ -506,10 +568,10 @@ class Process
         if($this->descriptors !== []){
             return $this->descriptors;
         }
-        
+
         return [
             0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
+            1 => ['pipe', 'w'], 
             2 => ['pipe', 'w'],
         ];
     }
@@ -532,39 +594,24 @@ class Process
     }
 
     /**
-     * Waits for the process to complete and collects output.
+     * Checks if the waiting time has exceeded the timeout.
      *
-     * @param int $timeout Maximum time to wait in seconds (default: 0 for no timeout).
-     * @throws RuntimeException If the process has not been started.
+     * @param int $timeout The maximum time to wait for the process to complete, in seconds.
      * 
-     * @return void
+     * @return bool Return true if the process is still waiting, false if it timed out.
      */
-    public function wait(int $timeout = 0): void
+    private function isWaiting(int $timeout): bool
     {
-        if (!$this->open) {
-            self::onError('Process not started. You need to call run() first.');
+        if ($timeout > 0 && (microtime(true) - $this->startTime) >= $timeout) {
+            $this->cleanup($timeout);
+            return false;
         }
 
-        if(self::EXECUTOR_PROC_OPEN === $this->executor){
-            $this->metadata = proc_get_status($this->process);
+        if ($this->process instanceof Generator) {
+            array_merge_result($this->response, $this->waitForGenerator(), false);
         }
 
-        $this->startTime = microtime(true);
-
-        while (!$this->response || !$this->isComplete) {
-            if ($this->process instanceof Generator) {
-                $this->normalizeResponse($this->waitForGenerator());
-            } elseif ($this->response) {
-                $this->isComplete = true;
-            }
-
-            if ($timeout > 0 && (microtime(true) - $this->startTime) >= $timeout) {
-                $this->cleanup(true);
-                break;
-            }
-
-            usleep(1000);
-        }
+        return true;
     }
 
     /**
@@ -584,70 +631,48 @@ class Process
         return $output;
     }
 
-    /**
-     * Reads data from the stream until EOF is reached.
+     /**
+     * Wait for all fibers to complete and resume suspended fibers.
      * 
-     * @return void
+     * @return bool Return true when all fibers are completed.
      */
-    private function readStream(): void
+    private function waitForFibers(): bool 
     {
-        while (!$this->process->eof()) {
-            $chunk = $this->process->read(1024);
-            
-            if ($chunk !== false) {
-                $this->normalizeResponse($chunk);
-            }
-        }
-        
-        $this->isComplete = true;
-    }
+        if(self::$isFiberSupported){
+            if ($this->fiber instanceof Fiber && !$this->isComplete){
+                if ($this->fiber->isSuspended()) {
+                    try{
+                        $this->fiber->resume();
+                    }catch(Exception|FiberError $e){
+                        throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+                    }
+                }
 
-    /**
-     * Adds response output to the internal response storage.
-     *
-     * @param mixed $response The response output to add.
-     * 
-     * @return void
-     */
-    private function normalizeResponse(mixed $response): void
-    {
-        if ($this->response === null) {
-            $this->response = $response;
-            return;
+                if($this->fiber->isTerminated()) {
+                    $this->fiber = null;
+                }
+            }
         }
-        
-        if (is_array($this->response)) {
-            if (is_array($response)) {
-                $this->response = array_merge($this->response, $response);
-            } else {
-                $this->response[] = $response;
-            }
-        } elseif (is_string($this->response)) {
-            if (is_array($response)) {
-                $this->response = array_merge([$this->response], $response);
-            } else {
-                $this->response = [$this->response, $response];
-            }
-        } else {
-            $this->response = [$this->response];
 
-            if (is_array($response)) {
-                $this->response = array_merge($this->response, $response);
-            } else {
-                $this->response[] = $response;
-            }
+        if (!$this->process) {
+            $this->cleanup();
+            self::onError(sprintf("Failed to run process with %s.", $this->executor));
+            return false;
         }
+
+        $this->open = true;
+        return true;
     }
 
     /**
      * Cleans up the process and its resources.
      * 
-     * @param bool $timeout Whether is cleanup for timeout (default: false).
+     * @param int|null $timeout Execution timeout (default: null).
      * 
      * @return void
      * @throws RuntimeException Throws if the process timeout is reached.
      */
-    private function cleanup(bool $timeout = false): void
+    private function cleanup(?int $timeout = null): void
     {
         if ($this->process && is_resource($this->process)) {
             if($this->executor === self::EXECUTOR_PROC_OPEN){
@@ -663,11 +688,11 @@ class Process
         $this->open = false;
         $this->startTime = null;
 
-        if($timeout){
+        if($timeout !== null){
             self::onError(
-                'Process not started. You need to call run() first.',
+                sprintf("The process has timed out after %d seconds.", $timeout),
                 RuntimeException::TIMEOUT_ERROR
-            );
+            );            
         }
     }
 
@@ -680,6 +705,12 @@ class Process
      */
     private function runExecutor(): void
     {
+        if (self::$isFiberSupported && Fiber::getCurrent()) {
+            Fiber::suspend();
+        }
+
+        $this->pipes = [];
+        
         if (!in_array($this->executor, [self::EXECUTOR_CALLBACK, self::EXECUTOR_STREAM])) {
             if(!function_exists($this->executor)){
                 self::onError(sprintf('The Process executor: %s is not available on your PHP environment', $this->executor));
@@ -688,91 +719,188 @@ class Process
             $this->input = $this->getCommand();
         }
 
-        switch ($this->executor) {
-            case self::EXECUTOR_POPEN:
-                $this->process = popen($this->input, $this->mode ?? 'r');
-                if ($this->process) {
-                    stream_set_blocking($this->process, false);
-                    $output = '';
-            
-                    while (!feof($this->process)) {
-                        $output .= fgets($this->process);
-                    }
-            
-                    if (pclose($this->process) !== -1) {
-                        $this->normalizeResponse($output); 
-                    }
+        $this->process = match($this->executor){
+            self::EXECUTOR_POPEN => popen($this->input, $this->mode ?? 'r'),
+            self::EXECUTOR_SHELL => shell_exec($this->input),
+            self::EXECUTOR_CALLBACK => ($this->input)(),
+            self::EXECUTOR_PROC_OPEN => proc_open(
+                $this->input, 
+                $this->getDescriptors(), 
+                $this->pipes,
+                $this->cwd,
+                $this->env,
+                $this->options
+            ),
+            self::EXECUTOR_STREAM => (function(){
+                if (
+                    $this->input instanceof StreamInterface ||
+                    $this->input instanceof Stream || 
+                    is_resource($this->input)
+                 ) {
+                    return $this->input;
                 }
-                break;
 
-            case self::EXECUTOR_EXEC:
-                $output = [];
-                $returnVar = null;
-                $this->process = exec($this->input, $output, $returnVar);
-                if ($returnVar === STATUS_SUCCESS) {
-                    $this->normalizeResponse(implode("\n", $output));
-                }
-                break;
-
-            case self::EXECUTOR_SHELL:
-                $this->process = shell_exec($this->input);
-                if ($this->process !== false) {
-                    $this->normalizeResponse($this->process);
-                }
-                break;
-            case self::EXECUTOR_PROC_OPEN:
-                $this->process = proc_open(
-                    $this->input, 
-                    $this->getDescriptors(), 
-                    $pipes,
-                    $this->cwd,
-                    $this->env,
-                    $this->options
-                );
-            
-                if (is_resource($this->process)) {
-                    fclose($pipes[0]);
-            
-                    $output = stream_get_contents($pipes[1]);
-                    fclose($pipes[1]);
-            
-                    $error = stream_get_contents($pipes[2]);
-                    fclose($pipes[2]);
-            
-                    if ($output !== false) {
-                        $this->normalizeResponse($output);
-                    }
-
-                    if ($error !== false) {
-                        $this->normalizeResponse("Error: " . $error);
-                    }
-                }
-                break;
-
-            case self::EXECUTOR_CALLBACK:
-                $this->process = ($this->input)();
-                if($this->process){
-                    $this->normalizeResponse($this->process);
-                }
-                break;
-            case self::EXECUTOR_STREAM:
-                if ($this->input instanceof StreamInterface || $this->input instanceof Stream) {
-                    $this->process = $this->input;
-                    $this->readStream();
-                } elseif (is_resource($this->input)) {
-                    $this->process = $this->input; 
-                    $output = stream_get_contents($this->process);
-
-                    if ($output !== false) {
-                        $this->normalizeResponse($output);
-                    }
-                } else {
-                    self::onError('Invalid stream resource provided.');
-                }
-                break;
-            default:
+                self::onError('Invalid stream resource provided.');
+                return false;
+            })(),
+            default => (function() {
                 self::onError('Invalid execution method specified.');
+                return false;
+            })()
+        };
+    }
+
+    /**
+     * Handles process responses when using popen.
+     *
+     * @param int $timeout The maximum time to wait for the process to complete, in seconds.
+     * 
+     * @return void 
+     */
+    private function handlePopen(int $timeout): void
+    {
+        if ($this->process) {
+            stream_set_blocking($this->process, false);
+            $output = '';
+
+            while (!feof($this->process) && !$this->isComplete) {
+                if (!$this->isWaiting($timeout)) {
+                    break; 
+                }
+
+                $output .= fgets($this->process);
+                usleep(10000);
+            }
+
+            $this->isComplete = true;
+            if (pclose($this->process) !== -1) {
+                array_merge_result($this->response, $output, false);
+            }
         }
+    }
+
+    /**
+     * Handles process responses when using exec.
+     * 
+     * @return void 
+     */
+    private function handleExec(): void
+    {
+        $this->isComplete = true;
+        array_merge_result($this->response, implode("\n", $this->process), false);
+    }
+
+    /**
+     * Handles process responses when using proc_open.
+     *
+     * @param int $timeout The maximum time to wait for the process to complete, in seconds.
+     * 
+     * @return void 
+     */
+    private function handleProcOpen(int $timeout): void
+    {
+        if (is_resource($this->process)) {
+            do {
+                if (!$this->isWaiting($timeout)) {
+                    $this->metadata['exitcode'] = STATUS_SUCCESS;
+                    $this->metadata['running'] = false;
+                    break;
+                }
+                usleep(10000); 
+                $this->metadata = proc_get_status($this->process);
+            } while ($this->metadata['running'] && !$this->isComplete);
+
+            $output = stream_get_contents($this->pipes[1]); 
+            $error = stream_get_contents($this->pipes[2]);
+
+
+            fclose($this->pipes[0]);
+            fclose($this->pipes[1]);
+            fclose($this->pipes[2]);
+            $this->isComplete = true; 
+
+            if ($this->metadata['exitcode'] === STATUS_SUCCESS && $output !== false) {
+                array_merge_result($this->response, $output, false);
+            }
+
+            if ($error) {
+                array_merge_result($this->response, "Error: {$error}", false);
+            }
+        }
+    }
+
+    /**
+     * Handles process responses when using callback or shell commands.
+     *
+     * @param int $timeout The maximum time to wait for the process to complete, in seconds.
+     * 
+     * @return void 
+     */
+    private function handleCallbackOrShell(int $timeout): void
+    {
+        while (!$this->response && !$this->isComplete) {
+            if (!$this->isWaiting($timeout)) {
+                break;
+            }
+            usleep(10000);
+        }
+
+        $this->isComplete = true;
+        array_merge_result($this->response, $this->process, false);
+    }
+
+    /**
+     * Handles process responses when using streams.
+     *
+     * @param int $timeout The maximum time to wait for the process to complete, in seconds.
+     * 
+     * @return void 
+     */
+    private function handleStream(int $timeout): void
+    {
+        if ($this->input instanceof StreamInterface || $this->input instanceof Stream) {
+            $this->readStream($timeout);
+            return;
+        } 
+        
+        if (is_resource($this->input)) {
+            while (!$this->response && !$this->isComplete) {
+                if (!$this->isWaiting($timeout)) {
+                    break;
+                }
+                usleep(1000);
+            }
+
+            $output = stream_get_contents($this->process);
+            $this->isComplete = true;
+            if ($output) {
+                array_merge_result($this->response, $output, false);
+            }
+        }
+    }
+
+     /**
+     * Reads data from the stream until EOF is reached.
+     * 
+     * @return void
+     */
+    private function readStream(int $timeout): void
+    {
+        while (!$this->process->eof() && !$this->isComplete) {
+            if (!$this->isWaiting($timeout)) {
+                break;
+            }
+
+            $chunk = $this->process->read(1024);
+            
+            if ($chunk !== false) {
+                array_merge_result($this->response, $chunk, false);
+            }
+
+            usleep(1000);
+        }
+        
+        $this->isComplete = true;
     }
 
     /**
