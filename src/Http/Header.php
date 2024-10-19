@@ -380,7 +380,7 @@ class Header implements Countable
             'rss'    => ['application/rss+xml'],
             'form'   => ['application/x-www-form-urlencoded', 'multipart/form-data']
         ];
-        
+
         return ($index === null) 
             ? ($types[$type] ?? null)
             : ($types[$type][$index] ?? 'text/html');
@@ -408,6 +408,7 @@ class Header implements Countable
      * Sets the appropriate output handler for content encoding.
      * 
      * @return bool Returns true if the output buffer handler is set successfully, otherwise false.
+     * @internal
      */
     public static function setOutputHandler(): bool
     {
