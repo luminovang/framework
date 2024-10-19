@@ -16,6 +16,8 @@ use \Luminova\Optimization\Minification;
 use \Luminova\Http\Header;
 use \Luminova\Http\Encoder;
 use \Luminova\Exceptions\JsonException;
+use \Luminova\Utils\WeakReference;
+use \WeakMap;
 use \Exception;
 
 class Response implements ViewResponseInterface
@@ -28,30 +30,40 @@ class Response implements ViewResponseInterface
     private bool $minify = false;
 
     /**
-     * Handles content minification object.
+     * Weak reference map.
      * 
-     * @var Minification|null $min
+     * @var WeakMap|null $weak
      */
-    private static ?Minification $min = null;
+    private static ?WeakMap $weak = null;
 
     /**
-     * Response constructor.
+     * Weak reference object key.
+     * 
+     * @var WeakReference|null $reference
+     */
+    private static ?WeakReference $reference = null;
+
+    /**
+     * Initializes the template content output response.
      *
      * @param int $status HTTP status code (default: 200 OK).
-     * @param array<string,mixed> $headers HTTP headers as key-value pairs.
-     * @param bool $encode Whether to enable content encoding like gzip.
-     * @param bool $minifyCodeblocks Indicates if code blocks should be minified.
-     * @param bool $codeblockButton Indicates if code blocks should include a copy button.
+     * @param array<string,mixed> $headers Optional HTTP headers as key-value pairs.
+     * @param bool $compress Whether to apply content compression (e.g., `gzip`, `deflate`), default is false.
+     * @param bool $minifyCodeblocks Whether to exclude HTML code blocks from minification (default: false).
+     * @param bool $codeblockButton Whether to automatically add a copy button to code blocks after minification (default: false).
+     * 
+     * > Note: If the `minify` method is not explicitly invoked, the environment variable `page.minification` will determine whether HTML content should be minified.
      */
     public function __construct(
         private int $status = 200, 
         private array $headers = [],
-        private bool $encode = false,
+        private bool $compress = false,
         private bool $minifyCodeblocks = false,
         private bool $codeblockButton = false
     )
     {
         $this->minify = (bool) env('page.minification', false);
+        self::$reference = new WeakReference();
     }
 
     /**
@@ -67,9 +79,9 @@ class Response implements ViewResponseInterface
     /**
      * {@inheritdoc}
      */
-    public function encode(bool $encode): self 
+    public function compress(bool $compress = true): self 
     {
-        $this->encode = $encode;
+        $this->compress = $compress;
 
         return $this;
     }
@@ -77,7 +89,7 @@ class Response implements ViewResponseInterface
     /**
      * {@inheritdoc}
      */
-    public function minify(bool $minify): self 
+    public function minify(bool $minify = true): self 
     {
         $this->minify = $minify;
 
@@ -87,7 +99,7 @@ class Response implements ViewResponseInterface
     /**
      * {@inheritdoc}
      */
-    public function codeblock(bool $minify, bool $button = false): self 
+    public function codeblock(bool $minify = true, bool $button = false): self 
     {
         $this->minifyCodeblocks = $minify;
         $this->codeblockButton = $button;
@@ -118,10 +130,25 @@ class Response implements ViewResponseInterface
     /**
      * {@inheritdoc}
      */
-    public function send(): void 
+    public function send(bool $validate = false): void 
     {
+        if($validate){
+            Header::validate($this->headers, $this->status);
+            return;
+        }
+
         Header::sendStatus($this->status);
         Header::send($this->headers);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function sendStatus(): bool
+    {
+        return ($this->status >= 100 && $this->status < 600) 
+            ? http_status_header($this->status)
+            : false;
     }
 
     /**
@@ -193,38 +220,33 @@ class Response implements ViewResponseInterface
     /**
      * {@inheritdoc}
      */
-    public function render(
-        string $content, 
-        int $status = 200, 
-        array $headers = [],
-        bool $encode = false, 
-        bool $minify = false
-    ): int
+    public function render(string $content, array $headers = []): int
     {
         if($content === ''){
             return STATUS_ERROR;
         }
 
-        $headers = array_merge($this->headers, $headers);
+        $length = 0;
+        $headers = ($headers === []) 
+            ? $this->headers : 
+            array_merge($this->headers, $headers);
 
         if(!isset($headers['Content-Type'])){
             $headers['Content-Type'] = 'application/json';
         }
-
-        $length = false;
        
-        if($minify && str_contains($headers['Content-Type'], 'text/html')){
-            self::$min ??= new Minification();
-            self::$min->codeblocks($this->minifyCodeblocks);
-            self::$min->copyable($this->codeblockButton);
-            
-            $instance = self::$min->compress($content, $headers['Content-Type']);
-            $content = $instance->getContent();
-            $length = $instance->getLength();
+        if($this->minify && str_contains($headers['Content-Type'], 'text/html')){
+            self::$weak[self::$reference] ??= new Minification();
+            $content = self::$weak[self::$reference]->codeblocks($this->minifyCodeblocks)
+                ->copyable($this->codeblockButton)
+                ->compress($content, $headers['Content-Type']);
+
+            $content = self::$weak[self::$reference]->getContent();
+            $length = self::$weak[self::$reference]->getLength();
         }
 
-        if($encode){
-            [$encoding, $content] = (new Encoder())->encode($content);
+        if($this->compress){
+            [$encoding, $content, $length] = Encoder::encode($content);
             if($encoding !== false){
                 $headers['Content-Encoding'] = $encoding;
             }
@@ -235,28 +257,14 @@ class Response implements ViewResponseInterface
         }
 
         $headers['default_headers'] = true;
-        $headers['Content-Length'] = ($length === false ? string_length($content) : $length);
+        if($length > 0){
+            $headers['Content-Length'] = $length;
+        }
 
-        Header::parseHeaders($headers, $status);
+        Header::validate($headers, $this->status);
         echo $content;
 
         return STATUS_SUCCESS;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function sendHeaders(): void 
-    {
-        Header::parseHeaders($this->headers, $this->status);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function sendStatus(): bool
-    {
-        return http_status_header($this->status);
     }
 
     /**
@@ -270,9 +278,9 @@ class Response implements ViewResponseInterface
                 JSON_THROW_ON_ERROR
             );
 
-            return $this->render($content, $this->status, [
+            return $this->render($content, [
                 'Content-Type' => 'application/json'
-            ], $this->encode, $this->minify);
+            ]);
         }catch(Exception|\JsonException $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
@@ -285,9 +293,9 @@ class Response implements ViewResponseInterface
      */
     public function text(string $content): int 
     {
-        return $this->render($content, $this->status, [
+        return $this->render($content, [
             'Content-Type' => 'text/plain'
-        ], $this->encode, $this->minify);
+        ]);
     }
 
     /**
@@ -295,9 +303,9 @@ class Response implements ViewResponseInterface
      */
     public function html(string $content): int 
     {
-        return $this->render($content, $this->status, [
+        return $this->render($content, [
             'Content-Type' => 'text/html'
-        ], $this->encode, $this->minify);
+        ]);
     }
 
     /**
@@ -305,9 +313,9 @@ class Response implements ViewResponseInterface
      */
     public function xml(string $content): int 
     {
-        return $this->render($content, $this->status, [
+        return $this->render($content, [
             'Content-Type' => 'application/xml'
-        ], $this->encode, $this->minify);
+        ]);
     }
 
     /**

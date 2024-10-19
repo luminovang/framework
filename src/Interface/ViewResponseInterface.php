@@ -12,70 +12,77 @@ namespace Luminova\Interface;
 interface ViewResponseInterface
 {
     /**
-     * Set the HTTP status code.
+     * Set the HTTP status code for the response.
      *
-     * @param int $status HTTP status code.
+     * @param int $status The HTTP status code to be set.
      * 
      * @return self Return instance of the Response class.
      */
     public function setStatus(int $status): self;
 
     /**
-     * Enable or disable content encoding.
+     * Enable or disable content compression using encoding (e.g., `gzip`, `deflate`).
      *
-     * @param bool $encode Whether to enable content encoding like gzip.
+     * @param bool $compress Whether to compress content (default: true).
      * 
-     * @return self Instance of the Response class.
+     * @return self Return instance of the Response class.
      */
-    public function encode(bool $encode): self;
+    public function compress(bool $compress = true): self;
 
     /**
-     * Enable or disable content minification.
+     * Enable or disable HTML content minification.
+     * This overrides the environment variable `page.minification`.
      *
-     * @param bool $minify Whether to minify the content.
+     * @param bool $minify Whether to minify the HTML content (default: true).
      * 
-     * @return self Instance of the Response class.
+     * @return self Return instance of the Response class.
      */
-    public function minify(bool $minify): self;
+    public function minify(bool $minify = true): self;
 
     /** 
-     * Configure HTML code block minification and copy button.
+     * Configure minification behavior for HTML code blocks and optional copy button.
      *
-     * @param bool $minify Whether to minify code blocks.
-     * @param bool $button Whether to add a copy button to code blocks (default: false).
-     *
-     * @return self Instance of the Response class.
+     * @param bool $minify Whether to exclude HTML code blocks from minification (default: false).
+     * @param bool $button Whether to include a copy button in code blocks (default: false).
+     * 
+     * @return self Return instance of the Response class.
      */
-    public function codeblock(bool $minify, bool $button = false): self;
+    public function codeblock(bool $minify = true, bool $button = false): self;
 
     /**
-     * Set an HTTP header.
+     * Set an individual HTTP header.
      *
-     * @param string $key The header name.
-     * @param mixed $value The header value.
-     * 
-     * @return self Instance of the Response class.
+     * @param string $key Header name.
+     * @param mixed $value Header value.
+     * @return self Return instance of the Response class.
      */
     public function header(string $key, mixed $value): self;
 
     /**
-     * Set multiple HTTP headers.
+     * Set multiple HTTP headers at once.
      *
-     * @param array<string,mixed> $headers Associative array of headers.
-     * 
-     * @return self Instance of the Response class.
+     * @param array<string,mixed> $headers An associative array of headers.
+     * @return self Return instance of the Response class.
      */
     public function headers(array $headers): self;
 
     /**
-     * Send HTTP response headers to the client.
+     * Send all response headers and the status code to the client without content body.
+     * Optionally validate the against REST Api headers based on `App\Config\Apis` if `$validate` is set to true.
      * 
-     * This method sends the HTTP status code (if set) and all accumulated 
-     * headers to the client.
-     *
+     * @param bool $validate Whether to apply APIs headers validations (default: false).
+     * 
      * @return void
      */
-    public function send(): void;
+    public function send(bool $validate = false): void;
+
+    /**
+     * Send the HTTP status code header with the corresponding status message.
+     * Additionally, it sends the 'Status' header for compatibility with older clients.
+     * 
+     * @return bool Returns true if the status header is valid and successfully sent, otherwise false.
+     */
+    public function sendStatus(): bool;
 
     /**
      * Get the current HTTP status code.
@@ -85,98 +92,75 @@ interface ViewResponseInterface
     public function getStatusCode(): int;
 
     /**
-     * Retrieve a specific HTTP header.
+     * Retrieve the value of a specific HTTP header.
      * 
-     * @param string $name The name of the header.
+     * @param string $name The header name.
      * 
-     * @return mixed Return the header value, or null if it doesn't exist.
+     * @return mixed Return the header value, or null if not found.
      */
     public function getHeader(string $name): mixed;
 
     /**
-     * Retrieve all HTTP headers.
+     * Retrieve all set HTTP headers.
      * 
-     * @return array<string,mixed> Return list of all HTTP headers.
+     * @return array<string,mixed> Return an array of all headers.
      */
     public function getHeaders(): array;
 
     /**
-     * Retrieves the HTTP protocol version (e.g, `1.0`, `1.1`).
+     * Get the HTTP protocol version being used (e.g., `1.0`, `1.1`).
      *
      * @return float Return the HTTP protocol version.
      */
     public function getProtocolVersion(): float;
 
     /**
-     * Clear all previous HTTP headers.
+     * Clear all previously set HTTP headers.
      * 
      * @return void
      */
     public function clearHeaders(): void;
-    
+
     /**
-     * Clear previous set HTTP header redirects.
+     * Clear any redirects set in the response headers.
      * 
-     *  @return bool Return true if any redirect was cleared, false otherwise.
+     * @return bool Return true if any redirects were cleared, false otherwise.
      */
     public function clearRedirects(): bool;
-    
+
     /**
-     * Determine if the response headers has any redirects.
+     * Check if the response headers contain any redirects.
      * 
-     * @return bool Return true if headers contain any redirect, otherwise false.
+     * @return bool Return true if redirects are set, false otherwise.
      */
     public function hasRedirects(): bool;
 
     /**
-     * Send the response content with headers.
+     * Send the response content along with headers.
      *
      * @param string $content The content to send.
-     * @param int $status HTTP status code (default: 200).
-     * @param array<string,mixed> $headers Additional headers (default: []).
-     * @param bool $encode Whether to enable content encoding (default: false).
-     * @param bool $minify Whether to minify content (default: false).
+     * @param array<string,mixed> $headers Additional headers to send with the content.
      * 
-     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
+     * @return int Return the status code: `STATUS_SUCCESS` if successful, otherwise `STATUS_ERROR`.
      */
-    public function render(
-        string $content, 
-        int $status = 200, 
-        array $headers = [],
-        bool $encode = false, 
-        bool $minify = false
-    ): int;
-
-    /** 
-     * Send the defined HTTP headers without any body.
-     *
-     * @return void
-     */
-    public function sendHeaders(): void;
-
-    /**
-     * Send the HTTP status header.
-     * 
-     * @return bool True if the status header was sent, false otherwise.
-     */
-    public function sendStatus(): bool;
+    public function render(string $content, array $headers = []): int;
 
     /**
      * Send a JSON response.
      *
-     * @param array|object $content The data to encode as JSON.
+     * @param array|object $content Data to be encoded as JSON.
      * 
-     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
-     * @throws JsonException Throws if json error occurs.
+     * @return int Return status code: `STATUS_SUCCESS` if successful, otherwise `STATUS_ERROR`.
+     * @throws JsonException If a JSON encoding error occurs.
      */
     public function json(array|object $content): int;
 
     /**
      * Send a plain text response.
      *
-     * @param string $content The text content to send.
+     * @param string $content Text content to send.
      * 
-     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
+     * @return int Return status code: `STATUS_SUCCESS` if successful, otherwise `STATUS_ERROR`.
      */
     public function text(string $content): int;
 
@@ -185,7 +169,7 @@ interface ViewResponseInterface
      *
      * @param string $content HTML content to send.
      * 
-     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
+     * @return int Return status code: `STATUS_SUCCESS` if successful, otherwise `STATUS_ERROR`.
      */
     public function html(string $content): int;
 
@@ -194,14 +178,14 @@ interface ViewResponseInterface
      *
      * @param string $content XML content to send.
      * 
-     * @return int Response status code `STATUS_SUCCESS` if content was rendered, otherwise `STATUS_ERROR`.
+     * @return int Return status code: `STATUS_SUCCESS` if successful, otherwise `STATUS_ERROR`.
      */
     public function xml(string $content): int;
 
     /**
-     * Send a file or content to download on browser.
+     * Send a file or content as a browser download.
      *
-     * @param string $fileOrContent Path to the file or content for download.
+     * @param string $fileOrContent The file path or content for download.
      * @param string|null $name Optional name for the downloaded file.
      * @param array $headers Optional download headers.
      * 
@@ -214,13 +198,13 @@ interface ViewResponseInterface
     ): bool;
 
     /**
-     * Send large files using stream to read file content.
+     * Stream a large file to the client.
      *
-     * @param string $path The path to file storage (e.g: /writeable/storages/images/).
-     * @param string $basename The file name (e.g: image.png).
+     * @param string $path File storage path (e.g., `/writable/storage/images/`).
+     * @param string $basename The file name (e.g., `image.png`).
      * @param array $headers Optional stream headers.
      * @param bool $eTag Whether to generate ETag headers (default: true).
-     * @param int $expiry Expiry time in seconds for cache control (default: 0), indicating no cache.
+     * @param int $expiry Cache expiry time in seconds (default: 0 for no cache).
      * 
      * @return bool Return true if file streaming was successful, false otherwise.
      */
@@ -233,12 +217,12 @@ interface ViewResponseInterface
     ): bool;
 
     /** 
-     * Redirect the client to a different URL location.
+     * Redirect the client to a new URL.
      *
-     * @param string $uri  The target URI for the redirection.
-     * @param string|null $method Optional. The redirection method (`refresh` or `null` for standard).
+     * @param string $uri The target URI.
+     * @param string|null $method Optional redirection method (`refresh` or standard null).
      * @param int|null $code Optional HTTP status code (e.g., `302`, `303`, `307`).
-     *
+     * 
      * @return void
      */
     public function redirect(string $uri, ?string $method = null, ?int $code = null): void;

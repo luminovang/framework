@@ -21,12 +21,14 @@ use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
 use \Luminova\Optimization\Minification;
+use \Luminova\Utils\WeakReference;
 use \Luminova\Cache\ViewCache;
 use \App\Config\Template as TemplateConfig;
 use \DateTimeInterface;
 use \DateTimeImmutable;
 use \DateTimeZone;
 use \Closure;
+use \WeakMap;
 use \Exception;
 
 trait View
@@ -37,20 +39,6 @@ trait View
      * @var TemplateConfig $config
      */
     private static ?TemplateConfig $config = null;
-
-    /**
-     * Page minification instance.
-     * 
-     * @var ?Minification $min
-     */
-    private static ?Minification $min = null;
-
-    /**
-     * View cache instance.
-     * 
-     * @var ViewCache $viewCache 
-     */
-    private static ?ViewCache $viewCache  = null;
 
     /**
      * Flag for key not found.
@@ -123,13 +111,6 @@ trait View
     private static array $publicOptions = [];
 
     /** 
-     * Holds the array classes.
-     * 
-     * @var array<string,mixed> $publicClasses 
-     */
-    private static array $publicClasses = [];
-
-    /** 
      * Ignore or allow view optimization.
      * 
      * @var array<string,array> $cacheOption
@@ -197,7 +178,11 @@ trait View
      * 
      * @var string[] $supportedTypes
      */
-    private static array $supportedTypes = ['html', 'json', 'text', 'txt', 'xml', 'js', 'css', 'rdf', 'atom', 'rss'];
+    private static array $supportedTypes = [
+        'html', 'json', 'text', 
+        'txt', 'xml', 'js', 
+        'css', 'rdf', 'atom', 'rss'
+    ];
 
     /**
      * View headers.
@@ -206,15 +191,33 @@ trait View
      */
     private array $headers = [];
 
+    /**
+     * Weak object reference.
+     * 
+     * @var WeakMap|null $weak
+     */
+    private static ?WeakMap $weak = null;
+
+    /**
+     * Exported object reference.
+     * 
+     * @var WeakReference|null $reference
+     */
+    private static ?WeakReference $reference = null;
+
     /** 
      * Initialize template view configuration.
      *
      * @return void
      * @internal 
      */
-    protected final function initialize(): void
+    protected final function onInitialized(): void
     {
         self::$config ??= new TemplateConfig();
+        self::$weak ??= new WeakMap();
+        self::$reference ??= new WeakReference(); // Public and Protected Classes
+
+        self::$weak[self::$reference] = [];
         self::$root ??= root();
         self::$minifyContent = (bool) env('page.minification', false);
         self::$useHmvcModule = env('feature.app.hmvc', false);
@@ -224,7 +227,7 @@ trait View
     }
 
     /** 
-     * Get property from self::$publicOptions or self::$publicClasses
+     * Get property from view options or application exported, public and protected properties.
      *
      * @param string $key The property name.
      *
@@ -237,7 +240,7 @@ trait View
             return self::$publicOptions[$key];
         }
 
-        return self::$publicClasses[$key] ?? static::$KEY_NOT_FOUND;
+        return self::$weak[self::$reference][$key] ?? static::$KEY_NOT_FOUND;
     }
 
     /** 
@@ -381,16 +384,16 @@ trait View
 
         $alias ??= get_class_name($class);
 
-        if (isset(self::$publicClasses[$alias])) {
+        if (isset(self::$weak[self::$reference][$alias])) {
             throw new RuntimeException("Exported class with the same name or alias: '{$alias}' already exists.");
         }
 
         if ($initialize && is_string($class)) {
-            self::$publicClasses[$alias] = new $class();
+            self::$weak[self::$reference][$alias] = new $class();
             return true;
         }
         
-        self::$publicClasses[$alias] = $class;
+        self::$weak[self::$reference][$alias] = $class;
         return true;
     }
 
@@ -402,7 +405,7 @@ trait View
      * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
      * 
      * @example - Usage example with cache.
-     * ```
+     * ```php
      * $cache = $this-app->cache(60); 
      * //Check if already cached before caching again.
      * if($cache->expired()){
@@ -498,7 +501,7 @@ trait View
      */
     public final function onExpired(string $viewType, Closure $renew, mixed ...$arguments): int
     {
-        if ($this->shouldCache() && !$this->expired($viewType)) {
+        if ($this->shouldLmvCache() && !$this->expired($viewType)) {
             $this->forceCache = true;
             return $this->reuse();
         }
@@ -573,11 +576,11 @@ trait View
         }
 
         $this->viewsDirectory = $this->getViewPath();
-        $this->filepath = $this->viewsDirectory . $viewName . self::dot();
+        $this->filepath = $this->viewsDirectory . $viewName . self::lmvTplExe();
 
         if (PRODUCTION && !file_exists($this->filepath)) {
             $viewName = '404';
-            $this->filepath = $this->viewsDirectory . $viewName . self::dot();
+            $this->filepath = $this->viewsDirectory . $viewName . self::lmvTplExe();
         }
 
         $this->viewType = $viewType;
@@ -603,7 +606,7 @@ trait View
      */
     public final function render(array $options = [], int $status = 200): int 
     {
-        return $this->call($options, $status) 
+        return $this->callLmv($options, $status) 
             ? STATUS_SUCCESS 
             : STATUS_ERROR;
     }
@@ -625,7 +628,7 @@ trait View
      */
     public final function respond(array $options = [], int $status = 200): string
     {
-        return $this->call($options, $status, true);
+        return $this->callLmv($options, $status, true);
     }
 
     /** 
@@ -661,10 +664,10 @@ trait View
      */
     public final function viewInfo(): array 
     {
-        $viewPath = root($this->getViewPath()) . $this->activeView . self::dot();
+        $viewPath = root($this->getViewPath()) . $this->activeView . self::lmvTplExe();
         $info = [
             'location' => $viewPath,
-            'engine' => self::engine(),
+            'engine' => self::lmvEngine(),
             'size' => 0,
             'timestamp' => 0,
             'modified' => '',
@@ -711,9 +714,9 @@ trait View
      *
      * @return string Returns extension type.
      */
-    private static function dot(): string
+    private static function lmvTplExe(): string
     {
-        $engine = self::engine();
+        $engine = self::lmvEngine();
         return ($engine === 'smarty' 
             ? '.tpl' 
             : ($engine === 'twig' ? '.twig' : '.php')
@@ -725,7 +728,7 @@ trait View
      *
      * @return string Return template engine name.
      */
-    private static function engine(): string 
+    private static function lmvEngine(): string 
     {
         return strtolower(self::$config->templateEngine ?? 'default');
     }
@@ -740,28 +743,36 @@ trait View
      * @return bool|string  Return true on success, false on failure.
      * @throws ViewNotFoundException Throw if view file is not found.
      */
-    private function call(
+    private function callLmv(
         array $options = [], 
         int $status = 200, 
         bool $return = false
     ): string|bool
     {
-        $options = $this->parseOptions($options);
         try {
-            if($this->assertSetup($status)){
-                $cacheable = $this->shouldCache();
-                $engine = self::engine();
+            $cacheable = $this->shouldLmvCache();
+            $engine = self::lmvEngine();
+            $cache = null;
 
+            if ($cacheable && $engine === 'default') {
+                $cache = self::getCache($this->cacheExpiry);
+
+                if ($cache->expired($this->viewType) === false) {
+                    return $return ? $cache->get() : $cache->read();
+                }
+            }
+            
+            if($this->lmvSetup($status)){
                 if ($engine === 'smarty' || $engine === 'twig') {
-                    $expires = ($this->cacheExpiry instanceof DateTimeInterface) 
-                        ? Timestamp::ttlToSeconds($this->cacheExpiry)
-                        : $this->cacheExpiry;
-                    return self::{$engine . 'TemplateEngine'}(
-                        $this->activeView . self::dot(), 
+                    return self::{$engine . 'Lmv'}(
+                        $this->activeView . self::lmvTplExe(), 
                         $this->viewsDirectory, 
-                        $options, 
+                        $this->lmvViewOptions($options), 
                         $cacheable,
-                        $expires,
+                        (($this->cacheExpiry instanceof DateTimeInterface) 
+                            ? Timestamp::ttlToSeconds($this->cacheExpiry) 
+                            : $this->cacheExpiry
+                        ),
                         $this->minifyCodeblocks, 
                         $this->codeblockButton,
                         $return,
@@ -769,20 +780,10 @@ trait View
                     );
                 }
 
-                $cache = null;
-
-                if ($cacheable) {
-                    $cache = self::getCache($this->cacheExpiry);
-   
-                    if ($cache->expired($options['viewType']) === false) {
-                        return $return ? $cache->get() : $cache->read();
-                    }
-                }
-
                 if(self::$config->templateIsolation){
-                    return self::isolateTemplateEngine(
+                    return self::isolateLmv(
                         $this->filepath, 
-                        $options,
+                        $this->lmvViewOptions($options),
                         $cache,
                         $this->minifyCodeblocks, 
                         $this->codeblockButton,
@@ -791,11 +792,16 @@ trait View
                     );
                 }
 
-                return $this->defaultTemplateEngine($options, $cache, $return, $this->headers);
+                return $this->defaultLmv(
+                    $this->lmvViewOptions($options), 
+                    $cache, 
+                    $return, 
+                    $this->headers
+                );
             }
         } catch (ExceptionInterface|Exception $e) {
             if($e instanceof ExceptionInterface){
-                self::handleException($e, $options);
+                self::handleLmvException($e, $this->lmvViewOptions($options));
                 return false;
             }
 
@@ -813,7 +819,7 @@ trait View
      * @throws ViewNotFoundException Throw if view file is not found.
      * @throws RuntimeException Throw of error occurred during rendering.
      */
-    private function assertSetup(int $status = 200): bool
+    private function lmvSetup(int $status = 200): bool
     {
         if (!file_exists($this->filepath)) {
             Header::headerNoCache(404);
@@ -846,7 +852,7 @@ trait View
      * 
      * @return bool|string Return true on success, false on failure.
      */
-    private static function smartyTemplateEngine(
+    private static function smartyLmv(
         string $view, 
         string $viewsDirectory, 
         array $options = [], 
@@ -876,7 +882,7 @@ trait View
 
             if (!$instance->isCached($view)) {
                 $instance->assignOptions($options);
-                $instance->assignClasses(self::$publicClasses);
+                $instance->assignClasses(self::$weak[self::$reference]);
             }
 
             return $instance->display($view, $return);
@@ -902,7 +908,7 @@ trait View
      * 
      * @return bool|string Return true on success, false on failure.
      */
-    private static function twigTemplateEngine(
+    private static function twigLmv(
         string $view, 
         string $viewsDirectory, 
         array $options = [], 
@@ -933,7 +939,7 @@ trait View
                 'copyable' => $copy,
                 'encode' => false,
             ]);
-            $instance->assignClasses(self::$publicClasses);
+            $instance->assignClasses(self::$weak[self::$reference]);
 
             return $instance->display($view, $options, $return);
         }catch(AppException $e){
@@ -953,7 +959,7 @@ trait View
      * 
      * @return bool|string Return true on success, false on failure.
      */
-    private function defaultTemplateEngine(
+    private function defaultLmv(
         array $options, 
         ?ViewCache $_lmv_cache = null, 
         bool $_lmv_return = false,
@@ -962,14 +968,14 @@ trait View
     {
         $lmv_view_type = $options['viewType']??'html';
         if(self::$config->variablePrefixing !== null){
-            self::extract($options);
+            self::lmvExtractOptions($options);
         }
 
         include_once $this->filepath;
         $_lmv_contents = ob_get_clean();     
-        self::inlineErrors($_lmv_contents);
+        self::lmvInlineErrors($_lmv_contents);
 
-        [$_lmv_headers, $_lmv_contents, $_lmv_is_cacheable] = self::doContentMinification(
+        [$_lmv_headers, $_lmv_contents, $_lmv_is_cacheable] = self::lmvMinification(
             $_lmv_contents,
             $lmv_view_type,
             $this->minifyCodeblocks, 
@@ -982,7 +988,7 @@ trait View
         }
 
         $_lmv_headers['default_headers'] = true;
-        Header::parseHeaders($_lmv_headers);
+        Header::validate($_lmv_headers);
         echo $_lmv_contents;
 
         if($_lmv_is_cacheable && $_lmv_cache instanceof ViewCache){
@@ -1007,7 +1013,7 @@ trait View
      * @return bool|string Return true on success, false on failure.
      * @throws RuntimeException Throw if error occurred.
      */
-    private static function isolateTemplateEngine(
+    private static function isolateLmv(
         string $_lmv_view_file, 
         array $options,
         ?ViewCache $_lmv_cache = null,
@@ -1017,8 +1023,10 @@ trait View
         array $customHeaders = []
     ): bool|string
     {
-        $self = self::newSelfInstance();
-        self::$publicClasses = [];
+        $self = self::lmvSelf();
+        self::$weak[$self] = $self;
+        self::$weak->offsetUnset(self::$reference);
+
         $lmv_view_type = $options['viewType']??'html';
         if(($_lmv_prefix = self::$config->variablePrefixing) !== null){
             if($_lmv_prefix && isset($options['self'])){
@@ -1029,9 +1037,9 @@ trait View
 
         include_once $_lmv_view_file;
         $_lmv_contents = ob_get_clean();
-        self::inlineErrors($_lmv_contents);
+        self::lmvInlineErrors($_lmv_contents);
 
-        [$_lmv_headers, $_lmv_contents, $_lmv_is_cacheable] = self::doContentMinification(
+        [$_lmv_headers, $_lmv_contents, $_lmv_is_cacheable] = self::lmvMinification(
             $_lmv_contents,
             $lmv_view_type,
             $_lmv_ignore, 
@@ -1044,7 +1052,7 @@ trait View
         }
 
         $_lmv_headers['default_headers'] = true;
-        Header::parseHeaders($_lmv_headers);
+        Header::validate($_lmv_headers);
         echo $_lmv_contents;
         
         if($_lmv_is_cacheable && $_lmv_cache instanceof ViewCache){
@@ -1060,9 +1068,9 @@ trait View
      * 
      * @return class-object Return new instance of anonymous classes.
      */
-    private static function newSelfInstance(): object 
+    private static function lmvSelf(): object 
     {
-        return new class(self::$publicClasses) {
+        return new class(self::$weak[self::$reference]) {
             /**
              * @var array<string,mixed> $classes
              */
@@ -1099,7 +1107,7 @@ trait View
      * 
      * @return array<int,mixed> Return array of contents and headers.
      */
-    private function doContentMinification(
+    private function lmvMinification(
         string|false $content, 
         string $type, 
         bool $ignore, 
@@ -1142,7 +1150,7 @@ trait View
      * @return bool Return true if view should be cached, otherwise false.
      * > Keep the validation order its important.
      */
-    private function shouldCache(): bool
+    private function shouldLmvCache(): bool
     {
         if ($this->forceCache) {
             return true;
@@ -1174,10 +1182,11 @@ trait View
             return true;
         }
 
-        static $timezone = null;
         if ($this->cacheExpiry instanceof DateTimeInterface) {
-            $timezone ??= new DateTimeZone(date_default_timezone_get());
-            return $this->cacheExpiry < new DateTimeImmutable('now', $timezone);
+            return $this->cacheExpiry < new DateTimeImmutable(
+                'now', 
+                new DateTimeZone(date_default_timezone_get())
+            );
         }
 
         return false;
@@ -1191,7 +1200,7 @@ trait View
      *
      * @return void 
      */
-    private static function handleException(
+    private static function handleLmvException(
         ExceptionInterface $exception, 
         array $options = []
     ): void 
@@ -1214,7 +1223,7 @@ trait View
      * @return void
      * @throws RuntimeException If there is an error setting the attributes.
      */
-    private static function extract(array $attributes): void
+    private static function lmvExtractOptions(array $attributes): void
     {
         if (self::$config->variablePrefixing === null) {
             return;
@@ -1251,7 +1260,7 @@ trait View
             );
         }
 
-        if (isset(self::$publicClasses[$key])) {
+        if (isset(self::$weak[self::$reference][$key])) {
             throw new RuntimeException(
                 sprintf('Class with the same option name: "%s". already exists. Use a different name or enable variable prefixing to retain the name.', $key)
             );
@@ -1268,7 +1277,7 @@ trait View
      * @param string $contents The content to check for inline PHP errors.
      * @throws RuntimeException if an inline PHP error is detected.
      */
-    private static function inlineErrors(string $contents): void
+    private static function lmvInlineErrors(string $contents): void
     {
         if (PRODUCTION || !env('debug.catch.inline.errors', false)) {
             return;
@@ -1291,7 +1300,7 @@ trait View
      * 
      * @return array<string,mixed> Return the parsed options.
      */
-    private function parseOptions(array $options = []): array 
+    private function lmvViewOptions(array $options = []): array 
     {
         $options['viewType'] = $this->viewType;
         $options['href'] = static::link();
@@ -1438,14 +1447,10 @@ trait View
         bool $copy = false,
     ): Minification
     {
-        if(!self::$min instanceof Minification){
-            self::$min = new Minification();
-        }
-
-        self::$min->codeblocks($ignore);
-        self::$min->copyable($copy);
-
-        return self::$min->compress($contents, $type);
+        return self::$weak[new static()] ??= (new Minification())
+            ->codeblocks($ignore)
+            ->copyable($copy)
+            ->compress($contents, $type);
     }
 
     /** 
@@ -1457,15 +1462,10 @@ trait View
      */
     private static function getCache(DateTimeInterface|int|null $expiry = 0): ViewCache
     {
-        if(!self::$viewCache instanceof ViewCache){
-            self::$viewCache = new ViewCache();
-        }
-
-        self::$viewCache->setExpiry($expiry);
-        self::$viewCache->setDirectory(self::$cacheFolder);
-        self::$viewCache->setKey(Foundation::getCacheId());
-        self::$viewCache->setUri(Foundation::getUriSegments());
-
-        return self::$viewCache;
+        return self::$weak[new static()] ??= (new ViewCache())
+            ->setExpiry($expiry)
+            ->setDirectory(self::$cacheFolder)
+            ->setKey(Foundation::getCacheId())
+            ->setUri(Foundation::getUriSegments());
     }
 }

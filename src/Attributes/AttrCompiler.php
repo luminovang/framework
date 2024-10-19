@@ -19,6 +19,7 @@ use \Luminova\Base\BaseViewController;
 use \Luminova\Interface\RouterInterface;
 use \Luminova\Exceptions\RouterException;
 use \Luminova\Exceptions\AppException;
+use \WeakMap;
 use \ReflectionClass;
 use \ReflectionMethod;
 use \ReflectionException;
@@ -40,7 +41,7 @@ final class AttrCompiler
     private array $routes = [];
 
     /**
-     * Waether routing attributes cache is enabled.
+     * Weather routing attributes cache is enabled.
      * 
      * @var bool $cache
      */
@@ -49,9 +50,9 @@ final class AttrCompiler
     /**
      * Loaded controller files.
      * 
-     * @var array<string,RecursiveIteratorIterator> $files
+     * @var WeakMap $weak
      */
-    private static array $files = [];
+    private static ?WeakMap $weak = null;
 
     /**
      * Constructor to initialize the compiler.
@@ -67,11 +68,19 @@ final class AttrCompiler
     )
     {
         self::$cache = (bool) env('feature.route.cache.attributes', false);
-
+        self::$weak = new WeakMap();
         // Throw an exceptions error on cli
         if($this->cli){
             setenv('throw.cli.exceptions', 'true');
         }
+    }
+
+    /**
+     * Forces collection of any existing garbage cycles.
+     */
+    public function __destruct() 
+    {
+        gc_collect_cycles();
     }
 
     /**
@@ -118,14 +127,14 @@ final class AttrCompiler
                     ? '\\App\Modules\\' . ($module === 'Controllers' ? '' : uppercase_words($module) . '\\') . 'Controllers\\Http\\'
                     : '\\App\\Controllers\\Http\\';
 
-                $class = new ReflectionClass("{$namespace}{$fileName}");
+                self::$weak[$file] = new ReflectionClass("{$namespace}{$fileName}");
             }catch(ReflectionException $e){
                 throw new RouterException($e->getMessage(), $e->getCode(), $e);
             }
 
             if(
-                !$this->isValidClass($class) || 
-                !$this->isClassUriPrefix($class, $uri, $context)
+                !$this->isValidClass(self::$weak[$file]) || 
+                !$this->isClassUriPrefix(self::$weak[$file], $uri, $context)
             ){
                 continue;
             }
@@ -133,16 +142,15 @@ final class AttrCompiler
             /**
              * Handle context attributes and register error handlers.
             */
-            $this->addErrorHandlers($class, $context);
+            $this->addErrorHandlers(self::$weak[$file], $context);
 
             /**
              * Handle method attributes and create routes.
             */
-            foreach ($class->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-                $attributes = $method->getAttributes(Route::class);
+            foreach (self::$weak[$file]->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
                 $callback = $fileName . '::' . $method->getName();
 
-                foreach ($attributes as $attribute) {
+                foreach ($method->getAttributes(Route::class) as $attribute) {
                     $attr = $attribute->newInstance();
                     //$callback = $fileName . '::' . $method->getName();
 
@@ -191,7 +199,6 @@ final class AttrCompiler
         }
 
         $this->cache('http', $context);
-        gc_mem_caches();
     }
 
     /**
@@ -226,21 +233,20 @@ final class AttrCompiler
                     ? '\\App\Modules\\' . ($module === 'Controllers' ? '' : uppercase_words($module) . '\\') . 'Controllers\\Cli\\'
                     : '\\App\\Controllers\\Cli\\';
 
-                $class = new ReflectionClass("{$namespace}{$fileName}");
+                self::$weak[$file] = new ReflectionClass("{$namespace}{$fileName}");
             }catch(ReflectionException $e){
                 throw new RouterException($e->getMessage(), $e->getCode(), $e);
             }
 
-            if (!($class->isInstantiable() && !$class->isAbstract() && (
-                $class->isSubclassOf(BaseCommand::class)))) {
+            if (!(self::$weak[$file]->isInstantiable() && !self::$weak[$file]->isAbstract() && (
+                self::$weak[$file]->isSubclassOf(BaseCommand::class)))) {
                 continue;
             }
 
-            foreach ($class->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-                $attributes = $method->getAttributes(Route::class);
+            foreach (self::$weak[$file]->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
                 $callback = $fileName . '::' . $method->getName();
 
-                foreach ($attributes as $attribute) {
+                foreach ($method->getAttributes(Route::class) as $attribute) {
                     $attr = $attribute->newInstance();
 
                     if(!$this->cli || $attr->group === null){
@@ -265,7 +271,6 @@ final class AttrCompiler
         }
 
         $this->cache('cli');
-        gc_mem_caches();
     }
 
     /**
@@ -294,28 +299,27 @@ final class AttrCompiler
                 : '\\App\\Controllers\\';
 
             try {
-                $class = new ReflectionClass("{$namespace}Http\\{$fileName}");
+                self::$weak[$file] = new ReflectionClass("{$namespace}Http\\{$fileName}");
             } catch (ReflectionException $e) {
                 try {
-                    $class = new ReflectionClass("{$namespace}Cli\\{$fileName}");
+                    self::$weak[$file] = new ReflectionClass("{$namespace}Cli\\{$fileName}");
                 } catch (ReflectionException $e) {
                     throw new RouterException($e->getMessage(), $e->getCode(), $e);
                 }
-            }                
+            }     
 
-            if (!($class->isInstantiable() && !$class->isAbstract() && (
-                $class->isSubclassOf(BaseCommand::class) || 
-                $class->isSubclassOf(BaseViewController::class) ||
-                $class->isSubclassOf(BaseController::class) ||
-                $class->implementsInterface(RouterInterface::class)))) {
+            if (!(self::$weak[$file]->isInstantiable() && !self::$weak[$file]->isAbstract() && (
+                self::$weak[$file]->isSubclassOf(BaseCommand::class) || 
+                self::$weak[$file]->isSubclassOf(BaseViewController::class) ||
+                self::$weak[$file]->isSubclassOf(BaseController::class) ||
+                self::$weak[$file]->implementsInterface(RouterInterface::class)))) {
                 continue;
             }
 
-            foreach ($class->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-                $attributes = $method->getAttributes(Route::class);
+            foreach (self::$weak[$file]->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
                 $callback = $fileName . '::' . $method->getName();
 
-                foreach ($attributes as $attribute) {
+                foreach ($method->getAttributes(Route::class) as $attribute) {
                     $attr = $attribute->newInstance();
                     
                     if($attr->group !== null){
@@ -373,7 +377,7 @@ final class AttrCompiler
         }
 
         try{
-            return static::$files[$path] ??= new RecursiveIteratorIterator(
+            return self::$weak[new static()] = new RecursiveIteratorIterator(
                 new RecursiveCallbackFilterIterator(
                     new RecursiveDirectoryIterator(
                         root($path), 
@@ -578,11 +582,10 @@ final class AttrCompiler
             return in_array($entry->getBasename(), $allowed); 
         }
 
-        $module = basename(dirname($entry->getPathname()));
         return ($this->hmvc 
             ? str_contains($entry->getPathname(), '/Controllers/') 
             : $entry->getBasename() !== 'Application.php'
-        ) && ($name !== 'Export' && $module === $name);
+        ) && ($name !== 'Export' && basename(dirname($entry->getPathname())) === $name);
     }
 
     /**
@@ -618,11 +621,10 @@ final class AttrCompiler
                 return false;
             }
 
-            $normalize ??= Router::normalizePatterns($pattern);
-            $this->routes['basePattern'] = $normalize;
+            $this->routes['basePattern'] = $normalize ?? Router::normalizePatterns($pattern);
             
             if($instance->onError !== null){
-                $this->routes['controllers']['errors'][$normalize] = $instance->onError;
+                $this->routes['controllers']['errors'][$this->routes['basePattern']] = $instance->onError;
             }
         }
 

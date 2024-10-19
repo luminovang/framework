@@ -26,6 +26,8 @@ use \Luminova\Cache\ViewCache;
 use \Luminova\Exceptions\RouterException;
 use \Luminova\Interface\RouterInterface;
 use \Luminova\Interface\ErrorHandlerInterface;
+use \Luminova\Utils\WeakReference;
+use \WeakMap;
 use \ReflectionMethod;
 use \ReflectionFunction;
 use \ReflectionNamedType;
@@ -64,21 +66,6 @@ final class Router
     public const CLI_URI = '__cli__';
     
     /**
-     * Application routes.
-     * 
-     * @var array<string,array> $routes
-     */
-    private static array $routes = [
-        'routes' =>             [], 
-        'routes_after' =>       [], 
-        'routes_middleware' =>  [], 
-        'cli_commands' =>       [], 
-        'cli_middleware' =>     [], 
-        'cli_groups' =>         [], 
-        'errors' =>             []
-    ];
-
-    /**
      * All allowed HTTP request methods.
      * 
      * @var array<string,string> $httpMethods
@@ -92,27 +79,6 @@ final class Router
         'OPTIONS'   => 'OPTIONS', 
         'HEAD'      => 'HEAD',
         'CLI'       => 'CLI' //Fake a request method for cli
-    ];
-
-    /**
-     * Strict placeholder patterns.
-     * 
-     * @var array<string,string> $placeholders
-     */
-    private static array $placeholders = [
-        '(:mixed)'        => '([^/]+)',
-        '(:any)'          => '(.*)',
-        '(:root)'         => '?.*', //?(.*)
-        '(:optional)'     => '?([^/]*)?',
-        '(:alphanumeric)' => '([a-zA-Z0-9-]+)',
-        '(:int)'          => '(\d+)',
-        '(:integer)'      => '(\d+)',
-        '(:number)'       => '([0-9-.]+)',
-        '(:double)'       => '([+-]?\d+(\.\d*)?)',
-        '(:float)'        => '([+-]?\d+\.\d+)',
-        '(:string)'       => '([a-zA-Z0-9\W_-]+)',
-        '(:alphabet)'     => '([a-zA-Z]+)',
-        '(:path)'         => '((.+)/([^/]+)+)'
     ];
     
     /**
@@ -184,6 +150,20 @@ final class Router
     private static ?CoreApplication $application = null;
 
     /**
+     * Weak object reference map.
+     * 
+     * @var WeakMap|null $weak
+    */
+    private static ?WeakMap $weak = null;
+
+     /**
+     * Router object reference.
+     * 
+     * @var WeakReference|null $reference
+    */
+    private static ?WeakReference $reference = null;
+
+    /**
      * Initialize router class.
      * 
      * @param CoreApplication $application Instance of application class.
@@ -191,8 +171,10 @@ final class Router
     public function __construct(CoreApplication $application)
     {
         self::$application = $application;
+        self::$weak = new WeakMap();
+        self::$reference = new WeakReference();
         self::$di = env('feature.route.dependency.injection', false);
-
+        self::reset();
         Foundation::profiling('start');
     }
 
@@ -240,7 +222,7 @@ final class Router
     public function context(Prefix|array|null ...$contexts): self 
     {
         self::$isCli = is_command();
-        self::$method  = self::getRoutingMethod();
+        self::$method  = self::getRequestMethod();
         self::$uri = self::getUriSegments();
 
         // If application is undergoing maintenance.
@@ -248,12 +230,12 @@ final class Router
             return $this;
         }
 
-        $prefix = self::getFirst();
-
         // If the view uri ends with `.extension`, then try serving the cached static version.
-        if(self::$uri !== self::CLI_URI && self::serveStaticCache($prefix)){
+        if(!self::$isCli && self::$uri !== self::CLI_URI && $this->serveStaticCache()){
             return $this;
         }
+
+        $prefix = self::getFirst();
 
         // Application start event.
         self::$application->__on('onStart', [
@@ -370,7 +352,7 @@ final class Router
      */
     public function command(string $command, Closure|string $callback): void
     {
-        self::$routes['cli_commands']['CLI'][] = [
+        self::$weak[self::$reference]['cli_commands']['CLI'][] = [
             'callback' => $callback,
             'pattern' => self::normalizePatterns(trim($command, '/'), true),
             'middleware' => false
@@ -393,7 +375,7 @@ final class Router
         }
 
         $group = trim($group, '/');
-        self::$routes['cli_middleware']['CLI'][$group][] = [
+        self::$weak[self::$reference]['cli_middleware']['CLI'][$group][] = [
             'callback' => $callback,
             'pattern' => $group,
             'middleware' => true
@@ -409,7 +391,7 @@ final class Router
      * @return void
      * @example - Example blog website binding.
      * 
-     * ```
+     * ```php
      * $router->bind('/blog/', static function(Router $router){
      *      $router->get('/', 'BlogController::blogs');
      *      $router->get('/id/([aZ-Az-0-9-])', 'BlogController::blog');
@@ -434,7 +416,7 @@ final class Router
      * @return void
      * @example - Example blog command grouping.
      * 
-     * ```
+     * ```php
      * $router->group('blog', static function(Router $router){
      *      $router->command('list', 'BlogController::blogs');
      *      $router->command('id/(:mixed)', 'BlogController::blog');
@@ -443,7 +425,7 @@ final class Router
      */
     public function group(string $group, Closure $callback): void
     {
-        self::$routes['cli_groups'][$group][] = $callback;
+        self::$weak[self::$reference]['cli_groups'][$group][] = $callback;
     }
 
     /**
@@ -487,6 +469,7 @@ final class Router
     public function run(): void
     {
         if(self::$terminate){
+            Foundation::profiling('stop');
             exit(STATUS_SUCCESS);
         }
 
@@ -497,7 +480,6 @@ final class Router
             $context = ['commands' => self::$commands];
         }else{
             $exitCode = self::runAsHttp();
-
             if (self::$method === 'HEAD') {
                 ob_end_clean();
             }
@@ -526,7 +508,7 @@ final class Router
     ): void
     {
         if ($callback === null) {
-            self::$routes['errors']['/'] = $match;
+            self::$weak[self::$reference]['errors']['/'] = $match;
             return;
         } 
 
@@ -535,7 +517,7 @@ final class Router
         }
 
         $match = self::normalizePatterns($match);
-        self::$routes['errors'][$match] = $callback;
+        self::$weak[self::$reference]['errors'][$match] = $callback;
     }
 
     /**
@@ -547,7 +529,7 @@ final class Router
      */
     public static function triggerError(int $status = 404): void
     {
-        foreach (self::$routes['errors'] as $pattern => $callable) {
+        foreach (self::$weak[self::$reference]['errors'] as $pattern => $callable) {
             $matches = [];
             if (
                 self::uriCapture($pattern, self::$uri, $matches) && 
@@ -557,7 +539,7 @@ final class Router
             }
         }
       
-        $error = (self::$routes['errors']['/'] ?? null);
+        $error = (self::$weak[self::$reference]['errors']['/'] ?? null);
 
         if ($error !== null && self::call($error, [], true)) {
             return;
@@ -658,29 +640,6 @@ final class Router
 
         return '';
     }
-    
-    /**
-     * Enable encoding of response.
-     * 
-     * @param string|null $encoding The encoding to output.
-     * 
-     * @return void
-     */
-    private static function outputEncoding(?string $encoding = null): void
-    {
-        if ($encoding === null || $encoding === '') {
-            ob_start();
-            return;
-        }
-
-        if (str_contains($encoding, 'x-gzip') || str_contains($encoding, 'gzip')) {
-            ob_start('ob_gzhandler');
-            return;
-        }
-
-        $handler = env('script.output.handler', null);
-        ob_start($handler === '' ? null : $handler);
-    }
 
     /**
      * Get the request method for routing, considering overrides.
@@ -688,7 +647,7 @@ final class Router
      * @return string The request method for routing.
      * @internal
      */
-    private static function getRoutingMethod(): string
+    private static function getRequestMethod(): string
     {
         $method = ($_SERVER['REQUEST_METHOD'] ?? null);
 
@@ -701,14 +660,12 @@ final class Router
         }
 
         $method = strtoupper($method);
-  
         if($method === 'HEAD'){
             ob_start();
             return 'GET';
         }
 
-        self::outputEncoding($_SERVER['HTTP_ACCEPT_ENCODING'] ?? null);
-
+        Header::setOutputHandler();
         if($method === 'POST'){
             $headers = Header::getHeaders();
             $overrides = ['PUT' => true, 'DELETE' => true, 'PATCH' => true];
@@ -774,7 +731,7 @@ final class Router
         $pipes = explode('|', $methods);
 
         foreach ($pipes as $method) {
-            self::$routes[$to][$method][] = [
+            self::$weak[self::$reference][$to][$method][] = [
                 'pattern' => $pattern,
                 'callback' => $callback,
                 'middleware' => $terminate
@@ -909,24 +866,24 @@ final class Router
         }
 
         $command = self::getArgument(2);
-        $global = (self::$routes['cli_middleware'][self::$method]['global']??null);
+        $global = (self::$weak[self::$reference]['cli_middleware'][self::$method]['global']??null);
 
         if($global !== null && !self::handleCommand($global)){
             return STATUS_ERROR;
         }
         
-        $groups = (self::$routes['cli_groups'][$group] ?? null);
+        $groups = (self::$weak[self::$reference]['cli_groups'][$group] ?? null);
         if($groups !== null){
             foreach($groups as $groupCallback){
                 $groupCallback(...self::noneParamInjection($groupCallback));
             }
 
-            $middleware = (self::$routes['cli_middleware'][self::$method][$group] ?? null);
+            $middleware = (self::$weak[self::$reference]['cli_middleware'][self::$method][$group] ?? null);
             if($middleware !== null && !self::handleCommand($middleware)){
                 return STATUS_ERROR;
             }
             
-            $routes = self::$routes['cli_commands'][self::$method] ?? null;
+            $routes = self::$weak[self::$reference]['cli_commands'][self::$method] ?? null;
             if ($routes !== null && self::handleCommand($routes)) {
                 self::$application->__on('onCommandPresent', self::getArguments());
                 return STATUS_SUCCESS;
@@ -978,11 +935,11 @@ final class Router
      */
     private static function getRoutes(string $from): array 
     {
-        $anyRoutes = self::$routes[$from][self::ANY_METHODS] ?? null;
+        $anyRoutes = self::$weak[self::$reference][$from][self::ANY_METHODS] ?? null;
 
         return ($anyRoutes !== null) 
-            ? array_merge(self::$routes[$from][self::$method] ?? [], $anyRoutes)
-            : self::$routes[$from][self::$method] ?? [];
+            ? array_merge(self::$weak[self::$reference][$from][self::$method] ?? [], $anyRoutes)
+            : self::$weak[self::$reference][$from][self::$method] ?? [];
     }
 
     /**
@@ -993,12 +950,18 @@ final class Router
     private static function systemMaintenance(): bool 
     {
         self::$terminate = true;
-        
+        $err = 'Error: (503) System undergoing maintenance!';
+        if(self::$isCli || self::$uri === self::CLI_URI){
+            self::terminal()->error($err);
+            return true;
+        }
+
         Header::headerNoCache(503, null, env('app.maintenance.retry', '3600'));
         if(file_exists($path = self::$application->getSystemError('maintenance'))){
             include_once $path;
         }
 
+        echo $err;
         return true;
     }
 
@@ -1006,38 +969,32 @@ final class Router
      * Serve static cached pages.
      * If cache is enabled and the request is not in CLI mode, check if the cache is still valid.
      * If valid, render the cache and terminate further router execution.
-     * 
-     * @param string $prefix Request url prefix.
      *
      * @return bool Return true if cache is rendered, otherwise false.
      */
-    private static function serveStaticCache(string $prefix): bool
+    private function serveStaticCache(): bool
     {
-        if (
-            self::$isCli || 
-            self::$method === 'CLI' || 
-            !env('page.caching', false)
-        ) {
+        if (self::$method === 'CLI' || !env('page.caching', false)) {
             return false;
         }
 
         // Supported extension types to match.
         $types = env('page.caching.statics', false);
-        static $cachePath = null;
         if ($types && $types !== '' && preg_match('/\.(' . $types . ')$/i', self::$uri, $matches)) {
-            $cachePath ??= root(rtrim((new Template())->cacheFolder, TRIM_DS) . '/default/');
-            $cache = (new ViewCache(0, $cachePath))
-                ->setKey(Foundation::getCacheId())
-                ->setUri(self::$uri);
+            self::$weak[self::$application] = new ViewCache(0, root(rtrim((new Template())->cacheFolder, TRIM_DS) . '/default/'));
 
             // If expiration return mismatched int code 404 ignore and do not try to replace to actual url.
-            $expired = $cache->expired($matches[1]);
+            $expired = self::$weak[self::$application]->setKey(Foundation::getCacheId())
+                ->setUri(self::$uri)
+                ->expired($matches[1]);
 
             if ($expired === true) {
                 // Remove the matched file extension to render the request normally
                 self::$uri = substr(self::$uri, 0, -strlen($matches[0]));
-            }elseif($expired === false && $cache->read() === true){
-                // Render the cached content.
+            }elseif($expired === false && self::$weak[self::$application]->read() === true){
+                // Render performance profiling content.
+                Foundation::profiling('stop');
+
                 // Terminate router run method to ensure other unwanted modules are loaded.
                 self::$terminate = true;
                 return true;
@@ -1214,10 +1171,9 @@ final class Router
      */
     private static function noneParamInjection(Closure $callback): array 
     {
-        $params = (new ReflectionFunction($callback))->getParameters();
         $classNames = [];
 
-        foreach ($params as $param) {
+        foreach ((new ReflectionFunction($callback))->getParameters() as $param) {
             $type = $param->getType();
             if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
                 $classNames[] = self::newInstance($type->getName(), $type->allowsNull());
@@ -1367,8 +1323,8 @@ final class Router
         }
 
         $current = $this->baseGroup;
-        self::$routes = array_merge(
-            self::$routes, 
+        self::$weak[self::$reference] = array_merge(
+            self::$weak[self::$reference], 
             $attr->getRoutes()
         );
         
@@ -1391,13 +1347,17 @@ final class Router
         $prefixes = $fromArray ? self::getArrayPrefixes($contexts) : Prefix::getPrefixes();
 
         foreach ($contexts as $context) {
-            $name = $fromArray ? ($context['prefix'] ?? '') : $context->getName();
+            $name = $fromArray 
+                ? ($context['prefix'] ?? '') 
+                : $context->getName();
 
             if($name === ''){
                 continue;
             }
             
-            $eHandler = $fromArray ? ($context['error'] ?? null) : $context->getErrorHandler();
+            $eHandler = $fromArray 
+                ? ($context['error'] ?? null) 
+                : $context->getErrorHandler();
 
             self::reset();
             $result = $this->installContext($name, $eHandler, $prefix, $prefixes);
@@ -1500,16 +1460,43 @@ final class Router
     {
         // Replace strict placeholders like '/(:int)/(:string)/(:foo)'
         if ($input !== '/' && str_contains($input, '(:')) {
+            $placeholders = self::getStrictPlaceholders();
             $input = str_replace(
-                array_keys(self::$placeholders), 
-                array_values(self::$placeholders), 
+                array_keys($placeholders), 
+                array_values($placeholders), 
                 $input
             );
         }
 
         // Replace regular placeholders like '/{name}/{id}/{foo}'
-        $input = ($input !== '/') ? preg_replace('/\/{(.*?)}/', '/(.*?)', $input) : $input;
+        $input = ($input !== '/') 
+            ? preg_replace('/\/{(.*?)}/', '/(.*?)', $input) 
+            : $input;
         return $cli ? '/' . ltrim($input, '/') : $input;
+    }
+
+    /**
+     * Strict placeholder patterns.
+     * 
+     * @return array<string,string> $placeholders Return strict placeholder patterns.
+     */
+    private static function getStrictPlaceholders(): array 
+    {
+        return [
+            '(:mixed)'        => '([^/]+)',
+            '(:any)'          => '(.*)',
+            '(:root)'         => '?.*', //?(.*)
+            '(:optional)'     => '?([^/]*)?',
+            '(:alphanumeric)' => '([a-zA-Z0-9-]+)',
+            '(:int)'          => '(\d+)',
+            '(:integer)'      => '(\d+)',
+            '(:number)'       => '([0-9-.]+)',
+            '(:double)'       => '([+-]?\d+(\.\d*)?)',
+            '(:float)'        => '([+-]?\d+\.\d+)',
+            '(:string)'       => '([a-zA-Z0-9\W_-]+)',
+            '(:alphabet)'     => '([a-zA-Z]+)',
+            '(:path)'         => '((.+)/([^/]+)+)'
+        ];
     }
 
     /**
@@ -1640,12 +1627,14 @@ final class Router
     */
     private static function reset(): void
     {
-        self::$routes['routes'] = [];
-        self::$routes['routes_after'] = [];
-        self::$routes['routes_middleware'] = [];
-        self::$routes['cli_commands'] = [];
-        self::$routes['cli_middleware'] = [];
-        self::$routes['errors'] = [];
-        self::$routes['cli_groups'] = [];
+        self::$weak[self::$reference] = [
+            'routes' =>             [], 
+            'routes_after' =>       [], 
+            'routes_middleware' =>  [], 
+            'cli_commands' =>       [], 
+            'cli_middleware' =>     [], 
+            'cli_groups' =>         [], 
+            'errors' =>             []
+        ];
     }
 }

@@ -49,9 +49,9 @@ final class Builder extends Connection
     /**
      * Class instance.
      * 
-     * @var Builder|null $instance 
+     * @var self|null $instance 
      */
-    private static ?Builder $instance = null;
+    private static ?self $instance = null;
 
     /**
      * Database table name to query.
@@ -245,7 +245,8 @@ final class Builder extends Connection
      * 
      * @var DatabaseInterface|bool|null $handler
      */
-    private static DatabaseInterface|bool|null $handler = null;
+    private DatabaseInterface|bool|null $handler = null;
+
 
     /**
      * Initialize database builder class.
@@ -1018,7 +1019,7 @@ final class Builder extends Connection
             return 0;
         }
 
-        static::$handler = null;
+        $this->handler = null;
         $columns = array_keys($values[0]);
 
         try {
@@ -1072,7 +1073,7 @@ final class Builder extends Connection
     public function execute(?array $placeholder = null, int $mode = RETURN_ALL): mixed 
     {
         $placeholder ??= [];
-        static::$handler = null;
+        $this->handler = null;
 
         if(
             $mode !== RETURN_STMT && 
@@ -1223,12 +1224,12 @@ final class Builder extends Connection
     {
         $this->resultType = 'stmt';
         if($this->createQueryExecution('', 'stmt', $columns)){
-            return static::$handler;
+            return $this->handler;
         }
 
         $this->free();
-        static::$handler?->free();
-        static::$handler = null;
+        $this->handler?->free();
+        $this->handler = null;
 
         return null;
     }
@@ -1253,7 +1254,7 @@ final class Builder extends Connection
         int $mode = FETCH_OBJ
     ): mixed
     {
-        static::$handler = null;
+        $this->handler = null;
         if(
             !$this->printQuery && 
             $return !== 'stmt' && 
@@ -1369,24 +1370,24 @@ final class Builder extends Connection
         }
 
         if($isBided){
-            static::$handler = $this->db->prepare($sqlQuery);
+            $this->handler = $this->db->prepare($sqlQuery);
             if ($this->whereCondition !== []) {
-                static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+                $this->handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
             }
-            $this->bindConditions(static::$handler, $isBided);
-            static::$handler->execute();
+            $this->bindConditions($this->handler, $isBided);
+            $this->handler->execute();
         }else{
-            static::$handler = $this->db->query($sqlQuery);
+            $this->handler = $this->db->query($sqlQuery);
         }
 
-        if (static::$handler->ok()) {
+        if ($this->handler->ok()) {
             $response = match ($return) {
                 'stmt' => true,
-                'select' => static::$handler->getAll($this->resultType),
-                'find' => static::$handler->getNext($this->resultType),
-                'total' => static::$handler->getCount(),
-                'fetch' => static::$handler->fetch($result, $mode),
-                default => static::$handler->getNext()->totalCalc ?? 0,
+                'select' => $this->handler->getAll($this->resultType),
+                'find' => $this->handler->getNext($this->resultType),
+                'total' => $this->handler->getCount(),
+                'fetch' => $this->handler->fetch($result, $mode),
+                default => $this->handler->getNext()->totalCalc ?? 0,
             };
         }
         
@@ -1406,7 +1407,7 @@ final class Builder extends Connection
     public function update(?array $setValues = []): int 
     {
         $columns = ($setValues === []) ? $this->querySetValues : $setValues;
-        static::$handler = null;
+        $this->handler = null;
 
         if ($columns === []) {
             throw new DatabaseException(
@@ -1445,7 +1446,7 @@ final class Builder extends Connection
         }
 
         try {
-            static::$handler = $this->db->prepare($updateQuery);
+            $this->handler = $this->db->prepare($updateQuery);
             foreach($columns as $key => $value){
                 if(!is_string($key) || $key === '?'){
                     throw new DatabaseException(
@@ -1455,13 +1456,14 @@ final class Builder extends Connection
                 }
 
                 $value = is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
-                static::$handler->bind(static::trimPlaceholder($key), $value);
+                $this->handler->bind(static::trimPlaceholder($key), $value);
             }
-            static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
-            $this->bindConditions(static::$handler);
-            static::$handler->execute();
+            
+            $this->handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            $this->bindConditions($this->handler);
+            $this->handler->execute();
 
-            $response = (static::$handler->ok() ? static::$handler->rowCount() : 0);
+            $response = ($this->handler->ok() ? $this->handler->rowCount() : 0);
             $this->reset();
 
             return $response;
@@ -1480,7 +1482,7 @@ final class Builder extends Connection
      */
     public function delete(): int
     {
-        static::$handler = null;
+        $this->handler = null;
 
         if ($this->whereCondition === []) {
             throw new DatabaseException(
@@ -1504,12 +1506,12 @@ final class Builder extends Connection
         }
 
         try {
-            static::$handler = $this->db->prepare($deleteQuery);
-            static::$handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
-            $this->bindConditions(static::$handler);
-            static::$handler->execute();
+            $this->handler = $this->db->prepare($deleteQuery);
+            $this->handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            $this->bindConditions($this->handler);
+            $this->handler->execute();
 
-            $response = (static::$handler->ok() ? static::$handler->rowCount() : 0);
+            $response = ($this->handler->ok() ? $this->handler->rowCount() : 0);
             $this->reset();
 
             return $response;
@@ -1536,9 +1538,9 @@ final class Builder extends Connection
         }
 
         if($this->bindValues === []){
-            static::$handler = $this->db->query($buildQuery);
+            $this->handler = $this->db->query($buildQuery);
         }else{
-            static::$handler = $this->db->prepare($buildQuery);
+            $this->handler = $this->db->prepare($buildQuery);
             foreach ($this->bindValues as $key => $value) {
                 if(!is_string($key) || $key === '?'){
                     throw new DatabaseException(
@@ -1547,15 +1549,15 @@ final class Builder extends Connection
                     );
                 }
 
-                static::$handler->bind(static::trimPlaceholder($key), $value);
+                $this->handler->bind(static::trimPlaceholder($key), $value);
             } 
-            static::$handler->execute();
+            $this->handler->execute();
         }
 
-        $response = (static::$handler->ok() ? 
+        $response = ($this->handler->ok() ? 
             (($mode === RETURN_STMT) 
-                ? static::$handler 
-                : static::$handler->getResult($mode, $this->resultType)) 
+                ? $this->handler 
+                : $this->handler->getResult($mode, $this->resultType)) 
             : false);
         $this->reset();
 
@@ -1938,8 +1940,8 @@ final class Builder extends Connection
             return 0;
         }
         
-        static::$handler = $this->db->query($insertQuery);
-        $response = (static::$handler->ok() ? static::$handler->rowCount() : 0);
+        $this->handler = $this->db->query($insertQuery);
+        $response = ($this->handler->ok() ? $this->handler->rowCount() : 0);
 
         $this->reset();
 
@@ -1967,17 +1969,17 @@ final class Builder extends Connection
             return 0;
         }
 
-        static::$handler = $this->db->prepare($insertQuery);
+        $this->handler = $this->db->prepare($insertQuery);
     
         foreach ($values as $row) {
             foreach ($row as $key => $value) {
                 $value = is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
-                static::$handler->bind(static::trimPlaceholder($key), $value);
+                $this->handler->bind(static::trimPlaceholder($key), $value);
             }
 
-            static::$handler->execute();
+            $this->handler->execute();
 
-            if(static::$handler->ok()){
+            if($this->handler->ok()){
                 $count++;
             }
         }
@@ -2571,8 +2573,8 @@ final class Builder extends Connection
         $this->buildQuery = '';
         if($this->resultType !== 'stmt'){
             $this->free();
-            static::$handler?->free();
-            static::$handler = null;
+            $this->handler?->free();
+            $this->handler = null;
         }
         $this->resultType = 'object';
     }

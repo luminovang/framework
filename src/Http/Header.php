@@ -17,25 +17,6 @@ use \Countable;
 class Header implements Countable
 {
     /**
-     * Content types.
-     * 
-     * @var array<int,array> $contentTypes
-     */
-    private static array $contentTypes = [
-        'html'   => ['text/html', 'application/xhtml+xml'],
-        'text'   => ['text/plain'],
-        'js'     => ['application/javascript', 'application/x-javascript', 'text/javascript'],
-        'css'    => ['text/css'],
-        'json'   => ['application/json', 'application/x-json'],
-        'jsonld' => ['application/ld+json'],
-        'xml'    => ['application/xml', 'text/xml', 'application/x-xml'],
-        'rdf'    => ['application/rdf+xml'],
-        'atom'   => ['application/atom+xml'],
-        'rss'    => ['application/rss+xml'],
-        'form'   => ['application/x-www-form-urlencoded', 'multipart/form-data']
-    ];
-
-    /**
      * Header variables.
      * 
      * @var array<string,mixed> $variables
@@ -242,11 +223,11 @@ class Header implements Countable
             $headers['Retry-After'] = $retry;
         }
 
-        static::parseHeaders($headers, $status);
+        static::validate($headers, $status);
     }
 
     /**
-     * Parses and modifies the HTTP headers, ensuring necessary headers are set.
+     * Validate, modifies and send HTTP headers to client, ensuring necessary headers are set.
      *
      * @param array $headers An associative array of headers to send.
      * @param int|null $status HTTP response code (default: NULL)
@@ -254,7 +235,7 @@ class Header implements Countable
      * @return void
      * @internal
      */
-    public static function parseHeaders(array $headers, ?int $status = null): void
+    public static function validate(array $headers, ?int $status = null): void
     {
         if (headers_sent()) {
             return;
@@ -386,9 +367,23 @@ class Header implements Countable
     public static function getContentTypes(string $type, int|null $index = 0): array|string|null
     {
         $type = ($type === 'txt') ? 'text' : $type;
+        $types = [
+            'html'   => ['text/html', 'application/xhtml+xml'],
+            'text'   => ['text/plain'],
+            'js'     => ['application/javascript', 'application/x-javascript', 'text/javascript'],
+            'css'    => ['text/css'],
+            'json'   => ['application/json', 'application/x-json'],
+            'jsonld' => ['application/ld+json'],
+            'xml'    => ['application/xml', 'text/xml', 'application/x-xml'],
+            'rdf'    => ['application/rdf+xml'],
+            'atom'   => ['application/atom+xml'],
+            'rss'    => ['application/rss+xml'],
+            'form'   => ['application/x-www-form-urlencoded', 'multipart/form-data']
+        ];
+        
         return ($index === null) 
-            ? (self::$contentTypes[$type] ?? null)
-            : (self::$contentTypes[$type][$index] ?? 'text/html');
+            ? ($types[$type] ?? null)
+            : ($types[$type][$index] ?? 'text/html');
     }
 
     /**
@@ -407,6 +402,37 @@ class Header implements Countable
         }
 
         return false;
+    }
+
+    /**
+     * Sets the appropriate output handler for content encoding.
+     * 
+     * @return bool Returns true if the output buffer handler is set successfully, otherwise false.
+     */
+    public static function setOutputHandler(): bool
+    {
+        if (!env('enable.encoding', true)) {
+            return ob_start();
+        }
+
+        $handler = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? $_SERVER['HTTP_CONTENT_ENCODING'] ?? null;
+        
+        if ($handler) {
+            if (str_contains($handler, 'gzip')) {
+                return ob_start('ob_gzhandler');
+            }
+            
+            if (str_contains($handler, 'deflate')) {
+                if (function_exists('ini_set')) {
+                    ini_set('zlib.output_compression', 'On');
+                    ini_set('zlib.output_handler', 'deflate');
+                }
+                return ob_start();
+            }
+        }
+
+        $handler = env('script.output.handler', null);
+        return ob_start(!$handler ? null : $handler);
     }
 
     /**

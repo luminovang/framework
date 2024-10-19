@@ -13,6 +13,7 @@ use \Luminova\Http\Header;
 use \Luminova\Time\Timestamp;
 use \Luminova\Storages\FileManager;
 use \DateTimeInterface;
+use \WeakMap;
 
 final class ViewCache
 {
@@ -29,21 +30,25 @@ final class ViewCache
     private string $key = '';
 
     /**
-     * @var array|null $lockFile Lock files.
-    */
-    private static ?array $lockFile = null;
-
-    /**
-     * @var string $lockFunc Lock function name.
-    */
+     * Lock function name.
+     * 
+     * @var string $lockFunc
+     */
     private string $lockFunc = '';
 
     /**
      * The found cache filename and version.
      * 
      * @var string|null $foundCacheLocation
-    */
+     */
     private static ?string $foundCacheLocation = null;
+
+    /**
+     * The found cache filename and version.
+     * 
+     * @var WeakMap|null $weak
+     */
+    private static ?WeakMap $weak = null;
 
     /**
      * Class page cache constructor.
@@ -63,6 +68,8 @@ final class ViewCache
     )
     {
         $this->setExpiry($expiration);
+        self::$weak = new WeakMap();
+        self::$weak[$this] = null;
     }
 
     /**
@@ -76,7 +83,9 @@ final class ViewCache
     */
     public function setExpiry(DateTimeInterface|int|null $expiration): self
     {
-        $this->expiration = ($expiration instanceof DateTimeInterface) ? Timestamp::ttlToSeconds($expiration) : $expiration;
+        $this->expiration = ($expiration instanceof DateTimeInterface) 
+            ? Timestamp::ttlToSeconds($expiration) 
+            : $expiration;
 
         return $this;
     }
@@ -100,7 +109,7 @@ final class ViewCache
      * @param string $uri The request uri prefix.
      * 
      * @return self Return class instance.
-    */
+     */
     public function setPrefix(string $prefix): self
     {
         $this->prefix = $prefix;
@@ -113,7 +122,7 @@ final class ViewCache
      * @param string $uri The request uri paths.
      * 
      * @return self Return class instance.
-    */
+     */
     public function setUri(string $url): self
     {
         $this->uri = $url;
@@ -126,11 +135,10 @@ final class ViewCache
      * @param string $directory The directory where cached files will be stored (default: 'cache').
      * 
      * @return self Return class instance.
-    */
+     */
     public function setDirectory(string $directory): self
     {
         $this->directory = $directory;
-
         return $this;
     }
 
@@ -164,7 +172,7 @@ final class ViewCache
      * @param string|null Optionally specify application version to retrieve (default: null).
      * 
      * @return string Return the file path for the cache.
-    */
+     */
     public function getFilename(?string $version = null): string
     {
         return $this->getLocation() . ($version ?? APP_VERSION) . DIRECTORY_SEPARATOR . $this->key . '.lmv.php';
@@ -201,19 +209,19 @@ final class ViewCache
     public function expired(?string $type = null): bool|int
     {
         // Validate initialization and ensure lockFile is not empty
-        if (!$this->init() || self::$lockFile === null) {
+        if (!$this->init() || self::$weak[$this] === null) {
             return true;
         }
 
         /// Check if content type matches the cached version
-        if($type !== null && (self::$lockFile['viewType'] ?? '_') !== $type){
+        if($type !== null && (self::$weak[$this]['viewType'] ?? '_') !== $type){
             return 404;
         }
 
         // Check if cache has expired
-        $expiration = (int) (self::$lockFile['Expiry'] ?? 0);
+        $expiration = (int) (self::$weak[$this]['Expiry'] ?? 0);
      
-        return ($expiration === 0 || (self::$lockFile['CacheImmutable'] ?? false) === true) 
+        return ($expiration === 0 || (self::$weak[$this]['CacheImmutable'] ?? false) === true) 
             ? false 
             : time() >= $expiration;
     }
@@ -224,7 +232,7 @@ final class ViewCache
      * @param string|null Optionally specify application version to delete (default: null).
      * 
      * @return bool Return true if the cache entry was deleted, false otherwise.
-    */
+     */
     public function delete(?string $version = null): bool 
     {
         $filename = $this->getFilename($version);
@@ -237,7 +245,7 @@ final class ViewCache
      * @param string|null Optionally specify application version to clear (default: null).
      * 
      * @return int Return number of deleted caches.
-    */
+     */
     public function clear(?string $version = null): int 
     {
         return FileManager::remove($this->getLocation() . ($version ?? APP_VERSION) . DIRECTORY_SEPARATOR);
@@ -249,39 +257,39 @@ final class ViewCache
      * @param string|null $type The type of cached content to check (default: null).
      * 
      * @return bool|int Return true if loading was successful, if miss-matched type return int 404, otherwise false.
-    */
+     */
     public function read(?string $type = null): bool|int
     {
-        if(self::$lockFile === [] && $this->init() === false){
+        if(self::$weak[$this] === [] && $this->init() === false){
             Header::headerNoCache(404);
             return false;
         }
 
         // Check if the view type matches the cached content view type.
-        if($type !== null && (self::$lockFile['viewType'] ?? '_') !== $type){
+        if($type !== null && (self::$weak[$this]['viewType'] ?? '_') !== $type){
             return 404;
         }
-
+    
         $ifNoneMatch = trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '');
-        $eTag = self::$lockFile['ETag'] ?? null;
+        $eTag = self::$weak[$this]['ETag'] ?? null;
     
         // Check if the ETag matches the client's If-None-Match header
         if ($eTag && $ifNoneMatch === "\"$eTag\"") {
-            Header::parseHeaders($this->getHeaders(), 304);
+            Header::validate($this->getHeaders(), 304);
             return true;
         }
 
         $ifModifiedSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? null;
-        $lasModify = self::$lockFile['Modify'] ?? null;
+        $lasModify = self::$weak[$this]['Modify'] ?? null;
 
         // Check if modify since matches the client's If-Modified-Since header
         if ($ifModifiedSince && $lasModify && strtotime($ifModifiedSince) >= $lasModify) {
-            Header::parseHeaders($this->getHeaders(), 304);
+            Header::validate($this->getHeaders(), 304);
             return true;
         }
 
-        Header::parseHeaders($this->getHeaders());
-        echo self::$lockFile['Func']();
+        Header::validate($this->getHeaders());
+        self::$weak[$this]['Func']();
         return true;
     }
 
@@ -291,19 +299,19 @@ final class ViewCache
      * @param string|null $type The type of cached content to check (default: null).
      * 
      * @return string|int|false|null Return cached contents, 404 for mismatched, null otherwise.
-    */
+     */
     public function get(?string $type = null): string|int|bool|null
     {
-        if(self::$lockFile === [] && $this->init() === false){
+        if(self::$weak[$this] === [] && $this->init() === false){
             return ($type === null) ? false : null;
         }
 
-        if($type !== null && (self::$lockFile['viewType'] ?? '_') !== $type){
+        if($type !== null && (self::$weak[$this]['viewType'] ?? '_') !== $type){
             return 404;
         }
 
         ob_start();
-        echo self::$lockFile['Func']();
+        self::$weak[$this]['Func']();
         return ob_get_clean();
     }
 
@@ -330,37 +338,37 @@ final class ViewCache
         }
 
         $now = time();
-        $fileSize = $this->filename ? @filesize($this->filename) : mb_strlen($content);
         $fileMTime = $this->filename ? @filemtime($this->filename) : $now;
         $expiration = ($this->expiration === 0) ? 31536000 * 5 : $this->expiration;
+        $length = $headers['Content-Length'] ?? string_length($content);
+        //$fileSize = $this->filename ? @filesize($this->filename) : $length;
 
-        $locks = [$this->key => [
-            'viewType' => $type,
-            'MaxAge' => $expiration,
-            'TTL' => $this->expiration,
-            'CacheImmutable' => env('page.caching.immutable', false),
-            'AppVersion' => APP_VERSION,
-            'Expiry' => $now + $expiration,
-            'Date' => gmdate('D, d M Y H:i:s \G\M\T'),
-            'Modify' => $fileMTime,
-            'Size' => $fileSize,
-            'Func' => '__lmv_template_content_' . $this->key,
-            'ETag' => md5("eTag_{$type}_{$fileMTime}_{$fileSize}" . APP_VERSION),
-            'Headers' =>  array_merge([
-                'Content-Encoding' => static::whichEncode(),
-                'Content-Type' => Header::getContentTypes($type)
-            ], $headers)
-        ]];
+        $headers['Content-Type'] = Header::getContentTypes($type);
+        $headers['Content-Length'] = $length;
 
-        $line = "<?php function {$this->lockFunc}(string \$key): array|bool {\n";
-        $line .= "    \$lock = " . var_export($locks, true) . ";\n";
-        $line .= "    return \$lock[\$key]??false;\n";
-        $line .= "}?>\n";
-        $line .= "<?php function __lmv_template_content_{$this->key}():void { ?>\n";
-        $line .= $content;
-        $line .= "\n<?php } ?>\n";
-
-        return FileManager::write($path . $this->key . '.lmv.php', $line);
+        return FileManager::write(
+            $path . $this->key . '.lmv.php', 
+            "<?php function {$this->lockFunc}(string \$key): array|bool {\n"
+            . " \$lock = " . var_export([$this->key => [
+                'viewType' => $type,
+                'MaxAge' => $expiration,
+                'TTL' => $this->expiration,
+                'CacheImmutable' => env('page.caching.immutable', false),
+                'AppVersion' => APP_VERSION,
+                'Expiry' => $now + $expiration,
+                'Date' => gmdate('D, d M Y H:i:s \G\M\T'),
+                'Modify' => $fileMTime,
+                'Size' => $length,
+                'Func' => '__lmv_template_content_' . $this->key,
+                'ETag' => md5("eTag_{$type}_{$fileMTime}_{$length}" . APP_VERSION),
+                'Headers' => $headers
+            ]], true) . ";\n"
+            . " return \$lock[\$key]??false;\n"
+            . "}?>\n"
+            . "<?php function __lmv_template_content_{$this->key}():void { ?>\n"
+            . $content
+            . "\n<?php } ?>\n"
+        );
     }
 
     /**
@@ -370,7 +378,7 @@ final class ViewCache
      */
     private function init(): bool
     {
-        self::$lockFile = [];
+        self::$weak[$this] = [];
         self::$foundCacheLocation = null;
         
         return $this->findCache() && $this->isCacheValid();
@@ -439,11 +447,10 @@ final class ViewCache
         if(self::$foundCacheLocation === null){
             return false;
         }
-
+ 
         include_once self::$foundCacheLocation;
-        $func = $this->lockFunc;
-        if(function_exists($func) && ($lock = $func($this->key)) !== false){
-            self::$lockFile = $lock;
+        if(function_exists($this->lockFunc) && ($lock = ($this->lockFunc)($this->key)) !== false){
+            self::$weak[$this] = $lock;
             return true;
         }
 
@@ -457,42 +464,18 @@ final class ViewCache
      */
     private function getHeaders(): array 
     {
-        $immutable = (self::$lockFile['CacheImmutable'] ?? false) ? ', immutable' : '';
-        $headers = self::$lockFile['Headers'] ?? [];
+        $immutable = (self::$weak[$this]['CacheImmutable'] ?? false) ? ', immutable' : '';
+        $headers = self::$weak[$this]['Headers'] ?? [];
         $headers['default_headers'] = true;
-        $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T',  self::$lockFile['Expiry']);
-        $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T',  self::$lockFile['Modify']);
-        $headers['Cache-Control'] = 'public, max-age=' . self::$lockFile['MaxAge'] . $immutable;
-        $headers['ETag'] =  '"' . self::$lockFile['ETag'] . '"';
+        $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T',  self::$weak[$this]['Expiry']);
+        $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T',  self::$weak[$this]['Modify']);
+        $headers['Cache-Control'] = 'public, max-age=' . self::$weak[$this]['MaxAge'] . $immutable;
+        $headers['ETag'] =  '"' . self::$weak[$this]['ETag'] . '"';
 
         if(($headers['Content-Encoding'] ?? null) === false){
             unset($headers['Content-Encoding']);
         }
 
         return $headers;
-    }
-
-    /**
-     * Determine the content encoding
-     * 
-     * @return string|false Return the content encoding handler, otherwise false.
-     */
-    private static function whichEncode(): string|bool
-    {
-        $encoding = env('compression.encoding', false);
-        if ($encoding) {
-            if (isset($_SERVER['HTTP_CONTENT_ENCODING'])) {
-                return $_SERVER['HTTP_CONTENT_ENCODING'];
-            }
-            
-            if (isset($_SERVER['HTTP_ACCEPT_ENCODING'])) {
-                $encoding = strtolower($encoding);
-                if (str_contains($_SERVER['HTTP_ACCEPT_ENCODING'], $encoding)) {
-                    return $encoding;
-                }
-            }
-        }
-        
-        return false;
     }
 }

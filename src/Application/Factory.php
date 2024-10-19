@@ -244,7 +244,9 @@ final class Factory
     private static function create(string $class, ?string $alias = null, bool $shared = true, mixed ...$arguments): object
     {
         try {
-            $instance = ($class === 'CoreFunction') ? new class extends CoreFunction{} : new $class(...$arguments);
+            $instance = ($class === 'CoreFunction') 
+                ? new class extends CoreFunction{} 
+                : new $class(...$arguments);
             
             if ($shared && $alias) {
                 self::$instances[$alias] = $instance;

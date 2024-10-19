@@ -42,9 +42,9 @@ abstract class CoreApplication
     public function __construct() 
     {
         $this->router ??= new Router($this);
-        $this->router->addNamespace('\\App\\Controllers\\') //mvc
-            ->addNamespace('\\App\\Modules\\Controllers\\'); // hmvc
-        $this->initialize();
+        $this->router->addNamespace('\\App\\Controllers\\')
+            ->addNamespace('\\App\\Modules\\Controllers\\');
+        $this->onInitialized();
         $this->onCreate();
     }
 
@@ -54,6 +54,7 @@ abstract class CoreApplication
     public function __destruct()
     {
         $this->onDestroy();
+        gc_collect_cycles();
     }
 
     /**

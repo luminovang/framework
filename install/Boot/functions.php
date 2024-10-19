@@ -1466,20 +1466,14 @@ if (!function_exists('string_length')) {
      */
     function string_length(string $content, ?string $charset = null): int 
     {
-        $charset ??= env('app.charset', 'utf-8');
-        switch (strtolower($charset)) {
-            case 'utf-8':
-            case 'utf8':
-                return mb_strlen($content, '8bit');
-            case 'iso-8859-1':
-            case 'latin1':
-                return strlen($content);
-            case 'windows-1252':
-                $content = mb_convert_encoding($content, 'ISO-8859-1', 'UTF-8');
-                return strlen($content);
-            default:
-                return is_utf8($content) ? mb_strlen($content, '8bit') : strlen($content);
-        }
+        return match(strtolower($charset ?? env('app.charset', 'utf-8'))){
+            'utf-8', 'utf8' => mb_strlen($content, '8bit'),
+            'iso-8859-1', 'latin1' => strlen($content),
+            'windows-1252' => strlen(mb_convert_encoding($content, 'ISO-8859-1', 'UTF-8')),
+            default => is_utf8($content) 
+                ? mb_strlen($content, '8bit') 
+                : strlen($content),
+        };
     }
 }
 

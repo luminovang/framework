@@ -77,7 +77,7 @@ abstract class CoreCronTasks
     protected function service(string $controller): self
     {
         self::$controllers[] = [
-            'controller' => $controller,
+            'controller' => $controller
         ];
 
         return $this;
