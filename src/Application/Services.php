@@ -56,7 +56,7 @@ final class Services
     */
     public static function __callStatic(string $service, array $arguments): object
     {
-        return static::call($service, $arguments);
+        return self::call($service, $arguments);
     }
 
     /**
@@ -76,7 +76,7 @@ final class Services
     */
     public function __call(string $service, array $arguments): object
     {
-        return static::call($service, $arguments);
+        return self::call($service, $arguments);
     }
 
     /**
@@ -90,11 +90,11 @@ final class Services
     {
         $alias = get_class_name($service);
 
-        if(isset(static::$services[$alias]) || isset(static::$instances[$alias])){
+        if(isset(self::$services[$alias]) || isset(self::$instances[$alias])){
             return true;
         }
 
-        $path = path('services') . $alias . static::$suffix;
+        $path = path('services') . $alias . self::$suffix;
         return file_exists($path);
     }
 
@@ -109,16 +109,16 @@ final class Services
     {
         $alias = get_class_name($service);
 
-        if(isset(static::$instances[$alias])){
-            unset(static::$instances[$alias]);
+        if(isset(self::$instances[$alias])){
+            unset(self::$instances[$alias]);
         }
 
-        if(isset(static::$services[$alias])){
-            unset(static::$services[$alias]);
+        if(isset(self::$services[$alias])){
+            unset(self::$services[$alias]);
         }
 
 
-        $path = path('services') . $alias . static::$suffix;
+        $path = path('services') . $alias . self::$suffix;
         return file_exists($path) && unlink($path);
     }
 
@@ -130,8 +130,8 @@ final class Services
     public static function clear(): bool
     {
         $path = path('services');
-        static::$instances = [];
-        static::$services = [];
+        self::$instances = [];
+        self::$services = [];
 
         return is_dir($path) ? FileManager::remove($path) : false;
     }
@@ -145,12 +145,12 @@ final class Services
     */
     private static function getInstance(string $alias): ?object
     {
-        if(isset(static::$instances[$alias])){
-            return static::$instances[$alias];
+        if(isset(self::$instances[$alias])){
+            return self::$instances[$alias];
         }
 
         try{
-            return static::getCachedInstance($alias);
+            return self::getCachedInstance($alias);
         }catch(Throwable $e){
             throw new RuntimeException("Failed to instantiate service '$alias'.", $e->getCode(), $e);
         }
@@ -173,13 +173,13 @@ final class Services
     {
         $alias = get_class_name($service);
    
-        if (static::has($alias)) {
+        if (self::has($alias)) {
             throw new RuntimeException("Failed to add service, service with '$alias'. already exist remove service before adding it again or call with new arguments.");
         }
 
         try{
-            $shared = static::isShared($arguments);
-            $serialize = static::isSerialize($arguments);
+            $shared = self::isShared($arguments);
+            $serialize = self::isSerialize($arguments);
             $shared = ($serialize && !$shared) ? true : $shared;
 
             if (empty($arguments)) {
@@ -194,7 +194,7 @@ final class Services
             }
 
             if($shared || $serialize){
-                static::storeInstance($alias, $instance, $shared, $serialize);
+                self::storeInstance($alias, $instance, $shared, $serialize);
             }
 
             return $instance;
@@ -215,14 +215,14 @@ final class Services
     private static function call(string $service, array $arguments): object
     {
         $alias = get_class_name($service);
-        $instance = static::getInstance($alias);
+        $instance = self::getInstance($alias);
 
         if($instance === null){
             throw new RuntimeException("Failed to instantiate service '$service'. Service not found, only existing service can be initialized.");
         }
 
-        $shared = static::isShared($arguments);
-        $serialize = static::isSerialize($arguments);
+        $shared = self::isShared($arguments);
+        $serialize = self::isSerialize($arguments);
         $shared = ($serialize && !$shared) ? true : $shared;
 
         if (empty($arguments) && ($shared || $serialize)) {
@@ -237,7 +237,7 @@ final class Services
             }
 
             $instance = $reflection->newInstance(...$arguments);
-            static::storeInstance($alias, $instance, $shared, $serialize);
+            self::storeInstance($alias, $instance, $shared, $serialize);
             return $instance;
         } catch (ReflectionException|Throwable $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
@@ -254,7 +254,7 @@ final class Services
     */
     public static function queService(array $services): bool
     {
-        static::$services = $services;
+        self::$services = $services;
 
         return true;
     }
@@ -322,7 +322,7 @@ final class Services
         }
 
         if($shared || $serialize){
-            static::$instances[$alias] = $instance;
+            self::$instances[$alias] = $instance;
         }
 
         if($serialize){
@@ -334,7 +334,7 @@ final class Services
             try {
                 $path = path('services');
                 make_dir($path);
-                write_content($path . $alias . static::$suffix, $stringInstance);
+                write_content($path . $alias . self::$suffix, $stringInstance);
             } catch (Throwable $e) {
                 throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
             }
@@ -350,7 +350,7 @@ final class Services
     */
     private static function getCachedInstance(string $alias): ?object
     {
-        $path = path('services') . $alias . static::$suffix;
+        $path = path('services') . $alias . self::$suffix;
 
         if (file_exists($path)) {
             $content = get_content($path);
@@ -360,12 +360,12 @@ final class Services
             }
         }
 
-        if(isset(static::$services[$alias])){
-            $service = static::$services[$alias];
+        if(isset(self::$services[$alias])){
+            $service = self::$services[$alias];
             $instance = new $service['service'](...$service['arguments']);
 
             if($service['shared'] || $service['serialize']){
-                static::storeInstance($alias, $instance, $service['shared'], $service['serialize']);
+                self::storeInstance($alias, $instance, $service['shared'], $service['serialize']);
             }
 
             return $instance;

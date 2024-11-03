@@ -733,41 +733,48 @@ if(!function_exists('import')) {
         require_once root('/libraries/libs/') . trim(rtrim($library, '.php'), TRIM_DS) . '.php';
         return true;
     }
- }
+}
 
- if(!function_exists('logger')) {
+if(!function_exists('logger')) {
     /**
-     * Log a message at the given level.
-     * This function will make use of your preferred psr logger class if available.
+     * Logs a message to a specified destination using the configured PSR logger.
+     * The destination can be a log level, email address, or URL endpoint. This function 
+     * delegates the logging action to the dispatch method, which handles the 
+     * asynchronous or synchronous execution as needed.
      *
-     * @param string $level The log level to use.
+     * Log Levels:
+     * - emergency: Log urgent errors requiring immediate attention.
+     * - alert: Log important alert messages.
+     * - critical: Log critical issues that may disrupt application functionality.
+     * - error: Log minor errors.
+     * - warning: Log warning messages.
+     * - notice: Log messages that require attention but are not urgent.
+     * - info: Log general information.
+     * - debug: Log messages for debugging purposes.
+     * - exception: Log exception messages.
+     * - php_errors: Log PHP-related errors.
+     * - metrics: Log performance metrics for production APIs.
+     *
+     * @param string $to The destination for the log (e.g, log level, email address, or URL).
      * @param string $message The message to log.
      * @param array $context Additional context data (optional).
-     * 
-     * Log Levels:
-     * 
-     * - emergency - Log emergency error that need attention.
-     * - alert - Log alert message. 
-     * - critical - Log critical issue that may cause app not to work properly. 
-     * - error - Log minor error.
-     * - warning - Log a warning message.
-     * - notice - Log a notice to attend later.
-     * - info - Log an information.
-     * - debug - Log for debugging purpose.
-     * - exception - Log an exception message.
-     * - php_errors - Log any php related error.
-     * - metrics - Log performance metrics, specifically for api in production level.
+     * @param bool $asynchronous Whether to log asynchronously for non network or email (default: false).
      *
      * @return void
-     * @throws InvalidArgumentException Throws if error occurs while login.
-    */
-    function logger(string $level, string $message, array $context = []): void
+     * @throws InvalidArgumentException Throws if an error occurs while logging or an invalid destination is provided.
+     */
+    function logger(
+        string $to, 
+        string $message, 
+        array $context = [],
+        bool $asynchronous = false
+    ): void
     {
-        Factory::logger()->log($level, $message, $context);
+        Factory::logger()->dispatch($to, $message, $context, $asynchronous);
     }
- }
+}
 
- if (!function_exists('lang')) {
+if (!function_exists('lang')) {
     /**
      * Translate multiple languages it supports nested array.
      *
@@ -1170,28 +1177,61 @@ if (!function_exists('make_dir')) {
     }
 }
 
-if (!function_exists('get_temp_dir')) {
+if (!function_exists('get_temp_file')) {
     /**
-     * Returns the directory path used for temporary files or generates a unique temporary file name.
-     * 
-     * @param string $prefix The prefix for the generated temporary filename.
-     * @param string|null $extension Optional file extension for the generated temporary filename.
-     * 
-     * @return string|null Returns the temporary directory path or a unique temporary file name with the specified extension, or null on failure.
+     * Retrieves the path for temporary files or generates a unique temporary file name.
+     *
+     * @param string|null $prefix Optional prefix for the temporary filename or a new sub-directory.
+     * @param string|null $extension  Optional file extension for the temporary filename.
+     * @param bool $local Indicates whether to use a local writable path (default: false).
+     *
+     * @return string|false Returns the path of the temporary directory, a unique temporary filename 
+     *                      with the specified extension, or false on failure.
      */
-    function get_temp_dir(string $prefix, ?string $extension = null): ?string
+    function get_temp_file(
+        ?string $prefix = null, 
+        ?string $extension = null,
+        bool $local = false
+    ): string|bool
     {
-        $file = tempnam(sys_get_temp_dir(), $prefix);
-        if ($file === false) {
-            return null;
+        $dir = ($local 
+            ? root('/writeable/temp/') 
+            : sys_get_temp_dir() . DIRECTORY_SEPARATOR
+        );
+
+        if($local && !make_dir($dir, 0755)){
+            return false;
+        }
+ 
+        if($extension){
+            $prefix ??= 'tmp_';
+            $extension = '.' . ltrim($extension, '.');
+            $file = tempnam($dir, $prefix);
+            static $ids = [];
+
+            if($file === false){
+                $id = $prefix . $extension;
+                $ids[$id] ??= uniqid($prefix, true);
+                $file = $dir . $ids[$id] . $extension;
+
+                return (!file_exists($file) && (!is_writable($dir) || !touch($file)))
+                    ? false
+                    : $file;
+            }
+
+            return rename($file, $file . $extension) 
+                ? $file . $extension
+                : $file;
         }
 
-        unlink($file);
-        $dir = dirname($file) . DIRECTORY_SEPARATOR;
+        if ($prefix) {
+            $newDir = $dir . $prefix . DIRECTORY_SEPARATOR;
+            return (is_dir($newDir) || make_dir($newDir, 0755))
+                ? $newDir
+                : $dir;
+        }
 
-        return $extension
-            ? $dir . basename($file, '.tmp') . $extension
-            : $dir;
+        return $dir;
     }
 }
 

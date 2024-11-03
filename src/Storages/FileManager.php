@@ -187,7 +187,7 @@ class FileManager
      * @param int $permission Permission code
      * 
      * @return string Permission string representation.
-    */
+     */
     public static function permissions(int $permission): string
     {
         $symbolic = '';
@@ -331,7 +331,7 @@ class FileManager
      */
     public static function write(string $filename, mixed $content, int $flags = 0, $context = null): bool
     {
-        if ($filename === '' || $content === '' || $content === null) {
+        if ($filename === '') {
             return false;
         }
 
@@ -376,7 +376,7 @@ class FileManager
             return false;
         }
 
-        if (!static::isResource($resource, 'stream')) {
+        if (!self::isResource($resource, 'stream')) {
             throw new FileException(sprintf(
                 'Invalid stream provided, expected stream resource, received: %s.', 
                 gettype($resource)
@@ -484,7 +484,7 @@ class FileManager
      * @return bool true if files existed or was created else false
      * @throws RuntimeException If path is not readable.
      * @throws FileException If unable to create directory
-    */
+     */
     public static function mkdir(string $path, int $permissions = 0777, bool $recursive = true): bool 
     {
         if($path === ''){
@@ -503,7 +503,7 @@ class FileManager
             }
             
             // Check if mkdir failed due to lack of write permission
-            static::permission('rw', $path);
+            self::permission('rw', $path);
         }
 
         return true;
@@ -536,7 +536,7 @@ class FileManager
 				$destFile = $dest . DIRECTORY_SEPARATOR . $file;
 
 				if (is_dir($srcFile)) {
-					if(static::copy($srcFile, $destFile, $copied)){
+					if(self::copy($srcFile, $destFile, $copied)){
                         $copied++;
                     }
 				} elseif(copy($srcFile, $destFile)){
@@ -577,7 +577,7 @@ class FileManager
                 $destFile = $dest . DIRECTORY_SEPARATOR . $file;
 
                 if (is_dir($srcFile)) {
-                    if (static::move($srcFile, $destFile, $moved)) {
+                    if (self::move($srcFile, $destFile, $moved)) {
                         $moved++;
                     }
                 } elseif(rename($srcFile, $destFile)) {
@@ -728,7 +728,7 @@ class FileManager
      * 
      * @return array<int,mixed> Return content length and range.
      *      - [length, offset, limit, rangeHeader].
-    */
+     */
     public static function getHttpContentRange(int $filesize): array
     {
         $offset = 0;
@@ -770,7 +770,7 @@ class FileManager
 
 		foreach ($files as $file) {
 			if (is_dir($file)) {
-				static::remove($file, true, $deleted);
+				self::remove($file, true, $deleted);
 			} else {
 				unlink($file);
 				$deleted++;
@@ -791,7 +791,7 @@ class FileManager
      * @param string  $link The location of the link.
      * 
      * @return bool Return true if the link was successfully created false otherwise.
-    */
+     */
     public static function symbolic(string $target, string $link): bool
     {
         if (!file_exists($target)) {
@@ -985,7 +985,7 @@ class FileManager
      * 
      * @return string Return compatible path based on operating system.
      * @ignore
-    */
+     */
     public function getCompatible(string $name): string 
     {
         if (property_exists($this, $name)) {
@@ -1002,7 +1002,7 @@ class FileManager
      * 
      * @return string Return compatible path based on operating system.
      * @ignore
-    */
+     */
     public static function toCompatible(string $path): string 
     {
         return str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
@@ -1015,7 +1015,7 @@ class FileManager
      * 
      * @return string Return compatible path based on operating system.
      * @ignore
-    */
+     */
     public function __get(string $key): string 
     {
         return $this->getCompatible($key);

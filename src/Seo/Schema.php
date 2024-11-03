@@ -18,35 +18,35 @@ final class Schema
      * Application view link.
      * 
      * @var string $link
-    */
+     */
     private static string $link = '';
 
     /**
      * Meta object json.
      * 
      * @var array<string,mixed> $manifest
-    */
+     */
     private static ?array $manifest = null;
 
     /**
      * Default configuration.
      * 
      * @var array $defaultConfig
-    */
+     */
     private static array $defaultConfig = [];
 
     /**
      * User passed configurations.
      * 
      * @var array $extendedConfig
-    */
+     */
     private static array $extendedConfig = [];
 
     /**
      * Class static singleton instance.
      * 
      * @var static $instance
-    */
+     */
     private static ?Schema $instance = null;
 
     /**
@@ -54,12 +54,12 @@ final class Schema
      * 
      * @see /app/Config/Meta.php
      * @see https://luminova.ng/docs/3.0.2/configs/schema
-    */
+     */
     public function __construct()
     {
-        static::$manifest ??= static::loadSchema();
-        static::$link = APP_URL;
-        static::defaultConfig();
+        self::$manifest ??= self::loadSchema();
+        self::$link = APP_URL;
+        self::defaultConfig();
     }
 
     /**
@@ -69,7 +69,7 @@ final class Schema
      */
     public static function getInstance(): static
     {
-        return static::$instance ??= new static();
+        return self::$instance ??= new static();
     }
 
     /**
@@ -78,10 +78,10 @@ final class Schema
      * @param string $link The current page URL.
      * 
      * @return self Return schema class instance.
-    */
+     */
     public function setLink(string $link): self
     {
-        static::$defaultConfig['link'] = $link;
+        self::$defaultConfig['link'] = $link;
 
         return $this;
     }
@@ -96,7 +96,7 @@ final class Schema
      */
     public function setConfig(array $config): self
     {
-       static::$extendedConfig = $config;
+       self::$extendedConfig = $config;
        return $this;
     }
 
@@ -109,7 +109,7 @@ final class Schema
      */
     public function setTitle(string $title): self
     {
-        static::$defaultConfig['title'] = str_contains($title, '| ' . APP_NAME) ? $title : "{$title} | " . APP_NAME;
+        self::$defaultConfig['title'] = str_contains($title, '| ' . APP_NAME) ? $title : "{$title} | " . APP_NAME;
         return $this;
     }
 
@@ -122,7 +122,7 @@ final class Schema
      */
     public function setDescription(string $description): self
     {
-        static::$defaultConfig['page_description'] = $description;
+        self::$defaultConfig['page_description'] = $description;
         return $this;
     }
 
@@ -136,7 +136,7 @@ final class Schema
      */
     public function setHeadline(string $headline): self
     {
-        static::$defaultConfig['headline'] = $headline;
+        self::$defaultConfig['headline'] = $headline;
         return $this;
     }
 
@@ -150,8 +150,8 @@ final class Schema
      */
     public function setCanonical(string $canonical, string $view = ''): self
     {
-        static::$defaultConfig['canonical'] = $canonical . $view;
-        static::$defaultConfig['link'] = $canonical . $view;
+        self::$defaultConfig['canonical'] = $canonical . $view;
+        self::$defaultConfig['link'] = $canonical . $view;
         return $this;
     }
 
@@ -159,20 +159,20 @@ final class Schema
      * Gets the current page title.
      *
      * @return string Return the current page title.
-    */
+     */
     public function getTitle(): string
     {
-        return static::getConfig('title') ?? '';
+        return self::getConfig('title') ?? '';
     }
 
-     /**
+    /**
      * Gets the current page link.
      *
      * @return string Return the current page link URL.
-    */
+     */
     public function getLink(): string
     {
-        return static::getConfig('link') ?? '';
+        return self::getConfig('link') ?? '';
     }
 
     /**
@@ -201,36 +201,36 @@ final class Schema
      * Call this method once on page creation to generate HTML meta tags for the current page.
      * 
      * @return string Return the HTML meta tags.
-    */
+     */
     public function getMeta(): string 
     {
-        $meta = '<meta name="keywords" content="' . implode(', ', (array) static::getConfig("keywords")) . '">
-            <meta name="description" content="' . static::getConfig("page_description") . '" />';
+        $meta = '<meta name="keywords" content="' . implode(', ', (array) self::getConfig("keywords")) . '">
+            <meta name="description" content="' . self::getConfig("page_description") . '" />';
         
-        if (!empty(static::getConfig("canonical"))) {
+        if (!empty(self::getConfig("canonical"))) {
             $meta .= '<!-- Canonical link tag --> 
-                <link rel="canonical" href="' . static::getConfig("canonical") . '" />';
+                <link rel="canonical" href="' . self::getConfig("canonical") . '" />';
         }
 
-        if (static::getConfig("isArticle")) {
-            $meta .= '<meta property="article:publisher" content="' . static::getConfig("company_name") . '" />
-                <meta property="article:published_time" content="' . static::toDate('published_date') . '" />
-                <meta property="article:modified_time" content="' . static::toDate('modified_date') . '" />';
+        if (self::getConfig("isArticle")) {
+            $meta .= '<meta property="article:publisher" content="' . self::getConfig("company_name") . '" />
+                <meta property="article:published_time" content="' . self::toDate('published_date') . '" />
+                <meta property="article:modified_time" content="' . self::toDate('modified_date') . '" />';
         }
 
-        $meta .= '<meta property="og:locale" content="' . static::getManifest('locale', 'en') . '" />
+        $meta .= '<meta property="og:locale" content="' . self::getManifest('locale', 'en') . '" />
             <meta property="og:type" content="website" />
-            <meta property="og:title" content="' . static::getConfig("title") . '" />
-            <meta property="og:description" content="' . static::getConfig("page_description") . '" />
-            <meta property="og:url" content="' . static::getConfig("link") . '" />
-            <meta property="og:site_name" content="' . static::getConfig("name") . '" />
-            <meta property="og:image" content="' . static::getConfig("image_assets") . static::getConfig("image_name") . '" />
-            <meta property="og:image:width" content="' . static::getConfig("image_width") . '" />
-            <meta property="og:image:height" content="' . static::getConfig("image_height") . '" />
-            <meta property="og:image:type" content="' . static::getConfig("image_type") . '" />';
+            <meta property="og:title" content="' . self::getConfig("title") . '" />
+            <meta property="og:description" content="' . self::getConfig("page_description") . '" />
+            <meta property="og:url" content="' . self::getConfig("link") . '" />
+            <meta property="og:site_name" content="' . self::getConfig("name") . '" />
+            <meta property="og:image" content="' . self::getConfig("image_assets") . self::getConfig("image_name") . '" />
+            <meta property="og:image:width" content="' . self::getConfig("image_width") . '" />
+            <meta property="og:image:height" content="' . self::getConfig("image_height") . '" />
+            <meta property="og:image:type" content="' . self::getConfig("image_type") . '" />';
         
         $meta .= '<meta name="twitter:card" content="summary" />
-            <meta name="twitter:site" content="@' . static::getManifest('twitter_name', '') . '" />
+            <meta name="twitter:site" content="@' . self::getManifest('twitter_name', '') . '" />
             <meta name="twitter:label1" content="Est. reading time" />
             <meta name="twitter:data1" content="37 minutes" />';
 
@@ -242,200 +242,200 @@ final class Schema
      * Call this method once on page load to generate structured data.
      *
      * @return array<string,mixed> Return the structured data schema.
-    */
+     */
     public function getSchema(): array
     {
-        $breadcrumbs = (array) static::getConfig('breadcrumbs');
+        $breadcrumbs = (array) self::getConfig('breadcrumbs');
         $schema = [];
 
         array_unshift($breadcrumbs, [
-            'link' => static::$link,
+            'link' => self::$link,
             'home' => true,
             'name' => 'Home Page',
-            'description' => static::getConfig('company_description'),
+            'description' => self::getConfig('company_description'),
         ]);
 
         $breadcrumbs[] = [
-            'link' => static::getConfig('link'),
-            'name' => static::getConfig('title'),
-            'description' => static::getConfig('page_description'),
+            'link' => self::getConfig('link'),
+            'name' => self::getConfig('title'),
+            'description' => self::getConfig('page_description'),
         ];
 
         $schema['organisation'] = [
             '@type' => 'Organization',
-            '@id' => static::getManifest('site_id', '') . '/#organization',
-            'name' => static::getConfig('company_name'),
-            'url' => static::$link . '/',
-            'brand' => static::getConfig('company_brands'),
-            'duns' => static::getConfig('company_duns'),
-            'email' => static::getConfig('company_email'),
-            'sameAs' => (array) static::getManifest('social_media', []),
+            '@id' => self::getManifest('site_id', '') . '/#organization',
+            'name' => self::getConfig('company_name'),
+            'url' => self::$link . '/',
+            'brand' => self::getConfig('company_brands'),
+            'duns' => self::getConfig('company_duns'),
+            'email' => self::getConfig('company_email'),
+            'sameAs' => (array) self::getManifest('social_media', []),
             'logo' => [
                 '@type' => 'ImageObject',
-                'inLanguage' => static::getManifest('language', 'en'),
-                '@id' => static::getManifest('site_id', '') . '/#logo',
-                'url' => static::getConfig('image_assets') . static::getManifest('logo_image_name', ''),
-                'contentUrl' => static::getConfig('image_assets') . static::getManifest('logo_image_name', ''),
-                'width' => static::getManifest('logo_image_width', 0),
-                'height' => static::getManifest('logo_image_height', 0),
-                'caption' => static::getConfig('title')
+                'inLanguage' => self::getManifest('language', 'en'),
+                '@id' => self::getManifest('site_id', '') . '/#logo',
+                'url' => self::getConfig('image_assets') . self::getManifest('logo_image_name', ''),
+                'contentUrl' => self::getConfig('image_assets') . self::getManifest('logo_image_name', ''),
+                'width' => self::getManifest('logo_image_width', 0),
+                'height' => self::getManifest('logo_image_height', 0),
+                'caption' => self::getConfig('title')
             ],
             'image' => [
-                '@id' => static::getManifest('site_id', '') . '/#logo'
+                '@id' => self::getManifest('site_id', '') . '/#logo'
             ],
             'address' => [
                 '@type' => 'PostalAddress',
-                'addressLocality' => static::getConfig('address_locality'),
-                'addressCountry' => static::getConfig('address_country'),
-                'postalCode' => static::getConfig('address_postalcode'),
-                'streetAddress' => static::getConfig('address_street')
+                'addressLocality' => self::getConfig('address_locality'),
+                'addressCountry' => self::getConfig('address_country'),
+                'postalCode' => self::getConfig('address_postalcode'),
+                'streetAddress' => self::getConfig('address_street')
             ]
         ];
 
         $schema['website'] = [
             '@type' => 'WebSite',
-            '@id' => static::getManifest('site_id', '') . '/#website',
-            'url' => static::$link . '/',
-            'name' => static::getConfig('name'),
-            'description' => static::getConfig('company_description'),
+            '@id' => self::getManifest('site_id', '') . '/#website',
+            'url' => self::$link . '/',
+            'name' => self::getConfig('name'),
+            'description' => self::getConfig('company_description'),
             'publisher' => [
-                '@id' => static::getManifest('site_id', '') . '/#organization'
+                '@id' => self::getManifest('site_id', '') . '/#organization'
             ],
             'potentialAction' => [
                 [
                     '@type' => 'SearchAction',
                     'target' => [
                         '@type' => 'EntryPoint',
-                        'urlTemplate' => static::$link . static::getConfig('search_query')
+                        'urlTemplate' => self::$link . self::getConfig('search_query')
                     ],
-                    'query-input' => 'required name=' . static::getConfig('search_input')
+                    'query-input' => 'required name=' . self::getConfig('search_input')
                 ]
             ],
-            'inLanguage' => static::getManifest('language', 'en'),
+            'inLanguage' => self::getManifest('language', 'en'),
         ];
 
         $schema['webpage'] = [
             '@type' => 'WebPage',
-            '@id' => static::getConfig('link') . '/#webpage',
-            'url' => static::getConfig('link'),
-            'name' => static::getConfig('title'),
+            '@id' => self::getConfig('link') . '/#webpage',
+            'url' => self::getConfig('link'),
+            'name' => self::getConfig('title'),
             'isPartOf' => [
-                '@id' => static::getManifest('site_id', '') . '/#website'
+                '@id' => self::getManifest('site_id', '') . '/#website'
             ],
             'about' => [
-                '@id' => static::getConfig('link') . '/#about'
+                '@id' => self::getConfig('link') . '/#about'
             ],
             'primaryImageOfPage' => [
-                '@id' => static::getConfig('link') . '/#primaryimage'
+                '@id' => self::getConfig('link') . '/#primaryimage'
             ],
             'image' => [
-                '@id' => static::getConfig('link') . '/#primaryimage'
+                '@id' => self::getConfig('link') . '/#primaryimage'
             ],
-            'thumbnailUrl' => static::getConfig('image_assets') . static::getConfig('image_name'),
-            'description' => static::getConfig('page_description'),
+            'thumbnailUrl' => self::getConfig('image_assets') . self::getConfig('image_name'),
+            'description' => self::getConfig('page_description'),
             'breadcrumb' => [
-                '@id' => static::getConfig('link') . '/#breadcrumb'
+                '@id' => self::getConfig('link') . '/#breadcrumb'
             ],
-            'inLanguage' => static::getManifest('language', 'en'),
+            'inLanguage' => self::getManifest('language', 'en'),
             'potentialAction' => [
                 '@type' => 'ReadAction',
                 'target' => [
-                    static::getConfig('link')
+                    self::getConfig('link')
                 ]
             ]
         ];
 
         $schema['image'] = [
             '@type' => 'ImageObject',
-            'inLanguage' => static::getManifest('language', 'en'),
-            '@id' => static::getConfig('link') . '/#primaryimage',
-            'url' => static::getConfig('image_assets') . static::getConfig('image_name'),
-            'contentUrl' => static::getConfig('image_assets') . static::getConfig('image_name'),
-            'width' => static::getConfig('image_width'),
-            'height' => static::getConfig('image_height')
+            'inLanguage' => self::getManifest('language', 'en'),
+            '@id' => self::getConfig('link') . '/#primaryimage',
+            'url' => self::getConfig('image_assets') . self::getConfig('image_name'),
+            'contentUrl' => self::getConfig('image_assets') . self::getConfig('image_name'),
+            'width' => self::getConfig('image_width'),
+            'height' => self::getConfig('image_height')
         ];
 
         $schema['breadcrumb'] = [
             '@type' => 'BreadcrumbList',
-            '@id' => static::getConfig('link') . '/#breadcrumb',
-            'itemListElement' => static::breadcrumbs($breadcrumbs)
+            '@id' => self::getConfig('link') . '/#breadcrumb',
+            'itemListElement' => self::breadcrumbs($breadcrumbs)
         ];
 
-        if (static::getConfig('isArticle')) {
-            $authorId = kebab_case(static::getConfig('author'));
+        if (self::getConfig('isArticle')) {
+            $authorId = kebab_case(self::getConfig('author'));
 
             $schema['article'] = [
-                '@type' => static::getConfig('article_type'),
-                '@id' => static::getConfig('link') . '/#article',
+                '@type' => self::getConfig('article_type'),
+                '@id' => self::getConfig('link') . '/#article',
                 'isPartOf' => [
-                    '@id' => static::getConfig('link') . '/#webpage'
+                    '@id' => self::getConfig('link') . '/#webpage'
                 ],
                 'author' => [
                     '@type' => 'Person',
-                    '@id' => static::getManifest('site_id', '') . '#/schema/person/' .$authorId,
-                    'name' => static::getConfig('author'),
+                    '@id' => self::getManifest('site_id', '') . '#/schema/person/' .$authorId,
+                    'name' => self::getConfig('author'),
                     'image' => [
                         '@type' => 'ImageObject',
-                        '@id' => static::getManifest('site_id', '') . '/author/' . $authorId . '/#personlogo',
-                        'inLanguage' => static::getManifest('language', 'en'),
-                        'url' => static::getConfig('image_assets') . 'logo-square-dark.png',
-                        'contentUrl' => static::getConfig('image_assets') . 'logo-square-dark.png',
-                        'caption' => static::getConfig('author')
+                        '@id' => self::getManifest('site_id', '') . '/author/' . $authorId . '/#personlogo',
+                        'inLanguage' => self::getManifest('language', 'en'),
+                        'url' => self::getConfig('image_assets') . 'logo-square-dark.png',
+                        'contentUrl' => self::getConfig('image_assets') . 'logo-square-dark.png',
+                        'caption' => self::getConfig('author')
                     ],
-                    'url' => static::$link . '/author/' . $authorId
+                    'url' => self::$link . '/author/' . $authorId
                 ],
-                'headline' => static::getConfig('headline'),
-                'name' => static::getConfig('title'),
-                'datePublished' => static::toDate('published_date'),
-                'dateModified' => static::toDate('modified_date'),
+                'headline' => self::getConfig('headline'),
+                'name' => self::getConfig('title'),
+                'datePublished' => self::toDate('published_date'),
+                'dateModified' => self::toDate('modified_date'),
                 'mainEntityOfPage' => [
-                    '@id' => static::getConfig('link') . '/#webpage'
+                    '@id' => self::getConfig('link') . '/#webpage'
                 ],
-                'wordCount' => (int) static::getConfig('word_count'),
-                'commentCount' => (int) static::getConfig('total_comments'),
+                'wordCount' => (int) self::getConfig('word_count'),
+                'commentCount' => (int) self::getConfig('total_comments'),
                 'publisher' => [
-                    '@id' => static::getManifest('site_id', '') . '/#organization'
+                    '@id' => self::getManifest('site_id', '') . '/#organization'
                 ],
                 'image' => [
-                    '@id' => static::getConfig('link') . '/#primaryimage'
+                    '@id' => self::getConfig('link') . '/#primaryimage'
                 ],
-                'thumbnailUrl' => static::getConfig('image_assets') . static::getConfig('image_name'),
-                'keywords' => (array) static::getConfig('article_keywords', []) + static::getConfig('keywords', []),
-                'articleSection' => (array) static::getConfig('article_section', 'Blog'),
-                'inLanguage' => static::getManifest('language', 'en'),
+                'thumbnailUrl' => self::getConfig('image_assets') . self::getConfig('image_name'),
+                'keywords' => (array) self::getConfig('article_keywords', []) + self::getConfig('keywords', []),
+                'articleSection' => (array) self::getConfig('article_section', 'Blog'),
+                'inLanguage' => self::getManifest('language', 'en'),
                 'potentialAction' => [
                     [
                         '@type' => 'CommentAction',
                         'name' => 'Comment',
-                        'target' => [static::getConfig('link') . '/#respond']
+                        'target' => [self::getConfig('link') . '/#respond']
                     ]
                 ],
-                'copyrightYear' => static::toYear('published_date'),
+                'copyrightYear' => self::toYear('published_date'),
                 'copyrightHolder' => [
-                    '@id' => static::getManifest('site_id', '') . '/#organization'
+                    '@id' => self::getManifest('site_id', '') . '/#organization'
                 ],
-                'citation' => static::getConfig('citation'),
-                'license' => static::getConfig('license'),
+                'citation' => self::getConfig('citation'),
+                'license' => self::getConfig('license'),
             ];
         }
 
-        if (static::getConfig('isProduct')) {
+        if (self::getConfig('isProduct')) {
             $schema['product'] = [
-                '@type' => static::getConfig('product_type'),
-                'name' => static::getConfig('title'),
-                'description' => static::getConfig('page_description'),
-                'category' => static::getConfig('category'),
-                'url' => static::getConfig('link'),
-                'image' => static::getConfig('product_image_link'),
+                '@type' => self::getConfig('product_type'),
+                'name' => self::getConfig('title'),
+                'description' => self::getConfig('page_description'),
+                'category' => self::getConfig('category'),
+                'url' => self::getConfig('link'),
+                'image' => self::getConfig('product_image_link'),
                 'brand' => [
                     '@type' => 'Brand',
-                    'name' => static::getConfig('brand')
+                    'name' => self::getConfig('brand')
                 ],
                 'offers' => [
                     '@type' => 'Offer',
-                    'priceCurrency' => static::getConfig('currency'),
-                    'price' => (string) static::getConfig('price'),
-                    'availability' => static::getConfig('availability')
+                    'priceCurrency' => self::getConfig('currency'),
+                    'price' => (string) self::getConfig('price'),
+                    'availability' => self::getConfig('availability')
                 ]
             ];
         }
@@ -457,10 +457,10 @@ final class Schema
      * @param mixed $default The default value (default: null).
      * 
      * @return mixed Return the values of the provided key.
-    */
+     */
     public static function getMutable(string $key, mixed $default = null): mixed
     {
-        return static::getConfig($key) ?? static::getManifest($key) ?? $default;
+        return self::getConfig($key) ?? self::getManifest($key) ?? $default;
     }
 
     /**
@@ -471,10 +471,10 @@ final class Schema
      * @param mixed $default The default value (default: null).
      * 
      * @return mixed Return the values of the provided key.
-    */
+     */
     private static function getFallback(string $key, string $fallback, mixed $default = null): mixed
     {
-        return static::getConfig($key) ?? static::getConfig($fallback) ?? $default;
+        return self::getConfig($key) ?? self::getConfig($fallback) ?? $default;
     }
 
     /**
@@ -486,11 +486,11 @@ final class Schema
      */
     private static function toDate(string $key): string
     {
-        $date = static::getConfig($key);
+        $date = self::getConfig($key);
         return ($date === null) ? '' : Time::parse($date)->format('Y-m-d\TH:i:sP');
     }
 
-     /**
+    /**
      * Get year from publish or modified date.
      * 
      * @param string $key The key to get the year from.
@@ -499,7 +499,7 @@ final class Schema
      */
     private static function toYear(string $key): string 
     {
-        $value = static::getConfig($key);
+        $value = self::getConfig($key);
         return ($value === null) ? '' : date('Y', strtotime($value));
     }
 
@@ -513,15 +513,15 @@ final class Schema
      */
     private static function getConfig(string $key, mixed $default = null): mixed
     {
-        $config = array_replace(static::$defaultConfig, array_filter(static::$extendedConfig));
+        $config = array_replace(self::$defaultConfig, array_filter(self::$extendedConfig));
         $param = $config[$key] ?? '';
         $value = null;
 
         if($param !== '' && is_array($param)){
             $value = $param;
         }elseif($param !== ''){
-            if(static::shouldAddParam($key, $param)){
-                $param .= '?' . static::getQuery();
+            if(self::shouldAddParam($key, $param)){
+                $param .= '?' . self::getQuery();
             }
 
             $value = rtrim($param, '/');
@@ -544,7 +544,7 @@ final class Schema
      */
     private static function shouldAddParam(string $key, string $param): bool 
     {
-        return (in_array($key, ['link', 'canonical']) && !static::has_query_parameter($param) && (static::getQuery() !== null && static::getQuery() !== ''));
+        return (in_array($key, ['link', 'canonical']) && !self::has_query_parameter($param) && (self::getQuery() !== null && self::getQuery() !== ''));
     }
 
     /**
@@ -563,7 +563,7 @@ final class Schema
      * @param array $breadcrumbs The current page breadcrumbs.
      * 
      * @return array<int,mixed> Return the breadcrumb list.
-    */
+     */
     private static function breadcrumbs(array $breadcrumbs): array
     {
         $itemListElement = [];
@@ -589,7 +589,7 @@ final class Schema
                 '@type' => 'WebPage',
                 '@id' => $page['link'] . '/#webpage',
                 'name' => $page['name'],
-                'description' => $page['description'] ?? static::getConfig('company_description'),
+                'description' => $page['description'] ?? self::getConfig('company_description'),
                 'url' => $page['link']
             ];
 
@@ -603,40 +603,40 @@ final class Schema
      * Loads the default configuration values for SEO meta data.
      *
      * @return void
-    */
+     */
     private static function defaultConfig(): void
     {
-        static::$defaultConfig = [
-            'link' => static::getManifest('start_url'),
-            'canonical' => static::$link,
+        self::$defaultConfig = [
+            'link' => self::getManifest('start_url'),
+            'canonical' => self::$link,
             'breadcrumbs' => [],
-            'image_assets' => static::getManifest('image_assets'),
-            'name' => static::getManifest('name'),
-            'company_brands' => static::getManifest('company_brands', [static::getManifest('name')]),
-            'company_duns'  => static::getManifest('duns'),
-            'company_name' => static::getManifest('company_name'),
-            'company_email' => static::getManifest('company_email'),
-            'company_description' => static::getManifest('company_description'),
-            'address_locality' => static::getManifest('address_locality', ''),
-            'address_country' => static::getManifest('address_country', ''),
-            'address_postalcode' => static::getManifest('address_postalcode', ''),
-            'address_street' => static::getManifest('address_street', ''),
-            'page_description' => static::getManifest('page_description'),
-            'title' => static::getManifest('title'),
-            'headline' => static::getFallback('headline', 'page_description'),
-            'image_name' =>static::getManifest('image_name'),
-            'image_width' => static::getManifest('image_width'),
-            'image_height' => static::getManifest('image_height'),
-            'image_type' => static::getManifest('image_type'),
-            'site_published_date' => static::getMutable('site_published_date'),
-            'site_modified_date' => static::getMutable('site_modified_date'),
-            'published_date' => static::getMutable('published_date'),
-            'modified_date' => static::getMutable('modified_date'),
-            'keywords' => static::getMutable('keywords', []),
+            'image_assets' => self::getManifest('image_assets'),
+            'name' => self::getManifest('name'),
+            'company_brands' => self::getManifest('company_brands', [self::getManifest('name')]),
+            'company_duns'  => self::getManifest('duns'),
+            'company_name' => self::getManifest('company_name'),
+            'company_email' => self::getManifest('company_email'),
+            'company_description' => self::getManifest('company_description'),
+            'address_locality' => self::getManifest('address_locality', ''),
+            'address_country' => self::getManifest('address_country', ''),
+            'address_postalcode' => self::getManifest('address_postalcode', ''),
+            'address_street' => self::getManifest('address_street', ''),
+            'page_description' => self::getManifest('page_description'),
+            'title' => self::getManifest('title'),
+            'headline' => self::getFallback('headline', 'page_description'),
+            'image_name' =>self::getManifest('image_name'),
+            'image_width' => self::getManifest('image_width'),
+            'image_height' => self::getManifest('image_height'),
+            'image_type' => self::getManifest('image_type'),
+            'site_published_date' => self::getMutable('site_published_date'),
+            'site_modified_date' => self::getMutable('site_modified_date'),
+            'published_date' => self::getMutable('published_date'),
+            'modified_date' => self::getMutable('modified_date'),
+            'keywords' => self::getMutable('keywords', []),
             'isArticle' => false,
             'article_type' => 'Article',
-            'article_keywords' => static::getMutable('article_keywords', []),
-            'article_section' => static::getMutable('article_section', []),
+            'article_keywords' => self::getMutable('article_keywords', []),
+            'article_section' => self::getMutable('article_section', []),
             'word_count' => 1500,
             'total_comments' => 0,
             'author' => 'Author Name',
@@ -644,9 +644,9 @@ final class Schema
             'product_type' => 'Product',
             'product_image_link' => '',
             'product_category' => 'Electronics',
-            'twitter_name' => static::getManifest('twitter_name', ''),
-            'search_query' => static::getManifest('search_query', '/search?q={search_term_string}'),
-            'search_input' => static::getManifest('search_input', 'search_term_string'),
+            'twitter_name' => self::getManifest('twitter_name', ''),
+            'search_query' => self::getManifest('search_query', '/search?q={search_term_string}'),
+            'search_input' => self::getManifest('search_input', 'search_term_string'),
             'availability' => 'InStock',
             'currency' => 'NGN',
             'price' => '0.00',
@@ -663,10 +663,10 @@ final class Schema
      * @param mixed $default The default value (default: null).
      * 
      * @return mixed Return the values of the provided key.
-    */
+     */
     private static function getManifest(string $key, mixed $default = null): mixed
     {
-        return static::$manifest[$key]??$default;
+        return self::$manifest[$key]??$default;
     }
     
     /**

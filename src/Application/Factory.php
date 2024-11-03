@@ -192,7 +192,7 @@ final class Factory
             $boot ??= new BootServices();
      
             $boot->bootstrap();
-            $instance = static::service();
+            $instance = self::service();
             $instance->queService($boot->getServices());
             self::$instances['service'] = $instance;
         }catch(RuntimeException $e){
@@ -271,6 +271,6 @@ final class Factory
     */
     private static function locator(string $factory): ?string
     {
-        return static::$classes[$factory] ?? null;
+        return self::$classes[$factory] ?? null;
     }
 }

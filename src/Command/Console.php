@@ -30,12 +30,12 @@ final class Console
      * Static terminal instance.
      * 
      * @var Terminal $instance 
-    */
+     */
     private static ?Terminal $instance = null;
 
     /**
      * Initialize novakit console instance.
-    */
+     */
     public function __construct()
     { 
         if(!self::$instance instanceof Terminal){
@@ -49,12 +49,17 @@ final class Console
      * @param array<string,mixed> $commands command arguments to execute.
      * 
      * @return void
-    */
+     */
     public function run(array $commands): void
     {
         $commands = self::$instance::parseCommands($commands);
         self::$instance::explain($commands);
         $command = self::$instance::getCommand();
+
+        if(!$command){
+            self::$instance::header();
+            exit(STATUS_ERROR);
+        }
 
         if('--version' === $command || '--v' === $command){
             self::$instance::writeln('Novakit Command Line Tool');
@@ -79,14 +84,53 @@ final class Console
      * @param array $options Command options.
      * 
      * @return int Return status code.
-    */
+     */
     public static function execute(Terminal $terminal, array $options): int
     {
-        $command = trim($terminal::getCommand());
+        $command = trim($terminal::getCommand() ?? '');
+        $newCommand = self::find($command);
+
+        if ($newCommand === '') {
+            $terminal::oops($command);
+            if(($suggest = Commands::suggest($command)) !== ''){
+                $terminal->fwrite($suggest, Terminal::STD_ERR);
+            }
+            return STATUS_ERROR;
+        } 
+
         /**
-         * @var class-string<BaseConsole> $newCommand
-        */
-        $newCommand = match($command){
+         * @var BaseConsole $newCommand
+         */
+        $newCommand = new $newCommand();
+
+        if($terminal::isHelp($options['options'])){
+            $info = self::getCommand($command);
+
+            if($terminal::header()){
+               $terminal::newLine();
+            }
+
+            if($newCommand->help($info) === STATUS_ERROR){
+                $terminal->helper($info);
+            }
+
+            return STATUS_SUCCESS;
+        }
+
+        return (int) $newCommand->run($options);
+    }
+
+    /**
+     * Maps a given command string to its corresponding handler class.
+     *
+     * @param string $command The command string provided (e.g., 'create:controller', 'db:migrate').
+     * 
+     * @return class-string<BaseCommand> The fully qualified class name of the handler for the command, or an 
+     *                empty string if no matching class is found.
+     */
+    public static function find(string $command): string 
+    {
+        return  match($command){
             '-h', '--help' => SystemHelp::class,
             'create:controller','create:view','create:class', 'create:model', => Generators::class,
             'list' => Lists::class,
@@ -99,31 +143,6 @@ final class Console
             'cron:create', 'cron:run' => CronJobs::class,
             default => ''
         };
-
-        if ($newCommand === '') {
-            $terminal::oops($command);
-            if(($suggest = Commands::suggest($command)) !== ''){
-                $terminal->write($suggest);
-            }
-            
-            return STATUS_ERROR;
-        } 
-
-        if($terminal::isHelp($options['options'])){
-            $info = self::getCommand($command);
-            
-            if(!array_key_exists('no-header', $options['options'])){
-                $terminal::header();
-            }
-
-            if((new $newCommand())->help($info) === STATUS_ERROR){
-                $terminal->helper($info);
-            }
-
-            return STATUS_SUCCESS;
-        }
-
-        return (int) (new $newCommand())->run($options);
     }
 
     /**
@@ -131,8 +150,8 @@ final class Console
      * 
      * @param string $command command name.
      * 
-     * @return array<string>mixed> Return array of command information.
-    */
+     * @return array<string,mixed> Return array of command information.
+     */
     public static function getCommand(string $command): array
     {
         return Commands::get($command);
@@ -144,7 +163,7 @@ final class Console
      * @param string $command command name 
      * 
      * @return bool Return true if command exist, false otherwise.
-    */
+     */
     public static function has(string $command): bool
     {
         return Commands::has($command) || Terminal::isHelp($command);
@@ -157,11 +176,9 @@ final class Console
      * @param string $key command key to retrieve.
      * 
      * @return mixed Return information details by its key if command exist.
-    */
+     */
     public static function get(string $command, string $key): mixed
     {
-        $isCommand = self::getCommand($command);
-
-        return $isCommand[$key] ?? null;
+        return self::getCommand($command)[$key] ?? null;
     }
 }

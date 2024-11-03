@@ -10,6 +10,7 @@
 namespace Luminova\Command\Novakit;
 
 use \Luminova\Base\BaseConsole;
+use \Luminova\Command\Utils\Color;
 use \Luminova\Exceptions\AppException;
 use \SplFileObject;
 use \Exception;
@@ -18,24 +19,24 @@ class Logs extends BaseConsole
 {
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $group = 'Logs';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $name = 'log';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected array $usages = [
         'php novakit log --help'
     ];
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function run(?array $options = []): int
     {
         $this->explain($options);
@@ -68,7 +69,7 @@ class Logs extends BaseConsole
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function help(array $helps): int
     {
         return STATUS_ERROR;
@@ -201,13 +202,13 @@ class Logs extends BaseConsole
             [$date, $line] = explode(']:', $line, 2);
             $date = str_replace($pattern, '', $date);
             $line = trim($line);
-            $date = $this->color($date, 'green');
+            $date = Color::style($date, 'green');
 
             $line = "[$date] $line";
         }
 
         if (preg_match($codePattern, $line, $matches)) {
-            $errorCode = $this->color("({$matches[1]})", 'red');
+            $errorCode = Color::style("({$matches[1]})", 'red');
             $line = preg_replace($codePattern, "[Code {$errorCode}]", $line);
         }
 

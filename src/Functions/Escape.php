@@ -88,7 +88,7 @@ class Escape
     public function __construct(string|null $encoding = 'utf-8')
     {
         $encoding ??= 'utf-8';
-        static::$isEscaper = class_exists(Escaper::class);
+        self::$isEscaper = class_exists(Escaper::class);
         $this->setEncoding($encoding);
     }
 
@@ -103,7 +103,7 @@ class Escape
      */
     public function __call(string $name, array $arguments): mixed
     {
-        if (!$this->escaper instanceof Escaper || !static::$isEscaper) {
+        if (!$this->escaper instanceof Escaper || !self::$isEscaper) {
             if (method_exists($this, $name)) {
                 return $this->{$name}(...$arguments);
             }
@@ -154,7 +154,7 @@ class Escape
         $this->encoding = $encoding;
         $this->encodingFlags = ENT_QUOTES|ENT_SUBSTITUTE;
 
-        if (static::$isEscaper) {
+        if (self::$isEscaper) {
             if($this->escaper instanceof Escaper && $this->escaper->getEncoding() === $encoding) {
                 return $this;
             }

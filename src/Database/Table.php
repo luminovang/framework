@@ -14,124 +14,119 @@ use \Luminova\Exceptions\DatabaseException;
 
 final class Table 
 {
-     /**
+    /**
      * Default field value none.
      * 
      * @var string DEFAULT_NONE
-    */
+     */
     public const DEFAULT_NONE = '__NONE__';
 
     /**
      * Default field value timestamp.
      * 
      * @var string DEFAULT_TIMESTAMP
-    */
+     */
     public const DEFAULT_TIMESTAMP = 'CURRENT_TIMESTAMP';
 
     /**
      * Default field value null.
      * 
      * @var string DEFAULT_NULL
-    */
+     */
     public const DEFAULT_NULL = 'NULL';
 
     /**
      * Primary key.
      * 
      * @var string INDEX_PRIMARY_KEY
-    */
+     */
     public const INDEX_PRIMARY_KEY = 'PRIMARY KEY';
 
     /**
      * Foreign key.
      * 
      * @var string INDEX_FOREIGN_KEY
-    */
+     */
     public const INDEX_FOREIGN_KEY = 'FOREIGN KEY';
    
     /**
-     * Uniqu table index.
+     * Unique table index.
      * 
      * @var string INDEX_UNIQUE
-    */
+     */
     public const INDEX_UNIQUE = 'UNIQUE';
 
     /**
-     * Indexd table index.
+     * Indexed table index.
      * 
      * @var string INDEX_DEFAULT
-    */
+     */
     public const INDEX_DEFAULT = 'INDEX';
 
     /**
      * Full text table index.
      * 
      * @var string INDEX_FULLTEXT
-    */
+     */
     public const INDEX_FULLTEXT = 'FULLTEXT';
 
     /**
      * Spatial table index.
      * 
      * @var string INDEX_SPATIAL
-    */
+     */
     public const INDEX_SPATIAL = 'SPATIAL';
 
     /**
      * Generate schema for mysql database.
      * 
      * @var string MYSQL
-    */
+     */
     public const MYSQL = 'mysql';
 
     /**
      * Generate schema for sql server database.
      * 
      * @var string SQL_SERVER
-    */
+     */
     public const SQL_SERVER = 'sql-server';
 
     /**
      * Generate schema for ms access database.
      * 
      * @var string MS_ACCESS
-    */
+     */
     public const MS_ACCESS = 'ms-access';
 
     /**
      * Generate schema for oracle database.
      * 
      * @var string ORACLE
-    */
+     */
     public const ORACLE = 'oracle';
 
     /**
      * Replaces format to column name.
      * 
      * @var string COLUMN_NAME
-    */
+     */
     public const COLUMN_NAME = '{__REPLACE_COLUMN_NAME__}';
-
-    /**
-     * Reference to table trait.
-    */
-    use TableTrait;
     
     /**
      * @var array<string,mixed> $columns
-    */
+     */
     private array $columns = [];
 
     /**
      * @var string $tableName
-    */
+     */
     private string $tableName = '';
 
     /**
      * Specify the database type to generate schema for.
      * 
      * @var string $database
-    */
+     */
     public string $database = 'mysql';
 
     /**
@@ -139,7 +134,7 @@ final class Table
      * The array key as the session identifier/name while the value is the session value to apply.
      * 
      * @var array<string,mixed> $session
-    */
+     */
     public array $session = [];
 
     /**
@@ -147,50 +142,55 @@ final class Table
      * The array key as the global identifier/name while the value is the global value to apply.
      * 
      * @var array<string,mixed> $global
-    */
+     */
     public array $global = [];
 
     /**
      * Set the table collation type.
      * 
      * @var string|null $collation
-    */
+     */
     public ?string $collation = null;
 
     /**
      * Set the database default charset.
      * 
      * @var string|null $charset
-    */
+     */
     public ?string $charset = null;
 
     /**
      * Set the table command.
      * 
      * @var string|null $comment
-    */
+     */
     public ?string $comment = null;
 
     /**
      * Specify weather to use create if not exists or just create table.
      * 
      * @var bool $ifNotExists
-    */
+     */
     public bool $ifNotExists = false;
 
     /**
      * Specify if table query should be print in new line.
      * 
      * @var bool $prettify
-    */
+     */
     public bool $prettify = true;
 
     /**
      * Set storage engines to handle SQL operations.
      * 
      * @var string|null $engine
-    */
+     */
     public ?string $engine = null;
+
+    /**
+     * Reference to table trait.
+     */
+    use TableTrait;
 
     /**
      * Constructor to initialize the table with a name.

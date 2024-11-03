@@ -10,6 +10,7 @@
 namespace Luminova\Errors;
 
 use \Throwable;
+use \Luminova\Exceptions\ErrorException;
 
 final class ErrorHandler
 {
@@ -48,6 +49,37 @@ final class ErrorHandler
 
         shared('__ERROR_DEBUG_BACKTRACE__', $backtrace);
         return true;
+    }
+
+    /**
+     * Triggers an error by throwing an ErrorException with the specified message and level.
+     *
+     * @param string $message The error message to be included in the exception.
+     * @param int $error_level The level of the error (default: `ErrorException::USER_NOTICE`).
+     * @param string|null $file Optional. The file where the error occurred.
+     * @param int|null $line Optional. The line number where the error occurred.
+     *
+     * @return never Always throws an ErrorException, so this method does not return a value.
+     * @throws ErrorException When an error is triggered.
+     */
+    public static function trigger(
+        string $message, 
+        int $error_level = ErrorException::USER_NOTICE,
+        ?string $file = null,
+        ?int $line = null
+    ): void 
+    {
+        $e = new ErrorException($message, $error_level);
+        
+        if($file){
+            $e->setFile($file);
+        }
+
+        if($line){
+            $e->setLine($line);
+        }
+
+        throw $e;
     }
 
     /**
@@ -107,10 +139,9 @@ final class ErrorHandler
      */
     public function getFilteredMessage(): string
     {
-        $position = strpos($this->message, APP_ROOT);
-        $message = ($position !== false) ? 
-            substr($this->message, 0, $position) : 
-            $this->message;
+        $message = str_contains($this->message, APP_ROOT) 
+            ? str_replace(APP_ROOT, '/', $this->message) 
+            : $this->message;
 
         return trim($message, ' in');
     }

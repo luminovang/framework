@@ -17,17 +17,17 @@ class System extends BaseConsole
 {
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $group = 'System';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $name = 'generator';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected string|array $usages  = [
         'php novakit generate:key --help',
         'php novakit generate:sitemap --help',
@@ -37,7 +37,7 @@ class System extends BaseConsole
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function run(?array $options = []): int
     {
         $this->explain($options);
@@ -63,13 +63,13 @@ class System extends BaseConsole
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function help(array $helps): int
     {
         return STATUS_ERROR;
     }
 
-   /**
+    /**
      * Add environment variable.
      * 
      * @param string $key Environment variable name. 
@@ -139,7 +139,7 @@ class System extends BaseConsole
      * Generates sitemap 
      * 
      * @return int Status code 
-    */
+     */
     private function generateSitemap(): int 
     {
         if(Sitemap::generate(null, $this)){
@@ -159,7 +159,7 @@ class System extends BaseConsole
      * @param bool $noSave Save key to env or just print.
      * 
      * @return int Status code 
-    */
+     */
     private function generateKey(bool $noSave): int 
     {
         $key = Crypter::generate_key(); 

@@ -20,27 +20,27 @@ class OpenSSL implements EncryptionInterface
 {
     /**
      * @var string $key
-    */
+     */
     private string $key = '';
 
     /**
      * @var string $message
-    */
+     */
     private string $message = '';
 
     /**
      * @var string $method
-    */
+     */
     private string $method = 'AES-128-CBC';
 
     /**
      * @var string $nonce
-    */
+     */
     private string $nonce = '';
 
     /**
      * @var int $size
-    */
+     */
     private int $size = 16;
 
     /**
@@ -59,7 +59,7 @@ class OpenSSL implements EncryptionInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function __construct(?string $key = null, ?string $method = null, int $size = 16)
     {
         self::$config ??= new Encryption();
@@ -76,7 +76,7 @@ class OpenSSL implements EncryptionInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setData(string $data): void
     {
         $this->message = $data;
@@ -84,7 +84,7 @@ class OpenSSL implements EncryptionInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setKey(string $key): void
     {
         $this->key = hash_hkdf($this->digest, $key, 0, self::$config->keyInfo);
@@ -100,7 +100,7 @@ class OpenSSL implements EncryptionInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function nonce(?string $string = null): string
     {
         if($string === null){
@@ -112,7 +112,7 @@ class OpenSSL implements EncryptionInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setMethod(string $method, int $size = 16): void
     {
         $this->method = $method;
@@ -125,7 +125,7 @@ class OpenSSL implements EncryptionInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function encrypt(): string|bool
     {
         if (!$this->valid()) {
@@ -156,7 +156,7 @@ class OpenSSL implements EncryptionInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function decrypt(): string|bool
     {
         if (!$this->valid()) {
@@ -194,9 +194,9 @@ class OpenSSL implements EncryptionInterface
         return trim($decrypted);
     }
 
-     /**
+    /**
      * {@inheritdoc}
-    */
+     */
     public function free(): void 
     {
         $this->key = '';
@@ -207,7 +207,7 @@ class OpenSSL implements EncryptionInterface
      * Validate encryption parameters.
      *
      * @return bool True if parameters are valid, false otherwise.
-    */
+     */
     private function valid(): bool
     {
         return $this->message !== '' && $this->method !== '' && $this->key !== '';

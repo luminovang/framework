@@ -11,30 +11,31 @@ namespace Luminova\Command\Novakit;
 
 use \Luminova\Base\BaseConsole;
 use \Luminova\Command\Utils\Text;
+use \Luminova\Command\Utils\Color;
 use \Luminova\Command\Novakit\Commands;
 
 class Lists extends BaseConsole 
 {
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $group = 'Lists';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $name = 'list';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected array $usages = [
         'php novakit list --help'
     ];
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function run(?array $options = []): int
     {
         static::listCommands();
@@ -44,12 +45,17 @@ class Lists extends BaseConsole
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function help(array $helps): int
     {
         return STATUS_ERROR;
     }
 
+    /**
+     * List all available luminova (novakit) commands.
+     * 
+     * @return void
+     */
     public static function listCommands(): void 
     {
         $commands = Commands::getCommands();
@@ -62,7 +68,8 @@ class Lists extends BaseConsole
         foreach ($groupedCommands as $group => $list) {
             self::writeln($group);
             foreach ($list as $command) {
-                self::writeln('   ' . self::color(Text::padEnd($command['name'], 25), 'green') . $command['description']);
+                $name = Color::style(Text::padding($command['name'], 25, Text::LEFT), 'green');
+                self::writeln('   ' . $name . $command['description']);
             }
 
             self::newLine();

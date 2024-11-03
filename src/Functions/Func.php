@@ -24,7 +24,7 @@ class Func
 	 * @param bool $noHtml Determines whether to remove all HTML tags or only allow certain tags like <p> by default, it's set to true.
 	 * 
 	 * @return string Return formatted text.
-	*/
+	 */
 	public static function normalize(
 		string $text, 
 		string $target = '_self', 
@@ -76,8 +76,8 @@ class Func
 	 * @param string $type The type of random value (e.g., character, alphabet, int, password).
 	 * @param bool $uppercase Whether to make the value uppercase if it's a string.
 	 * 
-	 * @return string The generated random value.
-	*/
+	 * @return string Return the generated random value.
+	 */
 	public static function random(int $length = 10, string $type = 'int', bool $uppercase = false): string 
 	{
 		$alphabets = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -117,7 +117,7 @@ class Func
 	 * @param int $max The maximin number.
 	 * 
 	 * @return string String representation of big integer.
-	*/
+	 */
 	public static function bigInteger(int $min, int $max): string 
 	{
 		$difference = (string) bcadd(bcsub((string) $max, (string) $min), '1');
@@ -133,10 +133,10 @@ class Func
 	 * @param int $length maximum length
 	 * 
 	 * @return string Product ean code.
-	*/
+	 */
 	public static function ean(int $country = 615, int $length = 13): string 
 	{
-		return static::upc($country, $length);
+		return self::upc($country, $length);
 	}
 
 	/**
@@ -150,7 +150,7 @@ class Func
 	public static function upc(int $prefix = 0, int $length = 12): string 
 	{
 		$length -= strlen((string)$prefix) + 1;
-		$randomPart = static::random($length);
+		$randomPart = self::random($length);
 		
 		$code = $prefix . str_pad($randomPart, $length, '0', STR_PAD_LEFT);
 		
@@ -181,8 +181,8 @@ class Func
 	public static function uuid(int $version = 4, ?string $namespace = null, ?string $name = null): string
     {
 		return match($version) {
-			1, 2 => static::uuid1Or2(),
-			3, 5 => static::uuid3Or5($namespace, $name, $version),
+			1, 2 => self::uuid1Or2(),
+			3, 5 => self::uuid3Or5($namespace, $name, $version),
 			/**
 			 * Generates a version 4 UUID.
 			 *
@@ -231,7 +231,7 @@ class Func
 			throw new InvalidArgumentException("Namespace and name must be provided for version {$version} UUID");
 		}
 	
-		if (!static::isUuid($namespace, $version)) {
+		if (!self::isUuid($namespace, $version)) {
 			throw new InvalidArgumentException("Invalid namespace UUID provided for version {$version} UUID");
 		}
 	
@@ -270,7 +270,7 @@ class Func
 	 * 
 	 * @param string $email email address to validate
 	 * 
-	 * @return bool true or false
+	 * @return bool Return true if valid email address, false otherwise.
 	 */
 	public static function isEmail(string $email): bool
 	{
@@ -281,13 +281,29 @@ class Func
 		return (bool) preg_match("/^([a-zA-Z0-9])+([a-zA-Z0-9\._-])*@([a-zA-Z0-9_-])+([a-zA-Z0-9\._-]+)+$/", $email);
 	}
 
+	/**
+	 * Checks if the string is a valid URL.
+	 *
+	 * @param string $url URL to validate.
+	 *
+	 * @return bool Return true if valid url, false otherwise.
+	 */
+	public static function isUrl(string $url): bool
+	{
+		if (filter_var($url, FILTER_VALIDATE_URL) !== false) {
+			return true;
+		}
+
+		return (bool) preg_match("/^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(:[0-9]{1,5})?(\/[^\s]*)?$/i", $url);
+	}
+
 	/** 
 	* Checks if string is a valid phone number
 	*
 	* @param string|int $phone phone address to validate
 	* @param int $min Minimum allowed length.
 	*
-	* @return bool true or false
+	* @return bool Return true if valid phone number, false otherwise.
 	*/
 	public static function isPhone(string|int $phone, int $min = 10): bool 
 	{
@@ -325,7 +341,7 @@ class Func
 	 * @param int $min minimum allowed password length (default: 6).
 	 * @param int $max maximum allowed password length (default: 50).
 	 * 
-	 * @return bool return trues if passed otherwise false
+	 * @return bool Return trues if passed otherwise false
 	*/
 	public static function strength(string $password, int $complexity = 4, int $min = 6, int $max = 50): bool 
 	{
@@ -360,7 +376,7 @@ class Func
 	 * @param string $type   The expected data type (e.g., 'int', 'email').
 	 * @param string $replacement The symbol to replace disallowed characters with (optional).
 	 *
-	 * @return string The sanitized string.
+	 * @return string Return the sanitized string.
 	*/
 	public static function strictType(string $string, string $type = 'name', string $replacement = ''): string
 	{
@@ -399,7 +415,7 @@ class Func
 	 * 
 	 * @param string $url The input URL from which subdomains should be removed.
 	 * 
-	 * @return string The main domain extracted from the URL.
+	 * @return string Return the main domain extracted from the URL.
 	 */
 	public static function mainDomain(string $url): string
 	{
@@ -412,7 +428,7 @@ class Func
 				$url = explode('.', $url, 2)[1];
 			}
 		} elseif ($count > 2) {
-			$url = static::mainDomain(explode('.', $url, 2)[1]);
+			$url = self::mainDomain(explode('.', $url, 2)[1]);
 		}
 
 		if (!preg_match('~^(?:f|ht)tps?://~i', $url)) {
@@ -429,7 +445,7 @@ class Func
 	 *
 	 * @param string $url The input URL from which the domain should be extracted.
 	 * 
-	 * @return string The extracted domain or an empty string if no domain is found.
+	 * @return string Return the extracted domain or an empty string if no domain is found.
 	 * 
 	 * > Note: `www` is considered as none subdomain.
 	 * > And only the first level of subdomain will be returned if the url contains multiple levels of subdomain.
@@ -456,7 +472,7 @@ class Func
 	 * @param int $length The length to display before truncating.
 	 * @param string $encoding Text encoding type.
 	 * 
-	 * @return string The truncated string.
+	 * @return string Return the truncated string.
 	 */
 	public static function truncate(string $text, int $length = 10, string $encoding = 'UTF-8'): string
 	{
@@ -474,9 +490,9 @@ class Func
 	/** 
 	 * Base64 encode string for URL passing.
 	 * 
-	 * @param string $input String to encode
+	 * @param string $input String to encode.
 	 * 
-	 * @return string Base64 encoded string
+	 * @return string Return base64 encoded string.
 	 */
 	public static function base64_url_encode(string $input): string 
 	{
@@ -488,7 +504,7 @@ class Func
 	 * 
 	 * @param string $input Encoded string to decode
 	 * 
-	 * @return string Base64 decoded string.
+	 * @return string Return base64 decoded string.
 	 */
 	public static function base64_url_decode(string $input): string
 	{
@@ -501,7 +517,7 @@ class Func
 	 * @param string $email Email address to mask.
 	 * @param string $masker  Mask character (default is "*").
 	 * 
-	 * @return string Masked email address.
+	 * @return string Return masked email address.
 	 */
 	public static function maskEmail(string $email, string $masker = '*'): string 
 	{

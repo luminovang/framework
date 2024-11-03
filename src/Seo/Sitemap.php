@@ -24,70 +24,70 @@ final class Sitemap
      * Visited links.
      * 
      * @var array $visited  
-    */
+     */
     private static array $visited = [];
 
     /**
      * Failed connections.
      * 
      * @var array $failed  
-    */
+     */
     private static array $failed = [];
 
     /**
      * Extracted urls.
      * 
      * @var array $urls  
-    */
+     */
     private static array $urls = [];
 
     /**
      * Extracted urls count .
      * 
      * @var int $counts   
-    */
+     */
     private static int $counts = 0;
 
     /**
      * Extracted urls count.
      * 
      * @var int $skipped   
-    */
+     */
     private static int $skipped = 0;
 
     /**
      * Command instance.
      * 
      * @var Terminal|BaseCommand|null $cli  
-    */
+     */
     private static Terminal|BaseCommand|null $cli = null;
 
     /**
      * Sitemap configuration.
      * 
      * @var SitemapConfig $config  
-    */
+     */
     private static ?SitemapConfig $config = null;
 
     /**
      * Set maximum memory usage threshold (in bytes).
      * 
      * @var int $memoryThreshold  
-    */
+     */
     private static int $memoryThreshold = 0;
 
     /**
      * Application HTTPS url.
      * 
      * @var string $https  
-    */
+     */
     private static string $https = '';
 
     /**
      * Application HTTP url.
      * 
      * @var string $http  
-    */
+     */
     private static string $http = '';
 
     /**
@@ -98,7 +98,7 @@ final class Sitemap
      * 
      * @return bool Return true if successful, false otherwise.
      * @throws RuntimeException If tries to call in none cli environment.
-    */
+     */
     public static function generate(?string $url = null, Terminal|BaseCommand|null $cli = null): bool  
     {
         set_time_limit(300);
@@ -156,10 +156,10 @@ final class Sitemap
             if(self::$cli !== null){
                 self::_print('');
                 self::_print('header');
-                self::_print(Text::border('Your sitemap was completed successfully'), 'green');
-                self::_print(Text::padEnd('Extracted:', 20) . self::_color('[' .self::$counts  . ']', 'green'));
-                self::_print(Text::padEnd('Skipped:', 20) . self::_color('[' .self::$skipped  . ']', 'yellow'));
-                self::_print(Text::padEnd('Failed:', 20) . self::_color('[' . count(self::$failed) . ']', 'red'));
+                self::_print(Text::block('Your sitemap was completed successfully', Text::CENTER, 1, 'white', 'green'));
+                self::_print(Text::padding('Extracted:', 20, Text::LEFT) . self::_color('[' .self::$counts  . ']', 'green'));
+                self::_print(Text::padding('Skipped:', 20, Text::LEFT) . self::_color('[' .self::$skipped  . ']', 'yellow'));
+                self::_print(Text::padding('Failed:', 20, Text::LEFT) . self::_color('[' . count(self::$failed) . ']', 'red'));
             }
         
             gc_mem_caches();
@@ -324,7 +324,7 @@ final class Sitemap
      * @param string $url The url to replace.
      * 
      * @return string Return https url.
-    */
+     */
     private static function toHttps(string $url, string $search): string 
     {
         $url = str_starts_with($url, self::$https) ? $url : str_replace($search, self::$https, $url);
@@ -342,7 +342,7 @@ final class Sitemap
      * @param string $url The url to trim.
      * 
      * @return string Return trimmed url.
-    */
+     */
     private static function toUrl(string $url): string 
     {
         return rtrim($url, '/') . '/';
@@ -355,7 +355,7 @@ final class Sitemap
      * @param string $startUrl The start url.
      * 
      * @return bool Return true if url is acceptable and not in ignore list, otherwise false.
-    */
+     */
     private static function isAcceptable(string $href): bool
     {
         if($href === '' || str_starts_with($href, '#')){
@@ -375,7 +375,7 @@ final class Sitemap
      * @param string $href The URL to check.
      * 
      * @return bool Return true if url is matched, false otherwise.
-    */
+     */
     private static function isPrefix(string $href): bool 
     {
         return str_starts_with($href, self::startUrl() . trim(self::$config->scanUrlPrefix, '/'));
@@ -388,7 +388,7 @@ final class Sitemap
      * @param array $patterns The URL patterns to check.
      * 
      * @return bool Return true if URL is in ignore pattern, false otherwise.
-    */
+     */
     private static function matchesIgnore(string $url, array $patterns): bool 
     {
         if($patterns === []){
@@ -409,7 +409,7 @@ final class Sitemap
      * Get the default host and base application.
      * 
      * @return string Return the start URL ensuring it's a valid url.
-    */
+     */
     private static function startUrl(): string 
     {
         return self::toUrl(env('dev.app.start.url', ''));
@@ -421,7 +421,7 @@ final class Sitemap
      * @param string $url The URL to replace.
      * 
      * @return string Return an absolute url.
-    */
+     */
     private static function replaceUrls(string $url): string 
     {
         if (str_starts_with($url, 'http')) {
@@ -449,7 +449,7 @@ final class Sitemap
      * @param bool $deep is connection a deep scan.
      * 
      * @return bool|array<string,mixed> Return the extracted URLs.
-    */
+     */
     private static function getUrls(string $url, bool $deep = false): array|bool
     {
         if (self::$config->maxScan !== 0 && self::$counts >= self::$config->maxScan) {
@@ -546,7 +546,7 @@ final class Sitemap
      * @param string $url The url to load it contents.
      * 
      * @return array<string,string>|false Return array containing the page content and file-time.
-    */
+     */
     private static function connection(string $url): array|bool
     {
         $url = self::toUrl($url);

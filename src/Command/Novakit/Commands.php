@@ -8,20 +8,23 @@
  * @license See LICENSE file
 */
 namespace Luminova\Command\Novakit;
+
+use \Luminova\Command\Utils\Color;
+use \Luminova\Command\Utils\Text;
 use \Luminova\Application\Foundation;
 
 final class Commands 
 {
     /**
-     * List of available commands
+     * List of available commands.
      *
-     * @var array<string, mixed> $commands
-    */
-    protected static array $commands = [
+     * @var array<string,array<string,mixed>> $commands
+     */
+    private static array $commands = [
         'help' => [
             'name' => 'help',
             'group' => 'Help',
-            'description' => "\033[1;33mPHP Luminova Novakit Command Help (Novakit Version: " . Foundation::NOVAKIT_VERSION . ", Framework Version: " . Foundation::VERSION . ")\n\033[0mThis command displays help options for the Novakit CLI tool.\n\nTo execute `novakit` commands, run them from your application's root directory (e.g., 'php novakit command'). For controller-related commands, navigate to the `public` directory before execution (e.g., 'php index.php command').\n\n\033[1;31mIMPORTANT NOTE:\033[0m\nThe \033[1;33m--help\033[0m (\033[1;33m-h\033[0m) options are reserved for displaying help messages and should not be used for custom arguments when creating CLI applications.",
+            'description' => 'his command displays help options for the Novakit CLI tool.',
             'usages' => [
                 'php novakit <command> --help',
                 'php index.php <controller-command> --help',
@@ -34,6 +37,7 @@ final class Commands
                 '-h, --help' => "Display help message related to novakit or controller command.",
                 '-a, --all' => "Display all available novakit help messages.",
                 '--no-header' => "Disable displaying novakit header information.",
+                '--no-color' => "Disable displaying colored text.",
                 '-v, --version' => "Display Framework and Novakit Command Line version information.",
             ],
             'examples' => [
@@ -394,7 +398,7 @@ final class Commands
                 'php novakit cron:create'
             ],
             'options' => [
-                '--force'  => 'Force update tasks with new changes from cron class if already locked.',
+                '-f, --force'  => 'Force update locked tasks with new changes from cron class if already locked.'
             ],
             'examples' => [
                 'php novakit cron:create',
@@ -409,11 +413,13 @@ final class Commands
                 'php novakit cron:run'
             ],
             'options' => [
-                '--force'  => 'Force update tasks with new changes from cron class if already locked.',
+                '-f, --force'  => 'Force update locked tasks with new changes from cron class if already locked.',
+                '-s, --sleep' => 'The number of seconds to pause between task executions (default: 100000).'
             ],
             'examples' => [
                 'php novakit cron:run',
                 'php novakit cron:run --force',
+                'php novakit cron:run --sleep=100000'
             ],
         ],
         'cache' => [
@@ -438,34 +444,34 @@ final class Commands
     ];
 
     /**
-     * Get all available commands
+     * Get all available commands.
      * 
-     * @return array
-    */
+     * @return array<string,array<string,mixed>> Return all available commands and their information.
+     */
     public static function getCommands(): array 
     {
-       // asort(self::$commands);
+        self::$commands['help']['description'] = self::getDescription();
         return self::$commands;
     }
 
     /**
-     * Get command information
+     * Get command information.
      * 
-     * @param string $key command name 
+     * @param string $key The command name.
      * 
-     * @return array
-    */
+     * @return array<string,mixed> Return a specific command information.
+     */
     public static function get(string $key): array 
     {
-        return self::$commands[$key] ?? [];
+        return self::getCommands()[$key] ?? [];
     }
 
     /**
-     * Check if command exists
+     * Check if command exists.
      * 
-     * @param string $key command name 
+     * @param string $key The command name to check.
      * 
-     * @return bool
+     * @return bool Return true if the command exists, false otherwise.
     */
     public static function has(string $key): bool
     {
@@ -490,7 +496,7 @@ final class Commands
         $suggestion = null;
         $shortestDistance = -1;
 
-        foreach (self::$commands as $command) {
+        foreach (self::getCommands() as $command) {
             $name = strtolower($command['name']);
 
             if (str_starts_with($name, $input)) {
@@ -503,7 +509,6 @@ final class Commands
                 return $command['name'];
             }
 
-            //$distance = $distance + (abs(strlen($input) - strlen($name)));
             if ($distance < $shortestDistance || $shortestDistance < 0) {
                 $suggestion = $command['name'];
                 $shortestDistance = $distance;
@@ -516,7 +521,6 @@ final class Commands
     /**
      * Suggest a similar command name.
      * 
-     *
      * @param string $input The user input to suggest a close match for.
      * 
      * @return string Return a formatted suggestion string, or an empty string if no suggestion is found.
@@ -525,7 +529,36 @@ final class Commands
     {
         $suggestion = self::search($input);
         return $suggestion 
-            ? "Do you mean \"\033[0;36m{$suggestion}\033[0m\"?"
+            ? 'Do you mean "' . Color::style($suggestion, 'cyan') . '"?'
             : '';
+    }
+
+    /**
+     * Format help command descriptions.
+     * 
+     * @return string Return formatted help command descriptions.
+     */
+    private static function getDescription(): string 
+    {
+        $title = Color::apply(
+            "PHP Luminova Novakit Command Help (Novakit Version: " . Foundation::NOVAKIT_VERSION .
+            ", Framework Version: " . Foundation::VERSION . ")",
+            Text::FONT_BOLD, 'yellow'
+        );
+    
+        $note = Color::apply("IMPORTANT NOTE:", Text::FONT_BOLD, 'red');
+        $flags = Color::apply("--help (-h)", null, 'yellow');
+    
+        return <<<TEXT
+            {$title}
+            This command displays help options for the Novakit CLI tool.
+            
+            To execute `novakit` commands, run them from your application's root directory (e.g., 'php novakit command'). 
+            For controller-related commands, navigate to the `public` directory before execution (e.g., 'php index.php command').
+            
+            {$note}
+            The {$flags} options are reserved for displaying help messages and should not be used 
+            for custom arguments when creating CLI applications.
+        TEXT;
     }
 }

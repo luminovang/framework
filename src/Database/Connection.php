@@ -55,7 +55,7 @@ class Connection implements Countable
      */
     private int $maxConnections = 0;
 
-   /**
+    /**
      * Initializes the Connection class based on the configuration in the .env file.
      * 
      * Sets maxConnections and pool properties from .env values.
@@ -70,25 +70,25 @@ class Connection implements Countable
         $this->db ??= $this->connect();
     }
 
-   /**
-    * Prevents un-serialization of the singleton instance.
-    *
-    * @return array Return the serializable array of database connection.
-    * @ignore
-    */
+    /**
+     * Prevents un-serialization of the singleton instance.
+     *
+     * @return array Return the serializable array of database connection.
+     * @ignore
+     */
     public function __serialize(): array
     {
         return [];
     }
 
-   /**
-    * Restores the connection after un-serialization.
-    *
-    * @param array $data Un-serialized data.
-    *
-    * @return void
-    * @ignore
-    */
+    /**
+     * Restores the connection after un-serialization.
+     *
+     * @param array $data Un-serialized data.
+     *
+     * @return void
+     * @ignore
+     */
     public function __unserialize(array $data): void
     {
         $this->db ??= $this->connect();
@@ -104,37 +104,37 @@ class Connection implements Countable
         return $this->db;
     }
 
-   /**
-    * Count the number of connection pool.
-    * 
-    * @return int Return the number of connection pools.
-    */
+    /**
+     * Count the number of connection pool.
+     * 
+     * @return int Return the number of connection pools.
+     */
     public function count(): int
     {
         return count($this->pools);
     }
 
-   /**
-    * Retrieves the shared singleton instance of the Connection class.
-    *
-    * @return static Return the singleton instance of the Connection class.
-    *@throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
-    */
+    /**
+     * Retrieves the shared singleton instance of the Connection class.
+     *
+     * @return static Return the singleton instance of the Connection class.
+     * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
+     */
     public static function getInstance(): static 
     {
         return self::$instance ??= new static();
     }
 
-   /**
-    * Retrieves a new database driver instance based on the provided configuration.
-    *
-    * If no configuration is provided, the default configuration will be used.
-    *
-    * @param CoreDatabase|null $config Database configuration (default: null).
-    *
-    * @return DatabaseInterface|null Return the database driver instance, or null if connection fails.
-    * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
-    */
+    /**
+     * Retrieves a new database driver instance based on the provided configuration.
+     *
+     * If no configuration is provided, the default configuration will be used.
+     *
+     * @param CoreDatabase|null $config Database configuration (default: null).
+     *
+     * @return DatabaseInterface|null Return the database driver instance, or null if connection fails.
+     * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
+     */
     public static function newInstance(?CoreDatabase $config = null): ?DatabaseInterface
     {
         $config ??= self::getDefaultConfig();
@@ -166,15 +166,15 @@ class Connection implements Countable
         return $connection;
     }
 
-   /**
-    * Connects to the database, returning a connection instance or reusing a previous connection from the pool if available.
-    * Optionally retries failed connections based on the retry attempt value set in the .env file (`database.connection.retry`).
-    *
-    * @param int|null $retry Number of retry attempts (default: 1).
-    *
-    * @return DatabaseInterface|null Return the database driver instance (either MySqliDriver or PdoDriver), or null if connection fails.
-    * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
-    */
+    /**
+     * Connects to the database, returning a connection instance or reusing a previous connection from the pool if available.
+     * Optionally retries failed connections based on the retry attempt value set in the .env file (`database.connection.retry`).
+     *
+     * @param int|null $retry Number of retry attempts (default: 1).
+     *
+     * @return DatabaseInterface|null Return the database driver instance (either MySqliDriver or PdoDriver), or null if connection fails.
+     * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
+     */
     public function connect(): ?DatabaseInterface
     {
         $connection = $this->retry((int) env('database.connection.retry', 1)) 
@@ -191,16 +191,16 @@ class Connection implements Countable
     }
 
 
-   /**
-    * Retries the database connection with optional backup server fallback.
-    *
-    * If the retry parameter is set to null, retries the connection with backup servers if available.
-    *
-    * @param int|null $retry Number of retry attempts (default: 1).
-    *
-    * @return DatabaseInterface|null Return connection instance or null if all retry attempts fail.
-    * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
-    */
+    /**
+     * Retries the database connection with optional backup server fallback.
+     *
+     * If the retry parameter is set to null, retries the connection with backup servers if available.
+     *
+     * @param int|null $retry Number of retry attempts (default: 1).
+     *
+     * @return DatabaseInterface|null Return connection instance or null if all retry attempts fail.
+     * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
+     */
     public function retry(int|null $retry = 1): ?DatabaseInterface
     {
         if($this->db instanceof DatabaseInterface && $this->db->isConnected()){
@@ -233,7 +233,7 @@ class Connection implements Countable
     
             foreach ($servers as $config) {
                 try {
-                    $connection = static::newInstance(self::newConfig($config));
+                    $connection = self::newInstance(self::newConfig($config));
                 } catch (DatabaseException|Exception $e) {
                     logger('critical', 'Failed to connect to backup database: ' . $e->getMessage(), [
                         'host' => $config['host'],
@@ -260,7 +260,7 @@ class Connection implements Countable
         
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             try {
-                $connection = static::newInstance();
+                $connection = self::newInstance();
             } catch (DatabaseException|Exception $e) {
                 logger('critical', 'Attempt (' . $attempt . '), failed to connect to database: ' . $e->getMessage());
             }
@@ -277,16 +277,16 @@ class Connection implements Countable
         return $connection;
     }
 
-   /**
-    * Releases a connection back to the connection pool.
-    *
-    * If the pool is not full, adds the provided connection to the pool.
-    * If the pool is full, closes the provided connection.
-    *
-    * @param DatabaseInterface|null $connection The connection to release.
-    *
-    * @return void
-    */
+    /**
+     * Releases a connection back to the connection pool.
+     *
+     * If the pool is not full, adds the provided connection to the pool.
+     * If the pool is full, closes the provided connection.
+     *
+     * @param DatabaseInterface|null $connection The connection to release.
+     *
+     * @return void
+     */
     public function release(DatabaseInterface|null $connection): void
     {
         if(!$connection instanceof DatabaseInterface){
@@ -302,15 +302,15 @@ class Connection implements Countable
         $connection = null;
     }
 
-   /**
-    * Purges all pooled connections and optionally closes the database connection.
-    *
-    * If the $conn parameter is true, the database connection will be closed; otherwise, only the pooled connections will be closed.
-    *
-    * @param bool $conn If true, close the database connection. Default is false.
-    *
-    * @return void
-    */
+    /**
+     * Purges all pooled connections and optionally closes the database connection.
+     *
+     * If the $conn parameter is true, the database connection will be closed; otherwise, only the pooled connections will be closed.
+     *
+     * @param bool $conn If true, close the database connection. Default is false.
+     *
+     * @return void
+     */
     public function purge(bool $conn = false): void
     {
         foreach ($this->pools as $connection) {
@@ -327,11 +327,11 @@ class Connection implements Countable
         }
     }
 
-   /**
-    * Gets the database configuration based on environment and settings.
-    *
-    * @return CoreDatabase Return the database configuration object.
-    */
+    /**
+     * Gets the database configuration based on environment and settings.
+     *
+     * @return CoreDatabase Return the database configuration object.
+     */
     private static function getDefaultConfig(): CoreDatabase
     {
         $var = (PRODUCTION ? 'database' : 'database.development');

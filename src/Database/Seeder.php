@@ -15,7 +15,7 @@ abstract class Seeder
 {
     /**
      * @var array<int,class-string<Seeder>> $invokes
-    */
+     */
     private static array $invokes = [];
     
     /**
@@ -31,19 +31,19 @@ abstract class Seeder
      * Invoke another seeder within seeder run method.
      * 
      * @param class-string<Seeder> $seed The seeder class name.
-    */
+     */
     protected final function invoke(string $seed): void
     {
-        static::$invokes[] = $seed;
+        self::$invokes[] = $seed;
     }
 
     /**
      * Get database seeder invokes.
      * 
      * @return array<int,class-string<Seeder>> Return seeders.
-    */
+     */
     public final function getInvokes(): array
     {
-        return static::$invokes;
+        return self::$invokes;
     }
 }

@@ -13,6 +13,7 @@ use \Luminova\Database\Table;
 use \Luminova\Database\Alter;
 use \Luminova\Database\Connection;
 use \Luminova\Command\Terminal;
+use \Luminova\Command\Utils\Color;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
 use \Closure;
@@ -24,38 +25,38 @@ final class Schema
      * Report messages.
      * 
      * @var array<int,array> $reports
-    */
+     */
     private static array $reports = [];
 
     /**
      * The previous table columns schema.
      * 
      * @var array<string,mixed> $columns
-    */
+     */
     private static array $columns = [];
 
     /**
      * Database connection.
      * 
      * @var DatabaseInterface|null $db 
-    */
+     */
     private static ?DatabaseInterface $db = null;
 
     /**
      * Command line instance.
      * 
      * @var Terminal|null $cli 
-    */
+     */
     private static ?Terminal $cli = null;
 
     /**
      * Get table execution reports.
      * 
      * @return array<int,array> Return result reports.
-    */
+     */
     public final function getReport(): array 
     {
-        return static::$reports;
+        return self::$reports;
     }
 
     /**
@@ -65,11 +66,11 @@ final class Schema
      */
     protected static function db(): DatabaseInterface
     {
-        if (static::$db === null) {
-            static::$db = (new Connection())->database();
+        if (self::$db === null) {
+            self::$db = (new Connection())->database();
         }
 
-        return static::$db;
+        return self::$db;
     }
 
     /**
@@ -79,11 +80,11 @@ final class Schema
      */
     protected static function cli(): Terminal
     {
-        if (static::$cli === null) {
-            static::$cli = new Terminal();
+        if (self::$cli === null) {
+            self::$cli = new Terminal();
         }
 
-        return static::$cli;
+        return self::$cli;
     }
 
     /**
@@ -116,22 +117,22 @@ final class Schema
             }            
 
             if(shared('SHOW_QUERY_DEBUG') === true){
-                static::$columns = $table->getColumns();
-                static::cli()->writeln("Table Creation SQL query string.", 'green');
-                static::cli()->newLine();
-                static::cli()->writeln($table->getCreateQuery());
-                static::cli()->newLine();
+                self::$columns = $table->getColumns();
+                self::cli()->writeln("Table Creation SQL query string.", 'green');
+                self::cli()->newLine();
+                self::cli()->writeln($table->getCreateQuery());
+                self::cli()->newLine();
                 return;
             }
 
             if(shared('CHECK_ALTER_TABLE') === true){
-                static::$columns = $table->getColumns();
+                self::$columns = $table->getColumns();
                 return;
             }
 
             $query = $table->getCreateQuery();
 
-            if (static::db()->exec($query) > 0) {
+            if (self::db()->exec($query) > 0) {
                 shared('MIGRATION_SUCCESS', true);
                 self::report("Table was created successfully.", $tableName, true);
             } else {
@@ -163,7 +164,7 @@ final class Schema
         }
 
         shared('ALTER_SUCCESS', false);
-        $db = static::db();
+        $db = self::db();
         try {
             $table = $tableCallback(new Table($tableName));
 
@@ -172,12 +173,12 @@ final class Schema
                 return;
             } 
 
-            $query = $table->getAlterQuery(static::$columns, shared('ALTER_DROP_COLUMNS') ?? false);
+            $query = $table->getAlterQuery(self::$columns, shared('ALTER_DROP_COLUMNS') ?? false);
 
             if(shared('SHOW_QUERY_DEBUG') === true){
-                static::cli()->writeln("Table Alteration SQL query string.", 'green');
-                static::cli()->newLine();
-                static::cli()->writeln(($query === '') ? 'No SQL column to print' : $query);
+                self::cli()->writeln("Table Alteration SQL query string.", 'green');
+                self::cli()->newLine();
+                self::cli()->writeln(($query === '') ? 'No SQL column to print' : $query);
                 return;
             }
 
@@ -200,7 +201,7 @@ final class Schema
             self::report($e->getMessage(), $tableName);
         }
 
-        static::$db = null;
+        self::$db = null;
     }
 
     /**
@@ -221,7 +222,7 @@ final class Schema
         }
 
         shared('ALTER_SUCCESS', false);
-        $db = static::db();
+        $db = self::db();
         try {
             $query = Alter::renameTable(
                 $database,
@@ -230,9 +231,9 @@ final class Schema
             );
 
             if(shared('SHOW_QUERY_DEBUG') === true){
-                static::cli()->writeln("Table Rename SQL query string.", 'green');
-                static::cli()->newLine();
-                static::cli()->writeln(($query === '') ? 'No SQL column to print' : $query);
+                self::cli()->writeln("Table Rename SQL query string.", 'green');
+                self::cli()->newLine();
+                self::cli()->writeln(($query === '') ? 'No SQL column to print' : $query);
                 return;
             }
 
@@ -241,7 +242,7 @@ final class Schema
             }
 
             $db->beginTransaction();
-            if (static::db()->exec($query) > 0) {
+            if (self::db()->exec($query) > 0) {
                 $db->commit();
                 shared('ALTER_SUCCESS', true);
                 self::report("Table was successfully renamed to {$to}.", $from, true);
@@ -253,7 +254,7 @@ final class Schema
             self::report($e->getMessage(), $from);
         }
 
-        static::$db = null;
+        self::$db = null;
     }
 
     /**
@@ -294,7 +295,7 @@ final class Schema
             self::report('Table name cannot be an empty string.', $tableName);
             return;
         }
-        $db = static::db();
+        $db = self::db();
         /**
          * Hold database object which maybe required to rollback transaction.
         */
@@ -308,7 +309,7 @@ final class Schema
         try {
             $query = "DROP TABLE " . ($ifExists ? "IF EXISTS " : "") . $tableName;
             $db->beginTransaction();
-            if (static::db()->exec($query) > 0) {
+            if (self::db()->exec($query) > 0) {
                 shared('DROP_TRANSACTION', $db);
                 shared('MIGRATION_SUCCESS', true);
                 self::report("Table has been dropped", $tableName, true);
@@ -332,18 +333,16 @@ final class Schema
     private static function report(string $message, ?string $tableName = null, bool $passed = false): void
     {
         if(is_command()){
-            if($passed){
-                static::cli()->writeln("[" . static::cli()->color("$tableName", 'green') . "] {$message}");
-            }else{
-                static::cli()->writeln("[" . static::cli()->color("$tableName", 'red') . "] {$message}");
-                static::cli()->beeps();
-                exit(STATUS_ERROR);
-            }
+            $message = "[" .  Color::style("$tableName", $passed ? 'green' : 'red') . "] {$message}";
 
-            return;
+            self::cli()->writeln($message);
+
+            if($passed){return;}
+            self::cli()->beeps();
+            exit(STATUS_ERROR);
         }
 
-        static::$reports[] = [
+        self::$reports[] = [
             'message' => $message,
             'table' => $tableName,
             'passed' => $passed

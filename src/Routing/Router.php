@@ -13,6 +13,7 @@ use \App\Application;
 use \App\Config\Template;
 use \Luminova\Http\Header;
 use \Luminova\Command\Terminal;
+use \Luminova\Command\Utils\Color;
 use \Luminova\Routing\Prefix;
 use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseCommand;
@@ -68,9 +69,9 @@ final class Router
     /**
      * All allowed HTTP request methods.
      * 
-     * @var array<string,string> $httpMethods
+     * @var array<string,string> $http_methods
      */
-    private static array $httpMethods = [
+    private static array $http_methods = [
         'GET'       => 'GET', 
         'POST'      => 'POST', 
         'PATCH'     => 'PATCH', 
@@ -110,18 +111,18 @@ final class Router
     private static array $namespace = [];
 
     /**
-     * Terminal instance.
+     * Terminal command instance.
      * 
-     * @var Terminal|null $term 
+     * @var Terminal|null $cmd 
      */
-    private static ?Terminal $term = null;
+    private static ?Terminal $cmd = null;
 
     /**
      * Weather router is running in cli mode.
      * 
-     * @var bool $isCli 
+     * @var bool $is_cli 
      */
-    private static bool $isCli = false;
+    private static bool $is_cli = false;
 
     /**
      * Allow Dependency injection.
@@ -131,7 +132,7 @@ final class Router
     private static bool $di = false;
 
     /**
-     * Terminate router run when serving static content.
+     * Flag to terminate router run immediately.
      * 
      * @var bool $terminate 
      */
@@ -145,6 +146,8 @@ final class Router
     private static array $commands = [];
 
     /**
+     * Application instance.
+     * 
      * @var CoreApplication|null $application 
      */
     private static ?CoreApplication $application = null;
@@ -164,16 +167,17 @@ final class Router
     private static ?WeakReference $reference = null;
 
     /**
-     * Initialize router class.
+     * Initializes the Router class and sets up default properties.
      * 
-     * @param CoreApplication $application Instance of application class.
+     * @param Application<CoreApplication> $app Instance of core application class.
      */
-    public function __construct(CoreApplication $application)
+    public function __construct(CoreApplication $app)
     {
-        self::$application = $application;
         self::$weak = new WeakMap();
         self::$reference = new WeakReference();
         self::$di = env('feature.route.dependency.injection', false);
+        self::$application = $app;
+        self::$is_cli = is_command() && self::cmd();
         self::reset();
         Foundation::profiling('start');
     }
@@ -196,7 +200,7 @@ final class Router
     {
         $method = strtoupper($name);
 
-        if ($method !== 'CLI' && isset(self::$httpMethods[$method])) {
+        if ($method !== 'CLI' && isset(self::$http_methods[$method])) {
             $this->capture($method, ...$arguments);
             return null;
         }
@@ -221,7 +225,6 @@ final class Router
      */
     public function context(Prefix|array|null ...$contexts): self 
     {
-        self::$isCli = is_command();
         self::$method  = self::getRequestMethod();
         self::$uri = self::getUriSegments();
 
@@ -231,7 +234,7 @@ final class Router
         }
 
         // If the view uri ends with `.extension`, then try serving the cached static version.
-        if(!self::$isCli && self::$uri !== self::CLI_URI && $this->serveStaticCache()){
+        if(!self::$is_cli && self::$uri !== self::CLI_URI && $this->serveStaticCache()){
             return $this;
         }
 
@@ -239,7 +242,7 @@ final class Router
 
         // Application start event.
         self::$application->__on('onStart', [
-            'cli' => self::$isCli ,
+            'cli' => self::$is_cli ,
             'method' => self::$method,
             'uri' => self::$uri,
             'module' => $prefix
@@ -255,7 +258,7 @@ final class Router
            RouterException::throwWith('no_context', RouterException::RUNTIME_ERROR);
         }
         
-        if (isset(self::$httpMethods[self::$method])) {
+        if (isset(self::$http_methods[self::$method])) {
            return $this->createWithMethods($prefix, $contexts);
         }
         
@@ -370,7 +373,7 @@ final class Router
      */
     public function before(string $group, Closure|string $callback = null): void
     {
-        if(!self::$isCli){
+        if(!self::$is_cli){
             RouterException::throwWith('invalid_cli_middleware');
         }
 
@@ -474,23 +477,26 @@ final class Router
         }
 
         $context = null;
+        $exit_code = STATUS_ERROR;
+
         if(self::$method === 'CLI'){
-            self::terminal();
-            $exitCode = self::runAsCommand();
-            $context = ['commands' => self::$commands];
+            if(self::$is_cli){
+                $exit_code = self::runAsCommand();
+                $context = ['commands' => self::$commands];
+            }
         }else{
-            $exitCode = self::runAsHttp();
+            $exit_code = self::runAsHttp();
             if (self::$method === 'HEAD') {
                 ob_end_clean();
             }
         }
 
         self::$application->__on('onFinish');
-        if($exitCode === STATUS_SUCCESS){
+        if($exit_code === STATUS_SUCCESS){
             Foundation::profiling('stop', $context);
         }
 
-        exit($exitCode);
+        exit($exit_code);
     }
 
     /**
@@ -566,7 +572,7 @@ final class Router
      */
     public static function getUriSegments(): string
     {
-        return self::$isCli 
+        return self::$is_cli 
             ? self::CLI_URI 
             : Foundation::getUriSegments();
     }
@@ -578,7 +584,7 @@ final class Router
      */
     public function getSegment(): Segments 
     {
-        return new Segments(self::$isCli ? [self::CLI_URI] : Foundation::getSegments());
+        return new Segments(self::$is_cli ? [self::CLI_URI] : Foundation::getSegments());
     }
 
     /**
@@ -622,14 +628,14 @@ final class Router
      */
     private static function getControllerClass(string $controller): string
     {
-        $prefix = self::$isCli ? 'Cli\\' : 'Http\\';
+        $prefix = self::$is_cli ? 'Cli\\' : 'Http\\';
 
         foreach (self::$namespace as $namespace) {
             if (class_exists($class = $namespace . $prefix . $controller)) {
                 return $class;
             }
 
-            if (!self::$isCli && class_exists($class = $namespace . 'Errors\\' . $controller)) {
+            if (!self::$is_cli && class_exists($class = $namespace . 'Errors\\' . $controller)) {
                 return $class;
             }
         }
@@ -651,7 +657,7 @@ final class Router
     {
         $method = ($_SERVER['REQUEST_METHOD'] ?? null);
 
-        if($method === null && self::$isCli){
+        if($method === null && self::$is_cli){
             return 'CLI';
         }
 
@@ -722,7 +728,7 @@ final class Router
         bool $terminate = false
     ): void
     {
-        if(self::$isCli){
+        if(self::$is_cli){
             RouterException::throwWith('invalid_middleware');
         }
 
@@ -746,7 +752,7 @@ final class Router
      */
     private static function getFirst(): string
     {
-        if(self::$isCli){
+        if(self::$is_cli){
             return self::CLI_URI;
         }
 
@@ -796,7 +802,7 @@ final class Router
     {
         if($first === $name) {
             if ($name === Prefix::CLI){
-                if(!self::$isCli) {
+                if(!self::$is_cli) {
                     return 2;
                 }
                 
@@ -842,11 +848,17 @@ final class Router
     /**
      * Get terminal instance.
      * 
-     * @return Terminal Return instance of Terminal class.
+     * @param bool $return Weather to return the terminal instance.
+     * 
+     * @return Terminal|true Return instance of terminal class or true if initalized.
      */
-    private static function terminal(): Terminal
+    private static function cmd(bool $return = false): Terminal|bool
     {
-        return self::$term ??= new Terminal();
+        if(!self::$cmd instanceof Terminal){
+            self::$cmd = new Terminal();
+        }
+
+        return $return ? self::$cmd : true;
     }
 
     /**
@@ -858,14 +870,22 @@ final class Router
     private static function runAsCommand(): int
     {
         $group = self::getArgument();
+        $command = self::getArgument(2);
 
-        if(self::$term->isHelp($group)){
-            self::$term->header();
-            self::$term->helper(null, true);
+        if($group === '' || $command === ''){
+            self::$cmd->header();
             return STATUS_SUCCESS;
         }
 
-        $command = self::getArgument(2);
+        if(self::$cmd->isHelp($group)){
+            if(self::$cmd->header()){
+                self::$cmd->newLine();
+            }
+
+            self::$cmd->helper(null, true);
+            return STATUS_SUCCESS;
+        }
+
         $global = (self::$weak[self::$reference]['cli_middleware'][self::$method]['global']??null);
 
         if($global !== null && !self::handleCommand($global)){
@@ -890,7 +910,9 @@ final class Router
             }
         }
 
-        self::$term->print('Unknown command ' . self::$term->color("'{$group} {$command}'", 'red') . ' not found', null);
+        $command = Color::style("'{$group} {$command}'", 'red');
+        self::$cmd->fwrite('Unknown command ' . $command . ' not found', Terminal::STD_ERR);
+
         return STATUS_ERROR;
     }
 
@@ -922,7 +944,7 @@ final class Router
             return STATUS_SUCCESS;
         }
 
-        static::triggerError();
+        self::triggerError();
         return STATUS_ERROR;
     }
 
@@ -951,8 +973,8 @@ final class Router
     {
         self::$terminate = true;
         $err = 'Error: (503) System undergoing maintenance!';
-        if(self::$isCli || self::$uri === self::CLI_URI){
-            self::terminal()->error($err);
+        if(self::$is_cli || self::$uri === self::CLI_URI){
+            self::$cmd->error($err);
             return true;
         }
 
@@ -1044,9 +1066,9 @@ final class Router
      */
     private static function handleCommand(array $routes): bool
     {
-        self::$commands = self::$term->parseCommands($_SERVER['argv'] ?? [], true);
+        self::$commands = self::$cmd->parseCommands($_SERVER['argv'] ?? [], true);
         $queries = self::getArguments();
-        $isHelp = self::$term->isHelp(self::getArgument(2));
+        $isHelp = self::$cmd->isHelp(self::getArgument(2));
         
         foreach ($routes as $route) {
             if($route['middleware']){
@@ -1200,7 +1222,7 @@ final class Router
     ): bool
     {
         if ($callback instanceof Closure) {
-            $arguments = (self::$isCli && isset($arguments['command'])) 
+            $arguments = (self::$is_cli && isset($arguments['command'])) 
                 ? ($arguments['params'] ?? []) 
                 : $arguments;
             
@@ -1271,7 +1293,7 @@ final class Router
             if ($caller->isPublic() && !$caller->isAbstract() && 
                 (!$caller->isStatic() || $class->implementsInterface(ErrorHandlerInterface::class) || $class->implementsInterface(RouterInterface::class))
             ) {
-                if (isset($arguments['command']) && self::$isCli) {;
+                if (isset($arguments['command']) && self::$is_cli) {;
                     if($class->getProperty('group')->getDefaultValue() === self::getArgument(1)) {
                         $arguments['classMethod'] = $method;
                         $result = self::invokeCommandArgs(
@@ -1313,10 +1335,10 @@ final class Router
     private function createWithAttributes(string $prefix): self 
     {
         $hmvc = env('feature.app.hmvc', false);
-        $attr = new AttrCompiler($this->baseGroup, self::$isCli, $hmvc);
+        $attr = new AttrCompiler($this->baseGroup, self::$is_cli, $hmvc);
         $path = $hmvc ? 'app/Modules/' : 'app/Controllers/';
 
-        if(self::$isCli){
+        if(self::$is_cli){
             $attr->getAttrFromCli($path);
         }else{
             $attr->getAttrFromHttp($path, $prefix, self::$uri);
@@ -1405,15 +1427,15 @@ final class Router
         ];
 
         // Check command string to determine if it has help arguments.
-        if(self::$term->isHelp($arguments['command'])){
+        if(self::$cmd->isHelp($arguments['command'])){
             
-            if(!array_key_exists('no-header', $arguments['options'])){
-                self::$term->header();
+            if(self::$cmd->header()){
+                self::$cmd->newLine();
             }
 
             if($instance->help($arguments[$id]) === STATUS_ERROR){
                 // Fallback to default help information if dev does not implement help.
-                self::$term->helper($arguments[$id]);
+                self::$cmd->helper($arguments[$id]);
             }
 
             return STATUS_SUCCESS;
@@ -1511,12 +1533,12 @@ final class Router
     private static function newInstance(string $class, bool $nullable = false): ?object 
     {
         return match ($class) {
-            Application::class, CoreApplication::class => self::$application ?? app(),
-            self::class => self::$application->router ?? new self(self::$application ?? app()),
-            Terminal::class => self::terminal(),
+            Application::class, CoreApplication::class => self::$application,
+            self::class => self::$application->router,
+            Terminal::class => self::cmd(true),
             Factory::class => factory(),
             Closure::class => fn(mixed ...$arguments): mixed => null,
-            default => $nullable && !class_exists($class) ? null : new $class(),
+            default => ($nullable && !class_exists($class)) ? null : new $class()
         };
     }
 
@@ -1579,7 +1601,7 @@ final class Router
             'null' => null,
             'false' => false,
             'true' => true,
-            default => $value,
+            default => $value
         };
     }
 
@@ -1599,7 +1621,7 @@ final class Router
             return $views;
         }
 
-        $result = self::$term->extract(array_slice($_SERVER['argv'], 2), true);
+        $result = self::$cmd->extract(array_slice($_SERVER['argv'], 2), true);
         $views['view'] = '/' . implode('/', $result['arguments']);
         $views['options'] = $result['options'];
 

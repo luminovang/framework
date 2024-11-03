@@ -69,10 +69,10 @@ abstract class Migration
      * 
      * @example Implementation.
      * `Schema::invoke('\App\Database\Migration\AnotherMigration')`
-    */
+     */
     protected final function invoke(string $migrate): void
     {
-        static::$invokes[] = $migrate;
+        self::$invokes[] = $migrate;
     }
 
     /**
@@ -80,9 +80,9 @@ abstract class Migration
      * 
      * @return array<int,class-string<Migration>> Return migration to invoke.
      * @internal
-    */
+     */
     public final function getInvokes(): array
     {
-        return static::$invokes;
+        return self::$invokes;
     }
 }

@@ -23,10 +23,10 @@ final class Uploader
      * 
      * @return bool Return true if upload was successful false otherwise.
      * @throws StorageException If upload path is not specified in configuration.
-    */
+     */
     public static function upload(File $file, ?string $path = null): bool
     {
-        $destination = static::beforeUpload($file, $path, $symlink);
+        $destination = self::beforeUpload($file, $path, $symlink);
       
         if ($destination === false) {
             return false;
@@ -36,7 +36,7 @@ final class Uploader
         $chunk = (isset($config->chunkLength) ? (int) $config->chunkLength : 5_242_880);
         $temp = $destination . '.part';
 
-        if (static::execute($temp, $file->getTemp(), $chunk) && rename($temp, $destination)) {
+        if (self::execute($temp, $file->getTemp(), $chunk) && rename($temp, $destination)) {
             $file->free();
             if($symlink !== null){
                 FileManager::symbolic($destination, $symlink);
@@ -59,7 +59,7 @@ final class Uploader
      */
     public static function move(File $file, ?string $path = null): bool
     {
-        $destination = static::beforeUpload($file, $path, $symlink);
+        $destination = self::beforeUpload($file, $path, $symlink);
 
         if ($destination === false) {
             return false;
@@ -91,7 +91,7 @@ final class Uploader
      */
     public static function chunk(File $file, ?string $path = null, int $chunk = 0, int $chunks = 0): bool|int
     {
-        $destination = static::beforeUpload($file, $path, $symlink);
+        $destination = self::beforeUpload($file, $path, $symlink);
 
         if ($destination === false) {
             return false;
@@ -167,7 +167,7 @@ final class Uploader
      * @param string $temp The temporary file path for on the server.
      * @param int $chunk Chunk read size in byte of the uploaded file (default: 5mb)
      * 
-     * @return bool True on success, false on failure.
+     * @return bool Return true on success, false on failure.
     */
     private static function execute(string $destination, string $temp, int $chunk = 5_242_880): bool
     {

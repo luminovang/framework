@@ -19,7 +19,7 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.3.5';
+    public const VERSION = '3.3.6';
 
     /**
      * Framework version name.
@@ -40,7 +40,7 @@ final class Foundation
      * 
      * @var string NOVAKIT_VERSION
      */
-    public const NOVAKIT_VERSION = '2.9.7';
+    public const NOVAKIT_VERSION = '2.9.8';
 
     /**
      * Server base path for router.
@@ -125,8 +125,8 @@ final class Foundation
      */
     public static function initialize(): void 
     {
-        set_error_handler([static::class, 'handle']);
-        register_shutdown_function([static::class, 'shutdown']);
+        set_error_handler([self::class, 'handle']);
+        register_shutdown_function([self::class, 'shutdown']);
     }
 
     /**
@@ -161,33 +161,26 @@ final class Foundation
      */
     private static function display(?ErrorHandler $stack = null): void 
     {
-        $path = APP_ROOT . 'resources' . DIRECTORY_SEPARATOR . 'Views' . DIRECTORY_SEPARATOR . 'system_errors' . DIRECTORY_SEPARATOR;
+        [$tracer, $view, $path] = self::errRoute($stack);
 
-        if(!$stack instanceof ErrorHandler){
-            $view = 'info.php';
-        }elseif (static::isCommand()) {
-            $view = 'cli.php';
-        } elseif (static::isApiPrefix()) {
-            $view = (defined('IS_UP') ? env('app.api.prefix', 'api')  . '.php' : 'api.php');
-        } else {
-            $view = 'errors.php';
-        }
-    
         // Get tracer for php error if not available
-        if(SHOW_DEBUG_BACKTRACE && !ErrorHandler::getBacktrace()){
+        if(($tracer || SHOW_DEBUG_BACKTRACE) && !ErrorHandler::getBacktrace()){
             ErrorHandler::setBacktrace(debug_backtrace());
         }
         
-        if (ob_get_level() > 0) {
+        if ($view !== 'cli.php' && ob_get_level() > 0) {
             ob_end_clean();
         }
+
         if(file_exists($path . $view)){
             include_once $path . $view;
             return;
         }
 
         $error = 'An error is stopping application from running correctly.';
-        echo ($view === 'cli.php') ? $error : '<h1>Application Error!</h2><p>' . $error . '</p>';
+        echo ($view === 'cli.php') 
+            ? $error 
+            : '<h1>Error Occurred!</h2><p>' . $error . '</p>';
     }
 
     /**
@@ -195,27 +188,27 @@ final class Foundation
      * Remove the index controller file name from the scrip name.
      *
      * @return string Return public directory path.
-    */
+     */
     public static function getBase(): string
     {
-        if (static::$base !== null) {
-            return static::$base;
+        if (self::$base !== null) {
+            return self::$base;
         }
 
-        static::$base = ($_SERVER['SCRIPT_NAME'] ?? '/');
+        self::$base = ($_SERVER['SCRIPT_NAME'] ?? '/');
 
-        if(static::$base === '/'){
-            return static::$base;
+        if(self::$base === '/'){
+            return self::$base;
         }
 
-        static::$base = str_replace(['/', '\\'], '/', static::$base);
-        if (($last = strrpos(static::$base, '/')) !== false && $last > 0) {
-            static::$base = substr(static::$base, 0, $last) . '/';
-            return static::$base;
+        self::$base = str_replace(['/', '\\'], '/', self::$base);
+        if (($last = strrpos(self::$base, '/')) !== false && $last > 0) {
+            self::$base = substr(self::$base, 0, $last) . '/';
+            return self::$base;
         }
 
-        static::$base = '/';
-        return static::$base;
+        self::$base = '/';
+        return self::$base;
     }
 
     /**
@@ -224,17 +217,17 @@ final class Foundation
      * @param string $path Path to convert to absolute url.
      * 
      * @return string Return full url without system path.
-    */
+     */
     public static function toAbsoluteUrl(string $path): string
     {
         if(NOVAKIT_ENV === null && !PRODUCTION){
-            $base = rtrim(static::getBase(), 'public/');
+            $base = rtrim(self::getBase(), 'public/');
             
             if (($basePos = strpos($path, $base)) !== false) {
                 $path = trim(substr($path, $basePos + strlen($base)), TRIM_DS);
             }
         }else{
-            $path = trim(static::filterPath($path), TRIM_DS);
+            $path = trim(self::filterPath($path), TRIM_DS);
         }
 
         if(str_starts_with($path, 'public/')){
@@ -259,35 +252,35 @@ final class Foundation
      * Removes the public controller path from uri if available.
      * 
      * @return string Relative url segment paths.
-    */
+     */
     public static function getUriSegments(): string
     {
-        if(static::$segments === null){
-            static::$segments = '/';
+        if(self::$segments === null){
+            self::$segments = '/';
 
             if (isset($_SERVER['REQUEST_URI'])) {
-                $uri = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen(static::getBase()));
+                $uri = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen(self::getBase()));
 
                 // Remove url parameters if available.
                 if ($uri !== '' && false !== ($pos = strpos($uri, '?'))) {
                     $uri = substr($uri, 0, $pos);
                 }
 
-                static::$segments = '/' . trim($uri, '/');
+                self::$segments = '/' . trim($uri, '/');
             }
         }
 
-        return static::$segments;
+        return self::$segments;
     }
 
     /**
      * Get the current view segments as array.
      * 
      * @return array<int,string> Return the array list of url segments.
-    */
+     */
     public static function getSegments(): array
     {
-        $segments = static::getUriSegments();
+        $segments = self::getUriSegments();
 
         if($segments === '/'){
             return [''];
@@ -333,17 +326,17 @@ final class Foundation
      * This method checks if the URL path starts with '/api' or 'public/api'.
      * 
      * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
-    */
+     */
     public static function isApiPrefix(): bool
     {
-        return static::getSegments()[0] === (defined('IS_UP') ? env('app.api.prefix', 'api') : 'api');
+        return self::getSegments()[0] === (defined('IS_UP') ? env('app.api.prefix', 'api') : 'api');
     }
 
     /**
      * Find whether the application is running in CLI mode.
      *
      * @return bool Return true if the request is made in CLI mode, false otherwise.
-    */
+     */
     public static function isCommand(): bool
     {
         if(isset($_SERVER['REMOTE_ADDR']) || isset($_SERVER['HTTP_USER_AGENT'])){
@@ -364,11 +357,11 @@ final class Foundation
      * @param string $path The path to be filtered.
      * 
      * @return string Return the filtered path.
-    */
+     */
     public static function filterPath(string $path): string 
     {
         $matching = '';
-        foreach (static::$systemPaths as $directory) {
+        foreach (self::$systemPaths as $directory) {
             $separator = $directory . DIRECTORY_SEPARATOR; 
             if (str_contains($path, $separator)) {
                 $matching = $separator;
@@ -390,7 +383,7 @@ final class Foundation
      * @param int $errLine The error line number.
      * 
      * @return bool Return true if error was handled by framework, false otherwise.
-    */
+     */
     public static function handle(int $errno, string $errstr, string $errFile, int $errLine): bool 
     {
         if (error_reporting() === 0) {
@@ -398,12 +391,12 @@ final class Foundation
         }
 
         $errorCode = ErrorHandler::getErrorCode($errstr, $errno);
-        self::log(static::getLevel($errno), sprintf(
+        self::log(self::getLevel($errno), sprintf(
             "[%s (%s)] %s File: %s Line: %s.", 
             ErrorHandler::getErrorName($errorCode),
             (string) $errorCode,
             $errstr,
-            static::filterPath($errFile),
+            self::filterPath($errFile),
             (string) $errLine
         ));
 
@@ -414,14 +407,14 @@ final class Foundation
      * Handle shutdown errors.
      * 
      * @return void
-    */
+     */
     public static function shutdown(): void 
     {
         if (($error = error_get_last()) === null || !isset($error['type'])) {
             return;
         }
  
-        $isFatal = static::isFatal($error['type']);
+        $isFatal = self::isFatal($error['type']);
         $isDisplay = ini_get('display_errors');
         $errorCode = ErrorHandler::getErrorCode($error['message'], $error['type']);
         $errName = ErrorHandler::getErrorName($errorCode);
@@ -437,13 +430,13 @@ final class Foundation
                 $errName
             ) : null;
 
-            static::display($stack);
+            self::display($stack);
         }
 
         // If message is not empty and is not fatal error or on projection
         // Log the error message.
         if(!$isFatal || PRODUCTION){
-            self::log(static::getLevel($error['type']), sprintf(
+            self::log(self::getLevel($error['type']), sprintf(
                 "[%s (%s)] %s File: %s Line: %s.", 
                 $errName,
                 (string) $errorCode,
@@ -465,10 +458,43 @@ final class Foundation
      * - Fatal errors that occur during PHP's initial startup.
      * - Fatal compile-time errors.
      * - Compile-time parse errors.
-    */
+     */
     public static function isFatal(string|int $errno): bool 
     {
         return in_array($errno, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true);
+    }
+
+    /**
+     * Determines the appropriate error view path based on the application state and error context.
+     *
+     * @param ErrorHandler $stack The error handler stack used to manage error types and contexts.
+     * 
+     * @return array{0:bool,1:string,2:string} Returns an array with the view filename and its file path.
+     */
+    private static function errRoute(ErrorHandler $stack): array
+    {
+        $view = null;
+        if(defined('IS_UP') && PRODUCTION){
+            $view = env('logger.mail.errors', null) 
+                ? 'mailer.php' 
+                : (env('logger.remote.errors', null) ? 'remote.php' : null);
+        }
+
+        $tracer = ($view !== null);
+
+        if($view === null){
+            $view = match (true) {
+                self::isCommand() => 'cli.php',
+                self::isApiPrefix() => (defined('IS_UP') ? env('app.api.prefix', 'api') . '.php' : 'api.php'),
+                default => ($stack instanceof ErrorHandler ? 'errors.php' : 'info.php')
+            };
+        }
+
+        return [
+            $tracer,
+            $view, 
+            APP_ROOT . 'resources' . DIRECTORY_SEPARATOR . 'Views' . DIRECTORY_SEPARATOR . 'system_errors' . DIRECTORY_SEPARATOR
+        ];
     }
 
     /**
@@ -478,7 +504,7 @@ final class Foundation
      * @param string $message The error message to log.
      * 
      * @return void 
-    */
+     */
     private static function log(string $level, string $message): void 
     {
         // If the error allowed framework to boot,
@@ -504,7 +530,7 @@ final class Foundation
      *
      * @return string Return trimmed path.
      * @internal
-    */
+     */
     public static function bothTrim(string $path): string 
     {
         return trim($path, TRIM_DS) . DIRECTORY_SEPARATOR;

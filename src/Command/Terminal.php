@@ -21,17 +21,38 @@ use \Closure;
 class Terminal 
 {
     /**
+     * Represents the standard output stream.
+     * 
+     * @var int STD_OUT
+     */
+    public const STD_OUT = 0;
+
+    /**
+     * Represents the standard error stream.
+     * 
+     * @var int STD_ERR
+     */
+    public const STD_ERR = 1;
+
+    /**
+     * Represents the standard input stream.
+     * 
+     * @var int STD_IN
+     */
+    public const STD_IN = 2;
+
+    /**
      * Height of terminal visible window
      *
      * @var int|null $windowHeight
-    */
+     */
     protected static ?int $windowHeight = null;
 
     /**
      * Width of terminal visible window
      *
      * @var int|null $windowWidth
-    */
+     */
     protected static ?int $windowWidth = null;
 
     /**
@@ -45,35 +66,54 @@ class Terminal
      * Write in a new line enabled.
      *
      * @var bool $isNewLine
-    */
+     */
     protected static bool $isNewLine = false;
 
     /**
-     * Is colored text supported.
+     * The parsed command information from (explain).
      *
-     * @var bool $isColored
-    */
-    protected static bool $isColored = false;
+     * @var array $explained
+     */
+    protected static array $explained = [];
 
     /**
-     * Passed command line arguments and infos about command.
+     * Flags to determine if color and ansi are supported 
+     * based on different `STDOUT` and `STDERR` resource.
      *
-     * @var array $commandsOptions
-    */
-    protected static array $commandsOptions = [];
+     * @var array{colors:array{0:?bool,1:?bool},ansi:array{0:?bool,1:?bool}} $isSupported
+     */
+    protected static array $isSupported = [
+        'colors' => [
+            0 => null, //stdout
+            1 => null, //stderr,
+            2 => null //stdin
+        ],
+        'ansi' => [
+            0 => null, // stdout
+            1 => null, // stderr,
+            2 => null //stdin
+        ]
+    ];
+
+    /**
+     * Input validations object.
+     * 
+     * @var Validation|null $validation;
+     */
+    protected static ?Validation $validation = null;
 
     /**
      * Initialize command line instance before running any commands.
-    */
+     */
     public function __construct()
     {
         defined('STDOUT') || define('STDOUT', 'php://output');
         defined('STDIN')  || define('STDIN', 'php://stdin');
         defined('STDERR') || define('STDERR', 'php://stderr');
         
-        static::$isReadLine = extension_loaded('readline');
-        static::$commandsOptions  = [];
-        static::$isColored = static::isColorSupported(STDOUT);
+        self::$isReadLine = extension_loaded('readline');
+        self::$explained  = [];
+        self::isColorSupported(self::STD_OUT);
     }
 
     /**
@@ -89,40 +129,41 @@ class Terminal
      * > During count down, the CLI screen will be wiped out of any output.
      * > If number of seconds is less than 1, it will prompt message `Press any key to continue...`.
      */
-    public static final function waiting(
+    public static function waiting(
         int $seconds = 0, 
         string $pattern = 'Waiting...(%d seconds)'
     ): void
     {
         if ($seconds <= 0) {
-            static::writeln('Press any key to continue...');
-            static::input();
+            self::writeln('Press any key to continue...');
+            self::input();
             return;
         }
 
         for ($time = $seconds; $time > 0; $time--) {
-            static::fwrite(sprintf("\r{$pattern}", $time));
+            self::fwrite(sprintf("\r{$pattern}", $time));
             sleep(1);
-            static::clear();
+            self::clear();
         }
-        static::fwrite(sprintf("\r{$pattern}", 0));
+        self::fwrite(sprintf("\r{$pattern}", 0));
     }
 
     /**
-     * Freeze and pause execution for a specified number of seconds, optionally clear the screen and the user input during the freeze.
+     * Freeze and pause execution for a specified number of seconds, 
+     * optionally clear the screen and the user input during the freeze.
      *
      * @param int $seconds The number of seconds to freeze execution (default: 10).
      * @param bool $clear Weather to clear the console screen and input while freezing (default: false).
      *
      * @return void
      */
-    public static final function freeze(int $seconds = 10, bool $clear = true): void
+    public static function freeze(int $seconds = 10, bool $clear = true): void
     {
         if ($clear) {
-            static::clear();
+            self::clear();
             for ($time = 0; $time < $seconds; $time++) {
                 sleep(1);
-                static::clear();
+                self::clear();
                 flush();
             }
             return;
@@ -143,7 +184,7 @@ class Terminal
      *
      * @return void
      */
-    public static final function spinner(
+    public static function spinner(
         array $spinners = ['-', '\\', '|', '/'], 
         int $spins = 10, 
         int $sleep = 100000, 
@@ -155,15 +196,18 @@ class Terminal
     
         for ($i = 0; $i < $iterations; $i++) {
             $current = $spinners[$i % $count];
-            static::fwrite("\r$current");
+            self::fwrite("\r$current");
             flush();
             usleep($sleep);
         }
     
-        static::fwrite("\r"); 
+        self::fwrite("\r"); 
         if ($onComplete === true) {
-            static::fwrite("Done!\n");
-        } elseif ($onComplete instanceof Closure) {
+            self::fwrite("Done!\n");
+            return;
+        }
+        
+        if ($onComplete instanceof Closure) {
             $onComplete();
         }
     }
@@ -177,7 +221,7 @@ class Terminal
      * 
      * @return float|int Return the percentage of completion between (0-100) or 100 if completed.
      */
-    public static final function progress(
+    public static function progress(
         int|bool $step = 1, 
         int $steps = 10, 
         bool $beep = true
@@ -185,7 +229,7 @@ class Terminal
     {
         $percent = 100;
         if ($step === false || $step >= $steps) {
-            static::fwrite("\r\033[32m[##########] 100%\033[0m\n");
+            self::fwrite("\r" . self::applyAnsi('[##########] 100%', '32m') . "\n");
         }else{
             $step = max(0, $step);
             $steps = max(1, $steps);
@@ -193,12 +237,12 @@ class Terminal
             $barWidth = (int) round($percent / 10);
             $progressBar = '[' . str_repeat('#', $barWidth) . str_repeat('.', 10 - $barWidth) . ']';
             $progressText = sprintf(' %3d%%', $percent);
-            static::fwrite("\r\033[32m" . $progressBar . "\033[0m" . $progressText);
+            self::fwrite("\r" . self::applyAnsi($progressBar, '32m') . $progressText);
         }
 
         flush();
         if($beep && $percent >= 100){
-            static::beeps(1);
+            self::beeps(1);
         }
         
         return $percent;
@@ -215,15 +259,17 @@ class Terminal
      * @param Closure|null $onProgress A callback to execute at each progress step (default: null). 
      * @param bool $beep Indicates whether to emit a beep sound upon completion. Defaults to true.
      *
-     * Progress Callback Signature:
+     * @return void
+     * 
+     * @example Progress Callback Signature:
      * Receiving the current progress percentage.
      * ```php
-     * function(float|int $step): void {
-     * }
+     * Terminal::watcher(5, function(float|int $step): void {
+     *    echo "Progress: $step%";
+     * });
      * ```
-     * @return void
      */
-    public static final function watcher(
+    public static function watcher(
         int $limit, 
         ?Closure $onFinish = null, 
         ?Closure $onProgress = null, 
@@ -231,7 +277,7 @@ class Terminal
     ): void 
     {
         for ($step = 0; $step <= $limit; $step++) {
-            $progress = static::progress($step, $limit, $beep);
+            $progress = self::progress($step, $limit, $beep);
 
             if ($onProgress instanceof Closure) {
                 $onProgress($progress);
@@ -254,10 +300,10 @@ class Terminal
      * @param int $total The total number of time to beep.
      *
      * @return void
-    */
-    public static final function beeps(int $total = 1): void
+     */
+    public static function beeps(int $total = 1): void
     {
-        echo str_repeat("\x07", $total);
+        self::print(str_repeat("\x07", $total));
     }
 
     /**
@@ -275,8 +321,8 @@ class Terminal
      * @return string Return the client input value.
      * 
      * @see https://luminova.ng/docs/0.0.0/security/validation - Read the input validation documentation.
-    */
-    public static final function prompt(
+     */
+    public static function prompt(
         string $message, 
         array $options = [], 
         string|bool|null $validations = null, 
@@ -287,37 +333,37 @@ class Terminal
         $placeholder = '';
         $textOptions = [];
         $validations = ($validations === false) ? 'none' : $validations;
+        $isColor = self::isColorSupported();
 
         if($options !== []){
             foreach($options as $color => $text){
                 $textOptions[] = $text;
-                $placeholder .= static::color($text, $color) . ',';
+                $placeholder .= ($isColor ? Color::style($text, $color) : $text) . ',';
             }
             $placeholder = '[' . rtrim($placeholder, ',') . ']';
             $default = $textOptions[0];
         }
 
-        $validationRules = $validations ?? $textOptions;
-        $validationRules = ($validations === 'none' 
-            ? false : ($validationRules !== [] && is_array($validationRules)
-            ? "required|in_array(" .  implode(",", $validationRules) . ")" : $validationRules));
+        $rules = $validations ?? $textOptions;
+        $rules = ($validations === 'none' 
+            ? false : ($rules !== [] && is_array($rules)
+            ? "required|in_array(" .  implode(",", $rules) . ")" : $rules));
 
-        if ($validationRules && str_contains($validationRules, 'required')) {
+        if ($rules && str_contains($rules, 'required')) {
             $default = '';
         }
         
         do {
             if(!$silent){
                 if (isset($input)) {
-                    static::fwrite('Input validation failed. ');
+                    self::fwrite('Input validation failed. ');
                 }
-                static::fwrite($message . ' ' . $placeholder . ': ');
+                self::fwrite($message . ' ' . $placeholder . ': ');
             }
-            $input = static::input();
+            $input = self::input();
             $input = ($input === '') ? $default : $input;
-        } while ($validationRules !== false && !static::validate($input, ['input' => $validationRules]));
+        } while ($rules !== false && !self::validate($input, ['input' => $rules]));
     
-
         return $input;
     }
 
@@ -333,8 +379,8 @@ class Terminal
      *
      * @return array<string|int,mixed> Return the client selected array keys and values.
      * @throws InvalidArgumentException Throw if options is not specified or an empty array.
-    */
-    public static final function chooser(string $text, array $options, bool $required = false): array
+     */
+    public static function chooser(string $text, array $options, bool $required = false): array
     {
         if ($options == []) {
             throw new InvalidArgumentException('Invalid argument, $options is required for chooser.');
@@ -342,149 +388,82 @@ class Terminal
 
         $lastIndex = 0;
         $placeholder = 'To specify multiple values, separate them with commas.';
-        $validationRules = '';
+        $rules = '';
         $optionValues = [];
         $index = 0;
+
         foreach ($options as $key => $value) {
             $optionValues[$index] = [
                 'key' => $key,
                 'value' => $value
             ];
 
-            $validationRules .= $index . ',';
+            $rules .= $index . ',';
             $lastIndex = $index;
             $index++;
         }
         
-        $validationRules = $required ? "required|keys_exist(" . rtrim($validationRules, ',')  . ")" : 'nullable';
-        static::writeln($text);
+        $rules = $required ? "required|keys_exist(" . rtrim($rules, ',')  . ")" : 'nullable';
+        self::writeln($text);
         self::writeOptions($optionValues, strlen((string) $lastIndex));
-        static::writeln($placeholder);
+        self::writeln($placeholder);
 
         do {
             if (isset($input)) {
-                static::fwrite('Required, please select an option to continue.');
-                static::newLine();
+                self::fwrite('Required, please select an option to continue.');
+                self::newLine();
             }
 
-            $input = static::input();
+            $input = self::input();
             $input = ($input === '') ? '0' : $input;
-        } while ($required && !static::validate($input, ['input' => $validationRules]));
+        } while ($required && !self::validate($input, ['input' => $rules]));
 
         return self::getInputValues(list_to_array($input), $optionValues);
     }
 
-    /**
-     * Prompts the user to enter a password, with options for retry attempts and a timeout.
+     /**
+     * Prompts the user to enter a password with hidden input. Supports retry attempts and optional timeout.
      *
-     * @param string $message The message to display when prompting for the password.
-     * @param int $retry The number of retry attempts if the user provides an empty password (default: 3).
-     * @param int $timeout The number of seconds to wait for user input before displaying an error message (default: 0).
+     * - On Windows, it uses a VBS script or PowerShell to hide the input.
+     * - On Linux/Unix, it uses a bash command to hide the input.
      *
-     * @return string Return the client inputted password.
+     * @param string $message Optional message to display when prompting for the password (default: 'Enter Password').
+     * @param int $retry The number of allowed retry attempts, set to `0` for unlimited retries (default: 3).
+     * @param int $timeout Optional time window for password input in seconds, set to 0 for no timeout (default: 0).
+     * 
+     * @return string Return the entered password or an empty string if the maximum retry attempts are exceeded.
      */
-    public static final function password(
+    public static function password(
         string $message = 'Enter Password', 
         int $retry = 3, 
         int $timeout = 0
     ): string
     {
         $attempts = 0;
-        $visibilityPromptShown = false;
+        $isVisibilityPromptShown = false;
+        $isWindows = (is_platform('windows') || self::isWindowsTerminal(self::STD_IN));
 
         do {
-            $password = '';
-
-            if (is_platform('windows') || static::isWindowsTerminal(STDIN)) {
-                $vbscript = sys_get_temp_dir() . 'prompt_password.vbs';
-                $inputBox = 'wscript.echo(InputBox("'. addslashes($message) . '", "", ""))';
-    
-                if ($timeout > 0) {
-                    $result = static::timeout(static function() {
-                        static::newLine();
-                        static::error("Error: Timeout exceeded. No input provided.");
-                    }, $timeout);
-    
-                    if ($result === true) {
-                        return '';
-                    }
-                }
-    
-                if (file_put_contents($vbscript, $inputBox) !== false) {
-                    $password = static::_shell("cscript //nologo " . escapeshellarg($vbscript));
-                }
-    
-                if ($password === '' || $password === false || $password === null) {
-                    $password = static::_shell('powershell -Command "Read-Host -AsSecureString | ConvertFrom-SecureString"');
-                }
-
-                $password = ($password === false || $password === null) ? '' : trim($password);
-    
-                unlink($vbscript);
-            } else {
-                $command = "/usr/bin/env bash -c 'echo OK'";
-                $continue = static::_shell($command);
-                $continue = ($continue === false || $continue === null) ? 'ERR' : trim($continue);
-    
-                if ($continue !== 'OK') {
-                    if (!$visibilityPromptShown && static::visibility(false) === false) {
-                        $continue = static::prompt('Your password may be visible while typing, do you wish to continue?', [
-                            'yes', 'no'
-                        ], 'required|in_array(yes,no)');
-                    } else {
-                        $continue = 'yes';
-                    }
-                }
-    
-                if ($continue !== 'no') {
-                    static::fwrite($message . ': ');
-    
-                    if ($continue === 'yes') {
-                        static::visibility(false);
-                    }
-    
-                    if ($timeout > 0) {
-                        $result = static::timeout(static function() {
-                            static::newLine();
-                            static::error("Error: Timeout exceeded. No input provided.");
-                        }, $timeout);
-    
-                        if ($result) {
-                            if ($continue === 'yes') {
-                                static::visibility(true);
-                            }
-                            
-                            return '';
-                        }
-                    }
-    
-                    if ($continue === 'yes') {
-                        $password = static::input();
-                        static::visibility(true);
-                    } elseif ($continue === 'OK') {
-                        $command = "/usr/bin/env bash -c 'read -s inputPassword && echo \$inputPassword'";
-                        $password = static::_shell($command);
-                        $password = ($password === false || $password === null) ? '' : trim($password);
-                    }
-                }
-            }
+            $password = $isWindows
+                ? self::getWindowsHiddenPassword($message, $timeout)
+                : self::getLinuxHiddenPassword($message, $timeout, $isVisibilityPromptShown);
     
             if ($password !== '') {
-                static::newLine();
+                self::newLine();
                 return $password;
             }
     
             $attempts++;
-            $visibilityPromptShown = true;
+            $isVisibilityPromptShown = true;
             if ($retry === 0 || $attempts < $retry) {
-                static::newLine();
-                static::error("Error: Password cannot be empty. Please try again.");
+                self::newLine();
+                self::error("Error: Password cannot be empty. Please try again.");
             }
         } while ($retry === 0 || $attempts < $retry);
     
         if($retry !== 0){
-            static::newLine();
-            static::error("Error: Maximum retry attempts reached. Exiting.");
+            self::newLine();
+            self::error("Error: Maximum retry attempts reached. Exiting.");
         }
 
         return '';
@@ -498,27 +477,30 @@ class Terminal
      *
      * @return never
      */
-    final public static function terminate(?string $message = null, int $exitCode = STATUS_SUCCESS): void
+    public static function terminate(?string $message = null, int $exitCode = STATUS_SUCCESS): void
     {
         if ($message !== null) {
-            static::writeln($message);
+            self::writeln($message);
         }
 
         exit($exitCode);
     }
 
     /**
-     * Highlights url as clickable link in terminal.
+     * Highlights URL to indicate it clickable in terminal.
      *
      * @param string $url The url to be highlighted.
      * @param string|null $title Optional title to be displayed (default: null).
      *
-     * @return never
+     * @return void
      */
-    final public static function link(string $url, ?string $title = null): void 
+    public static function link(string $url, ?string $title = null): void 
     {
         $title ??= $url;
-        static::write(static::isAnsiSupported() ? "\033]8;;{$url}\033\\{$title}\033]8;;\033\\" : $url);
+        self::write(self::isAnsiSupported() 
+            ? "\033]8;;{$url}\033\\{$title}\033]8;;\033\\" 
+            : $url
+        );
     }
 
     /**
@@ -526,18 +508,18 @@ class Terminal
      *
      * @param Closure $callback The callback function to execute on timeout.
      * @param int $timeout Timeout duration in seconds. If <= 0, callback is invoked immediately (default: 0).
-     * @param mixed $stream Optional stream to monitor for activity (default: STDIN).
+     * @param resource|string|int $stream Optional stream to monitor for activity (default: STDIN).
      * 
      * @return bool Returns true if the timeout occurred and callback was executed, otherwise false.
      */
-    public static final function timeout(Closure $callback, int $timeout = 0, mixed $stream = STDIN): bool
+    public static function timeout(Closure $callback, int $timeout = 0, mixed $stream = self::STD_IN): bool
     {
         if ($timeout <= 0) {
             $callback();
             return true;
         }
     
-        $read = [$stream];
+        $read = [self::getStd($stream)];
         $write = null;
         $except = null;
         $result = stream_select($read, $write, $except, $timeout);
@@ -557,7 +539,7 @@ class Terminal
      * 
      * @return array|false Return the output of executed command as an array of lines, or false on failure.
      */
-    public final function execute(string $command): array|bool
+    public static function execute(string $command): array|bool
     {
         $result_code = STATUS_ERROR;
         $output = [];
@@ -611,13 +593,13 @@ class Terminal
      * 
      * @return bool Return true if visibility toggling was successful, false otherwise.
      */
-    public static final function visibility(bool $visibility = true): bool
+    public static function visibility(bool $visibility = true): bool
     {
         $command = is_platform('windows') 
             ? ($visibility ? 'echo on' : 'echo off')
             : ($visibility ? 'stty echo' : 'stty -echo');
 
-        return static::_shell($command) !== null;
+        return self::_shell($command) !== null;
     }
 
     /**
@@ -627,7 +609,7 @@ class Terminal
      * @param array $options The prompted options.
      * 
      * @return array<string|int,mixed> $options The selected array keys and values.
-    */
+     */
     private static function getInputValues(array $input, array $options): array
     {
         $result = [];
@@ -647,68 +629,19 @@ class Terminal
      * @param int $max The maximum padding end to apply.
      * 
      * @return void 
-    */
+     */
     private static function writeOptions(array $options, int $max): void
     {
+        $isColor = self::isColorSupported();
+
         foreach ($options as $key => $value) {
-            $name = Text::padEnd('  [' . $key . ']  ', $max, ' ');
-            static::writeln(static::color($name, 'green') . static::wrap($value['value'], 125, $max));
-        }
-        static::newLine();
-    }
+            $name = Text::padding('  [' . $key . ']  ', $max, Text::LEFT);
+            $name = ($isColor ? Color::style($name, 'green') : $name);
 
-    /**
-     * Wrap a text with padding left and width to a maximum number.
-     * 
-     * @param string|null $text The text to wrap.
-     * @param int $max The maximum width to use for wrapping.
-     * @param int $leftPadding Additional left padding to apply.
-     * 
-     * @return string Return wrapped text with padding left and width.
-    */
-    public static final function wrap(?string $text = null, int $max = 0, int $leftPadding = 0): string
-    {
-        if (!$text) {
-            return '';
-        }
-        $max = min($max, static::getWidth());
-        $max -= $leftPadding;
-
-        $lines = wordwrap($text, $max, PHP_EOL);
-
-        if ($leftPadding > 0) {
-            $lines = preg_replace('/^/m', str_repeat(' ', $leftPadding), $lines);
+            self::writeln($name . Text::wrap($value['value'], 125, $max));
         }
 
-        return $lines;
-    }
-
-    /**
-     * Generate a card like with text centered within the card.
-     *
-     * @param string $text The text display in card.
-     * @param int|null $padding Optional maximum padding to use.
-     * 
-     * @return string Return beautiful card with text.
-    */
-    public static final function card(string $text, ?int $padding = null): string 
-    {
-        $width = static::getWidth() / 2;
-        $padding ??= $width;
-        $padding = max(20, $padding);
-        $padding = (int) min($width, $padding);
-
-        $text = static::wrap($text, $padding);
-        $largest = Text::largest($text)[1];
-        $lines = explode(PHP_EOL, $text);
-        $text = str_repeat(' ', $largest + 2) . PHP_EOL;
-
-        foreach ($lines as $line) {
-            $length = max(0, $largest - Text::strlen($line));
-            $text .= ' ' . $line . str_repeat(' ', $length) . ' '  . PHP_EOL;
-        }
-    
-        return $text . str_repeat(' ', $largest + 2);
+        self::newLine();
     }
 
     /**
@@ -717,14 +650,14 @@ class Terminal
      * @param int $default Optional default width (default: 80).
      * 
      * @return int Return terminal window width or default.
-    */
-    public static final function getWidth(int $default = 80): int
+     */
+    public static function getWidth(int $default = 80): int
     {
-        if (static::$windowWidth === null) {
-            self::calculateVisibleWindow();
+        if (self::$windowWidth === null) {
+            self::getVisibleWindow();
         }
 
-        return static::$windowWidth ?: $default;
+        return self::$windowWidth ?: $default;
     }
 
     /**
@@ -733,73 +666,43 @@ class Terminal
      * @param int $default Optional default height (default: 24).
      * 
      * @return int Return terminal window height or default.
-    */
-    public static final function getHeight(int $default = 24): int
+     */
+    public static function getHeight(int $default = 24): int
     {
-        if (static::$windowHeight === null) {
-            self::calculateVisibleWindow();
+        if (self::$windowHeight === null) {
+            self::getVisibleWindow();
         }
 
-        return static::$windowHeight ?: $default;
-    }
-
-    /**
-     * Calculate the visible CLI window width and height.
-     *
-     * @return void
-    */
-    private static function calculateVisibleWindow(): void
-    {
-        if (static::$windowHeight !== null && static::$windowWidth !== null) {
-            return;
-        }
-
-        if (is_platform('windows')) {
-            // Use PowerShell to get console size on Windows
-            $size = static::_shell('powershell -command "Get-Host | ForEach-Object { $_.UI.RawUI.WindowSize.Height; $_.UI.RawUI.WindowSize.Width }"');
-
-            if ($size) {
-                $dimensions = explode("\n", trim($size));
-                static::$windowHeight = (int) $dimensions[0];
-                static::$windowWidth = (int) $dimensions[1];
-            }
-        } else {
-            // Fallback for Unix-like systems
-            $size = static::_exec('stty size');
-            if ($size && preg_match('/(\d+)\s+(\d+)/', $size, $matches)) {
-                static::$windowHeight = (int) $matches[1];
-                static::$windowWidth  = (int) $matches[2];
-            }
-        }
-
-        // As a fallback, if still not set, default to standard size
-        if (static::$windowHeight === null || static::$windowWidth === null) {
-            static::$windowHeight = (int) static::_exec('tput lines');
-            static::$windowWidth  = (int) static::_exec('tput cols');
-        }
+        return self::$windowHeight ?: $default;
     }
 
     /**
      * Get user input from the shell, after requesting for user to type or select an option.
      *
      * @param string|null $prompt Optional message to prompt the user after they have typed.
-     * @param bool $useFopen Weather to use `fopen`, this opens `STDIN` stream in read-only binary mode (default: false). 
+     * @param bool $use_fopen Weather to use `fopen`, this opens `STDIN` stream in read-only binary mode (default: false). 
      *                      This creates a new file resource.
      * 
      * @return string Return user input string.
-    */
-    public static final function input(?string $prompt = null, bool $useFopen = false): string
+     */
+    public static function input(?string $prompt = null, bool $use_fopen = false): string
     {
-        if (static::$isReadLine && ENVIRONMENT !== 'testing') {
+        if (self::$isReadLine && ENVIRONMENT !== 'testing') {
             return @readline($prompt);
         }
 
         if ($prompt !== null) {
-            echo $prompt;
+            self::print($prompt);
         }
 
-    
-        $input = ($useFopen ? fgets(fopen(STDIN, 'rb')) : fgets(STDIN));
+        if ($use_fopen) {
+            $handle = fopen(STDIN, 'rb');
+            $input = fgets($handle);
+            fclose($handle);
+        } else {
+            $input = fgets(STDIN);
+        }
+
         return ($input === false) ? '' : trim($input);
     }
 
@@ -810,18 +713,17 @@ class Terminal
      * @param array $rules The validation rules.
      * 
      * @return bool Return true if validation succeeded, false if validation failed.
-    */
-    public static final function validate(string $value, array $rules): bool
+     */
+    public static function validate(string $value, array $rules): bool
     {
-        static $validation = null;
-        $validation ??= new Validation();
-        $validation->setRules($rules);
+        self::$validation ??= new Validation();
+        self::$validation->setRules($rules);
         $field = [
             'input' => $value
         ]; 
 
-        if (!$validation->validate($field)) {
-            static::error($validation->getError('input'));
+        if (!self::$validation->validate($field)) {
+            self::error(self::$validation->getError('input'));
             return false;
         }
 
@@ -829,13 +731,13 @@ class Terminal
     }
 
     /**
-     * Escape command arguments.
+     * Escapes a command argument to ensure safe execution in the shell.
      * 
-     * @param string|array $argument The command argument to escape.
+     * @param string $argument The command argument to escape.
      * 
      * @return string Return the escaped command string.
-    */
-    public static final function escape(?string $argument): string
+     */
+    public static function escape(?string $argument): string
     {
         if ($argument === '' || $argument === null) {
             return '""';
@@ -858,16 +760,19 @@ class Terminal
     }
 
     /**
-     * Replace command placeholders.
+     * Replace placeholders in a command with environment variable values.
      * 
-     * @param string $command The command to replace.
-     * @param array $env The environment variables to replace.
-     * @param bool $escape Weather escape command after replacements (default: false)
+     * Placeholders follow the format `${:VAR_NAME}`, where `VAR_NAME` corresponds to a key in the `$env` array.
+     * Optionally escapes each replacement for safe shell execution.
      * 
-     * @return string Return replaced command string to be executed.
-     * @throws InvalidArgumentException Throws if an error occurs.
+     * @param string $command The command string with placeholders to replace.
+     * @param array<string,mixed> $env Associative array of environment variables for replacements.
+     * @param bool $escape Whether to escape each replacement after substitution (default: false).
+     * 
+     * @return string Return the command string with placeholders replaced.
+     * @throws InvalidArgumentException Throws if a placeholder variable is not found in `$env` or is set to `false`.
      */
-    public static final function replace(string $command, array $env, bool $escape = false): string
+    public static function replace(string $command, array $env, bool $escape = false): string
     {
         return preg_replace_callback('/\$\{:([_a-zA-Z][\w]*)\}/', function ($matches) use ($command, $env, $escape) {
             $key = $matches[1];
@@ -881,191 +786,196 @@ class Terminal
     }
 
     /**
-     * Display card error message using red background and white text as default.
-     *
-     * @param string $text The text to output.
-     * @param string|null $foreground Foreground color name.
-     * @param string|null $background Optional background color name.
+     * Display an error message box with a default red background and white text.
+     * The message is formatted as a block and written to `STDERR`.
      * 
+     * @param string $text The error message to display.
+     * @param string|null $foreground The text color (default: white).
+     * @param string|null $background The background color (default: red).
+     *
      * @return void
-    */
-    public static final function error(
+     */
+    public static function error(
         string $text, 
         string|null $foreground = 'white', 
-        ?string $background = 'red'
+        string|null $background = 'red'
     ): void
     {
-        $stdout = static::$isColored;
-        static::$isColored = static::isColorSupported(STDERR);
-        $text = static::card($text);
-
-        if ($foreground || $background) {
-            $text = static::color($text, $foreground, $background);
+        if(($foreground || $background) && !self::isColorSupported(self::STD_ERR)){
+            $foreground = $background = null;
         }
 
-        static::fwrite($text . PHP_EOL, STDERR);
-        static::$isColored = $stdout;
+        self::fwrite(Text::block($text, Text::LEFT, 1, $foreground, $background), self::STD_ERR);
     }
 
     /**
-     * Display card success message, using green background and white text as default.
-     *
-     * @param string $text The text to output.
-     * @param string|null $foreground Foreground color name.
-     * @param string|null $background Optional background color name.
+     * Display a success message with a default green background and white text.
+     * The message is formatted as a block and written to `STDOUT`.
      * 
+     * @param string $text The success message to display.
+     * @param string|null $foreground The text color (default: white).
+     * @param string|null $background The background color (default: green).
+     *
      * @return void
-    */
-    public static final function success(
+     */
+    public static function success(
         string $text, 
         string|null $foreground = 'white', 
-        ?string $background = 'green'
+        string|null $background = 'green'
     ): void
     {
-        $stdout = static::$isColored;
-        static::$isColored = static::isColorSupported(STDERR);
-        $text = static::card($text);
-
-        if ($foreground || $background) {
-            $text = static::color($text, $foreground, $background);
+        if(($foreground || $background) && !self::isColorSupported(self::STD_OUT)){
+            $foreground = $background = null;
         }
 
-        static::fwrite($text . PHP_EOL, STDERR);
-        static::$isColored = $stdout;
+        self::fwrite(Text::block($text, Text::LEFT, 1, $foreground, $background));
     }
 
     /**
-     * Print text to in a newline using stream `STDOUT`.
+     * Print text followed by a newline to the specified stream, defaulting to `Terminal::STD_OUT`.
+     * Optionally apply foreground and background colors to the text.
      * 
-     * @param string $text The text to write.
+     * @param string $text The text to write (default: blank).
      * @param string|null $foreground Optional foreground color name.
      * @param string|null $background Optional background color name.
+     * @param int $stream The stream resource to write to (e.g, `Terminal::STD_OUT`, `Terminal::STD_IN`, `Terminal::STD_ERR`).
      *
      * @return void
-    */
-    public static final function writeln(
+     */
+    public static function writeln(
         string $text = '', 
         ?string $foreground = null, 
-        ?string $background = null
+        ?string $background = null,
+        int $stream = self::STD_OUT
     ): void
     {
-        if ($foreground || $background) {
-            $text = static::color($text, $foreground, $background);
+        if(($foreground || $background) && self::isColorSupported($stream)){
+            $text = Color::style($text, $foreground, $background);
         }
 
-        if (!static::$isNewLine) {
+        if (!self::$isNewLine) {
             $text = PHP_EOL . $text;
-            static::$isNewLine = true;
+            self::$isNewLine = true;
         }
 
-        static::fwrite($text . PHP_EOL);
+        self::fwrite($text . PHP_EOL, $stream);
     }
 
     /**
-     * Print text to without a newline applied using stream `STDOUT`.
+     * Print text without appending a newline to the specified stream, defaulting to `Terminal::STD_OUT`.
+     * Optionally apply foreground and background colors to the text.
      * 
-     * @param string $text The text to write.
+     * @param string $text The text to write (default: blank).
      * @param string|null $foreground Optional foreground color name.
      * @param string|null $background Optional background color name.
+     * @param int $stream The stream resource to write to (e.g, `Terminal::STD_OUT`, `Terminal::STD_IN`, `Terminal::STD_ERR`).
      *
      * @return void
-    */
-    public static final function write(
+     */
+    public static function write(
         string $text = '', 
         ?string $foreground = null, 
-        ?string $background = null
+        ?string $background = null,
+        int $stream = self::STD_OUT
     ): void
     {
-     
-        if ($foreground || $background) {
-            $text = static::color($text, $foreground, $background);
+        self::$isNewLine = false;
+        if(($foreground || $background) && self::isColorSupported($stream)){
+            $text = Color::style($text, $foreground, $background);
         }
 
-        static::$isNewLine = false;
-        static::fwrite($text);
+        self::fwrite($text, $stream);
     }
 
     /**
-     * Print a message to using using `echo`.
-     *
+     * Print text directly using `echo` without any stream handling.
+     * Optionally apply foreground and background colors to the text.
+     * 
      * @param string $text The text to print.
      * @param string|null $foreground Optional foreground color name.
      * @param string|null $background Optional background color name.
      *
      * @return void
-    */
-    public static final function print(
+     */
+    public static function print(
         string $text, 
         ?string $foreground = null, 
         ?string $background = null
     ): void
     {
-        if ($foreground || $background) {
-            $text = static::color($text, $foreground, $background);
+        if (($foreground || $background) && self::isColorSupported()) {
+            $text = Color::style($text, $foreground, $background);
         }
 
         echo $text;
     }
 
     /**
-     * Write text to stream resource with any handler as needed,
-     * If called in non-command context, it will output text using `echo`.
-     *
+     * Write text to the specified stream resource without applying any colors, defaulting to `STDOUT`.
+     * If the environment is non-command-based, the text will be output using `echo` instead of `fwrite`.
+     * 
      * @param string $text The text to output or write.
-     * @param resource $handle The resource handler to use (e.g. `STDOUT`, `STDIN`, `STDERR` etc...).
+     * @param resource|int $handler The stream resource handler to write to (e.g. `STDOUT`, `STDERR`, `STDIN`).
      *
      * @return void
-    */
-    public static final function fwrite(string $text, mixed $handle = STDOUT): void
+     */
+    public static function fwrite(string $text, mixed $handler = self::STD_OUT): void
     {
         if (!is_command()) {
             echo $text;
             return;
         }
 
-        fwrite($handle, $text);
+        $handler = self::getStd($handler);
+        fwrite($handler, $text);
+
+        if (!in_array($handler, [STDOUT, STDERR, STDIN], true) && !stream_isatty($handler)) {
+            @fclose($handler);
+        }
     }
 
     /**
-     * Clears the entire screen for both Windows and Unix-based systems console.
+     * Clears the entire console screen for both Windows and Unix-based systems.
      *
      * @return void
      */
-    public static final function clear(): void
+    public static function clear(): void
     {
-        if (is_platform('windows') && !static::streamSupports('sapi_windows_vt100_support', STDOUT)) {
-            static::fwrite(static::_shell('cls'));
-            static::newLine(40);
+        if (is_platform('windows') && !self::isStreamSupports('sapi_windows_vt100_support', self::STD_OUT)) {
+            self::fwrite(self::_shell('cls'));
+            self::newLine(40);
             return;
         }
-
-        static::fwrite("\033[H\033[2J");
+   
+        self::fwrite("\033[H\033[2J");
     }
 
     /**
-     * Clears the CLI output for the last printed text and prepares the terminal to update with new content.
+     * Clears the last printed line or lines of text in the terminal output.
      *
-     * @param string|null $lastOutput An optional last output printed to the terminal (default: null).
+     * @param string|null $lastOutput An optional string representing the last output printed
+     *                                 to the terminal (default: null). If provided, the method 
+     *                                 clears the specific lines that match this output.
      * 
      * @return void
      */
-    public static final function flush(?string $lastOutput = null): void
+    public static function flush(?string $lastOutput = null): void
     {
-        if (is_platform('windows') && !static::streamSupports('sapi_windows_vt100_support', STDOUT)) {
-            static::fwrite("\r"); 
+        if (is_platform('windows') && !self::isStreamSupports('sapi_windows_vt100_support', self::STD_OUT)) {
+            self::fwrite("\r"); 
             return;
         }
 
         if(!$lastOutput){
-            static::fwrite("\033[1A\033[2K");
+            self::fwrite("\033[1A\033[2K");
             return;
         }
-        
-        $lines = explode(PHP_EOL, wordwrap($lastOutput, static::getWidth(), PHP_EOL, true));
+   
+        $lines = explode(PHP_EOL, wordwrap($lastOutput, self::getWidth(), PHP_EOL, true));
         $numLines = count($lines);
 
         for ($i = 0; $i < $numLines; $i++) {
-            static::fwrite("\033[1A\033[2K");
+            self::fwrite("\033[1A\033[2K");
         }
     }
 
@@ -1073,20 +983,22 @@ class Terminal
      * Apply color and text formatting to the given text if color is supported.
      *
      * @param string $text The text to apply color to.
-     * @param string|null $foreground The foreground color name.
+     * @param string $foreground The foreground color name.
      * @param string|null $background Optional background color name.
      * @param int|null $format Optionally apply text formatting style.
      *
      * @return string Return colored text if color is supported, otherwise return default text.
-    */
-    public static final function color(
+     * @deprecated This method is deprecated and will be removed in a future release. 
+     *              Use `Luminova\Command\Utils\Color::apply(...)` or `Luminova\Command\Utils\Color::style(...)` instead.
+     */
+    public static function color(
         string $text, 
-        string|null $foreground, 
+        string $foreground, 
         ?string $background = null, 
         ?int $format = null
     ): string
     {
-        if (!static::$isColored) {
+        if (!self::isColorSupported()) {
             return $text;
         }
 
@@ -1099,11 +1011,11 @@ class Terminal
      * @param int $count The number of new lines to print.
      * 
      * @return void 
-    */
-    public static final function newLine(int $count = 1): void
+     */
+    public static function newLine(int $count = 1): void
     {
         for ($i = 0; $i < $count; $i++) {
-            static::writeln();
+            self::writeln();
         }
     }
 
@@ -1114,85 +1026,126 @@ class Terminal
      * @param string|null $color Text color for the command (default: red).
      * 
      * @return int Return status code STATUS_ERROR.
-    */
+     */
     public static function oops(string $command, string|null $color = 'red'): int 
     {
-       static::writeln('Unknown command ' . static::color("'$command'", $color) . ' not found', null);
+        $command = "'{$command}'";
+        $command = self::isColorSupported() 
+            ? Color::style($command, $color) 
+            : $command;
 
+       self::fwrite("Unknown command {$command} not found." . PHP_EOL, self::STD_ERR);
        return STATUS_ERROR;
     }
 
     /**
-     * Generate and print a formatted table header and rows to the console.
+     * Generate and print a formatted table with headers and rows to the console.
      *
-     * @param array<int,string> $headers The headers for the table columns.
-     * @param array<string,string> $rows The rows of data to display in the table.
-     * @param string|null $headerColor The table heading columns text color.
-     * @param int $headerPadding Optional table heading columns padding.
+     * @param array<int,string> $headers The headers for the table columns, 
+     *                                    where each header is defined by its index.
+     * @param array<int,array<string,string>> $rows The rows of table data to display in the tables body, 
+     *                                                where each row is an associative array with keys 
+     *                                                representing the column headers and values containing 
+     *                                                the corresponding content.
+     * @param string|null $foreground An optional text color for the table's body content (default: null).
+     * @param string|null $headerColor An optional text color for the table header columns (default: null).
+     * @param string|null $borderColor An optional color for the table borders (default: null).
+     * @param bool $border Indicate whether to display borders between each table raw (default: true).
      * 
-     * @return void
+     * @return string Return the formatted table as a string, ready to be output to the console.
+     * 
+     * @example Table example:
+     * 
+     * ```php
+     * Terminal::table(
+     *     ['Name', 'Email'], 
+     *     [
+     *         ['Name' => 'Peter', 'Email' => 'peter@example.com'],
+     *         ['Name' => 'Hana', 'Email' => 'hana@example.com']
+     *     ]
+     * );
+     * ```
      */
     public static function table(
         array $headers, 
         array $rows, 
+        ?string $foreground = null,
         ?string $headerColor = null, 
-        int $headerPadding = 1
-    ): void
+        ?string $borderColor = null,
+        bool $border = true
+    ): string
     {
-        $border = '+';
-        $colorLength = 0;
-
-        if($headerColor !== null){
-            $colorLength = Color::length(null, $headerColor, null) + $headerPadding;
-        }
-
-        $columnWidths = array_map(function($header) use ($rows) {
-            $columnValues = array_column($rows, $header);
-            $maxValueLength = max(array_map('strlen', $columnValues));
-            return max(strlen($header), $maxValueLength);
-        }, $headers);
-
-        foreach ($columnWidths as $width) {
-            $border .= str_repeat('-', $width + 2) . '+';
-        }
-
-        echo $border . PHP_EOL;
-
-        $headerRow = '|';
-        foreach ($headers as $i => $header) {
-            if($headerColor === null){
-                $headerRow .= ' ' . str_pad($header, $columnWidths[$i]) . ' |';
-            }else{
-                $headerRow .= ' ' . str_pad(self::color($header, $headerColor), $columnWidths[$i] + $colorLength) . ' |';
+        $chars = [
+            'topLeft' => Text::corners('topLeft'),
+            'topRight' => Text::corners('topRight'),
+            'bottomLeft' => Text::corners('bottomLeft'),
+            'bottomRight' => Text::corners('bottomRight'),
+            'topConnector' => Text::corners('topConnector'),
+            'bottomConnector' => Text::corners('bottomConnector'),
+            'crossings' => Text::corners('crossings'),
+            'leftConnector' => Text::corners('leftConnector'),
+            'rightConnector' => Text::corners('rightConnector'),
+            'horizontal' => Text::corners('horizontal'),
+            'vertical' => Text::corners('vertical')
+        ];
+    
+        $widths = array_map(
+            fn($header) => max(
+                Text::largest($header)[1], 
+                max(array_map(fn($value) => Text::largest($value)[1], array_column($rows, $header)))
+            ), 
+            $headers
+        );
+    
+        $heights = array_map(
+            fn($row) => max(array_map(fn($header) => Text::height($row[$header]), $headers)),
+            $rows
+        );
+    
+        $table = '';
+        $table .= self::tBorder($widths, $chars, 'topLeft', 'topConnector', 'topRight', $borderColor);
+        $table .= self::trow($headers, $widths, $headerColor ?? $foreground, $chars, true);
+        $table .= self::tBorder($widths, $chars, 'leftConnector', 'crossings', 'rightConnector', $borderColor);
+    
+        foreach ($rows as $index => $row) {
+            $height = $heights[$index];
+            $lines = array_map(
+                fn($header) => Text::lines(Text::wrap($row[$header], $widths[array_search($header, $headers)])),
+                $headers
+            );
+    
+            for ($lIdx = 0; $lIdx < $height; $lIdx++) {
+                $tData = Color::style($chars['vertical'], $borderColor);
+                foreach ($headers as $i => $header) {
+                    $tData .= ' ' . Color::style(str_pad($lines[$i][$lIdx] ?? '', $widths[$i]), $foreground);
+                    $tData .= ' ' . Color::style($chars['vertical'], $borderColor);
+                }
+                $table .= $tData . PHP_EOL;
             }
-
-        }
-        echo $headerRow . PHP_EOL;
-        echo $border . PHP_EOL;
-
-        foreach ($rows as $row) {
-            $rowString = '|';
-            foreach ($headers as $i => $header) {
-                $rowString .= ' ' . str_pad($row[$header], $columnWidths[$i]) . ' |';
+    
+            if ($border && $index < count($rows) - 1) {
+                $table .= self::tBorder($widths, $chars, 'leftConnector', 'crossings', 'rightConnector', $borderColor);
             }
-            echo $rowString . PHP_EOL;
         }
-
-        echo $border . PHP_EOL;
+    
+        $table .= self::tBorder($widths, $chars, 'bottomLeft', 'bottomConnector', 'bottomRight', $borderColor);
+    
+        return $table;
     }
 
     /**
-     * Register command line queries to make it available using `getOptions` etc.
-     * The explain command exposes executed command information making it ready to be accessed withing the class context.
+     * Sets command line queries to make it available using `getOptions` etc.
+     * The explain is a setter method exposes executed command information making it ready to be accessed withing 
+     * the extended child class.
      * 
-     * @param array $values The command arguments.
+     * @param array $values The custom extracted command arguments, options and flags.
      * 
      * @return void
      * @internal
-    */
+     */
     public static final function explain(array $values): void
     {
-        static::$commandsOptions = $values;
+        self::$explained = $values;
     }
 
     /**
@@ -1204,11 +1157,9 @@ class Terminal
      */
     public static function toString(array $arguments): ?string
     {
-        if ($arguments !== []) {
-            return implode(' ', $arguments);
-        }
-
-        return null;
+        return ($arguments === []) 
+            ? null 
+            : implode(' ', $arguments);
     }
 
     /**
@@ -1218,7 +1169,7 @@ class Terminal
      * 
      * @return array<string,mixed> Return parsed command arguments and options.
      * @internal Pass raw command arguments from $_SERVER['argv'].
-    */
+     */
     public static final function parseCommands(array $arguments, bool $controller = false): array
     {
         $caller = $arguments[0] ?? '';
@@ -1230,20 +1181,21 @@ class Terminal
             'options' => [],
             'exe_string' => self::toString($arguments),
         ];
+
         if ($caller === 'novakit' || $caller === 'php' || preg_match('/^.*\.php$/', $caller)) {
             array_shift($arguments); //Remove the front controller file
             $result['caller'] = implode(' ', $arguments);
 
             if($controller){
-                $result['group'] = $arguments[0]??'';
-                $result['command'] = $arguments[1]??'';
+                $result['group'] = $arguments[0] ?? '';
+                $result['command'] = $arguments[1] ?? '';
             }else{
-                $result['command'] = $arguments[0]??'';
+                $result['command'] = $arguments[0] ?? '';
             }
         }else{
             $hasSpace = array_reduce($arguments, fn($carry, $item) => $carry || str_contains($item, ' '), false);
-
             $callerCommend = $arguments;
+
             if ($hasSpace) {
                 $callerCommend = implode(' ', $arguments);
                 $callerCommend = $callerCommend[0];
@@ -1259,7 +1211,7 @@ class Terminal
             unset($arguments[0]); 
         }
 
-        $response = static::extract($arguments);
+        $response = self::extract($arguments);
         $result['arguments'] = $response['arguments'];
         $result['options'] = $response['options'];
 
@@ -1274,7 +1226,7 @@ class Terminal
      * 
      * @return array<string,array> Return extracted command line arguments and options.
      * @internal
-    */
+     */
     public static final function extract(array $arguments, $controller = false): array
     {
         $optionValue = false;
@@ -1319,40 +1271,40 @@ class Terminal
      * @param int $index The index position to get.
      * 
      * @return mixed Return command argument by index number.
-    */
-    public static final function getArgument(int $index): mixed
+     */
+    public static function getArgument(int $index): mixed
     {
-        return static::$commandsOptions['arguments'][$index - 1] ?? null;
+        return self::$explained['arguments'][$index - 1] ?? null;
     }
 
     /**
      * Get command arguments.
      * 
      * @return array Return command arguments.
-    */
-    public static final function getArguments(): array
+     */
+    public static function getArguments(): array
     {
-        return static::$commandsOptions['arguments'] ?? [];
+        return self::$explained['arguments'] ?? [];
     }
 
     /**
      * Get command name.
      * 
      * @return string|null Return the command name.
-    */
-    public static final function getCommand(): ?string
+     */
+    public static function getCommand(): ?string
     {
-        return static::$commandsOptions['command'] ?? null;
+        return self::$explained['command'] ?? null;
     }
 
     /**
      * Get command caller command string.
      * 
      * @return string|null Return the full passed command, options and arguments.
-    */
-    public static final function getCaller(): ?string
+     */
+    public static function getCaller(): ?string
     {
-        return static::$commandsOptions['caller'] ?? null;
+        return self::$explained['caller'] ?? null;
     }
 
     /**
@@ -1364,9 +1316,9 @@ class Terminal
      * 
      * @return mixed Return option value, true if empty value, otherwise default value.
      */
-    public static final function getOption(string $key, mixed $default = false): mixed
+    public static function getOption(string $key, mixed $default = false): mixed
     {
-        $options = static::getOptions();
+        $options = self::getOptions();
 
         if (array_key_exists($key, $options)) {
             return $options[$key] ?? true;
@@ -1385,9 +1337,9 @@ class Terminal
      * 
      * @return mixed Return option value, true if empty value, otherwise default value.
      */
-    public static final function getAnyOption(string $key, string $alias, mixed $default = false): mixed
+    public static function getAnyOption(string $key, string $alias, mixed $default = false): mixed
     {
-        $options = static::getOptions();
+        $options = self::getOptions();
 
         if (array_key_exists($key, $options)) {
             return $options[$key] ?? true;
@@ -1404,20 +1356,20 @@ class Terminal
      * Returns the command controller class method name.
      * 
      * @return string|null Return the command controller class method or null.
-    */
-    public static final function getMethod(): ?string
+     */
+    public static function getMethod(): ?string
     {
-        return static::getQuery('classMethod');
+        return self::getQuery('classMethod');
     }
 
     /**
      * Returns the array of options.
      * 
      * @return array Return array of executed command options.
-    */
-    public static final function getOptions(): array
+     */
+    public static function getOptions(): array
     {
-        return static::$commandsOptions['options']??[];
+        return self::$explained['options']??[];
     }
 
     /**
@@ -1427,73 +1379,112 @@ class Terminal
      * 
      * @return mixed Return command option query value.
     */
-    public static final function getQuery(string $name): mixed
+    public static function getQuery(string $name): mixed
     {
-        return static::$commandsOptions[$name] ?? null;
+        return self::$explained[$name] ?? null;
     }
 
     /**
      * Returns the entire command associative that was executed.
      * 
      * @return array Return an associative array of the entire command information
-    */
-    public static final function getQueries(): array
-    {
-        return static::$commandsOptions;
-    }
-
-    /**
-     * Determines if the terminal supports colored output.
-     * 
-     * @param mixed $resource The resource to check (default is STDOUT).
-     * 
-     * @return bool Return true if color output is supported, false otherwise.
      */
-    public static final function isColorSupported(mixed $resource = STDOUT): bool
+    public static function getQueries(): array
     {
-        if (self::isColorDisabled()) {
-            return false;
-        }
-
-        if (is_platform('mac')) {
-            return static::isMacTerminal();
-        }
-
-        if (is_platform('windows')) {
-            return static::isWindowsTerminal($resource);
-        }
-
-        return static::streamSupports('stream_isatty', $resource);
+        return self::$explained;
     }
 
     /**
-     * Checks if the current terminal supports ANSI escape sequences.
+     * Force enables color output for all standard streams (STDOUT, STDERR, STDIN)
+     * without checking whether the terminal or console supports colors. 
+     * 
+     * @return void
+     */
+    public static function setColorOutputEnabled(): void 
+    {
+        self::forceEnableSupport('colors');
+    }
+
+    /**
+     * Force enables ANSI escape codes (for formatting like text color, cursor movement, etc.) 
+     * for all standard streams (STDOUT, STDERR, STDIN), without checking whether 
+     * the terminal or console supports ANSI codes. 
+     * 
+     * @return void
+     */
+    public static function setAnsiSupportEnabled(): void 
+    {
+        self::forceEnableSupport('ansi');
+    }
+
+    /**
+     * Resolves the provided stream constant (`Terminal::STD_OUT`, `Terminal::STD_ERR`, or `Terminal::STD_IN`) and 
+     * returns the corresponding PHP predefined stream (`STDOUT`, `STDERR`, or `STDIN`).
+     * If the input does not match any of these constants, it returns the original input.
      *
-     * @return bool Return true if ANSI is supported, false otherwise.
+     * @param resource|int $std The stream identifier, which can be one of the predefined 
+     *                   constants `Terminal::STD_*` or another value.
+     * 
+     * @return resource|string Return the corresponding PHP stream resource (`STDOUT`, `STDERR`, `STDIN`) 
+     *               or the original custom stream handler if it doesn't match any standard-global streams.
      */
-    public static final function isAnsiSupported(): bool
+    public static final function getStd(mixed $std): mixed
     {
-        static $ansiResult = null;
+        return ($std === self::STD_OUT) ? STDOUT 
+            : (($std === self::STD_ERR) ? STDERR
+            : (($std === self::STD_IN) ? STDIN : $std));
+    }
 
-        if ($ansiResult !== null) {
-            return $ansiResult;
+    /**
+     * Checks if the terminal supports ANSI escape codes for color output.
+     *
+     * @param int $std The std resource to check for color support (e.g, `Terminal::STD_OUT`, `Terminal::STD_ERR` or `Terminal::STD_IN`).
+     * 
+     * @return bool Returns true if color output is supported, false otherwise.
+     */
+    public static function isColorSupported(int $std = self::STD_OUT): bool
+    {
+        if((self::$isSupported['colors'][$std] ?? null) !== null){
+            return self::$isSupported['colors'][$std];
         }
 
-        if (is_platform('windows')) {
-            return $ansiResult = getenv('ANSICON') === 'ON' || getenv('WT_SESSION') !== false;
-        }
+        self::$isSupported['colors'][$std] = false;
 
-        $term = getenv('TERM');
-        if ($term !== false) {
-            $ansiTerminals = ['xterm', 'xterm-color', 'screen', 'screen-256color', 'tmux', 'linux'];
-            foreach ($ansiTerminals as $terminal) {
-                if (str_contains($term, $terminal)) {
-                    return $ansiResult = true;
-                }
+        if (!self::isColorDisabled()) {
+            if (is_platform('mac')) {
+                self::$isSupported['colors'][$std] = self::isMacTerminal();
+            }elseif (is_platform('windows')) {
+                self::$isSupported['colors'][$std] = self::isWindowsTerminal($std);
+            }else{
+                self::$isSupported['colors'][$std] = self::isStreamSupports('stream_isatty', $std);
             }
         }
 
-        return $ansiResult = false;
+        return self::$isSupported['colors'][$std];
+    }
+
+    /**
+     * Checks if the terminal supports ANSI escape codes, including color and text formatting.
+     *
+     * @param int $std The std resource to check for ANSI support (e.g, `Terminal::STD_OUT`, `Terminal::STD_ERR` or `Terminal::STD_IN`).
+     * 
+     * @return bool Returns true if ANSI escape codes are supported, false otherwise.
+     */
+    public static function isAnsiSupported(int $std = self::STD_OUT): bool
+    {
+        if ((self::$isSupported['ansi'][$std] ?? null) !== null) {
+            return self::$isSupported['ansi'][$std];
+        }
+
+        self::$isSupported['ansi'][$std] = false;
+
+        if (!self::isAnsiDisabled()) {
+            self::$isSupported['ansi'][$std] = is_platform('windows') 
+                ? getenv('ANSICON') === 'ON' || getenv('WT_SESSION') !== false
+                :  self::isLinuxAnsi();
+        }
+
+        return self::$isSupported['ansi'][$std];
     }
 
     /**
@@ -1501,7 +1492,7 @@ class Terminal
      *
      * @return bool Return true if PTY is supported, false otherwise.
      */
-    public static final function isPtySupported(): bool
+    public static function isPtySupported(): bool
     {
         static $ptyResult;
 
@@ -1514,7 +1505,7 @@ class Terminal
         }
 
         return $ptyResult = (
-            self::streamSupports('posix_isatty', STDOUT) || 
+            self::isStreamSupports('posix_isatty', self::STD_OUT) || 
             (bool) @proc_open('echo 1 >/dev/null', [['pty'], ['pty'], ['pty']], $pipes)
         );
     }
@@ -1524,21 +1515,53 @@ class Terminal
      *
      * @return bool Return true if TTY is supported, false otherwise.
      */
-    public static final function isTtySupported(): bool
+    public static function isTtySupported(): bool
     {
         static $ttyResult;
-
-        return $ttyResult ??= ('/' === DIRECTORY_SEPARATOR && static::streamSupports('stream_isatty', STDOUT));
+        return $ttyResult ??= ('/' === DIRECTORY_SEPARATOR && self::isStreamSupports('stream_isatty', self::STD_OUT));
     }
 
     /**
      * Checks whether the no color is available in environment.
      *
      * @return bool Return true if color is disabled, false otherwise.
-    */
+     */
     public static function isColorDisabled(): bool
     {
-        return isset($_SERVER['NO_COLOR']) || getenv('NO_COLOR') !== false;
+        return (
+            self::hasFlag('--no-color') || 
+            isset($_SERVER['NO_COLOR']) || 
+            getenv('NO_COLOR') !== false
+        );
+    }
+
+    /**
+     * Determines if ANSI escape codes are disabled explicitly.
+     * 
+     * @return bool Returns `true` if ANSI escape codes are disabled, `false` otherwise.
+     */
+    public static function isAnsiDisabled(): bool
+    {
+        return (
+            self::hasFlag('--no-ansi') || 
+            isset($_SERVER['DISABLE_ANSI']) || 
+            getenv('DISABLE_ANSI') !== false
+        );
+    }
+    
+    /**
+     * Determines if a specific command-line flag is present.
+     * 
+     * @param string $flag The flag to search for (e.g., `--no-ansi`, `--no-color`, `--no-header`).
+     * 
+     * @return bool Returns true if the flag is present, false otherwise.
+     */
+    public static function hasFlag(string $flag): bool
+    {
+        $options = self::getOptions();
+        return ($options !== [] && array_key_exists($flag, $options)) 
+            ? true 
+            : in_array($flag, $_SERVER['argv']);
     }
 
     /**
@@ -1546,7 +1569,7 @@ class Terminal
      *
      * @return bool Return true if the terminal is a supported macOS terminal, false otherwise.
      */
-    public static final function isMacTerminal(): bool
+    public static function isMacTerminal(): bool
     {
         static $macResult = null;
 
@@ -1596,13 +1619,13 @@ class Terminal
     /**
      * Checks whether the stream resource on windows is terminal.
      *
-     * @param resource|string $resource The resource type to check (e.g. STDIN, STDOUT).
+     * @param resource|string|int $resource The resource type to check (e.g. `Terminal::STD_*`, `STDIN`, `STDOUT`).
      * 
-     * @return bool return true if is windows terminal, false otherwise.
-    */
-    public static final function isWindowsTerminal(mixed $resource = STDIN): bool
+     * @return bool Return true if is windows terminal, false otherwise.
+     */
+    public static function isWindowsTerminal(mixed $resource = self::STD_IN): bool
     {
-        return static::streamSupports('sapi_windows_vt100_support', $resource) ||
+        return self::isStreamSupports('sapi_windows_vt100_support', $resource) ||
             isset($_SERVER['ANSICON']) || 
             getenv('ANSICON') !== false || 
             getenv('ConEmuANSI') === 'ON' || 
@@ -1613,17 +1636,19 @@ class Terminal
      * Checks whether the current stream resource supports or refers to a valid terminal type device.
      *
      * @param string $function Function name to check.
-     * @param resource|string $resource Resource to handle (e.g. STDIN, STDOUT).
+     * @param resource|string|int $resource Resource to handle (e.g. `Terminal::STD_*`, `STDIN`, `STDOUT`).
      * 
      * @return bool Return true if stream resource is supported, otherwise false.
-    */
-    public static final function streamSupports(string $function, mixed $resource): bool
+     */
+    public static function isStreamSupports(string $function, mixed $resource = self::STD_OUT): bool
     {
-        if (ENVIRONMENT === 'testing') {
-            return function_exists($function);
+        if (!function_exists($function)) {
+            return false;
         }
-
-        return function_exists($function) && @$function($resource);
+        
+        return (ENVIRONMENT === 'testing') 
+            ? true 
+            : @$function(self::getStd($resource));
     }
 
     /**
@@ -1632,7 +1657,7 @@ class Terminal
      * @param string $command Command name to check.
      * 
      * @return bool Return true if command exist, false otherwise.
-    */
+     */
     public static final function hasCommand(string $command): bool
     {
         return Console::has($command);
@@ -1646,7 +1671,7 @@ class Terminal
      * 
      * @return bool Return true if command exist, false otherwise.
      * @internal Used in router to execute controller command.
-    */
+     */
     public static final function call(string $command, array $options): bool
     {
         static $terminal = null;
@@ -1654,10 +1679,7 @@ class Terminal
         if(Console::has($command)){
             $terminal ??= new static();
             $terminal->explain($options);
-
-            $call = Console::execute($terminal, $options);
-
-            return $call === STATUS_SUCCESS;
+            return Console::execute($terminal, $options) === STATUS_SUCCESS;
         }
 
         return false;
@@ -1669,16 +1691,19 @@ class Terminal
      * @param string|array $command Command name to check or command array options.
      * 
      * @return bool Return true if command is help, false otherwise.
-    */
+     */
     public static final function isHelp(string|array $command): bool 
     {
-        if(is_array($command)){
-            $command = $command['options'] ?? $command;
+        if(!$command){
+            return false;
+        }
 
+        if(is_array($command)){
+            $command = ($command['options'] ?? $command);
             return array_key_exists('help', $command) || array_key_exists('h', $command);
         }
 
-        return preg_match('/^(-h|--help|)$/', $command);
+        return preg_match('/^(-h|--help)$/', $command) === 1;
     }
 
     /**
@@ -1689,62 +1714,68 @@ class Terminal
      * 
      * @return void
      * @internal Used in router to print controller help information.
-    */
+     */
     public static final function helper(array|null $helps, bool $all = false): void
     {
-        $helps = (($helps === null) ? Commands::getCommands() : ($all ? $helps : [$helps]));
+        $helps = ($helps === null) 
+            ? Commands::getCommands() 
+            : ($all ? $helps : [$helps]);
 
         foreach($helps as $name => $help){
             if($all){
-                static::newLine();
-                static::writeln("------[{$name} Help Information]------");
+                self::newLine();
+                self::writeln("------[{$name} Help Information]------");
             }
 
             foreach($help as $key => $value){
                 if($key === 'description'){
-                    static::writeln('Description:');
-                    static::writeln($value);
-                    static::newLine();
+                    self::writeln('Description:');
+                    self::writeln($value);
+                    self::newLine();
                 }
 
                 if($key === 'usages'){
                     if(is_array($value)){
-                        static::addHelp($value, $key);
+                        self::printHelp($value, $key);
                     }else{
-                        static::writeln('Usages:');
-                        static::writeln($value);
-                        static::newLine();
+                        self::writeln('Usages:');
+                        self::writeln($value);
+                        self::newLine();
                     }
                 }
 
                 if(is_array($value)){
                     if($key === 'options'){
-                        static::addHelp($value, $key);
+                        self::printHelp($value, $key);
                     }
 
                     if($key === 'examples'){
-                        static::addHelp($value, $key);
+                        self::printHelp($value, $key);
                     }
                 }
             }
         }
     }
 
-     /**
+    /**
      * Print NovaKit Command line header information.
      * 
-     * @return void
-    */
-    public static final function header(): void
+     * @return bool Return true if header was printed, false otherwise.
+     */
+    public static final function header(): bool
     {
-        static::write(sprintf(
+        if(self::hasFlag('--no-header')){
+            return false;
+        }
+
+        self::write(sprintf(
             'PHP Luminova v%s NovaKit Command Line Tool v%s - Server Time: %s UTC%s',
             Foundation::VERSION,
             Foundation::NOVAKIT_VERSION,
             date('Y-m-d H:i:s'),
             date('P')
         ), 'green');
-        static::newLine();
+        return true;
     }
 
     /**
@@ -1754,25 +1785,281 @@ class Terminal
      * @param string $key Help line key.
      * 
      * @return void
-    */
-    private static function addHelp(array $options, string $key): void 
+     */
+    private static function printHelp(array $options, string $key): void 
     {
         if($options === []){
             return;
         }
         
         $minus = ($key === 'usages' || $key === 'examples') ? 1 : 0;
-        $color = (($key === 'usages') ? 'yellow' : (($key === 'usages') ? 'lightYellow' : 'lightGreen'));
-        static::writeln(ucfirst($key) . ':');
-
+        $color = self::isColorSupported() 
+            ? (($key === 'usages') ? 'yellow' : (($key === 'usages') ? 'lightYellow' : 'lightGreen'))
+            : null;
+        self::writeln(ucfirst($key) . ':');
+        
         foreach($options as $info => $values){
-            if(is_string($info)){
-                static::writeln(Text::padStart('', 8 - $minus) . static::color($info, $color));
-                static::writeln(Text::padStart('', 11 - $minus) . $values);
+            if(is_string($info)){ 
+                $info  = ($color === null) ? $info : Color::style($info, $color);
+
+                self::writeln(Text::padding('', 8 - $minus, Text::RIGHT) . $info);
+                self::writeln(Text::padding('', 11 - $minus, Text::RIGHT) . $values);
             }else{
-                static::writeln(Text::padStart('', 8 - $minus) . $values);
+                self::writeln(Text::padding('', 8 - $minus, Text::RIGHT) . $values);
             }
         }
-        static::newLine();
+        self::newLine();
+    }
+
+    /**
+     * Safely apply ANSI formatting acknowledging `--no-ansi` flag.
+     * 
+     * @param string $text The text to be formatted.
+     * @param string $format The format to be used.
+     * 
+     * @return string Return the formatted text.
+     */
+    private static function applyAnsi(string $text, string $format): string 
+    {
+        if(!self::isAnsiSupported()){
+            return $text;
+        }
+
+        return "\033[{$format}{$text}\033[0m";
+    }
+
+    /**
+     * Generates a horizontal border line for the table based on column widths.
+     *
+     * @param array $widths Array of column widths.
+     * @param array $chars Array of table border characters.
+     * @param string $left Character used for the left corner of the border line.
+     * @param string $connector Character used to connect columns within the border line.
+     * @param string $right Character used for the right corner of the border line.
+     * @param ?string $color Optional color to apply to the border line.
+     * 
+     * @return string Return formatted string representing the horizontal border line.
+     */
+    private static function tBorder(
+        array $widths, 
+        array $chars, 
+        string $left, 
+        string $connector, 
+        string $right, 
+        ?string $color
+    ): string
+    {
+        $border = Color::style($chars[$left], $color);
+        foreach ($widths as $i => $width) {
+            $border .= str_repeat($chars['horizontal'], $width + 2);
+            $border .= $i < count($widths) - 1 ? Color::style($chars[$connector], $color) : Color::style($chars[$right], $color);
+        }
+
+        return $border . PHP_EOL;
+    }
+    
+    /**
+     * Generates a table row with formatted cell values or headers.
+     *
+     * @param array $row Array of cell values for each column in the row.
+     * @param array $widths Array of column widths, matching the indices of $row.
+     * @param ?string $foreground Optional color to apply to the cell content.
+     * @param array $chars Array of table border characters.
+     * @param bool $isHeader Flag indicating if the row is a header row; applies bold styling if true.
+     * 
+     * @return string Return formatted string representing the row with each cell padded to its column width.
+     */
+    private static function trow(
+        array $row, 
+        array $widths, 
+        ?string $foreground, 
+        array $chars, 
+        bool $isHeader = false
+    ): string
+    {
+        $tcell = Color::style($chars['vertical'], $foreground);
+        foreach ($row as $i => $cell) {
+            $tcell .= ' ' . Color::apply(str_pad($cell, $widths[$i]), $isHeader ? Text::FONT_BOLD : Text::NO_FONT, $foreground);
+            $tcell .= ' ' . Color::style($chars['vertical'], $foreground);
+        }
+
+        return $tcell . PHP_EOL;
+    }
+
+    /**
+     * Checks if command is executing from the list of supports ANSI terminals.
+     *
+     * @return bool Return true if terminal is in list of ANSI supported, false otherwise.
+     */
+    protected static function isLinuxAnsi(): bool
+    {
+        $term = getenv('TERM');
+        if ($term !== false) {
+            $supported = ['xterm', 'xterm-color', 'screen', 'screen-256color', 'tmux', 'linux'];
+            foreach ($supported as $terminal) {
+                if (str_contains($term, $terminal)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Force enables the specified feature (e.g., 'colors', 'ansi') for all standard streams 
+     * (STDOUT, STDERR, STDIN) without checking for terminal support.
+     * 
+     * @param string $type The feature type to enable (e.g., 'colors', 'ansi').
+     * 
+     * @return void
+     */
+    private static function forceEnableSupport(string $type): void 
+    {
+        self::$isSupported[$type][self::STD_OUT] = true;
+        self::$isSupported[$type][self::STD_ERR] = true;
+        self::$isSupported[$type][self::STD_IN] = true;
+    }
+
+    /**
+     * Prompts the user to input a hidden password in a Unix-based terminal.
+     *
+     * @param string $message The message to display to the user prompting for the password.
+     * @param int $timeout The maximum time in seconds to wait for user input before timing out.
+     * @param bool $visibility Indicates whether password visibility is visible and prompt user if they wish to continue.
+     *
+     * @return string Return the entered password, or an empty string if no password was provided or an error occurred.
+    */
+    protected static function getLinuxHiddenPassword(string $message, int $timeout, bool $invisible): string
+    {
+        $password = '';
+        $command = "/usr/bin/env bash -c 'echo OK'";
+        $continue = self::_shell($command);
+        $continue = ($continue === false || $continue === null) ? 'ERR' : trim($continue);
+
+        if ($continue !== 'OK') {
+            $continue = 'yes';
+
+            if (!$invisible && self::visibility(false) === false) {
+                $continue = self::prompt('Your password may be visible while typing, do you wish to continue?', [
+                    'yes', 'no'
+                ], 'required|in_array(yes,no)');
+            }
+        }
+
+        if ($continue !== 'no') {
+            self::fwrite($message . ': ');
+
+            if ($continue === 'yes') {
+                self::visibility(false);
+            }
+
+            if ($timeout > 0) {
+                $result = self::timeout(static function() {
+                    self::newLine();
+                    self::error("Error: Timeout exceeded. No input provided.");
+                }, $timeout);
+
+                if ($result) {
+                    if ($continue === 'yes') {
+                        self::visibility(true);
+                    }
+                    
+                    return '';
+                }
+            }
+
+            if ($continue === 'yes') {
+                $password = self::input();
+                self::visibility(true);
+
+                return $password;
+            }
+            
+            if ($continue === 'OK') {
+                $command = "/usr/bin/env bash -c 'read -s inputPassword && echo \$inputPassword'";
+                $password = self::_shell($command);
+                return !$password ? '' : trim($password);
+            }
+        }
+
+        return $password;
+    }
+
+    /**
+     * Prompts the user to input a hidden password using a Windows dialog box, 
+     * which utilizes a temporary VBScript file to create an input box for password entry.
+     *
+     * @param string $message The message to display to the user prompting for the password.
+     * @param int $timeout The maximum time in seconds to wait for user input before timing out.
+     *
+     * @return string Return the entered password, or an empty string if no password was provided or an error occurred.
+     * @ignore
+     */
+    protected static function getWindowsHiddenPassword(string $message, int $timeout): string
+    {
+        $vbscript = sys_get_temp_dir() . 'prompt_password.vbs';
+        $inputBox = 'wscript.echo(InputBox("'. addslashes($message) . '", "", ""))';
+
+        if ($timeout > 0) {
+            $result = self::timeout(static function() {
+                self::newLine();
+                self::error("Error: Timeout exceeded. No input provided.");
+            }, $timeout);
+
+            if ($result === true) {
+                return '';
+            }
+        }
+
+        if (file_put_contents($vbscript, $inputBox) !== false) {
+            $password = self::_shell("cscript //nologo " . escapeshellarg($vbscript));
+        }
+
+        if (!$password) {
+            $password = self::_shell('powershell -Command "Read-Host -AsSecureString | ConvertFrom-SecureString"');
+        }
+
+        unlink($vbscript);
+        return !$password ? '' : trim($password);
+    }
+
+    /**
+     * Calculate the visible CLI window width and height.
+     *
+     * @return void
+     * @ignore
+     */
+    protected static function getVisibleWindow(): void
+    {
+        if (self::$windowHeight !== null && self::$windowWidth !== null) {
+            return;
+        }
+
+        if (is_platform('windows')) {
+            // Use PowerShell to get console size on Windows
+            $size = self::_shell('powershell -command "Get-Host | ForEach-Object { $_.UI.RawUI.WindowSize.Height; $_.UI.RawUI.WindowSize.Width }"');
+
+            if ($size) {
+                $dimensions = explode("\n", trim($size));
+                if($dimensions !== []){
+                    self::$windowHeight = (int) $dimensions[0];
+                    self::$windowWidth = (int) $dimensions[1];
+                }
+            }
+        } else {
+            // Fallback for Unix-like systems
+            $size = self::_exec('stty size');
+            if ($size && preg_match('/(\d+)\s+(\d+)/', $size, $matches)) {
+                self::$windowHeight = (int) $matches[1];
+                self::$windowWidth  = (int) $matches[2];
+            }
+        }
+
+        // As a fallback, if still not set, default to standard size
+        if (self::$windowHeight === null || self::$windowWidth === null) {
+            self::$windowHeight = (int) self::_exec('tput lines');
+            self::$windowWidth  = (int) self::_exec('tput cols');
+        }
     }
 }

@@ -136,7 +136,7 @@ abstract class CoreApplication
      */
     public static final function getInstance(): static 
     {
-        return static::$instance ??= new static();
+        return self::$instance ??= new static();
     }
 
     /**
@@ -159,9 +159,9 @@ abstract class CoreApplication
     */
     public function __get(string $key): mixed
     {
-        $value = static::attrGetter($key);
+        $value = self::attrGetter($key);
 
-        if ($value === static::$KEY_NOT_FOUND) {
+        if ($value === self::$KEY_NOT_FOUND) {
             return $this->{$key} ?? static::${$key} ?? null;
         }
 

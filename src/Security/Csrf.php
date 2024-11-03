@@ -18,21 +18,21 @@ final class Csrf
      * Token session input name
      *
      * @var string $tokenName
-    */
+     */
     private static $tokenName = "csrf_token";
 
     /**
      * Token session key name
      *
      * @var string $token
-    */
+     */
     private static $token = "csrf_token_token";
 
     /**
      * Cookie config
      *
      * @var CookieConfig $config
-    */
+     */
     private static ?CookieConfig $config = null;
 
     /**
@@ -44,7 +44,7 @@ final class Csrf
      * @return mixed 
      * @throws BadMethodCallException
      * @internal
-    */
+     */
     public function __call(string $name, array $arguments): mixed
     {
         if (method_exists(self::class, $name)) {
@@ -56,7 +56,7 @@ final class Csrf
 
     /**
      * Initialize the session configuration.
-    */
+     */
     private static function intConfig(): void 
     {
         self::$config ??= new CookieConfig();
@@ -90,7 +90,7 @@ final class Csrf
      * Use this method when you need to regenerate a token after validation.
      * 
      * @return string The generated CSRF token.
-    */
+     */
     public static function refresh(): string 
     {
         $token = self::generateToken();
@@ -120,7 +120,7 @@ final class Csrf
      * Generates and display an HTML hidden input field for the CSRF token.
      * 
      * @return void 
-    */
+     */
     public static function inputToken(): void 
     {
         echo '<input type="hidden" name="' . self::$tokenName . '" value="' . self::getToken() . '">';
@@ -172,7 +172,7 @@ final class Csrf
      * Checks if a token has already been generated.
      * 
      * @return bool Returns true if a token has already been created, otherwise false.
-    */
+     */
     public static function hasToken(): bool 
     {
         $storage = self::tokenStorage();
@@ -189,7 +189,7 @@ final class Csrf
      * Generates a CSRF token.
      *
      * @return string The generated CSRF token.
-    */
+     */
     private static function generateToken(): string
     {
         return bin2hex(random_bytes(32));
@@ -201,7 +201,7 @@ final class Csrf
      * 
      * 
      * @return string cookie or session.
-    */
+     */
     private static function tokenStorage(): string 
     {
         self::intConfig();
@@ -219,7 +219,7 @@ final class Csrf
      * @param ?int $expiry
      * 
      * @return void 
-    */
+     */
     private static function saveToken(string $token, ?int $expiry = null): void 
     {
         self::intConfig();
@@ -244,8 +244,8 @@ final class Csrf
     /**
      * Check if cookie taken was already created
      * 
-     * @return bool 
-    */
+     * @return bool Return true if cookie toke exists, false otherwise.
+     */
     private static function hasCookie(): bool 
     {
         return isset($_COOKIE[self::$token]) && !empty($_COOKIE[self::$token]);

@@ -24,7 +24,7 @@ final class FileDelivery
      * 
      * @param string $path The base path to file storage (e.g: /writeable/storages/images/).
      * @param bool $eTag Whether to generate ETag headers (default: true).
-    */
+     */
     public function __construct(
         private string $path, 
         private bool $eTag = true
@@ -40,7 +40,7 @@ final class FileDelivery
      *  > Note
      *  > Your files must be stored in the storage directory located in `/writeable/storages/`.
      *  > Additionally you don't need to specify the `/writeable/storages/` in your `$path` parameter.
-    */
+     */
     public static function storage(string $path, bool $eTag = true): static
     {
         return new self(root('writeable/storages/' . trim($path, TRIM_DS)), $eTag);
@@ -72,11 +72,11 @@ final class FileDelivery
         $read = false;
 
         if ($handler = fopen($filename, 'rb')) {
-            $filesize = static::cacheHeaders($headers, $basename, $filename, $expiry);
+            $filesize = self::cacheHeaders($headers, $basename, $filename, $expiry);
             $read = FileManager::read($handler, $filesize, $headers['Content-Type']);
         }
  
-        return $read ? true : static::expiredHeader(500);
+        return $read ? true : self::expiredHeader(500);
     }
 
     /**
@@ -121,7 +121,7 @@ final class FileDelivery
                 $options['ratio'] ?? true
             );
 
-            static::cacheHeaders($headers, $basename, null, $expiry);
+            self::cacheHeaders($headers, $basename, null, $expiry);
             $result = $img->get($options['quality']??100);
             $img->free();
 
@@ -141,7 +141,7 @@ final class FileDelivery
      * 
      * @return bool Return true if file output is successful, false otherwise.
      * @throws EncryptionException Throws if decryption failed.
-    */
+     */
     public function temporal(string $url_hash, array $headers = []): bool
     {
         $data = Crypter::decrypt($url_hash);
@@ -151,13 +151,13 @@ final class FileDelivery
             $expiration = (int) $then + (int) $expiry;
 
             if (time() > $expiration) {
-                return static::expiredHeader(404);
+                return self::expiredHeader(404);
             }
 
             return $this->output($basename, ($expiration - time()), $headers);
         }
 
-        return static::expiredHeader(404);
+        return self::expiredHeader(404);
     }
 
     /**
@@ -168,7 +168,7 @@ final class FileDelivery
      * 
      * @return string|false Return based64 encrypted url, otherwise false.
      * @throws EncryptionException Throws if encryption failed.
-    */
+     */
     public function url(string $basename, int $expiry = 3600): string|bool
     {
         $filename = $this->path . DIRECTORY_SEPARATOR . ltrim($basename, TRIM_DS);
@@ -198,7 +198,7 @@ final class FileDelivery
         $filename = $this->path . DIRECTORY_SEPARATOR . ltrim($basename, TRIM_DS);
   
         if (!file_exists($filename)) {
-            return static::expiredHeader(404);
+            return self::expiredHeader(404);
         }
 
         if ($this->eTag) {
@@ -209,11 +209,11 @@ final class FileDelivery
                 $filemtime = filemtime($filename);
                 $ifNoneMatch = trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '');
                 if ($ifNoneMatch === $eTag) {
-                    return static::notModifiedHeader($expiry, $filemtime);
+                    return self::notModifiedHeader($expiry, $filemtime);
                 }
 
                 if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) && ($modify = $filemtime) !== false && strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) >= $modify) {
-                   return static::notModifiedHeader($expiry, $filemtime);
+                   return self::notModifiedHeader($expiry, $filemtime);
                 }
 
                 $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T', $filemtime);
@@ -222,7 +222,7 @@ final class FileDelivery
 
         $headers['Content-Type'] ??= get_mime($filename);
         if (!isset($headers['Content-Type'])) {
-            return static::expiredHeader(500);
+            return self::expiredHeader(500);
         }
 
         return $filename;
@@ -241,7 +241,7 @@ final class FileDelivery
         $headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
         $headers['Expires'] = '0';
         $headers['Pragma'] = 'no-cache';
-        static::headers($headers, $statusCode);
+        self::headers($headers, $statusCode);
 
         return false;
     }
@@ -261,7 +261,7 @@ final class FileDelivery
             $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T', $filemtime);
         }
 
-        static::headers($headers, 304, ($expiry > 0));
+        self::headers($headers, 304, ($expiry > 0));
 
         return true;
     }
@@ -275,7 +275,7 @@ final class FileDelivery
      * @param int $expiry The expiration time in seconds.
      * 
      * @return int Filesize.
-    */
+     */
     private static function cacheHeaders(array $headers, string $basename, string|null $filename, int $expiry): int
     {
         if (!isset($headers['Expires'])) {
@@ -297,7 +297,7 @@ final class FileDelivery
             $headers['Content-Length'] = filesize($filename);
         }
 
-        static::headers($headers, 200, ($expiry > 0));
+        self::headers($headers, 200, ($expiry > 0));
 
         return $headers['Content-Length'] ?? 0;
     }
@@ -308,7 +308,7 @@ final class FileDelivery
      * @param array $headers The headers to set.
      * @param int $status HTTP status code.
      * @param bool $cache Allow caching if true remove pragma header.
-    */
+     */
     private static function headers(array $headers, int $status = 200, bool $cache = false): void 
     {
         if (headers_sent()) {

@@ -877,7 +877,7 @@ class Database extends BaseConsole
             ];
         }
 
-        $this->table($headers, $rows, 'green');
+        $this->print($this->table($headers, $rows, null, 'green'));
         return $versions;
     }
 

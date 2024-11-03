@@ -82,11 +82,11 @@ final class MemoryCache extends BaseCache
         ?string $persistent_id = null
     ): static 
     {
-        if (static::$instance === null) {
-            static::$instance = new static($storage, $persistent_id);
+        if (self::$instance === null) {
+            self::$instance = new static($storage, $persistent_id);
         }
 
-        return static::$instance;
+        return self::$instance;
     }
 
     /**
@@ -259,7 +259,7 @@ final class MemoryCache extends BaseCache
     */
     public function setStorage(string $storage): self
     {
-        $this->storage = static::hashStorage($storage);
+        $this->storage = self::hashStorage($storage);
         $this->storageName = $storage;
         return $this;
     }
@@ -479,7 +479,7 @@ final class MemoryCache extends BaseCache
     */
     public function delete(string $storage, array $keys): bool
     {
-        $storage = static::hashStorage($storage);
+        $storage = self::hashStorage($storage);
         return $this->getConn()?->deleteMultiByKey($storage, $keys);
     }
 

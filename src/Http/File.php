@@ -51,6 +51,13 @@ class File
     protected ?string $message = null;
 
     /**
+     * Mime from temp file.
+     *
+     * @var string|null $mime
+     */
+    protected ?string $mime = null;
+
+    /**
      * File upload configurations.
      *
      * @var stdClass|null $config
@@ -69,20 +76,21 @@ class File
         'allowed_types'     => 'allowedTypes',
         'chunk_length'      => 'chunkLength',
         'if_existed'        => 'ifExisted',
-        'symlink'           => 'symlink',
+        'symlink'           => 'symlink'
     ];
 
     /**
-     * Constructs a File object.
+     * Constructs a File object for handling uploaded file data.
      *
-     * @param int $index The index of the file.
-     * @param string|null $name The name of the file.
-     * @param string|null $type The MIME type of the file.
-     * @param int $size The size of the file in bytes.
-     * @param string|null $extension The file extension.
-     * @param string|null $temp The temporary file path.
-     * @param int $error The error code of the file upload (default: UPLOAD_ERR_NO_FILE).
-     * @param string|null $content The file content string available if `temp_name` is not.
+     * @param int $index The index of the file in the uploaded file array, typically representing the position in a multi-file upload scenario.
+     * @param string|null $name The original name of the uploaded file (e.g., `document.pdf`).
+     * @param string|null $type The MIME type of the file (e.g., `image/jpeg`, `application/pdf`).
+     * @param int $size The size of the uploaded file in bytes.
+     * @param string|null $extension The file extension (e.g., `jpg`, `png`, `pdf`).
+     * @param string|null $temp The temporary file path where the uploaded file is stored on the server.
+     * @param int $error The error code associated with the file upload (default: `UPLOAD_ERR_NO_FILE`).
+     * @param string|null $content The file's content in string format, typically used when the file data is stored directly in memory as an alternative to using the `temp`.
+     * @param bool $is_blob Indicates whether the uploaded file is handled as a binary large object (BLOB), which is commonly used for in-memory file storage (default: `false`).
      */
     public function __construct(
         protected int $index = 0,
@@ -92,7 +100,8 @@ class File
         protected ?string $extension = null,
         protected ?string $temp = null,
         protected int $error = UPLOAD_ERR_NO_FILE,
-        protected ?string $content = null
+        protected ?string $content = null,
+        protected bool $is_blob = false
     ) {
         $this->message = null;
     }
@@ -149,6 +158,23 @@ class File
     public function getMime(): ?string
     {
         return $this->getType();
+    }
+
+    /**
+     * Retrieves the MIME type directly from the temporary file path.
+     * Useful for cases where the file is uploaded as a large object (BLOB).
+     * Typically, the MIME type may default to 'application/octet-stream'.
+     *
+     * @return string|null Returns the MIME type of the file, or null if no temporary file exists.
+     */
+    public function getMimeFromTemp(): ?string
+    {
+        if($this->temp === null || $this->mime !== null){
+            return $this->mime;
+        }
+
+        $mime = get_mime($this->temp);
+        return $this->mime = ($mime === false) ? null : $mime;
     }
 
     /**
@@ -222,28 +248,56 @@ class File
     }
 
     /**
-     * Sets the name of the file.
+     * Determines if the file is uploaded as a BLOB (Binary Large Object).
+     * 
+     * This method checks whether the file was uploaded as a BLOB, 
+     * typically used for large file uploads or when the file's content is handled directly in binary form.
      *
-     * @param string $name The name of the file.
+     * @return bool Returns true if the file is a BLOB, otherwise false.
+     */
+    public function isBlob(): bool
+    {
+        return $this->is_blob;
+    }
+
+    /**
+     * Checks if an error occurred during the file upload process.
+     *
+     * @return bool Returns true if an error occurred; false otherwise.
+     */
+    public function isError(): bool
+    {
+        return $this->error !== UPLOAD_ERR_OK;
+    }
+
+    /**
+     * Sets the file name, with an option to replace its extension.
+     *
+     * @param string $name The desired name of the file, without directory paths.
+     * @param bool $replace_extension (optional) If true, updates the file extension based on 
+     * the provided name (default: true).
      * 
      * @return self Return instance of file object.
      * 
-     * @throws ErrorException If the filename contains paths or does not have a valid file extension type.
+     * @throws ErrorException Throws if the file name contains directory paths or, when 
+     * `replace_extension` is enabled, lacks a valid file extension.
      */
-    public function setName(string $name): self
+    public function setName(string $name, bool $replace_extension = true): self
     {
         if (str_contains($name, DIRECTORY_SEPARATOR)) {
             throw new ErrorException('Filename cannot contain paths.');
         }
 
-        $extension = pathinfo($name, PATHINFO_EXTENSION);
-        if ($extension === '') {
-            throw new ErrorException('Filename does not have a valid file extension type.');
+        if($replace_extension){
+            $extension = pathinfo($name, PATHINFO_EXTENSION);
+            if ($extension === '') {
+                throw new ErrorException('Filename does not have a valid file extension type.');
+            }
+
+            $this->extension = strtolower($extension);
         }
 
-        $this->extension = strtolower($extension);
         $this->name = $name;
-
         return $this;
     }
 
@@ -280,22 +334,30 @@ class File
     }
 
     /**
-     * Reset file configuration and remove temp file.
-     * 
-     * @return void 
+     * Resets the file configuration, clears content, and deletes any temporary file.
+     *
+     * @return void
      */
     public function free(): void 
     {
         $this->message = null;
         $this->config = null;
         $this->content = null;
-        @unlink($this->temp);
+        $this->error = UPLOAD_ERR_NO_FILE;
+        $this->is_blob = false;
+        $this->mime = null;
+
+        if (is_file($this->temp)) {
+            @unlink($this->temp);
+        }
+        $this->temp = null;
     }
 
     /**
-     * Checks if the file is valid according to the specified configuration.
-     * 
-     * @return bool Return true if the file is valid, false otherwise.
+     * Validates the uploaded file against the defined configuration rules.
+     *
+     * @return bool Returns true if the file is valid; false otherwise, with 
+     * an appropriate error code and message set.
      */
     public function valid(): bool
     {

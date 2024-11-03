@@ -109,6 +109,24 @@ final class HttpCode
     private function __construct() {}
 
     /**
+     * Return a status code message using a fancy method call.
+     * 
+     * @param string $name The status code method name (e.g, $status->status404).
+     * 
+     * @return string|null Return the http status code message, otherwise null.
+     * 
+     * @example Returning status code message.
+     * 
+     * ```php
+     * echo $status->status200;
+     * ```
+     */
+    public function __get(string $name): ?string
+    {
+        return self::{$name}();
+    }
+
+    /**
      * Return an http status code message or the entire status codes.
      * 
      * @param int|null $code The http status code (e.g, 200, 404 etc) (default: null).
@@ -118,8 +136,8 @@ final class HttpCode
     public static function get(?int $code = null): array|string|null
     {
         return ($code === null) 
-            ? static::$codes
-            : (static::$codes[$code] ?? null);
+            ? self::$codes
+            : (self::$codes[$code] ?? null);
     }
 
     /**
@@ -127,7 +145,7 @@ final class HttpCode
      * Your method call must follow this pattern: `status followed by the http status code`.
      * 
      * @param string $name The status code method name (e.g, HttpCode::status404()).
-     * @param array $arguments An array of arguments.
+     * @param array $arguments Unused array of arguments.
      * 
      * @return string|null Return the http status code message, otherwise null.
      * 
@@ -140,9 +158,9 @@ final class HttpCode
     public static function __callStatic(string $name, array $arguments): ?string
     {
         if (preg_match('/^status(\d+)$/', $name, $matches)) {
-            $statusCode = (int) $matches[1];
+            $code = (int) $matches[1];
 
-            return static::$codes[$statusCode]??null;
+            return self::$codes[$code] ?? null;
         }
 
         return null;

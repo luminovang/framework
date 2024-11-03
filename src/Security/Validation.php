@@ -16,23 +16,29 @@ use \JsonException;
 final class Validation implements ValidationInterface
 {
     /**
-     * @var array<string,array> $failures validated errors messages.
-    */
+     * Validated errors messages.
+     * 
+     * @var array<string,array> $failures
+     */
     private array $failures = [];
 
     /**
-     * @var array<string,string> $rules validation rules.
-    */
+     * Validation rules.
+     * 
+     * @var array<string,string> $rules
+     */
     public array $rules = [];
 
     /**
-     * @var array<string,array> $messages validation error messages.
-    */
+     * Validation error messages.
+     * 
+     * @var array<string,array> $messages
+     */
     public array $messages = [];
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function validate(array $input, ?array $rules = null): bool
     {
         $rules ??= $this->rules;
@@ -111,7 +117,7 @@ final class Validation implements ValidationInterface
                             }
                         break;
                         default:
-                            if (!static::validation($ruleName, $fieldValue, $rulePart, $ruleParam)) {
+                            if (!self::validation($ruleName, $fieldValue, $rulePart, $ruleParam)) {
                                 $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
@@ -127,7 +133,7 @@ final class Validation implements ValidationInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getErrors(): array
     {
         return $this->failures;
@@ -135,7 +141,7 @@ final class Validation implements ValidationInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getError(string|int $fieldIndex = 0, string $type = 'message'): string
     {
         $errors = $this->getErrorField($fieldIndex);
@@ -147,9 +153,9 @@ final class Validation implements ValidationInterface
         return $errors[0][$type] ?? '';
     }
 
-     /**
+    /**
      * {@inheritdoc}
-    */
+     */
     public function getErrorFieldLine(string $prefix = ''): string
     {
         return $prefix . $this->getError(0, 'field');
@@ -157,7 +163,7 @@ final class Validation implements ValidationInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getErrorLine(string|int $fieldIndex = 0, int $errorIndex = 0): string
     {
         $errors = $this->getErrorField($fieldIndex);
@@ -177,7 +183,7 @@ final class Validation implements ValidationInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getErrorField(string|int $fieldIndex = 0): array
     {
         if($this->failures === []){
@@ -206,7 +212,7 @@ final class Validation implements ValidationInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setRules(array $rules, array $messages = []): self
     {
         $this->rules = $rules;
@@ -220,7 +226,7 @@ final class Validation implements ValidationInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function addRule(string $field, string $rules, array $messages = []): self
     {
         $this->rules[$field] = $rules;
@@ -234,7 +240,7 @@ final class Validation implements ValidationInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function isPassed(): bool
     {
         return $this->failures === [];
@@ -249,7 +255,7 @@ final class Validation implements ValidationInterface
      * @param string $param additional validation parameters.
      * 
      * @return boolean Return true if the rule passed else false.
-    */
+     */
     private static function validation(string $ruleName, mixed $value, string $rule, mixed $param = null): bool
     {
         try {
@@ -290,15 +296,9 @@ final class Validation implements ValidationInterface
             return false;
         }
 
-        if ($param === 'positive') {
-            return (int) $value > 0;
-        }
-
-        if ($param === 'negative') {
-            return (int) $value < 0;
-        }
-
-        return true;
+        return ($param === 'positive') 
+            ? (int) $value > 0 
+            : (($param === 'negative') ? (int) $value < 0 : true);
     }
 
     /**
@@ -316,22 +316,17 @@ final class Validation implements ValidationInterface
         }
 
         if($rule === 'path'){
-            if($param === 'true' || $param === 'readable'){
-                return is_readable($value);
-            }
-
-            if($param === 'writable'){
-                return is_writable($value);
-            }
-
-            return preg_match('#^(?:[a-zA-Z]:[\\\/]|/|\\\\)[\\w\\s\\-_.\\/\\\\]+$#i', $value);
+            return ($param === 'true' || $param === 'readable') 
+                ? is_readable($value)
+                : (($param === 'writable') 
+                    ? is_writable($value) 
+                    : (bool) preg_match('#^(?:[a-zA-Z]:[\\\/]|/|\\\\)[\\w\\s\\-_.\\/\\\\]+$#i', $value)
+                );
         }
 
-        if($param === ''){
-            return preg_match('#^[a-z][a-z\d+.-]*://#i', $value);
-        }
-
-        return str_starts_with($value, rtrim($param, '://') . '://');
+        return ($param === '') 
+            ? (bool) preg_match('#^[a-z][a-z\d+.-]*://#i', $value) 
+            : str_starts_with($value, rtrim($param, '://') . '://');
     }
 
     /**
@@ -349,17 +344,15 @@ final class Validation implements ValidationInterface
             static $func = null;
             $func ??= func();
 
-            if($name === 'phone'){
-                return $func->isPhone((string) $value, ($param === '') ? 10 : (int) $param);
-            }
-
-            if($name === 'uuid'){
-                return $func->isUuid((string) $value, ($param === '') ? 4 : (int) $param);
-            }
-
-            if($name === 'ip'){
-                return $func->ip()->isValid((string) $value, ($param === '') ? 0 : (int) $param);
-            }
+            return ($name === 'phone')
+                ? $func->isPhone((string) $value, ($param === '') ? 10 : (int) $param)
+                : (($name === 'uuid')
+                    ? $func->isUuid((string) $value, ($param === '') ? 4 : (int) $param)
+                    : (($name === 'ip') 
+                            ? $func->ip()->isValid((string) $value, ($param === '') ? 0 : (int) $param) 
+                            : true
+                        )
+                    );
         }
 
        return true;
@@ -371,14 +364,12 @@ final class Validation implements ValidationInterface
      * @param mixed $value The value to check.
      * 
      * @return Return true if the value is not empty, false otherwise.
-    */
+     */
     private function isEmpty(mixed $value): bool 
     {
-        if ($value === null || $value === '' || $value === []) {
-            return true;
-        }
-
-        return is_empty($value);
+        return ($value === null || $value === '' || $value === []) 
+            ? true 
+            : is_empty($value);
     }
 
     /**
@@ -387,7 +378,7 @@ final class Validation implements ValidationInterface
      * @param string $rule The validation rule string to be parsed.
      * 
      * @return array<int,string> Return an array of rule names and parameter if available.
-    */
+     */
     private static function parseRule(string $rule): array
     {
         $name = '';
@@ -412,7 +403,7 @@ final class Validation implements ValidationInterface
      * @param mixed $value Filed value.
      * 
      * @return void 
-    */
+     */
     private function addError(string $field, string $ruleName, mixed $value = null): void
     {
         $message = $this->messages[$field][$ruleName] ?? null;
@@ -439,7 +430,7 @@ final class Validation implements ValidationInterface
      * @param array $placeholders array.
      * 
      * @return string Return the translated message.
-    */
+     */
     private static function replace(string $message, array $placeholders = []): string 
     {
         if($placeholders === []){

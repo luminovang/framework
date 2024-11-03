@@ -13,10 +13,10 @@ use \Luminova\Base\BaseConsole;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Http\Network;
 use \Luminova\Time\Time;
+use \Luminova\Command\Utils\Text;
 use \App\Config\Cron;
 use \Luminova\Exceptions\AppException;
 use \ReflectionClass;
-use \Closure;
 use \DateInterval;
 use \Exception;
 
@@ -24,45 +24,50 @@ class CronJobs extends BaseConsole
 {
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $group = 'Cron';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $name = 'cronjob';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected array $usages = [
         'php novakit cron:create --help',
         'php novakit cron:run --help'
     ];
 
     /**
-     * @var Network|null $network network instance
-    */
+     * Network instance.
+     * 
+     * @var Network|null $network
+     */
     private static ?Network $network = null;
 
     /**
-     * @var Cron|null $cron Application cron instance.
-    */
+     * Application cron instance.
+     * 
+     * @var Cron|null $cron
+     */
     private static ?Cron $cron = null;
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function run(?array $params = null): int
     {
         $this->explain($params);
         setenv('throw.cli.exceptions', 'true');
         $command = trim($this->getCommand());
         $force = $this->getAnyOption('force', 'f', false);
+        $sleep = (int) $this->getAnyOption('sleep', 's', 100000);
 
         $runCommand = match($command){
             'cron:create'   => $this->createCommands($force),
-            'cron:run'      => $this->runCommands($force),
+            'cron:run'      => $this->runCommands($sleep, $force),
             default         => 'unknown'
         };
 
@@ -75,7 +80,7 @@ class CronJobs extends BaseConsole
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function help(array $helps): int
     {
         return STATUS_ERROR;
@@ -87,9 +92,10 @@ class CronJobs extends BaseConsole
      * @param bool $force Force update cron lock file.
      * 
      * @return int Return status code.
-    */
-    private function runCommands(bool $force = false): int 
+     */
+    private function runCommands(int $sleep, bool $force = false): int 
     {
+        ob_start();
         self::$cron ??= new Cron();
         self::$cron->create($force);
         $instance = self::$cron->getTask();
@@ -101,118 +107,120 @@ class CronJobs extends BaseConsole
         $tasks = self::$cron->getTaskFromFile();
         $executed = 0;
         $id = 0;
+        $output = '';
         $newTasks = [];
-        $logger = '';
+        $logger = [];
+        $iniBody = ob_get_clean();
 
         foreach($tasks as $id => $task) {
             $lastExecution = $task['lastExecutionDate'] ?? false;
     
             if ($lastExecution) {
-                $retry = !$task['lastRunCompleted'] ?? true;
+                ob_start();
+                $retry = !($task['lastRunCompleted'] ?? true);
                 $format = $task['interval']['format'] ?? '';
                 $timezone = $task['interval']['timezone'] ?? null;
                 $shouldRun = false;
 
                 if(str_contains($format, ' ')){
-                    $nextExecution = (new Time("@" . $lastExecution, $timezone))->modify($format)->setTime(0, 0);
-                    
                     $now = Time::now($timezone)->setTime(0, 0);
-                    $shouldRun = $now == $nextExecution;
+                    $shouldRun = ($now == (new Time("@" . $lastExecution, $timezone))->modify($format)->setTime(0, 0));
                 }else{
                     $interval = new DateInterval($format);
-                    $nextExecution = Time::now($timezone)->modify("@" . $lastExecution)->add($interval);
-        
                     $now = Time::now($timezone)->add($interval);
-                    $shouldRun = $now >= $nextExecution;
+                    $shouldRun = ($now >= Time::now($timezone)->modify("@" . $lastExecution)->add($interval));
                 }
 
                 if ($retry || $shouldRun) {
-                    ob_start();
-                    $logger .= "--------------------------------------------------\n";
-                    $logger .=  "| " . str_pad($task['controller'], 48, " ", STR_PAD_BOTH) . " |\n";
-                    $logger .=  "| " . str_pad(($task['description'] ?? 'Cron Execution'), 48, " ", STR_PAD_BOTH) . " |\n";
-                    $logger .=  "| " . str_pad("Current Time: " . Time::now()->format('Y-m-d H:i:s'), 48, " ", STR_PAD_BOTH) . " |\n";
-                    $logger .=  "--------------------------------------------------\n";    
-
+                    $output .= self::setCronOutputHead(
+                        $task['controller'], 
+                        $task['description'] ?? ''
+                    );
                     try{
-                        $execute = $this->callCommandMethod($task, $logger);
+                        $execute = $this->callTaskCommandMethod($task, $output);
                         $task['lastExecutionDate'] = $now->getTimestamp();
                         $executed++;
 
                         if($retry){
                             $task['retries'] += 1;
-                            $logger .=  "Retrying execution...\n";
+                            $output .= "Retrying execution...\n";
                         }
         
                         if($execute){
-                            if($retry){
-                                $logger .=  "Retry attempt succeeded\n";
-                            } else {
-                                $logger .=  "Task executed successfully\n";
-                            }
-                            
+                            $output .= ($retry) 
+                                ? "Retry attempt succeeded\n" 
+                                : "Task executed successfully\n";
                             $task['lastRunCompleted'] = true;
                             $task['completed'] += 1;
         
                             if(isset($instance[$id])){
-                                $this->callCallbacks($task, $instance, true, $logger);
+                                $this->callTaskCallbacks($task, $instance, true, $output);
                             }
                         } else {
-                            if($retry){
-                                $logger .= "Retry attempt failed\n";
-                            } else {
-                                $logger .= "Task execution failed, will retry again\n";
-                            }
-                            
+                            $output .= ($retry) 
+                                ? "Retry attempt failed\n" 
+                                : "Task execution failed, will retry again\n";
                             $task['lastRunCompleted'] = false;
                             $task['failures'] += 1;
         
                             if(isset($instance[$id])){
-                                $this->callCallbacks($task, $instance, false, $logger);
+                                $this->callTaskCallbacks($task, $instance, false, $output);
                             }
                         }
                     }catch(Exception $e){
-                        $logger .= 'Exception Error: ' . $e->getMessage();
+                        $output .= 'Exception Error: ' . $e->getMessage();
                     }
 
-                    if($task['log'] !== null && $logger !== ''){
-                        logger($task['log'], rtrim($logger, "\n"));
-                        $logger = '';
+                    if($task['output'] !== null && $output !== ''){
+                        $logger['outputs'][$task['output']][] = $output . PHP_EOL;
+                        $output = '';
                     }
+                }
 
-                    if($task['output'] !== null){
-                        $output = ob_get_clean(); 
-                        if($output !== false || $output !== ''){  
-                            make_dir(pathinfo($task['output'])['dirname']);
-                            write_content($task['output'], $output . PHP_EOL, LOCK_EX);
-                            $output = false;
-                        }
+                if($task['log'] !== null && ($body = ob_get_clean()) !== false){
+                    if(!empty(trim($body))){
+                        $logger['logs'][$task['log']][] = self::setCronOutputHead(
+                            $task['controller'], 
+                            $task['description'] ?? 'Cron Execution',
+                            $body
+                        );
                     }
+                    $body = null;
                 }
             }
     
             $newTasks[$id] = $task;
+            usleep($sleep);
         }
     
         if($executed > 0){
             self::$cron->update($newTasks);
         }
-    
+        
+        self::logCronOutputs($logger, $iniBody);
+        $iniBody = null;
         return STATUS_SUCCESS;
     }
 
     /**
-     * Executed cron jobs.
+     * Executed cronjob task callbacks.
      * 
      * @param array $task Cron task array information.
      * @param array $instance Cron task array information from class.
      * @param bool $isComplete Weather task is completed or not.
-     * @param string &$logger Log line passed by reference.
-    */
-    private function callCallbacks(array $task, array $instance, $isComplete = true, string &$logger = ''): void
+     * @param string &$output Log line passed by reference.
+     * 
+     * @return void
+     */
+    private function callTaskCallbacks(
+        array $task, 
+        array $instance, 
+        bool $isComplete = true, 
+        string &$output = ''
+    ): void
     {
         $event = $isComplete ? 'Complete' : 'Failure';
-        if($task['onComplete'] && isset($instance['on' . $event]) && $instance['on' . $event] instanceof Closure){
+        if($task['onComplete'] && isset($instance['on' . $event]) && is_callable($instance['on' . $event])){
             $instance['onComplete']($task);
         }
 
@@ -222,10 +230,10 @@ class CronJobs extends BaseConsole
                 self::$network->get($instance['pingOn' . $event], [
                     'query' => $task
                 ]);
-                $logger .= $event ? "Failure ping succeeded\n" : "Completed ping succeeded\n";
+                $output .= $event ? "Failure ping succeeded\n" : "Completed ping succeeded\n";
             } catch(Exception|AppException $e){
-                $logger .= $event ? "Failure ping failed: " : "Completed ping failed: ";
-                $logger .= $e->getMessage() . "\n";
+                $output .= $event ? "Failure ping failed: " : "Completed ping failed: ";
+                $output .= $e->getMessage() . "\n";
             }
         }
     }
@@ -234,34 +242,33 @@ class CronJobs extends BaseConsole
      * Executed cron jobs class method.
      * 
      * @param array $task Cron task array information.
-     * @param string &$logger Log line passed by reference.
+     * @param string &$output Log line passed by reference.
      * 
      * @return array Return true on success, false on failure.
-    */
-    private function callCommandMethod(array $task, string &$logger = ''): bool
+     */
+    private function callTaskCommandMethod(array $task, string &$output = ''): bool
     {
         [$namespace, $method] = explode('::', $task['controller']);
-
         $reflector = new ReflectionClass($namespace);
-        $instance = $reflector->newInstance();
 
         if ($reflector->isSubclassOf(BaseCommand::class)) {
             if ($reflector->hasMethod($method)) {
                 $caller = $reflector->getMethod($method);
                 if($caller->isPublic() && !$caller->isAbstract() && !$caller->isStatic()){
-                    $response = $caller->invoke($instance);
-                    $logger .= "Job was executed with response: " . var_export($response, true) . "\n";
+                    $response = $caller->invoke($reflector->newInstance());
+                    $output .= "Job was executed with response: " . var_export($response, true) . "\n";
                     return true;
-                }else{
-                    $logger .= "Unable to call method {$method}.\n";
                 }
-            }else{
-                $logger .= "Method {$method} does not exist in class {$namespace}.\n";
+
+                $output .= "Unable to call method {$method}.\n";
+                return false;
             }
-        }else{
-            $logger .= "Class {$namespace} is not a subclass of " . BaseCommand::class . ".\n";
+
+            $output .= "Method {$method} does not exist in class {$namespace}.\n";
+            return false;
         }
 
+        $output .= "Class {$namespace} is not a subclass of " . BaseCommand::class . ".\n";
         return false;
     }
 
@@ -271,7 +278,7 @@ class CronJobs extends BaseConsole
      * @param bool $force Force update cron lock file.
      * 
      * @return int Return status code.
-    */
+     */
     private function createCommands(bool $force = false): int 
     {
         $created = (new Cron())->create($force);
@@ -285,5 +292,70 @@ class CronJobs extends BaseConsole
         }
 
         return $created ? STATUS_SUCCESS : STATUS_ERROR;
+    }
+
+     /**
+     * Log the execution outputs and error logs.
+     * 
+     * @param array $outputs The execution outputs to log.
+     * 
+     * @return void
+     */
+    private static function logCronOutputs(array $logger, string|bool $iniBody = false): void 
+    {
+        if($iniBody !== false && !empty(trim($iniBody))){
+            logger('debug', "Cron Task Initialization Error: {$iniBody}.");
+        }
+
+        foreach ($logger as $key => $list) {
+            foreach ($list as $to => $contents) {
+                $content = trim(implode(PHP_EOL, $contents));
+
+                if (empty($content)) {
+                    continue;
+                }
+
+                if ($key === 'outputs') {
+                    make_dir(pathinfo($to)['dirname']);
+                    write_content($to, $content, LOCK_EX);
+                } elseif ($key === 'logs') {
+                    logger($to, $content);
+                }
+
+                usleep(1000);
+            }
+        }
+    }
+
+    /**
+     * Set the output message header.
+     * 
+     * @param class-string $controller The execution controller class name. 
+     * @param string $description The output description.
+     * 
+     * @return string Return the output message header.
+     */
+    private static function setCronOutputHead(
+        string $controller, 
+        string $description, 
+        ?string $body = null
+    ): string 
+    {
+        if($body !== null){
+            return sprintf(
+                "Task Execution Output:\nController: %s\nDescription: %s\nContent Body: %s" . PHP_EOL,
+                $controller,
+                $description,
+                $body
+            );
+        }
+
+        $description = ($description === '') ? 'Cron Execution' : $description;
+        
+        return Text::card(sprintf("%s\n%s\n%s",
+            $controller,
+            $description,
+            "Current Time: " . Time::now()->format('Y-m-d H:i:s'),
+        ), 2) . PHP_EOL;  
     }
 }

@@ -185,7 +185,7 @@ final class IP
    public static function info(?string $ip = null, array $options = []): ?object
    {
       static $path = null;
-      $ip ??= static::get();
+      $ip ??= self::get();
       $path ??= root('/writeable/caches/ip/');
       $filename =  "{$path}ip_info_{$ip}.json";
       $settings = [];
@@ -265,7 +265,7 @@ final class IP
          return false;
       }
 
-      $ip ??= static::get();
+      $ip ??= self::get();
 
       if ($ip === '' || $ip === null) {
          return false;
@@ -301,7 +301,7 @@ final class IP
    */
    public static function isValid(?string $ip = null, int $version = 0): bool 
    {
-      $ip ??= static::get();
+      $ip ??= self::get();
 
       return match ($version) {
          4 => filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false,
@@ -319,13 +319,13 @@ final class IP
    */
    public static function toNumeric(?string $ip = null): string|bool
    {
-      $ip ??= static::get();
+      $ip ??= self::get();
 
-      if (static::isValid($ip, 4)) {
+      if (self::isValid($ip, 4)) {
          return (string) ip2long($ip);
       }
 
-      if (static::isValid($ip, 6)) {
+      if (self::isValid($ip, 6)) {
          return inet_pton($ip);
       }
 
@@ -341,7 +341,7 @@ final class IP
    */
    public static function toAddress(int|string|null $numeric = null): string|bool
    {
-      $numeric ??= static::toNumeric(); 
+      $numeric ??= self::toNumeric(); 
 
       if (is_numeric($numeric)) {
          // If it's a valid IPv4 numeric representation
@@ -366,9 +366,9 @@ final class IP
    */
    public static function toBinary(?string $ip = null): string|bool
    {
-      $ip ??= static::toNumeric(); 
+      $ip ??= self::toNumeric(); 
 
-      if (static::isValid($ip, 4)) {
+      if (self::isValid($ip, 4)) {
          if(($ip = ip2long($ip)) !== false){
             return str_pad(pack('N', $ip), 16, "\0", STR_PAD_LEFT);
          }
@@ -376,7 +376,7 @@ final class IP
          return false;
       } 
       
-      if (static::isValid($ip, 6)) {
+      if (self::isValid($ip, 6)) {
          return inet_pton($ip);
       }
 
@@ -425,7 +425,7 @@ final class IP
    */
    public static function isTor(string|null $ip = null, int $expiration = 2592000): bool 
    {
-      return Tor::isTor($ip ?? static::get(), $expiration);
+      return Tor::isTor($ip ?? self::get(), $expiration);
    }
 
    /**

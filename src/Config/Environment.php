@@ -57,7 +57,7 @@ final class Environment
         $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
 
         if ($value === false) {
-            $value = static::getNotationConvention($key);
+            $value = self::getNotationConvention($key);
         }
 
         return $value;

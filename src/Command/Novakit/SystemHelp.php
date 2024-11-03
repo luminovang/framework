@@ -16,24 +16,24 @@ class SystemHelp extends BaseConsole
 {
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $group = 'Help';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $name = 'help';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected array $usages = [
         'php novakit --help'
     ];
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function run(?array $options = []): int
     {
         $this->explain($options);
@@ -51,13 +51,12 @@ class SystemHelp extends BaseConsole
         }
 
         $this->helper($helps, $all);
-    
         return STATUS_SUCCESS;
     }
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function help(array $helps): int
     {
         return STATUS_ERROR;

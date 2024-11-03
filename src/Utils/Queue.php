@@ -169,6 +169,27 @@ class Queue implements Countable
         self::$isForkSupported = !self::$isFiberSupported && function_exists('pcntl_fork');
     }
 
+   /**
+     * Singleton method to run asynchronous queued tasks.
+     *
+     * @param array<int,Closure|callable|string> $jobs An array of jobs to execute. Each job can be a closure, callable, or string.
+     * @param bool $output Whether to display the result of executed jobs if they return a string (default: false).
+     * @param int $eReporting Determines how execution messages and errors are handled (default: `Queue::E_OUTPUT`).
+     *
+     * @return Queue Return new Queue instance.
+     * @example Usage Example:
+     * ```php
+     * Queue::wait([request('https://example.com/foo'),request('https://example.com/bar')])->run();
+     * ```
+     */
+    public static function wait(
+        array $jobs, 
+        bool $output = false,
+        int $eReporting = self::E_OUTPUT
+    ){
+        return new static($jobs, $output, $eReporting);
+    }
+
     /**
      * Push a new job queue, either closure, any callable or string to be executed.
      *
@@ -734,7 +755,7 @@ class Queue implements Countable
     }
 
     /**
-     * Add result to response veriable and invoke onResponse callback function.
+     * Add result to response variable and invoke onResponse callback function.
      *
      * @param mixed $result The result from executed job.
      *

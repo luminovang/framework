@@ -65,7 +65,7 @@ trait TableTrait
      * Previous types to change changes.
      * 
      * @var array<int,string> $typesToCheck
-    */
+     */
     protected static array $typesToCheck = [
         'type', 
         'length', 
@@ -85,7 +85,7 @@ trait TableTrait
 
     /**
      * @var array<string,array> $columnTypes
-    */
+     */
     protected static array $columnTypes = [
         'INT'            =>         ['restricted'      =>         false],
         'NUMBER'         =>         ['restricted'      =>         true,       'maxLength'  =>        38],
@@ -130,11 +130,11 @@ trait TableTrait
         'JSON'                 =>   ['restricted'      =>         false],
     ];
 
-     /**
+    /**
      * Supported index types.
      * 
      * @var array<int,string> $supportedIndexes
-    */
+     */
     protected static array $supportedIndexes = [
         Table::INDEX_DEFAULT,
         Table::INDEX_UNIQUE,
@@ -189,7 +189,7 @@ trait TableTrait
         }
     }
 
-   /**
+    /**
      * Validates that at least one column is defined before adding attributes or options.
      *
      * @param string|null $type Optional column type to check support.

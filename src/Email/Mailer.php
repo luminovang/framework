@@ -295,7 +295,7 @@ class Mailer
     ): self {
         try{
             $this->client->addAttachment($path, $name, $encoding, $type, $disposition);
-        }catch(Exception | MailerException $e){
+        }catch(Exception|MailerException $e){
             throw new MailerException($e->getMessage(), $e->getCode(), $e);
         }
 
@@ -320,12 +320,7 @@ class Mailer
             $this->client->setFrom($this->from, $this->fromName, $this->fromAuto);
 
             return $this->client->send();
-        }catch(Exception | MailerException $e){
-            if(PRODUCTION){
-                logger('exception', $e->getMessage());
-                return false;
-            }
-
+        }catch(Exception|MailerException $e){
             throw new MailerException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -337,7 +332,7 @@ class Mailer
      */
     private function initialize(): void
     {
-        $this->client->SMTPDebug = self::debugable() ? 3 : 0;
+        $this->client->SMTPDebug = self::isDebugable() ? 3 : 0;
         $this->client->CharSet = self::getCharset(env('smtp.charset'));
         $this->client->XMailer = Foundation::copyright();
 
@@ -369,7 +364,7 @@ class Mailer
      *
      * @return bool True if debugging is enabled, false otherwise.
      */
-    private static function debugable(): bool
+    private static function isDebugable(): bool
     {
         return !PRODUCTION && (bool) env('smtp.debug');
     }

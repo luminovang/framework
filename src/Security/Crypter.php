@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework Crypter class provides methods for encrypting and decrypting data using encryption algorithms in OpenSSL or Sodium.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -15,16 +15,13 @@ use \Luminova\Security\Encryption\OpenSSL;
 use \Luminova\Security\Encryption\Sodium;
 use \Luminova\Exceptions\EncryptionException;
 
-/**
- * The Crypter class provides methods for encrypting and decrypting data using encryption algorithms in OpenSSL or Sodium.
-*/
 final class Crypter 
 {
     /**
      * The supported cipher algorithms and their properties.
      *
      * @var array<string,array> $ciphers
-    */
+     */
     public static array $ciphers = [
         'AES-128-CBC' => ['size' => 16],
         'AES-192-CBC' => ['size' => 24],
@@ -57,7 +54,7 @@ final class Crypter
 
     /**
      * @var Encryption $config
-    */
+     */
     private static ?Encryption $config = null;
 
     /**
@@ -77,7 +74,7 @@ final class Crypter
             throw new EncryptionException('Encryption key is required. Run the command "php novakit generate:key" to generate a new application key.');
         }
 
-        $handler = static::handler();
+        $handler = self::handler();
         
         if ($handler === false) {
             throw new EncryptionException('Invalid encryption handler or OpenSSL or Sodium extension is not loaded in your environment.');
@@ -93,7 +90,7 @@ final class Crypter
         ];
 
         $method = strtoupper(self::$config->method);
-        $size = static::$ciphers[$method]['size'] ?? 16;
+        $size = self::$ciphers[$method]['size'] ?? 16;
         $encryption = $handlers[$handler];
 
         return new $encryption($key, $method, $size);
@@ -111,11 +108,11 @@ final class Crypter
     {
         $cipher = strtoupper($method);
 
-        if (!isset(static::$ciphers[$cipher])) {
+        if (!isset(self::$ciphers[$cipher])) {
             return false;
         }
 
-        return mb_strlen($key, '8bit') === static::$ciphers[$cipher]['size'];
+        return mb_strlen($key, '8bit') === self::$ciphers[$cipher]['size'];
     }
 
     /**
@@ -126,10 +123,10 @@ final class Crypter
      * @return string|bool Return the encrypted data, or false if encryption fails.
      * 
      * @throws EncryptionException Throws when invalid encryption data is passed.
-    */
+     */
     public static function encrypt(string $data): string|bool 
     {
-        $crypt = static::getInstance();
+        $crypt = self::getInstance();
 
         try {
             $crypt->setNonce();
@@ -153,7 +150,7 @@ final class Crypter
      */
     public static function decrypt(string $data): string|bool|null
     {
-        $crypt = static::getInstance();
+        $crypt = self::getInstance();
 
         try {
             $crypt->setData($data);
@@ -167,22 +164,22 @@ final class Crypter
     }
 
     /** 
-    * Generate a hash representation of user password string.
-    *
-    * @param string $password The actual password to hash.
-    * @param array|null $options Optional password hash options.
-    *
-    * @return string|false Return hashed password otherwise false on empty password. 
-    *
-    * Default Options:
-    *  ```
-    * [
-	*		'cost' => 12,
-	*		'algorithm' => PASSWORD_BCRYPT,
-    *       //'salt' => 'my_custom_salt', // You can optionally specify password salt
-	* ];
-    * ```
-    */
+     * Generate a hash representation of user password string.
+     *
+     * @param string $password The actual password to hash.
+     * @param array|null $options Optional password hash options.
+     *
+     * @return string|false Return hashed password otherwise false on empty password. 
+     *
+     * Default Options:
+     *  ```
+     * [
+	 *		'cost' => 12,
+	 *		'algorithm' => PASSWORD_BCRYPT,
+     *       //'salt' => 'my_custom_salt', // You can optionally specify password salt
+	 * ];
+     * ```
+     */
 	public static function password(string $password, ?array $options = null): string|bool
 	{
 		if($password === ''){
@@ -198,13 +195,13 @@ final class Crypter
 	}
 	
 	/** 
-	* Verify a password against it stored hash value to determine if if they match.
-	*
-	* @param string $password The password string to verify.
-	* @param string $hash The password stored hash value.
-	*
-	* @return bool Return true if password matches with the hash, otherwise false.
-	*/
+	 * Verify a password against it stored hash value to determine if if they match.
+	 *
+	 * @param string $password The password string to verify.
+	 * @param string $hash The password stored hash value.
+	 *
+	 * @return bool Return true if password matches with the hash, otherwise false.
+	 */
 	public static function verify(string $password, string $hash): bool 
 	{
 		if($password === '' || $hash === ''){
@@ -229,14 +226,14 @@ final class Crypter
      *        and 'private_key_type (default: OPENSSL_KEYTYPE_RSA)' specifies the type of the private key (e.g., OPENSSL_KEYTYPE_RSA).
      *      - For 'public' type, use key 'private_key' to specify the private key string from which to derive the public key
      *        if the key private_key is not specified, it generate a new private key to use.
-    */
+     */
     public static function generate_key(string $type = 'random', array $options = []): array|string|bool
     {
         self::initConfig();
-        $handler = static::handler();
+        $handler = self::handler();
 
         if ($type === 'random') {
-            $length = ($options['length'] ?? static::$ciphers[strtoupper(self::$config->method)]['size'] ?? 16);
+            $length = ($options['length'] ?? self::$ciphers[strtoupper(self::$config->method)]['size'] ?? 16);
 
             if($handler === 'openssl') {
                 $random = openssl_random_pseudo_bytes($length / 2);
@@ -267,7 +264,7 @@ final class Crypter
         }
 
         if ($type === 'public') {
-            $privateKey = $options['private_key'] ?? static::generate_key('private', $options);
+            $privateKey = $options['private_key'] ?? self::generate_key('private', $options);
             
             $private = openssl_pkey_get_private($privateKey);
 
@@ -294,7 +291,7 @@ final class Crypter
      * Get the encryption extension handler.
      * 
      * @return string|false Return handler name or false if not found.
-    */
+     */
     private static function handler(): string|bool
     {
         $handler = strtolower(self::$config->handler);
@@ -312,7 +309,7 @@ final class Crypter
 
     /**
      * Initialize the configuration
-    */
+     */
     private static function initConfig(): void 
     {
         self::$config ??= new Encryption();

@@ -22,10 +22,10 @@ use \Exception;
 class Storage extends Adapters
 {
     /**
-      * The filesystem instance.
-
+     * The filesystem instance.
+     * 
      * @var FileSystem|null $filesystem
-    */
+     */
     private ?FileSystem $filesystem = null;
 
     /**
@@ -39,28 +39,28 @@ class Storage extends Adapters
      * The configuration for the current adapter.
      * 
      * @var array $config
-    */
+     */
     private array $config = [];
 
     /**
      * The current working directory.
      * 
      * @var string $directory
-    */
+     */
     private string $directory = '';
 
     /**
      * Storage adapter name.
      * 
      * @var string $adapter;
-    */
+     */
     private string $adapter = '';
 
     /**
      * Last write filename
      * 
      * @var string $filename;
-    */
+     */
     private string $filename = '';
 
     /**
@@ -68,7 +68,7 @@ class Storage extends Adapters
      * 
      * @param string $adapter The storage adapter to use.
      * Supported Storage Adapters: [local, ftp, memory, aws-s3, aws-async-s3, azure-blob, google-cloud, sftp-v3, web-dev or zip-archive]
-    */
+     */
     public function __construct(string $adapter)
     {
         $this->adapter = strtolower($adapter);
@@ -90,7 +90,7 @@ class Storage extends Adapters
      * Supported Storage Adapters: [local, ftp, memory, aws-s3, aws-async-s3, azure-blob, google-cloud, sftp-v3, web-dev or zip-archive]
      * 
      * @return static The New `Storage` instance.
-    */
+     */
     public static function context(string $adapter = 'local'): static
     {
         return new static($adapter);
@@ -103,7 +103,7 @@ class Storage extends Adapters
      * 
      * @return self Return class instance.
      * @throws StorageException If an error occurs during the creation.
-    */
+     */
     public function disk(string $location): self 
     {
         if($location === '' || $location === '.' || $location === './'){
@@ -123,7 +123,7 @@ class Storage extends Adapters
      * @return self Return class instance.
      * 
      * > Shortcut to return to the main storage directory are `blank string`, `.` or `./`.
-    */
+     */
     public function chdir(string $directory = './'): self 
     {
         if($directory === '' || $directory === '.' || $directory === './' || $directory === '.\\'){
@@ -143,7 +143,7 @@ class Storage extends Adapters
      * @param string $file The file name and path to remove file.
      * 
      * @return string|null Return remote url to file otherwise null.
-    */
+     */
     public function url(string $file): ?string
     {
         $filename = $this->getDisk($file);
@@ -163,7 +163,7 @@ class Storage extends Adapters
      * @param int $minutes Expiry duration in minutes.
      * 
      * @return string|null Return remote url to file otherwise null.
-    */
+     */
     public function tempUrl(string $file, int $minutes = 1): ?string 
     {
         $filename = $this->getDisk($file);
@@ -184,7 +184,7 @@ class Storage extends Adapters
      * @param string  $link The location of the link.
      * 
      * @return bool Return true if the link was successfully created false otherwise.
-    */
+     */
     public function symbolic(string $target, string $link): bool
     {
         if($this->adapter !== 'local'){
@@ -205,7 +205,7 @@ class Storage extends Adapters
      * > This method is only available on local filesystem.
      * 
      * > Also it should only be called after method `write` has been called otherwise it will return false.
-    */
+     */
     public function toLink(): string|bool
     {
         if($this->filename === '' || $this->adapter !== 'local'){
@@ -236,7 +236,7 @@ class Storage extends Adapters
      * 
      * @return self Class instance.
      * @throws StorageException If an error occurs during the write operation.
-    */
+     */
     public function write(string $filename, mixed $contents, bool $steam = false): self 
     {
         $this->filename = $this->getDisk($filename);
@@ -262,7 +262,7 @@ class Storage extends Adapters
      * 
      * @return bool Return true if upload was successful false otherwise.
      * @throws StorageException If an error occurs during the upload operation.
-    */
+     */
     public function upload(File $file): bool
     {
         if ($file === false || !$file->valid()) {
@@ -290,7 +290,7 @@ class Storage extends Adapters
      * @return string|false Return file checksum, otherwise false.
      *
      * @throws StorageException If an error occurs during the write operation.
-    */
+     */
     public function checksum(string $path, array $options = []): string|bool
     {
         try {
@@ -341,7 +341,7 @@ class Storage extends Adapters
      * 
      * @return bool Return true if download was successful, otherwise false.
      * @throws StorageException If an error occurs during the read operation.
-    */
+     */
     public function download(string $filename, string $name = null, bool $steam = false, array $headers = []): bool
     {
         try {
@@ -471,11 +471,11 @@ class Storage extends Adapters
         $filename = $this->getDisk($filename);
 
         if($type === 'file'){
-            return static::fileExist($filename);
+            return self::fileExist($filename);
         }
 
         if($type === 'dir'){
-            return static::dirExist($filename);
+            return self::dirExist($filename);
         }
 
         throw new StorageException('Invalid argument type "' . $type . '" was specified, allowed types are "file" or "dir');
@@ -601,7 +601,7 @@ class Storage extends Adapters
      * @param string $path The path of the directory to create.
      * 
      * @throws StorageException If an error occurs during the creation.
-    */
+     */
     public function mkdir(string|null $path): void 
     {
         $path ??= '';
@@ -654,8 +654,9 @@ class Storage extends Adapters
      * Retrieves the configurations for the specified context.
      * 
      * @param string $context The storage context.
+     * 
      * @return array<int,mixed> The configurations for the context.
-    */
+     */
     private static function getConfigs(string $context = 'local'): array 
     {
         if(self::$configs === [] && ($config = configs('Storage')) !== null){
@@ -671,7 +672,7 @@ class Storage extends Adapters
      * @param string $file The name file to prepend.
      * 
      * @return string Full file location.
-    */
+     */
     private function getDisk(string $file): string 
     {
         return $this->directory . ltrim($file, TRIM_DS);

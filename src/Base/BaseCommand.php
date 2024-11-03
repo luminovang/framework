@@ -36,9 +36,9 @@ abstract class BaseCommand extends Terminal
      * Command usage instructions.
      * Keys represent the command usage, and values describe the usage.
      * 
-     * @var string|array<string|int,string> $usage
+     * @var array<string|int,string>|string $usage
      */
-    protected string|array $usage = '';
+    protected array|string $usage = '';
 
     /**
      * Available command options.
@@ -78,12 +78,14 @@ abstract class BaseCommand extends Terminal
      * @param string $method The method name to call.
      * @param array<int,mixed> $arguments The arguments to pass to the method.
      * 
-     * @return mixed The return value of the method, or null if the method doesn't exist.
+     * @return mixed Return the value of the method, or null if the method doesn't exist.
      * @ignore 
-    */
+     */
     public static function __callStatic(string $method, array $arguments): mixed
     {
-        return method_exists(static::class, $method) ? static::{$method}(...$arguments) : null;
+        return method_exists(static::class, $method) 
+            ? static::{$method}(...$arguments) 
+            : null;
     }
 
     /**
@@ -100,10 +102,10 @@ abstract class BaseCommand extends Terminal
      *      - examples: Command usage examples.
      * 
      * @return int Return STATUS_SUCCESS when custom help is implemented, STATUS_ERROR when using default implementation.
-    */
+     */
     abstract public function help(array $helps): int;
 
-     /**
+    /**
      * onCreate method that gets triggered on object creation, 
      * designed to be overridden in subclasses for custom initialization.
      * 
@@ -118,7 +120,7 @@ abstract class BaseCommand extends Terminal
      * 
      * @return mixed The property value, or null if it doesn't exist.
      * @ignore
-    */
+     */
     public function __get(string $key): mixed
     {
         return $this->{$key} ?? null;
@@ -131,7 +133,7 @@ abstract class BaseCommand extends Terminal
      * 
      * @return bool True if the property exists, otherwise false.
      * @ignore
-    */
+     */
     public function __isset(string $key): bool
     {
         return property_exists($this, $key);

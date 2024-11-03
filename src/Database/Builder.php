@@ -285,7 +285,7 @@ final class Builder extends Connection
      */
     public static function getInstance(): static 
     {
-        return static::$instance ??= new static();
+        return self::$instance ??= new static();
     }
 
     /**
@@ -552,7 +552,7 @@ final class Builder extends Connection
      */
     public function where(string $column, string $operator, mixed $value): self
     {
-        $placeholder = static::trimPlaceholder($column);
+        $placeholder = self::trimPlaceholder($column);
 
         $this->whereCondition = [
             'type' => 'WHERE', 
@@ -1430,7 +1430,7 @@ final class Builder extends Connection
             );
         }
 
-        $updateColumns = static::buildPlaceholder($columns, true);
+        $updateColumns = self::buildPlaceholder($columns, true);
         $updateQuery = "UPDATE {$this->tableName} SET {$updateColumns}";
         $updateQuery .= $this->whereCondition['query'];
  
@@ -1456,7 +1456,7 @@ final class Builder extends Connection
                 }
 
                 $value = is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
-                $this->handler->bind(static::trimPlaceholder($key), $value);
+                $this->handler->bind(self::trimPlaceholder($key), $value);
             }
             
             $this->handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
@@ -1549,7 +1549,7 @@ final class Builder extends Connection
                     );
                 }
 
-                $this->handler->bind(static::trimPlaceholder($key), $value);
+                $this->handler->bind(self::trimPlaceholder($key), $value);
             } 
             $this->handler->execute();
         }
@@ -1928,7 +1928,7 @@ final class Builder extends Connection
     {
         $inserts = '';
         foreach ($values as $row) {
-            $inserts .= "(" . static::quotedValues($row) . "), ";
+            $inserts .= "(" . self::quotedValues($row) . "), ";
         }
 
         $keys = implode(', ', $columns);
@@ -1974,7 +1974,7 @@ final class Builder extends Connection
         foreach ($values as $row) {
             foreach ($row as $key => $value) {
                 $value = is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
-                $this->handler->bind(static::trimPlaceholder($key), $value);
+                $this->handler->bind(self::trimPlaceholder($key), $value);
             }
 
             $this->handler->execute();
@@ -2055,7 +2055,7 @@ final class Builder extends Connection
         $placeholder = $isBided 
             ? ($condition['type'] === 'AGAINST' 
                 ? ":match_column_{$index}" 
-                : static::trimPlaceholder($column))
+                : self::trimPlaceholder($column))
             : addslashes($condition['value']);
 
         return match ($condition['type']) {
@@ -2064,7 +2064,7 @@ final class Builder extends Connection
             'IN' => " {$prefix}$column IN (" . (
                 $isBided 
                 ? rtrim(self::bindInConditions($condition['values'], $column), ', ')
-                : static::quotedValues($condition['values'])
+                : self::quotedValues($condition['values'])
             ) . ')',
             'AGAINST' => " {$prefix}MATCH($column) AGAINST ({$placeholder} {$operator})",
             'IN_SET' => self::insetQuery($condition, $prefix, $operator),
@@ -2142,7 +2142,7 @@ final class Builder extends Connection
                     }
                 break;
                 default:
-                    $handler->bind(static::trimPlaceholder($bindings['column']), $bindings['value']);
+                    $handler->bind(self::trimPlaceholder($bindings['column']), $bindings['value']);
                 break;
             }
         }
@@ -2179,7 +2179,7 @@ final class Builder extends Connection
         foreach ($conditions as $idx => $condition) {
             $column = key($condition);
             $operator = $condition[$column]['operator'] ?? '=';
-            $placeholder = $isBided ? static::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1)) : addslashes($condition[$column]['value']);
+            $placeholder = $isBided ? self::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1)) : addslashes($condition[$column]['value']);
 
             if ($idx > 0) {
                 $group .= " {$type} ";
@@ -2241,7 +2241,7 @@ final class Builder extends Connection
     {
         $placeholders = '';
         foreach ($values as $idx => $value) {
-            $placeholder = static::trimPlaceholder("{$column}_in_{$idx}");
+            $placeholder = self::trimPlaceholder("{$column}_in_{$idx}");
             if($handler instanceof DatabaseInterface){
                 $handler->bind($placeholder, $value);
             }else{
@@ -2272,7 +2272,7 @@ final class Builder extends Connection
         $count = 0;
         foreach ($bindings as $idx => $bind) {
             $column = key($bind);
-            $placeholder = static::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1));
+            $placeholder = self::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1));
             $handler->bind($placeholder, $bind[$column]['value']);
             $count++;
         }
@@ -2322,7 +2322,7 @@ final class Builder extends Connection
                         self::bindDebugGroupConditions($bindings['Y'], $index, $params, $last);
                     break;
                     default: 
-                        $placeholder = static::trimPlaceholder($bindings['column']);
+                        $placeholder = self::trimPlaceholder($bindings['column']);
                         $params[] = ":$placeholder = " . $bindings['value'];
                     break;
                 }
@@ -2382,7 +2382,7 @@ final class Builder extends Connection
         $count = 0;
         foreach ($bindings as $idx => $bind) {
             $column = key($bind);
-            $placeholder = static::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1));
+            $placeholder = self::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1));
             $params[] = "{$placeholder} = " . $bind[$column]['value'];
             $count++;
         }

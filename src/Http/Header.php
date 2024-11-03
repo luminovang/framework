@@ -37,7 +37,7 @@ class Header implements Countable
      */
     public function __construct(?array $variables = null)
     {
-        self::$variables = $variables ?? static::getHeaders();
+        self::$variables = $variables ?? self::getHeaders();
     }
 
     /**
@@ -223,7 +223,7 @@ class Header implements Countable
             $headers['Retry-After'] = $retry;
         }
 
-        static::validate($headers, $status);
+        self::validate($headers, $status);
     }
 
     /**
@@ -242,7 +242,7 @@ class Header implements Countable
         }
 
         if (isset($headers['default_headers'])) {
-            $headers = array_replace(static::getSystemHeaders(), $headers);
+            $headers = array_replace(self::getSystemHeaders(), $headers);
         }
 
         if(self::isValidRestFullHeaders($headers)){
@@ -268,7 +268,7 @@ class Header implements Countable
         }
 
         self::$config ??= new Apis();
-        $origin = static::server('HTTP_ORIGIN');
+        $origin = self::server('HTTP_ORIGIN');
 
         if(!$origin && self::$config->forbidEmptyOrigin){
             self::terminateRequest(400, 'Invalid request: missing origin.', 'forbidEmptyOrigin');
@@ -306,7 +306,8 @@ class Header implements Countable
      *
      * @param array<string,mixed> $headers An associative array of headers to send.
      * @param bool $ifNotSent Weather to send headers if headers is not already sent (default: true).
-     * @param bool $charset Weather to append default charset from env to `Content-Type` if it doesn't contain it (default: false).
+     * @param bool $charset Weather to append default charset from env to `Content-Type` 
+     *              if it doesn't contain it (default: false).
      * 
      * @return void
      */
@@ -353,7 +354,7 @@ class Header implements Countable
     {
         $charset ??= env('app.charset', 'utf-8');
 
-        return static::getContentTypes($extension, 0) . ($charset === '' ?: '; charset=' . $charset);
+        return self::getContentTypes($extension, 0) . ($charset === '' ?: '; charset=' . $charset);
     }
 
     /**

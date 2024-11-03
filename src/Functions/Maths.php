@@ -185,7 +185,7 @@ final class Maths
 		}
 
         if ($network === 'USDT') {
-			return static::money($amount);
+			return self::money($amount);
 		}
 
         return number_format((float) $amount, (self::$cryptos[$network] ?? 8), '.', '') . ' ' . $network;

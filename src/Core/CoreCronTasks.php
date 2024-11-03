@@ -13,7 +13,7 @@ use \Luminova\Time\Time;
 use \Luminova\Time\CronInterval;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Exceptions\RuntimeException;
-use \Closure;
+use \Luminova\Exceptions\InvalidArgumentException;
 
 abstract class CoreCronTasks
 {
@@ -25,14 +25,14 @@ abstract class CoreCronTasks
     protected static array $controllers = [];
 
     /**
-     * Path to store cron job configuration files.
+     * Path to store cron job configuration lock files.
      *
      * @var string|null $path
      */
     protected static ?string $path = null;
 
     /**
-     * The filename to store cron job configuration files.
+     * The filename to store cron job configuration lock files.
      *
      * @var string|null $filename
      */
@@ -46,17 +46,47 @@ abstract class CoreCronTasks
     protected static ?string $timezone = null;
 
     /**
-     * Initialize constructor with optional configuration.
-     *
-     * @param string|null $path Path to store cron job configuration files.
-     * @param string|null $filename The filename for lock file.
+     * Supported Log levels.
+     * 
+     * @var array $logLevels
      */
-    public function __construct(?string $path = null, ?string $filename = null)
+    private static $logLevels = [
+        'emergency',
+        'alert',
+        'critical',
+        'error',
+        'warning',
+        'notice',
+        'info',
+        'debug',
+        'exception',
+        'php_errors'
+    ];
+
+    /**
+     * Constructs the Cron instance with optional configuration settings.
+     * 
+     * To override the default cron `$path`, set the property before invoking the parent constructor.
+     * 
+     * @example
+     * In your cron configuration class:
+     * ```php
+     * class Cron extends Luminova\Core\CoreCronTasks
+     * {
+     *     public function __construct()
+     *     {
+     *         self::$path = 'path/to/cron/';
+     *         parent::__construct();
+     *     }
+     * }
+     * ```
+     */
+    public function __construct()
     {
-        self::$path = $path ?? root('/writeable/cron/');
-        self::$filename = $filename ?? 'schedules.json';
-        self::$timezone = env('app.timezone', date_default_timezone_get());
-        make_dir(self::$path);
+        self::$path ??= root('/writeable/cron/');
+        self::$filename ??='schedules.json';
+        self::$timezone ??= env('app.timezone', date_default_timezone_get());
+        make_dir(self::getPath());
     }
 
     /**
@@ -86,14 +116,13 @@ abstract class CoreCronTasks
     /**
      * Set the callback for the cron execution completion.
      *
-     * @param Closure $onComplete The callback function to execute on completion.
-     *      - Closure with one array parameter of task details.
+     * @param callable $onComplete The callback function to execute on completion.
      * 
      * @return self Return cron class instance.
      */
-    protected function onComplete(Closure $onComplete): self
+    protected function onComplete(callable $onComplete): self
     {
-        self::$controllers[count(self::$controllers) - 1]['onComplete'] = $onComplete;
+        self::$controllers[self::getId()]['onComplete'] = $onComplete;
 
         return $this;
     }
@@ -101,14 +130,13 @@ abstract class CoreCronTasks
     /**
      * Set a callback for the cron execution failure.
      *
-     * @param Closure $onError The callback function to execute on failure.
-     *      - Closure with one array parameter of task details.
+     * @param callable $onError The callback function to execute on failure.
      * 
      * @return self Return cron class instance.
      */
-    protected function onFailure(Closure $onError): self
+    protected function onFailure(callable $onError): self
     {
-        self::$controllers[count(self::$controllers) - 1]['onFailure'] = $onError;
+        self::$controllers[self::getId()]['onFailure'] = $onError;
 
         return $this;
     }
@@ -122,7 +150,7 @@ abstract class CoreCronTasks
      */
     protected function pingOnComplete(string $url): self
     {
-        self::$controllers[count(self::$controllers) - 1]['pingOnComplete'] = $url;
+        self::$controllers[self::getId()]['pingOnComplete'] = $url;
 
         return $this;
     }
@@ -136,7 +164,7 @@ abstract class CoreCronTasks
      */
     protected function pingOnFailure(string $url): self
     {
-        self::$controllers[count(self::$controllers) - 1]['pingOnFailure'] = $url;
+        self::$controllers[self::getId()]['pingOnFailure'] = $url;
 
         return $this;
     }
@@ -145,27 +173,50 @@ abstract class CoreCronTasks
      * Set the log path for the cron job execution response.
      *
      * @param string $level The log level to use while logging execution response.
-     * Log levels [emergency, alert, critical, error, warning, notice, info, debug, exception, php_errors]
+     * 
+     * **Supported Log levels:**
+     * [emergency, alert, critical, error, warning, notice, info, debug, exception, php_errors]
      * 
      * @return self Return cron class instance.
+     * @throws InvalidArgumentException If invalid or unsupported log level is provided.
      */
     protected function log(string $level): self
     {
-        self::$controllers[count(self::$controllers) - 1]['log'] = $level;
+        if (!in_array($level, self::$logLevels, true)) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid or unsupported log level: "%s" provided in %s(string $level). Supported log levels are: [%s]',
+                $level,
+                __FUNCTION__,
+                implode(', ', self::$logLevels)
+            ));
+        }
+
+        self::$controllers[self::getId()]['log'] = $level;
 
         return $this;
     }
 
     /**
-     * Set the output file path for errors that may occur during execution.
+     * Set the output filepath for execution messages and errors that may occur during executions.
      *
-     * @param string $path The output full filename.
+     * @param string $filepath The output filepath (e.g, `/path/to/writable/cron/err.txt`).
      * 
      * @return self Return cron class instance.
+     * @throws InvalidArgumentException If invalid or unsupported file path is provided.
+     * 
+     * > **Note:** Latest execution outputs overrides the previous outputs.
      */
-    protected function output(string $path): self
+    protected function output(string $filepath): self
     {
-        self::$controllers[count(self::$controllers) - 1]['output'] = $path;
+        if (preg_match('/^(?!.*[<>:"|?*])(?!.*\/\/)[a-zA-Z0-9_\/\.\-]+$/', $filepath) !== 1) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid or unsupported file path: "%s" provided in %s(). A valid file path is required.',
+                $filepath,
+                __FUNCTION__
+            ));
+        }     
+
+        self::$controllers[self::getId()]['output'] = $filepath;
 
         return $this;
     }
@@ -179,7 +230,7 @@ abstract class CoreCronTasks
      */
     protected function description(string $description): self
     {
-        self::$controllers[count(self::$controllers) - 1]['description'] = $description;
+        self::$controllers[self::getId()]['description'] = $description;
 
         return $this;
     }
@@ -194,19 +245,19 @@ abstract class CoreCronTasks
      */
     public final function create(bool $force = false): bool
     {
-        if(!$force && file_exists(self::$path . self::$filename)){
+        if(!$force && file_exists(self::getPath() . self::$filename)){
             return true;
         }
 
         $this->schedule();
-        $now = Time::now(self::$timezone);
+        $now = Time::now(self::$timezone)->getTimestamp();
         $commands = [];
         
         foreach(self::$controllers as $command){
             $commands[$command['controller']] = [
                 'description' => $command['description'] ?? '',
                 'controller' => $command['controller'],
-                'lastExecutionDate' => $now->getTimestamp(),
+                'lastExecutionDate' => $now,
                 'lastRunCompleted' => true,
                 'completed' => 0,
                 'failures' => 0,
@@ -221,7 +272,7 @@ abstract class CoreCronTasks
             ];
         }
 
-        return write_content(self::$path . self::$filename, json_encode($commands, JSON_PRETTY_PRINT));
+        return write_content(self::getPath() . self::$filename, json_encode($commands, JSON_PRETTY_PRINT));
     }
 
     /**
@@ -340,7 +391,7 @@ abstract class CoreCronTasks
     */
     public final function update(array $tasks): bool
     {
-        return write_content(self::$path . self::$filename, json_encode($tasks, JSON_PRETTY_PRINT));
+        return write_content(self::getPath() . self::$filename, json_encode($tasks, JSON_PRETTY_PRINT));
     }
 
     /**
@@ -370,7 +421,7 @@ abstract class CoreCronTasks
      */
     public final static function getTaskFromFile(): array|bool
     {
-        if(file_exists($file = self::$path . self::$filename)){
+        if(file_exists($file = self::getPath() . self::$filename)){
             $content = get_content($file);
             if($content !== false){
                 return json_decode($content, true);
@@ -397,12 +448,33 @@ abstract class CoreCronTasks
             $format = "{$format}{$value}{$unit}";
         }
       
-        self::$controllers[count(self::$controllers) - 1]['interval'] = [
+        self::$controllers[self::getId()]['interval'] = [
             'timezone' => self::$timezone,
             'format' => $format
         ];
 
         return $this;
     }
-}
 
+    /**
+     * Get the cron task lock directory.
+     * 
+     * @return string Return the cron tasks directory.
+     */
+    private static function getPath(): string
+    {
+        return rtrim(self::$path, TRIM_DS) . DIRECTORY_SEPARATOR;
+    }
+
+    /**
+     * Get the last task service index id.
+     * 
+     * @return int Return the index id of last added task.
+     */
+    protected static final function getId(): int
+    {
+        return (self::$controllers === []) 
+            ? 0 
+            : (array_key_last(self::$controllers) ?? 0);
+    }
+}

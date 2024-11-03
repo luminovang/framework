@@ -20,22 +20,22 @@ class Sodium implements EncryptionInterface
 {
     /**
      * @var string $key
-    */
+     */
     private string $key = '';
 
     /**
      * @var string $message
-    */
+     */
     private string $message = '';
 
     /**
      * @var string $nonce
-    */
+     */
     private string $nonce = '';
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function __construct(?string $key = null, ?string $method = null, int $size = 16)
     {
         if ($key !== null) {
@@ -160,7 +160,7 @@ class Sodium implements EncryptionInterface
      * Validate encryption parameters.
      *
      * @return bool True if parameters are valid, false otherwise.
-    */
+     */
     private function valid(): bool
     {
         return $this->message !== '' && $this->key !== '';
@@ -168,7 +168,7 @@ class Sodium implements EncryptionInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function free(): void 
     {
         try{

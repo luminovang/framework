@@ -85,9 +85,9 @@ class UserAgent implements Stringable
     /**
      * The platform/operating system version.
      *
-     * @var string $platformversion
+     * @var string $platform_version
      */
-    protected string $platformversion = '';
+    protected string $platform_version = '';
 
     /**
      * The name of the robot if it's a known robot.
@@ -159,6 +159,10 @@ class UserAgent implements Stringable
     {
         $method = strtolower(substr($name, 3));
 
+        if($method === 'platformversion'){
+            $method = 'platform_version';
+        }
+        
         return $this->{$method} ?? null;
     }
 
@@ -221,7 +225,7 @@ class UserAgent implements Stringable
      */
     public function replace(string $userAgent): void
     {
-        $agent = static::parse($userAgent, false);
+        $agent = self::parse($userAgent, false);
         $this->useragent = $userAgent;
 
         if($agent !== false){
@@ -229,7 +233,7 @@ class UserAgent implements Stringable
             $this->platform = $agent->platform;
             $this->version = $agent->version;
             $this->browser = $agent->browser;
-            $this->platformversion = $agent->platform_version;
+            $this->platform_version = $agent->platform_version;
             $this->isRobot();
             $this->isMobile();
             return;
@@ -437,6 +441,6 @@ class UserAgent implements Stringable
         $this->mobile = '';
         $this->robot = '';
         $this->platform = '';
-        $this->platformversion = '';
+        $this->platform_version = '';
     }
 }

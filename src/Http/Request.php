@@ -454,7 +454,7 @@ final class Request implements HttpRequestInterface, Stringable
         $error = 'Invalid Hostname "%s".';
         // Remove any unwanted characters from the hostname
         if($hostname && preg_replace('/(?:^\[)?[a-zA-Z0-9-:\]_]+\.?/', '', $hostname) === ''){
-            if(static::isTrusted($hostname, 'hostname')){
+            if(self::isTrusted($hostname, 'hostname')){
                 return $hostname;
             }
 
@@ -487,7 +487,7 @@ final class Request implements HttpRequestInterface, Stringable
         $domain = parse_url($origin, PHP_URL_HOST);
         return ($domain === '')
             ? null 
-            : (static::isTrusted($domain, 'origin') ? $domain : null);
+            : (self::isTrusted($domain, 'origin') ? $domain : null);
     }
 
     /**
@@ -609,7 +609,7 @@ final class Request implements HttpRequestInterface, Stringable
      */
     public function isTrustedProxy(): bool
     {
-        return static::isTrusted($this->server->get('REMOTE_ADDR', ''), 'proxy');
+        return self::isTrusted($this->server->get('REMOTE_ADDR', ''), 'proxy');
     }
 
     /**
@@ -631,7 +631,7 @@ final class Request implements HttpRequestInterface, Stringable
         $domain = parse_url($origin, PHP_URL_HOST);
         return ($domain === '') 
             ? false 
-            : static::isTrusted($domain, 'origin');
+            : self::isTrusted($domain, 'origin');
     }
 
     /**
@@ -766,6 +766,7 @@ final class Request implements HttpRequestInterface, Stringable
             $type = $file['type'] ?? null;
             $error = $file['error'] ?? UPLOAD_ERR_OK;
             $content = $file['content'] ?? null;
+            $path = $file['full_path'] ?? null; // Js Chunk Upload library
         } else {
             $name = $file['name'][$index] ?? null;
             $temp = $file['tmp_name'][$index] ?? null;
@@ -773,16 +774,18 @@ final class Request implements HttpRequestInterface, Stringable
             $type = $file['type'][$index] ?? null;
             $error = $file['error'][$index] ?? UPLOAD_ERR_OK;
             $content = $file['content'][$index] ?? null;
+            $path = $file['full_path'][$index] ?? null;
         }
 
         $error = ($error === UPLOAD_ERR_OK && $content === null && $temp === null) 
             ? UPLOAD_ERR_NO_FILE
             : $error;
 
+        $isBlob = ($content !== null || $this->isBlobUpload($temp, $type, $name, $path));
         $type ??= get_mime($temp);
         $name ??= uniqid('file_');
         $extension = pathinfo($name, PATHINFO_EXTENSION);
-        $extension = strtolower(($extension === '' && $type) ? (explode('/', $type, 2)[1] ?? '') : $extension);
+        $extension = strtolower((!$extension && $type) ? (explode('/', $type, 2)[1] ?? '') : $extension);
 
         return new File(
             $index ?? 0,
@@ -792,7 +795,35 @@ final class Request implements HttpRequestInterface, Stringable
             $extension ?: '',
             $temp,
             $error,
-            $content
+            $content,
+            $isBlob
+        );
+    }
+
+    /**
+     * Determine if the file was uploaded in chunks or is considered a BLOB.
+     *
+     * Chunked uploads commonly have a file name like 'blob', a MIME type of 'application/octet-stream',
+     * and still a temporary file path ('tmp_name'). If these conditions are met, the file may be part of
+     * a chunked upload or treated as a BLOB.
+     *
+     * @param string|null $temp The temporary file path.
+     * @param string|null $type The MIME type of the file.
+     * @param string|null $name The original file name.
+     * @param string|null $full_path The full path of the uploaded file, if provided.
+     * 
+     * @return bool Returns true if the file appears to be a chunked or BLOB upload, otherwise false.
+     */
+    private function isBlobUpload(?string $temp, ?string $type, ?string $name, ?string $full_path = null): bool
+    {
+        return (
+            !$type ||
+            (
+                (!$name || $name === 'blob') && 
+                (!$full_path || $full_path === 'blob') && 
+                $type === 'application/octet-stream' && 
+                $temp !== null
+            )
         );
     }
 

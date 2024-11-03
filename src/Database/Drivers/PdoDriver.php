@@ -499,7 +499,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function bind(string $param, mixed $value, int|null $type = null): self 
     {
-        $this->stmt->bindValue($param, $value, static::getType($value));
+        $this->stmt->bindValue($param, $value, self::getType($value));
         $this->parseParams = true;
 
         return $this;
@@ -510,7 +510,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function param(string $param, mixed &$value, int|null $type = null): self 
     {
-        $this->stmt->bindParam($param, $value, static::getType($value));
+        $this->stmt->bindParam($param, $value, self::getType($value));
         $this->parseParams = true;
         
         return $this;

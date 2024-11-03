@@ -25,35 +25,35 @@ class Time extends DateTimeImmutable implements Stringable
      * Timezone instance.
      * 
      * @var DateTimeZone
-    */
+     */
     private ?DateTimeZone $timezone = null;
 
     /**
      * Default datetime format to use when displaying datetime string.
      *
      * @var string $stringFormat
-    */
+     */
     private static string $stringFormat = 'Y-M-D H:i:s';
 
     /**
      * Default datetime format to use.
      *
      * @var string $defaultFormat
-    */
+     */
     private static string $defaultFormat = 'Y-m-d H:i:s';
 
     /**
      * Regular expression pattern for relative time keywords.
      * 
      * @var string $relativePattern 
-    */
+     */
     private static string $relativePattern = '/this|next|last|tomorrow|yesterday|midnight|today|[+-]|first|last|ago/i';
 
     /**
      * Regular expression pattern for relative time ago keywords.
      * 
      * @var string $agoRelativePattern 
-    */
+     */
     private static string $agoRelativePattern = '/^\d+\s+(second|minute|hour|day|week|month|year|decade)s?\s+ago$/i';
 
     /**
@@ -63,15 +63,15 @@ class Time extends DateTimeImmutable implements Stringable
      * @param DateTimeZone|string|null $timezone Optional timezone.
      *
      * @throws DateTimeException Throws if error occurs during DateTimeImmutable object construction.
-    */
+     */
     public function __construct(?string $datetime = null, DateTimeZone|string|null $timezone = null)
     {
         $datetime ??= '';
         $timezone ??= date_default_timezone_get();
-        $this->timezone = static::timezone($timezone);
+        $this->timezone = self::timezone($timezone);
        
-        if ($datetime !== '' && !static::isAbsolute($datetime)) {
-           $datetime = static::fromRelative($datetime, $this->timezone);
+        if ($datetime !== '' && !self::isAbsolute($datetime)) {
+           $datetime = self::fromRelative($datetime, $this->timezone);
         }
 
         try {
@@ -87,7 +87,7 @@ class Time extends DateTimeImmutable implements Stringable
      * @param DateTimeZone|string $timezone Optional timezone to associate with the current DateTime instance.
      *
      * @return DateTimeZone The timezone instance.
-    */
+     */
     public static function timezone(DateTimeZone|string $timezone): DateTimeZone
     {
         return ($timezone instanceof DateTimeZone) ? $timezone : new DateTimeZone($timezone);
@@ -157,10 +157,10 @@ class Time extends DateTimeImmutable implements Stringable
      *
      * @return self Return new DateTimeImmutable object.
      * @throws DateTimeException Throws if any error occurred.
-    */
+     */
     public function setTimezone(DateTimeZone|string $timezone): self
     {
-        $timezone = static::timezone($timezone);
+        $timezone = self::timezone($timezone);
 
         return self::fromInstance($this->toDatetime()->setTimezone($timezone));
     }
@@ -280,17 +280,17 @@ class Time extends DateTimeImmutable implements Stringable
      * @param DateTimeZone|string|null $timezone Optional timezone string.
      * 
      * @return string Returns datetime string.
-    */
+     */
     public static function datetime(DateTimeZone|string|null $timezone = 'UTC'): string
     {
-        return static::now($timezone)->format(self::$defaultFormat);
+        return self::now($timezone)->format(self::$defaultFormat);
     }
 
     /**
      * Determine if the current time is already in daylight savings.
      * 
      * @return bool Return true if the current time is already in daylight saving, false otherwise.
-    */
+     */
     public function isDaylight(): bool
     {
         return $this->format('I') === '1'; 
@@ -300,7 +300,7 @@ class Time extends DateTimeImmutable implements Stringable
      * Check whether the passed timezone is the same as the application timezone.
      * 
      * @return bool true if the passed timezone is the same as the local timezone false otherwise.
-    */
+     */
     public function isSystemTimezone(): bool
     {
         return date_default_timezone_get() === $this->timezone->getName();
@@ -310,7 +310,7 @@ class Time extends DateTimeImmutable implements Stringable
      * Returns boolean whether object is in UTC.
      * 
      * @return bool Whether the timezone offset is UTC.
-    */
+     */
     public function isUtc(): bool
     {
         return $this->getOffset() === 0;
@@ -320,13 +320,13 @@ class Time extends DateTimeImmutable implements Stringable
      * Returns the name of the current timezone.
      * 
      * @return string The name of the current timezone.
-    */
+     */
     public function getTimezoneName(): string
     {
         return $this->timezone->getName();
     }
 
-     /**
+    /**
      * Returns Datetime instance of UTC timezone.
      *
      * @param DateTimeInterface|Time|string $datetime Datetime object or string
@@ -340,7 +340,7 @@ class Time extends DateTimeImmutable implements Stringable
             $datetime = $datetime->toDatetime();
         } elseif (is_string($datetime)) {
             $timezone ??= $this->timezone;
-            $datetime = new DateTime($datetime, static::timezone($timezone));
+            $datetime = new DateTime($datetime, self::timezone($timezone));
         }
 
         if ($datetime instanceof DateTime || $datetime instanceof DateTimeImmutable) {
@@ -351,12 +351,12 @@ class Time extends DateTimeImmutable implements Stringable
     }
 
     /**
-     * Returns a formatted datetime to your prefered format.
+     * Returns a formatted datetime to your preferred format.
      * 
-     * @param null|string $format Formt to return (default: `YYYY-MM-DD HH:MM:SS`).
+     * @param null|string $format Format to return (default: `YYYY-MM-DD HH:MM:SS`).
      * 
      * @return false|string Formatted datetime string otherwise false.
-    */
+     */
     public function toFormat(?string $format = null): bool|string
     {
         $format ??= $this->stringFormat;
@@ -368,7 +368,7 @@ class Time extends DateTimeImmutable implements Stringable
      * Returns a formatted time string (ex. 17:17:17).
      *
      * @return string Formatted time string otherwise false.
-    */
+     */
     public function toTime(): bool|string
     {
         return $this->toFormat('HH:mm:ss');
@@ -442,7 +442,7 @@ class Time extends DateTimeImmutable implements Stringable
         DateTimeZone|string|null $timezone = null
     ): self
     {
-        return static::createFrom($year, $month, $day, null, null, null, $timezone);
+        return self::createFrom($year, $month, $day, null, null, null, $timezone);
     }
 
     /**
@@ -463,13 +463,13 @@ class Time extends DateTimeImmutable implements Stringable
         DateTimeZone|string|null $timezone = null
     ): self
     {
-        return static::createFrom(null, null, null, $hour, $minutes, $seconds, $timezone);
+        return self::createFrom(null, null, null, $hour, $minutes, $seconds, $timezone);
     }
 
     /**
      * Returns a new datetime instance from a relative time format.
      *
-     * @param string $datetime Rerative time string (2 days ago, -3 years etc..).
+     * @param string $datetime Relative time string (2 days ago, -3 years etc..).
      * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      *
      * @return string Return formatted DateTime string.
@@ -477,9 +477,9 @@ class Time extends DateTimeImmutable implements Stringable
      */
     public static function fromRelative(string $datetime, DateTimeZone|string|null $timezone = null): string
     {
-        $timezone = is_string($timezone) ? static::timezone($timezone): $timezone;
-        if(static::isAgo($datetime)){
-            $now = static::agoToDatetime($datetime, $timezone);
+        $timezone = is_string($timezone) ? self::timezone($timezone): $timezone;
+        if(self::isAgo($datetime)){
+            $now = self::agoToDatetime($datetime, $timezone);
         }else{
             if(self::isRelative($datetime)){
                 $now = new DateTime('now');
@@ -557,7 +557,7 @@ class Time extends DateTimeImmutable implements Stringable
      *
      * @return DateTimeImmutable|false  Returns new DateTimeImmutable false otherwise
      * @throws DateTimeException Throws if any error occurred.
-    */
+     */
     public static function fromFormat(
         string $format, 
         string $datetime, 
@@ -576,7 +576,7 @@ class Time extends DateTimeImmutable implements Stringable
      * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      * 
      * @return array<int,mixed> $calendar Calendar values.
-    */
+     */
     public static function calendar(
         ?string $month = null, 
         ?string $year = null, 
@@ -614,7 +614,7 @@ class Time extends DateTimeImmutable implements Stringable
 	 * @param string $format The format for the returned dates (default is 'd-M-Y').
 	 * 
 	 * @return array<int,string> An array of dates within the specified month.
-	*/
+	 */
 	public static function days(
         string|int|null $month = null, 
         string|int|null $year = null, 
@@ -640,7 +640,7 @@ class Time extends DateTimeImmutable implements Stringable
 	 * @param string $format The format for the returned dates (default is "M").
 	 * 
 	 * @return array<int,string> An array of month within the specified year.
-	*/
+	 */
     public static function months(string $format = 'M'): array 
     {
         $months = [];
@@ -659,7 +659,7 @@ class Time extends DateTimeImmutable implements Stringable
      * @param int|string|null $end Ending year. Defaults to the current year minus 3 years if not provided.
      * 
      * @return array<int, int> List of years.
-    */
+     */
     public static function years(int|string|null $start = null, int|string|null $end = null): array 
     {
         $start ??= date('Y');
@@ -708,7 +708,7 @@ class Time extends DateTimeImmutable implements Stringable
      * @return string|false A string representing the time elapsed since the given datetime, in human-readable format.
      *
      * > If a string is provided, it must be a valid datetime string or time string.
-    */
+     */
     public static function ago(string|int|Time|DateTimeImmutable $datetime, bool $full = false, DateTimeZone|string|null $timezone = null): string|bool
     {
         if (is_string($datetime)) {
@@ -716,14 +716,14 @@ class Time extends DateTimeImmutable implements Stringable
         }
 
         if (is_numeric($datetime)) {
-            $datetime = static::parse("@$datetime", $timezone)->format(self::$stringFormat);
+            $datetime = self::parse("@$datetime", $timezone)->format(self::$stringFormat);
         }
 
         if (!$datetime instanceof Time && !$datetime instanceof DateTime && !$datetime instanceof DateTimeImmutable) {
             return false;
         }
 
-        $now = static::now($timezone);
+        $now = self::now($timezone);
         $elapsed = $now->diff($datetime);
         $week = (int) floor($elapsed->d / 7);
         $elapsed->d -= $week * 7;
@@ -768,11 +768,11 @@ class Time extends DateTimeImmutable implements Stringable
      * 
      * @return DateTime Return new datetime instance.
      * @throws DateTimeException If invalid time unit was found in the ago format.
-    */
+     */
     public static function agoToDatetime(string $ago, DateTimeZone|string|null $timezone = null): DateTime
     {
         $ago = strtolower(trim($ago));
-        $timezone = static::timezone($timezone);
+        $timezone = self::timezone($timezone);
 
         if ($ago === 'just now') {
             return (new DateTime('now', $timezone))->setTimezone($timezone);
@@ -827,9 +827,9 @@ class Time extends DateTimeImmutable implements Stringable
                 return false;
             }
 
-            $datetime = static::parse("@$datetime", $timezone);
+            $datetime = self::parse("@$datetime", $timezone);
         } elseif(!($datetime instanceof Time || $datetime instanceof DateTime || $datetime instanceof DateTimeImmutable)) {
-            $datetime = static::fromFormat(self::$defaultFormat, $datetime, $timezone);
+            $datetime = self::fromFormat(self::$defaultFormat, $datetime, $timezone);
         }
 
         $timestamp = $datetime->getTimestamp();
@@ -838,7 +838,7 @@ class Time extends DateTimeImmutable implements Stringable
             throw new DateTimeException('Invalid datetime "' . $datetime . '" specified');
         }
         
-        $interval = static::now($timezone)->diff($datetime);
+        $interval = self::now($timezone)->diff($datetime);
         $difference = $interval->days * 24 * 60 + $interval->h * 60 + $interval->i;
         
 		return $difference >= $minutes;
@@ -850,7 +850,7 @@ class Time extends DateTimeImmutable implements Stringable
      * @param string|int $day The day for which to determine the suffix.
      * 
      * @return string The day with its appropriate suffix.
-    */
+     */
     public static function suffix(string|int $day): string 
     {
         $day = is_string($day) ? (int) $day : $day;
@@ -879,7 +879,7 @@ class Time extends DateTimeImmutable implements Stringable
      * @param string $datetime The datetime string to check.
      * 
      * @return bool True if the string contains relative time keywords otherwise, false.
-    */
+     */
     public static function isRelative(string $datetime): bool
     {
         return preg_match(self::$relativePattern, $datetime) === 1;
@@ -891,7 +891,7 @@ class Time extends DateTimeImmutable implements Stringable
      * @param string $datetime The datetime string to check.
      * 
      * @return bool True if the string contains relative time keywords otherwise, false.
-    */
+     */
     public static function isAgo(string $datetime): bool
     {
         return preg_match(self::$agoRelativePattern, $datetime) === 1;
@@ -903,7 +903,7 @@ class Time extends DateTimeImmutable implements Stringable
      * @param string $datetime The datetime string to check.
      * 
      * @return bool True if the string contains absolute time time otherwise, false.
-    */
+     */
     public static function isAbsolute(string $datetime): bool
     {
         return (bool) preg_match('/\d{4}-\d{1,2}-\d{1,2}/', $datetime);
@@ -911,7 +911,7 @@ class Time extends DateTimeImmutable implements Stringable
 
     /**
      * Wakeup is called during unserializing the Time object.
-    */
+     */
     public function __wakeup(): void
     {
         $this->timezone = new DateTimeZone((string) $this->timezone);
@@ -920,10 +920,12 @@ class Time extends DateTimeImmutable implements Stringable
 
     /**
      * Return the current current datetime string
-    */
+     * 
+     * @return string
+     */
     public function __toString(): string
     {
-        return static::now()->format(self::$stringFormat);
+        return self::now()->format(self::$stringFormat);
     }
 
     /**

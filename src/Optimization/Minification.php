@@ -148,10 +148,10 @@ final class Minification
     ): self {
        
         // Convert data to string if not already
-        $content = is_string($data) ? $data : static::toJsonString($data);
+        $content = is_string($data) ? $data : self::toJsonString($data);
 
         // Minify content if required
-        $content = ($this->codeblocks ? static::minify($content) : static::minifyIgnore($content, $this->copyable));
+        $content = ($this->codeblocks ? self::minify($content) : self::minifyIgnore($content, $this->copyable));
 
         // Resolve content type if it's a shorthand
         if (!str_contains($contentType, '/')) {
@@ -201,9 +201,9 @@ final class Minification
     public static function minify(string $content): string 
     {
         $content = preg_replace(
-            static::$patterns["find"], 
-            static::$patterns["replace"], 
-            str_replace(static::$patterns["line"], '', $content)
+            self::$patterns["find"], 
+            self::$patterns["replace"], 
+            str_replace(self::$patterns["line"], '', $content)
         );
 
         return trim($content);
@@ -246,7 +246,7 @@ final class Minification
             );
 
             return "<div class='lmv-snippet-container'>{$formatter}</div>";
-        }, static::minify($content));
+        }, self::minify($content));
 
         return $content;
     }

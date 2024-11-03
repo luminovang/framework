@@ -27,7 +27,7 @@ final class Tracer
         }
 
         // Set our highlight colors:
-        static::highlightColor();
+        self::highlightColor();
         $source = get_content($file);
 
         if($source === false){

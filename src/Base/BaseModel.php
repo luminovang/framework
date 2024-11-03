@@ -231,7 +231,7 @@ abstract class BaseModel
             $tbl->where($this->primaryKey, '=', $key);
         }
 
-        $cache_key = static::cacheKey($key, $fields, 'find');
+        $cache_key = self::cacheKey($key, $fields, 'find');
         $tbl->cache($cache_key, $this->table . '_find', $this->expiry, static::$cacheFolder);
         return $tbl->find($fields);
     }
@@ -264,7 +264,7 @@ abstract class BaseModel
         
         $tbl->limit($limit, $offset);
         $tbl->cache(
-            static::cacheKey($key, $fields, 'select'), 
+            self::cacheKey($key, $fields, 'select'), 
             $this->table . '_select', 
             $this->expiry, 
             static::$cacheFolder
@@ -330,7 +330,7 @@ abstract class BaseModel
         }
 
         $tbl->cache(
-            static::cacheKey($key, [], 'count'), 
+            self::cacheKey($key, [], 'count'), 
             $this->table . '_total', 
             $this->expiry, 
             static::$cacheFolder
@@ -355,7 +355,7 @@ abstract class BaseModel
         }
 
         $query = strtolower($query);
-        $cache_key = static::cacheKey($query, $fields, 'search');
+        $cache_key = self::cacheKey($query, $fields, 'search');
         $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
         $columns = 'WHERE';
 
@@ -405,7 +405,7 @@ abstract class BaseModel
             return false;
         }
 
-        $cache_key = static::cacheKey($query, $fields, 'doSearch');
+        $cache_key = self::cacheKey($query, $fields, 'doSearch');
         $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
         $sql = "SELECT {$fields} FROM {$this->table} {$queries} LIMIT {$offset}, {$limit}";
 

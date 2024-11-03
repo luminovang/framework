@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework asynchronous queue execution using fiber, process fork or default.
+ * Luminova Framework weak reference object key class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter

@@ -10,6 +10,7 @@
 namespace Luminova\Command\Novakit;
 
 use \Luminova\Base\BaseConsole;
+use \Luminova\Command\Utils\Color;
 use \Luminova\Application\Foundation;
 use \Luminova\Functions\IP;
 
@@ -17,34 +18,34 @@ class Server extends BaseConsole
 {
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $group = 'Server';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $name = 'server';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected array $usages = [
         'php novakit server --help'
     ];
 
     /**
      * @var int $offset port offset
-    */
+     */
     private int $offset = 0;
 
     /**
      * @var int $tries number of tries
-    */
+     */
     private int $tries = 10;
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function run(?array $options = []): int
     {
         $this->explain($options);
@@ -63,7 +64,8 @@ class Server extends BaseConsole
         $php = escapeshellarg($this->getAnyOption('php', 'b', PHP_BINARY));
         $port = (int) $this->getAnyOption('port', 'p', 8080) + $this->offset;
         $root = escapeshellarg(FRONT_CONTROLLER);
-        $access = $this->color('http://' . $host . ':' . $port, 'green');
+        $access ='http://' . $host . ':' . $port;
+        $access = Color::style($access, 'green');
 
         $this->header();
         $this->writeln('Server Software: NovaKit/' . Foundation::NOVAKIT_VERSION . ' (Luminova) PHP/' . PHP_VERSION . ' (Development Server)', 'yellow');
@@ -71,7 +73,8 @@ class Server extends BaseConsole
         if($testing){
             $this->writeln('Network access: ' . $access);
         }
-        $this->writeln('Document root: ' . $this->color( $root, 'cyan'));
+        
+        $this->writeln('Document root: ' . Color::style($root, 'cyan'));
         $this->newLine();
         $this->writeln('Press Ctrl-C to stop the server.');
         $this->newLine();
@@ -81,7 +84,7 @@ class Server extends BaseConsole
         $status = STATUS_ERROR;
         passthru($php . ' -S ' . $host . ':' . $port . ' -t ' . $root . ' ' . $rewrite, $status);
 
-        if ($status && $this->offset < $this->tries) {
+        if ($status === STATUS_ERROR && $this->offset < $this->tries) {
             $this->offset++;
             $this->run($options);
         }
@@ -91,7 +94,7 @@ class Server extends BaseConsole
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function help(array $helps): int
     {
         return STATUS_ERROR;

@@ -485,12 +485,12 @@ final class MySqliDriver implements DatabaseInterface
         $params = [];
         if($type === 'values'){
             foreach ($values as $value) {
-                $types .= static::getType($value);
+                $types .= self::getType($value);
                 $params[] = $value;
             }
         }else{
             foreach ($values as &$value) {
-                $types .= static::getType($value);
+                $types .= self::getType($value);
                 $params[] = $value;
             }
         }

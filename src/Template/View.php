@@ -240,7 +240,7 @@ trait View
             return self::$publicOptions[$key];
         }
 
-        return self::$weak[self::$reference][$key] ?? static::$KEY_NOT_FOUND;
+        return self::$weak[self::$reference][$key] ?? self::$KEY_NOT_FOUND;
     }
 
     /** 
@@ -565,8 +565,8 @@ trait View
         $viewName = trim($viewName, '/');
         $viewType = strtolower($viewType);
     
-        if(!in_array($viewType, static::$supportedTypes)){
-            $supported = implode(', ', static::$supportedTypes);
+        if(!in_array($viewType, self::$supportedTypes)){
+            $supported = implode(', ', self::$supportedTypes);
             throw new RuntimeException(sprintf(
                 'Invalid argument, unsupported view type: "%s" for view: "%s", supported types (%s). To render other formats use helper function `response()->render()`', 
                 $viewType, 
@@ -1303,7 +1303,7 @@ trait View
     private function lmvViewOptions(array $options = []): array 
     {
         $options['viewType'] = $this->viewType;
-        $options['href'] = static::link();
+        $options['href'] = self::link();
         $options['asset'] = $options['href'] . 'assets/';
         $options['active'] = $this->activeView;
         
