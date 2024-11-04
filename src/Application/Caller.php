@@ -28,7 +28,7 @@ final class Caller
      * @param string $directory The directory to search for classes that extend the base class.
      * @param string|null $namespace Optional provide target class namespace (default: null).
      * 
-     * @return array<int,class-string> An array of fully qualified class names that extend the base class.
+     * @return array<int,class-string> Return an array of fully qualified class names that extend the base class.
      */
     public static function extenders(string $baseClass, string $directory, ?string $namespace = null): array 
     {
@@ -74,7 +74,7 @@ final class Caller
      * @param class-string<T>|class-object<T> $class class name or instance of a class.
      * @param bool $return return type.
      * 
-     * @return int|array<int,string>  Return all called methods in the given and their response.
+     * @return int|array<int,string> Return all called methods in the given and their response.
      * @throws RuntimeException If failed to instantiate class.
     */
     public static function call(string|object $class, bool $return = false): int|array
@@ -99,12 +99,8 @@ final class Caller
                 }
             }
 
-            if($return){
-                return $calls;
-            }
-
-            return $count;
-        }catch(RuntimeException | ReflectionException $e){
+            return $return ? $calls : $count;
+        }catch(RuntimeException|ReflectionException $e){
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 

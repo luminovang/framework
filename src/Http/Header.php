@@ -105,16 +105,17 @@ class Header implements Countable
     }
 
     /**
-     * Get server variables.
+     * Retrieve a server variable by key.
      *
-     * @param string $key Key name of the server variable.
+     * @param string $key The key to retrieve from internal variables or Apache request headers.
+     * @param string|null $server Optional alternative key to access the PHP server variable.
      *
-     * @return mixed Return the value of the specified server variable.
+     * @return mixed Return the server variable value, or null if not set.
      * @internal
      */
-    public static function server(string $key): mixed
+    public static function server(string $key, ?string $server = null): mixed
     {
-        return $_SERVER[$key] ?? null;
+        return self::$variables[$key] ?? $_SERVER[$server ?? $key] ?? null;
     }
 
     /**
@@ -189,11 +190,14 @@ class Header implements Countable
             'Cache-Control' => env('default.cache.control', 'no-store, max-age=0, no-cache'),
             'Content-Language' => env('app.locale', 'en'), 
             'X-Content-Type-Options' => 'nosniff',
-            'X-Frame-Options' => 'SAMEORIGIN', //'deny',
+            'X-Frame-Options' => 'SAMEORIGIN',
             'X-XSS-Protection' => '1; mode=block',
             'X-Firefox-Spdy' => 'h2',
             'Vary' => 'Accept-Encoding',
-            'Connection' => 'keep-alive', //'close',
+            'Connection' => ((self::server('Connection', 'HTTP_CONNECTION') ?? 'keep-alive') === 'keep-alive' 
+                ? 'keep-alive' 
+                : 'close'
+            ),
             'X-Powered-By' => Foundation::copyright()
         ];
     }
@@ -399,6 +403,7 @@ class Header implements Countable
         if ($code >= 100 && $code < 600) {
             http_response_code($code);
             $_SERVER["REDIRECT_STATUS"] = $code;
+            self::$variables['Redirect-Status'] = $code;
             return true;
         }
 

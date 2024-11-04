@@ -495,7 +495,6 @@ class Time extends DateTimeImmutable implements Stringable
             }
         }
 
-       // $datetime = $now->format(self::$defaultFormat);
         $datetime = $now->format('Y-m-d H:i:s.u');
 
         return $datetime;
@@ -555,7 +554,7 @@ class Time extends DateTimeImmutable implements Stringable
      * @param string $datetime datetime to convert to format.
      * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      *
-     * @return DateTimeImmutable|false  Returns new DateTimeImmutable false otherwise
+     * @return DateTimeImmutable|false Returns new DateTimeImmutable false otherwise
      * @throws DateTimeException Throws if any error occurred.
      */
     public static function fromFormat(
@@ -575,7 +574,7 @@ class Time extends DateTimeImmutable implements Stringable
      * @param ?string $year Year default is `date('y')`.
      * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      * 
-     * @return array<int,mixed> $calendar Calendar values.
+     * @return array<int,mixed> Return an array of calendar values.
      */
     public static function calendar(
         ?string $month = null, 
@@ -613,7 +612,7 @@ class Time extends DateTimeImmutable implements Stringable
 	 * @param string|int|null $year The year (e.g., 2023).
 	 * @param string $format The format for the returned dates (default is 'd-M-Y').
 	 * 
-	 * @return array<int,string> An array of dates within the specified month.
+	 * @return array<int,string> Return an array of dates within the specified month.
 	 */
 	public static function days(
         string|int|null $month = null, 
@@ -639,7 +638,7 @@ class Time extends DateTimeImmutable implements Stringable
      * 
 	 * @param string $format The format for the returned dates (default is "M").
 	 * 
-	 * @return array<int,string> An array of month within the specified year.
+	 * @return array<int,string> Return an array of month within the specified year.
 	 */
     public static function months(string $format = 'M'): array 
     {
@@ -650,6 +649,21 @@ class Time extends DateTimeImmutable implements Stringable
         }
 
         return $months;
+    }
+
+    /**
+     * Get the name of a month based on its numeric value.
+     *
+     * @param int $month The numeric value of the month (1 for January, 2 for February, etc.).
+     * @param bool $full_name  If true, returns the full month name (e.g., "January"). 
+     *                    If false, returns the abbreviated month name (e.g., "Jan").
+     *
+     * @return string Return the name of the specified month, either full or abbreviated.
+     */
+    public static function month(int $month, bool $full_name = false): string 
+    {
+        return self::createFromFormat('!m', $month)
+            ->format($full_name ? 'F' : 'M');
     }
 
     /**

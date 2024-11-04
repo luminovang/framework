@@ -27,7 +27,7 @@ use \Luminova\Builder\Document;
  * @method static string p(string $content = '', bool $closeElement = true, array $attributes = [])
  * @method static string span(string $content = '', bool $closeElement = true, array $attributes = [])
  * @method static string br(string $content = null, bool $closeElement = false, array $attributes = [])
- * @method static string h<1-6>(string $content = '', bool $closeElement = true, array $attributes = [])
+ * @method static string h{1-6}(string $content = '', bool $closeElement = true, array $attributes = [])
  */
 class Xhtml extends Document
 {

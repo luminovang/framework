@@ -13,7 +13,6 @@ use \Luminova\Http\Header;
 use \Luminova\Time\Timestamp;
 use \Luminova\Storages\FileManager;
 use \DateTimeInterface;
-use \WeakMap;
 
 final class ViewCache
 {
@@ -44,11 +43,11 @@ final class ViewCache
     private static ?string $foundCacheLocation = null;
 
     /**
-     * The found cache filename and version.
+     * Cache lock files.
      * 
-     * @var WeakMap|null $weak
+     * @var array|null $cache
      */
-    private static ?WeakMap $weak = null;
+    private static ?array $cache = null;
 
     /**
      * Class page cache constructor.
@@ -68,8 +67,6 @@ final class ViewCache
     )
     {
         $this->setExpiry($expiration);
-        self::$weak = new WeakMap();
-        self::$weak[$this] = null;
     }
 
     /**
@@ -209,19 +206,19 @@ final class ViewCache
     public function expired(?string $type = null): bool|int
     {
         // Validate initialization and ensure lockFile is not empty
-        if (!$this->init() || self::$weak[$this] === null) {
+        if (!$this->init() || self::$cache === null) {
             return true;
         }
 
         /// Check if content type matches the cached version
-        if($type !== null && (self::$weak[$this]['viewType'] ?? '_') !== $type){
+        if($type !== null && (self::$cache['viewType'] ?? '_') !== $type){
             return 404;
         }
 
         // Check if cache has expired
-        $expiration = (int) (self::$weak[$this]['Expiry'] ?? 0);
+        $expiration = (int) (self::$cache['Expiry'] ?? 0);
      
-        return ($expiration === 0 || (self::$weak[$this]['CacheImmutable'] ?? false) === true) 
+        return ($expiration === 0 || (self::$cache['CacheImmutable'] ?? false) === true) 
             ? false 
             : time() >= $expiration;
     }
@@ -260,18 +257,18 @@ final class ViewCache
      */
     public function read(?string $type = null): bool|int
     {
-        if(self::$weak[$this] === [] && $this->init() === false){
+        if(self::$cache === [] && $this->init() === false){
             Header::headerNoCache(404);
             return false;
         }
 
         // Check if the view type matches the cached content view type.
-        if($type !== null && (self::$weak[$this]['viewType'] ?? '_') !== $type){
+        if($type !== null && (self::$cache['viewType'] ?? '_') !== $type){
             return 404;
         }
     
         $ifNoneMatch = trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '');
-        $eTag = self::$weak[$this]['ETag'] ?? null;
+        $eTag = self::$cache['ETag'] ?? null;
     
         // Check if the ETag matches the client's If-None-Match header
         if ($eTag && $ifNoneMatch === "\"$eTag\"") {
@@ -280,7 +277,7 @@ final class ViewCache
         }
 
         $ifModifiedSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? null;
-        $lasModify = self::$weak[$this]['Modify'] ?? null;
+        $lasModify = self::$cache['Modify'] ?? null;
 
         // Check if modify since matches the client's If-Modified-Since header
         if ($ifModifiedSince && $lasModify && strtotime($ifModifiedSince) >= $lasModify) {
@@ -289,7 +286,8 @@ final class ViewCache
         }
 
         Header::validate($this->getHeaders());
-        self::$weak[$this]['Func']();
+        self::$cache['Func']();
+
         return true;
     }
 
@@ -302,16 +300,16 @@ final class ViewCache
      */
     public function get(?string $type = null): string|int|bool|null
     {
-        if(self::$weak[$this] === [] && $this->init() === false){
+        if(self::$cache === [] && $this->init() === false){
             return ($type === null) ? false : null;
         }
 
-        if($type !== null && (self::$weak[$this]['viewType'] ?? '_') !== $type){
+        if($type !== null && (self::$cache['viewType'] ?? '_') !== $type){
             return 404;
         }
 
         ob_start();
-        self::$weak[$this]['Func']();
+        self::$cache['Func']();
         return ob_get_clean();
     }
 
@@ -341,7 +339,6 @@ final class ViewCache
         $fileMTime = $this->filename ? @filemtime($this->filename) : $now;
         $expiration = ($this->expiration === 0) ? 31536000 * 5 : $this->expiration;
         $length = $headers['Content-Length'] ?? string_length($content);
-        //$fileSize = $this->filename ? @filesize($this->filename) : $length;
 
         $headers['Content-Type'] = Header::getContentTypes($type);
         $headers['Content-Length'] = $length;
@@ -378,7 +375,7 @@ final class ViewCache
      */
     private function init(): bool
     {
-        self::$weak[$this] = [];
+        self::$cache = [];
         self::$foundCacheLocation = null;
         
         return $this->findCache() && $this->isCacheValid();
@@ -450,7 +447,7 @@ final class ViewCache
  
         include_once self::$foundCacheLocation;
         if(function_exists($this->lockFunc) && ($lock = ($this->lockFunc)($this->key)) !== false){
-            self::$weak[$this] = $lock;
+            self::$cache = $lock;
             return true;
         }
 
@@ -464,13 +461,13 @@ final class ViewCache
      */
     private function getHeaders(): array 
     {
-        $immutable = (self::$weak[$this]['CacheImmutable'] ?? false) ? ', immutable' : '';
-        $headers = self::$weak[$this]['Headers'] ?? [];
+        $immutable = (self::$cache['CacheImmutable'] ?? false) ? ', immutable' : '';
+        $headers = self::$cache['Headers'] ?? [];
         $headers['default_headers'] = true;
-        $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T',  self::$weak[$this]['Expiry']);
-        $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T',  self::$weak[$this]['Modify']);
-        $headers['Cache-Control'] = 'public, max-age=' . self::$weak[$this]['MaxAge'] . $immutable;
-        $headers['ETag'] =  '"' . self::$weak[$this]['ETag'] . '"';
+        $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T',  self::$cache['Expiry']);
+        $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T',  self::$cache['Modify']);
+        $headers['Cache-Control'] = 'public, max-age=' . self::$cache['MaxAge'] . $immutable;
+        $headers['ETag'] =  '"' . self::$cache['ETag'] . '"';
 
         if(($headers['Content-Encoding'] ?? null) === false){
             unset($headers['Content-Encoding']);

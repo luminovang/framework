@@ -19,7 +19,7 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.3.6';
+    public const VERSION = '3.3.7';
 
     /**
      * Framework version name.
@@ -119,7 +119,7 @@ final class Foundation
     }
 
     /**
-     * Initializes error display.
+     * Initializes and register global error handler.
      * 
      * @return void 
      */
@@ -157,6 +157,7 @@ final class Foundation
      * This method includes an appropriate error view based on the environment and request type.
      *
      * @param ErrorHandler|null $stack The error stack containing errors to display.
+     * 
      * @return void
      */
     private static function display(?ErrorHandler $stack = null): void 
@@ -251,7 +252,7 @@ final class Foundation
      * Get the request url segments as relative.
      * Removes the public controller path from uri if available.
      * 
-     * @return string Relative url segment paths.
+     * @return string Return relative url segment paths.
      */
     public static function getUriSegments(): string
     {
@@ -475,7 +476,7 @@ final class Foundation
     {
         $view = null;
         if(defined('IS_UP') && PRODUCTION){
-            $view = env('logger.mail.errors', null) 
+            $view = env('logger.mail.errors', null)
                 ? 'mailer.php' 
                 : (env('logger.remote.errors', null) ? 'remote.php' : null);
         }

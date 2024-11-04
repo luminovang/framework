@@ -9,7 +9,11 @@
  */
 namespace Luminova\Builder;
 
-abstract class Document
+use \Luminova\Time\Time;
+use \Luminova\Exceptions\DateTimeException;
+use \DateTimeZone;
+
+class Document
 {
     /**
      * Default html5 elements.
@@ -118,6 +122,100 @@ abstract class Document
     }
 
     /**
+     * Generates a calendar for a specified month and year, highlighting important seasonal days.
+     *
+     * This method constructs an HTML representation of a calendar for the given month and year.
+     * It allows the specification of significant seasonal days that are highlighted in the calendar.
+     * The calendar is adjustable based on the provided timezone and allows for customization of the 
+     * starting month and day of the season.
+     *
+     * @param string|null $year The year for which the calendar is generated (default: `currentYear`).
+     * @param string|null $month The month for which the calendar is generated (default: `currentMonth`).
+     * @param DateTimeZone|string|null $timezone  The timezone to be used for date calculations (default: `systemTimezone`).
+     * @param array $season_days An optional array of names representing significant days or events in the season.
+     * @param int $season_start_month  The starting month of the season (1-12) (default: `January`).
+     * @param int $season_start_day The starting day of the season (1-31) (default: `March`).
+     *
+     * @return string|false Returns the generated HTML calendar as a string, or false if the calendar cannot be generated.
+     * @throws DateTimeException Throws if invalid calendar date format is provided.
+     */
+    public static function calendar( 
+        ?string $year = null, 
+        ?string $month = null,
+        DateTimeZone|string|null $timezone = null,
+        array $season_days = [],
+        int $season_start_month = 1,
+        int $season_start_day = 3
+    ): string|bool
+    {
+        $month ??= date('n');
+        $year ??= date('Y');
+        $calendar = Time::calendar($month, $year, $timezone);
+
+        if(!$calendar){
+            return false;
+        }
+        
+        static $datetime = null;
+        $length = $season_days ? count($season_days) : 0;
+        $today =  date('j');
+        $datetime ??= $season_days 
+            ? new Time(date('Y-m-d', strtotime("{$year}-$season_start_month-$season_start_day")), $timezone) 
+            : null;
+
+        $html = <<<HTML
+            <table border="1" cellpadding="5" cellspacing="0" class="lmv-calendar-table">
+            <thead class="lmv-calendar-head" style="background-color: teal;color: #fff;">
+                <tr>
+                    <th style="border-color: teal;">Sun</th>
+                    <th style="border-color: teal;">Mon</th>
+                    <th style="border-color: teal;">Tue</th>
+                    <th style="border-color: teal;">Wed</th>
+                    <th style="border-color: teal;">Thu</th>
+                    <th style="border-color: teal;">Fri</th>
+                    <th style="border-color: teal;">Sat</th>
+                </tr>
+            </thead>
+            <tbody>
+        HTML;
+
+        foreach ($calendar as $week) {
+            $html .= '<tr>';
+            foreach ($week as $timestamp) {
+                $day = date('j', $timestamp);
+                $isCurrentMonth = (date('n', $timestamp) === $month);
+                $isCurrentDay = ($day === $today);
+
+                $style = ($isCurrentMonth
+                    ?   ($isCurrentDay
+                            ? ' lmv-calendar-current" style="color: #fff;background-color: #063ca9;border-color: #063ca9;"' 
+                            : '"'
+                        ) 
+                    : ' lmv-calendar-past" style="color: #ccc;"'
+                );
+
+                $html .= '<td class="lmv-calendar-day' . $style . ' data-day="'.$day.'" data-timestamp="'.$timestamp.'">';
+                $html .= $day;
+
+                if($datetime){
+                    $daysSinceBase = floor(($timestamp - $datetime->getTimestamp()) / 86400);
+                    $html .= '<small class="lmv-calendar-season" style="display: block;color: ' . ($isCurrentDay ? '#f4dde0' : ($isCurrentMonth ? '#bf0707' : '#532828')) . ';">' . $season_days[$daysSinceBase % $length] . '</small>';
+                }
+
+                $html .= '</td>';
+            }
+            $html .= '</tr>';
+        }
+        $html .= '</tbody>';
+        $html .= '<tfoot class="lmv-calendar-head" style="background-color: #3a3a3b;color: #fff;">';
+        $html .= '<tr><th colspan="7" align="center" style="border-color: #3a3a3b;">' . Time::month($month) . ', ' . $year . ' Calender</th></tr>';
+        $html .= '</tfoot>';
+        $html .= '</table>';
+
+        return $html;
+    }
+
+    /**
      * Get attribute value type.
      *
      * @param mixed $value The value of the attribute.
@@ -140,7 +238,7 @@ abstract class Document
     /**
      * Escapes input for safe output in HTML, including handling numeric values directly.
      *
-     * @param string|int|float $input  The value to be escaped.
+     * @param string|int|float $input The value to be escaped.
      * 
      * @return string Return the safely escaped string or numeric value.
      * @ignore

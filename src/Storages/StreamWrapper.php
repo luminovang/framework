@@ -492,7 +492,7 @@ class StreamWrapper
      *
      * @param string $path The path to parse.
      * 
-     * @return array|false Array with scheme and full path or false if invalid.
+     * @return array|false Return array with scheme and full path or false if invalid.
      */
     protected function setExternalContext(string $path): array
     {
