@@ -18,20 +18,21 @@ final class Minification
 	 *  Minified content.
      *
 	 * @var mixed $contents
-	*/
+	 */
     private mixed $contents = '';
 
     /** 
 	 * Minified content headers.
      *
 	 * @var array $headers
-	*/
+	 */
     private array $headers = [];
 
     /**
      * Regular expression patterns for content stripping.
+     * 
      * @var array $patterns
-    */
+     */
     private static array $patterns = [
         "find" => [
             '/\>[^\S ]+/s',          // Strip whitespace after HTML tags
@@ -172,7 +173,7 @@ final class Minification
      * @param array|object $data The content to convert to json string.
      * 
      * @return string Return json string or empty string.
-    */
+     */
     private static function toJsonString(array|object $data): string
     {
         if(is_object($data)){
@@ -217,7 +218,7 @@ final class Minification
      * @param bool $button Allow copying codeblock (default: false).
      * 
      * @return string Return minified content.
-    */
+     */
     public static function minifyIgnore(string $content, bool $button = false): string 
     {
         $ignores = [];

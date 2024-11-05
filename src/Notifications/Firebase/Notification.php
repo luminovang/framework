@@ -110,7 +110,7 @@ class Notification
         return self::$factory;
     }
 
-   /**
+    /**
      * Create a new Factory instance with the specified service account file or configuration array.
      *
      * @param Factory|string|array $config The service account filename or configuration array.
@@ -231,7 +231,7 @@ class Notification
             return $message;
 
         } catch (Exception $e) {
-            ErrorException::throwException($e->getMessage(), $e->getCode(), $e);
+            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
         }
 
         return null;
@@ -289,7 +289,7 @@ class Notification
             }
 
         } catch (Exception $e) {
-            ErrorException::throwException($e->getMessage(), $e->getCode(), $e);
+            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
         }
 
         throw new ErrorException("Invalid input: Expected a Message instance and must call method setToken or an array with a 'topic' key token.");
@@ -327,7 +327,7 @@ class Notification
             }
 
         } catch (Exception $e) {
-            ErrorException::throwException($e->getMessage(), $e->getCode(), $e);
+            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
         }
 
         throw new ErrorException("Invalid input: Expected a Message instance and must call method setTopic or an array with a 'topic' key included.");
@@ -366,7 +366,7 @@ class Notification
             }
 
         } catch (Exception $e) {
-            ErrorException::throwException($e->getMessage(), $e->getCode(), $e);
+            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
         }
 
         throw new ErrorException("Invalid input: Expected a Message instance and must call method setCondition or an array with a 'conditions' key included.");
@@ -518,7 +518,7 @@ class Notification
      * Determine if notification or subscription was completed successfully.
      * 
      * @return bool Return true if successful, false otherwise.
-    */
+     */
     public function isDone(): bool 
     {
         if($this->report === null){
@@ -536,7 +536,7 @@ class Notification
      * Retrieve response report from firebase sent notification or topic management.
      * 
      * @return MulticastSendReport|array The response from Firebase Cloud Messaging.
-    */
+     */
     public function getReport(): MulticastSendReport|array|null
     {
         return $this->report;

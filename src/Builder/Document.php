@@ -90,11 +90,11 @@ class Document
     ]; 
 
     /**
-     *Generates an html doctype.
+     * Retrieve a doctype based on the name-type.
      *
-     * @param string $type The html type of your document.
+     * @param string $type The type of your document retrieve.
      *
-     * @return string|null Returns generated doctype.
+     * @return string|null Returns content doctype based on type.
     */
     public static function doctype(string $type = 'html5'): ?string
     {
@@ -102,9 +102,9 @@ class Document
     }
 
     /**
-     * Generate HTML attributes as a string.
+     * Generate HTML attributes as a string and escape values while generating.
      *
-     * @param array<string,string|int|float> $attributes The attributes as key-value pairs.
+     * @param array<string,string|int|float|bool> $attributes An array of attributes as key-value pairs.
      * 
      * @return string Return the attributes as a string.
      */
@@ -123,12 +123,7 @@ class Document
 
     /**
      * Generates a calendar for a specified month and year, highlighting important seasonal days.
-     *
-     * This method constructs an HTML representation of a calendar for the given month and year.
-     * It allows the specification of significant seasonal days that are highlighted in the calendar.
-     * The calendar is adjustable based on the provided timezone and allows for customization of the 
-     * starting month and day of the season.
-     *
+     * 
      * @param string|null $year The year for which the calendar is generated (default: `currentYear`).
      * @param string|null $month The month for which the calendar is generated (default: `currentMonth`).
      * @param DateTimeZone|string|null $timezone  The timezone to be used for date calculations (default: `systemTimezone`).
@@ -216,7 +211,7 @@ class Document
     }
 
     /**
-     * Get attribute value type.
+     * Escape and retrieve attribute value type.
      *
      * @param mixed $value The value of the attribute.
      * 

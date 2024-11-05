@@ -19,28 +19,28 @@ class Session
      * session interface
      * 
      * @var SessionManagerInterface $manager
-    */
+     */
     private ?SessionManagerInterface $manager = null;
 
     /**
      * static class instance
      * 
      * @var Session $instance 
-    */
+     */
     private static ?Session $instance = null;
 
     /**
      * Session configuration.
      * 
      * @var SessionConfig $config 
-    */
+     */
     private static ?SessionConfig $config = null;
 
     /**
      * Initializes session constructor
      *
      * @param SessionManagerInterface|null $manager The session manager.
-    */
+     */
     public function __construct(?SessionManagerInterface $manager = null)
     {
         self::$config ??= new SessionConfig();
@@ -56,7 +56,7 @@ class Session
      * @param SessionManagerInterface|null $manager The session manager.
      * 
      * @return static self instance
-    */
+     */
     public static function getInstance(?SessionManagerInterface $manager = null): static
     {
         if (self::$instance === null) {
@@ -96,7 +96,7 @@ class Session
      * @param string $type Return type of object or array (default is 'array').
      * 
      * @return array|object All stored session data.
-    */
+     */
     public function toExport(string $type = 'array'): array|object
     {
         return $this->manager->getResult($type);
@@ -108,7 +108,7 @@ class Session
      * @param SessionManagerInterface $manager The session manager to set.
      * 
      * @return void
-    */
+     */
     public function setManager(SessionManagerInterface $manager): void
     {
         $this->manager = $manager;
@@ -118,7 +118,7 @@ class Session
      * Retrieves the session storage manager instance (`CookieStorage` or `SessionManager`).
      *
      * @return SessionManagerInterface|null The storage manager instance.
-    */
+     */
     public function getManager(): ?SessionManagerInterface
     {
         return $this->manager;
@@ -130,7 +130,7 @@ class Session
      * @param string $storage The storage key to set.
      * 
      * @return self The Session class instance.
-    */
+     */
     public function setStorage(string $storage): self
     {
         $this->manager->setStorage($storage);
@@ -142,7 +142,7 @@ class Session
      * Retrieves the current session storage name.
      * 
      * @return string The current storage name.
-    */
+     */
     public function getStorage(): string 
     {
         return $this->manager->getStorage();
@@ -155,7 +155,7 @@ class Session
      * @param mixed $default Default value if the key is not found.
      * 
      * @return mixed The retrieved data.
-    */
+     */
     public function get(string $key, mixed $default = null): mixed
     {
         return $this->manager->getItem($key, $default);
@@ -203,7 +203,7 @@ class Session
      * @param string $storage optional storage instance key
      * 
      * @return bool Returns true if the session user is online, false otherwise.
-    */
+     */
     public function online(string $storage = ''): bool
     {
         $data = $this->manager->getItems($storage);
@@ -217,7 +217,7 @@ class Session
      * @return string|null Returns the session ID or null if not logged in.
      * > **Note**
      * > The session ID returned from this method is not same as PHP `session_id`.
-    */
+     */
     public function ssid(): string|null
     {
         return $this->manager->getItem('_session_online_id', null);
@@ -228,7 +228,7 @@ class Session
      * The session datetime is automatically generated once synchronize() is called.
      * 
      * @return string|null Returns the session login datetime or null if not logged in.
-    */
+     */
     public function ssdate(): ?string
     {
         return $this->manager->getItem('_session_online_datetime', null);
@@ -241,7 +241,7 @@ class Session
      * @param mixed $value The value to set.
      * 
      * @return self The Session class instance.
-    */
+     */
     public function set(string $key, mixed $value): self
     {
         $this->manager->setItem($key, $value);
@@ -256,7 +256,7 @@ class Session
      * @param mixed $value The value to set.
      * 
      * @return bool True if item was added else false.
-    */
+     */
     public function add(string $key, mixed $value): bool
     {
         if($this->has($key)){
@@ -268,7 +268,7 @@ class Session
         return true;
     }
 
-   /** 
+    /** 
      * Remove a key from the session storage by passing the key.
      * 
      * @param string $index The key to remove.
@@ -302,7 +302,7 @@ class Session
      * @param string $key Key to check
      * 
      * @return bool Return true if key exists in session storage else false.
-    */
+     */
     public function has(string $key): bool
     {
         return $this->manager->hasItem($key);
@@ -315,7 +315,7 @@ class Session
      * @param string|null $sid Optional specify session identifier from PHP `session_id`.
      *
      * @return void 
-    */
+     */
     public function start(?string $sid = null): void
     {
         if ($this->manager instanceof SessionManager) {
@@ -355,7 +355,7 @@ class Session
      * This method doesn't behave same way as PHP `session_destroy`.
      *
      * @return bool Return true if storage was data was deleted successfully otherwise false.
-    */
+     */
     public function destroy(): bool 
     {
         return $this->manager->destroyItem();
@@ -368,7 +368,7 @@ class Session
      * @param string $ip The IP address.
      * 
      * @return self The Session class instance.
-    */
+     */
     public function synchronize(string $ip = ''): self
     {
         $this->set('_session_online', 'on');
@@ -389,7 +389,7 @@ class Session
      * @param string $storage Optional storage location.
      * 
      * @return void
-    */
+     */
     private function ipListener(string $storage = ''): void
     {
         $default = $this->getStorage();
@@ -414,7 +414,7 @@ class Session
      * @param string $storage Optional storage location
      * 
      * @return bool Returns false if the user's IP address matches the session login IP, otherwise returns true.
-    */
+     */
     public function ipChanged(string $storage = ''): bool
     {
         $default = $this->getStorage();
@@ -442,7 +442,7 @@ class Session
      * Configure session settings.
      *
      * @return void
-    */
+     */
     private function sessionConfigure(): void
     {
         $cookieParams = [

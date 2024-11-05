@@ -20,7 +20,8 @@ class RouterException extends AppException
     private static array $types = [
         'invalid_argument' => 'Invalid argument "%s", expected "%s", "%s" is given.',
         'empty_argument' => 'Invalid argument "%s", cannot be empty.',
-        'invalid_namespace' => 'Invalid namespace: "%s". Only namespaces starting with "\App\Controllers", "\App\Modules\Controllers\" or "\App\Modules\<Module>\Controllers\" are allowed.',
+        'invalid_namespace' => 'Invalid MVC namespace: "%s". Must start with "\App\" and end with "Controllers\" (e.g., "\App\Controllers\", "\App\<Folder>\Controllers\").',
+        'invalid_module_namespace' => 'Invalid HMVC module namespace: "%s". Must start with "\App\Modules\" and end with "Controllers\" (e.g., "\App\Modules\Controllers\", "\App\Modules\<Module>\Controllers\").',
         'invalid_context' => 'The application environment is not configured correctly. The route context "%s" may be missing or incorrect.',
         'invalid_context_log' => 'The view context "%s" is missing create view context to register your application routes /routes/%s.php',
         'invalid_controller' => 'Invalid class "%s". Only subclasses of BaseCommand, BaseController, BaseViewController, ViewErrors, or CoreApplication are allowed.',

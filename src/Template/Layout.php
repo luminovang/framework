@@ -14,38 +14,38 @@ use Luminova\Exceptions\RuntimeException;
 final class Layout
 {
     /** 
-     * @var array<string, string> $sections
-    */
+     * @var array<string,string> $sections
+     */
     private array $sections = [];
     
     /** 
      * @var string|null $current
-    */
+     */
     private ?string $current = null;
     
     /** 
      * @var bool $nesting
-    */
+     */
     private bool $nesting = false;
     
     /** 
      * @var bool $process
-    */
+     */
     private bool $process = true;
     
     /** 
      * @var string $file
-    */
+     */
     private static string $file = '';
 
     /** 
      * @var string|null $layouts
-    */
+     */
     private static ?string $layouts = null;
 
     /** 
      * @var self|null $instance
-    */
+     */
     private static ?self $instance = null;
 
     /**
@@ -192,7 +192,7 @@ final class Layout
      * Get the layout sections contents without processing.
      *
      * @return string Return the inherited layout contents.
-    */
+     */
     public function get(): string
     {
         $this->process = false;

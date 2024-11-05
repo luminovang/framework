@@ -190,7 +190,7 @@ final class Router
      * 
      * Expected arguments:
      * 
-     *  - string $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
+     *  - string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
      *  - Closure|string $callback Handle callback for router.
      * 
      * @return mixed Return value of method.
@@ -269,8 +269,8 @@ final class Router
     /**
      * Before middleware, to handle router middleware authentication.
      * 
-     * @param string  $methods  The allowed methods, can be serrated with `|` pipe symbol (e.g. `GET|POST`).
-     * @param string  $pattern The route URL pattern or template view name (e.g `/.*`, `/home`, `/user/([0-9])`).
+     * @param string  $methods  The allowed methods, can be serrated with `|` pipe symbol (e.g,. `GET|POST`).
+     * @param string  $pattern The route URL pattern or template view name (e.g, `/.*`, `/home`, `/user/([0-9])`).
      * @param Closure|string $callback Callback function to execute.
      * 
      * @return void
@@ -291,9 +291,9 @@ final class Router
     /**
      * After middleware route, executes the callback function after request was executed successfully.
      *
-     * @param string  $methods  The allowed methods, can be serrated with `|` pipe symbol (e.g. `GET|POST`).
-     * @param string  $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback The callback function to execute (e.g `ClassBaseName::methodName`).
+     * @param string  $methods  The allowed methods, can be serrated with `|` pipe symbol (e.g, `GET|POST`).
+     * @param string  $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback The callback function to execute (e.g, `ControllerClass::methodName`).
      * 
      * @return void
      * @throws RouterException Throws if blank method is passed.
@@ -313,9 +313,9 @@ final class Router
     /**
      * Capture front controller request method based on pattern and execute the callback.
      *
-     * @param string $methods The allowed methods, can be separated with `` pipe symbol (e.g `GET|POST|PUT`).
-     * @param string $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback The callback function to execute (e.g `ClassBaseName::methodName`).
+     * @param string $methods The allowed methods, can be separated with `` pipe symbol (e.g, `GET|POST|PUT`).
+     * @param string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback The callback function to execute (e.g, `ControllerClass::methodName`).
      * 
      * @return void
      * @throws RouterException Throws if blank method is passed.
@@ -335,8 +335,8 @@ final class Router
     /**
      * An alias for route capture method to handle any type of request method.
      *
-     * @param string $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback The callback to execute (e.g `ClassBaseName::methodName`).
+     * @param string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback The callback to execute (e.g, `ControllerClass::methodName`).
      * 
      * @return void
      */
@@ -348,8 +348,8 @@ final class Router
     /**
      * Capture front controller command request names and execute callback.
      *
-     * @param string $command The allowed command name or command with filters (e.g `foo`, `foo/(:int)/bar/(:string)`).
-     * @param Closure|string $callback The callback function to execute (e.g `ClassBaseName::methodName`).
+     * @param string $command The allowed command name or command with filters (e.g, `foo`, `foo/(:int)/bar/(:string)`).
+     * @param Closure|string $callback The callback function to execute (e.g, `ControllerClass::methodName`).
      * 
      * @return void
      */
@@ -366,7 +366,7 @@ final class Router
      * Before middleware, for command middleware authentication.
      *
      * @param string $group The command middleware group name or `global` for global middleware.
-     * @param Closure|string $callback Callback controller handler (e.g `ClassBaseName::methodName`).
+     * @param Closure|string $callback Callback controller handler (e.g, `ControllerClass::methodName`).
      * 
      * @return void
      * @throws RouterException Throws when called in wrong context.
@@ -388,7 +388,7 @@ final class Router
     /**
      *The Bind method allow you to group a collection nested `URI`  together in a single base path prefix or pattern.
      *
-     * @param string $prefix The path prefix name or pattern (e.g. `/blog`, `/account/([a-z])`).
+     * @param string $prefix The path prefix name or pattern (e.g,. `/blog`, `/account/([a-z])`).
      * @param Closure $callback The callback function to handle routes group binding.
      * 
      * @return void
@@ -434,7 +434,7 @@ final class Router
     /**
      * Registers module controller class namespace group for use in application routing.
      *
-     * @param string $namespace The class namespace to be registered (e.g, `\App\Controllers\Http\`).
+     * @param string $namespace The class namespace to be registered (e.g,, `\App\Controllers\Http\`, `\App\Modules\FooModule\Controllers\`).
      *
      * @return self Return instance of router class.
      * @throws RouterException If the namespace is empty or contains invalid characters.
@@ -452,9 +452,14 @@ final class Router
         $namespace = '\\' . trim($namespace, '\\') . '\\';
 
         if(!str_starts_with($namespace, '\\App\\') || !str_ends_with($namespace, '\Controllers\\')){
-            RouterException::throwWith('invalid_namespace', RouterException::NOT_ALLOWED, [
-                $namespace
-            ]);
+            RouterException::throwWith(
+                env('feature.app.hmvc', false)
+                    ? 'invalid_module_namespace'
+                    : 'invalid_namespace', 
+                RouterException::NOT_ALLOWED, [
+                    $namespace
+                ]
+            );
             return $this;
         }
 
@@ -502,14 +507,14 @@ final class Router
     /**
      * Set an error listener callback function.
      *
-     * @param Closure|string|array<int,string> $match Matching route callback or segment pattern for error handling.
-     * @param Closure|string|array<int,string>|null $callback Optional error callback handler function.
+     * @param Closure|array{0:class-string<ErrorHandlerInterface>,1:string}|string $match Matching route callback or segment pattern for error handling.
+     * @param Closure|array{0:class-string<ErrorHandlerInterface>,1:string}|string|null $callback Optional error callback handler function.
      *  
      * @return void
      * @throws RouterException Throws if callback is specified and `$match` is not a segment pattern.
      */
     public function setErrorListener(
-        Closure|string|array $match, 
+        Closure|array|string $match, 
         Closure|array|string|null $callback = null
     ): void
     {
@@ -557,7 +562,7 @@ final class Router
     /**
      * Get list of registered controller namespaces.
      *
-     * @return array<int,string> Return registered namespaces.
+     * @return string[] Return registered namespaces.
      * @internal
      */
     public static function getNamespaces(): array
@@ -624,7 +629,7 @@ final class Router
      * 
      * @param string $controller Controller class base name.
      * 
-     * @return class-string Return class name.
+     * @return class-string<BaseController|BaseViewController|BaseCommand|ErrorHandlerInterface> Return full qualify class namespace.
      */
     private static function getControllerClass(string $controller): string
     {
@@ -699,10 +704,19 @@ final class Router
         int $status = 404
     ): void 
     {
+        if(self::$is_cli){
+            self::$cmd?->error(sprintf('(%s) [%s] %s', $status, $header, $message));
+            exit(STATUS_ERROR);
+        }
+
         Header::headerNoCache($status);
-        
         if($message){
-            echo "<html><title>{$header}</title><body><h1>{$header}</h1><p>{$message}</p></body></html>";
+            echo sprintf(
+                '<html><title>%s</title><body><h1>%s</h1><p>%s</p></body></html>',
+                $header,
+                $header,
+                $message
+            );
         }
 
         exit(STATUS_ERROR);
@@ -713,7 +727,7 @@ final class Router
      *
      * @param string  $to group name.
      * @param string  $methods  Allowed methods, can be serrated with | pipe symbol.
-     * @param string  $pattern The route URL pattern or template view name (e.g `/`, `/home`, `/user/([0-9])`).
+     * @param string  $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
      * @param Closure|string $callback Callback function to execute.
      * @param bool $terminate Terminate if it before middleware.
      * 
@@ -850,7 +864,7 @@ final class Router
      * 
      * @param bool $return Weather to return the terminal instance.
      * 
-     * @return Terminal|true Return instance of terminal class or true if initalized.
+     * @return Terminal|true Return instance of terminal class or true if initialized.
      */
     private static function cmd(bool $return = false): Terminal|bool
     {
@@ -1095,7 +1109,7 @@ final class Router
      *
      * @param array<int,array> $array Matched url parameters.
      * 
-     * @return array<int,string> Return matched parameters.
+     * @return string[] Return matched parameters.
      */
     private static function matchesToArgs(array $array): array
     {
@@ -1114,7 +1128,7 @@ final class Router
      * Dependency injection and parameter casting.
      *
      * @param Closure|callable-string $caller Class method or callback closure.
-     * @param array<int,string> $arguments Method arguments to pass to callback method.
+     * @param string[] $arguments Method arguments to pass to callback method.
      * @param bool $injection Force use of dependency injection.
      *
      * @return array<int,mixed> Return method params and arguments-value pairs.
@@ -1208,7 +1222,7 @@ final class Router
     /**
      * Execute router HTTP callback class method with the given parameters using instance callback or reflection class.
      *
-     * @param Closure|string|array<int,string> $callback Class public callback method eg: UserController:update.
+     * @param Closure|array{0:class-string<BaseController|BaseViewController|BaseCommand|RouterInterface|ErrorHandlerInterface>,1:string}|string $callback Class public callback method eg: UserController:update.
      * @param array $arguments Method arguments to pass to callback method.
      * @param bool $injection Force use dependency injection. Default is false.
      *
@@ -1250,8 +1264,8 @@ final class Router
 
     /**
      * Execute class using reflection method.
-     *
-     * @param string $className Controller class name.
+     * 
+     * @param class-string<BaseController|BaseViewController|BaseCommand|RouterInterface|RouterInterface|ErrorHandlerInterface> $className Controller class name.
      * @param string $method Controller class method name.
      * @param array $arguments Optional arguments to pass to the method.
      * @param bool $injection Force use dependency injection. Default is false.

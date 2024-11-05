@@ -78,35 +78,35 @@ abstract class CoreDatabase
      * The name of the database to connect to.
      * 
      * @var string $database 
-    */
+     */
     private string $database = '';
 
     /**
      * Database force socket connection.
      * 
      * @var bool $socket 
-    */
+     */
     private bool $socket = false;
 
     /**
      * Database connection socket path.
      * 
      * @var string $socket 
-    */
+     */
     private string $socket_path = '';
 
     /**
      * persistent database connection.
      * 
      * @var bool $persistent 
-    */
+     */
     private bool $persistent = true;
     
     /**
      * emulate pre-parse statement.
      * 
      * @var bool $emulate_preparse 
-    */
+     */
     private bool $emulate_preparse = false;
 
     /**
@@ -134,14 +134,14 @@ abstract class CoreDatabase
      * ]
      * 
      * @var array<int,mixed> $databaseBackups
-    */
+     */
     protected static array $databaseBackups = [];
 
     /**
      * Initialize database configuration with backup connection details.
      * 
      * @param array<string,mixed> $config The database configuration.
-    */
+     */
     public function __construct(array $config = [])
     {
         if($config !== []){
@@ -156,7 +156,7 @@ abstract class CoreDatabase
      * @param string $property Property name.
      * 
      * @return mixed Return property value if exists, otherwise return null.
-    */
+     */
     public function __get(string $property): mixed 
     {
         return $this->{$property} ?? null;
@@ -179,7 +179,7 @@ abstract class CoreDatabase
      * @param array<string,mixed> $config Database configuration.
      * 
      * @return void 
-    */
+     */
     private function configure(array $config): void 
     {
         $this->port = $config['port'] ?? 3306;

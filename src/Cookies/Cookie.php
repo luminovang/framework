@@ -48,62 +48,62 @@ class Cookie implements CookieInterface, Stringable
 
     /**
      * @var string $prefix Cookie prefix
-    */
+     */
     protected string $prefix = '';
 
     /**
      * @var string $name Cookie name.
-    */
+     */
     protected string $name = '';
 
-     /**
+    /**
      * @var mixed $value Cookie value.
-    */
+     */
     protected mixed $value = '';
 
-     /**
+    /**
      * @var int $expires Cookie expiration time.
-    */
+     */
     protected int $expires = 0;
 
-     /**
+    /**
      * @var string $path Cookie path.
-    */
+     */
     protected string $path = '/';
 
-     /**
+    /**
      * @var string $domain Cookie domain
-    */
+     */
     protected string $domain = '';
 
-     /**
+    /**
      * @var bool $secure Cookie is secure.
-    */
+     */
     protected bool $secure = false;
 
-     /**
+    /**
      * @var bool $httpOnly Cookie http only.
-    */
+     */
     protected bool $httpOnly = true;
 
-     /**
+    /**
      * @var string $sameSite Cookie same site attribute.
-    */
+     */
     protected string $sameSite = 'Lax';
 
-     /**
+    /**
      * @var bool $raw Is cookie raw enabled
-    */
+     */
     protected bool $raw = false;
 
-     /**
+    /**
      * @var array<string, mixed> $options Cookie options.
-    */
+     */
     protected array $options = [];
 
     /**
      * @var array $default Cookie default options.
-    */
+     */
     protected array $default = [
         'prefix' => '',
         'expires'  => 0,
@@ -128,7 +128,7 @@ class Cookie implements CookieInterface, Stringable
      * Cookie configuration.
      * 
      * @var ?CookieConfig $config
-    */
+     */
     private static ?CookieConfig $config = null;
 
     /**
@@ -139,7 +139,7 @@ class Cookie implements CookieInterface, Stringable
      * @param array $options Cookie options
      * 
      * @throws CookieException
-    */
+     */
     final public function __construct(string $name, mixed $value = '', array $options = []) 
     {
         if( $options === []){
@@ -171,7 +171,7 @@ class Cookie implements CookieInterface, Stringable
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setOptions(CookieConfig|array $options): self
     {
         if ($options instanceof CookieConfig) {
@@ -194,7 +194,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function set(mixed $name, mixed $value, array $options = []): CookieInterface
     {
         return new self($name, $value, $options);
@@ -202,7 +202,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function setValue(mixed $value): self
     {
         $finalValue = $this->parseString($value);
@@ -219,7 +219,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function get(?string $key = null): mixed
     {
         $value = $this->getContents();
@@ -237,7 +237,7 @@ class Cookie implements CookieInterface, Stringable
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function delete(?string $key = null): self
     {
         $name = $this->getName();
@@ -279,7 +279,7 @@ class Cookie implements CookieInterface, Stringable
     
     /** 
      * {@inheritdoc}
-    */
+     */
     public function has(?string $key = null): bool
     {
         $name = $this->getName();
@@ -299,7 +299,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getName(): string
     {
         return $this->name;
@@ -307,7 +307,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      *{@inheritdoc}
-    */
+     */
     public function getOptions(): array
     {
         return $this->options;
@@ -315,7 +315,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getValue(): mixed
     {
         return $this->value;
@@ -323,7 +323,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getDomain(): string
     {
         return $this->domain;
@@ -331,7 +331,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getPrefix(): string
     {
         return $this->prefix;
@@ -339,7 +339,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getExpiry(bool $return_string = false): int|string
     {
         if($return_string){
@@ -351,7 +351,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function hasExpired(): bool
     {
         return $this->expires === 0 || $this->expires < Time::now()->getTimestamp();
@@ -369,7 +369,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getPath(): string
     {
         return $this->path;
@@ -377,7 +377,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getSameSite(): string
     {
         return $this->sameSite;
@@ -385,7 +385,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function isSecure(): bool
     {
         return $this->secure;
@@ -393,7 +393,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function isHttpOnly(): bool
     {
         return $this->httpOnly;
@@ -401,15 +401,15 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function isRaw(): bool
     {
         return $this->raw;
     }
 
-     /**
+    /**
      * {@inheritdoc}
-    */
+     */
     public function getString(): string
     {
         return $this->__toString();
@@ -417,7 +417,7 @@ class Cookie implements CookieInterface, Stringable
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function __toString(): string
     {
         return $this->toString();
@@ -425,7 +425,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getId(): string
     {
         return implode(';', [$this->getPrefixedName(), $this->getPath(), $this->getDomain()]);
@@ -433,7 +433,7 @@ class Cookie implements CookieInterface, Stringable
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getPrefixedName(): string
     {
         $name = $this->getPrefix();
@@ -452,7 +452,7 @@ class Cookie implements CookieInterface, Stringable
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function newFromString(string $cookie, bool $raw = false): CookieInterface
     {
         $options = ($this->options === []) ? $this->default : $this->options;
@@ -481,7 +481,7 @@ class Cookie implements CookieInterface, Stringable
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function hasPrefix(?string $name = null): bool
     {
         $name ??= $this->name;
@@ -495,7 +495,7 @@ class Cookie implements CookieInterface, Stringable
   
     /**
      * {@inheritdoc}
-    */
+     */
     public function toString(): string
     {
         $headers = [];
@@ -550,7 +550,7 @@ class Cookie implements CookieInterface, Stringable
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function toArray(): array
     {
         return array_merge($this->options, [
@@ -601,7 +601,7 @@ class Cookie implements CookieInterface, Stringable
      * @throws CookieException If invalid same-site was passed.
      *
      * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite
-    */
+     */
     private function validateSameSite(): void
     {
         $sameSite = $this->sameSite;
@@ -627,7 +627,7 @@ class Cookie implements CookieInterface, Stringable
      * @param array|object|int $value 
      * 
      * @return string|bool
-    */
+     */
     private function parseString(mixed $value): string|bool
     {
         if (!is_string($value) && !is_int($value)) {
@@ -647,7 +647,7 @@ class Cookie implements CookieInterface, Stringable
      * @param string $key option key
      * 
      * @return mixed $option
-    */
+     */
     private function passOption(string $key): mixed 
     {
         if(isset($this->options[$key]) && $this->options[$key] !== ''){
@@ -664,7 +664,7 @@ class Cookie implements CookieInterface, Stringable
      * Get data as array from storage 
      * 
      * @return mixed
-    */
+     */
     private function getContents(): mixed
     {
         $name = $this->getName();
@@ -693,7 +693,7 @@ class Cookie implements CookieInterface, Stringable
      * @param array $options cookie options
      * 
      * @return void
-    */
+     */
     private function saveContent(string $value = '', ?int $expiry = null, array $options = []): void
     {
         $name = $this->getName();
@@ -721,7 +721,7 @@ class Cookie implements CookieInterface, Stringable
      * @param string $value contents.
      * 
      * @return void
-    */
+     */
     private function saveGlobal(?string $name = null, mixed $value = ''): void 
     {
         $name ??= $this->name;
@@ -735,7 +735,7 @@ class Cookie implements CookieInterface, Stringable
      * @param string $property property to retrieve.
      * @throws CookieException Throws if property does not exist.
      * @internal
-    */
+     */
     public function __get(string $property): mixed 
     {
         if(property_exists($this, $property)){

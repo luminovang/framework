@@ -178,10 +178,8 @@ final class Foundation
             return;
         }
 
-        $error = 'An error is stopping application from running correctly.';
-        echo ($view === 'cli.php') 
-            ? $error 
-            : '<h1>Error Occurred!</h2><p>' . $error . '</p>';
+        // Give up and output basic issue message
+        ErrorHandler::notify($view === 'cli.php');
     }
 
     /**

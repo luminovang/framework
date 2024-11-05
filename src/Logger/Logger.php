@@ -36,9 +36,20 @@ class Logger implements LoggerInterface
     /**
      * Initialize logger instance 
      */
-    public function __construct()
+    public function __construct(){}
+
+    /**
+     * Get shared instance of PSR logger class.
+     * 
+     * @return LoggerInterface Return instance of logger class inuse.
+     */
+    public static function getLogger(): LoggerInterface
     {
-        static::$logger ??= ((new Preference())->getLogger() ?? new NovaLogger());
+        if(static::$logger instanceof LoggerInterface){
+            return static::$logger;
+        }
+
+        return static::$logger = (new Preference())->getLogger() ?? new NovaLogger();
     }
     
     /**
@@ -190,8 +201,8 @@ class Logger implements LoggerInterface
      */
     public function log($level, $message, array $context = []): void
     {
-        if (static::$logger instanceof LoggerInterface) {
-            static::$logger->log($level, $message, $context);
+        if (static::getLogger() instanceof LoggerInterface) {
+            static::getLogger()->log($level, $message, $context);
             return;
         }
 
@@ -217,6 +228,10 @@ class Logger implements LoggerInterface
         array $context = [],
         bool $asynchronous = false
     ): void {
+
+        if(!$to || trim($message) === ''){
+            return;
+        }
 
         if (NovaLogger::has($to)) {
             if ($asynchronous) {

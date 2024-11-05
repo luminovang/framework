@@ -68,8 +68,9 @@ final class Environment
      *
      * @param string $input The input string .
      * @param string $notation The conversion notion
+     * 
      * @return string
-    */
+     */
     public static function variableToNotation(string $input, string $notation = "."): string 
     {
         if ($notation === ".") {
@@ -100,7 +101,7 @@ final class Environment
      * @param string $key The input string .
      * 
      * @return mixed
-    */
+     */
     private static function getNotationConvention(string $key): mixed 
     {
         $keys = [str_replace('_', '.', $key), str_replace('.', '_', $key)];

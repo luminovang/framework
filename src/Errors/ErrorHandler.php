@@ -82,6 +82,34 @@ final class ErrorHandler
         throw $e;
     }
 
+    /** 
+     * Outputs a basic error message when no error handler is available.
+     * 
+     * @param bool $is_cli Whether the error occurred in a CLI environment.
+     * @param int $retry_after Optional number of seconds after which the client should retry (default: 60).
+     * 
+     * @return void
+     */
+    public static function notify(bool $is_cli, int $retry_after = 60): void 
+    {
+        $error = 'An error has prevented the application from running correctly.';
+        
+        if ($is_cli) {
+            echo $error;
+            return;
+        } 
+
+        if (!headers_sent()) {
+            header('HTTP/1.1 500 Internal Server Error');
+            header('Retry-After: ' . $retry_after);
+        }
+
+        echo sprintf(
+            '<html><head><title>Error Occurred</title></head><body><h1>Error Occurred</h1><p>%s</p></body></html>',
+            $error
+        );
+    }
+
     /**
      * Gets the error code.
      * 

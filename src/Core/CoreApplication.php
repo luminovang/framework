@@ -18,21 +18,21 @@ abstract class CoreApplication
      * Utilize the View trait for handling template rendering and responses.
      *
      * @see https://luminova.ng/docs/0.0.0/templates/views
-    */
+     */
     use View;
 
     /**
      * Singleton instance of the CoreApplication.
      *
      * @var self|null $instance
-    */
+     */
     private static ?self $instance = null;
 
     /**
      * Instance of the Router class.
      *
      * @var Router|null $router
-    */
+     */
     public ?Router $router = null;
 
     /**
@@ -64,7 +64,7 @@ abstract class CoreApplication
      * @param mixed ...$arguments Optional arguments for the event method.
      * 
      * @return void
-    */
+     */
     public final function __on(string $event, mixed ...$arguments): void 
     {
         $this->{$event}(...$arguments);
@@ -92,14 +92,14 @@ abstract class CoreApplication
      * @param array<string,mixed> $info The request state information.
      * 
      * @return void 
-    */
+     */
     protected function onStart(array $info): void {}
 
     /**
      * Called after the application finishes handling a request, regardless of success or failure.
      * 
      * @return void 
-    */
+     */
     protected function onFinish(): void {}
 
     /**
@@ -108,7 +108,7 @@ abstract class CoreApplication
      * @param string $context The name of the registered context.
      * 
      * @return void 
-    */
+     */
     protected function onContextInstalled(string $context): void {}
 
     /**
@@ -117,7 +117,7 @@ abstract class CoreApplication
      * @param string $uri The URI of the presented view.
      * 
      * @return void 
-    */
+     */
     protected function onViewPresent(string $uri): void {}
 
     /**
@@ -126,7 +126,7 @@ abstract class CoreApplication
      * @param array $options The presented command options.
      * 
      * @return void 
-    */
+     */
     protected function onCommandPresent(array $options): void {}
 
     /**
@@ -156,7 +156,7 @@ abstract class CoreApplication
      * 
      * @return mixed|null The property value or null if not found.
      * @ignore
-    */
+     */
     public function __get(string $key): mixed
     {
         $value = self::attrGetter($key);

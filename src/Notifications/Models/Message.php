@@ -265,7 +265,10 @@ final class Message
      */
     public function addNotification(string $key, mixed $value): self
     {
-        $this->payload['notification'][$key] = $value;
+        if($value !== ''){
+            $this->payload['notification'][$key] = $value;
+        }
+        
         return $this;
     }
 
@@ -330,8 +333,7 @@ final class Message
      */
     public function setImageUrl(string $url): self
     {
-        $this->payload['notification']['image'] = $url;
-        return $this;
+        return $this->addNotification('image', $url);
     }
 
     /**
@@ -343,8 +345,7 @@ final class Message
      */
     public function setIcon(string $icon): self
     {
-        $this->payload['notification']['icon'] = $icon;
-        return $this;
+        return $this->addNotification('icon', $icon);
     }
 
     /**
@@ -356,8 +357,7 @@ final class Message
      */
     public function setSound(string $sound): self
     {
-        $this->payload['notification']['sound'] = $sound;
-        return $this;
+        return $this->addNotification('sound', $sound);
     }
 
     /**
@@ -382,8 +382,7 @@ final class Message
      */
     public function setTag(string $tag): self
     {
-        $this->payload['notification']['tag'] = $tag;
-        return $this;
+        return $this->addNotification('tag', $tag);
     }
 
     /**
@@ -394,8 +393,7 @@ final class Message
      */
     public function setColor(string $color): self
     {
-        $this->payload['notification']['color'] = $color;
-        return $this;
+        return $this->addNotification('color', $color);
     }
 
     /**
@@ -459,8 +457,7 @@ final class Message
      */
     public function setClickAction(string $action): self
     {
-        $this->payload['notification']['click_action'] = $action;
-        return $this;
+        return $this->addNotification('click_action', $action);
     }
 
     /**
@@ -729,7 +726,7 @@ final class Message
      * @param array|null $setter The array of configuration settings.
      * 
      * @return void
-     * @throws InvalidArgumentException
+     * @throws InvalidArgumentException Throws if $setter field value has an invalid value.
      */
     private function setFromArray(?array $setter = null): void 
     {

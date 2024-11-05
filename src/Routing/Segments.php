@@ -9,15 +9,27 @@
  */
 namespace Luminova\Routing;
 
-class Segments 
+use \Countable;
+
+class Segments implements Countable
 {
     /**
-     * Initializes class.
+     * Initializes URL segments class.
      * 
-     * @param array<int,string> array list of url segments.
-    */
+     * @param array<int,string> A list array of URL segments.
+     */
     public function __construct(private array $segments = [])
     {
+    }
+
+    /**
+     * Retrieve the number of segments.
+     * 
+     * @return int Return the number of URL segments
+     */
+    public function count(): int 
+    {
+        return count($this->segments);
     }
 
     /**
@@ -25,8 +37,8 @@ class Segments
      * 
      * @param int $index Position index to return segment
      * 
-     * @return string view segment
-    */
+     * @return string Return view URL segment.
+     */
     public function index(int $index = 0): string
     {
         return $this->segments[$index] ?? '';
@@ -35,32 +47,30 @@ class Segments
     /**
      * Get first segment of current view uri.
      * 
-     * @return string First url segment
-    */
+     * @return string Return the first URL segment.
+     */
     public function first(): string
     {
         $segments = $this->segments;
-
         return reset($segments);
     }
     
     /**
-     * Get the last segment of current view uri.
+     * Get the last segment as the current view URL segment.
      * 
-     * @return string Current uri segment 
-    */
+     * @return string Return the current URL segment.
+     */
     public function current(): string 
     {
         $segments = $this->segments;
-
         return end($segments);
     }
 
     /**
      * Get the current view segment before last segment.
      * 
-     * @return string
-    */
+     * @return string Return the the URL segment before the last.
+     */
     public function previous(): string 
     {
         if (count($this->segments) > 1) {
@@ -73,8 +83,8 @@ class Segments
     /**
      * Get the current view segments as array.
      * 
-     * @return array<int,string> Array list of url segments
-    */
+     * @return array<int,string> Return an array list of URL segments.
+     */
     public function segments(): array 
     {
         return $this->segments;

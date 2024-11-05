@@ -281,7 +281,7 @@ abstract class CoreCronTasks
      * @param int $seconds Interval in seconds.
      * 
      * @return self Return cron class instance.
-    */
+     */
     protected final function seconds(int $seconds = 5): self
     {
         return $this->setInterval('PT', $seconds, 'S');
@@ -388,7 +388,7 @@ abstract class CoreCronTasks
      * 
      * @return bool Returns true on success, false on failure.
      * @internal
-    */
+     */
     public final function update(array $tasks): bool
     {
         return write_content(self::getPath() . self::$filename, json_encode($tasks, JSON_PRETTY_PRINT));

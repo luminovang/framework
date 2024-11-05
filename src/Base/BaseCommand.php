@@ -10,6 +10,7 @@
 namespace Luminova\Base;
 
 use \Luminova\Command\Terminal;
+use \App\Application;
 
 abstract class BaseCommand extends Terminal 
 {
@@ -64,6 +65,13 @@ abstract class BaseCommand extends Terminal
     protected string $description = '';
 
     /**
+     * Application instance.
+     * 
+     * @var Application|null $app
+     */
+    protected ?Application $app = null;
+
+    /**
      * {@inheritdoc}
      */
     public function __construct()
@@ -104,6 +112,20 @@ abstract class BaseCommand extends Terminal
      * @return int Return STATUS_SUCCESS when custom help is implemented, STATUS_ERROR when using default implementation.
      */
     abstract public function help(array $helps): int;
+
+    /**
+     * Initialize the application instance.
+     * 
+     * @return Application Return the application instance.
+     */
+    protected final function app(): Application
+    {
+        if (!$this->app instanceof Application) {
+            $this->app = Application::getInstance();
+        }
+        
+        return $this->app;
+    }
 
     /**
      * onCreate method that gets triggered on object creation, 
