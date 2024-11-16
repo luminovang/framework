@@ -76,7 +76,7 @@ class Mailer
     }
 
     /**
-     * Retrive the mail client object.
+     * Retrieve the mail client object.
      * 
      * @param string $method The method to call.
      * @param array $arguments Optional arguments to pass to the method.

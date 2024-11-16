@@ -21,6 +21,7 @@ use \WeakMap;
 use \Exception;
 
 class Response implements ViewResponseInterface
+
 {
     /**
      * Indicates if the response content should be minified.
@@ -324,10 +325,12 @@ class Response implements ViewResponseInterface
     public function download(
         string $fileOrContent, 
         ?string $name = null, 
-        array $headers = []
+        array $headers = [],
+        int $chunk_size = 8192,
+        int $delay = 0
     ): bool 
     {
-        return FileManager::download($fileOrContent, $name, $headers);
+        return FileManager::download($fileOrContent, $name, $headers, $chunk_size, $delay);
     }
 
     /**
@@ -338,10 +341,13 @@ class Response implements ViewResponseInterface
         string $basename, 
         array $headers = [],
         bool $eTag = true,
-        int $expiry = 0
+        int $expiry = 0,
+        int $length = (1 << 21),
+        int $delay = 0
         ): bool 
     {
-        return (new FileDelivery($path, $eTag))->output($basename, $expiry, $headers);
+        return (new FileDelivery($path, $eTag))
+            ->output($basename, $expiry, $headers, $length, $delay);
     }
 
     /**

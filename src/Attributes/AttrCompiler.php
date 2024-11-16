@@ -50,7 +50,7 @@ final class AttrCompiler
     /**
      * Loaded controller files.
      * 
-     * @var WeakMap $weak
+     * @var WeakMap|null $weak
      */
     private static ?WeakMap $weak = null;
 
@@ -113,10 +113,13 @@ final class AttrCompiler
         if($files === true){
             return;
         }
-  
+
+        $count = 0;
+
         foreach ($files as $file) {
             $fileName = pathinfo($file->getBasename(), PATHINFO_FILENAME);
-           
+            $count++;
+
             if (!$fileName) {
                 continue;
             }
@@ -139,6 +142,8 @@ final class AttrCompiler
                 continue;
             }
 
+            Router::setClassInfo('filename', $fileName);
+
             /**
              * Handle context attributes and register error handlers.
             */
@@ -152,7 +157,6 @@ final class AttrCompiler
 
                 foreach ($method->getAttributes(Route::class) as $attribute) {
                     $attr = $attribute->newInstance();
-                    //$callback = $fileName . '::' . $method->getName();
 
                     // If group is not null, then we need to skip immediately as it for cli
                     if($attr->group !== null){
@@ -198,6 +202,7 @@ final class AttrCompiler
             }
         }
 
+        Router::setClassInfo('attrFiles', $count?: 1);
         $this->cache('http', $context);
     }
 
@@ -220,9 +225,11 @@ final class AttrCompiler
             return;
         }
 
+        $count = 0;
         foreach ($files as $file) {
             $fileName = pathinfo($file->getBasename(), PATHINFO_FILENAME);
-           
+            $count++;
+
             if (!$fileName) {
                 continue;
             }
@@ -242,6 +249,8 @@ final class AttrCompiler
                 self::$weak[$file]->isSubclassOf(BaseCommand::class)))) {
                 continue;
             }
+
+            Router::setClassInfo('filename', $fileName);
 
             foreach (self::$weak[$file]->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
                 $callback = $fileName . '::' . $method->getName();
@@ -270,6 +279,7 @@ final class AttrCompiler
             }
         }
 
+        Router::setClassInfo('attrFiles', $count?: 1);
         $this->cache('cli');
     }
 

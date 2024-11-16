@@ -227,7 +227,7 @@ class Func
      */
 	private static function uuid3Or5(string|null $namespace, string|null $name, int $version = 3): string 
 	{
-		if ($namespace === null || $name === null) {
+		if (!$namespace || !$name) {
 			throw new InvalidArgumentException("Namespace and name must be provided for version {$version} UUID");
 		}
 	
@@ -258,6 +258,10 @@ class Func
      */
     public static function isUuid(string $uuid, int $version = 4): bool 
     {
+		if(!$uuid){
+			return false;
+		}
+
         $pattern = ($version === 4)
             ? '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i'
             : '/^\{?[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}\}?$/';
@@ -274,6 +278,10 @@ class Func
 	 */
 	public static function isEmail(string $email): bool
 	{
+		if(!$email){
+			return false;
+		}
+
 		if(filter_var($email, FILTER_VALIDATE_EMAIL) !== false){
 			return true;
 		}
@@ -290,6 +298,10 @@ class Func
 	 */
 	public static function isUrl(string $url): bool
 	{
+		if(!$url){
+			return false;
+		}
+
 		if (filter_var($url, FILTER_VALIDATE_URL) !== false) {
 			return true;
 		}
@@ -297,32 +309,69 @@ class Func
 		return (bool) preg_match("/^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(:[0-9]{1,5})?(\/[^\s]*)?$/i", $url);
 	}
 
+	/**
+     * Determines if a given string is likely to be Base64-encoded.
+     *
+     * @param string $data The string to check for Base64 encoding.
+     *
+     * @return bool Returns true if the string is likely to be Base64-encoded, false otherwise.
+     */
+    public static function isBase64Encoded(string $data): bool
+    {
+        return $data 
+			? (bool) preg_match('/^[a-zA-Z0-9\/+\r\n]+={0,2}$/', $data) && strlen($data) % 4 === 0
+			: false;
+    }
+
+	/**
+     * Determines if the content string is likely a binary based on the presence of non-printable characters.
+     * 
+	 * @param string $data The string to check for binary.
+	 * 
+     * @return bool Return true if it's a binary, false otherwise.
+     */
+    public static function isBinary(string $data): bool
+    {
+        return $data 
+			? (bool) preg_match('/[^\x20-\x7E\t\r\n]/', $data)
+			: false;
+    }
+
 	/** 
-	* Checks if string is a valid phone number
-	*
-	* @param string|int $phone phone address to validate
-	* @param int $min Minimum allowed length.
-	*
-	* @return bool Return true if valid phone number, false otherwise.
-	*/
+	 * Checks if string is a valid phone number
+	 *
+	 * @param string|int $phone phone address to validate
+	 * @param int $min Minimum allowed length.
+	 *
+	 * @return bool Return true if valid phone number, false otherwise.
+	 */
 	public static function isPhone(string|int $phone, int $min = 10): bool 
 	{
-		$phone = is_int($phone) ? (string) $phone : $phone;
-		$phone = preg_replace('/\D/', '', $phone);
+		if(!$phone){
+			return false;
+		}
+
+		$phone = is_int($phone) 
+			? (string) $phone 
+			: preg_replace('/\D/', '', $phone);
 		$length = strlen($phone);
 		
 		return ($length >= $min && $length <= 15);
 	}
 
 	/** 
-	* Formats a phone number as (xxx) xxx-xxxx or xxx-xxxx depending on the length.
-	*
-	* @param string $phone phone address to format
-	*
-	* @return string Return the formatted phone number.
-	*/
+	 * Formats a phone number as (xxx) xxx-xxxx or xxx-xxxx depending on the length.
+	 *
+	 * @param string $phone phone address to format
+	 *
+	 * @return string Return the formatted phone number.
+	 */
 	public static function formatPhone(string $phone): string 
 	{
+		if(!$phone){
+			return '';
+		}
+
 		$phone = preg_replace("/[^0-9]/", '', $phone);
 		$length = strlen($phone);
 		$patterns =[
@@ -342,9 +391,13 @@ class Func
 	 * @param int $max maximum allowed password length (default: 50).
 	 * 
 	 * @return bool Return trues if passed otherwise false
-	*/
+	 */
 	public static function strength(string $password, int $complexity = 4, int $min = 6, int $max = 50): bool 
 	{
+		if(!$password){
+			return false;
+		}
+
 		$length = strlen($password);
 
 		if ($length < $min || $length > $max) {
@@ -370,15 +423,39 @@ class Func
 	}
 
 	/**
-	 * Sanitize user input to protect against cross-site scripting attacks.
+	 * Strictly sanitizes user input to protect against invalid characters and ensure it conforms to the expected type.
 	 *
 	 * @param string $string The input string to be sanitized.
-	 * @param string $type   The expected data type (e.g., 'int', 'email').
-	 * @param string $replacement The symbol to replace disallowed characters with (optional).
+	 * @param string $type The expected data type (e.g., 'int', 'email', 'username').
+	 * @param string|null $replacement The symbol to replace disallowed characters or null to throw and exception (default: '').
 	 *
 	 * @return string Return the sanitized string.
-	*/
-	public static function strictType(string $string, string $type = 'name', string $replacement = ''): string
+	 * @throws InvalidArgumentException If the input does not match the expected type and no replacement is provided.
+	 * 
+	 * Available types:
+	 * - 'int'       : Only numeric characters (0-9) are allowed.
+	 * - 'digit'     : Numeric characters, including negative numbers and decimals.
+	 * - 'key'       : Alphanumeric characters, underscores, and hyphens.
+	 * - 'password'  : Alphanumeric characters, and special characters (@, *, !, _, -).
+	 * - 'username'  : Alphanumeric characters, hyphen, underscore, and dot.
+	 * - 'email'     : Alphanumeric characters and characters allowed in email addresses.
+	 * - 'url'       : Valid URL characters (alphanumeric, ?, #, &, +, =, . , : , /, -).
+	 * - 'money'     : Numeric characters, including decimal and negative values.
+	 * - 'double'    : Floating point numbers (numeric and decimal points).
+	 * - 'alphabet'  : Only alphabetic characters (a-z, A-Z).
+	 * - 'phone'     : Numeric characters, plus sign, and hyphen (e.g., phone numbers).
+	 * - 'name'      : Unicode characters, spaces, and common name symbols (e.g., apostrophe).
+	 * - 'timezone'  : Alphanumeric characters, hyphen, slash, and colon (e.g., timezone names).
+	 * - 'time'      : Alphanumeric characters and colon (e.g., time format).
+	 * - 'date'      : Alphanumeric characters, hyphen, slash, comma, and space (e.g., date format).
+	 * - 'uuid'      : A valid UUID format (e.g., 8-4-4-4-12 hexadecimal characters).
+	 * - 'default'   : Removes HTML tags.
+	 */
+	public static function strictType(
+		string $string, 
+		string $type = 'default', 
+		string|null $replacement = ''
+	): string
 	{
 		if($string === ''){
 			return $string;
@@ -403,10 +480,20 @@ class Func
 			'uuid' => "/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/",
 			'default' => "/<[^>]+>/",
 		];
-
+		
 		$pattern = $patterns[$type] ?? $patterns['default'];
-		$format = preg_replace($pattern, $replacement, $string);
+		if($replacement === null){
+			if (!preg_match($pattern, $string)) {
+				throw new InvalidArgumentException(
+					"String does not match the required format for type: $type.",
+					InvalidArgumentException::STRICT_NOTICE
+				);
+			}
 
+			return $string;
+		}
+
+		$format = preg_replace($pattern, $replacement, $string);
 		return trim($format);
 	}
 

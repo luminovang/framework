@@ -106,6 +106,20 @@ final class Table
     public const ORACLE = 'oracle';
 
     /**
+     * Generate schema for Postgres sql database.
+     * 
+     * @var string POSTGRES
+     */
+    public const POSTGRES = 'postgres';
+
+    /**
+     * Generate schema for sqlite sql database.
+     * 
+     * @var string SQLITE
+     */
+    public const SQLITE = 'sqlite';
+
+    /**
      * Replaces format to column name.
      * 
      * @var string COLUMN_NAME
@@ -258,6 +272,12 @@ final class Table
      */
     public function id(string $name = 'id'): self
     {
+        if($this->database === Table::SQLITE){
+            return $this->addColumn('INTEGER', $name)
+                ->attribute(self::INDEX_PRIMARY_KEY)
+                ->attribute('AUTOINCREMENT'); 
+        }
+
         return $this->addColumn('BIGINT', $name)
             ->autoIncrement()
             ->unsigned()
@@ -302,10 +322,10 @@ final class Table
     {
         return $this->addColumn('TIMESTAMP', 'created_on', $precision)
             ->nullable()
-            ->default(null)
+            ->default(self::DEFAULT_TIMESTAMP)
             ->addColumn('TIMESTAMP', 'updated_on', $precision)
             ->nullable()
-            ->default(null);
+            ->default(self::DEFAULT_TIMESTAMP);
     }
 
     /**
@@ -660,7 +680,7 @@ final class Table
      */
     public function unsigned(): self
     {
-        if($this->database === self::MYSQL) {
+        if($this->database === self::MYSQL || $this->database === self::SQLITE) {
             return $this->attribute('UNSIGNED');
         }
 

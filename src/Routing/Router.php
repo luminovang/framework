@@ -48,7 +48,7 @@ use \Exception;
  * @method static void delete(string $pattern, Closure|string $callback) Route to handle http `DELETE` requests.
  * @method static void put(string $pattern, Closure|string $callback) Route to handle http `PUT` requests.
  * @method static void options(string $pattern, Closure|string $callback) Route to handle http `OPTIONS` requests.
-*/
+ */
 final class Router 
 {
     /**
@@ -146,6 +146,13 @@ final class Router
     private static array $commands = [];
 
     /**
+     * Controller class information.
+     * 
+     * @var array<string,string> $classInfo
+     */
+    private static array $classInfo = [];
+
+    /**
      * Application instance.
      * 
      * @var CoreApplication|null $application 
@@ -178,7 +185,7 @@ final class Router
         self::$di = env('feature.route.dependency.injection', false);
         self::$application = $app;
         self::$is_cli = is_command() && self::cmd();
-        self::reset();
+        self::reset(true);
         Foundation::profiling('start');
     }
 
@@ -270,7 +277,7 @@ final class Router
      * Before middleware, to handle router middleware authentication.
      * 
      * @param string  $methods  The allowed methods, can be serrated with `|` pipe symbol (e.g,. `GET|POST`).
-     * @param string  $pattern The route URL pattern or template view name (e.g, `/.*`, `/home`, `/user/([0-9])`).
+     * @param string  $pattern The route URL pattern or template view name (e.g, `{segment}`, `(:type)`, `/.*`, `/home`, `/user/([0-9])`).
      * @param Closure|string $callback Callback function to execute.
      * 
      * @return void
@@ -292,7 +299,7 @@ final class Router
      * After middleware route, executes the callback function after request was executed successfully.
      *
      * @param string  $methods  The allowed methods, can be serrated with `|` pipe symbol (e.g, `GET|POST`).
-     * @param string  $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param string  $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
      * @param Closure|string $callback The callback function to execute (e.g, `ControllerClass::methodName`).
      * 
      * @return void
@@ -314,7 +321,7 @@ final class Router
      * Capture front controller request method based on pattern and execute the callback.
      *
      * @param string $methods The allowed methods, can be separated with `` pipe symbol (e.g, `GET|POST|PUT`).
-     * @param string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
      * @param Closure|string $callback The callback function to execute (e.g, `ControllerClass::methodName`).
      * 
      * @return void
@@ -335,7 +342,7 @@ final class Router
     /**
      * An alias for route capture method to handle any type of request method.
      *
-     * @param string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
      * @param Closure|string $callback The callback to execute (e.g, `ControllerClass::methodName`).
      * 
      * @return void
@@ -388,7 +395,7 @@ final class Router
     /**
      *The Bind method allow you to group a collection nested `URI`  together in a single base path prefix or pattern.
      *
-     * @param string $prefix The path prefix name or pattern (e.g,. `/blog`, `/account/([a-z])`).
+     * @param string $prefix The path prefix name or pattern (e.g,. `/blog`, `{segment}`, `(:type)`, `/account/([a-z])`).
      * @param Closure $callback The callback function to handle routes group binding.
      * 
      * @return void
@@ -413,7 +420,7 @@ final class Router
     /**
      * Binds commands route within a group.
      *
-     * @param string $group The command group name. 
+     * @param string $group The command group name (e.g, `foo`, `bar`). 
      * @param Closure $callback Callback command function to handle group.
      * 
      * @return void
@@ -437,7 +444,7 @@ final class Router
      * @param string $namespace The class namespace to be registered (e.g,, `\App\Controllers\Http\`, `\App\Modules\FooModule\Controllers\`).
      *
      * @return self Return instance of router class.
-     * @throws RouterException If the namespace is empty or contains invalid characters.
+     * @throws RouterException Throw if the namespace is empty or contains invalid characters.
      */
     public function addNamespace(string $namespace): self
     {
@@ -496,7 +503,7 @@ final class Router
             }
         }
 
-        self::$application->__on('onFinish');
+        self::$application->__on('onFinish', self::$classInfo);
         if($exit_code === STATUS_SUCCESS){
             Foundation::profiling('stop', $context);
         }
@@ -555,8 +562,24 @@ final class Router
         if ($error !== null && self::call($error, [], true)) {
             return;
         }
-     
-        self::printError('Error file not found', null, $status);
+
+        if (PRODUCTION) {
+            self::printError(
+                'Resource Not Found', 
+                'The requested resource could not be found on the server.', 
+                $status
+            );
+            return;
+        }
+    
+        self::printError(
+            'Resource Not Found', 
+            "An error occurred:\n\n" . 
+            "- No controller is registered to handle the requested URL.\n" . 
+            "- Alternatively, a custom error handler is missing for this URL prefix in the controller.\n" . 
+            "- Additionally, check your Controller class's prefix pattern to ensure it doesn't exclude the URL.",
+            $status
+        );
     }
 
     /**
@@ -590,6 +613,29 @@ final class Router
     public function getSegment(): Segments 
     {
         return new Segments(self::$is_cli ? [self::CLI_URI] : Foundation::getSegments());
+    }
+
+    /**
+     * Get the routed controller class information.
+     *
+     * @return array<string,string> Return array of controller information.
+     */
+    public static function getClassInfo(): array
+    {
+        return self::$classInfo;
+    }
+
+    /**
+     * Sets information about the routed controller class.
+     *
+     * @param string $key The key under which to store the information.
+     * @param mixed $value The value to store.
+     *
+     * @return void
+     */
+    public static function setClassInfo(string $key, mixed $value): void
+    {
+        self::$classInfo[$key] = $value;
     }
 
     /**
@@ -708,26 +754,24 @@ final class Router
             self::$cmd?->error(sprintf('(%s) [%s] %s', $status, $header, $message));
             exit(STATUS_ERROR);
         }
-
+        
         Header::headerNoCache($status);
-        if($message){
-            echo sprintf(
-                '<html><title>%s</title><body><h1>%s</h1><p>%s</p></body></html>',
-                $header,
-                $header,
-                $message
-            );
-        }
-
+        echo sprintf(
+            '<html><title>%s</title><body><h1>%s</h1><p>%s</p></body></html>',
+            $header,
+            $header,
+            str_replace("\n", '<br/>', $message ?? $header)
+        );
+        
         exit(STATUS_ERROR);
     }
 
     /**
      * Register a http route.
      *
-     * @param string  $to group name.
+     * @param string  $to The routing group name to add this route.
      * @param string  $methods  Allowed methods, can be serrated with | pipe symbol.
-     * @param string  $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param string  $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
      * @param Closure|string $callback Callback function to execute.
      * @param bool $terminate Terminate if it before middleware.
      * 
@@ -879,7 +923,7 @@ final class Router
      * Run the CLI router and application, Loop all defined CLI routes
      * 
      * @return int Return status success or failure.
-     * @throws RouterException
+     * @throws RouterException Throws if an error occurs while running cli routes.
      */
     private static function runAsCommand(): int
     {
@@ -1028,6 +1072,10 @@ final class Router
                 // Remove the matched file extension to render the request normally
                 self::$uri = substr(self::$uri, 0, -strlen($matches[0]));
             }elseif($expired === false && self::$weak[self::$application]->read() === true){
+
+                self::$classInfo['staticCache'] = true;
+                self::$classInfo['cache'] = true;
+
                 // Render performance profiling content.
                 Foundation::profiling('stop');
 
@@ -1086,7 +1134,7 @@ final class Router
         
         foreach ($routes as $route) {
             if($route['middleware']){
-                return self::call($route['callback'], self::$commands);
+                return self::call($route['callback'], self::$commands, false, true);
             }
 
             $matches = [];
@@ -1224,7 +1272,8 @@ final class Router
      *
      * @param Closure|array{0:class-string<BaseController|BaseViewController|BaseCommand|RouterInterface|ErrorHandlerInterface>,1:string}|string $callback Class public callback method eg: UserController:update.
      * @param array $arguments Method arguments to pass to callback method.
-     * @param bool $injection Force use dependency injection. Default is false.
+     * @param bool $injection Force use dependency injection (default: false).
+     * @param bool $is_cli_middleware Indicate weather caller is cli middleware (default: false).
      *
      * @return bool Return true if controller method was executed successfully, false otherwise.
      * @throws RouterException if method is not callable or doesn't exist.
@@ -1232,7 +1281,8 @@ final class Router
     private static function call(
         Closure|string|array $callback, 
         array $arguments = [], 
-        bool $injection = false
+        bool $injection = false,
+        bool $is_cli_middleware = false
     ): bool
     {
         if ($callback instanceof Closure) {
@@ -1240,22 +1290,36 @@ final class Router
                 ? ($arguments['params'] ?? []) 
                 : $arguments;
             
-            return status_code($callback(...self::injection($callback, $arguments, $injection)), false);
+            self::$classInfo['namespace'] = '\\Closure';
+            self::$classInfo['method'] = 'function';
+
+            return status_code($callback(...self::injection(
+                $callback, 
+                $arguments, 
+                $injection
+            )), false);
         }
 
         if (is_array($callback)) {
             // It probably static implementation of error handler.
-            return self::reflection($callback[0], $callback[1], $arguments, $injection);
+            return self::reflection(
+                $callback[0], 
+                $callback[1], 
+                $arguments, 
+                $injection,
+                $is_cli_middleware
+            );
         }
 
         if (str_contains($callback, '::')) {
             [$controller, $method] = explode('::', $callback);
-
+            
             return self::reflection(
                 self::getControllerClass($controller), 
                 $method, 
                 $arguments, 
-                $injection
+                $injection,
+                $is_cli_middleware
             );
         }
 
@@ -1269,6 +1333,7 @@ final class Router
      * @param string $method Controller class method name.
      * @param array $arguments Optional arguments to pass to the method.
      * @param bool $injection Force use dependency injection. Default is false.
+     * @param bool $is_cli_middleware Indicate weather caller is cli middleware (default: false).
      *
      * @return bool If method was called successfully.
      * @throws RouterException if method is not callable or doesn't exist.
@@ -1277,7 +1342,8 @@ final class Router
         string $className, 
         string $method, 
         array $arguments = [], 
-        bool $injection = false
+        bool $injection = false,
+        bool $is_cli_middleware = false
     ): bool 
     {
         if ($className === '') {
@@ -1287,6 +1353,9 @@ final class Router
             ]);
             return false;
         }
+
+        self::$classInfo['namespace'] = $className;
+        self::$classInfo['method'] = $method;
 
         try {
             $class = new ReflectionClass($className);
@@ -1314,7 +1383,8 @@ final class Router
                             $class->newInstance(), 
                             $arguments, 
                             $className, 
-                            $caller
+                            $caller,
+                            $is_cli_middleware
                         );
                     }
                 } else {
@@ -1419,6 +1489,7 @@ final class Router
      * @param array $arguments Pass arguments to reflection method.
      * @param string $className Invoking class name.
      * @param ReflectionMethod $caller Controller class method.
+     * @param bool $is_middleware Indicate weather caller is cli middleware (default: false).
      *
      * @return int Return result from command controller method.
      */
@@ -1426,7 +1497,8 @@ final class Router
         BaseCommand $instance,
         array $arguments, 
         string $className, 
-        ReflectionMethod $caller
+        ReflectionMethod $caller,
+        bool $is_middleware = false
     ): int
     {
         $id = '_about_' . $instance->name;
@@ -1441,7 +1513,7 @@ final class Router
         ];
 
         // Check command string to determine if it has help arguments.
-        if(self::$cmd->isHelp($arguments['command'])){
+        if(!$is_middleware && self::$cmd->isHelp($arguments['command'])){
             
             if(self::$cmd->header()){
                 self::$cmd->newLine();
@@ -1661,16 +1733,29 @@ final class Router
      * 
      * @return void
     */
-    private static function reset(): void
+    private static function reset(bool $init = false): void
     {
         self::$weak[self::$reference] = [
             'routes' =>             [], 
             'routes_after' =>       [], 
             'routes_middleware' =>  [], 
             'cli_commands' =>       [], 
-            'cli_middleware' =>     [], 
+            'cli_middleware' =>     [],
             'cli_groups' =>         [], 
             'errors' =>             []
+        ];
+
+        if(!$init){
+            return;
+        }
+
+        self::$classInfo = [
+            'filename'    => null,
+            'namespace'   => null,
+            'method'      => null,
+            'attrFiles'   => 1,
+            'cache'       => false,
+            'staticCache' => false
         ];
     }
 }

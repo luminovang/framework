@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework File upload helper
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -16,52 +16,77 @@ use \Luminova\Exceptions\StorageException;
 final class Uploader
 {
     /**
-     * Upload file to server, by reading entire file from temp and writing to destination.
+     * Uploads a file to the server by transferring data from a temporary source or string content
+     * of file-object to a specified destination. Supports chunked writing for resource management.
      *
-     * @param File $file Instance of file being uploaded.
-     * @param string|null $path Upload file location if not already set in file setConfig method.
+     * @param File $file The instance of file object being uploaded.
+     * @param string|null $path Optional upload path, if not set in the file configuration.
+     * @param int $delay Optional microsecond delay between chunks to limit resource usage (default: 0).
+     * @param string|null $destination Output variable holding the final upload path or null if upload fails.
      * 
-     * @return bool Return true if upload was successful false otherwise.
-     * @throws StorageException If upload path is not specified in configuration.
+     * @return bool Return true if the upload is successful, false otherwise.
+     * @throws StorageException Throws if the upload path is not configured or permission to create it was denied.
      */
-    public static function upload(File $file, ?string $path = null): bool
+    public static function upload(
+        File $file, 
+        ?string $path = null, 
+        int $delay = 0,
+        ?string &$destination = null
+    ): bool
     {
         $destination = self::beforeUpload($file, $path, $symlink);
       
-        if ($destination === false) {
+        if ($destination === null) {
             return false;
         }
-
+       
         $config = $file->getConfig();
         $chunk = (isset($config->chunkLength) ? (int) $config->chunkLength : 5_242_880);
-        $temp = $destination . '.part';
+        $uploaded = false;
 
-        if (self::execute($temp, $file->getTemp(), $chunk) && rename($temp, $destination)) {
+        if($file->getTemp() !== null){
+            $temp = $destination . '.part';
+            $uploaded = self::execute($temp, $file->getTemp(), $chunk, $delay) && rename($temp, $destination);
+        }elseif($file->getContent() !== null){
+            $uploaded = self::write(
+                $destination, 
+                $file->isBase64Encoded() ? base64_decode($file->getContent()) :  $file->getContent()
+            );
+        }
+
+        if ($uploaded) {
             $file->free();
             if($symlink !== null){
                 FileManager::symbolic($destination, $symlink);
             }
+
             return true;
         }
-
+       
         $file->free();
+        $destination = null;
         return false;
     }
 
     /**
-     * Moves an uploaded file to a new location.
+     * Moves an uploaded file from a temporary location to a permanent destination.
      *
-     * @param File $file Instance of file being uploaded.
-     * @param string|null $path Upload file location if not already set in file setConfig method.
+     * @param File $file The file object being moved.
+     * @param string|null $path Optional upload path, if not set in the file configuration.
+     * @param string|null $destination Output variable holding the final destination path or null if move fails.
      * 
-     * @return bool Return true if upload was successful false otherwise.
-     * @throws StorageException If upload path is not specified in configuration.
+     * @return bool return true if the move is successful, false otherwise.
+     * @throws StorageException Throws if the upload path is not configured or permission to create it was denied.
      */
-    public static function move(File $file, ?string $path = null): bool
+    public static function move(
+        File $file, 
+        ?string $path = null,
+        ?string &$destination = null
+    ): bool
     {
         $destination = self::beforeUpload($file, $path, $symlink);
 
-        if ($destination === false) {
+        if ($destination === null) {
             return false;
         }
 
@@ -74,26 +99,37 @@ final class Uploader
         }
         
         $file->free();
+        $destination = null;
         return false;
     }
 
     /**
-     * Uploads a file to the server using stream file upload, allowing large files to be uploaded in chunks.
+     * Uploads a file in chunks to a specified destination, supporting large file uploads by dividing
+     * the file into manageable parts. This chunk splitting is usually done from client side (e.g, `PluUpload Js`).
      *
-     * @param File $file Instance of file being uploaded.
-     * @param string|null $path The directory path where the file will be stored.
-     * @param int $chunk The current chunk part index (start: 0).
-     * @param int $chunks The total number of chunks parts the server will be expecting (start: 0).
+     * @param File $file The instance of file object being uploaded.
+     * @param string|null $path Directory path for the upload, if not set in file configuration.
+     * @param int $chunk The current chunk index, starting at 0 (default: 0).
+     * @param int $chunks The total number of chunks to be uploaded, starting at 0 (default: 0).
+     * @param int $delay Optional delay in microseconds between chunks to control resource usage (default: 0).
+     * @param string|null $destination Output variable holding the final destination path or null if upload fails.
      * 
-     * @return bool|int Return true if upload was successful, false otherwise. If chunks are being uploaded, returns remaining chunks count.
-     * 
-     * @throws StorageException If upload path is not specified in configuration.
+     * @return bool|int Return true if upload is complete, false otherwise. 
+     *          If upload is still in progress, returns remaining chunks count.
+     * @throws StorageException Throws if the upload path is not configured or permission to create it was denied.
      */
-    public static function chunk(File $file, ?string $path = null, int $chunk = 0, int $chunks = 0): bool|int
+    public static function chunk(
+        File $file, 
+        ?string $path = null, 
+        int $chunk = 0, 
+        int $chunks = 0,
+        int $delay = 0,
+        ?string &$destination = null
+    ): bool|int
     {
         $destination = self::beforeUpload($file, $path, $symlink);
 
-        if ($destination === false) {
+        if ($destination === null) {
             return false;
         }
         
@@ -103,6 +139,7 @@ final class Uploader
         $out = fopen($temp, $chunk === 0 ? 'wb' : 'ab');
 
         if ($out === false) {
+            $destination = null;
             return false;
         }
 
@@ -110,11 +147,17 @@ final class Uploader
         if ($in === false) {
             fclose($out);
             $file->free();
+            $destination = null;
             return false;
         }
 
+        $delay = ($delay === 0 && $length > 10_000_000) ? 10000 : $delay;
         while ($buffer = fread($in, $length)) {
             fwrite($out, $buffer);
+
+            if($delay > 0){
+                usleep($delay);
+            }
         }
 
         fclose($in);
@@ -128,48 +171,62 @@ final class Uploader
                 }
                 return true;
             }
-            
+
+            $destination = null;
             return false;
         }
 
+        $destination = null;
         return $chunks - $chunk;
     }
 
     /**
-     * Save contents to a file.
+     * Writes provided content to a specified file path.
      *
-     * @param string $filename The file path and and name the to put content.
-     * @param string|resource $contents The contents to be written to the file.
+     * @param string $filename The path and filename to write the content (e.g, `path/to/text.txt`).
+     * @param resource|string $contents The string content or resource to be written.
      * 
-     * @return bool Returns true if the file was successfully written, false otherwise.
+     * @return bool Return true if the file is written successfully, false otherwise.
      */
     public static function write(string $filename, mixed $contents): bool 
     {
-       if(is_string($contents) || is_resource($contents)){
+        if(!make_dir(dirname($filename))){
+            return false;
+        }
+
+        $isResource = is_resource($contents);
+        if(is_string($contents) || $isResource){
             $file = fopen($filename, 'w');
 
             if ($file === false) {
                 return false;
             }
 
-            $result = fwrite($file, is_resource($contents) ? stream_get_contents($contents) : $contents);
+            $result = fwrite($file, $isResource ? stream_get_contents($contents) : $contents);
             fclose($file);
 
             return $result !== false;
         }
+
         return false;
     }
 
     /**
-     * Handles chunked upload of the file.
-     *
-     * @param string $destination Destination to custom temporal file.
-     * @param string $temp The temporary file path for on the server.
-     * @param int $chunk Chunk read size in byte of the uploaded file (default: 5mb)
+     * Transfers data from a temporary file to a permanent destination in chunks, enabling controlled resource usage.
      * 
-     * @return bool Return true on success, false on failure.
-    */
-    private static function execute(string $destination, string $temp, int $chunk = 5_242_880): bool
+     * @param string $destination The file path to write data to.
+     * @param string $temp Temporary file path of the source data.
+     * @param int $chunk Size of each data chunk in bytes (default: 5 MB).
+     * @param int $delay Optional microsecond delay between chunks for resource management (default: 0).
+     * 
+     * @return bool Return true if transfer completes successfully, false otherwise.
+     */
+    private static function execute(
+        string $destination, 
+        string $temp, 
+        int $chunk = 5_242_880,
+        int $delay = 0
+    ): bool
     {
         $in = fopen($temp, 'rb');
         
@@ -184,8 +241,13 @@ final class Uploader
             return false;
         }
 
+        $delay = ($delay === 0 && $chunk > 10_000_000) ? 10000 : $delay;
         while ($buffer = fread($in, $chunk)) {
             fwrite($out, $buffer);
+
+            if($delay > 0){
+                usleep($delay);
+            }
         }
 
         fclose($in);
@@ -195,32 +257,40 @@ final class Uploader
     }
 
     /**
-     * Validate file before uploading
+     * Prepares a file for uploading by validating configuration and setting up destination paths.
      * 
-     * @param File $file Instance of file being uploaded.
-     * @param string|null $path Upload file location if not already set in file setConfig method.
+     * @param File $file The file object to be validated for upload.
+     * @param string|null $path Optional custom path for the upload location.
+     * @param string|null $symlink Optional symbolic link path reference.
      * 
-     * @return string|false Return upload destination or false on failure.
-     * @throws StorageException If upload path is not specified in configuration.
-    */
-    private static function beforeUpload(File $file, ?string $path = null, ?string &$symlink = null): string|bool
+     * @return string|null Return the upload destination path or null if preparation fails.
+     * @throws StorageException Throws if the upload path is not configured or permission to create it was denied.
+     */
+    private static function beforeUpload(
+        File $file, 
+        ?string $path = null, 
+        ?string &$symlink = null
+    ): ?string
     {
         if ($file === false) {
-            return false;
+            return null;
         }
 
         $config = $file->getConfig();
 
-        if(!isset($config->uploadPath) && $path === null){
-            throw new StorageException('Upload path must be specified in setConfig of file object or pass in second parameter.');
+        if(!$path && !isset($config->uploadPath)){
+            throw new StorageException('Upload path must be specified in setConfig() method of file object or pass in second parameter.');
         }
 
         if (!$file->valid()) {
-            return false;
+            throw new StorageException('Upload validation failed: ' . $file->getMessage());
         }
 
         $path = rtrim($path ?? $config->uploadPath, TRIM_DS) . DIRECTORY_SEPARATOR;
-        make_dir($path);
+
+        if(!make_dir($path)){
+            throw new StorageException("Failed to create upload directory at '{$path}': Path does not exist or permission was denied.");
+        }
 
         $filename = basename($file->getName());
         $destination = $path . $filename;
@@ -229,12 +299,14 @@ final class Uploader
             if(($config->ifExisted ?? File::IF_EXIST_OVERWRITE) === File::IF_EXIST_OVERWRITE){
                 unlink($destination);
             }else{
-                $filename =  uniqid() . '-' . $filename;
+                $filename =  uniqid('copy') . '-' . $filename;
                 $destination = $path . $filename;
             }
         }
 
-        $symlink = (isset($config->symlink) ? rtrim($config->symlink, TRIM_DS) . DIRECTORY_SEPARATOR . $filename : null);
+        $symlink = isset($config->symlink)
+            ? rtrim($config->symlink, TRIM_DS) . DIRECTORY_SEPARATOR . $filename 
+            : null;
 
         return $destination;
     }

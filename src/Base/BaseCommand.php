@@ -10,7 +10,9 @@
 namespace Luminova\Base;
 
 use \Luminova\Command\Terminal;
+use \Luminova\Functions\Func;
 use \App\Application;
+use \App\Config\Files;
 
 abstract class BaseCommand extends Terminal 
 {
@@ -128,6 +130,151 @@ abstract class BaseCommand extends Terminal
     }
 
     /**
+     * Retrieves the full command-line execution string for the current command.
+     *
+     * @return string Return the full command-line string.
+     * 
+     * @example Given a command with `php index.php foo user=1 --no-nocache`
+     * 
+     *```bash 
+     * index.php index.php foo user=1 --no-nocache
+     * ```
+     */
+    protected function getString(): string 
+    {
+        return parent::getQuery('exe_string');
+    }
+
+    /**
+     * Retrieves an option value of executed command based on the specified key or alias.
+     * This method is an alias of the parent `getAnyOption` method.
+     * 
+     * @param string $key The primary key for the option.
+     * @param string $alias The alias for the option.
+     * @param mixed $default The default value to return if the option is not found.
+     * 
+     * @return mixed Return the value of the option, or the default if not found.
+     * 
+     * @example Given a command with options `--verbose` or `-v`
+     * ```php
+     * $verbose = $this->option('verbose', 'v', false); // Returns true if either option is set.
+     * ```
+     * @example Given a command with options `--address=192.160.0.1` or `-a=192.160.0.1`
+     * ```php
+     * $address = $this->option('address', 'a', null); // Returns 192.160.0.1 if either option is set.
+     */
+    protected function option(string $key, string $alias, mixed $default = false): mixed 
+    {
+        return parent::getAnyOption($key, $alias, $default);
+    }
+
+    /**
+     * Retrieves a command-line argument by its index or name, extending the parent functionality.
+     * 
+     * If the argument is specified as a string (name), it searches all arguments for a match.
+     * If the argument is in "key=value" format, the value portion (after `=`) is returned.
+     * If an integer index is provided, it retrieves the argument by position.
+     * 
+     * @param int|string $index The index (integer) or name (string) of the argument.
+     * 
+     * @return mixed Return the argument value, or the full argument if no '=' is found, or null if not found.
+     * 
+     * @example Given a command with arguments 'php index.php foo file=example.txt mode=write'.
+     * ```php
+     * $file = $this->argument('file'); // Returns 'example.txt'
+     * $file = $this->argument(1); // Returns 'example.txt'
+     * $mode = $this->argument('mode'); // Returns 'write'
+     * $mode = $this->argument(2);    // Returns 'write'
+     * ```
+     */
+    protected function argument(string|int $index): mixed 
+    {
+        if (is_string($index)) {
+            foreach (parent::getArguments() as $arg) {
+                if (str_starts_with($arg, $index)) {
+                    return str_contains($arg, '=') ? explode('=', $arg, 2)[1] : $arg;
+                }
+            }
+
+            return null;
+        }
+
+        $argument = parent::getArgument($index);
+
+        return ($argument === null) 
+            ? null 
+            : (str_contains($argument, '=') ? explode('=', $argument, 2)[1] : $argument);
+    }
+
+    /**
+     * Uploads a file in command line interface to a specified directory.
+     *
+     * @param string $file The path to the file, text content or a base64 encoded string of the file content.
+     * @param string $directory The target directory where the file should be uploaded.
+     * @param string|null $name Optional. The desired name for the uploaded file (e.g, `file.txt`). 
+     *                      If null, a name will be generated.
+     *
+     * @return string|false Returns the path of the uploaded file on success, or false on failure.
+     */
+    protected function upload(string $file, string $directory, ?string $name = null): string|bool
+    {
+        if(!$file){
+            $this->error('Failed no content to upload.');
+            return false;
+        }
+
+        if (is_file($file)){
+            if(file_exists($file)) {
+                $data = file_get_contents($file);
+                if ($data === false) {
+                    $this->error("Failed to read file {$file} content.");
+                    return false;
+                }
+            } else{
+                $this->error("The file {$file} does not exist.");
+                return false;
+            }
+
+            $name = basename($name ?? $file);
+        }elseif(Func::isBase64Encoded($file)) {
+            $data = base64_decode($file);
+
+            if ($data === false) {
+                $this->error("Failed to decode base64 content.");
+                return false;
+            }
+
+            if($name === null){
+                $mime = get_mime($data);
+                $name = uniqid(date('YmdHis') . '_')  . '.' . (
+                    ($mime === false) 
+                        ? 'bin' 
+                        : Files::getExtension($mime)
+                    );
+            }else{
+                $name = basename($name);
+            }
+        }else{
+            $data = $file;
+            $name = basename($name ?? uniqid(date('YmdHis') . '_') . '.txt');
+        }
+
+        if(!make_dir($directory)){
+            $this->error("The directory {$directory} does not exist, and creation failed.");
+            return false;
+        }
+
+        $output = rtrim($directory, '/') . '/' . $name;
+
+        if(file_put_contents($output, $data) !== false){
+            return $output;
+        }
+
+        $this->error("Failed to upload file: {$output} to directory: {$directory}.");
+        return false;
+    }
+
+    /**
      * onCreate method that gets triggered on object creation, 
      * designed to be overridden in subclasses for custom initialization.
      * 
@@ -140,7 +287,7 @@ abstract class BaseCommand extends Terminal
      *
      * @param string $key The property name.
      * 
-     * @return mixed The property value, or null if it doesn't exist.
+     * @return mixed Return the property value, or null if it doesn't exist.
      * @ignore
      */
     public function __get(string $key): mixed
@@ -153,7 +300,7 @@ abstract class BaseCommand extends Terminal
      *
      * @param string $key The property name.
      * 
-     * @return bool True if the property exists, otherwise false.
+     * @return bool Return true if the property exists, otherwise false.
      * @ignore
      */
     public function __isset(string $key): bool

@@ -54,7 +54,7 @@ class Document
      * List of html document types.
      *
      * @var array<string,string> $docTypes
-    */
+     */
     public static array $docTypes = [
         'html5'             => '<!DOCTYPE html>',
         'xhtml11'           => '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">',
@@ -95,7 +95,7 @@ class Document
      * @param string $type The type of your document retrieve.
      *
      * @return string|null Returns content doctype based on type.
-    */
+     */
     public static function doctype(string $type = 'html5'): ?string
     {
         return self::$docTypes[$type] ?? null;

@@ -30,57 +30,57 @@ class NovaMailer implements MailerInterface
 
     /**
      * @var string $SMTPSecure 
-    */
+     */
     private string $to = '';
 
     /**
      * @var array $bcc 
-    */
+     */
     private array $bcc = [];
 
     /**
      * @var array $cc 
-    */
+     */
     private array $cc = [];
 
     /**
      * @var string $Subject 
-    */
+     */
     public string $Subject = '';
 
     /**
      * @var string $Body 
-    */
+     */
     public string $Body = '';
 
-     /**
+    /**
      * @var string $AltBody 
-    */
+     */
     public string $AltBody = '';
 
     /**
      * @var string $from 
-    */
+     */
     private string $from = '';
 
     /**
      * @var string $replyTo 
-    */
+     */
     private string $replyTo = '';
 
     /**
      * @var string $sendWith 
-    */
+     */
     private string $sendWith = '';
 
     /**
      * @var string $contentType 
-    */
+     */
     private string $contentType = 'text/plain';
 
     /**
      * @var array $attachments 
-    */
+     */
     private array $attachments = [];
 
     /**
@@ -90,57 +90,57 @@ class NovaMailer implements MailerInterface
 
     /**
      * @var string $CharSet 
-    */
+     */
     public string $CharSet = '';
 
     /**
      * @var int $SMTPDebug 
-    */
+     */
     public int $SMTPDebug = 0;
 
     /**
      * @var bool $exceptions 
-    */
+     */
     public bool $exceptions = false;
 
     /**
      * @var string $Host 
-    */
+     */
     public string $Host = '';
 
     /**
      * @var int $Port 
-    */
+     */
     public int $Port = -1;
 
     /**
      * @var bool $SMTPAuth 
-    */
+     */
     public bool $SMTPAuth = false;
 
     /**
      * @var string $Username 
-    */
+     */
     public string $Username = '';
 
     /**
      * @var string $Password 
-    */
+     */
     public string $Password = '';
 
     /**
      * @var string $SMTPSecure 
-    */
+     */
     public string $SMTPSecure = 'tls';
 
     /**
      * @var mixed $connection
-    */
+     */
     private mixed $connection = false;
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function __construct(bool $exceptions = false)
     {
         $this->exceptions = $exceptions;
@@ -148,7 +148,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function initialize(): void
     {
 
@@ -156,7 +156,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function addAddress(string $address, string $name = ''): bool
     {
         $this->to = $address;
@@ -166,7 +166,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function addCC(string $address, string $name = ''): bool
     {
         $name = trim(preg_replace('/[\r\n]+/', '', $name));
@@ -179,7 +179,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function addBCC(string $address, string $name = ''): bool
     {
         $name = trim(preg_replace('/[\r\n]+/', '', $name));
@@ -192,7 +192,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setFrom(string $address, string $name = '', bool $auto = true): bool 
     {
         $name = trim(preg_replace('/[\r\n]+/', '', $name));
@@ -205,7 +205,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function addAttachment(
         string $path, 
         string $name = '', 
@@ -243,7 +243,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function addReplyTo(string $address, string $name = ''): bool 
     {
         $name = trim(preg_replace('/[\r\n]+/', '', $name));
@@ -257,7 +257,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function send(): bool 
     {
         error_clear_last();
@@ -279,7 +279,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function isSMTP(): void 
     {
         $this->sendWith = 'smtp';
@@ -287,7 +287,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function isMail(): void 
     {
         $this->sendWith = 'mail';
@@ -295,7 +295,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function isHTML(bool $isHtml = true): void 
     {
         $this->contentType = $isHtml ? self::CONTENT_TYPE_TEXT_HTML : self::CONTENT_TYPE_PLAINTEXT;
@@ -305,7 +305,7 @@ class NovaMailer implements MailerInterface
      * Get initial headers.
      *
      * @return string
-    */
+     */
     private function getHeaders(): string 
     {
         $XMailer = trim($this->XMailer);
@@ -330,7 +330,7 @@ class NovaMailer implements MailerInterface
      * Send the email.
      *
      * @return array
-    */
+     */
     private function sendWithOutAttachment(): array 
     {
         $headers = $this->getHeaders();
@@ -345,7 +345,7 @@ class NovaMailer implements MailerInterface
      * Send the email.
      * 
      * @return array
-    */
+     */
     private function sendWithAttachment(): array 
     {
         $boundary = uniqid('np');
@@ -384,7 +384,7 @@ class NovaMailer implements MailerInterface
      * 
      * @return bool Return true if successful, otherwise false.
      * @throws MailerException
-    */
+     */
     private function smtp_mail(array $result): bool
     {
         $from = $this->from ?? $this->Username;
@@ -437,7 +437,7 @@ class NovaMailer implements MailerInterface
      * @param array $options
      * 
      * @return mixed Return resource.
-    */
+     */
     public function connection(array $options = []): mixed
     {
         if ($this->connected()) {
@@ -473,7 +473,7 @@ class NovaMailer implements MailerInterface
      * Check socket already connected.
      *
      * @return bool Return true if connected
-    */
+     */
     public function connected(): bool
     {
         if (is_resource($this->connection)) {
@@ -510,7 +510,7 @@ class NovaMailer implements MailerInterface
      * 
      * @return void 
      * @throws MailerException
-    */
+     */
     private function smtpGet(string $name = ''): void 
     {
         while ($str = fgets($this->connection, 515)) {

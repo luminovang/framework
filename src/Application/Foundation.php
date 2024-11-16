@@ -19,7 +19,7 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.3.7';
+    public const VERSION = '3.3.8';
 
     /**
      * Framework version name.
@@ -328,7 +328,10 @@ final class Foundation
      */
     public static function isApiPrefix(): bool
     {
-        return self::getSegments()[0] === (defined('IS_UP') ? env('app.api.prefix', 'api') : 'api');
+        $segments = self::getSegments();
+        return $segments === [] 
+            ? false 
+            : $segments[0] === (defined('IS_UP') ? env('app.api.prefix', 'api') : 'api');
     }
 
     /**

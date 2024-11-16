@@ -50,11 +50,9 @@ class Header implements Countable
      */
     public function get(?string $name = null, mixed $default = null): mixed
     {
-        if ($name === null || $name === '') {
-            return self::$variables;
-        }
-
-        return $this->has($name) ? self::$variables[$name] : $default;
+        return ($name === null || $name === '') 
+            ? self::$variables 
+            : ($this->has($name) ? self::$variables[$name] : $default);
     }
 
     /**
@@ -92,6 +90,23 @@ class Header implements Countable
     public function has(string $key): bool
     {
         return array_key_exists($key, self::$variables);
+    }
+
+     /**
+     * Check if request header key exist and has a valid value.
+     * 
+     * @param string $key Header key to check.
+     * @param string|null $server Optionally check the PHP global server variable.
+     * 
+     * @return bool Return true if key exists, false otherwise.
+     */
+    public function exist(string $key, ?string $server = null): bool
+    {
+        if(isset(self::$variables[$key])){
+            return true;
+        }
+
+        return $server && isset($_SERVER[$server]);
     }
 
     /**
@@ -137,7 +152,11 @@ class Header implements Countable
         // If PHP function apache_request_headers() is not available or went wrong: manually extract headers
         foreach ($_SERVER as $name => $value) {
             if (str_starts_with($name, 'HTTP_') || $name == 'CONTENT_TYPE' || $name == 'CONTENT_LENGTH') {
-                $header = str_replace([' ', 'Http'], ['-', 'HTTP'], ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))));
+                $header = str_replace(
+                    [' ', 'Http'], 
+                    ['-', 'HTTP'], 
+                    ucwords(strtolower(str_replace('_', ' ', substr($name, 5))))
+                );
                 $headers[$header] = $value;
             }
         }

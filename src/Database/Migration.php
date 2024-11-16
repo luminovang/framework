@@ -13,7 +13,7 @@ abstract class Migration
 {
     /**
      * @var array<int,class-string<Migration>> $invokes
-    */
+     */
     private static array $invokes = [];
 
     /**

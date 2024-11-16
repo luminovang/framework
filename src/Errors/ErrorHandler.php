@@ -179,7 +179,7 @@ final class ErrorHandler
      * 
      * @return Throwable Return the the previous error.
      * @ignore
-    */
+     */
     public function getPrevious(): ?Throwable 
     {
         return $this->previous;
@@ -235,7 +235,7 @@ final class ErrorHandler
      * @param string|int $code The error code.
      * 
      * @return string Return Error name by error code.
-    */
+     */
     public static function getErrorName(string|int $code): string 
     {
         return match ($code) {

@@ -42,6 +42,13 @@ final class Message
     public const WEBPUSH = 4;
 
     /**
+     * Indicate that payload is handled by notification class
+     * 
+     * @var bool $isInternal
+     */
+    private bool $isInternal = false;
+
+    /**
      * @var array<string,mixed> $basic
      */
     private array $basic = [
@@ -61,6 +68,7 @@ final class Message
         'apn'           => [],
         'data'          => [],
         'webpush'       => [],
+        'headers'       => [],
         'notification'  => [
             'title'     => '',
             'body'      => '',
@@ -110,6 +118,7 @@ final class Message
      *      - android (array<string,mixed>) Android specific configuration.
      *      - apns (array<string,mixed>) APNs specific configuration.
      *      - webpush (array<string,mixed>) WebPush specific configuration.
+     *      - headers (array<string,mixed>) Payload headers configuration.
      *      - fcm_options (array<string,mixed>) Optional firebase configurations.
      *      - notification (array<string,mixed>) Notification payload information:
      *         -  - title (string) Notification title.
@@ -126,15 +135,16 @@ final class Message
 
         if($this->default['raw']){
             $this->payload = $setter;
-        }else{
-            $this->payload = $this->basic;
-            $this->default['platform'] = $setter['platform'] ?? self::DEFAULT;
-            $this->default['topic'] = $setter['topic'] ?? '';
-            $this->default['token'] = $setter['token'] ?? '';
-            $this->default['conditions'] = $setter['conditions'] ?? '';
-            $this->default['tokens'] = $setter['tokens'] ?? [];
-            $this->setFromArray($setter);
+            return;
         }
+
+        $this->payload = $this->basic;
+        $this->default['platform'] = $setter['platform'] ?? self::DEFAULT;
+        $this->default['topic'] = $setter['topic'] ?? '';
+        $this->default['token'] = $setter['token'] ?? '';
+        $this->default['conditions'] = $setter['conditions'] ?? '';
+        $this->default['tokens'] = $setter['tokens'] ?? [];
+        $this->setFromArray($setter);
     }
 
     /**
@@ -144,7 +154,7 @@ final class Message
      * @param mixed $value The value to associate with the key.
      * @param string|null $root Optional root key for nested payloads, if `NUll`, the key will be store in payload root instead. and replace any existing key value.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function add(string $key, mixed $value, ?string $root = null): self
     {
@@ -179,7 +189,7 @@ final class Message
      * @param string $keys The dot-separated keys representing the nested structure.
      * @param mixed $value The value to associate with the nested keys.
      * 
-     * @return self Return notification message model instance for method chaining. Returns the updated instance of the class, allowing method chaining.
+     * @return self Return notification message model instance. Returns the updated instance of the class, allowing method chaining.
      */
     public function addNested(string $keys, mixed $value): self
     {
@@ -208,7 +218,7 @@ final class Message
      * @param string $key The key to add.
      * @param mixed $value The value to associate with the key.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function addApns(string $key, mixed $value): self
     {
@@ -221,7 +231,7 @@ final class Message
      * @param string $key The key to add.
      * @param mixed $value The value to associate with the key.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function addWebpush(string $key, mixed $value): self
     {
@@ -234,7 +244,7 @@ final class Message
      * @param string $key The key to add.
      * @param mixed $value The value to associate with the key.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function addAndroid(string $key, mixed $value): self
     {
@@ -247,7 +257,7 @@ final class Message
      * @param string $key The key to add.
      * @param string $value The value to associate with the key.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function addData(string $key, string $value): self
     {
@@ -261,7 +271,7 @@ final class Message
      * @param string $key The key to add.
      * @param string $value The value to associate with the key.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function addNotification(string $key, mixed $value): self
     {
@@ -277,11 +287,14 @@ final class Message
      * 
      * @param array<string,mixed> $notification The notification payload object.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setNotification(array $notification): self
     {
-        $this->payload['notification'] = $notification;
+        $this->payload['notification'] = array_merge(
+            $this->payload['notification'] ?? [],
+            $notification
+        );
         return $this;
     }
 
@@ -290,11 +303,30 @@ final class Message
      * 
      * @param array<string,mixed> $options The FCM options.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setFcmOptions(array $options): self
     {
-        $this->payload['fcm_options'] = $options;
+        $this->payload['fcm_options'] = array_merge(
+            $this->payload['fcm_options'] ?? [],
+            $options
+        );
+        return $this;
+    }
+
+    /**
+     * Set payload headers. array of key-value pair to the `header` object.
+     * 
+     * @param array<string,mixed> $headers The payload array headers key-pair value.
+     * 
+     * @return self Return notification message model instance.
+     */
+    public function setHeaders(array $headers): self
+    {
+        $this->payload['headers'] = array_merge(
+            $this->payload['headers'] ?? [],
+            $headers
+        );
         return $this;
     }
 
@@ -303,7 +335,7 @@ final class Message
      *
      * @param string $title The notification title.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setTitle(string $title): self
     {
@@ -316,7 +348,7 @@ final class Message
      *
      * @param string $body Notification message body.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setBody(string $body): self
     {
@@ -329,7 +361,7 @@ final class Message
      *
      * @param string $url The image url to set.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setImageUrl(string $url): self
     {
@@ -341,7 +373,7 @@ final class Message
      *
      * @param string $icon The notification icon.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setIcon(string $icon): self
     {
@@ -353,7 +385,7 @@ final class Message
      *
      * @param string $sound Notification sound.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setSound(string $sound): self
     {
@@ -365,7 +397,7 @@ final class Message
      *
      * @param array $vibrate The vibrate pattern e.g. [200, 100, 200].
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setVibration(array $vibrate): self
     {
@@ -378,7 +410,7 @@ final class Message
      *
      * @param string $tag The notification tag.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setTag(string $tag): self
     {
@@ -389,7 +421,7 @@ final class Message
      * Set a color for the notification.
      *
      * @param string $color The notification color.
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setColor(string $color): self
     {
@@ -401,7 +433,7 @@ final class Message
      *
      * @param string $analytic Set analytic label.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setAnalytic(string $analytic): self
     {
@@ -414,7 +446,7 @@ final class Message
      *
      * @param string $priority The notification priority (e.g normal).
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setPriority(string $priority): self
     {
@@ -427,7 +459,7 @@ final class Message
      *
      * @param string $ttl The ttl (e.g. 3600s).
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setTtl(string $ttl): self
     {
@@ -440,7 +472,7 @@ final class Message
      *
      * @param string $url The notification action url.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setLink(string $url): self
     {
@@ -453,7 +485,7 @@ final class Message
      *
      * @param string $action The notification intent action.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setClickAction(string $action): self
     {
@@ -466,7 +498,7 @@ final class Message
      *
      * @param int $count The number of badge to add for this notification.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setBadgeCount(int $count): self
     {
@@ -479,7 +511,7 @@ final class Message
      *
      * @param string $package The notification package restriction (e.g: com.app.name.foo).
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setPackage(string $package): self
     {
@@ -502,9 +534,9 @@ final class Message
      * 
      * @param bool $raw Should send notification as raw, otherwise false.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
-    public function setRaw(bool $raw): self
+    public function setRaw(bool $raw = true): self
     {
         $this->default['raw'] = $raw;
         
@@ -516,7 +548,7 @@ final class Message
      *
      * @param string $topic The notification topic name.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setTopic(string $topic): self
     {
@@ -529,7 +561,7 @@ final class Message
      *
      * @param string $conditions The conditional expression.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setConditions(string $conditions): self
     {
@@ -542,7 +574,7 @@ final class Message
      *
      * @param array<int,string> $tokens The device notification tokens.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setTokens(array $tokens): self
     {
@@ -555,7 +587,7 @@ final class Message
      *
      * @param string $token The notification device token.
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setToken(string $token): self
     {
@@ -573,7 +605,7 @@ final class Message
      *      - Message::WEBPUSH (4) - WebPush platform.  
      *      
      * 
-     * @return self Return notification message model instance for method chaining.
+     * @return self Return notification message model instance.
      */
     public function setPlatform(int $platform): self
     {
@@ -721,6 +753,21 @@ final class Message
     }
 
     /**
+     * Retrieve notification platform name.
+     * 
+     * @return string Return platform name.
+     */
+    public function getPlatformName(): string 
+    {
+        return match($this->getPlatform()){
+            self::WEBPUSH => 'webpush',
+            self::ANDROID => 'android',
+            self::APN => 'apns',
+            default => 'default'
+        };
+    }
+
+    /**
      * Set the payload from an array of configuration settings.
      *
      * @param array|null $setter The array of configuration settings.
@@ -747,6 +794,7 @@ final class Message
             $setter['apns'] ?? [],
             $setter['android'] ?? [],
             $setter['webpush'] ?? [],
+            $setter['headers'] ?? [],
         );
         
         foreach (self::$fields as $field => $requireArray) {
@@ -757,6 +805,20 @@ final class Message
                 $this->payload[$field] = $setter[$field];
             }
         }
+    }
+
+    /**
+     * Determine if building payload for internal notification class.
+     * 
+     * @param bool $builder Weather notification payload is handled internally by notification class.
+     * 
+     * @return self Return instance of notification class.
+     * @internal Handled internally for notification class.
+     */
+    public function isInternal(bool $internal = true): self 
+    {
+        $this->isInternal = $internal;
+        return $this;
     }
 
     /**
@@ -777,12 +839,14 @@ final class Message
             case self::WEBPUSH:
                 $data['webpush'] = [
                     'notification' => $this->payload['notification'] ?? [],
-                    'fcm_options' => [
-                        'link' => $this->payload['link'] ?? ''
-                    ],
                     'headers' => $this->payload['headers'] ?? [],
+                    'fcm_options' => []
                 ];
 
+                if (isset($this->payload['link'])) {
+                    $data['webpush']['fcm_options']['link'] = $this->payload['link'];
+                }
+                
                 if (isset($this->payload['ttl'])) {
                     $data['webpush']['headers']['ttl'] = $this->payload['ttl'];
                 }
@@ -802,7 +866,6 @@ final class Message
 
             case self::APN:
                 $data['apns'] = [
-                    'headers' => $this->payload['headers'] ?? [],
                     'payload' => [
                         'aps' => [
                             'alert' => [
@@ -811,18 +874,44 @@ final class Message
                             ]
                         ]
                     ],
-                    'fcm_options' => [
-                        'image' => $this->getImageUrl()
-                    ]
+                    'headers' => [],
+                    'fcm_options' => [],
                 ];
+
+                $image = $this->getImageUrl();
+                if($image){
+                    $data['apns']['fcm_options']['image'] = ($data['apns']['fcm_options']['image'] ?? $image);
+                }
              
                 break;
+        }
+
+        $platformName = $this->getPlatformName();
+
+        if($this->isInternal && $platformName !== 'default'){
+
+            if (isset($this->payload['analytics_label'])) {
+                $data[$platformName]['fcm_options']['analytics_label'] = $this->payload['analytics_label'];
+            }
+
+            $clone = $this->payload;
+            $specific = $clone[$platformName] ?? [];
+            unset($clone[$platformName]);
+
+            return array_merge_recursive(
+                $specific, 
+                $data[$platformName],
+                $clone
+            );
         }
 
         if (isset($this->payload['analytics_label'])) {
             $data['fcm_options']['analytics_label'] = $this->payload['analytics_label'];
         }
 
-        return array_merge_recursive($this->payload, $data);
+        return array_merge_recursive(
+            $this->payload, 
+            $data
+        );
     }
 }

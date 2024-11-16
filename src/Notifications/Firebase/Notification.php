@@ -64,9 +64,10 @@ class Notification
     {
         if ($config instanceof Factory) {
             self::$factory = $config;
-        } else {
-            self::$factory ??= self::createFactory($config);
+            return;
         }
+
+        self::$factory ??= self::createFactory($config);
     }
 
     /**
@@ -276,10 +277,12 @@ class Notification
             }
 
             if ($config instanceof Message) {
+                $config->isInternal();
+
                 if($config->isRaw()){
-                    $message = self::rawMessage($config);
+                    $message = $this->rawMessage($config);
                 }elseif($config->getToken() !== ''){
-                    $message = self::message(MessageTarget::TOKEN, $config->getToken(), $config);
+                    $message = $this->message(MessageTarget::TOKEN, $config->getToken(), $config);
                 }
 
                 if($message instanceof MessageCaster){
@@ -308,16 +311,19 @@ class Notification
     {
         $this->report = null;
         $message = null;
+        
         try {
             if (is_array($config)) {
                 $config = new Message($config);
             }
 
             if ($config instanceof Message) {
+                $config->isInternal();
+
                 if($config->isRaw()){
-                    $message = self::rawMessage($config);
+                    $message = $this->rawMessage($config);
                 }elseif($config->getTopic() !== ''){
-                    $message = self::message(MessageTarget::TOPIC, $config->getTopic(), $config);
+                    $message = $this->message(MessageTarget::TOPIC, $config->getTopic(), $config);
                 }
 
                 if($message instanceof MessageCaster){
@@ -347,16 +353,19 @@ class Notification
     {
         $this->report = null;
         $message = null;
+
         try {
             if (is_array($config)) {
                 $config = new Message($config);
             }
 
             if ($config instanceof Message) {
+                $config->isInternal();
+
                 if($config->isRaw()){
-                    $message = self::rawMessage($config);
+                    $message = $this->rawMessage($config);
                 }elseif($config->getConditions() !== ''){
-                    $message = self::message(MessageTarget::CONDITION, $config->getConditions(), $config);
+                    $message = $this->message(MessageTarget::CONDITION, $config->getConditions(), $config);
                 }
 
                 if($message instanceof MessageCaster){
@@ -392,8 +401,10 @@ class Notification
             }
 
             if ($config instanceof Message) {
+                $config->isInternal();
+
                 if($config->isRaw()){
-                    $message = self::rawMessage($config);
+                    $message = $this->rawMessage($config);
 
                     if($message instanceof MessageCaster){
                         $this->report = $this->messaging()->send($message, $validateOnly);

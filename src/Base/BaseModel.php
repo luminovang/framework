@@ -13,6 +13,7 @@ use \Luminova\Database\Builder;
 use \Luminova\Security\Validation;
 use \Luminova\Storages\FileManager;
 use \Peterujah\NanoBlock\SearchController as SearchInstance;
+use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \DateTimeInterface;
@@ -105,13 +106,6 @@ abstract class BaseModel
     protected DateTimeInterface|int $expiry = 7 * 24 * 60 * 60;
 
     /**
-     * Database query builder class instance.
-     * 
-     * @var Builder $builder
-     */
-    protected ?Builder $builder = null;
-
-    /**
      * Input validation class instance.
      * 
      * @var Validation $validation
@@ -144,13 +138,14 @@ abstract class BaseModel
      * Constructor for the Model class.
      * If null is passed framework will initialize builder lass instance.
      * 
-     * @param Builder|null $builder Query builder class instance.
+     * @param Builder|null $builder Optional database query builder class instance.
      */
-    public function __construct(?Builder $builder = null)
+    public function __construct(protected ?Builder $builder = null)
     {
-        $this->builder ??= ($builder ?? Builder::getInstance());
+        $this->builder = ($this->builder instanceof Builder)
+            ? $builder->table($this->table)
+            : Builder::table($this->table);
         $this->builder->caching($this->cacheable);
-        $this->builder->table($this->table);
         $this->builder->returns($this->resultType);
 
         if($this->cacheable && static::$cacheFolder === ''){
@@ -179,7 +174,7 @@ abstract class BaseModel
     public function insert(array $values): bool 
     {
         if($this->readOnly){
-            return 0;
+            return false;
         }
 
         $this->assertAllowedColumns($this->insertable, $values, 'insert');
@@ -189,22 +184,29 @@ abstract class BaseModel
     /**
      * Update current record in the database.
      *
-     * @param array<int,mixed>|string|int|float $key The key?s to update its record
-     * @param array<string,mixed> $data associative array of columns and values to update.
-     * @param int $max The maximum number of records to update.
+     * @param array<int,mixed>|string|float|int|null $key The key?s to update its record or null to update all records in table.
+     * @param array<string,mixed> $data An associative array of columns and values to update.
+     * @param int|null $max The maximum number of records to update (default: null).
      * 
      * @return bool Return true if records was updated, otherwise false.
      * @throws RuntimeException Throws if update columns contains column names that isn't defined in `$updatable`.
      */
-    public function update(string|int|float|array $key, array $data, int $max = 1): bool  
+    public function update(string|array|float|int|null $key, array $data, ?int $max = null): bool  
     {
         if($this->readOnly){
-            return 0;
+            return false;
         }
 
         $this->assertAllowedColumns($this->updatable, $data, 'update');
         $tbl = $this->builder->table($this->table);
-        $tbl->max($max);
+
+        if($max){
+            $tbl->max($max);
+        }
+
+        if($key === null){
+            return $tbl->update($data) > 0;
+        }
 
         if(is_array($key)){
             return $tbl->in($this->primaryKey, $key)->update($data) > 0;
@@ -216,12 +218,12 @@ abstract class BaseModel
     /**
      * Fine next or a single record from the database table.
      *
-     * @param array<int,mixed>|string|int|float $key The key?s to find its record
+     * @param array<int,mixed>|string|float|int $key The key?s to find its record
      * @param array<int,string> $fields The fields to retrieve (default is all).
      * 
      * @return mixed Return selected records or false on failure.
      */
-    public function find(string|int|float|array $key, array $fields = ['*']): mixed 
+    public function find(string|array|float|int $key, array $fields = ['*']): mixed 
     {
         $tbl = $this->builder->table($this->table);
 
@@ -275,19 +277,21 @@ abstract class BaseModel
     /**
      * Delete a record from the database.
      * 
-     * @param string|int|float|array<int,mixed>|null $key The keys to delete, if null all record in table will be deleted.
-     * @param int $max The maximum number of records to delete.
+     * @param string|array<int,mixed>|float|int|null $key The keys to delete, if null all record in table will be deleted.
+     * @param int|null $max The maximum number of records to delete (default: null).
      * 
      * @return bool Return true if the record was successfully deleted otherwise false.
      */
-    public function delete(string|int|float|array|null $key = null, int $max = 1): bool 
+    public function delete(string|int|float|array|null $key = null, ?int $max = null): bool 
     {
         if($this->readOnly){
             return false;
         }
 
         $tbl = $this->builder->table($this->table);
-        $tbl->max($max);
+        if($max){
+            $tbl->max($max);
+        }
 
         if($key === null){
             return $tbl->delete() > 0;
@@ -315,7 +319,7 @@ abstract class BaseModel
     /**
      * Get total number of records in the database based on the keys.
      * 
-     * @param string|int|float|array<int,mixed> $key The key?s to find total number of matched.
+     * @param array<int,mixed>|string|float|int $key The key?s to find total number of matched.
      * 
      * @return int|bool Return the number of records.
      */
@@ -335,6 +339,7 @@ abstract class BaseModel
             $this->expiry, 
             static::$cacheFolder
         );
+
         return $tbl->total();
     }
 
@@ -423,9 +428,6 @@ abstract class BaseModel
     /**
      * Deletes all cache entries related to the current model.
      * 
-     * This method removes all cache files for the model from the cache directory.
-     * The path is constructed based on the model's class name and is expected to be within the filesystem cache directory.
-     * 
      * @return bool Returns true if the cache files are successfully deleted, false otherwise.
      */
     public function purge(): bool 
@@ -439,9 +441,24 @@ abstract class BaseModel
     }
 
     /**
+     * Change the database result return type (e.g, array or object).
+     * 
+     * @param string $returns The result returned as (e.g, `array` or `object`).
+     * 
+     * @return self Return instance of model class.
+     */
+    public function setReturn(string $returns): self
+    {
+        $this->resultType = $returns;
+        $this->builder->returns($returns);
+
+        return $this;
+    }
+
+    /**
      * Get the name of the database table associated with this model.
      *
-     * @return string The name of the database table.
+     * @return string Return the name of the database table.
      */
     public function getTable(): string
     {
@@ -466,6 +483,37 @@ abstract class BaseModel
     public function getSearchable(): array
     {
         return $this->searchable;
+    }
+
+    /**
+     * Get instance of database connection.
+     * 
+     * @return DatabaseInterface Return database driver connection instance.
+     * @throws DatabaseException Throws if database connection failed.
+     */
+    public function getConn(): DatabaseInterface
+    {
+        return $this->builder->database();
+    }
+
+    /**
+     * Get instance of database builder class.
+     * 
+     * @return Builder|null Return the instance database builder.
+     */
+    public function getBuilder(): ?Builder
+    {
+        return $this->builder;
+    }
+
+    /**
+     * Retrieve last inserted id from database after insert method is called.
+     * 
+     * @return mixed Return last inserted id from database.
+     */
+    public function getLastInsertedId(): mixed
+    {
+        return $this->builder->getLastInsertedId();
     }
 
     /**

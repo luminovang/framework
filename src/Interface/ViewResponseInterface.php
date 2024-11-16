@@ -136,9 +136,9 @@ interface ViewResponseInterface
     public function hasRedirects(): bool;
 
     /**
-     * Send the response content along with headers.
+     * Render and output any type response content along with additional optional headers.
      *
-     * @param string $content The content to send.
+     * @param string $content The response content to render.
      * @param array<string,mixed> $headers Additional headers to send with the content.
      * 
      * @return int Return the status code: `STATUS_SUCCESS` if successful, otherwise `STATUS_ERROR`.
@@ -148,10 +148,10 @@ interface ViewResponseInterface
     /**
      * Send a JSON response.
      *
-     * @param array|object $content Data to be encoded as JSON.
+     * @param array|object $content An array or JSON object data to be encoded as JSON string.
      * 
      * @return int Return status code: `STATUS_SUCCESS` if successful, otherwise `STATUS_ERROR`.
-     * @throws JsonException If a JSON encoding error occurs.
+     * @throws \Luminova\Exceptions\JsonException Throws if a JSON encoding error occurs.
      */
     public function json(array|object $content): int;
 
@@ -188,32 +188,41 @@ interface ViewResponseInterface
      * @param string $fileOrContent The file path or content for download.
      * @param string|null $name Optional name for the downloaded file.
      * @param array $headers Optional download headers.
+     * @param int $chunk_size The size of each chunk in bytes for large content (default: 8192, 8KB).
+     * @param int $delay The delay between each chunk in microseconds (default: 0).
      * 
      * @return bool Return true if the download was successful, false otherwise.
      */
     public function download(
         string $fileOrContent, 
         ?string $name = null, 
-        array $headers = []
+        array $headers = [],
+        int $chunk_size = 8192,
+        int $delay = 0
     ): bool;
 
     /**
-     * Stream a large file to the client.
+     * Stream output any file or large files to the client.
      *
-     * @param string $path File storage path (e.g., `/writable/storage/images/`).
+     * @param string $path File directory location (e.g., `/writable/storage/images/`).
      * @param string $basename The file name (e.g., `image.png`).
-     * @param array $headers Optional stream headers.
+     * @param array $headers Optional output headers.
      * @param bool $eTag Whether to generate ETag headers (default: true).
-     * @param int $expiry Cache expiry time in seconds (default: 0 for no cache).
+     * @param int $expiry Enable cache expiry time in seconds, 0 for no cache (default: 0).
+     * @param int $length Optional size of each chunk to be read (default: 2MB).
+     * @param int $delay Optional delay in microseconds between chunk length (default: 0).
      * 
      * @return bool Return true if file streaming was successful, false otherwise.
+     * @see Luminova\Storages\FileDelivery For more  advanced usage.
      */
     public function stream(
         string $path, 
         string $basename, 
         array $headers = [],
         bool $eTag = true,
-        int $expiry = 0
+        int $expiry = 0,
+        int $length = (1 << 21),
+        int $delay = 0
     ): bool;
 
     /** 

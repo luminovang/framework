@@ -163,8 +163,11 @@ class NovaLogger extends AbstractLogger
                            $this->clear($level);
                         }
                     }catch(FileException $e){
-                        $message = self::message($level, 'Failed to create backup: ' . $e->getMessage());
-                        FileManager::write($filepath, $message . PHP_EOL, FILE_APPEND|LOCK_EX);
+                        FileManager::write(
+                            $filepath, 
+                            self::message($level, 'Failed to create backup: ' . $e->getMessage()) . PHP_EOL, 
+                            FILE_APPEND|LOCK_EX
+                        );
                     }
                 }
                 return;

@@ -17,6 +17,7 @@ use \Luminova\Http\UserAgent;
 use \Luminova\Functions\IP;
 use \Luminova\Functions\Func;
 use \App\Config\Security;
+use \App\Config\Files;
 use \Luminova\Interface\HttpRequestInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
@@ -24,25 +25,18 @@ use \Stringable;
 use \JsonException;
 
 /**
- * Anonymous methods to retrieve values from HTTP request fields. 
- * 
- * @method mixed getPut(string|null $field, mixed $default = null)       Get a field value from HTTP PUT request or entire fields if `$field` param is null.
- * @method mixed getOptions(string|null $field, mixed $default = null)   Get a field value from HTTP OPTIONS request  or entire fields if `$field` param is null.
- * @method mixed getPatch(string|null $field, mixed $default = null)     Get a field value from HTTP PATCH request or entire fields if `$field` param is null.
- * @method mixed getHead(string|null $field, mixed $default = null)      Get a field value from HTTP HEAD request or entire fields if `$field` param is null.
- * @method mixed getConnect(string|null $field, mixed $default = null)   Get a field value from HTTP CONNECT request or entire fields if `$field` param is null.
- * @method mixed getTrace(string|null $field, mixed $default = null)     Get a field value from HTTP TRACE request or entire fields if `$field` param is null.
- * @method mixed getPropfind(string|null $field, mixed $default = null)  Get a field value from HTTP PROPFIND request or entire fields if `$field` param is null.
- * @method mixed getMkcol(string|null $field, mixed $default = null)     Get a field value from HTTP MKCOL request or entire fields if `$field` param is null.
- * @method mixed getCopy(string|null $field, mixed $default = null)      Get a field value from HTTP COPY request or entire fields if `$field` param is null.
- * @method mixed getMove(string|null $field, mixed $default = null)      Get a field value from HTTP MOVE request or entire fields if `$field` param is null.
- * @method mixed getLock(string|null $field, mixed $default = null)      Get a field value from HTTP LOCK request or entire fields if `$field` param is null.
- * @method mixed getUnlock(string|null $field, mixed $default = null)    Get a field value from HTTP UNLOCK request or entire fields if `$field` param is null.
- * 
- * @param string $key  The field key to retrieve the value value from.
- * @param mixed $default An optional default value to return if the key is not found.
- * 
- * @return mixed Return the value from HTTP request method body based on key.
+ * @method mixed getPut(string|null $field, mixed $default = null)
+ * @method mixed getOptions(string|null $field, mixed $default = null) 
+ * @method mixed getPatch(string|null $field, mixed $default = null)
+ * @method mixed getHead(string|null $field, mixed $default = null) 
+ * @method mixed getConnect(string|null $field, mixed $default = null)
+ * @method mixed getTrace(string|null $field, mixed $default = null)
+ * @method mixed getPropfind(string|null $field, mixed $default = null)
+ * @method mixed getMkcol(string|null $field, mixed $default = null)
+ * @method mixed getCopy(string|null $field, mixed $default = null)
+ * @method mixed getMove(string|null $field, mixed $default = null)
+ * @method mixed getLock(string|null $field, mixed $default = null)
+ * @method mixed getUnlock(string|null $field, mixed $default = null)
  */
 final class Request implements HttpRequestInterface, Stringable
 {
@@ -58,23 +52,17 @@ final class Request implements HttpRequestInterface, Stringable
     ]; 
 
     /**
-     * Http server instance.
-     *
-     * @var Server|null $server
+     * {@inheritdoc}
      */
     public ?Server $server = null;
 
     /**
-     * Http request header instance.
-     *
-     * @var Header|null $header
+     * {@inheritdoc}
      */
     public ?Header $header = null;
 
     /**
-     * Browser request user-agent information.
-     *
-     * @var UserAgent|null $agent
+     * {@inheritdoc}
      */
     public ?UserAgent $agent = null;
 
@@ -110,7 +98,7 @@ final class Request implements HttpRequestInterface, Stringable
     ) {
         $this->server = new Server($server ?? $_SERVER);
         $this->header = new Header($headers);
-        $this->parseBody();
+        $this->parseRequestBody();
     }
 
     /**
@@ -144,14 +132,18 @@ final class Request implements HttpRequestInterface, Stringable
             return $this->raw;
         }
 
-        $contentType = $this->getContentType();
+        $type = $this->getContentType();
 
-        if (str_contains($contentType, 'application/json')) {
-            return $this->raw = json_encode($this->getBody());
+        if (str_contains($type, 'application/json')) {
+            try{
+                return $this->raw = (json_encode($this->getBody(), JSON_THROW_ON_ERROR) ?: '');
+            }catch(JsonException){
+                return '';
+            }
         }
         
-        if (str_contains($contentType, 'multipart/form-data')) {
-            return $this->raw = $this->toMultipart();
+        if (str_contains($type, 'multipart/form-data')) {
+            return $this->raw = 'Content-Type: multipart/form-data; ' . $this->toMultipart();
         }
     
         return $this->raw = http_build_query($this->getBody());
@@ -162,15 +154,36 @@ final class Request implements HttpRequestInterface, Stringable
      */
     public function toMultipart(): string
     {
-        $boundary = '----WebKitFormBoundary' . md5(time());
-        $body = '';
+        $boundary = '------LuminovaFormBoundary' . md5(time());
+        $body = 'boundary=';
 
         foreach ($this->getBody() as $key => $value) {
-            $body .= "--{$boundary}\r\n";
-            $body .= "Content-Disposition: form-data; name=\"{$key}\"\r\n\r\n";
-            $body .= "{$value}\r\n";
+            $isArray = is_array($value);
+            $body .= "{$boundary}\r\n";
+
+            if ($isArray && (!empty($value['tmp_name']) || !empty($value['content']))) {
+                $filePath = $value['tmp_name'] ?? null;
+                $fileSize = $value['size'] ?? self::fnBox('filesize', $filePath);
+                $fileType = $value['type'] ?? self::fnBox('get_mime', $filePath) ?? 'application/octet-stream';
+                $fileName = $value['name'] ?? self::fnBox('basename', $filePath);
+                
+                $fileContent = ($filePath === null) 
+                    ? $value['content'] 
+                    : file_get_contents($filePath);
+
+                $body .= "Content-Disposition: form-data; name=\"{$key}\"; filename=\"{$fileName}\"\r\n";
+                if($fileSize){
+                    $body .= "Content-Length: {$fileSize}\r\n";
+                }
+                $body .= "Content-Type: {$fileType}\r\n\r\n";
+                $body .= "{$fileContent}\r\n";
+            } else {
+                $body .= "Content-Disposition: form-data; name=\"{$key}\"\r\n\r\n";
+                $body .= $isArray ? json_encode($value) . "\r\n" : "{$value}\r\n";
+            }
         }
-        $body .= "--{$boundary}--\r\n";
+
+        $body .= "{$boundary}--\r\n";
 
         return $body;
     }
@@ -200,26 +213,32 @@ final class Request implements HttpRequestInterface, Stringable
      */
     public function getBody(bool $object = false): array|object
     {
-        $body = ($this->body === [])
-            ? $this->parseBody()
-            : ($this->body[$this->getMethod()] ?? $this->body);
+        if($this->body === []){
+            $this->parseRequestBody();
+        }
+
+        if($object){
+            return (object) array_merge(
+                $this->body[$this->getMethod()] ?? $this->body,
+                $this->files ?: $_FILES
+            );
+        }
         
-        $body = array_merge($body, $this->files ?: $_FILES);
-        return $object ? (object) $body : $body;
+        return array_merge(
+            $this->body[$this->getMethod()] ?? $this->body,
+            $this->files ?: $_FILES
+        );
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getFile(string $name, ?int $index = null): File|array|null
+    public function getFile(string $name, ?int $index = null): File|array|bool
     {
-        $files = $this->files[$name] ?? $_FILES[$name] ?? null;
-
-        if ($files !== null && ($parsed = $this->parseFile($files, $index)) !== false) {
-            return $parsed;
-        }
-
-        return null;
+        return $this->parseRequestFile(
+            $this->files[$name] ?? $_FILES[$name] ?? null, 
+            $index
+        );
     }
 
     /**
@@ -281,6 +300,61 @@ final class Request implements HttpRequestInterface, Stringable
     /**
      * {@inheritdoc}
      */
+    public static function getFromMultipart(string $data, string $boundary): array
+    {
+        $params = [];
+        $files = [];
+        $parts = explode($boundary, $data);
+        array_pop($parts);
+
+        foreach ($parts as $part) {
+            $tPart = trim($part);
+            if (
+                $tPart === '' || 
+                $tPart == "--" || 
+                $tPart == "--\r\n"
+            ) {
+                continue;
+            }
+
+            [$rawHeaders, $content] = explode("\r\n\r\n", $part, 2) + [null, null];
+            $content = rtrim($content ?? '');
+            $headers = [];
+
+            foreach (explode("\r\n", $rawHeaders) as $headerLine) {
+                if (str_contains($headerLine, ': ')) {
+                    [$key, $value] = explode(': ', $headerLine, 2);
+                    $headers[strtolower($key)] = $value;
+                }
+            }
+
+            if (
+                isset($headers['content-disposition']) && 
+                preg_match('/name="([^"]+)"/', $headers['content-disposition'], $matches)
+            ) {
+                if (preg_match('/filename="([^"]+)"/', $headers['content-disposition'], $fileMatches)) {
+                    $files[$matches[1]] = [
+                        'name' => $fileMatches[1],
+                        'type' => $headers['content-type'] ?? 'application/octet-stream',
+                        'size' => strlen($content),
+                        'error' => UPLOAD_ERR_OK,
+                        'content' => $content,
+                        'tmp_name' => null
+                    ];
+                } else {
+                    $params[$matches[1]] = json_validate($content) 
+                        ? json_decode($content, true) 
+                        : $content;
+                }
+            }
+        }
+
+        return ['params' => $params, 'files' => $files];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function isGet(): bool
     {
         return $this->getMethod() === 'GET';
@@ -332,6 +406,29 @@ final class Request implements HttpRequestInterface, Stringable
     public function isSecure(): bool
     {
         return ($this->server->get('HTTPS') !== 'off' || $this->server->get('SERVER_PORT') === 443);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isProxy(): bool 
+    {
+        $headers = [
+            'X-Forwarded-For' => 'HTTP_X_FORWARDED_FOR',
+            'X-Forwarded-For-Ip' => 'HTTP_FORWARDED_FOR_IP',
+            'X-Real-Ip' => 'HTTP_X_REAL_IP',
+            'Via' => 'HTTP_VIA',
+            'Forwarded' => 'HTTP_FORWARDED',
+            'Proxy-Connection' => 'HTTP_PROXY_CONNECTION'
+        ];
+
+        foreach ($headers as $head => $server) {
+            if ($this->header->exist($head, $server)) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     /**
@@ -474,7 +571,7 @@ final class Request implements HttpRequestInterface, Stringable
     public function getOrigin(): ?string
     {
         $origin = $this->header->get('Origin', $this->server->get('HTTP_ORIGIN'));
-        self::initConfig();
+        self::initRequestSecurityConfig();
 
         if (!$origin) {
             return null;
@@ -540,7 +637,7 @@ final class Request implements HttpRequestInterface, Stringable
      */
     public function getUserAgent(?string $useragent = null): UserAgent
     {
-        if(!$this->agent instanceof UserAgent){
+        if($useragent || !($this->agent instanceof UserAgent)){
             $this->agent = new UserAgent($useragent);
         }
 
@@ -586,7 +683,7 @@ final class Request implements HttpRequestInterface, Stringable
             return IP::isTrustedProxy($input);
         }
 
-        self::initConfig();
+        self::initRequestSecurityConfig();
         $trusted = ($context === 'hostname') ? self::$config->trustedHostname : self::$config->trustedOrigins;
 
         if($trusted === []){
@@ -618,7 +715,7 @@ final class Request implements HttpRequestInterface, Stringable
     public function isTrustedOrigin(): bool
     {
         $origin = $this->header->get('Origin', $this->server->get('HTTP_ORIGIN'));
-        self::initConfig();
+        self::initRequestSecurityConfig();
 
         if (!$origin) {
             return false;
@@ -641,7 +738,7 @@ final class Request implements HttpRequestInterface, Stringable
      *
      * Copyright (c) 2005-2010 Zend Technologies USA Inc. (https://www.zend.com/)
      * @internal
-    */
+     */
     protected function extractRequestUri(): string
     {
         $uri = '';
@@ -686,44 +783,52 @@ final class Request implements HttpRequestInterface, Stringable
     /**
      * Parse the request body based on the request method.
      * 
-     * @return array<string,array> Return request body as an array.
+     * @return void
      */
-    private function parseBody(): array
+    protected function parseRequestBody(): void
     {
-        $body = $this->body;
         $method = $this->getMethod();
-        $this->body = [];
-        $this->body[$method] = [];
-
-        if ($method === 'GET' || $method === 'POST') {
-            $this->body[$method] = ($body === []) 
-                ? ($method === 'GET' ? $_GET : $_POST) 
-                : $body;
-
-            if ($method === 'GET') {
-                return $this->body[$method];
+    
+        if($this->body !== []){
+            if(!isset($this->body[$method])){
+                $this->body = [$method => $this->body];
             }
+            
+            return;
         }
 
-        if(($this->body[$method] ?? []) === []){
-            $input = file_get_contents('php://input');
-  
-            if ($input !== false) {
-                $params = [];
-                parse_str($input, $params);
-                $this->body[$method] = $params;
+        $this->body = [];
+        $this->body[$method] = ($method === 'POST') ? $_POST : $_GET;
 
-                if($this->raw === null){
-                    $this->raw = $input;
+        if($this->body[$method] === []){
+            $input = file_get_contents('php://input');
+
+            if ($input !== false) {
+                $type = $this->getContentType();
+
+                if(str_contains($type, 'multipart/form-data')){
+                    if(($boundary = $this->getBoundary())){
+                        $result = self::getFromMultipart($input, '--' . $boundary);
+                        $this->body[$method] = $result['params'];
+                        $this->files = $result['files'];
+                    }
+                } elseif(str_contains($type, 'application/json')) {
+                    try{
+                        $this->body[$method] = json_decode($input, true, 512, JSON_THROW_ON_ERROR);
+                    }catch(JsonException){}
                 }
+
+                if($this->body[$method] === []){
+                    parse_str($input, $this->body[$method]);
+                }
+
+                $input = $result = null;
             }
         }
 
         if ($this->files === []) {
             $this->files = $_FILES ?? [];
         }
-
-        return $this->body[$method];
     }
 
     /**
@@ -732,11 +837,11 @@ final class Request implements HttpRequestInterface, Stringable
      * @param array $file File information array.
      * @param int|null $index Optional file index for multiple files.
      * 
-     * @return File|array<int,File>|false Return the parsed file information or false if the file array is empty.
+     * @return File[]|File|false Return the parsed file information or false if the file array is empty.
      */
-    private function parseFile(array $file, ?int $index = null): File|array|bool
+    protected function parseRequestFile(array $file, ?int $index = null): File|array|bool
     {
-        if($file === []){
+        if($file === [] || $file === null){
             return false;
         }
 
@@ -782,15 +887,15 @@ final class Request implements HttpRequestInterface, Stringable
             : $error;
 
         $isBlob = ($content !== null || $this->isBlobUpload($temp, $type, $name, $path));
-        $type ??= get_mime($temp);
+        $type ??= (get_mime($temp)?: 'application/octet-stream');
         $name ??= uniqid('file_');
         $extension = pathinfo($name, PATHINFO_EXTENSION);
-        $extension = strtolower((!$extension && $type) ? (explode('/', $type, 2)[1] ?? '') : $extension);
+        $extension = strtolower((!$extension && $type) ? Files::getExtension($type) : $extension);
 
         return new File(
             $index ?? 0,
             $name,
-            $type ?: null,
+            $type,
             (int) $size,
             $extension ?: '',
             $temp,
@@ -832,8 +937,21 @@ final class Request implements HttpRequestInterface, Stringable
      * 
      * @return void
      */
-    private static function initConfig(): void
+    private static function initRequestSecurityConfig(): void
     {
         self::$config ??= new Security();
+    }
+
+    /**
+     * Call function PHP function if path is null.
+     *
+     * @param string $fn The name of the function to call.
+     * @param string|null $path The path to apply the function to.
+     *
+     * @return mixed Return the result of called function to the path.
+     */
+    private static function fnBox(string $fn, ?string $path): mixed 
+    {
+        return ($path === null) ? null : $fn($path);
     }
 }

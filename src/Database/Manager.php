@@ -157,7 +157,7 @@ final class Manager
      * @param string $directory The backup directory.
      * 
      * @return bool Return true if the backup was created successfully, false otherwise.
-    */
+     */
     private function backupDatabase(string $filename, string $directory): bool
     {
         $var = (PRODUCTION ? 'database' : 'database.development');
@@ -192,7 +192,7 @@ final class Manager
      * @param resource $handle The resource handler.
      * 
      * @return void
-    */
+     */
     private function writeTriggers($handle): void
     {
         if ($handle && $this->db instanceof DatabaseInterface) {
@@ -211,13 +211,13 @@ final class Manager
     }
 
     /**
-     * Write datable table strectures.
+     * Write datable table structures.
      * 
      * @param resource $handle The resource handler.
      * @param string $table The name of the database table name.
      * 
      * @return void
-    */
+     */
     private function writeTableStructure($handle, string $table): void
     {
         if ($handle && $this->db instanceof DatabaseInterface) {

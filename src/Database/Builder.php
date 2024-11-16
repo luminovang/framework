@@ -23,7 +23,7 @@ use \DateTimeInterface;
 use \Exception;
 use \JsonException;
 
-final class Builder extends Connection 
+final class Builder
 {  
     /**
      * Return result as an array.
@@ -45,6 +45,27 @@ final class Builder extends Connection
      * @var string RETURN_STATEMENT
      */
     public const RETURN_STATEMENT = 'stmt';
+
+    /**
+     * Database connection driver instance.
+     *
+     * @var Connection|null $conn
+     */
+    private ?Connection $conn = null;
+
+    /**
+     * Query statement handler.
+     * 
+     * @var DatabaseInterface|false|null $handler
+     */
+    private DatabaseInterface|bool|null $handler = null;
+
+    /**
+     * Cache class instance.
+     * 
+     * @var BaseCache|null $cache 
+     */
+    private static ?BaseCache $cache = null;
 
     /**
      * Class instance.
@@ -93,7 +114,7 @@ final class Builder extends Connection
      * 
      * @var int $maxLimit 
      */
-    private int $maxLimit = 1;
+    private int $maxLimit = 0;
 
     /**
      * Table query order rows.
@@ -185,13 +206,6 @@ final class Builder extends Connection
     private array $debugQuery = [];
 
     /**
-     * Cache class instance.
-     * 
-     * @var BaseCache|null $cache 
-     */
-    private static ?BaseCache $cache = null;
-
-    /**
      * Result return type.
      * 
      * @var string $resultType 
@@ -241,24 +255,44 @@ final class Builder extends Connection
     private string $cacheDriver = '';
 
     /**
-     * Query statement handler.
+     * The last inserted Id.
      * 
-     * @var DatabaseInterface|bool|null $handler
+     * @var mixed $lastInsertId
      */
-    private DatabaseInterface|bool|null $handler = null;
-
+    private static mixed $lastInsertId = null;
 
     /**
-     * Initialize database builder class.
+     * Is database connected.
+     * 
+     * @var bool $isConnected
      */
-    public function __construct()
+    private static bool $isConnected = false;
+
+    /**
+     * Private constructor prevents instantiation from outside.
+     * 
+     * @param string|null $table Optional table name (non-empty string).
+     * @param string|null $alias Optional table alias (default: null).
+     */
+    private function __construct(?string $table = null, ?string $alias = null)
     {
-        parent::__construct();
+        if($table === ''){
+            throw new InvalidArgumentException('Invalid table argument, $table argument expected non-empty string.');
+        }
+
+        $this->conn = Connection::getInstance();
+        $this->handler = null;
         $this->cacheDriver = env('database.caching.driver', 'filesystem');
+        $this->tableName = $table ?? '';
+        $this->tableAlias = $alias ? "AS {$alias}" : '';
+        self::$isConnected = (
+            ($this->conn->database() instanceof DatabaseInterface) &&
+            $this->conn->database()->isConnected()
+        );
     }
 
     /**
-     * Reset query properties before cloning.
+     * Prevent outside cloning and reset query properties before cloning.
      * 
      * @ignore
      */
@@ -268,48 +302,71 @@ final class Builder extends Connection
     }
 
     /**
-     * Get database connection instance.
+     * Prevent outside deserialization.
      * 
-     * @return DatabaseInterface|null Return database driver instance.
+     * @ignore
      */
-    public function db(): ?DatabaseInterface
-    {
-        return $this->db;
-    }
+    private function __wakeup() {}
 
     /**
      * Class shared singleton class instance.
-     *
-     * @return static Return new static instance of builder class.
-     * @throws DatabaseException If the database connection fails.
+     * 
+     * @return Builder Return new static instance of builder class.
+     * @throws DatabaseException Throws if the database connection fails.
      */
     public static function getInstance(): static 
     {
-        return self::$instance ??= new static();
+        return self::$instance ??= new self();
     }
 
     /**
-     * Sets the database table name to build query for.
+     * Retrieve last inserted id from database after insert method is called.
+     * 
+     * @return mixed Return last inserted id from database.
+     */
+    public function getLastInsertedId(): mixed 
+    {
+        return self::$lastInsertId;
+    }
+
+    /**
+     * Get database connection driver instance.
+     * 
+     * @return DatabaseInterface Return database driver instance.
+     * @throws DatabaseException Throws if database connection failed.
+     */
+    public function database(): DatabaseInterface
+    {
+        if(self::$isConnected){
+            return $this->conn->database();
+        }
+
+        throw new DatabaseException('Database connection error.');
+    }
+
+    /**
+     * Create instance of builder class and sets the database table name to execute query for.
      *
      * @param string $table The table name (non-empty string).
      * @param string|null $alias Optional table alias (default: NULL).
      * 
-     * @return self Returns the instance of builder class.
+     * @return Builder Returns the instance of builder class.
      * @throws InvalidArgumentException Throws if an invalid table name is provided.
      */
-    public function table(string $table, ?string $alias = null): self
+    public static function table(string $table, ?string $alias = null): Builder
     {
+        if(!self::$instance instanceof self){
+            return self::$instance = new self($table, $alias);
+        }
+
         if($table === ''){
             throw new InvalidArgumentException('Invalid table argument, $table argument expected non-empty string.');
         }
 
-        $this->tableName = $table;
+        self::$instance->tableName = $table;
+        self::$instance->tableAlias = $alias ? "AS {$alias}" : '';
 
-        if($alias !== null){
-            $this->tableAlias = "AS {$alias}";;
-        }
-
-        return $this;
+        return self::$instance;
     }
 
     /**
@@ -783,16 +840,16 @@ final class Builder extends Connection
      * 
      * **Using the `custom` Operator:**
      * ```php
-     * $builder->table('fruits')->inset('banana', '= 2', ['apple','banana','orange']);
+     * Builder::table('fruits')->inset('banana', '= 2', ['apple','banana','orange']);
      * ```
      * **Using the `exists` Operator with a column:**
      * ```php
-     * $builder->table('employees')->inset('PHP', 'exists', 'column_language_skills');
+     * Builder::table('employees')->inset('PHP', 'exists', 'column_language_skills');
      * ```
      * 
      * **Using the `exists` Operator with a search column:**
      * ```php
-     * $builder->table('employees')->inset('department', 'exists', 'HR,Finance,Marketing', true);
+     * Builder::table('employees')->inset('department', 'exists', 'HR,Finance,Marketing', true);
      * ```
      */
     public function inset(
@@ -1218,20 +1275,23 @@ final class Builder extends Connection
      * @param array<int,string> $columns The table columns to return (default: *).
      * 
      * @return DatabaseInterface Return prepared statement if query is successful otherwise null.
-     * @throws DatabaseException If an error occurs.
+     * @throws DatabaseException Throws if an error occurs.
      */
-    public function stmt(array $columns = ['*']): DatabaseInterface|null
+    public function stmt(array $columns = ['*']): ?DatabaseInterface
     {
         $this->resultType = 'stmt';
+
         if($this->createQueryExecution('', 'stmt', $columns)){
             return $this->handler;
         }
 
         $this->free();
-        $this->handler?->free();
-        $this->handler = null;
 
-        return null;
+        if($this->handler instanceof DatabaseInterface){
+            $this->handler->free();
+        }
+
+        return $this->handler = null;
     }
 
     /**
@@ -1370,14 +1430,14 @@ final class Builder extends Connection
         }
 
         if($isBided){
-            $this->handler = $this->db->prepare($sqlQuery);
+            $this->handler = $this->database()->prepare($sqlQuery);
             if ($this->whereCondition !== []) {
                 $this->handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
             }
             $this->bindConditions($this->handler, $isBided);
             $this->handler->execute();
         }else{
-            $this->handler = $this->db->query($sqlQuery);
+            $this->handler = $this->database()->query($sqlQuery);
         }
 
         if ($this->handler->ok()) {
@@ -1416,13 +1476,6 @@ final class Builder extends Connection
             );
         }
 
-        if ($this->whereCondition === []) {
-            throw new DatabaseException(
-                'Update operation without a WHERE condition is not allowed. Use where method set set update condition.', 
-                DatabaseException::VALUE_FORBIDDEN
-            );
-        }
-
         if(isset($columns[0])){
             throw new DatabaseException(
                 'Invalid update values, values must be an associative array, key-value pairs, where the key is the column name and the value to update.', 
@@ -1432,9 +1485,9 @@ final class Builder extends Connection
 
         $updateColumns = self::buildPlaceholder($columns, true);
         $updateQuery = "UPDATE {$this->tableName} SET {$updateColumns}";
-        $updateQuery .= $this->whereCondition['query'];
+        $updateQuery .= $this->whereCondition['query'] ?? '';
  
-        $this->buildConditions($updateQuery, true, false);
+        $this->buildConditions($updateQuery, true, $this->whereCondition === []);
 
         if($this->maxLimit > 0){
             $updateQuery .= " LIMIT {$this->maxLimit}";
@@ -1446,7 +1499,7 @@ final class Builder extends Connection
         }
 
         try {
-            $this->handler = $this->db->prepare($updateQuery);
+            $this->handler = $this->database()->prepare($updateQuery);
             foreach($columns as $key => $value){
                 if(!is_string($key) || $key === '?'){
                     throw new DatabaseException(
@@ -1459,7 +1512,10 @@ final class Builder extends Connection
                 $this->handler->bind(self::trimPlaceholder($key), $value);
             }
             
-            $this->handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            if($this->whereCondition !== []){
+                $this->handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            }
+            
             $this->bindConditions($this->handler);
             $this->handler->execute();
 
@@ -1506,7 +1562,7 @@ final class Builder extends Connection
         }
 
         try {
-            $this->handler = $this->db->prepare($deleteQuery);
+            $this->handler = $this->database()->prepare($deleteQuery);
             $this->handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
             $this->bindConditions($this->handler);
             $this->handler->execute();
@@ -1538,9 +1594,9 @@ final class Builder extends Connection
         }
 
         if($this->bindValues === []){
-            $this->handler = $this->db->query($buildQuery);
+            $this->handler = $this->database()->query($buildQuery);
         }else{
-            $this->handler = $this->db->prepare($buildQuery);
+            $this->handler = $this->database()->prepare($buildQuery);
             foreach ($this->bindValues as $key => $value) {
                 if(!is_string($key) || $key === '?'){
                     throw new DatabaseException(
@@ -1571,7 +1627,7 @@ final class Builder extends Connection
      */
     public function errors(): array 
     {
-        return $this->db->errors();
+        return $this->database()->errors();
     }
 
     /**
@@ -1590,7 +1646,7 @@ final class Builder extends Connection
      */
     public function transaction(int $flags = 0, ?string $name = null): bool 
     {
-        return $this->db->beginTransaction($flags, $name);
+        return $this->database()->beginTransaction($flags, $name);
     }
 
     /**
@@ -1605,7 +1661,7 @@ final class Builder extends Connection
      */
     public function commit(int $flags = 0, ?string $name = null): bool 
     {
-        return $this->db->commit($flags, $name);
+        return $this->database()->commit($flags, $name);
     }
 
     /**
@@ -1621,7 +1677,7 @@ final class Builder extends Connection
      */
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
-        return $this->db->rollback($flags, $name);
+        return $this->database()->rollback($flags, $name);
     }
 
     /**
@@ -1636,10 +1692,10 @@ final class Builder extends Connection
     public function truncate(bool $transaction = true): bool 
     {
         try {
-            $driverName = $this->db->getDriver();
+            $driverName = $this->database()->getDriver();
             $transaction = ($transaction && $driverName !== 'sqlite');
 
-            if ($transaction && !$this->db->beginTransaction()) {
+            if ($transaction && !$this->database()->beginTransaction()) {
                 DatabaseException::throwException(
                     'Failed: Unable to start transaction', 
                     DatabaseException::DATABASE_TRANSACTION_FAILED
@@ -1648,35 +1704,35 @@ final class Builder extends Connection
             }
 
             if ($driverName === 'mysql' || $driverName === 'pgsql') {
-                $completed = $this->db->exec("TRUNCATE TABLE {$this->tableName}");
+                $completed = $this->database()->exec("TRUNCATE TABLE {$this->tableName}");
             } elseif ($driverName === 'sqlite') {
-                $deleteSuccess = $this->db->exec("DELETE FROM {$this->tableName}");
+                $deleteSuccess = $this->database()->exec("DELETE FROM {$this->tableName}");
                 $resetSuccess = true;
 
-                $result = $this->db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'")->getNext('array');
+                $result = $this->database()->query("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'")->getNext('array');
                 if ($result) {
-                    $resetSuccess = $this->db->exec("DELETE FROM sqlite_sequence WHERE name = '{$this->tableName}'");
+                    $resetSuccess = $this->database()->exec("DELETE FROM sqlite_sequence WHERE name = '{$this->tableName}'");
                 }
 
                 $completed = $deleteSuccess && $resetSuccess;
 
-                if ($completed && !$this->db->exec("VACUUM")) {
+                if ($completed && !$this->database()->exec("VACUUM")) {
                     $completed = false;
                 }
             } else {
-                $deleteSuccess = $this->db->exec("DELETE FROM {$this->tableName}");
-                $resetSuccess = $this->db->exec("ALTER TABLE {$this->tableName} AUTO_INCREMENT = 1");
+                $deleteSuccess = $this->database()->exec("DELETE FROM {$this->tableName}");
+                $resetSuccess = $this->database()->exec("ALTER TABLE {$this->tableName} AUTO_INCREMENT = 1");
 
                 $completed = $deleteSuccess && $resetSuccess;
             }
 
-            if ($transaction && $this->db->inTransaction()) {
-                if ($completed && $this->db->commit()) {
+            if ($transaction && $this->database()->inTransaction()) {
+                if ($completed && $this->database()->commit()) {
                     $this->reset();
                     return true;
                 }
 
-                $this->db->rollback();
+                $this->database()->rollback();
                 $completed = false;
             }
 
@@ -1684,8 +1740,8 @@ final class Builder extends Connection
             return (bool) $completed;
 
         } catch (DatabaseException|Exception $e) {
-            if ($transaction && $this->db->inTransaction()) {
-                $this->db->rollback();
+            if ($transaction && $this->database()->inTransaction()) {
+                $this->database()->rollback();
             }
 
             $this->reset();
@@ -1693,8 +1749,8 @@ final class Builder extends Connection
             return false;
         }
 
-        if ($transaction && $this->db->inTransaction()) {
-            $this->db->rollback();
+        if ($transaction && $this->database()->inTransaction()) {
+            $this->database()->rollback();
         }
 
         $this->reset();
@@ -1711,8 +1767,8 @@ final class Builder extends Connection
      *
      * @example
      * ```php
-     * if ($builder->table('users')->temp()) {
-     *     $data = $builder->table('temp_users')->select();
+     * if (Builder::table('users')->temp()) {
+     *     $data = Builder::table('temp_users')->select();
      * }
      * ```
      * 
@@ -1733,7 +1789,7 @@ final class Builder extends Connection
             $create = "CREATE TEMPORARY TABLE IF NOT EXISTS temp_{$this->tableName} 
             AS (SELECT * FROM {$this->tableName} WHERE 1 = 0)";
             
-            if($transaction && !$this->db->beginTransaction()){
+            if($transaction && !$this->database()->beginTransaction()){
                 DatabaseException::throwException(
                     'Failed: Unable to start transaction', 
                     DatabaseException::DATABASE_TRANSACTION_FAILED
@@ -1741,15 +1797,15 @@ final class Builder extends Connection
                 return false;
             }
 
-            if ($this->db->exec($create) > 0 && 
-                $this->db->exec("INSERT INTO temp_{$this->tableName} SELECT * FROM {$this->tableName}") > 0
+            if ($this->database()->exec($create) > 0 && 
+                $this->database()->exec("INSERT INTO temp_{$this->tableName} SELECT * FROM {$this->tableName}") > 0
             ) {
                 $result = false;
-                if($transaction && $this->db->inTransaction()){
-                    if($this->db->commit()){
+                if($transaction && $this->database()->inTransaction()){
+                    if($this->database()->commit()){
                         $result = true;
                     }else{
-                        $this->db->rollBack();
+                        $this->database()->rollBack();
                     }
                 }
 
@@ -1757,15 +1813,15 @@ final class Builder extends Connection
                 return $result;
             }
 
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
+            if ($this->database()->inTransaction()) {
+                $this->database()->rollBack();
             }
 
             $this->reset();
             return false;
         } catch (DatabaseException | Exception $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
+            if ($this->database()->inTransaction()) {
+                $this->database()->rollBack();
             }
 
             $this->reset();
@@ -1773,8 +1829,8 @@ final class Builder extends Connection
             return false;
         }
 
-        if ($this->db->inTransaction()) {
-            $this->db->rollBack();
+        if ($this->database()->inTransaction()) {
+            $this->database()->rollBack();
         }
 
         $this->reset();
@@ -1798,7 +1854,7 @@ final class Builder extends Connection
         }
 
         try {
-            return $this->db->exec($query);
+            return $this->database()->exec($query);
         } catch (DatabaseException|Exception $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
@@ -1851,7 +1907,7 @@ final class Builder extends Connection
         }
 
         try {
-            if ($transaction && !$this->db->beginTransaction()) {
+            if ($transaction && !$this->database()->beginTransaction()) {
                 DatabaseException::throwException(
                     'Failed: Unable to start transaction for drop table.', 
                     DatabaseException::DATABASE_TRANSACTION_FAILED
@@ -1861,13 +1917,13 @@ final class Builder extends Connection
 
             $drop = $this->getDropTableSQL($isTempTable);
 
-            if ($this->db->exec($drop) >= 0) {
+            if ($this->database()->exec($drop) >= 0) {
                 $result = false;
-                if ($transaction && $this->db->inTransaction()) {
-                    if ($this->db->commit()) {
+                if ($transaction && $this->database()->inTransaction()) {
+                    if ($this->database()->commit()) {
                         $result = true;
                     } else {
-                        $this->db->rollBack();
+                        $this->database()->rollBack();
                     }
                 }
 
@@ -1875,14 +1931,14 @@ final class Builder extends Connection
                 return $result;
             }
 
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
+            if ($this->database()->inTransaction()) {
+                $this->database()->rollBack();
             }
 
             $this->reset();
         } catch (DatabaseException | Exception $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
+            if ($this->database()->inTransaction()) {
+                $this->database()->rollBack();
             }
 
             $this->reset();
@@ -1905,7 +1961,7 @@ final class Builder extends Connection
         $tablePrefix = $isTempTable ? 'temp_' : '';
         $tableIdentifier = $isTempTable ? "#temp_{$this->tableName}" : $this->tableName;
 
-        return match ($this->db->getDriver()) {
+        return match ($this->database()->getDriver()) {
             'mysql' => "DROP " . ($isTempTable ? "TEMPORARY " : "") . "TABLE IF EXISTS {$tablePrefix}{$this->tableName}",
             'dblib' => "DROP TABLE IF EXISTS {$tableIdentifier}",
             'sqlsrv' => "IF OBJECT_ID('{$tablePrefix}{$this->tableName}', 'U') IS NOT NULL DROP TABLE {$tablePrefix}{$this->tableName}",
@@ -1940,7 +1996,7 @@ final class Builder extends Connection
             return 0;
         }
         
-        $this->handler = $this->db->query($insertQuery);
+        $this->handler = $this->database()->query($insertQuery);
         $response = ($this->handler->ok() ? $this->handler->rowCount() : 0);
 
         $this->reset();
@@ -1961,6 +2017,8 @@ final class Builder extends Connection
     private function executeInsertPrepared(array $columns, array $values): int
     {
         $count = 0;
+        self::$lastInsertId = null;
+
         [$placeholders, $inserts] = self::mapParams($columns);
         $insertQuery = "INSERT INTO {$this->tableName} ({$inserts}) VALUES ($placeholders)";
        
@@ -1969,7 +2027,7 @@ final class Builder extends Connection
             return 0;
         }
 
-        $this->handler = $this->db->prepare($insertQuery);
+        $this->handler = $this->database()->prepare($insertQuery);
     
         foreach ($values as $row) {
             foreach ($row as $key => $value) {
@@ -1982,6 +2040,10 @@ final class Builder extends Connection
             if($this->handler->ok()){
                 $count++;
             }
+        }
+
+        if($count > 0){
+            self::$lastInsertId = $this->handler->getLastInsertId();
         }
 
         $this->reset();
@@ -2395,14 +2457,16 @@ final class Builder extends Connection
      * Returns a singleton instance of the Manager class initialized with the current database connection.
      * 
      * @return Manager Database manager class instance.
+     * @throws DatabaseException Throws if database connection failed.
      * 
      * @see https://luminova.ng/docs/0.0.0/database/manager
      */
     public function manager(): Manager 
     {
         static $manager = null;
-        $manager ??= new Manager($this->db);
+        $manager ??= new Manager($this->database());
         $manager->setTable($this->tableName);
+
         return $manager;
     }
 
@@ -2543,7 +2607,7 @@ final class Builder extends Connection
      */
     public function dump(): bool|null
     {
-        return $this->db->dumpDebug();
+        return $this->database()->dumpDebug();
     }
     
     /**
@@ -2560,7 +2624,7 @@ final class Builder extends Connection
         $this->joinType = '';
         $this->joinConditions = [];
         $this->selectLimit = '';
-        $this->maxLimit = 1;
+        $this->maxLimit = 0;
         $this->queryOrder = [];
         $this->queryMatchOrder = [];
         $this->queryGroup = [];
@@ -2573,9 +2637,13 @@ final class Builder extends Connection
         $this->buildQuery = '';
         if($this->resultType !== 'stmt'){
             $this->free();
-            $this->handler?->free();
+            if($this->handler instanceof DatabaseInterface){
+                $this->handler->free();
+            }
+
             $this->handler = null;
         }
+        
         $this->resultType = 'object';
     }
 
@@ -2586,7 +2654,14 @@ final class Builder extends Connection
      */
     public function free(): void 
     {
-        $this->db?->free();
+        if(
+            !($this->conn instanceof Connection) || 
+            !($this->conn->database() instanceof DatabaseInterface && $this->conn->database()->isConnected())
+        ){
+            return;
+        }
+
+        $this->conn->database()->free();
     }
 
     /**
@@ -2596,6 +2671,10 @@ final class Builder extends Connection
      */
     public function close(): void 
     {
-        $this->db?->close();
+        if(!$this->conn instanceof Connection){
+            return;
+        }
+
+        $this->conn->purge(true);
     }
 }

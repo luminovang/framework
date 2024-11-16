@@ -10,6 +10,7 @@
 namespace Luminova\Storages;
 
 use \Luminova\Http\Header;
+use \App\Config\Files;
 use \Luminova\Exceptions\FileException;
 use \Luminova\Exceptions\RuntimeException;
 use \RecursiveIteratorIterator;
@@ -186,7 +187,7 @@ class FileManager
      * 
      * @param int $permission Permission code
      * 
-     * @return string Permission string representation.
+     * @return string Return permission string representation.
      */
     public static function permissions(int $permission): string
     {
@@ -222,7 +223,7 @@ class FileManager
      * @param string $permission The permission string (e.g., 'rw-r--r--').
      * @param bool $decimal Weather to return permission as decimal or formatted octal string.
      * 
-     * @return string|int|null The Unix integer permission, or null if the conversion failed.
+     * @return string|int|null Return the Unix integer permission, or null if the conversion failed.
      */
     public static function toUnixPermission(string $permission, bool $decimal = false): string|int|null
     {
@@ -268,9 +269,9 @@ class FileManager
      * @param int $offset The starting position in the file to begin reading from (default: 0).
      * @param bool $useInclude If `true`, the file will be searched in the include path (default: false). 
      * @param resource|null $context A context resource created with `stream_context_create()` (default: null).
+     * @param int $delay The delay between each chunk in microseconds (default:, 0 second).
      * 
      * @return string|false Returns the contents of the file as a string, or `false` on failure.
-     * 
      * @throws FileException If an error occurs while opening or reading the file.
      */
     public static function getContent(
@@ -278,7 +279,8 @@ class FileManager
         int $length = 0, 
         int $offset = 0, 
         bool $useInclude = false, 
-        $context = null
+        mixed $context = null,
+        int $delay = 0
     ): string|bool
     {
         if ($filename === '') {
@@ -302,6 +304,9 @@ class FileManager
                     return false;
                 }
                 $contents .= $data;
+                if($delay > 0){
+                    usleep($delay);
+                }
 
                 // If a specific length is required and that length is met
                 if ($length > 0 && strlen($contents) >= $length) {
@@ -326,7 +331,7 @@ class FileManager
      * @param int $flags [optional] The flags determining the behavior of the write operation (default: 0).
      * @param resource|null $context [optional] A valid context resource created with stream_context_create (default: null).
      * 
-     * @return bool True if the operation was successful, false otherwise.
+     * @return bool Return true if the operation was successful, false otherwise.
      * @throws FileException If unable to write to the file.
      */
     public static function write(string $filename, mixed $content, int $flags = 0, $context = null): bool
@@ -366,11 +371,18 @@ class FileManager
      * @param resource $content The contents to write to the file as a stream resource.
      * @param int $flags [optional] The value of flags can be any combination of the following flags (with some restrictions), joined with the binary OR (|) operator.
      * @param resource $context [optional] A valid context resource created with stream_context_create.
+     * @param int $delay The delay between each chunk in microseconds (default: 0 second).
      * 
-     * @return bool True if the operation was successful, false otherwise.
+     * @return bool Return true if the operation was successful, false otherwise.
      * @throws FileException If unable to write to the file.
      */
-    public static function stream(string $filename, mixed $resource, int $flags = 0, mixed $context = null): bool
+    public static function stream(
+        string $filename, 
+        mixed $resource, 
+        int $flags = 0, 
+        mixed $context = null,
+        int $delay = 0
+    ): bool
     {
         if ($filename === '' || $resource === null) {
             return false;
@@ -404,6 +416,10 @@ class FileManager
                 $written = $file->fwrite($data);
                 if ($written === false) {
                     throw new FileException("Error writing to the file $filename.");
+                }
+
+                if($delay > 0){
+                    usleep($delay);
                 }
             }
 
@@ -478,12 +494,12 @@ class FileManager
      * Attempts to create the directory, if it doesn't exist.
      * 
      * @param string $path Directory path to create.
-     * @param int $permissions Unix file permissions
+     * @param int $permissions Unix file permissions (default: 0777 fully accessible to all users).
      * @param bool $recursive Allows the creation of nested directories specified in the pathname (default: true).
      * 
-     * @return bool true if files existed or was created else false
-     * @throws RuntimeException If path is not readable.
-     * @throws FileException If unable to create directory
+     * @return bool Return true if files existed or was created else false.
+     * @throws RuntimeException Throws if path is not readable.
+     * @throws FileException Throws if unable to create directory.
      */
     public static function mkdir(string $path, int $permissions = 0777, bool $recursive = true): bool 
     {
@@ -520,7 +536,7 @@ class FileManager
 	 */
 	public static function copy(string $origin, string $dest, int &$copied = 0): bool
 	{
-		if(!make_dir($dest)){
+		if(!self::mkdir($dest, Files::$dirPermissions)){
             return false;
         }
 
@@ -531,7 +547,7 @@ class FileManager
 		}
 
 		while (false !== ($file = readdir($dir))) {
-			if (($file != '.') && ($file != '..')) {
+			if (($file !== '.') && ($file !== '..')) {
 				$srcFile = $origin . DIRECTORY_SEPARATOR . $file;
 				$destFile = $dest . DIRECTORY_SEPARATOR . $file;
 
@@ -542,6 +558,8 @@ class FileManager
 				} elseif(copy($srcFile, $destFile)){
 					$copied++;
 				}
+
+                usleep(10000);
 			}
 		}
 
@@ -561,7 +579,7 @@ class FileManager
      */
     public static function move(string $origin, string $dest, int &$moved = 0): bool
     {
-        if(!make_dir($dest)){
+        if(!self::mkdir($dest, Files::$dirPermissions)){
             return false;
         }
 
@@ -572,7 +590,7 @@ class FileManager
         }
 
         while (false !== ($file = readdir($dir))) {
-            if ($file != '.' && $file != '..') {
+            if ($file !== '.' && $file !== '..') {
                 $srcFile = $origin . DIRECTORY_SEPARATOR . $file;
                 $destFile = $dest . DIRECTORY_SEPARATOR . $file;
 
@@ -583,6 +601,8 @@ class FileManager
                 } elseif(rename($srcFile, $destFile)) {
                     $moved++;
                 }
+
+                usleep(10000);
             }
         }
         closedir($dir);
@@ -595,26 +615,35 @@ class FileManager
     }
 
     /**
-     * Download a file to the user's browser.
-     *
-     * @param mixed $content The full file path, resource, or string to download.
+     * Download a file to the user's browser with optional delay between chunks.
+     * 
+     * @param string|resource $content The full file path, resource, or string to download.
      *      - File path - Download content from path specified.
      *      - Resource - Download content from resource specified.
      *      - String - Download content from string specified.
-     * @param string|null $filename The filename as it will be shown in the download.
-     * @param array $headers Optional headers for download.
+     * @param string|null $filename The filename as it will be shown in the download (e.g, `image.png`).
+     * @param array<string,mixed> $headers Optional array headers for download.
      * @param bool $delete Whether to delete the file after download (default: false).
+     * @param int $chunk_size The size of each chunk in bytes for large content (default: 8192, 8KB).
+     * @param int $delay The delay between each chunk in microseconds (default: 0).
      * 
      * @return bool Return true on success, false on failure.
      */
-    public static function download(mixed $content, ?string $filename = null, array $headers = [], bool $delete = false): bool
+    public static function download(
+        mixed $content, 
+        ?string $filename = null, 
+        array $headers = [], 
+        bool $delete = false, 
+        int $chunk_size = 8192,
+        int $delay = 0
+    ): bool 
     {
         if (!$content) {
             return false;
         }
 
         $length = 0;
-        $typeOf = '';
+        $typeOf = null;
 
         if (is_resource($content)) {
             $typeOf = 'resource';
@@ -622,15 +651,12 @@ class FileManager
             if ($stat !== false) {
                 $length = $stat['size'];
             }
-        } elseif (str_contains($content, DIRECTORY_SEPARATOR) && is_readable($content)) {
+        } elseif(str_contains($content, DIRECTORY_SEPARATOR) && is_readable($content)) {
             $typeOf = 'file';
             $filename ??= basename($content);
-            $mime = get_mime($content);
+            $mime = get_mime($content)?: null;
             $length = filesize($content);
-            if ($mime === false) {
-                $mime = null;
-            }
-        } elseif (is_string($content)) {
+        } elseif(is_string($content)) {
             $typeOf = 'string';
             $length = strlen($content);
         }
@@ -639,11 +665,12 @@ class FileManager
             return false;
         }
 
-        $bufferSize = 8192; // 8KB buffer size
-        $isPartialContent = $length > (5 * 1024 * 1024);
+        // Files larger than 5MB are considered partial content
+        $isPartial = $length > (5 * 1024 * 1024);
         $offset = 0;
         $filename ??= 'file_download';
         $mime ??= 'application/octet-stream';
+
         $headers = array_merge([
             'Connection' => 'close',
             'Content-Type' => $mime,
@@ -661,18 +688,19 @@ class FileManager
             [$length, $offset, $limit, $rangeHeader] = self::getHttpContentRange($length);
             
             if ($rangeHeader !== null) {
-                $isPartialContent = true;
+                $isPartial = true;
                 $headers["Content-Range"] = $rangeHeader;
                 $headers["Content-Length"] = $length;
                 Header::sendStatus(206);
             }
         }
 
-        if ($isPartialContent && ob_get_level()) {
+        if ($isPartial && ob_get_level()) {
             ob_end_clean();
         }
 
         Header::send($headers, false);
+
         if ($typeOf === 'file' || $typeOf === 'resource') {
             $handler = ($typeOf === 'file') ? fopen($content, 'rb') : $content;
 
@@ -681,13 +709,14 @@ class FileManager
             }
 
             fseek($handler, $offset);
-            if ($isPartialContent) {
+            if ($isPartial) {
                 while (!feof($handler) && $length > 0) {
-                    $read = min($bufferSize, $length);
+                    $read = min($chunk_size, $length);
                     echo fread($handler, $read);
                     $length -= $read;
                     ob_flush();
                     flush();
+                    usleep($delay);
                 }
             } else {
                 fpassthru($handler);
@@ -695,6 +724,7 @@ class FileManager
 
             if ($typeOf === 'file') {
                 fclose($handler);
+
                 if ($delete) {
                     unlink($content);
                 }
@@ -703,15 +733,17 @@ class FileManager
             return true;
         }
 
-        if ($isPartialContent && $typeOf === 'string') {
+        if ($isPartial && $typeOf === 'string') {
             $start = $offset;
             $end = $length - 1;
+
             while ($start <= $end) {
-                $bufferSize = min($bufferSize, $end - $start + 1);
-                echo substr($content, $start, $bufferSize);
-                $start += $bufferSize;
+                $chunk_size = min($chunk_size, $end - $start + 1);
+                echo substr($content, $start, $chunk_size);
+                $start += $chunk_size;
                 ob_flush();
                 flush();
+                usleep($delay);
             }
 
             return true;
@@ -800,7 +832,7 @@ class FileManager
         }
 
         $linkPath = dirname($link);
-        if(!file_exists($linkPath) && !make_dir($linkPath, 0755)){
+        if(!file_exists($linkPath) && !self::mkdir($linkPath, 0755)){
             logger('alert', 'Unable to create symlink destination directory');
             return false;
         }
@@ -824,11 +856,10 @@ class FileManager
         
         if (symlink($target, $link) === false) {
             $error = error_get_last();
-            if ($error !== null) {
-                logger('alert', 'Symlink creation failed: ' . $error['message'] ?? '');
-            } else {
-                logger('alert', 'Unknown error occurred while creating symlink.');
-            }
+            logger('alert', ($error === null) 
+                ? 'Unknown error occurred while creating symlink.' 
+                : 'Symlink creation failed: ' . $error['message'] ?? ''
+            );
 
             return false;
         }
@@ -839,13 +870,9 @@ class FileManager
     /**
      * Calculate the size of a given file or directory.
      *
-     * This method calculates the size of a given file or recursively calculates the
-     * total size of all files within a directory. If the path does not exist, it
-     * throws a FileException.
-     *
      * @param string $path The path to the file or directory.
      * 
-     * @return int The size in bytes.
+     * @return int Return the size in bytes.
      * @throws FileException If the path does not exist.
      */
     public static function size(string $path): int 
@@ -856,7 +883,9 @@ class FileManager
     
         $size = 0;
         if(is_dir($path)){
-            $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS));
+            $files = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS)
+            );
         
             foreach ($files as $file) {
                 $size += $file->getSize();
@@ -866,19 +895,24 @@ class FileManager
         }
 
         $size = filesize($path);
-        return $size !== false ? $size : 0;
+        return ($size !== false) ? $size : 0;
     }
 
     /**
-     * Reads binary files in chunks.
+     * Reads binary files in chunks with a customizable delay.
      * 
      * @param resource $handler The file handler.
      * @param int $length The length of each chunk (default: 2MB in bytes).
+     * @param int $delay The delay in microseconds between each chunk read (default: 1).
      * 
-     * @return bool True if the file was successfully read, false otherwise.
+     * @return bool Return true if the file was successfully read, false otherwise.
      */
-    public static function readBinary($handler, int $length = (1 << 21)): bool
+    public static function readBinary($handler, int $length = (1 << 21), int $delay = 0): bool
     {
+        if(!is_resource($handler)){
+            return false;
+        }
+  
         while (!feof($handler)) {
             $chunk = fread($handler, $length);
 
@@ -889,6 +923,7 @@ class FileManager
 
             echo $chunk;
             flush();
+            usleep($delay);
 
             if (connection_status() != CONNECTION_NORMAL) {
                 break;
@@ -900,16 +935,21 @@ class FileManager
     }
 
     /**
-     * Reads text-based files in chunks while preserving line endings.
+     * Reads text-based files in chunks with a customizable delay while preserving line endings.
      * 
      * @param resource $handler The file handler.
      * @param int $filesize The size of the file.
      * @param int $length The length of each chunk (default: 2MB in bytes).
+     * @param int $delay The delay in microseconds between each chunk read (default: 1).
      * 
-     * @return bool True if the file was successfully read, false otherwise.
+     * @return bool Return true if the file was successfully read, false otherwise.
      */
-    public static function readText($handler, int $filesize, int $length = (1 << 21)): bool
+    public static function readText($handler, int $filesize, int $length = (1 << 21), int $delay = 0): bool
     {
+        if(!is_resource($handler)){
+            return false;
+        }
+
         if($filesize === 0){
             fclose($handler);
             return false;
@@ -939,6 +979,7 @@ class FileManager
                 $length = $filesize - $position;
             }
 
+            usleep($delay);
             if (connection_status() != CONNECTION_NORMAL) {
                 break;
             }
@@ -949,33 +990,42 @@ class FileManager
     }
 
     /**
-     * Reads a file in chunks, optimizing for efficiency and type-specific handling.
+     * Reads a file in chunks with type-specific handling and customizable delay, for optimized performance.
+     * For text-based files, it reads while preserving line endings. For binary files, it reads in raw chunks.
      * 
      * @param resource $handler The file handler.
-     * @param int $filesize The size of the file.
-     * @param string $mime The MIME type of the file.
-     * @param int $length The length of each chunk (default: 2MB).
+     * @param int $filesize The total size of the file.
+     * @param string|null $mime The MIME type of the file (degault: null).
+     * @param int $length The size of each chunk to be read (default: 2MB).
+     * @param int $delay The delay in microseconds between chunk reads (default: 0).
      * 
-     * @return bool Return true if the file was successfully read, false otherwise.
+     * @return bool Returns true if the file was successfully read, false otherwise.
      */
-    public static function read($handler, int $filesize, string $mime, int $length = (1 << 21)): bool
+    public static function read(
+        $handler, 
+        int $filesize, 
+        ?string $mime = null, 
+        int $length = (1 << 21),
+        int $delay = 0
+    ): bool
     {
-        if ($filesize === 0) {
-            fclose($handler);
-            return false;
-        }
+        $result = false;
 
-        if ($filesize > 5 * 1024 * 1024) {
-            if (preg_match('/^(text\/.*|application\/json|application\/xml)$/i', $mime)) {
-                return self::readText($handler, $filesize, $length);
+        if ($filesize > 0 && is_resource($handler)) {
+            if ($filesize > 5 * 1024 * 1024) {
+                $result = ($mime && (str_starts_with($mime, 'text/') || preg_match('/^(application\/(?:json|xml|javascript)|image\/svg\+xml)$/i', $mime)))
+                    ? self::readText($handler, $filesize, $length, $delay)
+                    : self::readBinary($handler, $length, $delay);
+            }else{
+                $result = fpassthru($handler) > 0;
             }
-            
-            return self::readBinary($handler, $length);
         }
 
-        $read = fpassthru($handler);
-        fclose($handler);
-        return $read > 0;
+        if($handler && is_resource($handler)){
+            fclose($handler);
+        }
+
+        return $result;
     }
 
     /**
@@ -988,11 +1038,7 @@ class FileManager
      */
     public function getCompatible(string $name): string 
     {
-        if (property_exists($this, $name)) {
-            return root($this->{$name});
-        }
-    
-        return '';
+        return property_exists($this, $name) ? root($this->{$name}) : '';
     } 
     
     /**

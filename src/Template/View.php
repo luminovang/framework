@@ -28,6 +28,7 @@ use \DateTimeInterface;
 use \DateTimeImmutable;
 use \DateTimeZone;
 use \Closure;
+use \stdClass;
 use \WeakMap;
 use \Exception;
 
@@ -756,7 +757,7 @@ trait View
 
             if ($cacheable && $engine === 'default') {
                 $cache = self::getCache($this->cacheExpiry);
-
+        
                 if ($cache->expired($this->viewType) === false) {
                     return $return ? $cache->get() : $cache->read();
                 }
@@ -1447,7 +1448,7 @@ trait View
         bool $copy = false,
     ): Minification
     {
-        return self::$weak[new static()] ??= (new Minification())
+        return self::$weak[new stdClass()] ??= (new Minification())
             ->codeblocks($ignore)
             ->copyable($copy)
             ->compress($contents, $type);
@@ -1462,7 +1463,7 @@ trait View
      */
     private static function getCache(DateTimeInterface|int|null $expiry = 0): ViewCache
     {
-        return self::$weak[new static()] ??= (new ViewCache())
+        return self::$weak[new stdClass()] ??= (new ViewCache())
             ->setExpiry($expiry)
             ->setDirectory(self::$cacheFolder)
             ->setKey(Foundation::getCacheId())

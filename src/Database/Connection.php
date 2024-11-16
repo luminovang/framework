@@ -94,11 +94,11 @@ class Connection implements Countable
         $this->db ??= $this->connect();
     }
 
-   /**
-    * Retrieves the database driver connection instance.
-    *
-    * @return DatabaseInterface|null Return the driver connection instance, or null if not connected.
-    */
+    /**
+     * Retrieves the database driver connection instance.
+     *
+     * @return DatabaseInterface|null Return the driver connection instance, or null if not connected.
+     */
     public function database(): ?DatabaseInterface
     {
         return $this->db;
@@ -190,6 +190,20 @@ class Connection implements Countable
         return $connection;
     }
 
+    /**
+     * Frees up the statement cursor and close current database connection.
+     *
+     * @return true Always return true.
+     * @see purge() method to close all connections including pools.
+     */
+    public function disconnect(): bool
+    {
+        if($this->db instanceof DatabaseInterface && $this->db->isConnected()){
+            $this->db->close();
+        }
+
+        return true;
+    }
 
     /**
      * Retries the database connection with optional backup server fallback.
@@ -303,15 +317,15 @@ class Connection implements Countable
     }
 
     /**
-     * Purges all pooled connections and optionally closes the database connection.
+     * Purges all pooled connections and optionally closes the current database connection.
      *
      * If the $conn parameter is true, the database connection will be closed; otherwise, only the pooled connections will be closed.
      *
-     * @param bool $conn If true, close the database connection. Default is false.
+     * @param bool $close_current If true, close the current database connection also (default: false).
      *
-     * @return void
+     * @return bool Always true when connection are closed.
      */
-    public function purge(bool $conn = false): void
+    public function purge(bool $close_current = false): bool
     {
         foreach ($this->pools as $connection) {
             if($connection instanceof DatabaseInterface){
@@ -322,9 +336,9 @@ class Connection implements Countable
 
         $this->pools = [];
 
-        if($conn && $this->db instanceof DatabaseInterface){
-            $this->db->close();
-        }
+        return $close_current 
+            ? $this->disconnect() 
+            : true;
     }
 
     /**

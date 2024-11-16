@@ -10,6 +10,8 @@
 namespace Luminova\Interface;
 
 use \Luminova\Http\File;
+use \Luminova\Http\Server;
+use \Luminova\Http\Header;
 use \Luminova\Http\UserAgent;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
@@ -30,11 +32,11 @@ use \Luminova\Exceptions\SecurityException;
  * @method mixed getLock(string|null $field, mixed $default = null)      Get a field value from HTTP LOCK request or entire fields if `$field` param is null.
  * @method mixed getUnlock(string|null $field, mixed $default = null)    Get a field value from HTTP UNLOCK request or entire fields if `$field` param is null.
  * 
- * @param string $key  The field key to retrieve the value value from.
- * @param mixed $default An optional default value to return if the key is not found.
- * 
- * @return mixed Return the value from HTTP request method body based on key.
+ * @property Server|null $server The server instance representing HTTP server parameters and configurations.
+ * @property Header|null $header The header instance providing HTTP request headers information.
+ * @property UserAgent|null $agent The user-agent instance containing client browser details.
  */
+
 interface HttpRequestInterface
 {
     /**
@@ -122,10 +124,10 @@ interface HttpRequestInterface
      * @param string $name The file input field name.
      * @param int|null $index Optional file index for multiple files (default: null).
      * 
-     * @return array<int,File>|File|null Return uploaded file instance or null if file input name not found.
+     * @return \Luminova\Http\File[]|\Luminova\Http\File|false Return uploaded file instance or false if file input name not found.
      * @see https://luminova.ng/docs/3.0.2/http/file-object
      */
-    public function getFile(string $name, ?int $index = null): File|array|null;
+    public function getFile(string $name, ?int $index = null): File|array|bool;
 
     /**
      * Get raw array of all uploaded files.
@@ -149,27 +151,16 @@ interface HttpRequestInterface
     public function getBoundary(): ?string;
 
     /**
-     * Check if the request method is GET.
+     * Parses a multipart/form-data string into an associative array with form fields and file data.
      *
-     * @return bool Returns true if the request method is GET, false otherwise.
-     */
-    public function isGet(): bool;
-
-    /**
-     * Check if the request method is POST.
-     *
-     * @return bool Returns true if the request method is POST, false otherwise.
-     */
-    public function isPost(): bool;
-
-    /**
-     * Check if the request method is the provided method.
-     *
-     * @param string $method The method to check against (e.g, `POST`, `GET`).
+     * @param string $data The raw multipart form data content.
+     * @param string $boundary The boundary string used to separate form data parts.
      * 
-     * @return bool Returns true if the request method matches the provided method, false otherwise.
+     * @return array Return an array containing {param:array,files:array}:
+     *               - 'params' => Associative array of form field names and values
+     *               - 'files'  => Associative array of files with metadata and binary content
      */
-    public function isMethod(string $method): bool;
+    public static function getFromMultipart(string $data, string $boundary): array;
 
     /**
      * Get the request content type.
@@ -184,29 +175,6 @@ interface HttpRequestInterface
      * @return string|null Return the authorization header value or null if no authorization header was sent.
      */
     public function getAuth(): ?string;
-
-    /**
-     * Check if the current connection is secure
-     * 
-     * @return bool Return true if the connection is secure false otherwise.
-     */
-    public function isSecure(): bool;
-
-    /**
-     * Check if request is ajax request, see if a request contains the HTTP_X_REQUESTED_WITH header.
-     * 
-     * @return bool Return true if request is ajax request, false otherwise.
-     */
-    public function isAJAX(): bool;
-
-    /**
-     * Check if the request URL indicates an API endpoint.
-     *
-     * This method checks if the URL path starts with '/api' or 'public/api'.
-     * 
-     * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
-     */
-    public function isApi(): bool;
     
     /**
      * Get the request URL query string.
@@ -324,9 +292,62 @@ interface HttpRequestInterface
      * 
      * @param string|null $useragent The User Agent string, if not provided, it defaults to (`HTTP_USER_AGENT`).
      * 
-     * @return UserAgent Return instance user-agent class containing browser information.
+     * @return \Luminova\Http\UserAgent Return instance user-agent class containing browser information.
      */
     public function getUserAgent(?string $useragent = null): UserAgent;
+
+    /**
+     * Check if the request method is GET.
+     *
+     * @return bool Returns true if the request method is GET, false otherwise.
+     */
+    public function isGet(): bool;
+
+    /**
+     * Check if the request method is POST.
+     *
+     * @return bool Returns true if the request method is POST, false otherwise.
+     */
+    public function isPost(): bool;
+
+    /**
+     * Check if the request method is the provided method.
+     *
+     * @param string $method The method to check against (e.g, `POST`, `GET`).
+     * 
+     * @return bool Returns true if the request method matches the provided method, false otherwise.
+     */
+    public function isMethod(string $method): bool;
+
+     /**
+     * Check if the current connection is secure
+     * 
+     * @return bool Return true if the connection is secure false otherwise.
+     */
+    public function isSecure(): bool;
+
+    /**
+     * Check if request is ajax request, see if a request contains the HTTP_X_REQUESTED_WITH header.
+     * 
+     * @return bool Return true if request is ajax request, false otherwise.
+     */
+    public function isAJAX(): bool;
+
+    /**
+     * Check if the request URL indicates an API endpoint.
+     *
+     * This method checks if the URL path starts with '/api' or 'public/api'.
+     * 
+     * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
+     */
+    public function isApi(): bool;
+
+    /**
+     * Checks if the request is routed through a proxy server by inspecting various proxy-related headers.
+     * 
+     * @return bool Returns true if the request is likely from proxy, false otherwise.
+     */
+    public function isProxy(): bool;
 
     /**
      * Check if the request origin matches the current application host.

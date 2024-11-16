@@ -79,6 +79,27 @@ interface DatabaseInterface
     public function dumpDebug(): bool;
 
     /**
+     * Record the database query execution time.
+     * This method stores the execution time in a shared memory using `__DB_QUERY_EXECUTION_TIME__`, 
+     * to retrieve later when needed.
+     * 
+     * Note: To call this method you must first enable `debug.show.performance.profiling` in environment variables file.
+     *
+     * @param bool $start Indicates whether to start or stop recording (default: true).
+     * @param bool $finished_transaction Indicates whether is stopping recording for a transaction commit or rollback (default: false).
+     *              This is used internally to stop recording after transaction has been committed or rolled back.
+     * 
+     * @return void
+     * 
+     * @example - To get the query execution in any application scope. 
+     * 
+     * ```php
+     * $time = shared('__DB_QUERY_EXECUTION_TIME__', null, 0);
+     * ```
+     */
+    public function profiling(bool $start = true, bool $finished_transaction = false): void;
+
+    /**
      * Get information about the last executed statement.
      *
      * @return array Returns an array of statement execution information.
@@ -93,7 +114,7 @@ interface DatabaseInterface
     public function free(): void;
 
     /**
-     * Frees up the statement cursor and closes the database
+     * Frees up the statement cursor and closes the database connection.
      * 
      * @return void
      */
@@ -208,7 +229,7 @@ interface DatabaseInterface
      * @param array|null $params Optional array of parameters to bind during statement execution. Each value is treated as a string.
      * 
      * @return bool Returns true on success, false on failure.
-     * @throws DatabaseException Throws if any error occurs.
+     * @throws DatabaseException Throws if any error occurs while executing query.
      */
     public function execute(?array $params = null): bool;
 
@@ -255,7 +276,7 @@ interface DatabaseInterface
      * 
      * @param string $type The return type ('object' or 'array').
      * 
-     * @return array|object|bool Returns the result as an object or array, or false if no more rows are available.
+     * @return array|object|false Returns the result as an object or array, or false if no more rows are available.
      */
     public function getNext(string $type = 'object'): array|object|bool;
 
@@ -264,21 +285,21 @@ interface DatabaseInterface
      * 
      * @param string $type The return type ('object' or 'array').
      * 
-     * @return array|object|bool Returns an array of result objects or arrays, or false on failure.
+     * @return array|object|false Returns an array of result objects or arrays, or false on failure.
      */
     public function getAll(string $type = 'object'): array|object|bool;
 
     /**
      * Fetch the result set as a 2D array of integers.
      *
-     * @return array|bool Returns a 2D array of integers, or false on failure.
+     * @return array|false Returns a 2D array of integers, or false on failure.
      */
     public function getInt(): array|bool;
 
     /**
      * Get the total count of selected rows as an integer.
      *
-     * @return int|bool Returns the total count as an integer, or false on failure.
+     * @return int|false Returns the total count as an integer, or false on failure.
      */
     public function getCount(): int|bool;
 
@@ -294,9 +315,9 @@ interface DatabaseInterface
     /**
      * Get the prepared statement of the last executed query.
      *
-     * @return PDOStatement|mysqli_stmt|mysqli_result|bool|null Returns the statement instance, or false/null on failure.
+     * @return PDOStatement|mysqli_stmt|mysqli_result|null Returns the statement instance, or null on failure.
      */
-    public function getStatement(): PDOStatement|mysqli_stmt|mysqli_result|bool|null;
+    public function getStatement(): PDOStatement|mysqli_stmt|mysqli_result|null;
 
     /**
      * Fetch the result with a specific type and mode.

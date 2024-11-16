@@ -12,6 +12,7 @@ namespace Luminova\Command\Novakit;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Base\BaseConsole;
 use \Luminova\Database\Builder;
+use \Luminova\Command\Utils\Color;
 use \Luminova\Database\Migration;
 use \Luminova\Database\Seeder;
 use \Luminova\Storages\FileManager;
@@ -23,17 +24,17 @@ class Database extends BaseConsole
 {
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $group = 'Database';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $name = 'db';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected array $usages = [
         'php novakit db:clear --help',
         'php novakit db:drop --help',
@@ -45,17 +46,17 @@ class Database extends BaseConsole
 
     /**
      * @var ?Builder $builder
-    */
+     */
     private static ?Builder $builder = null;
 
-     /**
+    /**
      * @var bool $isDebug
-    */
+     */
     private static bool $isDebug = false;
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function run(?array $options = []): int
     {
         $this->explain($options);
@@ -84,7 +85,7 @@ class Database extends BaseConsole
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function help(array $helps): int
     {
         return STATUS_ERROR;
@@ -96,7 +97,7 @@ class Database extends BaseConsole
      * @param mixed $table The table to truncate.
      * 
      * @return int Returns STATUS_SUCCESS on successful execution, STATUS_ERROR on failure.
-    */
+     */
     private function doTruncate(mixed $table = null): int 
     {
         $table ??= $this->getAnyOption('table', 't');
@@ -121,7 +122,7 @@ class Database extends BaseConsole
      * Clear all migrations & seeders files and locks.
      * 
      * @return int Returns STATUS_SUCCESS on successful execution, STATUS_ERROR on failure.
-    */
+     */
     private function clearLocks(): int 
     {
         $context = $this->getAnyOption('lock', 'l', null);
@@ -216,7 +217,7 @@ class Database extends BaseConsole
      * Run database table migration alter.
      * 
      * @return int Returns STATUS_SUCCESS on successful execution, STATUS_ERROR on failure.
-    */
+     */
     private function alterTable(): int 
     {
         $class = $this->getAnyOption('class', 'c');
@@ -332,7 +333,7 @@ class Database extends BaseConsole
                 $extenders = Caller::extenders(Seeder::class, $path, $namespace);
                 foreach ($extenders as $seed) {
 
-                    if($lock !== [] && $this->guardVersion($seed, $lock, $path, $backup, true)){
+                    if($lock !== [] && $this->guardVersion($seed, $lock, $path, $backup)){
                         continue;
                     }
 
@@ -350,11 +351,13 @@ class Database extends BaseConsole
                             self::lockFile($lock, $seed, $path, $backup, true);
                         }
                     }
+
+                    usleep(100000);
                 }
             } else {
                 $seed = "{$namespace}\\{$class}";
-
-                if($lock !== [] && $this->guardVersion($seed, $lock, $path, $backup, true)){
+               
+                if($lock !== [] && $this->guardVersion($seed, $lock, $path, $backup)){
                     return STATUS_SUCCESS;
                 }
 
@@ -372,10 +375,12 @@ class Database extends BaseConsole
                         self::lockFile($lock, $seed, $path, $backup, true);
                     }
                 }
+
+                usleep(100000);
             }
 
             foreach ($seeders as $seed) {
-                if($lock !== [] && $this->guardVersion($seed, $lock, $path, $backup, true)){
+                if($lock !== [] && $this->guardVersion($seed, $lock, $path, $backup)){
                     continue;
                 }
 
@@ -390,8 +395,11 @@ class Database extends BaseConsole
                         self::lockFile($lock, $seed, $path, $backup, true);
                     }
                 }
+
+                usleep(100000);
             }
 
+            $this->newLine();
             if($executed > 0){
                 $this->writeln(sprintf("'{$executed}' seeder%s was executed successfully.", $executed > 1 ? 's' : ''), 'white', 'green');
                 return STATUS_SUCCESS;
@@ -466,6 +474,8 @@ class Database extends BaseConsole
                             self::lockFile($lock, $migrate, $path, $backup, false, $drop);
                         }
                     }
+
+                    usleep(100000);
                 }
             }else{
                 $migrate = "{$namespace}\\{$class}";
@@ -481,6 +491,8 @@ class Database extends BaseConsole
                         self::lockFile($lock, $migrate, $path, $backup, false, $drop);
                     }
                 }
+
+                usleep(100000);
             }
 
             foreach ($migrants as $migrate) {
@@ -495,6 +507,8 @@ class Database extends BaseConsole
                         self::lockFile($lock, $migrate, $path, $backup, false, $drop);
                     }
                 }
+
+                usleep(100000);
             }
 
             if(self::$isDebug){
@@ -599,12 +613,12 @@ class Database extends BaseConsole
      * @param Seeder $seeder The seeder to execute.
      * 
      * @return bool Return true if seeder succeeded, false otherwise.
-    */
+     */
     private function doSeeding(Seeder $seeder): bool 
     {
         try{
             $seeder->run(self::$builder);
-            $this->writeln("[" . $this->color(get_class_name($seeder), 'green') . "] Execution completed.");
+            $this->writeln("[" . Color::style(get_class_name($seeder), 'green') . "] Execution completed.");
             return true;
         } catch (Exception|AppException $e) {
             $this->writeln("Error: " . $e->getMessage(), 'white', 'red');
@@ -694,7 +708,7 @@ class Database extends BaseConsole
                                         $executions++;
                                     }
     
-                                    sleep(1);
+                                    usleep(100000);
                                 }
 
                                 if ($executions > 0) {
@@ -808,6 +822,8 @@ class Database extends BaseConsole
                                                 self::updateLockFile($lock, (int) $input, null, $seed, $path, $backupPath, true);
                                             }
                                         }
+
+                                        usleep(100000);
                                     }
                                 }
 
@@ -846,7 +862,7 @@ class Database extends BaseConsole
      * @param string $title  The context title for table identifier.
      * 
      * @return array<int,array> Return list of all available versions number.
-    */
+     */
     private function listLocks(
         array $lock, 
         string $class, 
@@ -996,12 +1012,12 @@ class Database extends BaseConsole
 
     /**
      * Compare two files to see if any changes in the hash
-
+     * 
      * @param string $source File source.
      * @param string $destination. File destination path.
      * 
      * @return bool  
-    */
+     */
     private static function versionChanged(string $source, string $destination): bool
     {
         if(file_exists($source) && file_exists($destination)){
@@ -1018,8 +1034,8 @@ class Database extends BaseConsole
      * @param array    $lock     The lock array where metadata will be stored.
      * @param string   $path     The path to the original migration or seeder file.
      * @param string   $backup   The directory path where backup files will be stored.
-     * @param int|null $version  The last version of migration or seeder.
-     * @param bool $alter Whether executing table alter.
+     * @param int|null $version  The version of migration or seeder to execute.
+     * @param bool $alter Whether you are executing table alter.
      *
      * @return bool Returns true if the current version file is still same as last, false otherwise.
      */

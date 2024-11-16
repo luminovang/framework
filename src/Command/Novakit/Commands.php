@@ -314,7 +314,7 @@ final class Commands
             ],
             'options' => [
                 '-c, --class' => "Specify the migration class to alter.",
-                '-n, --no-backup' => "Run alter migration without creating a backup.",
+                '-n, --no-backup' => "Run alter migration without considering locked version nor creating a new backup lock version.",
                 '-d, --drop-columns' => "Drop columns that don't exist in the new schema during the alter migration.",
                 '-b, --debug' => "Print generated alteration SQL query string without applying any changes."
             ],
@@ -331,11 +331,12 @@ final class Commands
             'group' => 'Database',
             'description' => "Truncates a database table to clear all records.",
             'usages' => [
-                'php novakit db:truncate --table=TestTable',
+                'php novakit db:truncate --table=<table-name>',
             ],
             'options' => [
                 '-t, --table' => "Specify the database table name to truncate.",
                 '-n, --no-transaction' => "Run database truncation without transaction.",
+                '--help' => "This help."
             ],
             'examples' => [
                 'php novakit db:truncate --table=TestTable',
@@ -347,15 +348,16 @@ final class Commands
             'group' => 'Database',
             'description' => "Executes database seeders.",
             'usages' => [
-                'php novakit db:seed',
-                'php novakit db:seed --class=TestSeeder',
+                'php novakit db:seed' => 'Executes all database seeders classes.',
+                'php novakit db:seed --class=<class-name>' => 'Execute a specific database seeder class.'
             ],
             'options' => [
                 '-c, --class' => "Specify the seeder class to run.",
                 '-t, --table' => "Specify the seeder class table name to truncate before rolling back.",
                 '-r, --rollback' => "Rollback seeder to previous version.",
-                '-n, --no-backup' => "Run seeder without backup.",
+                '-n, --no-backup' => "Run seeder without considering locked version nor creating a new backup lock version.",
                 '-i, --invoke' => "Run seeder and also invoke other invokable seeders classes.",
+                '--help' => "This help."
             ],
             'examples' => [
                 'php novakit db:seed',
@@ -371,16 +373,17 @@ final class Commands
             'group' => 'Database',
             'description' => 'Executes database table migrations.',
             'usages' => [
-                'php novakit db:migrate',
-                'php novakit db:migrate --class=TestMigration'
+                'php novakit db:migrate' => 'Executes all database migration classes.',
+                'php novakit db:migrate --class=<class-name>' => 'Execute a specific database migration class.'
             ],
             'options' => [
                 '-c, --class' => "Specify the migration class to run.",
-                '-n, --no-backup' => "Run migration without backup.",
+                '-n, --no-backup' => "Run migration without considering locked version nor creating a new backup lock version.",
                 '-d, --drop' => "Drop table for `down` method during migration.",
                 '-r, --rollback' => "Rollback migration to previous version.",
                 '-b, --debug' => "Print generated migration SQL query string without applying any changes.",
                 '-i, --invoke' => "Run migration and also invoke other invokable migration classes.",
+                '--help' => "This help."
             ],
             'examples' => [
                 'php novakit db:migrate',

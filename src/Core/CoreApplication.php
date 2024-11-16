@@ -36,16 +36,37 @@ abstract class CoreApplication
     public ?Router $router = null;
 
     /**
+     * Application is lifecycle state counter.
+     *
+     * @var int $lifecycle
+     */
+    private static int $lifecycle = 0;
+
+    /**
      * CoreApplication constructor.
      * Initializes the router, sets the controller namespace, and sets up the template engine.
+     * 
+     * > Note: 
+     * > if application is already created before re-initializing application instance will not call onCreate and onDestroy method again.
      */
     public function __construct() 
     {
+        // Prevent multiple re-initializations
+        if(self::$lifecycle > 0){
+            if(self::$instance instanceof static && !$this->router instanceof Router){
+                $this->router = self::$instance->router;
+            }
+
+            return;
+        }
+
+        $this->onInitialized();
         $this->router ??= new Router($this);
         $this->router->addNamespace('\\App\\Controllers\\')
             ->addNamespace('\\App\\Modules\\Controllers\\');
-        $this->onInitialized();
+
         $this->onCreate();
+        self::$lifecycle = 1;
     }
 
     /**
@@ -53,14 +74,18 @@ abstract class CoreApplication
      */
     public function __destruct()
     {
+        if(self::$lifecycle > 1){
+            return;
+        }
+
+        self::$lifecycle = 2;
         $this->onDestroy();
-        gc_collect_cycles();
     }
 
     /**
-     * Trigger an application event listener.
+     * Trigger an application event or lifecycle hook.
      * 
-     * @param string $event The event method name to trigger.
+     * @param string $event The event or hook method name to trigger.
      * @param mixed ...$arguments Optional arguments for the event method.
      * 
      * @return void
@@ -71,36 +96,49 @@ abstract class CoreApplication
     }
 
     /**
-     * onCreate method that gets triggered on object creation, 
-     * designed to be overridden in subclasses for custom initialization.
+     * Lifecycle onCreate hook: Triggered once on object creation.
+     * Override in subclasses for custom initialization.
      * 
      * @return void
      */
     protected function onCreate(): void {}
 
     /**
-     * onDestroy method that gets triggered on object destruction, 
-     * designed to be overridden in subclasses for custom cleanup.
+     * Lifecycle onDestroy hook: Triggered once on object destruction.
+     * Override in subclasses for custom cleanup.
      * 
      * @return void
+     * > Optionally Add `gc_collect_cycles()` to your onDestroy hook to forces collection of any existing garbage cycles.
      */
-    protected function onDestroy(): void {}
+    protected function onDestroy(): void 
+    {
+        gc_collect_cycles();
+    }
 
     /**
-     * Called when the application starts handling a request, regardless of success or failure.
-     * 
-     * @param array<string,mixed> $info The request state information.
-     * 
-     * @return void 
+     * Lifecycle onStart hook: Triggered when the application starts handling a request.
+     *
+     * @param array<string,mixed> $info Request state information.
      */
     protected function onStart(array $info): void {}
 
     /**
-     * Called after the application finishes handling a request, regardless of success or failure.
+     * Lifecycle onFinish hook: Triggered after a request is handled, regardless of success or failure.
+     * 
+     * @param array<string,mixed> $info Request controller information.
+     * 
+     * **Class Info keys:**
+     * 
+     * - `filename`  (string|null) Optional controller class file name.
+     * - `namespace` (string|null) Optional controller class namespace.
+     * - `method`    (string|null) Optional controller class method name.
+     * - `attrFiles` (int) Number of controller files scanned for matched attributes.
+     * - `cache`     (bool) Weather cached version rendered or new content.
+     * - `staticCache` (bool) Weather is a static cached version (e.g, page.html) or regular cache (e.g, `page`).
      * 
      * @return void 
      */
-    protected function onFinish(): void {}
+    protected function onFinish(array $info): void {}
 
     /**
      * Triggered after a route context is successfully registered.
@@ -132,17 +170,38 @@ abstract class CoreApplication
     /**
      * Retrieve the singleton instance of the application.
      * 
-     * @return static The shared application instance.
+     * @return static Return a shared application instance.
      */
-    public static final function getInstance(): static 
+    public static function getInstance(): static 
     {
-        return self::$instance ??= new static();
+        if(!self::$instance instanceof static){
+            self::$instance = new static();
+        }
+       
+        return self::$instance;
     }
 
     /**
-     * Get the current URI segments.
+     * Set the singleton instance to a new application instance.
+     * 
+     * @param CoreApplication $app The application instance to set.
+     * 
+     * @return static Return the new shared application instance.
+     */
+    public static function setInstance(CoreApplication $app): static
+    {
+        if(self::$instance instanceof static && !$app->router instanceof Router){
+            $app->router = self::$instance->router;
+        }
+
+        self::$instance = $app;
+        return self::$instance;
+    }
+
+    /**
+     * Get the current URI segments from the router.
      *
-     * @return string The URI of the current request.
+     * @return string Return the URI of the current request.
      */
     public final function getView(): string 
     {
@@ -150,21 +209,19 @@ abstract class CoreApplication
     }
 
     /**
-     * Retrieve a protected property from template options or exported classes.
+     * Retrieve a protected property or dynamic attribute from template options or exported classes.
      *
      * @param string $key The property or class alias name.
      * 
-     * @return mixed|null The property value or null if not found.
+     * @return mixed|null Return the property value or null if not found.
      * @ignore
      */
     public function __get(string $key): mixed
     {
         $value = self::attrGetter($key);
 
-        if ($value === self::$KEY_NOT_FOUND) {
-            return $this->{$key} ?? static::${$key} ?? null;
-        }
-
-        return $value;
+        return ($value === self::$KEY_NOT_FOUND) 
+            ? ($this->{$key} ?? static::${$key} ?? null)
+            : $value;
     }
 }

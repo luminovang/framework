@@ -298,12 +298,12 @@ final class Schema
         $db = self::db();
         /**
          * Hold database object which maybe required to rollback transaction.
-        */
+         */
         shared('DROP_TRANSACTION', null);
 
         /**
          * Hold migration drop static.
-        */
+         */
         shared('MIGRATION_SUCCESS', false);
 
         try {

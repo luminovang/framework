@@ -38,6 +38,7 @@ class Alter
                 }
 
             case 'mysql':
+            case 'sqlite':
             default:
                 return $alter
                     ? "ALTER TABLE {$table} AUTO_INCREMENT={$input['start']};"
@@ -86,6 +87,7 @@ class Alter
                 return "ALTER TABLE {$table} MODIFY {$column} {$datatype};\n";
 
             case 'mysql':
+            case 'sqlite':
             default:
                 return "ALTER TABLE {$table} MODIFY COLUMN {$column} {$datatype};\n";
         }
@@ -131,6 +133,7 @@ class Alter
                     "ALTER TABLE {$table} DROP COLUMN {$column}_temp;\n";
 
             case 'mysql':
+            case 'sqlite':
             default:
                 return "ALTER TABLE {$table} MODIFY COLUMN {$column} {$datatype} {$move};\n";
         }
@@ -157,7 +160,7 @@ class Alter
         string $typeLength,
         string $visibility
     ): string {
-        if($database === 'mysql'){
+        if($database === 'mysql' || $database === 'sqlite'){
             return "ALTER TABLE {$table} MODIFY COLUMN {$column} {$typeLength} {$visibility};\n";
         }
 
@@ -188,6 +191,7 @@ class Alter
     
             case 'oracle':
             case 'mysql':
+            case 'sqlite':
             default:
                 return "ALTER TABLE {$table} RENAME COLUMN {$from} TO {$to};\n";
         }
@@ -214,6 +218,7 @@ class Alter
                 return "ALTER TABLE [$from] RENAME [$to]";
 
             case 'mysql':
+            case 'sqlite':
             default:
                 return "RENAME TABLE `$from` TO `$to`";
         }
@@ -250,6 +255,7 @@ class Alter
     
             case 'ms-access':
             case 'mysql':
+            case 'sqlite':
             default:
                 return "ALTER TABLE {$table} ALTER COLUMN {$column} SET DEFAULT {$default};\n";
         }
@@ -339,6 +345,7 @@ class Alter
             
             case 'oracle':
             case 'mysql':
+            case 'sqlite':
             default:
                 return "ALTER TABLE {$table} MODIFY {$column} {$nullable};\n";
         }
@@ -360,6 +367,7 @@ class Alter
                 return '';
 
             case 'mysql':
+            case 'sqlite':
             default:
                 return "ALTER TABLE {$table} MODIFY {$column} CHARACTER SET {$charset};\n";
         }
@@ -381,6 +389,7 @@ class Alter
                 return '';
 
             case 'mysql':
+            case 'sqlite':
             default:
                 return "ALTER TABLE {$table} MODIFY {$column} COLLATE {$collation};\n";
         }

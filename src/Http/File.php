@@ -9,6 +9,7 @@
  */
 namespace Luminova\Http;
 
+use \Luminova\Functions\Func;
 use \Luminova\Functions\Maths;
 use \Luminova\Exceptions\ErrorException;
 use \stdClass;
@@ -261,6 +262,30 @@ class File
     }
 
     /**
+     * Determines if the uploaded content string is likely a binary based on the presence of non-printable characters.
+     * 
+     * @return bool Return true if it's a binary, false otherwise.
+     */
+    public function isBinary(): bool
+    {
+        return ($this->content === null) 
+            ? false 
+            : Func::isBinary($this->content);
+    }
+
+    /**
+     * Determines if the uploaded content string is likely to be Base64-encoded.
+     *
+     * @return bool Returns true if the content is likely to be Base64-encoded, false otherwise.
+     */
+    public function isBase64Encoded(): bool
+    {
+        return ($this->content === null) 
+            ? false 
+            : Func::isBase64Encoded($this->content);
+    }
+
+    /**
      * Checks if an error occurred during the file upload process.
      *
      * @return bool Returns true if an error occurred; false otherwise.
@@ -302,7 +327,7 @@ class File
     }
 
     /**
-     * Set file configurations for upload behavior.
+     * Set file configurations for upload behavior file type restriction.
      * 
      * @param array<string,mixed> $config An associative array of file configuration key and value.
      * 
@@ -313,14 +338,14 @@ class File
      * - `upload_path`:    (string) The path where files will be uploaded.
      * - `max_size`:       (int) Maximum allowed file size in bytes.
      * - `min_size`:       (int) Minimum allowed file size in bytes.
-     * - `allowed_types`:  (string|string{}) Array of allowed file types or String separated by pipe symbol (e.g, `png|jpg|gif`).
-     * - `chunk_length`:   (int) Length of chunk in bytes (default: 5242880).
+     * - `allowed_types`:  (string|string[]) A list array of allowed file types or String separated by pipe symbol (e.g, `png|jpg|gif`).
+     * - `chunk_length`:   (int) Write length of chunk in bytes (default: 5242880).
      * - `if_existed`:     (string) How to handle existing files [`File::IF_EXIST_OVERWRITE` or `File::IF_EXIST_RETAIN`] (default: `File::IF_EXIST_OVERWRITE`).
-     * - `symlink`:        (string) Specify a valid path to create a symlink after upload was completed (e.g /public/assets/).
+     * - `symlink`:        (string) Specify a valid path to create a symlink after upload was completed (e.g `/writeable/storages/`, `/public/assets/`).
      */
     public function setConfig(array $config): self
     {
-        $this->config = new stdClass();
+        $this->config ??= new stdClass();
 
         foreach (self::$configurations as $key => $name) {
             if (isset($config[$key])) {
@@ -357,7 +382,7 @@ class File
      * Validates the uploaded file against the defined configuration rules.
      *
      * @return bool Returns true if the file is valid; false otherwise, with 
-     * an appropriate error code and message set.
+     *              an appropriate error code and message set.
      */
     public function valid(): bool
     {
@@ -374,7 +399,7 @@ class File
 
         if ($this->temp === null && $this->content === null) {
             $this->error = UPLOAD_ERR_NO_TMP_DIR;
-            $this->message = 'File not found, or may not have been uploaded to the server correctly.';
+            $this->message = 'File not found, or may not have been uploaded correctly.';
             return false;
         }
 
@@ -392,11 +417,13 @@ class File
 
         if (isset($this->config->allowedTypes) && $this->config->allowedTypes) {
             $isArray = is_array($this->config->allowedTypes);
-            $allowed = $isArray ? $this->config->allowedTypes : explode('|', strtolower($this->config->allowedTypes));
+            $allowed = $isArray 
+                ? $this->config->allowedTypes 
+                : explode('|', strtolower($this->config->allowedTypes));
             
             if ($allowed !== [] && !in_array($this->extension, $allowed)) {
                 $this->error = UPLOAD_ERR_EXTENSION;
-                $this->message = 'File type is not allowed. Allowed file types: "[' . ($isArray ? implode('|', $this->config->allowedTypes) : $this->config->allowedTypes) . ']".';
+                $this->message = 'File type is not supported. Allowed file types: "[' . ($isArray ? implode('|', $this->config->allowedTypes) : $this->config->allowedTypes) . ']".';
                 return false;
             }
         }

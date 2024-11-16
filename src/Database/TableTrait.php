@@ -88,6 +88,7 @@ trait TableTrait
      */
     protected static array $columnTypes = [
         'INT'            =>         ['restricted'      =>         false],
+        'INTEGER'        =>         ['restricted'      =>         false],
         'NUMBER'         =>         ['restricted'      =>         true,       'maxLength'  =>        38],
         'VARCHAR'        =>         ['restricted'      =>         true,       'maxLength'  =>        65535],
         'TEXT'           =>         ['restricted'      =>         false],

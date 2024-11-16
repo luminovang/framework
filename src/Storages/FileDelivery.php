@@ -47,17 +47,25 @@ final class FileDelivery
     }
 
     /**
-     * Outputs the file content with appropriate headers.
+     * Read and outputs any file content with appropriate headers.
      *
      * @param string $basename The file name (e.g: image.png).
      * @param int $expiry Expiry time in seconds for cache control (default: 0), indicating no cache.
      * @param array<string,mixed> $headers An associative array for additional headers to set.
+     * @param int $length Optional size of each chunk to be read (default: 2MB).
+     * @param int $delay Optional delay in microseconds between chunk length (default: 0).
      * 
      * @return bool Returns true if file output is successfully, false otherwise.
      * 
      * > By default `304`, `404` and `500` headers will be set based file status and cache control.
      */
-    public function output(string $basename, int $expiry = 0, array $headers = []): bool
+    public function output(
+        string $basename, 
+        int $expiry = 0, 
+        array $headers = [],
+        int $length = (1 << 21),
+        int $delay = 0
+    ): bool
     {
         $filename = $this->assertOutputHead($basename, $expiry, $headers);
 
@@ -73,22 +81,28 @@ final class FileDelivery
 
         if ($handler = fopen($filename, 'rb')) {
             $filesize = self::cacheHeaders($headers, $basename, $filename, $expiry);
-            $read = FileManager::read($handler, $filesize, $headers['Content-Type']);
+            $read = FileManager::read(
+                $handler, 
+                $filesize, 
+                $headers['Content-Type'],
+                $length,
+                $delay
+            );
         }
  
         return $read ? true : self::expiredHeader(500);
     }
 
     /**
-     * Outputs the image content with appropriate headers.
+     * Modify image height, width and qaulity before outputs the image content with appropriate headers.
      *
      * @param string $basename The file name (e.g: image.png).
      * @param int $expiry Expiry time in seconds for cache control (default: 0), indicating no cache.
      * @param array<string,mixed> $options Image filter options.
-     *  -    width (int)  -   New output width.
-     *  -    height (int) -  New output height.
-     *  -    ratio (bool) -  Use aspect ratio while resizing image.
-     *  -    quality (int) - Image quality.
+     *  -    width (int)  -   New output width (default: 200).
+     *  -    height (int) -   New output height (default: 200).
+     *  -    ratio (bool) -  Use aspect ratio while resizing image (default: true).
+     *  -    quality (int) - Image quality (default: 100, 9 PNG).
      * @param array<string,mixed> $headers An associative array for additional headers to set.
      * 
      * @return bool Returns true if file output is successfully, false otherwise.
@@ -116,9 +130,9 @@ final class FileDelivery
         try{
             $img->open($filename);
             $img->resize(
-                $options['width'] ?? 200, 
-                $options['height'] ?? 200, 
-                $options['ratio'] ?? true
+                max($options['width'] ?? 200, 1),
+                max($options['height'] ?? 200, 1),
+                (bool) ($options['ratio'] ?? true)
             );
 
             self::cacheHeaders($headers, $basename, null, $expiry);
@@ -134,13 +148,13 @@ final class FileDelivery
     }
 
     /**
-     * Processes a temporal URL and outputs the file if valid and not expired.
+     * Temporally output file based on the URL hash key if valid and not expired.
      *
      * @param string $url_hash The encrypted URL hash.
      * @param array $headers Additional headers to set.
      * 
      * @return bool Return true if file output is successful, false otherwise.
-     * @throws EncryptionException Throws if decryption failed.
+     * @throws EncryptionException Throws if decryption failed or an error is encountered.
      */
     public function temporal(string $url_hash, array $headers = []): bool
     {
@@ -167,7 +181,7 @@ final class FileDelivery
      * @param int $expiry The expiration time in seconds (default: 1hour).
      * 
      * @return string|false Return based64 encrypted url, otherwise false.
-     * @throws EncryptionException Throws if encryption failed.
+     * @throws EncryptionException Throws if encryption failed or an error occurred.
      */
     public function url(string $basename, int $expiry = 3600): string|bool
     {

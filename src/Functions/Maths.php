@@ -45,6 +45,34 @@ final class Maths
     ];
 
     /**
+     * Time units to corresponding number of milliseconds.
+     * 
+     * @var array $timeUnits 
+     */
+    private static array $timeUnits = [
+        'ms'  => 1,
+        's'   => 1_000,
+        'min' => 60_000,
+        'h'   => 3_600_000,
+        'd'   => 86_400_000,
+        'w'   => 604_800_000
+    ];
+
+    /**
+     * Time units to full names.
+     * 
+     * @var array $timeUnitNames 
+     */
+    private static array $timeUnitNames = [
+        'ms' => 'millisecond',
+        's'  => 'second',
+        'min' => 'minute',
+        'h'  => 'hour',
+        'd'  => 'day',
+        'w'  => 'week'
+    ];
+
+    /**
      * Converts bytes to the appropriate unit.
      *
      * @param int $bytes The number of bytes to convert.
@@ -64,6 +92,31 @@ final class Maths
         $formatted = number_format($bytes, 2);
 
         return ($add_name ? $formatted . ' ' . self::$units[$index] : $formatted);
+    }
+
+    /**
+     * Converts a given time in milliseconds to a human-readable format with
+     * appropriate time units (e.g., milliseconds, seconds, minutes, etc.).
+     * 
+     * @param float|int  $milliseconds The time duration in milliseconds to be converted.
+     * @param bool $add_name     Whether to include the unit name in the output (default: false).
+     * @param bool $full_name    Whether to use the full name of the unit (e.g., 'seconds' instead of 's').
+     * 
+     * @return string Return the formatted time duration with up to two decimal precision.
+     */
+    public static function toTimeUnit(float|int $milliseconds, bool $add_name = false, bool $full_name = false): string
+    {
+        if ($milliseconds < 1) {
+            return self::timeName($milliseconds / self::$timeUnits['ms'], 'ms', $add_name, $full_name);
+        }
+
+        foreach (self::$timeUnits as $unit => $threshold) {
+            if ($milliseconds < $threshold * 1_000) {
+                return self::timeName($milliseconds / $threshold, $unit, $add_name, $full_name);
+            }
+        }
+        
+        return self::timeName($milliseconds / self::$timeUnits['w'], 'w', $add_name, $full_name);
     }
 
     /**
@@ -123,7 +176,7 @@ final class Maths
      * 
      * @example - The average rating is: 8.50:
      * ```Math::rating(5, 42.5, true) ``
-	*/
+	 */
 	public static function rating(int $reviews = 0, float $rating = 0, bool $round = false): float 
 	{
 		if ($reviews === 0) {
@@ -142,7 +195,7 @@ final class Maths
 	 * @param int $decimals Decimals places.
 	 * 
 	 * @return string Formatted currency string.
-	*/
+	 */
 	public static function money(mixed $amount, int $decimals = 2): string 
 	{
 		if (!is_numeric($amount)) {
@@ -177,7 +230,7 @@ final class Maths
      * @param string $network The cryptocurrency code (e.g., 'BTC', 'ETH', 'LTC').
      * 
      * @return string|false The equivalent amount in cryptocurrency.
-    */
+     */
     public static function crypto(int|float|string $amount, string $network = 'BTC'): string|bool
     {
         if (!is_numeric($amount)) {
@@ -294,5 +347,29 @@ final class Maths
         $rate = is_numeric($rate) ? (float) $rate : 0.0;
 
         return $total * (1 + ($rate / 100));
+    }
+
+    /**
+     * Formats a time value with optional unit name.
+     *
+     * @param float|int $time  The time value to format.
+     * @param string $unit The unit of time (e.g., 'ms', 's', 'min', 'h', 'd', 'w').
+     * @param bool $name   Whether to include the unit name in the output.
+     * @param bool $full   Whether to use the full name of the unit (e.g., 'seconds' instead of 's').
+     *
+     * @return string The formatted time string.
+     */
+    private static function timeName(float|int $time, string $unit, bool $name, bool $full): string 
+    {
+        $formatted = number_format((float) $time, 2);
+
+        if (!$name && !$full) {
+            return $formatted;
+        }
+
+        return "$formatted " . ($full 
+            ? self::$timeUnitNames[$unit] . (($formatted > 1) ? 's' : '')
+            : $unit
+        );
     }
 }

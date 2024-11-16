@@ -11,6 +11,7 @@ namespace Luminova\Cache;
 
 use \Luminova\Http\Header;
 use \Luminova\Time\Timestamp;
+use \Luminova\Routing\Router;
 use \Luminova\Storages\FileManager;
 use \DateTimeInterface;
 
@@ -269,6 +270,7 @@ final class ViewCache
     
         $ifNoneMatch = trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '');
         $eTag = self::$cache['ETag'] ?? null;
+        Router::setClassInfo('cache', true);
     
         // Check if the ETag matches the client's If-None-Match header
         if ($eTag && $ifNoneMatch === "\"$eTag\"") {
@@ -287,7 +289,6 @@ final class ViewCache
 
         Header::validate($this->getHeaders());
         self::$cache['Func']();
-
         return true;
     }
 

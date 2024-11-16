@@ -18,29 +18,29 @@ class Escape
 {
     /**
      * @var Escaper $escaper Escaper object
-    */
+     */
     private ?Escaper $escaper = null;
 
     /**
      * Determine whether Escaper class is available.
      * 
      * @var bool $isEscaper
-    */
+     */
     private static bool $isEscaper = false;
 
     /**
      * @var string $encoding Escaper encoding
-    */
+     */
     protected string $encoding = 'utf-8';
 
     /**
      * @var int $encodingFlags Escaper encoding flag
-    */
+     */
     protected int $encodingFlags = 0;
 
-     /**
+    /**
      * @var string[] $supportedEncodings Escaper supported encodings
-    */
+     */
     protected array $supportedEncodings = [
         'iso-8859-1',
         'iso8859-1',

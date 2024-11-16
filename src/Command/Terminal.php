@@ -1104,7 +1104,7 @@ class Terminal
     
         $table = '';
         $table .= self::tBorder($widths, $chars, 'topLeft', 'topConnector', 'topRight', $borderColor);
-        $table .= self::trow($headers, $widths, $headerColor ?? $foreground, $chars, true);
+        $table .= self::trow($headers, $widths, $headerColor ?? $foreground, $borderColor, $chars, true);
         $table .= self::tBorder($widths, $chars, 'leftConnector', 'crossings', 'rightConnector', $borderColor);
     
         foreach ($rows as $index => $row) {
@@ -1124,11 +1124,25 @@ class Terminal
             }
     
             if ($border && $index < count($rows) - 1) {
-                $table .= self::tBorder($widths, $chars, 'leftConnector', 'crossings', 'rightConnector', $borderColor);
+                $table .= self::tBorder(
+                    $widths, 
+                    $chars, 
+                    'leftConnector', 
+                    'crossings', 
+                    'rightConnector', 
+                    $borderColor
+                );
             }
         }
     
-        $table .= self::tBorder($widths, $chars, 'bottomLeft', 'bottomConnector', 'bottomRight', $borderColor);
+        $table .= self::tBorder(
+            $widths, 
+            $chars, 
+            'bottomLeft', 
+            'bottomConnector', 
+            'bottomRight', 
+            $borderColor
+        );
     
         return $table;
     }
@@ -1239,7 +1253,7 @@ class Terminal
                 if ($optionValue) {
                     $optionValue = false;
                 } elseif ($controller && str_contains($arg, '=')) {
-                    [$arg, $value] = explode('=', $arg);
+                    [$arg, $value] = explode('=', $arg, 2);
                     $result['arguments'][] = $arg;
                     $result['arguments'][] = $value;
                 }else{
@@ -1250,7 +1264,7 @@ class Terminal
                 $value = null;
 
                 if(str_contains($arg, '=')){
-                    [$arg, $value] = explode('=', $arg);
+                    [$arg, $value] = explode('=', $arg, 2);
                 }
 
                 if (isset($arguments[$i + 1]) && $arguments[$i + 1][0] !== '-') {
@@ -1849,13 +1863,15 @@ class Terminal
         ?string $color
     ): string
     {
-        $border = Color::style($chars[$left], $color);
+        $border = $chars[$left];
         foreach ($widths as $i => $width) {
             $border .= str_repeat($chars['horizontal'], $width + 2);
-            $border .= $i < count($widths) - 1 ? Color::style($chars[$connector], $color) : Color::style($chars[$right], $color);
+            $border .= $i < count($widths) - 1 
+                ? $chars[$connector]
+                : $chars[$right];
         }
 
-        return $border . PHP_EOL;
+        return Color::style($border, $color) . PHP_EOL;
     }
     
     /**
@@ -1873,17 +1889,22 @@ class Terminal
         array $row, 
         array $widths, 
         ?string $foreground, 
+        ?string $borderColor, 
         array $chars, 
         bool $isHeader = false
     ): string
     {
-        $tcell = Color::style($chars['vertical'], $foreground);
+        $tCell = Color::style($chars['vertical'], $borderColor);
         foreach ($row as $i => $cell) {
-            $tcell .= ' ' . Color::apply(str_pad($cell, $widths[$i]), $isHeader ? Text::FONT_BOLD : Text::NO_FONT, $foreground);
-            $tcell .= ' ' . Color::style($chars['vertical'], $foreground);
+            $tCell .= ' ' . Color::apply(
+                str_pad($cell, $widths[$i]), 
+                $isHeader ? Text::FONT_BOLD : Text::NO_FONT, 
+                $foreground
+            );
+            $tCell .= ' ' . Color::style($chars['vertical'], $borderColor);
         }
 
-        return $tcell . PHP_EOL;
+        return $tCell . PHP_EOL;
     }
 
     /**

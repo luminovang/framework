@@ -26,11 +26,11 @@ final class IP
     */
    private static string $cloudFlare = 'HTTP_CF_CONNECTING_IP';
 
-  /**
-   * List of possible headers to check for the client's IP address.
-   *
-   * @var array $ipHeaders
-   */
+   /**
+    * List of possible headers to check for the client's IP address.
+    *
+    * @var array $ipHeaders
+    */
    private static array $ipHeaders = [
       'HTTP_CLIENT_IP',
       'HTTP_X_FORWARDED_FOR',
@@ -109,14 +109,14 @@ final class IP
    }
 
    /**
-   * Get the local IP address of the machine.
-   *
-   * This method first attempts to retrieve the machine's IP address via its hostname. 
-   * If that fails or returns an invalid IP address, it falls back to using platform-specific 
-   * shell commands (`ipconfig` on Windows or `ifconfig` on Linux/macOS) to retrieve the IP.
-   * 
-   * @return string|false Returns the local IP address as a string, or false if unable to retrieve it.
-   */
+    * Get the local IP address of the machine.
+    *
+    * This method first attempts to retrieve the machine's IP address via its hostname. 
+    * If that fails or returns an invalid IP address, it falls back to using platform-specific 
+    * shell commands (`ipconfig` on Windows or `ifconfig` on Linux/macOS) to retrieve the IP.
+    * 
+    * @return string|false Returns the local IP address as a string, or false if unable to retrieve it.
+    */
    public static function getLocalAddress():string|bool
    {
       if (($hostName = getHostName()) !== false) {
@@ -181,7 +181,7 @@ final class IP
     * @param array $options Optional information to store user ip address with.
     *
     * @return null|object Return ip address information, otherwise null.
-   */
+    */
    public static function info(?string $ip = null, array $options = []): ?object
    {
       static $path = null;
@@ -290,15 +290,15 @@ final class IP
       return false;
    }
 
-  /**
-   * Check if an IP address is valid.
-   * Uses the current IP if `$address` is `null`.
-   *
-   * @param string|null $ip The IP address to validate (default: null).
-   * @param int $version The IP version to validate (e.g., `4`, `6`, or `0` for any).
-   *
-   * @return bool Return true if the IP address is valid, false otherwise.
-   */
+   /**
+    * Check if an IP address is valid.
+    * Uses the current IP if `$address` is `null`.
+    *
+    * @param string|null $ip The IP address to validate (default: null).
+    * @param int $version The IP version to validate (e.g., `4`, `6`, or `0` for any).
+    *
+    * @return bool Return true if the IP address is valid, false otherwise.
+    */
    public static function isValid(?string $ip = null, int $version = 0): bool 
    {
       $ip ??= self::get();
@@ -310,13 +310,13 @@ final class IP
       };
    }
 
-  /**
-   * Convert an IP address to its numeric representation (IPv4 or IPv6).
-   *
-   * @param string|null $ip The IP address to convert.
-   *
-   * @return string|false Return numeric representation of the IP address, otherwise false.
-   */
+   /**
+    * Convert an IP address to its numeric representation (IPv4 or IPv6).
+    *
+    * @param string|null $ip The IP address to convert.
+    *
+    * @return string|false Return numeric representation of the IP address, otherwise false.
+    */
    public static function toNumeric(?string $ip = null): string|bool
    {
       $ip ??= self::get();
@@ -332,13 +332,13 @@ final class IP
       return false;
    }
 
-  /**
-   * Convert a numeric IP address to its string representation (IPv4 or IPv6).
-   *
-   * @param int|string $numeric The numeric IP address to convert.
-   *
-   * @return string|false Return original IP address, otherwise false on error.
-   */
+   /**
+    * Convert a numeric IP address to its string representation (IPv4 or IPv6).
+    *
+    * @param int|string $numeric The numeric IP address to convert.
+    *
+    * @return string|false Return original IP address, otherwise false on error.
+    */
    public static function toAddress(int|string|null $numeric = null): string|bool
    {
       $numeric ??= self::toNumeric(); 
@@ -358,12 +358,12 @@ final class IP
    }
 
    /**
-   * Convert IP address to binary representation (IPv4 or IPv6).
-   *
-   * @param string $ip The IP address to convert.
-   *
-   * @return string|false Return binary representation of an IP address, otherwise false on error.
-   */
+    * Convert IP address to binary representation (IPv4 or IPv6).
+    *
+    * @param string $ip The IP address to convert.
+    *
+    * @return string|false Return binary representation of an IP address, otherwise false on error.
+    */
    public static function toBinary(?string $ip = null): string|bool
    {
       $ip ??= self::toNumeric(); 
@@ -415,14 +415,14 @@ final class IP
    }
 
    /**
-     * Checks if the given IP address is a Tor exit node
-     * 
-     * @param string|null $ip Ip address if null it will use current user's IP.
-     * @param int $expiration The expiration time to request for new exit nodes from tor api (default: 2592000 30 days).
-     * 
-     * @return bool Return true if the IP address is a Tor exit node.
-     * @throws FileException Throws if error occurs or unable to read or write to directory.
-   */
+    * Checks if the given IP address is a Tor exit node
+    * 
+    * @param string|null $ip Ip address if null it will use current user's IP.
+    * @param int $expiration The expiration time to request for new exit nodes from tor api (default: 2592000 30 days).
+    * 
+    * @return bool Return true if the IP address is a Tor exit node.
+    * @throws FileException Throws if error occurs or unable to read or write to directory.
+    */
    public static function isTor(string|null $ip = null, int $expiration = 2592000): bool 
    {
       return Tor::isTor($ip ?? self::get(), $expiration);
@@ -435,7 +435,7 @@ final class IP
     * @param int $status Error status code.
     *
     * @return object Return error information.
-   */
+    */
    private static function error(string $message, int $status = 404): object
    {
       return (object) [

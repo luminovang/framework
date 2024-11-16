@@ -29,11 +29,6 @@ class Logger implements LoggerInterface
     protected static ?LoggerInterface $logger = null;
 
     /**
-     * @var Network $network
-     */
-    private static ?Network $network = null;
-
-    /**
      * Initialize logger instance 
      */
     public function __construct(){}
@@ -239,7 +234,10 @@ class Logger implements LoggerInterface
                     try {
                         $this->log($to, $message, $context);
                     } catch (Throwable $e) {
-                        $this->log('exception', sprintf('Logging Exception: %s', $e->getMessage()));
+                        $this->_error(
+                            'Logging', $e->getMessage(), 
+                            $message, $context
+                        );
                     }
                 });
                 $fiber->start();
@@ -260,7 +258,10 @@ class Logger implements LoggerInterface
             return;
         }
 
-        throw new InvalidArgumentException(sprintf('Invalid logger context: %s was provided', $to));
+        throw new InvalidArgumentException(sprintf(
+            'Invalid logger destination: %s was provided. A valid log level, URL, or an email address is required.', 
+            $to
+        ));
     }
 
     /**
@@ -273,21 +274,37 @@ class Logger implements LoggerInterface
      * @param array $context Additional context data (optional).
      *
      * @return void
+     * > Note: If error occurs during mailing log, file logger will be used instead.
+     * > If exception occurs during mailing log, file logger with level `exception` be used.
      */
     public function mailLog(string $email, string $message, array $context = []): void 
     {
-        $body = NovaLogger::message('error', $message, $context);
+        if(!$email || !Func::isEmail($email)){
+            $this->log(LogLevel::CRITICAL, sprintf('Invalid mail logger email address: %s', $email), [
+                'originalMessage' => $message,
+                'originalContext' => $context
+            ]);
+            return;
+        }
+
+        $body = NovaLogger::message(LogLevel::ERROR, $message, $context);
         $subject = sprintf('%s (v%.1f) Error Logged: %s', APP_NAME, APP_VERSION);
 
-        $fiber = new Fiber(function () use ($email, $subject, $body, $message) {
+        $fiber = new Fiber(function () use ($email, $subject, $body, $message, $context) {
             try {
                 if (!Mailer::to($email)->subject($subject)->body($body)->send()) {
-                    $this->log('error', "Failed to send email log: {$message}");
+                    $this->log(LogLevel::ERROR, "Failed to send email log: {$message}", $context);
                 }
             } catch (AppException $e) {
-                $this->log('exception', sprintf('Mailer Exception: %s', $e->getMessage()));
+                $this->_error(
+                    'Mailer', $e->getMessage(), 
+                    $message, $context
+                );
             } catch (Throwable $fe) {
-                $this->log('exception', sprintf('Fiber Exception: %s', $fe->getMessage()));
+                $this->_error(
+                    'Fiber', $fe->getMessage(), 
+                    $message, $context
+                );
             }
         });
 
@@ -299,28 +316,37 @@ class Logger implements LoggerInterface
      * This method sends an error log to a specified URL endpoint with details about the error.
      * If sending fails, it logs an error message.
      *
-     * @param string $endpoint The URL to which the log should be sent.
+     * @param string $url_endpoint The URL to which the log should be sent.
      * @param string $message The message to log.
      * @param array $context Additional context data (optional).
      *
      * @return void
+     * > Note: If error occurs during network log, file logger will be used instead.
+     * > If exception occurs during network log, file logger with level `exception` be used.
      */
-    public function networkLog(string $endpoint, string $message, array $context): void 
+    public function networkLog(string $url_endpoint, string $message, array $context = []): void 
     {
+        if(!$url_endpoint || !Func::isUrl($url_endpoint)){
+            $this->log(LogLevel::CRITICAL, sprintf('Invalid network logger URL endpoint: %s', $url_endpoint), [
+                'originalMessage' => $message,
+                'originalContext' => $context
+            ]);
+            return;
+        }
+
         $payload = [
             'title'    => sprintf('%s (v%.1f) Error Logged: %s', APP_NAME, APP_VERSION),
             'host'     => HOST_NAME,
-            'details'  => NovaLogger::message('error', $message),
+            'details'  => NovaLogger::message(LogLevel::ERROR, $message),
             'context'  => $context,
             'version'  => APP_VERSION,
         ];
 
-        $fiber = new Fiber(function () use ($endpoint, $payload) {
-            self::$network ??= new Network();
+        $fiber = new Fiber(function () use ($url_endpoint, $payload, $message) {
             try {
-                $response = self::$network->post($endpoint, ['body' => $payload]);
+                $response = (new Network())->post($url_endpoint, ['body' => $payload]);
                 if ($response->getStatusCode() !== 200) {
-                    $this->log('error', 
+                    $this->log(LogLevel::ERROR, 
                         sprintf(
                             'Failed to send error to remote server: %s | Response: %s', 
                             $payload['details'], 
@@ -330,12 +356,37 @@ class Logger implements LoggerInterface
                     );
                 }
             } catch (AppException $e) {
-                $this->log('exception', sprintf('Network Exception: %s', $e->getMessage()));
+                $this->_error(
+                    'Network', $e->getMessage(), 
+                    $message, $payload['context']
+                );
             } catch (Throwable $fe) {
-                $this->log('exception', sprintf('Unexpected Exception: %s', $fe->getMessage()));
+                $this->_error(
+                    'Unexpected', $fe->getMessage(), 
+                    $message, $payload['context']
+                );
             }
         });
 
         $fiber->start();
+    }
+
+    /**
+     * Logs an exception error message with original log information.
+     *
+     * @param string $from     The source or context where the error originated.
+     * @param string $error    The error message or description.
+     * @param string $message  The original message that was being logged when the error occurred (optional).
+     * @param array  $context  Additional contextual data related to the original log attempt (optional).
+     *
+     * @return void
+     */
+    private function _error(string $from, string $error, string $message = '', array $context = []): void
+    {
+        $this->log(LogLevel::EXCEPTION, sprintf('%s Exception: %s', $from, $error), 
+        [
+            'originalMessage' => $message,
+            'originalContext' => $context
+        ]);
     }
 }

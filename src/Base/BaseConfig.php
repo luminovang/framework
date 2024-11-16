@@ -19,9 +19,27 @@ abstract class BaseConfig
     private array $cspDirectives = [];
 
     /**
+     * Application nonce value for CPS directive.
+     * 
      * @var string|null $nonce 
      */
     protected static ?string $nonce = null;
+
+    /**
+     * File extensions based on MIME types.
+     * Where the key is the MIME type and the value is the extension.
+     * 
+     * @var array<string,string> $extensions 
+     * @example Usage example
+     * ```php 
+     * protected static array $extensions = [
+     *      'image/jpeg' => 'jpg',
+     *      'image/png' => 'png',
+     * ];
+     * ```
+     * > **Note:** Only define this property in `App\Config\Files` class.
+     */
+    protected static array $extensions = [];
 
     /**
      * Constructor to initialize the class and trigger onCreate hook.
@@ -164,8 +182,68 @@ abstract class BaseConfig
      * 
      * @return void
      */
-    public function getCspHeader(): void
+    public function sendCspHeader(): void
     {
         header('Content-Security-Policy: ' . $this->getCsp());
+    }
+
+    /**
+     * Get the file extension based on the MIME type.
+     *
+     * @param string $mimeType The MIME type of the file.
+     *
+     * @return string Return the corresponding file extension (without the dot),
+     *                or 'bin' if the MIME type is not recognized.
+     */
+    public static function getExtension(string $mimeType): string 
+    {
+        return match ($mimeType) {
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            'image/bmp' => 'bmp',
+            'image/svg+xml' => 'svg',
+            'image/tiff' => 'tiff',
+            'image/avif' => 'avif',
+            'image/x-icon' => 'ico',
+            'application/pdf' => 'pdf',
+            'text/plain' => 'txt',
+            'text/markdown' => 'md',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            'application/vnd.ms-excel' => 'xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+            'application/vnd.ms-powerpoint' => 'ppt',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
+            'application/zip' => 'zip',
+            'application/gzip' => 'gzip',
+            'application/x-tar' => 'tar',
+            'application/x-gzip' => 'gz',
+            'application/x-bzip2' => 'bz2',
+            'application/x-7z-compressed' => '7z',
+            'application/x-rar-compressed' => 'rar',
+            'application/x-msdownload' => 'exe',
+            'application/x-dosexec' => 'dos',
+            'audio/mpeg' => 'mp3',
+            'audio/wav' => 'wav',
+            'audio/ogg', 'video/ogg', 'application/ogg' => 'ogg',
+            'video/mp4' => 'mp4',
+            'video/webm' => 'webm',
+            'video/x-msvideo' => 'avi',
+            'video/x-matroska' => 'mkv',
+            'video/quicktime' => 'mov',
+            'text/html' => 'html',
+            'text/css' => 'css',
+            'application/json' => 'json',
+            'application/xml' => 'xml',
+            'text/csv' => 'csv',
+            'application/javascript' => 'js',
+            'application/rtf' => 'rtf',
+            'application/x-sh' => 'sh',
+            'application/x-php' => 'php',
+            'application/octet-stream' => 'bin',
+            default => ltrim(self::$extensions[$mimeType] ?? '', '.'),
+        };
     }
 }
