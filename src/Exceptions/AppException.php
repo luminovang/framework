@@ -215,9 +215,12 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
         $this->code = $code;
 
         // If debug tracing is enabled then store it in shared memory
-        // In other to access it when error handler is called, since there is no way to access trace information.
+        // In other to access it when error handler is called, since there is no other way to access trace information.
         if(SHOW_DEBUG_BACKTRACE){
-            ErrorHandler::setBacktrace($this->getTrace() ?: debug_backtrace());
+            ErrorHandler::setBacktrace(
+                (($previous instanceof Throwable) ? $previous->getTrace() : null)
+                    ?:($this->getTrace() ?: debug_backtrace())
+            );
         }
     }
 
