@@ -477,9 +477,9 @@ final class Foundation
     {
         $view = null;
         if(defined('IS_UP') && PRODUCTION){
-            $view = env('logger.mail.errors', null)
+            $view = env('logger.mail.logs', null)
                 ? 'mailer.php' 
-                : (env('logger.remote.errors', null) ? 'remote.php' : null);
+                : (env('logger.remote.logs', null) ? 'remote.php' : null);
         }
 
         $tracer = ($view !== null);
