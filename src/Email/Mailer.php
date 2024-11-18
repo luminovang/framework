@@ -12,7 +12,7 @@ namespace Luminova\Email;
 use \Luminova\Interface\MailerInterface;
 use \Luminova\Application\Foundation;
 use \Luminova\Base\BaseMailer;
-use \App\Config\Preference;
+use \App\Config\Mailer as MailerConfig;
 use \Luminova\Exceptions\MailerException;
 use \Luminova\Exceptions\AppException;
 use \Exception;
@@ -57,7 +57,7 @@ class Mailer
      */
     public function __construct(MailerInterface|string|null $interface = null)
     {
-        $interface ??= (new Preference())->getMailer();
+        $interface ??= (new MailerConfig())->getMailer();
 
         if(is_string($interface) && class_exists($interface)) {
             $interface = new $interface(!PRODUCTION);

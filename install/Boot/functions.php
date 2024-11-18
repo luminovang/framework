@@ -797,7 +797,6 @@ if(!function_exists('logger')) {
      * @param string $to The destination for the log (e.g, log level, email address, or URL).
      * @param string $message The message to log.
      * @param array $context Additional context data (optional).
-     * @param bool $asynchronous Whether to log asynchronously for non network or email (default: false).
      *
      * @return void
      * @throws InvalidArgumentException Throws if an error occurs while logging or an invalid destination is provided.
@@ -805,11 +804,10 @@ if(!function_exists('logger')) {
     function logger(
         string $to, 
         string $message, 
-        array $context = [],
-        bool $asynchronous = false
+        array $context = []
     ): void
     {
-        Factory::logger()->dispatch($to, $message, $context, $asynchronous);
+        Factory::logger()->dispatch($to, $message, $context);
     }
 }
 

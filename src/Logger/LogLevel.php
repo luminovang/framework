@@ -90,4 +90,35 @@ final class LogLevel
      * @var string METRICS
      */
     public const METRICS       = 'metrics';
+
+    /**
+     * List of all valid log levels.
+     * 
+     * @var array<string,string>
+     */
+    public const LEVELS = [
+        'emergency'     => self::EMERGENCY,
+        'alert'         => self::ALERT,
+        'critical'      => self::CRITICAL,
+        'error'         => self::ERROR,
+        'warning'       => self::WARNING,
+        'notice'        => self::NOTICE,
+        'info'          => self::INFO,
+        'debug'         => self::DEBUG,
+        'exception'     => self::EXCEPTION,
+        'php_errors'    => self::PHP,
+        'metrics'       => self::METRICS,
+    ];
+
+    /**
+     * Checks if the specified log level exists.
+     *
+     * @param string $level The log level to check (e.g., 'error', 'info', 'debug').
+     * 
+     * @return bool Return true if the log level exists, false otherwise.
+     */
+    public static function has(string $level): bool
+    {
+        return isset(self::LEVELS[$level]);
+    }
 }

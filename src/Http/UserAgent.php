@@ -27,13 +27,6 @@ use \Stringable;
 class UserAgent implements Stringable
 {
     /**
-     * The full User Agent string.
-     *
-     * @var string $useragent
-     */
-    protected string $useragent = '';
-
-    /**
      * Whether the user agent represents a browser.
      *
      * @var bool $isBrowser
@@ -122,14 +115,15 @@ class UserAgent implements Stringable
      *
      * Sets the User Agent and runs the compilation routine.
      *
-     * @param string|null $useragent The User Agent string. If not provided, it defaults to $_SERVER['HTTP_USER_AGENT'].
+     * @param string|null $useragent The User Agent string. 
+     *              If not provided, it defaults to $_SERVER['HTTP_USER_AGENT'].
      */
-    public function __construct(?string $useragent = null)
+    public function __construct(protected ?string $useragent = null)
     {
-        $useragent ??= trim($_SERVER['HTTP_USER_AGENT']??'');
+        $this->useragent ??= trim($_SERVER['HTTP_USER_AGENT']??'');
         self::$config ??= new Browser();
 
-        $this->replace($useragent);
+        $this->replace($this->useragent);
         $this->isReferral();
     }
 
