@@ -21,6 +21,7 @@ use \App\Config\Files;
 use \Luminova\Interface\HttpRequestInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
+use \Generator;
 use \Stringable;
 use \JsonException;
 
@@ -191,6 +192,19 @@ final class Request implements HttpRequestInterface, Stringable
     /**
      * {@inheritdoc}
      */
+    public function setField(string $field, mixed $value, ?string $method = null): self
+    {
+        if($field){
+            $method = ($method === null) ? $this->getMethod() : strtoupper($method);
+            $this->body[$method][$field] = $value;
+        }
+
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function getGet(string|null $field, mixed $default = null): mixed
     {
         return ($field === null)
@@ -233,12 +247,38 @@ final class Request implements HttpRequestInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function getFile(string $name, ?int $index = null): File|array|bool
+    public function getArray(string $field, array $default = [], ?string $method = null): array
     {
-        return $this->parseRequestFile(
+        $method = ($method === null) ? $this->getMethod() : strtoupper($method);
+
+        if ($field && isset($this->body[$method][$field])) {
+            $result = $this->getBody()[$field];
+
+            if(json_validate($result)) {
+                try{
+                    $result = json_decode($result, true, 512, JSON_THROW_ON_ERROR);
+
+                    return $result ? $result : $default;
+                }catch(JsonException){
+                    return $default;
+                }
+            }
+            
+            return (array) $result;
+        }
+        
+        return $default;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getFile(string $name, ?int $index = null): Generator|File|null
+    {
+        return $name ? $this->parseRequestFile(
             $this->files[$name] ?? $_FILES[$name] ?? null, 
             $index
-        );
+        ) : null;
     }
 
     /**
@@ -254,38 +294,30 @@ final class Request implements HttpRequestInterface, Stringable
      */
     public function getMethod(): string
     {
-        return strtoupper($this->method ?? $this->server->get('REQUEST_METHOD', ''));
+        $this->method ??= strtoupper($this->server->get('REQUEST_METHOD', ''));
+
+        return $this->method;
+    }
+
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getContentType(): string
+    {
+        return $this->header->get('Content-Type') ?? $this->server->get('CONTENT_TYPE', '');
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getArray(string $method, string $field, array $default = []): array
+    public function getAuth(): ?string
     {
-        $method = strtoupper($method);
-        if (isset($this->body[$method][$field])) {
-            $result = $this->getBody()[$field];
-    
-            if(is_string($result) && json_validate($result)) {
-                try{
-                    $decode = json_decode($result, true, 512, JSON_THROW_ON_ERROR);
+        $auth = $this->header->get('Authorization')
+            ?? $this->server->get('HTTP_AUTHORIZATION')
+            ?? $this->server->get('REDIRECT_HTTP_AUTHORIZATION');
 
-                    if ($decode !== null || $decode !== false) {
-                        return (array) $decode ?? $default;
-                    }
-                }catch(JsonException){
-                    return $default;
-                }
-            }
-            
-            return (array) $result ?? $default;
-        }
-        
-        throw new InvalidArgumentException(sprintf(
-            'Request method" "%s" is not supported, supported methods are: [%s]',
-            $method,
-            implode(', ', self::$methods))
-        );
+        return $auth ? trim($auth ?? '') : null;
     }
 
     /**
@@ -350,104 +382,6 @@ final class Request implements HttpRequestInterface, Stringable
         }
 
         return ['params' => $params, 'files' => $files];
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function isGet(): bool
-    {
-        return $this->getMethod() === 'GET';
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function isPost(): bool
-    {
-        return $this->getMethod() === 'POST';
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function isMethod(string $method): bool
-    {
-        return $this->getMethod() === strtoupper($method);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getContentType(): string
-    {
-        return $this->header->get('Content-Type', 
-            $this->server->get('CONTENT_TYPE', '')
-        );
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getAuth(): ?string
-    {
-        if(!$auth = $this->header->get('Authorization')){
-            if(!$auth = $this->server->get('HTTP_AUTHORIZATION')){
-                $auth = $this->server->get('REDIRECT_HTTP_AUTHORIZATION');
-            }
-        }
-
-        return ($auth === null) ? null : trim($auth ?? '');
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function isSecure(): bool
-    {
-        return ($this->server->get('HTTPS') !== 'off' || $this->server->get('SERVER_PORT') === 443);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function isProxy(): bool 
-    {
-        $headers = [
-            'X-Forwarded-For' => 'HTTP_X_FORWARDED_FOR',
-            'X-Forwarded-For-Ip' => 'HTTP_FORWARDED_FOR_IP',
-            'X-Real-Ip' => 'HTTP_X_REAL_IP',
-            'Via' => 'HTTP_VIA',
-            'Forwarded' => 'HTTP_FORWARDED',
-            'Proxy-Connection' => 'HTTP_PROXY_CONNECTION'
-        ];
-
-        foreach ($headers as $head => $server) {
-            if ($this->header->exist($head, $server)) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function isAJAX(): bool
-    {
-        $ajax = $this->header->get('X-Requested-With', $this->server->get('HTTP_X_REQUESTED_WITH', ''));
-        return ($ajax === '')
-            ? false 
-            : strtolower($ajax) === 'xmlhttprequest';
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function isApi(): bool
-    {
-        return Foundation::isApiPrefix();
     }
     
     /**
@@ -529,15 +463,13 @@ final class Request implements HttpRequestInterface, Stringable
      */
     public function getHostname(bool $exception = false, bool $port = true): ?string
     {
-        if (!$hostname = $this->header->get('Host', $this->server->get('HTTP_HOST'))) {
-           if(!$hostname = $this->server->get('HOST')){
-                if (!$hostname = $this->server->get('SERVER_NAME')) {
-                    $hostname = $this->server->get('SERVER_ADDR', '');
-                }
-            }
-        }
+        $hostname = $this->header->get('Host')
+            ?? $this->server->get('HTTP_HOST')
+            ?? $this->server->get('HOST')
+            ?? $this->server->get('SERVER_NAME')
+            ?? $this->server->get('SERVER_ADDR');
 
-        if($hostname === null){
+        if(!$hostname){
             return '';
         }
     
@@ -570,7 +502,7 @@ final class Request implements HttpRequestInterface, Stringable
      */
     public function getOrigin(): ?string
     {
-        $origin = $this->header->get('Origin', $this->server->get('HTTP_ORIGIN'));
+        $origin = $this->header->get('Origin') ?? $this->server->get('HTTP_ORIGIN');
         self::initRequestSecurityConfig();
 
         if (!$origin) {
@@ -590,21 +522,23 @@ final class Request implements HttpRequestInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function getPort(): string|int|null
+    public function getPort(): int
     {
-        if (!($port = $this->header->get('X-Forwarded-Port', $this->server->get('HTTP_X_FORWARDED_PORT')))) {
-            if(!($port = $this->server->get('X_FORWARDED_PORT'))){
-                return $this->server->get('SERVER_PORT');
-            }
-        }
-        
-        $pos = ('[' === $port[0]) ? strpos($port, ':', strrpos($port, ']')) : strrpos($port, ':');
+        $port = $this->header->get('X-Forwarded-Port') 
+            ?? $this->server->get('HTTP_X_FORWARDED_PORT') 
+            ?? $this->server->get('SERVER_PORT');
 
-        if ($pos !== false && ($port = substr($port, $pos + 1))) {
-            return (int) $port;
+        if (!$port) {
+            return $this->isSecure() ? 443 : 80;
         }
 
-        return $this->isSecure() ? 443 : 80;
+        $pos = str_starts_with($port, '[') 
+            ? strpos($port, ':', strrpos($port, ']')) 
+            : strrpos($port, ':');
+
+        return ($pos !== false) 
+            ? (int) substr($port, $pos + 1) 
+            : ($this->isSecure() ? 443 : 80);
     }
 
     /**
@@ -647,9 +581,123 @@ final class Request implements HttpRequestInterface, Stringable
     /**
      * {@inheritdoc}
      */
+    public function hasField(string $field, ?string $method = null): bool
+    {
+        if(!$field){
+            return false;
+        }
+        
+        $method = $method ? strtoupper($method) : $this->getMethod();
+
+        return ($this->body === [] || ($this->body[$method]??null) === null) 
+            ? false 
+            : array_key_exists($field, $this->body[$method] ?? []);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isGet(): bool
+    {
+        return $this->getMethod() === 'GET';
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isPost(): bool
+    {
+        return $this->getMethod() === 'POST';
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isMethod(string $method = 'GET'): bool
+    {
+        return $this->getMethod() === strtoupper($method);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isAuth(string $type = 'Bearer'): bool 
+    {
+        if(!$type){
+            return false;
+        }
+
+        $auth = $this->getAuth();
+
+        if (!$auth) {
+            return false;
+        }
+
+        $name = explode(' ', $auth, 2)[0] ?? '';
+
+        return ($name === '') 
+            ? false 
+            : strcasecmp($name, $type) === 0;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isSecure(): bool
+    {
+        return ($this->server->get('HTTPS') !== 'off' || $this->server->get('SERVER_PORT') === 443);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isProxy(): bool 
+    {
+        $headers = [
+            'X-Forwarded-For' => 'HTTP_X_FORWARDED_FOR',
+            'X-Forwarded-For-Ip' => 'HTTP_FORWARDED_FOR_IP',
+            'X-Real-Ip' => 'HTTP_X_REAL_IP',
+            'Via' => 'HTTP_VIA',
+            'Forwarded' => 'HTTP_FORWARDED',
+            'Proxy-Connection' => 'HTTP_PROXY_CONNECTION'
+        ];
+
+        foreach ($headers as $head => $server) {
+            if ($this->header->exist($head, $server)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isAJAX(): bool
+    {
+        $ajax = $this->header->get('X-Requested-With') 
+            ?? $this->server->get('HTTP_X_REQUESTED_WITH', '');
+
+        return ($ajax === '')
+            ? false 
+            : strtolower($ajax) === 'xmlhttprequest';
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isApi(): bool
+    {
+        return Foundation::isApiPrefix();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function isSameOrigin(bool $subdomains = false): bool
     {
-        $origin = $this->header->get('Origin', $this->server->get('HTTP_ORIGIN'));
+        $origin = $this->header->get('Origin') ?? $this->server->get('HTTP_ORIGIN');
 
         if (!$origin) {
             return true;
@@ -714,7 +762,7 @@ final class Request implements HttpRequestInterface, Stringable
      */
     public function isTrustedOrigin(): bool
     {
-        $origin = $this->header->get('Origin', $this->server->get('HTTP_ORIGIN'));
+        $origin = $this->header->get('Origin') ?? $this->server->get('HTTP_ORIGIN');
         self::initRequestSecurityConfig();
 
         if (!$origin) {
@@ -834,70 +882,107 @@ final class Request implements HttpRequestInterface, Stringable
     /**
      * Parse the uploaded file(s) information and return file instances.
      *
-     * @param array $file File information array.
+     * @param array|null $file File information array.
      * @param int|null $index Optional file index for multiple files.
      * 
-     * @return File[]|File|false Return the parsed file information or false if the file array is empty.
+     * @return Generator<int,File,void,void>|File|null Return the parsed file information or null if the file array is empty.
      */
-    protected function parseRequestFile(array $file, ?int $index = null): File|array|bool
+    protected function parseRequestFile(array|null $file, ?int $index = null): Generator|File|null
     {
         if($file === [] || $file === null){
-            return false;
+            return null;
         }
 
         if (is_array($file['name'] ?? null)) {
             return ($index === null)
-                ? array_map(fn($idx) => $this->createFileInstance($file, $idx), array_keys($file['name']))
-                : $this->createFileInstance($file, $index);
+                ? $this->createFileGenerator($file)
+                : (isset($file['name'][$index]) ? $this->createFileInstance($file, $index) : null);
+        }
+
+        if (isset($file[0]['name'])) {
+            return ($index === null) 
+                ? $this->createFileGenerator($file, true) 
+                : $this->createFileInstance($file[$index] ?? [], null, $index);
         }
 
         return $this->createFileInstance($file, null);
     }
 
     /**
-     * Create a File instance based on the provided file data.
+     * Generator function to yield `File` instances for multiple uploaded files.
      *
-     * @param array $file File information array.
-     * @param int|null $index File index (default: null).
+     * @param array $file File data from the request.
+     * @param bool $flat Generate File instances from developer-friendly flat structure.
+     * 
+     * @return Generator<int,File,void,void> yield File A `File` instance for each file in the input array.
+     */
+    private function createFileGenerator(array $files, bool $flat = false): Generator
+    {
+        if($flat){
+            foreach ($files as $index => $file) {
+                yield $index => $this->createFileInstance($file, null, $index);
+            }
+        }else{
+            foreach (array_keys($files['name']) as $index) {
+                yield $index => $this->createFileInstance($files, $index);
+            }
+        }
+    }
+
+    /**
+     * Create a File instance from the provided file data.
+     *
+     * @param array $file File data from the request.
+     * @param int|null $index Optional index for handling multiple file uploads (default: null).
+     * @param int|null $flatIndex Optional index for handling multiple file uploads for flat structure (default: null).
      * 
      * @return File Return the created File instance.
      */
-    private function createFileInstance(array $file, ?int $index = null): File
+    private function createFileInstance(array $file, ?int $index = null, ?int $flatIndex = null): ?File
     {
-        if ($index === null) {
-            $name = $file['name'] ?? null;
-            $temp = $file['tmp_name'] ?? null;
-            $size = $file['size'] ?? 0;
-            $type = $file['type'] ?? null;
-            $error = $file['error'] ?? UPLOAD_ERR_OK;
-            $content = $file['content'] ?? null;
-            $path = $file['full_path'] ?? null; // Js Chunk Upload library
-        } else {
-            $name = $file['name'][$index] ?? null;
-            $temp = $file['tmp_name'][$index] ?? null;
-            $size = $file['size'][$index] ?? 0;
-            $type = $file['type'][$index] ?? null;
-            $error = $file['error'][$index] ?? UPLOAD_ERR_OK;
-            $content = $file['content'][$index] ?? null;
-            $path = $file['full_path'][$index] ?? null;
+        if ($file === []) {
+            return null;
         }
 
-        $error = ($error === UPLOAD_ERR_OK && $content === null && $temp === null) 
+        $extract = fn(string $key) => ($index === null)
+            ? ($file[$key] ?? ($key === 'size' ? 0 : null)) 
+            : ($file[$key][$index] ?? ($key === 'size' ? 0 : null));
+
+        $name = $extract('name');
+        $temp = $extract('tmp_name');
+        $size = (int) $extract('size');
+        $type = $extract('type');
+        $error = $extract('error') ?? UPLOAD_ERR_OK;
+        $content = $extract('content');
+        $path = $extract('full_path'); // For JS Upload Libraries
+
+        $isBlob = ($content !== null || $this->isBlobUpload($temp, $type, $name, $path));
+        $size = ($content && $size === 0) ? strlen($content) : $size;
+
+        // Sanitize and derive name
+        $path = ($path && $path !== 'blob') ? basename($path) : $path;
+        $name ??= ($path && $path !== 'blob') ? $path : uniqid('file_', true);
+
+        // Derive extension
+        $extension = pathinfo($name, PATHINFO_EXTENSION);
+        $type ??= get_mime($temp) ?: 'application/octet-stream';
+        $extension = $extension ?: (Files::getExtension($type) ?: '');
+
+        if ($extension && !str_ends_with($name, ".$extension")) {
+            $name .= ".$extension";
+        }
+
+        // Error handling for missing content or temp
+        $error = ($error === UPLOAD_ERR_OK && ($content === null && $temp === null) || $size === 0)
             ? UPLOAD_ERR_NO_FILE
             : $error;
 
-        $isBlob = ($content !== null || $this->isBlobUpload($temp, $type, $name, $path));
-        $type ??= (get_mime($temp)?: 'application/octet-stream');
-        $name ??= uniqid('file_');
-        $extension = pathinfo($name, PATHINFO_EXTENSION);
-        $extension = strtolower((!$extension && $type) ? Files::getExtension($type) : $extension);
-
         return new File(
-            $index ?? 0,
+            $index ?? $flatIndex ?? 0,
             $name,
             $type,
-            (int) $size,
-            $extension ?: '',
+            $size,
+            strtolower($extension),
             $temp,
             $error,
             $content,
@@ -906,29 +991,37 @@ final class Request implements HttpRequestInterface, Stringable
     }
 
     /**
-     * Determine if the file was uploaded in chunks or is considered a BLOB.
-     *
+     * Determine if the file is uploaded as a blob or part of a chunked upload.
+     * 
      * Chunked uploads commonly have a file name like 'blob', a MIME type of 'application/octet-stream',
      * and still a temporary file path ('tmp_name'). If these conditions are met, the file may be part of
      * a chunked upload or treated as a BLOB.
      *
-     * @param string|null $temp The temporary file path.
-     * @param string|null $type The MIME type of the file.
+     * @param string|null $temp The temporary file path of the uploaded file.
+     * @param string|null $type The MIME type of the uploaded file.
      * @param string|null $name The original file name.
-     * @param string|null $full_path The full path of the uploaded file, if provided.
-     * 
-     * @return bool Returns true if the file appears to be a chunked or BLOB upload, otherwise false.
+     * @param string|null $path Optional full path provided by JS libraries.
+     *
+     * @return bool Returns true if the file is detected as a blob upload, false otherwise.
      */
-    private function isBlobUpload(?string $temp, ?string $type, ?string $name, ?string $full_path = null): bool
+    private function isBlobUpload(?string $temp, ?string $type, ?string $name, ?string $path): bool
     {
+        if (
+            $temp === null || 
+            $name === null || 
+            $name === 'blob' || 
+            $path === 'blob' ||
+            !$type || 
+            $type === 'application/octet-stream' 
+        ) {
+            return true;
+        }
+
+        $pattern = '/chunk|part|blob/i';
         return (
-            !$type ||
-            (
-                (!$name || $name === 'blob') && 
-                (!$full_path || $full_path === 'blob') && 
-                $type === 'application/octet-stream' && 
-                $temp !== null
-            )
+            ($temp && preg_match($pattern, $temp)) || 
+            ($name && preg_match($pattern, $name)) || 
+            ($path && preg_match($pattern, $path))
         );
     }
 

@@ -96,7 +96,7 @@ if (!function_exists('app')) {
      * @return Application Returns the shared instance if $shared is true,
      *                     or a new instance if $shared is false.
      * 
-     * Usage example:
+     * @example Usage example:
      * ```php
      * $app = app(false, 'foo', 'bar');
      * ```
@@ -1565,12 +1565,12 @@ if (!function_exists('layout')) {
      * @return Layout Returns the layout class instance.
      * @throws RuntimeException Throws if layout file is not found.
      * 
-     * @example  - Usage examples:
-     * ```
+     * @example - Usage examples:
+     * ```php
      * layout('foo')
      * ```
      *  or
-     * ```
+     * ```php
      * layout('foo/bar/baz')
      * ```
      * 

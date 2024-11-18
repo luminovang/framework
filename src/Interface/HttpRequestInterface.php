@@ -15,6 +15,7 @@ use \Luminova\Http\Header;
 use \Luminova\Http\UserAgent;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
+use \Generator;
 
 /**
  * Anonymous methods to retrieve values from HTTP request fields. 
@@ -78,6 +79,17 @@ interface HttpRequestInterface
     public function toMultipart(): string;
 
     /**
+     * Set a specific field in the request body for the given HTTP method.
+     * 
+     * @param string $field The name of the field to set.
+     * @param mixed $value The value to assign to the field.
+     * @param string|null $method Optional HTTP method, if null the current request method will be used (e.g, `GET`, `POST`).
+     * 
+     * @return self Returns the instance request class.
+     */
+    public function setField(string $field, mixed $value, ?string $method = null): self;
+
+    /**
      * Get a field value from HTTP GET request or entire fields if `$field` param is null.
      *
      * @param string|null $field The field key to retrieve the value value from.
@@ -100,37 +112,38 @@ interface HttpRequestInterface
     /**
      * Get a field value from HTTP request body as an array.
      *
-     * @param string $method The HTTP request method (e.g, `GET`, `POST`, etc..).
      * @param string $field The request body field name to return.
      * @param array $default Optional default value to return.
+     * @param string|null $method Optional HTTP request method, if null current request method will be used (e.g, `GET`, `POST`, etc..).
      * 
      * @return array Return array of HTTP request method key values.
-     * @throws InvalidArgumentException Throws if unsupported HTTP method was passed.
      */
-    public function getArray(string $method, string $field, array $default = []): array;
+    public function getArray(string $field, array $default = [], ?string $method = null): array;
 
     /**
      * Get the entire request body as an array or JSON object.
      * 
      * @param bool $object Whether to return an array or a JSON object (default: false).
      * 
-     * @return array|object Return the request body as an array or JSON object.
+     * @return array<string,mixed>|object Return the request body as an array or JSON object.
      */
     public function getBody(bool $object = false): array|object;
 
     /**
-     * Get an uploaded file object or any array of file object for multiple files.
+     * Get an uploaded file instance or a generator yielding file instances for multiple files.
      * 
      * @param string $name The file input field name.
-     * @param int|null $index Optional file index for multiple files (default: null).
+     * @param int|null $index Optional file index for multiple files. If null, all files will be returned (default: null).
      * 
-     * @return \Luminova\Http\File[]|\Luminova\Http\File|false Return uploaded file instance or false if file input name not found.
+     * @return Generator<int,\Luminova\Http\File,void,void>|\Luminova\Http\File|null Returns an uploaded `File` instance, 
+     *         a generator yielding `File` instances for multiple files, or `null` if the input name was not found.
+     * 
      * @see https://luminova.ng/docs/3.0.2/http/file-object
      */
-    public function getFile(string $name, ?int $index = null): File|array|bool;
+    public function getFile(string $name, ?int $index = null): Generator|File|null;
 
     /**
-     * Get raw array of all uploaded files.
+     * Get raw array of original uploaded file information without any modification.
      *
      * @return array<string,array> Return an array containing uploaded files information.
      */
@@ -257,12 +270,12 @@ interface HttpRequestInterface
     /**
      * Get the request origin port from `X_FORWARDED_PORT` or `SERVER_PORT` if available.
      *
-     * @return int|string|null Return either a string if fetched from the server available, or integer, otherwise null.
+     * @return int Return the port number, otherwise default to `443` secured or `80` for insecure.
      * 
      * > Check if X-Forwarded-Port header exists and use it, if available.
-     * > If not available check for server-port header if also not available return NULL as default.
+     * > If not available check for server-port header if also not available return default port.
      */
-    public function getPort(): int|string|null;
+    public function getPort(): int;
 
     /**
      * Gets the request scheme name.
@@ -297,6 +310,16 @@ interface HttpRequestInterface
     public function getUserAgent(?string $useragent = null): UserAgent;
 
     /**
+     * Check if a specific field exists in the request body for the given HTTP method.
+     * 
+     * @param string $field The name of the field to check.
+     * @param string|null $method Optional HTTP method, if null the current request method will be used (e.g, `GET`, `POST`).
+     * 
+     * @return bool Returns true if the field exists for the given method; otherwise, false.
+     */
+    public function hasField(string $field, ?string $method = null): bool;
+
+    /**
      * Check if the request method is GET.
      *
      * @return bool Returns true if the request method is GET, false otherwise.
@@ -317,9 +340,18 @@ interface HttpRequestInterface
      * 
      * @return bool Returns true if the request method matches the provided method, false otherwise.
      */
-    public function isMethod(string $method): bool;
+    public function isMethod(string $method = 'GET'): bool;
 
-     /**
+    /**
+     * Check if the Authorization header matches the specified type.
+     *
+     * @param string $type The expected type of authorization (e.g., 'Bearer', 'Basic').
+     *
+     * @return bool Returns true if the Authorization header matches the specified type, otherwise false.
+     */
+    public function isAuth(string $type = 'Bearer'): bool;
+
+    /**
      * Check if the current connection is secure
      * 
      * @return bool Return true if the connection is secure false otherwise.
@@ -362,7 +394,7 @@ interface HttpRequestInterface
      * Validates if the given (hostname's, origins, proxy ip or subnet) matches any of the trusted patterns.
      * This will consider the defined configuration in `App\Config\Security` during validation.
      * 
-     * @param string $input The domain, origin or ip address to check.
+     * @param string $input The domain, origin or ip address to check (e.g, `example.com`, `192.168.0.1`).
      * @param string $context The context to check input for (e.g, `hostname`).
      * 
      * @return bool Return true if the input is trusted, false otherwise.

@@ -38,7 +38,7 @@ final class Commands
                 '-a, --all' => "Display all available novakit help messages.",
                 '--no-header' => "Disable displaying novakit header information.",
                 '--no-color' => "Disable displaying colored text.",
-                '-v, --version' => "Display Framework and Novakit Command Line version information.",
+                '-v, --version' => "Display Framework and Novakit Command Line version information."
             ],
             'examples' => [
                 'php novakit list --help' => 'Display help for listing all available commands and their descriptions.',
@@ -71,7 +71,9 @@ final class Commands
             'usages' => [
                 'php novakit list',
             ],
-            'options' => [],
+            'options' => [
+                '--help' => 'This help.'
+            ],
             'examples' => [],
         ],
         'log' => [
@@ -86,6 +88,7 @@ final class Commands
                 '-s, --start' => 'Specify the starting line offset for reading logs.',
                 '-e, --end' => 'Specify the maximum number of lines to read from the log.',
                 '-c, --clear' => 'Clear the contents of the specified log level.',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit log --level=notice --start=20 --end=50' => 'Show logs starting from 20 limit 50.',
@@ -105,6 +108,7 @@ final class Commands
                 '-h, --host'  => 'Specify the development hostname.',
                 '-p, --port'  => 'Specify the port for the development server.',
                 '-t, --testing' => 'Start the server with the network address for testing on other devices.',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit server' => 'Start the development server on localhost.',
@@ -121,6 +125,7 @@ final class Commands
             ],
             'options' => [
                 '--type' => "Specify the type of build to generate (`zip` or `build`).",
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit build:project --type=zip' => 'Generates application production files as zip files',
@@ -136,6 +141,7 @@ final class Commands
             ],
             'options' => [
                 '--no-save' => 'Do not save the generated application key to the .env file.',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit generate:key',
@@ -149,7 +155,9 @@ final class Commands
             'usages' => [
                 'php novakit generate:sitemap',
             ],
-            'options' => [],
+            'options' => [
+                '--help' => 'This help.'
+            ],
             'examples' => [],
         ],
         'env:add' => [
@@ -162,6 +170,7 @@ final class Commands
             'options' => [
                 '--key' => 'Specify the environment key name to add.',
                 '--value' => 'Specify the environment key content value to add.',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit env:add --key="test.key" --value="test key value"',
@@ -176,6 +185,7 @@ final class Commands
             ],
             'options' => [
                 '--key' => 'Specify the environment key name to remove.',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit env:remove --key="test.key"',
@@ -193,6 +203,7 @@ final class Commands
                 '-e, --export-attr' => 'Indicate to export and build code-based routes from defined route attributes.',
                 '-c, --clear-attr' => 'Indicate to clear all cached route attributes to allow re-caching new changed.',
                 '-n, --no-error' => 'Indicate to leave error callback handler `NULL` while adding new context.',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit context "foo"',
@@ -212,6 +223,7 @@ final class Commands
                 '--dir' => 'Specify the directory within the `/app/Controllers/` directory to store the controller file.',
                 '--type' => 'Specify the type of controller class you wish to create (e.g. `view`, `command` or `request`).',
                 '--module' => 'Specify the controller class HMVC module (e.g. `user`, `blog`, `admin`, etc...).',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit create:controller TestController',
@@ -229,6 +241,7 @@ final class Commands
             ],
             'options' => [
                 '--dir' => 'Specify the directory within the `resources/Views/` directory to store the view file.',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit create:view TestView',
@@ -245,6 +258,7 @@ final class Commands
             'options' => [
                 '--implement' => 'Specify the interface class name to implement.',
                 '--extend' => 'Specify the class name to extend.',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit create:class TestClass',
@@ -261,6 +275,7 @@ final class Commands
             ],
             'options' => [
                 '--implement' => 'Specify the interface class name to implement.',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit create:model TestModel',
@@ -278,6 +293,7 @@ final class Commands
             'options' => [
                 '-c, --class' => "Specify the migration class to drop.",
                 '-n, --no-backup' => "Run migration drop without backup.",
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit db:drop --class=TestMigration',
@@ -297,6 +313,7 @@ final class Commands
             'options' => [
                 '-l, --lock' => "Specify the context of lock files to clear. Allowed values: 'seeder', 'migration'.",
                 '-c, --class' => "Specify the migration or seeder class to clear lock files for.",
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit db:clear --lock=seeder',
@@ -316,7 +333,8 @@ final class Commands
                 '-c, --class' => "Specify the migration class to alter.",
                 '-n, --no-backup' => "Run alter migration without considering locked version nor creating a new backup lock version.",
                 '-d, --drop-columns' => "Drop columns that don't exist in the new schema during the alter migration.",
-                '-b, --debug' => "Print generated alteration SQL query string without applying any changes."
+                '-b, --debug' => "Print generated alteration SQL query string without applying any changes.",
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit db:alter --class=TestMigration',
@@ -336,7 +354,7 @@ final class Commands
             'options' => [
                 '-t, --table' => "Specify the database table name to truncate.",
                 '-n, --no-transaction' => "Run database truncation without transaction.",
-                '--help' => "This help."
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit db:truncate --table=TestTable',
@@ -357,7 +375,7 @@ final class Commands
                 '-r, --rollback' => "Rollback seeder to previous version.",
                 '-n, --no-backup' => "Run seeder without considering locked version nor creating a new backup lock version.",
                 '-i, --invoke' => "Run seeder and also invoke other invokable seeders classes.",
-                '--help' => "This help."
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit db:seed',
@@ -383,7 +401,7 @@ final class Commands
                 '-r, --rollback' => "Rollback migration to previous version.",
                 '-b, --debug' => "Print generated migration SQL query string without applying any changes.",
                 '-i, --invoke' => "Run migration and also invoke other invokable migration classes.",
-                '--help' => "This help."
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit db:migrate',
@@ -401,7 +419,8 @@ final class Commands
                 'php novakit cron:create'
             ],
             'options' => [
-                '-f, --force'  => 'Force update locked tasks with new changes from cron class if already locked.'
+                '-f, --force'  => 'Force update locked tasks with new changes from cron class if already locked.',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit cron:create',
@@ -417,7 +436,8 @@ final class Commands
             ],
             'options' => [
                 '-f, --force'  => 'Force update locked tasks with new changes from cron class if already locked.',
-                '-s, --sleep' => 'The number of seconds to pause between task executions (default: 100000).'
+                '-s, --sleep' => 'The number of seconds to delay between task executions (default: 100000).',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit cron:run',
@@ -437,6 +457,7 @@ final class Commands
             'options' => [
                 '--key'  => 'Specify the cache key to delete.',
                 '--storage'  => 'Specify the cache storage name to delete.',
+                '--help' => 'This help.'
             ],
             'examples' => [
                 'php novakit cache:clear',
