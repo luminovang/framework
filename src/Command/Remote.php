@@ -135,15 +135,15 @@ class Remote
         ?string $server = null
     ): self 
     {
-        if(!static::$instance instanceof Remote){
-            static::$instance = new self(
+        if(!self::$instance instanceof Remote){
+            self::$instance = new self(
                 $username, $password, 
                 $private_key_path, $public_key_path, 
                 $port, $server
             );
         }
 
-        return static::$instance;
+        return self::$instance;
     }
 
     /**

@@ -12,6 +12,7 @@ namespace Luminova\Http;
 use \Luminova\Interface\NetworkClientInterface;
 use \Luminova\Interface\NetworkInterface;
 use \Luminova\Http\Message\Response;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Http\Client\Curl;
 use \Psr\Http\Message\RequestInterface;
 use \Psr\Http\Message\UriInterface;
@@ -26,7 +27,7 @@ use \Luminova\Exceptions\Http\ConnectException;
 use \Luminova\Exceptions\BadMethodCallException;
 use \Exception;
 
-class Network implements NetworkInterface
+class Network implements NetworkInterface, LazyInterface
 {
     /**
      * The network client interface to use.

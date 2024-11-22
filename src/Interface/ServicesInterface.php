@@ -18,9 +18,9 @@ interface ServicesInterface
      * Add each service in a new line within the bootstrap method.
      * 
      * Usage:
-     *     - static::newService(Configuration::class) as $config = service('Configuration')
-     *     - static::newService('\Luminova\Config\Configuration') as $config = service('Configuration')
-     *     - static::newService(Configuration:class, 'config') as $config = service('config')
+     *     - self::newService(Configuration::class) as $config = service('Configuration')
+     *     - self::newService('\Luminova\Config\Configuration') as $config = service('Configuration')
+     *     - self::newService(Configuration:class, 'config') as $config = service('config')
      *     - Services::Configuration()
      *     - Services::config()
      * 

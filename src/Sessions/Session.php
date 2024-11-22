@@ -10,10 +10,11 @@
 namespace Luminova\Sessions;
 
 use \Luminova\Interface\SessionManagerInterface;
+use \Luminova\Interface\LazyInterface;
 use \App\Config\Session as SessionConfig;
 use \Luminova\Sessions\SessionManager;
 
-class Session 
+class Session implements LazyInterface
 {
     /**
      * session interface

@@ -236,11 +236,11 @@ final class Crypter
             $length = ($options['length'] ?? self::$ciphers[strtoupper(self::$config->method)]['size'] ?? 16);
 
             if($handler === 'openssl') {
-                $random = openssl_random_pseudo_bytes($length / 2);
+                $random = openssl_random_pseudo_bytes((int) ceil($length / 2));
             }elseif($handler === 'sodium') {
                 $random = sodium_crypto_secretbox_keygen();
             }else{
-                $random = random_bytes($length / 2);
+                $random = random_bytes((int) ceil($length / 2));
             }
 
             return bin2hex($random);

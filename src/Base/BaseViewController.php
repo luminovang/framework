@@ -12,24 +12,25 @@ namespace Luminova\Base;
 
 use \App\Application;
 use \Luminova\Http\Request;
-use \Luminova\Interface\HttpRequestInterface;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Security\Validation;
+use \Luminova\Utils\LazyObject;
 
 abstract class BaseViewController
 {
     /**
      * HTTP request object.
      * 
-     * @var HttpRequestInterface|null
+     * @var Request<LazyInterface>|null
      */
-    protected ?HttpRequestInterface $request = null;
+    protected Request|LazyInterface|null $request = null;
  
     /**
      * Input validation object.
      * 
-     * @var Validation|null
+     * @var Validation<LazyInterface>|null
      */
-    protected ?Validation $validate = null;
+    protected Validation|LazyInterface|null $validate = null;
  
     /**
      * Application instance.
@@ -44,7 +45,9 @@ abstract class BaseViewController
      */
     public function __construct()
     {
-        $this->app();
+        $this->app ??= Application::getInstance();
+        $this->validate ??= LazyObject::newObject(Validation::class);
+        $this->request ??= LazyObject::newObject(Request::class);
         $this->onCreate();
     }
 
@@ -84,48 +87,6 @@ abstract class BaseViewController
     public function __isset(string $key): bool
     {
         return property_exists($this, $key);
-    }
-
-    /**
-     * Initialize the HTTP request instance.
-     * 
-     * @return HttpRequestInterface Return the HTTP request instance.
-     */
-    protected final function request(): HttpRequestInterface
-    {
-        if (!$this->request instanceof HttpRequestInterface) {
-            $this->request = new Request();
-        }
-
-        return $this->request;
-    }
-
-    /**
-     * Initialize the input validation instance.
-     * 
-     * @return Validation Return the input validation instance.
-     */
-    protected final function validate(): Validation
-    {
-        if (!$this->validate instanceof Validation) {
-            $this->validate = new Validation();
-        }
-        
-        return $this->validate;
-    }
-
-    /**
-     * Initialize the application instance.
-     * 
-     * @return Application Return the application instance.
-     */
-    protected final function app(): Application
-    {
-        if (!$this->app instanceof Application) {
-            $this->app = Application::getInstance();
-        }
-        
-        return $this->app;
     }
 
     /**

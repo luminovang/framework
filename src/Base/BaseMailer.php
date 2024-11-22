@@ -9,10 +9,11 @@
  */
 namespace Luminova\Base;
 
+use \Luminova\Interface\LazyInterface;
 /**
  * Base class for mailer template implementations.
  */
-abstract class BaseMailer
+abstract class BaseMailer implements LazyInterface
 {
     /**
      * Get the subject of the email.

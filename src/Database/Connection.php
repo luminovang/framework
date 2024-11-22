@@ -12,13 +12,14 @@ namespace Luminova\Database;
 use \Luminova\Database\Drivers\MySqliDriver;
 use \Luminova\Database\Drivers\PdoDriver;
 use \Luminova\Interface\DatabaseInterface;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Core\CoreDatabase;
 use \Luminova\Exceptions\DatabaseException;
 use \App\Config\Database;
 use \Countable;
 use \Exception;
 
-class Connection implements Countable
+class Connection implements LazyInterface, Countable
 {
     /**
      * Database connection driver instance.

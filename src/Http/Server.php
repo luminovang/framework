@@ -9,9 +9,10 @@
  */
 namespace Luminova\Http;
 
+use \Luminova\Interface\LazyInterface;
 use \Countable;
 
-class Server implements Countable
+class Server implements LazyInterface, Countable
 {
     /**
      * Initializes the server constructor.

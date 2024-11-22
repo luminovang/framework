@@ -123,7 +123,7 @@ class Smarty
     public static function getInstance(TemplateConfig $config, string $root, array $options = []): static
     {
         if(self::$instance === null){
-            self::$instance = new static($config, $root, $options);
+            self::$instance = new self($config, $root, $options);
         }
 
         return self::$instance;

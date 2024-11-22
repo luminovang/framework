@@ -9,12 +9,13 @@
  */
 namespace Luminova\Http;
 
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Functions\Func;
 use \Luminova\Functions\Maths;
 use \Luminova\Exceptions\ErrorException;
 use \stdClass;
 
-class File
+class File implements LazyInterface
 {
     /**
      * Upload error file has not size.

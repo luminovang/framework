@@ -9,7 +9,9 @@
  */
 namespace Luminova\Core;
 
-abstract class CoreDatabase
+use \Luminova\Interface\LazyInterface;
+
+abstract class CoreDatabase implements LazyInterface
 {
     /**
      * The port to connect to the database.

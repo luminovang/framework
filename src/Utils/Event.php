@@ -11,7 +11,7 @@ namespace Luminova\Utils;
 
 use \Luminova\Exceptions\InvalidArgumentException;
 
-class Event
+final class Event
 {
     /**
      * Static container for event callbacks.
@@ -35,11 +35,11 @@ class Event
     /**
      * Retrieve event singleton instance.
      * 
-     * @return static Return a new static event object.
+     * @return self Return a new static event object.
      */
-    public static function getInstance(): static 
+    public static function getInstance(): self 
     {
-        return self::$instance ??= new static();
+        return self::$instance ??= new self();
     }
 
     /**

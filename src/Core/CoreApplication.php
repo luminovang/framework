@@ -174,7 +174,7 @@ abstract class CoreApplication
      */
     public static function getInstance(): static 
     {
-        if(!self::$instance instanceof static){
+        if(!self::$instance instanceof self){
             self::$instance = new static();
         }
        

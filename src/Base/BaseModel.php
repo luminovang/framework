@@ -14,11 +14,12 @@ use \Luminova\Security\Validation;
 use \Luminova\Storages\FileManager;
 use \Peterujah\NanoBlock\SearchController as SearchInstance;
 use \Luminova\Interface\DatabaseInterface;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \DateTimeInterface;
 
-abstract class BaseModel
+abstract class BaseModel implements LazyInterface
 {
     /**
      * The name of the model's table.

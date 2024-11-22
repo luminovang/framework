@@ -20,6 +20,7 @@ use \Luminova\Arrays\Lists;
 use \Luminova\Storages\FileManager;
 use \Luminova\Cache\FileCache;
 use \Luminova\Cache\MemoryCache;
+use \Luminova\Functions\Func;
 use \Luminova\Http\Request;
 use \Luminova\Http\UserAgent;
 use \Luminova\Http\HttpCode;
@@ -327,7 +328,7 @@ if(!function_exists('uuid')){
      */
     function uuid(int $version = 4, ?string $namespace = null, ?string $name = null): string 
     {
-       return Factory::functions()->uuid($version, $namespace, $name);
+       return Func::uuid($version, $namespace, $name);
     }
 }
 
@@ -402,12 +403,13 @@ if(!function_exists('strict')){
 	 * @param string $type The expected data type (e.g., 'int', 'email', 'username').
 	 * @param string|null $replacement The symbol to replace disallowed characters or null to throw and exception (default: '').
 	 *
-	 * @return string Return the sanitized string.
-	 * @throws InvalidArgumentException Throws if the input does not match the expected type and no replacement is provided.
+	 * @return string|null Return the sanitized string or null if input doesn't match 
+	 * 			nor support replacing like `email` `url` `username` or `password`.
+	 * @throws InvalidArgumentException If the input contains invalid characters, or HTML tags, and no replacement is provided.
 	 * 
 	 * Available types:
 	 * - 'int'       : Only numeric characters (0-9) are allowed.
-	 * - 'digit'     : Numeric characters, including negative numbers and decimals.
+	 * - 'numeric'   : Numeric characters, including negative numbers and decimals.
 	 * - 'key'       : Alphanumeric characters, underscores, and hyphens.
 	 * - 'password'  : Alphanumeric characters, and special characters (@, *, !, _, -).
 	 * - 'username'  : Alphanumeric characters, hyphen, underscore, and dot.
@@ -422,15 +424,19 @@ if(!function_exists('strict')){
 	 * - 'time'      : Alphanumeric characters and colon (e.g., time format).
 	 * - 'date'      : Alphanumeric characters, hyphen, slash, comma, and space (e.g., date format).
 	 * - 'uuid'      : A valid UUID format (e.g., 8-4-4-4-12 hexadecimal characters).
-	 * - 'default'   : Removes any HTML tags.
+	 * - 'default'   : Removes HTML tags.
+	 * 
+	 * > **Note:** 
+	 * > - HTML tags (including their content) are completely removed for the 'default' type.
+	 * > - This method ensures secure handling of input to prevent invalid characters or unsafe content.
 	 */
     function strict(
         string $input, 
         string $type = 'default', 
         string|null $replacer = ''
-    ): string 
+    ): ?string 
     {
-       return Factory::functions()->strictType(
+       return Func::strictType(
             $input, 
             $type, 
             $replacer

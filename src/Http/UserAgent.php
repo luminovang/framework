@@ -9,6 +9,7 @@
  */
 namespace Luminova\Http;
 
+use \Luminova\Interface\LazyInterface;
 use \App\Config\Browser;
 use \Stringable;
 
@@ -24,7 +25,7 @@ use \Stringable;
  * @method string getReferrer() Get the referrer hostname, if available.
  * @method string getPlatformVersion() Get the platform/operating system version.
  */
-class UserAgent implements Stringable
+class UserAgent implements LazyInterface, Stringable
 {
     /**
      * Whether the user agent represents a browser.

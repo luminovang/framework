@@ -10,11 +10,12 @@
 namespace Luminova\Http;
 
 use \Luminova\Application\Foundation;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Functions\Func;
 use \App\Config\Apis;
 use \Countable;
 
-class Header implements Countable
+class Header implements LazyInterface, Countable
 {
     /**
      * Header variables.

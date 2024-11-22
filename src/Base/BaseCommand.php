@@ -79,6 +79,8 @@ abstract class BaseCommand extends Terminal
     public function __construct()
     {
         parent::__construct();
+        $this->app ??= Application::getInstance();
+        
         $this->onCreate();
     }
 
@@ -114,20 +116,6 @@ abstract class BaseCommand extends Terminal
      * @return int Return STATUS_SUCCESS when custom help is implemented, STATUS_ERROR when using default implementation.
      */
     abstract public function help(array $helps): int;
-
-    /**
-     * Initialize the application instance.
-     * 
-     * @return Application Return the application instance.
-     */
-    protected final function app(): Application
-    {
-        if (!$this->app instanceof Application) {
-            $this->app = Application::getInstance();
-        }
-        
-        return $this->app;
-    }
 
     /**
      * Retrieves the full command-line execution string for the current command.

@@ -91,9 +91,9 @@ class Storage extends Adapters
      * 
      * @return static The New `Storage` instance.
      */
-    public static function context(string $adapter = 'local'): static
+    public static function context(string $adapter = 'local'): self
     {
-        return new static($adapter);
+        return new self($adapter);
     }
 
     /**

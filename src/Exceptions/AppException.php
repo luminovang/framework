@@ -193,13 +193,6 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     public const CANNOT_OPEN_DATABASE_FILE = 14;
 
     /**
-     * PSR Logger instance.
-     *
-     * @var Logger|null $logger 
-     */
-    private static ?Logger $logger = null;
-
-    /**
      * {@inheritdoc}
      */
     public function __construct(

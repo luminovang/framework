@@ -1427,8 +1427,9 @@ trait View
             $level = substr_count('/' . trim($url, '/'), '/');
         }
 
-        $suffix = (NOVAKIT_ENV === null) ? 'public/' : '/';
-        return (($level === 0) ? './' : str_repeat('../', $level)) . $suffix;
+        $relative = (($level === 0) ? './' : str_repeat('../', $level));
+        
+        return $relative . (NOVAKIT_ENV === null) ? 'public/' : '';
     }
 
     /** 

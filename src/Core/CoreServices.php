@@ -10,9 +10,10 @@
 namespace Luminova\Core;
 
 use \Luminova\Interface\ServicesInterface;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\RuntimeException;
 
-abstract class CoreServices implements ServicesInterface
+abstract class CoreServices implements ServicesInterface, LazyInterface
 {
     /**
      * Service queue.

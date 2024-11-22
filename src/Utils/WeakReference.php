@@ -9,7 +9,7 @@
  */
 namespace Luminova\Utils;
 
-class WeakReference
+final class WeakReference
 {
     /**
      * Initializes a new WeakReference instance with an optional reference.

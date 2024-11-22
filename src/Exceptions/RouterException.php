@@ -67,7 +67,7 @@ class RouterException extends AppException
         array $values = []
     ): void
     {
-        throw new static(static::withMessage($type, ...$values), $code);
+        throw new self(self::withMessage($type, ...$values), $code);
     }
 
     /**

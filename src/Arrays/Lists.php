@@ -9,10 +9,11 @@
  */
 namespace Luminova\Arrays;
 
+use \Luminova\interface\LazyInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\RuntimeException;
 
-class Lists
+class Lists implements LazyInterface
 {
     /**
      * Determines if a string is a valid list based on the expected list format.

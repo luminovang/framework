@@ -12,11 +12,12 @@ namespace Luminova\Cookies;
 use \App\Config\Cookie as CookieConfig;
 use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Interface\CookieInterface;
 use \Luminova\Exceptions\CookieException;
 use \Stringable;
 
-class Cookie implements CookieInterface, Stringable
+class Cookie implements CookieInterface, LazyInterface, Stringable
 {
    /**
      * Cookies will be sent in all contexts, i.e., in responses to both

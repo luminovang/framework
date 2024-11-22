@@ -20,7 +20,7 @@ use function \pcntl_wexitstatus;
 use function \pcntl_wifexited;
 use function \pcntl_waitpid;
 
-class Queue implements Countable
+final class Queue implements Countable
 {
     /**
      * Log errors and execution messages using log level `debug`.
@@ -169,7 +169,7 @@ class Queue implements Countable
         self::$isForkSupported = !self::$isFiberSupported && function_exists('pcntl_fork');
     }
 
-   /**
+    /**
      * Singleton method to run asynchronous queued tasks.
      *
      * @param array<int,Closure|callable|string> $jobs An array of jobs to execute. Each job can be a closure, callable, or string.
@@ -179,7 +179,10 @@ class Queue implements Countable
      * @return Queue Return new Queue instance.
      * @example Usage Example:
      * ```php
-     * Queue::wait([request('https://example.com/foo'),request('https://example.com/bar')])->run();
+     * Queue::wait([
+     *      request('https://example.com/foo'),
+     *      request('https://example.com/bar')
+     * ])->run();
      * ```
      */
     public static function wait(
@@ -187,7 +190,7 @@ class Queue implements Countable
         bool $output = false,
         int $eReporting = self::E_OUTPUT
     ){
-        return new static($jobs, $output, $eReporting);
+        return new self($jobs, $output, $eReporting);
     }
 
     /**
@@ -258,6 +261,7 @@ class Queue implements Countable
                 $this->execute($task, $idx);
             }
 
+            $this->reindex();
             $this->waitForAsync();
             $this->isCompleted = ($this->isCompleted || $this->jobs === []);
         }
@@ -287,8 +291,8 @@ class Queue implements Countable
      * 
      * ```php
      * $queue->onResponse(function (mixed $result, mixed $previous, Luminova\Utils\Queue $queue) {
-     *  echo "Task completed: " . var_dump($result) . "\n";
-     *  echo "Current cumulative results: " . var_dump($previous) . "\n";
+     *      echo "Task completed: " . var_dump($result) . "\n";
+     *      echo "Current cumulative results: " . var_dump($previous) . "\n";
      * });
      * ```
      * 
@@ -470,6 +474,24 @@ class Queue implements Countable
     }
 
     /**
+     * Reindexes the tasks array to remove any gaps in the array keys.
+     *
+     * This method is useful after tasks have been removed from the queue,
+     * ensuring that the remaining tasks are indexed sequentially.
+     *
+     * @return bool Returns true if the reindexed, otherwise false.
+     */
+    public function reindex(): bool
+    {
+        if($this->jobs === []){
+            return false;
+        }
+
+        $this->jobs = array_values($this->jobs);
+        return true;
+    }
+
+    /**
      * Free all resources by clearing the queue
      *
      * @return void
@@ -594,6 +616,7 @@ class Queue implements Countable
             $this->fibers[$idx] = $fiber;
         }
 
+        $this->reindex();
         return $this->waitForFibers();
     }
 
@@ -693,6 +716,7 @@ class Queue implements Countable
                 }
             }
 
+            $this->reindex();
             usleep(1000);
         }
 
@@ -751,6 +775,7 @@ class Queue implements Countable
             $this->report("Queue Child process with PID: {$fork['pid']}, {$message}");
         }
 
+        $this->reindex();
         $this->isCompleted = true;
     }
 

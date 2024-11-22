@@ -56,6 +56,6 @@ class MailerException extends AppException
     ): static
     {
         $message = self::$types[$type] ?? 'Unknown error occurred while creating email';
-        return new static($name === null ? $message : sprintf($message, $name), $code);
+        return new self($name === null ? $message : sprintf($message, $name), $code);
     }
 }

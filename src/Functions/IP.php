@@ -110,10 +110,6 @@ final class IP
 
    /**
     * Get the local IP address of the machine.
-    *
-    * This method first attempts to retrieve the machine's IP address via its hostname. 
-    * If that fails or returns an invalid IP address, it falls back to using platform-specific 
-    * shell commands (`ipconfig` on Windows or `ifconfig` on Linux/macOS) to retrieve the IP.
     * 
     * @return string|false Returns the local IP address as a string, or false if unable to retrieve it.
     */
@@ -146,10 +142,6 @@ final class IP
 
    /**
     * Get the local network IP address (not the loopback address).
-    *
-    * This method attempts to retrieve the machine's IP address on the network, avoiding the
-    * loopback IP (127.0.0.1). It first checks platform-specific network interfaces using
-    * shell commands (`ipconfig` on Windows, `ifconfig` on Linux/macOS).
     * 
     * @return string|false Returns the local network IP address as a string, or false if unable to retrieve it.
     */

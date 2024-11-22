@@ -16,9 +16,11 @@ use \Luminova\Http\File;
 use \Luminova\Http\UserAgent;
 use \Luminova\Functions\IP;
 use \Luminova\Functions\Func;
+use \Luminova\Utils\LazyObject;
 use \App\Config\Security;
 use \App\Config\Files;
 use \Luminova\Interface\HttpRequestInterface;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
 use \Generator;
@@ -39,7 +41,7 @@ use \JsonException;
  * @method mixed getLock(string|null $field, mixed $default = null)
  * @method mixed getUnlock(string|null $field, mixed $default = null)
  */
-final class Request implements HttpRequestInterface, Stringable
+final class Request implements HttpRequestInterface, LazyInterface, Stringable
 {
     /**
      * Http request methods.
@@ -55,12 +57,12 @@ final class Request implements HttpRequestInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public ?Server $server = null;
+    public Server|LazyInterface|null $server = null;
 
     /**
      * {@inheritdoc}
      */
-    public ?Header $header = null;
+    public Header|LazyInterface|null $header = null;
 
     /**
      * {@inheritdoc}
@@ -97,8 +99,8 @@ final class Request implements HttpRequestInterface, Stringable
         ?array $server = null,
         ?array $headers = null
     ) {
-        $this->server = new Server($server ?? $_SERVER);
-        $this->header = new Header($headers);
+        $this->server = LazyObject::newObject(Server::class, $server ?? $_SERVER);
+        $this->header = LazyObject::newObject(Header::class, $headers);
         $this->parseRequestBody();
     }
 

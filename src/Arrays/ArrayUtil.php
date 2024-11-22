@@ -13,10 +13,11 @@ use \Countable;
 use \Stringable;
 use \ArrayIterator;
 use \Luminova\Arrays\Lists;
+use \Luminova\interface\LazyInterface;
 use \Luminova\Exceptions\JsonException;
 use \Luminova\Exceptions\RuntimeException;
 
-class ArrayUtil implements Countable, Stringable
+class ArrayUtil implements LazyInterface, Countable, Stringable
 {
     /**
      * Constructor to initialize array instance.

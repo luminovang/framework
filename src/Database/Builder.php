@@ -16,6 +16,7 @@ use \Luminova\Cache\MemoryCache;
 use \Luminova\Database\Connection;
 use \Luminova\Database\Manager;
 use \Luminova\Interface\DatabaseInterface;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\CacheException;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Exceptions\InvalidArgumentException;
@@ -23,7 +24,7 @@ use \DateTimeInterface;
 use \Exception;
 use \JsonException;
 
-final class Builder
+final class Builder implements LazyInterface
 {  
     /**
      * Return result as an array.
@@ -306,7 +307,7 @@ final class Builder
      * 
      * @ignore
      */
-    private function __wakeup() {}
+    public function __wakeup() {}
 
     /**
      * Class shared singleton class instance.

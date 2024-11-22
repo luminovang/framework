@@ -147,7 +147,7 @@ class Adapters
                 return new SftpV3Adapter(self::newSftpProvider(3, $config), $config['root'], $visibility); 
             /*case 'sftp-v2':
                 $visibility = isset($config['visibility']) ? UnixVisibility::fromArray($config['visibility']): null;
-                return new SftpV2Adapter(static::newSftpProvider(2, $config), $config['root'], $visibility); */
+                return new SftpV2Adapter(self::newSftpProvider(2, $config), $config['root'], $visibility); */
             case 'zip-archive':
                 self::$client = new ZipClient($config['path']);
                 return new ZipAdapter(self::$client);

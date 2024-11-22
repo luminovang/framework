@@ -61,6 +61,6 @@ class CookieException extends AppException
         $message = self::$types[$type] ?? 'Unknown error occurred while creating cookie';
         $message = ($name === null) ? $message : sprintf($message, $name);
 
-        return new static($message, $code);
+        return new self($message, $code);
     }
 }

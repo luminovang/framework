@@ -38,7 +38,7 @@ class Lists extends BaseConsole
      */
     public function run(?array $options = []): int
     {
-        static::listCommands();
+        self::listCommands();
 
         return STATUS_SUCCESS;
     }

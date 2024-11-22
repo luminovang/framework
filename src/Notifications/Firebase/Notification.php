@@ -9,6 +9,7 @@
  */
 namespace Luminova\Notifications\Firebase;
 
+use \Luminova\Interface\LazyInterface;
 use \Kreait\Firebase\Factory;
 use \Kreait\Firebase\Messaging\CloudMessage;
 use \Kreait\Firebase\Messaging\Notification as Notifier;
@@ -26,7 +27,7 @@ use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Notifications\Models\Message;
 use \Exception;
 
-class Notification
+class Notification implements LazyInterface
 {
     /**
      * Notification factory.

@@ -10,10 +10,11 @@
 namespace Luminova\Security;
 
 use \Luminova\Interface\ValidationInterface;
+use \Luminova\Interface\LazyInterface;
 use \Exception;
 use \JsonException;
 
-final class Validation implements ValidationInterface
+final class Validation implements ValidationInterface, LazyInterface
 {
     /**
      * Validated errors messages.
@@ -411,7 +412,7 @@ final class Validation implements ValidationInterface
         if($message === null){
             $message = "Validation failed for field: '{$field}', while validating [{$ruleName}].";
         }else{
-            $message = static::replace($message, [
+            $message = self::replace($message, [
                 $field, $ruleName, $value
             ]);
         }

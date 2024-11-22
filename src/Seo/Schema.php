@@ -10,9 +10,10 @@
  */
 namespace Luminova\Seo;  
 
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Time\Time;
 
-final class Schema
+final class Schema implements LazyInterface
 {
     /**
      * Application view link.
@@ -65,11 +66,11 @@ final class Schema
     /**
      * Initialize and retrieve shared instance singleton class.
      * 
-     * @return static Return a static class instance.
+     * @return self Return a static class instance.
      */
-    public static function getInstance(): static
+    public static function getInstance(): self
     {
-        return self::$instance ??= new static();
+        return self::$instance ??= new self();
     }
 
     /**

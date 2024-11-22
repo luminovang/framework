@@ -9,7 +9,9 @@
  */
 namespace Luminova\Base;
 
-abstract class BaseConfig
+use \Luminova\Interface\LazyInterface;
+
+abstract class BaseConfig implements LazyInterface
 {
     /**
      * Stores the Content-Security-Policy (CSP) directives.
@@ -97,7 +99,7 @@ abstract class BaseConfig
      */
     public static final function getNonce(int $length = 16, string $prefix = ''): string
     {
-        return self::$nonce ??= $prefix . bin2hex(random_bytes($length / 2));
+        return self::$nonce ??= $prefix . bin2hex(random_bytes((int) ceil($length / 2)));
     }
 
     /**

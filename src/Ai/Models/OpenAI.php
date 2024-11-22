@@ -10,6 +10,7 @@
 namespace Luminova\Ai\Models;
 
 use \Luminova\Interface\AiInterface;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Http\Network;
 use \Luminova\Http\Client\Curl;
 use \Luminova\Storages\FileManager;
@@ -18,7 +19,7 @@ use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\JsonException;
 use \CurlFile;
 
-class OpenAI implements AiInterface
+class OpenAI implements AiInterface, LazyInterface
 {
     /**
      * @var Network|null $network

@@ -10,6 +10,7 @@
 namespace Luminova\Email;
 
 use \Luminova\Interface\MailerInterface;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Application\Foundation;
 use \Luminova\Base\BaseMailer;
 use \App\Config\Mailer as MailerConfig;
@@ -17,7 +18,7 @@ use \Luminova\Exceptions\MailerException;
 use \Luminova\Exceptions\AppException;
 use \Exception;
 
-class Mailer
+class Mailer implements LazyInterface
 {
     /**
      * Mailer singleton instance
