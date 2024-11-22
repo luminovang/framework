@@ -6,8 +6,18 @@
     "type": "library",
     "homepage": "https://luminova.ng",
     "support": {
-        "source": "https://github.com/luminovang/framework/"
+        "email": "dev@luminova.ng",
+        "source": "https://github.com/luminovang/framework/",
+        "docs": "https://luminova.ng/docs"
     },
+    "authors": [
+        {
+            "name": "Ujah Chigozie Peter",
+            "email": "peter@luminova.ng",
+            "homepage": "https://github.com/peterujah/",
+            "role": "developer"
+        }
+    ],
     "require": {
         "php": "^8.0",
         "ext-json": "*",
