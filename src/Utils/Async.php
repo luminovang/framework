@@ -99,9 +99,6 @@ class Async
     /**
      * Suspends the current fiber and yields a value.
      *
-     * If fibers are supported, it suspends the current fiber and yields the given value.
-     * If not, it simply returns the value immediately.
-     *
      * @param mixed $value The value to yield.
      * 
      * @return mixed Return the value yielded by the fiber or the immediate value if fibers are not supported.
