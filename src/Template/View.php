@@ -1428,8 +1428,9 @@ trait View
         }
 
         $relative = (($level === 0) ? './' : str_repeat('../', $level));
+        $relative .= (NOVAKIT_ENV === null) ? 'public/' : '';
         
-        return $relative . (NOVAKIT_ENV === null) ? 'public/' : '';
+        return $relative;
     }
 
     /** 
