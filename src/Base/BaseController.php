@@ -20,23 +20,23 @@ abstract class BaseController
     /**
      * HTTP request object.
      * 
-     * @var Request<LazyInterface>|null
+     * @var Request|LazyInterface|null
      */
     protected Request|LazyInterface|null $request = null;
  
     /**
      * Input validation object.
      * 
-     * @var Validation<LazyInterface>|null
+     * @var Validation|LazyInterface|null
      */
     protected Validation|LazyInterface|null $validate = null;
  
     /**
      * Application instance.
      * 
-     * @var Application|null $app
+     * @var Application|LazyInterface|null $app
      */
-    protected ?Application $app = null;
+    protected Application|LazyInterface|null $app = null;
 
     /**
      * Initialize the BaseController instance 
@@ -44,9 +44,9 @@ abstract class BaseController
      */
     public function __construct()
     {
-        $this->app ??= Application::getInstance();
-        $this->validate ??= LazyObject::newObject(Validation::class);
-        $this->request ??= LazyObject::newObject(Request::class);
+        $this->app = LazyObject::newObject(fn() => Application::getInstance());
+        $this->validate = LazyObject::newObject(Validation::class);
+        $this->request = LazyObject::newObject(Request::class);
  
         $this->onCreate();
     }

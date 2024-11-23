@@ -9,7 +9,9 @@
  */
 namespace Luminova\Base;
 
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Command\Terminal;
+use \Luminova\Utils\LazyObject;
 use \Luminova\Functions\Func;
 use \App\Application;
 use \App\Config\Files;
@@ -69,9 +71,9 @@ abstract class BaseCommand extends Terminal
     /**
      * Application instance.
      * 
-     * @var Application|null $app
+     * @var Application|LazyInterface|null $app
      */
-    protected ?Application $app = null;
+    protected Application|LazyInterface|null $app = null;
 
     /**
      * {@inheritdoc}
@@ -79,8 +81,8 @@ abstract class BaseCommand extends Terminal
     public function __construct()
     {
         parent::__construct();
-        $this->app ??= Application::getInstance();
         
+        $this->app = LazyObject::newObject(fn() => Application::getInstance());
         $this->onCreate();
     }
 

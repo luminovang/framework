@@ -46,7 +46,7 @@ class LazyObject implements LazyInterface
      * a custom lazy initialization.
      * 
      * @param Closure|class-string<\T> $callback A class string or closure that creates the lazily initialized object.
-     * @param mixed ...$arguments Optional arguments to pass to the class constructor.
+     * @param mixed ...$arguments Optional arguments to pass to the class constructor for non-closure initializer.
      * @throws RuntimeException If the class does not exist or error occurs.
      * 
      * @example - Custom Closure Initialization.
@@ -89,7 +89,7 @@ class LazyObject implements LazyInterface
      * a custom lazy initialization.
      *
      * @param Closure|\class-string<\T> $initializer A class string or closure that creates the lazily initialized object.
-     * @param mixed ...$arguments Optional arguments to pass to the class constructor.
+     * @param mixed ...$arguments Optional arguments to pass to the class constructor for non-closure initializer.
      * 
      * @return class-object<\T>|LazyInterface<\T> Return lazy-loaded instance of the specified class.
      * @throws RuntimeException If the class does not exist or error occurs.
@@ -112,7 +112,9 @@ class LazyObject implements LazyInterface
             return self::newLazyGhost($initializer, ...$arguments);
         }
     
-        return new self(fn() => new $initializer(...$arguments));
+        return ($initializer instanceof Closure) 
+            ? new self($initializer)
+            : new self(fn() => new $initializer(...$arguments));
     }
 
     /**
