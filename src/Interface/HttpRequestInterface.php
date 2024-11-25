@@ -34,8 +34,8 @@ use \Generator;
  * @method mixed getLock(string|null $field, mixed $default = null)      Get a field value from HTTP LOCK request or entire fields if `$field` param is null.
  * @method mixed getUnlock(string|null $field, mixed $default = null)    Get a field value from HTTP UNLOCK request or entire fields if `$field` param is null.
  * 
- * @property Server|Server<LazyInterface>|null $server The server instance representing HTTP server parameters and configurations.
- * @property Header|Header<LazyInterface>|null $header The header instance providing HTTP request headers information.
+ * @property Server|null $server The server instance representing HTTP server parameters and configurations.
+ * @property Header|null $header The header instance providing HTTP request headers information.
  * @property UserAgent|null $agent The user-agent instance containing client browser details.
  */
 

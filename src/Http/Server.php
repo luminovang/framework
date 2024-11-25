@@ -35,11 +35,7 @@ class Server implements LazyInterface, Countable
             return $this->variables;
         }
 
-        if($this->has($name)){
-            return $this->variables[$name];
-        }
-
-        return $default;
+        return $this->has($name) ? $this->variables[$name] :$default;
     }
 
     /**
@@ -92,11 +88,9 @@ class Server implements LazyInterface, Countable
         // Remove "HTTP_" prefix and replace underscores with hyphens
         $stripped = str_replace('_', '-', substr($key, 5));
 
-        if (array_key_exists($stripped, $this->variables)) {
-            return $this->variables[$stripped];
-        }
-
-        return $default; 
+        return array_key_exists($stripped, $this->variables) 
+            ? $this->variables[$stripped] 
+            : $default; 
     }
 
     /**

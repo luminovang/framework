@@ -20,21 +20,21 @@ abstract class BaseController
     /**
      * HTTP request object.
      * 
-     * @var Request|LazyInterface|null
+     * @var Request|null
      */
     protected Request|LazyInterface|null $request = null;
  
     /**
      * Input validation object.
      * 
-     * @var Validation|LazyInterface|null
+     * @var Validation|null
      */
     protected Validation|LazyInterface|null $validate = null;
  
     /**
      * Application instance.
      * 
-     * @var Application|LazyInterface|null $app
+     * @var Application|null $app
      */
     protected Application|LazyInterface|null $app = null;
 

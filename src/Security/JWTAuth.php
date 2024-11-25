@@ -29,6 +29,13 @@ class JWTAuth implements LazyInterface
      */
 	private static ?self $instance = null;
 
+    /**
+     * Validation error.
+     * 
+     * @var object|null $error
+     */
+    private ?object $error = null;
+
 	/**
      * Initialize the JWTAuth class constructor with configurable JWT and key settings.
      *
@@ -49,6 +56,7 @@ class JWTAuth implements LazyInterface
         protected ?string $aud = null
     )
 	{
+        $this->error = null;
         if($this->path !== null && (!is_writable($this->path) || !is_readable($this->path))){
             throw new EncryptionException(
                 sprintf(
@@ -86,6 +94,17 @@ class JWTAuth implements LazyInterface
         }
 
         return self::$instance;
+    }
+
+    /**
+     * Retrieves the validation error object.
+     *
+     * @return object|null Return the error object containing details about the last validation error,
+     *                     or null if no error occurred or no validation has been performed.
+     */
+    public function getError(): ?object 
+    {
+        return $this->error;
     }
 
 	/**
@@ -174,14 +193,6 @@ class JWTAuth implements LazyInterface
                 new Key(self::key($user_id, 'sha256'), $this->algo ?? 'HS256')
             );
         } catch (Throwable $e) {
-            if(PRODUCTION){
-                logger('emergency', $e->getMessage(), [
-                    'user_id' => $user_id
-                ]);
-
-                return false;
-            }
-
             throw new EncryptionException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -211,6 +222,7 @@ class JWTAuth implements LazyInterface
      * ```php
      * $isValid = $jwt->validate('Bearer my-token', 'user-id', function(bool $passed, \stdClass $payload): bool {
      *     if (!$passed) {
+     *         echo $payload->err->uid;
      *         return false; // Reject the token if initial validation fails
      *     }
      *     
@@ -236,6 +248,8 @@ class JWTAuth implements LazyInterface
     {
         $valid = false;
         $decoded = new stdClass();
+        $decoded->err = true;
+        $this->error = null;
 
         if($token && $user_id){
             // Match any scheme (e.g., Bearer, Token, etc.)
@@ -244,11 +258,25 @@ class JWTAuth implements LazyInterface
                 $token = $matches[2];
             }
 
-            $decoded = $this->decode($token, $user_id);
+            try{
+                $decoded = $this->decode($token, $user_id);
 
-            if($decoded instanceof stdClass){
-                $valid = (!empty($decoded->uid) && (string) $user_id === $decoded->uid);
+                if($decoded instanceof stdClass){
+                    $valid = (!empty($decoded->uid) && (string) $user_id === $decoded->uid);
+                    $decoded->err = $valid ? null : true;
+                }
+            }catch(EncryptionException $e){
+                $decoded = $this->error($e, $user_id, $token);
             }
+        }
+
+        if($decoded->err === true){
+            $this->error = $decoded->err = (object)[
+                'code' => 0,
+                'message' => 'Invalid authentication token or client ID.',
+                'uid' => $user_id,
+                'token'   => $token
+            ];
         }
 
         return ($callback instanceof Closure) ? $callback($valid, $decoded) : $valid;
@@ -278,6 +306,7 @@ class JWTAuth implements LazyInterface
      * ```php
      * $isValid = $jwt->validateFromFile('user-id', function(bool $valid, \stdClass $payload): bool {
      *     if (!$valid) {
+     *         echo $payload->err->message;
      *         return false; // Reject the token if validation fails
      *     }
      *     
@@ -293,6 +322,8 @@ class JWTAuth implements LazyInterface
      */
     public function validateFromFile(string|int $user_id, ?Closure $callback = null): bool
     {
+        $this->error = null;
+        
         if($user_id){
             $this->path ??= root('/writeable/auth/');
             $filename = self::filename($user_id);
@@ -306,7 +337,19 @@ class JWTAuth implements LazyInterface
             }
         }
 
-        return ($callback instanceof Closure) ? $callback(false, new stdClass()) : false;
+        if($callback instanceof Closure){
+            $err = new stdClass();
+            $this->error = $err->err = (object)[
+                'code' => 0,
+                'message' => 'Invalid authentication token or client ID.',
+                'uid' => $user_id,
+                'token'   => null
+            ];
+
+            return $callback(false, $err);
+        }
+
+        return false;
     }
 
     /**
@@ -488,5 +531,39 @@ class JWTAuth implements LazyInterface
 
             throw new EncryptionException($e->getMessage(), $e->getCode(), $e);
 		}
+    }
+
+    /**
+     * Handles and logs errors during JWT validation.
+     *
+     * @param Throwable $e The exception or error that occurred during validation.
+     * @param string|int|null $user_id The user ID associated with the token.
+     * @param string|null $token The JWT token being validated.
+     *
+     * @return stdClass Return an object containing error details.
+     */
+    private function error(
+        Throwable $e,
+        string|int|null  $user_id = null, 
+        ?string $token = null
+    ): stdClass 
+    {
+        $e = ($e->getPrevious() === null) ? $e : $e->getPrevious();
+
+        if(PRODUCTION){
+            logger('emergency', 'JWT validate error: ' . $e->getMessage(), [
+                'user_id' => $user_id
+            ]);
+        }
+
+        $err = new stdClass();
+        $this->error = $err->err = (object)[
+            'code' => $e->getCode(),
+            'message' => PRODUCTION ? 'Authentication failed, invalid token or client ID.' : $e->getMessage(),
+            'uid' => $user_id,
+            'token' => $token
+        ];
+
+        return $err;
     }
 }

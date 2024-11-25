@@ -9,8 +9,17 @@
  */
 namespace Luminova\Interface;
 
-interface LazyInterface 
+/**
+ * Marker interface for lazily initialized objects.
+ * 
+ * Implementing this interface allows classes to support lazy initialization 
+ * while ensuring compatibility with type casting for original object types.
+ *
+ * Classes implementing this interface indicate they can be treated as lazy 
+ * objects, helping IDEs recognize and suggest the original class methods 
+ * when type-hinted alongside `LazyInterface`.
+ */
+interface LazyInterface
 {
-    // This is an empty interface to implement lazily initialized objects.
-    // With this interface casting properties it original type and LazyInterface will ensure compatibility.
+    // This is a marker interface with no methods.
 }
