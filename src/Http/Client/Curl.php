@@ -11,7 +11,10 @@ namespace Luminova\Http\Client;
 
 use \Luminova\Application\Foundation;
 use \Luminova\Http\Message\Response;
+use \Luminova\Cookies\CookieFileJar;
+use \Luminova\Interface\CookieJarInterface;
 use \Luminova\Storages\Stream;
+use \Luminova\Http\Network;
 use \Luminova\Interface\NetworkClientInterface;
 use \Luminova\Functions\Normalizer;
 use \Luminova\Exceptions\Http\RequestException;
@@ -33,12 +36,24 @@ class Curl implements NetworkClientInterface
     private ?array $mutable = null;
 
     /**
+     * CURL Options.
+     * 
+     * @var array $constants
+     */
+    private static array $constants = [];
+
+    /**
      * {@inheritdoc}
      */
     public function __construct(private array $config = [])
     {
-        $this->config['headers']['X-Powered-By'] = $this->config['headers']['X-Powered-By'] ?? Foundation::copyright();
-        $this->config['headers']['User-Agent'] = $this->config['headers']['User-Agent'] ?? Foundation::copyright(true);
+        if(($this->config['headers']['X-Powered-By'] ?? true) !== false){
+            $this->config['headers']['X-Powered-By'] = $this->config['headers']['X-Powered-By'] ?? Foundation::copyright();
+        }
+        
+        if(($this->config['headers']['User-Agent'] ?? true) !== false){
+            $this->config['headers']['User-Agent'] = $this->config['headers']['User-Agent'] ?? Foundation::copyright(true);
+        }
     }
 
     /**
@@ -128,6 +143,8 @@ class Curl implements NetworkClientInterface
         $base_uri = $this->mutable['base_uri'] ?? null;
         $decoding = $this->mutable['decode_content'] ?? false;
         $verify = $this->mutable['verify'] ?? false;
+        $proxy = $this->mutable['proxy'] ?? null;
+        $cookies = $this->mutable['cookies'] ?? null;
 
         $curlOptions = [
             CURLOPT_URL => ($base_uri ? rtrim($base_uri) . '/' . ltrim($url) : $url),
@@ -183,12 +200,12 @@ class Curl implements NetworkClientInterface
             $curlOptions[CURLOPT_POSTFIELDS] = $data;
 
             if (!isset($headers['Content-Type'])) {
-                $headers['Content-Type'] = (!$isBody && $isParam) ? 
-                    'application/x-www-form-urlencoded' : 
-                    ($isMultipart ? 'multipart/form-data' : 'application/json');
+                $headers['Content-Type'] = (!$isBody && $isParam) 
+                    ? 'application/x-www-form-urlencoded' 
+                    : ($isMultipart ? 'multipart/form-data' : 'application/json');
 
             }
-        } elseif ($method === 'HEAD') {
+        } elseif($method === 'HEAD') {
             $curlOptions[CURLOPT_NOBODY] = true;
         }
 
@@ -205,33 +222,69 @@ class Curl implements NetworkClientInterface
             $curlOptions[CURLOPT_HTTPGET] = true;
         }        
 
+        if($cookies !== null && is_string($cookies)){
+            $cookies = new CookieFileJar($cookies);
+        }
+
+        if ($cookies instanceof CookieJarInterface) {
+            $cookieString = $cookies->getCookieStringByDomain($curlOptions[CURLOPT_URL] ?? '');
+        
+            if ($cookieString) {
+                if ($cookies->isEmulateBrowser()) {
+                    $headers['Cookie'] = $cookieString;
+                } else {
+                    $curlOptions[CURLOPT_COOKIE] = $cookieString;
+                }
+            }
+        
+            $curlOptions[CURLOPT_COOKIESESSION] = $cookies->isNewSession();
+        }
+
         if ($headers) {
             $curlOptions[CURLOPT_HTTPHEADER] = self::toRequestHeaders($headers);
         }
 
-        curl_setopt_array($curl, $curlOptions);
+        if ($proxy) {
+            $this->setProxy($proxy, $curlOptions);
+        }
+
+        if (!curl_setopt_array($curl, $curlOptions)) {
+            $failedOptions = [];
+        
+            foreach ($curlOptions as $key => $value) {
+                if (!curl_setopt($curl, $key, $value)) {
+                    $failedOptions[] = self::getOptionName($key);
+                }
+            }
+        
+            $errorDetails = !empty($failedOptions) 
+                ? " Failed options: " . implode(', ', $failedOptions) 
+                : '';
+        
+            throw new RequestException("Failed to set cURL request options." . $errorDetails);
+        }
 
         $responseHeaders = [];
         $contentSize = 0;
         $onHeader = ($this->mutable['on_headers'] ?? null);
         $isStream = (bool) ($this->mutable['stream'] ?? false);
-        $res = ($onHeader !== null && is_callable($onHeader)) ? 
-            new Response(204, ['Content-Length' => [0]]) : 
-            null;
-        $stream = $isStream ? 
-            self::createStreamResponse($curl, $this->mutable['sink'] ?? 'php://temp') : 
-            null;
+        $res = ($onHeader !== null && is_callable($onHeader)) 
+            ? new Response(204, ['Content-Length' => [0]]) 
+            : null;
+        $stream = $isStream 
+            ? self::createStreamResponse($curl, $this->mutable['sink'] ?? 'php://temp')
+            : null;
 
-        $ouputHeaders = (bool) ($this->mutable['output_headers'] ?? false);
+        $outputHeaders = (bool) ($this->mutable['output_headers'] ?? false);
         $headersComplete = false;
 
         curl_setopt($curl, CURLOPT_HEADERFUNCTION, function ($curl, $header) 
-        use ($stream, &$responseHeaders, &$headersComplete, $onHeader, $res, $ouputHeaders) {
+        use ($stream, &$responseHeaders, &$headersComplete, $onHeader, $res, $outputHeaders) {
             $length = strlen($header);
 
             if (trim($header) === '') {
                 $headersComplete = true;
-                return ($ouputHeaders && $stream instanceof Stream) ? $stream->write($header) : $length;
+                return ($outputHeaders && $stream instanceof Stream) ? $stream->write($header) : $length;
             }
 
             if (($head = self::normalizeHeader($header)) !== null) {
@@ -253,15 +306,15 @@ class Curl implements NetworkClientInterface
                 }
             }
 
-            return ($ouputHeaders && $stream instanceof Stream) ? $stream->write($header) : $length;
+            return ($outputHeaders && $stream instanceof Stream) ? $stream->write($header) : $length;
         });
         
 
         if ($isStream) {
             curl_setopt($curl, CURLOPT_WRITEFUNCTION, function ($curl, $data) 
-            use ($stream, &$responseHeaders, &$contentSize, &$headersComplete, $ouputHeaders) 
+            use ($stream, &$responseHeaders, &$contentSize, &$headersComplete, $outputHeaders) 
             {
-                if($headersComplete || $ouputHeaders){
+                if($headersComplete || $outputHeaders){
                     $bytes = $stream->write($data); 
 
                     if($headersComplete){
@@ -296,9 +349,22 @@ class Curl implements NetworkClientInterface
         if($isStream && $stream instanceof Stream){
             $stream->rewind();
         }else{
-            $contents = $ouputHeaders ? 
-                self::toHeaderString($responseHeaders) . "\r\n" . $response : 
-                $response;
+            $contents = $outputHeaders 
+                ? self::toHeaderString($responseHeaders) . "\r\n" . $response 
+                : $response;
+        }
+
+        if ($cookies instanceof CookieJarInterface && isset($responseHeaders['Set-Cookie'])) {
+            $headerCookies = $cookies->getFromHeader($responseHeaders['Set-Cookie']);
+            $cookies->setCookies($headerCookies);
+        
+            $cookies = CookieFileJar::newCookie(
+                $headerCookies,
+                [
+                    ...$cookies->getConfig(),
+                    'readOnly' => true
+                ]
+            );
         }
 
         $response = null;
@@ -307,8 +373,54 @@ class Curl implements NetworkClientInterface
             headers: $responseHeaders,
             contents: $contents,
             info: $info,
-            stream: $stream
+            stream: $stream,
+            cookie: $cookies
         );
+    }
+
+    /**
+     * Sets the proxy for the cURL request based on the provided proxy configuration.
+     *
+     * @param array|string $proxy The proxy configuration, which can be a string or an associative array.
+     * @param array &$curlOptions The cURL options array, passed by reference
+     *
+     * @throws RequestException If the provided proxy format is invalid.
+     */
+    private function setProxy(array|string $proxy, array &$curlOptions): void
+    {
+        if (is_string($proxy)) {
+            $curlOptions[CURLOPT_PROXY] = $proxy;
+            return;
+        }
+
+        if (is_array($proxy)) {
+            $url = $curlOptions[CURLOPT_URL] ?? '';
+            $parsedUrl = parse_url($url);
+            $scheme = $parsedUrl['scheme'] ?? 'http';
+            $host = $parsedUrl['host'] ?? '';
+
+            if (!empty($proxy['no'])) {
+                foreach ($proxy['no'] as $noProxy) {
+                    if (str_ends_with($host, $noProxy)) {
+                        return;
+                    }
+                }
+            }
+
+            if (isset($proxy[$scheme])) {
+                $curlOptions[CURLOPT_PROXY] = $proxy[$scheme];
+            }
+
+            if (!empty($curlOptions[CURLOPT_PROXY])) {
+                if (!empty($proxy['username']) && !empty($proxy['password'])) {
+                    $curlOptions[CURLOPT_PROXYUSERPWD] = $proxy['username'] . ':' . $proxy['password'];
+                }
+            }
+
+            return;
+        }
+
+        throw new RequestException("Invalid proxy format. Expected string or array.");
     }
 
     /**
@@ -397,6 +509,22 @@ class Curl implements NetworkClientInterface
     }
 
     /**
+     * Get the human-readable name of a cURL option (for better debugging).
+     * 
+     * @param int $option The option identifier.
+     * 
+     * @return string|int Return option name.
+     */
+    private static function getOptionName(int $option): string|int
+    {
+        if (self::$constants === []) {
+            self::$constants = array_flip(get_defined_constants(true)['curl']);
+        }
+
+        return self::$constants[$option] ?? $option;
+    }
+
+    /**
      * Normalize an HTTP header string into a key-value pair array.
      *
      * @param string $header The raw HTTP header string.
@@ -407,13 +535,17 @@ class Curl implements NetworkClientInterface
     {
         if (str_contains($header, ': ')) {
             [$key, $value] = explode(': ', $header, 2);
+
             $key = trim($key);
             Normalizer::assertHeader($key);
+
             $value = trim($value);
             Normalizer::assertValue($value);
 
             return [$key, [$value]];
-        }elseif(stripos($header, 'HTTP/') === 0){
+        }
+        
+        if(stripos($header, 'HTTP/') === 0){
             return ['X-Response-Protocol-Status-Phrase', [trim($header)]];
         }
 
@@ -497,10 +629,13 @@ class Curl implements NetworkClientInterface
         $line = [];
         foreach ($headers as $key => $value) {
             $key = (string) $key;
+            if(($key === 'X-Powered-By' && $value === false) || Network::SKIP_HEADER === $value){
+                continue;
+            }
             Normalizer::assertHeader($key);
             $value = Normalizer::normalizeHeaderValue($value);
 
-            $line[] = "{$key}: {$value}";
+            $line[] = "{$key}: {$value[0]}";
         }
 
         return $line;

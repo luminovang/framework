@@ -219,7 +219,7 @@ class Session implements LazyInterface
      * > **Note**
      * > The session ID returned from this method is not same as PHP `session_id`.
      */
-    public function ssid(): string|null
+    public function ssid(): ?string
     {
         return $this->manager->getItem('_session_online_id', null);
     }

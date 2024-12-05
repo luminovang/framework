@@ -141,12 +141,8 @@ class Header implements LazyInterface, Countable
      */
     public static function getHeaders(): array
     {
-        if(self::$variables !== []){
-            return self::$variables;
-        }
-
         if (function_exists('apache_request_headers') && ($headers = apache_request_headers()) !== false) {
-            return $headers;
+            return [...self::$variables, $headers];
         }
 
         $headers = [];
@@ -162,7 +158,7 @@ class Header implements LazyInterface, Countable
             }
         }
 
-        return $headers;
+        return [...self::$variables, $headers];
     }
 
     /**

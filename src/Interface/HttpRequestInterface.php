@@ -13,7 +13,7 @@ use \Luminova\Http\File;
 use \Luminova\Http\Server;
 use \Luminova\Http\Header;
 use \Luminova\Http\UserAgent;
-use \Luminova\Interface\LazyInterface;
+use \Luminova\Interface\CookieJarInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
 use \Generator;
@@ -139,7 +139,8 @@ interface HttpRequestInterface
      * @return Generator<int,\Luminova\Http\File,void,void>|\Luminova\Http\File|null Returns an uploaded `File` instance, 
      *         a generator yielding `File` instances for multiple files, or `null` if the input name was not found.
      * 
-     * @see https://luminova.ng/docs/3.0.2/http/file-object
+     * @link https://luminova.ng/docs/0.0.0/http/file-object
+     * @see https://luminova.ng/docs/0.0.0/files/uploader
      */
     public function getFile(string $name, ?int $index = null): Generator|File|null;
 
@@ -147,8 +148,19 @@ interface HttpRequestInterface
      * Get raw array of original uploaded file information without any modification.
      *
      * @return array<string,array> Return an array containing uploaded files information.
+     * @see https://luminova.ng/docs/0.0.0/files/uploader
      */
     public function getFiles(): array;
+
+    /**
+     * Retrieves the instance of cookie jar containing the cookies from the request headers.
+     * 
+     * @param string|null $name An optional cookie name to pre-initialize.
+     *
+     * @return CookieJarInterface Return the cookie jar instance populated with parsed cookies.
+     * @link https://luminova.ng/docs/0.0.0/cookies/cookie-file-jar
+     */
+    public function getCookie(?string $name = null): CookieJarInterface;
 
     /**
      * Get the current request method.
@@ -187,6 +199,7 @@ interface HttpRequestInterface
      * Get request header authorization header from (e.g, `HTTP_AUTHORIZATION`, `Authorization` or `REDIRECT_HTTP_AUTHORIZATION`).
      * 
      * @return string|null Return the authorization header value or null if no authorization header was sent.
+     * @see https://luminova.ng/docs/0.0.0/security/jwt
      */
     public function getAuth(): ?string;
     
@@ -307,6 +320,7 @@ interface HttpRequestInterface
      * @param string|null $useragent The User Agent string, if not provided, it defaults to (`HTTP_USER_AGENT`).
      * 
      * @return \Luminova\Http\UserAgent Return instance user-agent class containing browser information.
+     * @link https://luminova.ng/docs/0.0.0/http/user-agent
      */
     public function getUserAgent(?string $useragent = null): UserAgent;
 
@@ -405,6 +419,8 @@ interface HttpRequestInterface
      * - hostname - Validates a host name.
      * - origin - Validates an origin hostname.
      * - proxy Validates an IP address or proxy.
+     * 
+     * @see https://luminova.ng/docs/0.0.0/functions/ip
      */
     public static function isTrusted(string $input, string $context = 'hostname'): bool;
 

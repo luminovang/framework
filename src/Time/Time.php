@@ -151,18 +151,61 @@ class Time extends DateTimeImmutable implements Stringable
     }
 
     /**
-     * Set the TimeZone associated with the DateTime, and returns a new instance with the updated timezone.
+     * Return string datetime of this format 'yyyy-mm-dd H:i:s'.
+     * @param DateTimeZone|string|null $timezone Optional timezone string.
+     * 
+     * @return string Returns datetime string.
+     */
+    public static function datetime(DateTimeZone|string|null $timezone = 'UTC'): string
+    {
+        return self::now($timezone)->format(self::$defaultFormat);
+    }
+
+    /**
+     * Returns an instance set to midnight tomorrow morning.
      *
-     * @param DateTimeZone|string $timezone Timezone to set.
+     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
      *
      * @return self Return new DateTimeImmutable object.
      * @throws DateTimeException Throws if any error occurred.
      */
-    public function setTimezone(DateTimeZone|string $timezone): self
+    public static function tomorrow(DateTimeZone|string|null $timezone = null): self
     {
-        $timezone = self::timezone($timezone);
+        return new self(date('Y-m-d 00:00:00', strtotime('+1 day')), $timezone);
+    }
 
-        return self::fromInstance($this->toDatetime()->setTimezone($timezone));
+    /**
+     * Returns a new instance with the date time values individually set.
+     *
+     * @param int|null $year Year to pass.
+     * @param int|null $month Month to pass.
+     * @param int|null $day Day to pass.
+     * @param int|null $hour Hour to pass.
+     * @param int|null $minutes Minutes to pass.
+     * @param int|null $seconds Seconds to pass.
+     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
+     *
+     * @return self Return new DateTimeImmutable object.
+     * @throws DateTimeException Throws if any error occurred.
+     */
+    public static function createFrom(
+        ?int $year = null, 
+        ?int $month = null, 
+        ?int $day = null, 
+        ?int $hour = null, 
+        ?int $minutes = null, 
+        ?int $seconds = null, 
+        DateTimeZone|string|null $timezone = null
+    ): self 
+    {
+        $year ??= date('Y');
+        $month ??= date('m');
+        $day ??= date('d');
+        $hour ??= 0;
+        $minutes ??= 0;
+        $seconds ??= 0;
+
+        return new self(date(self::$defaultFormat, strtotime("{$year}-{$month}-{$day} {$hour}:{$minutes}:{$seconds}")), $timezone);
     }
 
     /**
@@ -276,14 +319,64 @@ class Time extends DateTimeImmutable implements Stringable
     }
 
     /**
-     * Return string datetime of this format 'yyyy-mm-dd H:i:s'.
-     * @param DateTimeZone|string|null $timezone Optional timezone string.
+     * Returns the name of the current timezone.
      * 
-     * @return string Returns datetime string.
+     * @return string The name of the current timezone.
      */
-    public static function datetime(DateTimeZone|string|null $timezone = 'UTC'): string
+    public function getTimezoneName(): string
     {
-        return self::now($timezone)->format(self::$defaultFormat);
+        return $this->timezone->getName();
+    }
+
+    /**
+     * Calculates the maximum age in seconds until a given timestamp.
+     *
+     * @param int $timestamp The target timestamp to calculate the maximum age against.
+     * 
+     * @return int Return the number of seconds from the current timestamp to the given timestamp.
+     */
+    public function getMaxAge(int $timestamp): int
+    {
+        return max(0, $timestamp - parent::getTimestamp());
+    }
+
+    /**
+     * Returns Datetime instance of UTC timezone.
+     *
+     * @param DateTimeInterface|Time|string $datetime Datetime object or string
+     *
+     * @return DateTime Return new datetime instance of UTC timezone.
+     * @throws DateTimeException Throws if any error occurred.
+     */
+    public function getInstanceUtc(DateTimeInterface|Time|string $datetime, ?string $timezone = null):  DateTime
+    {
+        if ($datetime instanceof Time) {
+            $datetime = $datetime->toDatetime();
+        } elseif (is_string($datetime)) {
+            $timezone ??= $this->timezone;
+            $datetime = new DateTime($datetime, self::timezone($timezone));
+        }
+
+        if ($datetime instanceof DateTime || $datetime instanceof DateTimeImmutable) {
+            $datetime = $datetime->setTimezone(new DateTimeZone('UTC'));
+        }
+
+        return $datetime;
+    }
+
+    /**
+     * Set the TimeZone associated with the DateTime, and returns a new instance with the updated timezone.
+     *
+     * @param DateTimeZone|string $timezone Timezone to set.
+     *
+     * @return self Return new DateTimeImmutable object.
+     * @throws DateTimeException Throws if any error occurred.
+     */
+    public function setTimezone(DateTimeZone|string $timezone): self
+    {
+        $timezone = self::timezone($timezone);
+
+        return self::fromInstance($this->toDatetime()->setTimezone($timezone));
     }
 
     /**
@@ -317,37 +410,39 @@ class Time extends DateTimeImmutable implements Stringable
     }
 
     /**
-     * Returns the name of the current timezone.
+     * Check if time string has a relative time keywords.
      * 
-     * @return string The name of the current timezone.
+     * @param string $datetime The datetime string to check.
+     * 
+     * @return bool True if the string contains relative time keywords otherwise, false.
      */
-    public function getTimezoneName(): string
+    public static function isRelative(string $datetime): bool
     {
-        return $this->timezone->getName();
+        return preg_match(self::$relativePattern, $datetime) === 1;
     }
 
     /**
-     * Returns Datetime instance of UTC timezone.
-     *
-     * @param DateTimeInterface|Time|string $datetime Datetime object or string
-     *
-     * @return DateTime Return new datetime instance of UTC timezone.
-     * @throws DateTimeException Throws if any error occurred.
+     * Check if time string has a human-readable relative time keywords from `ago` method.
+     * 
+     * @param string $datetime The datetime string to check.
+     * 
+     * @return bool True if the string contains relative time keywords otherwise, false.
      */
-    public function getInstanceUtc(DateTimeInterface|Time|string $datetime, ?string $timezone = null):  DateTime
+    public static function isAgo(string $datetime): bool
     {
-        if ($datetime instanceof Time) {
-            $datetime = $datetime->toDatetime();
-        } elseif (is_string($datetime)) {
-            $timezone ??= $this->timezone;
-            $datetime = new DateTime($datetime, self::timezone($timezone));
-        }
+        return preg_match(self::$agoRelativePattern, $datetime) === 1;
+    }
 
-        if ($datetime instanceof DateTime || $datetime instanceof DateTimeImmutable) {
-            $datetime = $datetime->setTimezone(new DateTimeZone('UTC'));
-        }
-
-        return $datetime;
+    /**
+     * Check if time string is a valid absolute time string.
+     * 
+     * @param string $datetime The datetime string to check.
+     * 
+     * @return bool True if the string contains absolute time time otherwise, false.
+     */
+    public static function isAbsolute(string $datetime): bool
+    {
+        return (bool) preg_match('/\d{4}-\d{1,2}-\d{1,2}/', $datetime);
     }
 
     /**
@@ -498,53 +593,6 @@ class Time extends DateTimeImmutable implements Stringable
         $datetime = $now->format('Y-m-d H:i:s.u');
 
         return $datetime;
-    }
-
-    /**
-     * Returns a new instance with the date time values individually set.
-     *
-     * @param int|null $year Year to pass.
-     * @param int|null $month Month to pass.
-     * @param int|null $day Day to pass.
-     * @param int|null $hour Hour to pass.
-     * @param int|null $minutes Minutes to pass.
-     * @param int|null $seconds Seconds to pass.
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
-     *
-     * @return self Return new DateTimeImmutable object.
-     * @throws DateTimeException Throws if any error occurred.
-     */
-    public static function createFrom(
-        ?int $year = null, 
-        ?int $month = null, 
-        ?int $day = null, 
-        ?int $hour = null, 
-        ?int $minutes = null, 
-        ?int $seconds = null, 
-        DateTimeZone|string|null $timezone = null
-    ): self 
-    {
-        $year ??= date('Y');
-        $month ??= date('m');
-        $day ??= date('d');
-        $hour ??= 0;
-        $minutes ??= 0;
-        $seconds ??= 0;
-
-        return new self(date(self::$defaultFormat, strtotime("{$year}-{$month}-{$day} {$hour}:{$minutes}:{$seconds}")), $timezone);
-    }
-
-    /**
-     * Returns an instance set to midnight tomorrow morning.
-     *
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
-     *
-     * @return self Return new DateTimeImmutable object.
-     * @throws DateTimeException Throws if any error occurred.
-     */
-    public static function tomorrow(DateTimeZone|string|null $timezone = null): self
-    {
-        return new self(date('Y-m-d 00:00:00', strtotime('+1 day')), $timezone);
     }
 
     /**
@@ -885,42 +933,6 @@ class Time extends DateTimeImmutable implements Stringable
         } 
 
         return $day . "th";
-    }
-
-    /**
-     * Check if time string has a relative time keywords.
-     * 
-     * @param string $datetime The datetime string to check.
-     * 
-     * @return bool True if the string contains relative time keywords otherwise, false.
-     */
-    public static function isRelative(string $datetime): bool
-    {
-        return preg_match(self::$relativePattern, $datetime) === 1;
-    }
-
-    /**
-     * Check if time string has a human-readable relative time keywords from `ago` method.
-     * 
-     * @param string $datetime The datetime string to check.
-     * 
-     * @return bool True if the string contains relative time keywords otherwise, false.
-     */
-    public static function isAgo(string $datetime): bool
-    {
-        return preg_match(self::$agoRelativePattern, $datetime) === 1;
-    }
-
-    /**
-     * Check if time string is a valid absolute time string.
-     * 
-     * @param string $datetime The datetime string to check.
-     * 
-     * @return bool True if the string contains absolute time time otherwise, false.
-     */
-    public static function isAbsolute(string $datetime): bool
-    {
-        return (bool) preg_match('/\d{4}-\d{1,2}-\d{1,2}/', $datetime);
     }
 
     /**

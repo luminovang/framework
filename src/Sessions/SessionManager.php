@@ -17,32 +17,32 @@ final class SessionManager implements SessionManagerInterface
 {
     /**
      * @var string $storage Session storage name 
-    */
+     */
     private string $storage = '';
 
     /**
      * @var BaseConfig $config
-    */
+     */
     private ?BaseConfig $config = null;
 
-     /**
+    /**
      * The session storage index name.
      * 
      * @var string $table
-    */
+     */
     private static string $table = 'default';
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function __construct(string $storage = 'global') 
     {
         $this->storage = $storage;
     }
 
-     /**
+    /**
      * {@inheritdoc}
-    */
+     */
     public function setConfig(BaseConfig $config): void
     {
         $this->config = $config;
@@ -50,7 +50,7 @@ final class SessionManager implements SessionManagerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setStorage(string $storage): self 
     {
         $this->storage = $storage;
@@ -60,7 +60,7 @@ final class SessionManager implements SessionManagerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setTable(string $table): self 
     {
         self::$table = $table;
@@ -69,7 +69,7 @@ final class SessionManager implements SessionManagerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getStorage(): string 
     {
         return $this->storage;
@@ -77,7 +77,7 @@ final class SessionManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getItem(string $index, mixed $default = null): mixed
     {
         $result = $this->getItems();
@@ -91,7 +91,7 @@ final class SessionManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function setItem(string $index, mixed $data, string $storage = ''): self
     {
         $storage = ($storage === '') ? $this->storage : $storage;
@@ -103,7 +103,7 @@ final class SessionManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function deleteItem(?string $index = null, string $storage = ''): self
     {
         $storage = ($storage === '') ? $this->storage : $storage;
@@ -121,7 +121,7 @@ final class SessionManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function destroyItem(): bool
     {
         if(isset($_SESSION[self::$table])) {
@@ -135,7 +135,7 @@ final class SessionManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function hasItem(string $key): bool
     {
         if(isset($_SESSION[self::$table][$this->storage])){
@@ -147,7 +147,7 @@ final class SessionManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function hasStorage(string $storage): bool
     {
         return isset($_SESSION[self::$table][$storage]);
@@ -155,7 +155,7 @@ final class SessionManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getResult(string $type = 'array'): array|object
     {
         $result = [];
@@ -179,7 +179,7 @@ final class SessionManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function toAs(string $type = 'array', ?string $index = null): object|array|null
     {
         $result = $this->getItems();
@@ -207,7 +207,7 @@ final class SessionManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getItems(string $storage = ''): array
     {
         $storage = ($storage === '') ? $this->storage : $storage;

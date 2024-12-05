@@ -14,11 +14,14 @@ use \Luminova\Http\Header;
 use \Luminova\Http\Server;
 use \Luminova\Http\File;
 use \Luminova\Http\UserAgent;
+use \Luminova\Cookies\CookieFileJar;
 use \Luminova\Functions\IP;
 use \Luminova\Functions\Func;
 use \Luminova\Utils\LazyObject;
 use \App\Config\Security;
 use \App\Config\Files;
+use \App\Config\Session;
+use \Luminova\Interface\CookieJarInterface;
 use \Luminova\Interface\HttpRequestInterface;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
@@ -77,6 +80,13 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     private static ?Security $config = null;
 
     /**
+     * Request cookie jar object.
+     * 
+     * @var CookieJarInterface|null $cookie
+     */
+    private ?CookieJarInterface $cookie = null;
+
+    /**
      * Initializes a new Request object, representing an HTTP request.
      * 
      * @param string|null $method The HTTP method used for the request (e.g., 'GET', 'POST').
@@ -89,6 +99,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      *                                         If not provided, defaults to global `$_SERVER`.
      * @param array<string,mixed>|null $headers Optional. An associative array of HTTP headers. 
      *                                          If not provided, headers request headers will be extracted from `apache_request_headers` or `$_SERVER`.
+     * @link https://luminova.ng/docs/0.0.0/http/request
      */
     public function __construct(
         private ?string $method = null,
@@ -270,6 +281,21 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         }
         
         return $default;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getCookie(?string $name = null): CookieJarInterface
+    {
+        if($this->cookie instanceof CookieJarInterface){
+            return $this->cookie;
+        }
+
+        $this->cookie = $this->parseRequestCookies();
+        return $name 
+            ? $this->cookie->getCookie($name) 
+            : $this->cookie;
     }
 
     /**
@@ -831,6 +857,47 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     }
 
     /**
+     * Parses and sets up request cookies.
+     * 
+     * @return CookieJarInterface
+     */
+    protected function parseRequestCookies(): CookieJarInterface
+    {
+        $cookie = new CookieFileJar([], ['readOnly' => true]);
+        $cookies =  $this->header->get('Cookie') ?? $this->server->get('HTTP_COOKIE');
+
+        if(!$cookies){
+            return $cookie;
+        }
+
+        $cookie->setCookies($cookie->getFromHeader(
+            explode('; ', $cookies),
+            false,
+            [
+                ...CookieFileJar::DEFAULT_OPTIONS,
+                'domain' => '.' . $this->getHost()
+            ]
+        ));
+
+        $config = new Session();
+
+        if($cookie->has($config->cookieName)){
+            $cookie->getCookie($config->cookieName)
+                ->setOptions([
+                    'domain'    =>  $config->sessionDomain,
+                    'path'      =>  $config->sessionPath,
+                    'secure'    =>  true,
+                    'httponly'  =>  true,
+                    'expires'   =>  $config->expiration,
+                    'samesite'  =>  $config->sameSite,
+                    'raw'       =>  false
+                ]);
+        }
+
+        return $cookie;
+    }
+
+    /**
      * Parse the request body based on the request method.
      * 
      * @return void
@@ -920,14 +987,10 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     private function createFileGenerator(array $files, bool $flat = false): Generator
     {
-        if($flat){
-            foreach ($files as $index => $file) {
-                yield $index => $this->createFileInstance($file, null, $index);
-            }
-        }else{
-            foreach (array_keys($files['name']) as $index) {
-                yield $index => $this->createFileInstance($files, $index);
-            }
+        foreach ($flat ? $files : array_keys($files['name']) as $index => $file) {
+            yield $index => $flat
+                ? $this->createFileInstance($file, null, $index)
+                : $this->createFileInstance($files, $index);
         }
     }
 

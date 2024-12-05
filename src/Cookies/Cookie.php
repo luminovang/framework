@@ -9,9 +9,9 @@
  */
 namespace Luminova\Cookies;
 
+use \Luminova\Cookies\CookieTrait;
 use \App\Config\Cookie as CookieConfig;
 use \Luminova\Time\Time;
-use \Luminova\Time\Timestamp;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Interface\CookieInterface;
 use \Luminova\Exceptions\CookieException;
@@ -19,34 +19,6 @@ use \Stringable;
 
 class Cookie implements CookieInterface, LazyInterface, Stringable
 {
-   /**
-     * Cookies will be sent in all contexts, i.e., in responses to both
-     * third-party and cross-origin requests. If `SameSite=None` is set,
-     * the cookie `Secure` attribute must also be set (or the cookie will be blocked).
-     */
-    public const NONE = 'none';
-
-    /**
-     * Cookies are not sent on normal cross-site sub-requests (for example to
-     * load images or frames into a third-party site), but are sent when a
-     * user is navigating to the origin site (i.e., when following a link).
-     */
-    public const LAX = 'lax';
-
-    /**
-     * Cookies will only be sent in a third-party context and not be sent
-     * along with requests initiated by third-party websites.
-     */
-    public const STRICT = 'strict';
-
-    /**
-     * Expires date string format.
-     *
-     * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Date
-     * @see https://tools.ietf.org/html/rfc7231#section-7.1.1.2
-     */
-    public const EXPIRES_FORMAT = 'D, d-M-Y H:i:s T';
-
     /**
      * @var string $prefix Cookie prefix
      */
@@ -103,29 +75,6 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
     protected array $options = [];
 
     /**
-     * @var array $default Cookie default options.
-     */
-    protected array $default = [
-        'prefix' => '',
-        'expires'  => 0,
-        'path'     => '/',
-        'domain'   => '',
-        'secure'   => false,
-        'httponly' => true,
-        'samesite' => 'Lax',
-        'raw'      => false,
-    ];
-
-    /**
-     * A cookie name can be any US-ASCII characters, except control characters,
-     * spaces, tabs, or separator characters.
-     *
-     * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#attributes
-     * @see https://tools.ietf.org/html/rfc2616#section-2.2
-     */
-    private string $reservedCharsList = "=,; \t\r\n\v\f()<>@:\\\"/[]?{}";
-
-    /**
      * Cookie configuration.
      * 
      * @var ?CookieConfig $config
@@ -133,22 +82,25 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
     private static ?CookieConfig $config = null;
 
     /**
-     * Cookie constructor.
-     * 
-     * @param string $name Cookie name 
-     * @param mixed $value cookie value
-     * @param array $options Cookie options
-     * 
-     * @throws CookieException
+     * Cookie helper trait class.
      */
-    final public function __construct(string $name, mixed $value = '', array $options = []) 
+    use CookieTrait;
+
+    /**
+     * Initialize and create new cookie object.
+     * 
+     * @param string $name The cookie name to initialize with.
+     * @param mixed $value Optional cookie value.
+     * @param CookieConfig|array $options An optional array of cookie options or instance of cookie config class.
+     * 
+     * @throws CookieException Throws if error occurs or invalid cookie attributes.
+     */
+    final public function __construct(string $name, mixed $value = '', CookieConfig|array $options = []) 
     {
-        if( $options === []){
-            self::$config ??= new CookieConfig();
-            $this->setOptions(self::$config);
-        }else{
-            $this->setOptions($options);
-        }
+        $this->setOptions(($options === []) 
+            ? self::$config ??= new CookieConfig() 
+            : $options
+        );
 
         $this->name = $name;
         $this->value = $value;
@@ -170,26 +122,24 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
         }
     }
 
-    /**
+    /** 
+     * {@inheritdoc}
+     */
+    public function __get(string $property): mixed 
+    {
+        if(property_exists($this, $property)){
+            return $this->{$property};
+        }
+
+        throw new CookieException(sprintf('Invalid property "%s", does not exist.', $property));
+    }
+
+    /** 
      * {@inheritdoc}
      */
     public function setOptions(CookieConfig|array $options): self
     {
-        if ($options instanceof CookieConfig) {
-            $options = [
-                'expires'  => $options->expiration,
-                'path'     => $options->cookiePath,
-                'domain'   => $options->cookieDomain,
-                'secure'   => $options->secure,
-                'httponly' => $options->httpOnly,
-                'samesite' => $options->sameSite,
-                'raw'      => $options->cookieRaw,
-            ];
-        }
-
-        $options['expires'] = Timestamp::ttlTimestamp($options['expires']);
-        $this->options = array_merge($this->default, $options);
-
+        $this->options = self::parseOptions($options);
         return $this;
     }
 
@@ -206,10 +156,10 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
      */
     public function setValue(mixed $value): self
     {
-        $finalValue = $this->parseString($value);
+        $finalValue = $this->toValue($value);
 
         if($finalValue === false){
-            throw CookieException::throwWith('invalid_value', $value);
+            throw CookieException::throwWith('invalid_value', __FUNCTION__ . '->($value)" ');
         }
         
         $this->saveGlobal(null, $value);
@@ -225,46 +175,40 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
     {
         $value = $this->getContents();
 
-        if($key === null || $key === ''){
-            return $value ?? null;
+        if(!$key || !is_array($value)){
+            return $value;
         }
 
-        if($key && is_array($value)){
-            return $value[$key] ?? null;
-        }
-
-        return $value ?? null;
+        return $value[$key] ?? null;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function delete(?string $key = null): self
+    public function delete(?string $key = null): bool
     {
         $name = $this->getName();
 
         if (!isset($_COOKIE[$name])) {
-            return $this; 
+            return false; 
         }
 
-        $expired = time() - $this->options['expires'];
+        $expired = time() - ($this->options['expires'] ?? PHP_INT_MAX);
     
         if ($key === null || $key === '') {
             $this->saveGlobal();
-            $this->saveContent('', $expired);
-
-            return $this;
+            return $this->saveContent('', $expired);
         }
     
         $value = $this->getContents();
 
         if (!is_array($value) || !isset($value[$key])) {
-            return $this;
+            return false;
         }
     
         unset($value[$key]);
 
-        $finalValue = $this->parseString($value);
+        $finalValue = $this->toValue($value);
         $expiry = null;
 
         if($finalValue === false){
@@ -273,9 +217,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
         }
     
         $this->saveGlobal(null, $value);
-        $this->saveContent($finalValue, $expiry);
-
-        return $this;
+        return $this->saveContent($finalValue, $expiry);
     }
     
     /** 
@@ -285,7 +227,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
     {
         $name = $this->getName();
 
-        if (($key === null || $key === '') && isset($_COOKIE[$name])) {
+        if (!$key && isset($_COOKIE[$name])) {
             return true;
         }
 
@@ -343,19 +285,17 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
      */
     public function getExpiry(bool $return_string = false): int|string
     {
-        if($return_string){
-            return gmdate(self::EXPIRES_FORMAT, $this->expires);
-        }
-
-        return $this->expires;
+        return $return_string 
+            ? gmdate(self::EXPIRES_FORMAT, $this->expires) 
+            : $this->expires;
     }
 
     /** 
      * {@inheritdoc}
      */
-    public function hasExpired(): bool
+    public function isExpired(): bool
     {
-        return $this->expires === 0 || $this->expires < Time::now()->getTimestamp();
+        return ($this->expires > 0 && $this->expires < Time::now()->getTimestamp());
     }
 
     /**
@@ -363,9 +303,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
      */
     public function getMaxAge(): int
     {
-        $maxAge = ($this->expires - Time::now()->getTimestamp());
-
-        return max($maxAge, 0);
+        return Time::now()->getMaxAge($this->expires);
     }
 
     /** 
@@ -411,15 +349,34 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function getString(): string
+    public function __toString(): string
     {
-        return $this->__toString();
+        return $this->toString();
     }
 
     /**
      * {@inheritdoc}
      */
-    public function __toString(): string
+    public function toString(): string
+    {
+        return self::parseToString(
+            $this->getValue(), 
+            $this->getPrefixedName(),
+            [
+                'expires' => $this->getExpiry(),
+                'path' => $this->getPath(),
+                'domain' => $this->getDomain(),
+                'secure' => $this->isSecure(),
+                'httponly' => $this->isHttpOnly(),
+                'samesite' => $this->getSameSite()
+            ]
+        );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getString(): string
     {
         return $this->toString();
     }
@@ -441,12 +398,11 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
 
         if ($this->isRaw()) {
             $name .= $this->getName();
-        } else {
-            $search  = str_split($this->reservedCharsList);
-            $replace = array_map('rawurlencode', $search);
+            return $name;
+        } 
 
-            $name .= str_replace($search, $replace, $this->getName());
-        }
+        $search = str_split(self::RESERVED_CHAR_LIST);
+        $name .= str_replace($search, array_map('rawurlencode', $search), $this->getName());
 
         return $name;
     }
@@ -454,99 +410,54 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function newFromString(string $cookie, bool $raw = false): CookieInterface
+    public static function newFromString(
+        string $cookie, 
+        bool $raw = false, 
+        CookieConfig|array $options = []
+    ): CookieInterface
     {
-        $options = ($this->options === []) ? $this->default : $this->options;
-        $options['raw'] = $raw;
-
-        $parts = preg_split('/\;[\s]*/', $cookie);
-        $part  = explode('=', array_shift($parts), 2);
-
-        $name  = $raw ? $part[0] : urldecode($part[0]);
-        $value = isset($part[1]) ? ($raw ? $part[1] : urldecode($part[1])) : '';
-        unset($part);
-
-        foreach ($parts as $part) {
-            if (str_contains($part, '=')) {
-                [$attr, $val] = explode('=', $part);
-            } else {
-                $attr = $part;
-                $val  = true;
-            }
-
-            $options[strtolower($attr)] = $val;
-        }
-        
-        return new self($name, $value, $options);
+        return new self(...self::parseFromString(
+            $cookie, 
+            $raw, 
+            self::parseOptions($options)
+        ));
     }
 
-    /** 
-     * {@inheritdoc}
-     */
-    public function hasPrefix(?string $name = null): bool
-    {
-        $name ??= $this->name;
-
-        if (str_starts_with($name, '__Secure-')) {
-            return true;
-        }
-
-        return str_starts_with($name, '__Host-');
-    }
-  
     /**
      * {@inheritdoc}
      */
-    public function toString(): string
+    public static function newFromArray(
+        array|object $cookies, 
+        CookieConfig|array $options = []
+    ): CookieInterface
     {
-        $headers = [];
-        $value = $this->getValue();
+        $options = self::parseOptions($options);
+        $name  = null;
+        $value = null;
+        $raw = false;
 
+        foreach ($cookies as $key => $val) {
+            $line = strtolower($key);
+            $raw = ($line === 'raw' && $val);
 
-        if ($value === '') {
-            $headers[] = $this->getPrefixedName() . '=deleted';
-            $headers[] = 'Expires=' . gmdate(self::EXPIRES_FORMAT, 0);
-            $headers[] = 'Max-Age=0';
-        } else {
-            if(is_array($value)){
-                $value = json_encode($value);
+            if($line === 'name'){
+                $name = $val;
+                continue;
             }
 
-            $value = $this->isRaw() ? $value : rawurlencode($value);
-
-            $headers[] = sprintf('%s=%s', $this->getPrefixedName(), $value);
-
-            if ($this->getExpiry() !== 0) {
-                $headers[] = 'Expires=' . $this->getExpiry(true);
-                $headers[] = 'Max-Age=' . $this->getMaxAge();
+            if($line === 'value'){
+                $value = $val;
+                continue;
             }
+
+            $options[$line] = $val;
         }
-
-        if ($this->getPath() !== '') {
-            $headers[] = 'Path=' . $this->getPath();
-        }
-
-        if ($this->getDomain() !== '') {
-            $headers[] = 'Domain=' . $this->getDomain();
-        }
-
-        if ($this->isSecure()) {
-            $headers[] = 'Secure';
-        }
-
-        if ($this->isHttpOnly()) {
-            $headers[] = 'HttpOnly';
-        }
-
-        $samesite = $this->getSameSite();
-
-        if ($samesite === '') {
-            $samesite = self::LAX;
-        }
-
-        $headers[] = 'SameSite=' . ucfirst(strtolower($samesite));
-
-        return implode('; ', $headers);
+        
+        return new self(
+            $raw ? urldecode($name) : $name, 
+            $value, 
+            $options
+        );
     }
 
     /**
@@ -554,12 +465,13 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
      */
     public function toArray(): array
     {
-        return array_merge($this->options, [
+        return [
+            ...$this->options,
             'name'   => $this->name,
             'value'  => $this->value,
             'prefix' => $this->prefix,
             'raw'    => $this->raw,
-        ]);
+        ];
     }
 
     /**
@@ -575,7 +487,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
             throw CookieException::throwWith('empty_name');
         }
 
-        if ($this->raw && strpbrk($this->name, $this->reservedCharsList) !== false) {
+        if ($this->raw && strpbrk($this->name, self::RESERVED_CHAR_LIST) !== false) {
             throw CookieException::throwWith('invalid_name', $this->name);
         }
     }
@@ -608,7 +520,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
         $sameSite = $this->sameSite;
 
         if ($sameSite === '') {
-            $sameSite = $this->default['samesite'];
+            $sameSite = self::DEFAULT_OPTIONS['samesite'];
         }
 
         $sameSite = strtolower($sameSite);
@@ -622,30 +534,10 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
         }
     }
 
-    /** 
-     * Convert value to string
-     * 
-     * @param array|object|int $value 
-     * 
-     * @return string|bool
-     */
-    private function parseString(mixed $value): string|bool
-    {
-        if (!is_string($value) && !is_int($value)) {
-            $value = json_encode($value);
-
-            if ($value === false) {
-                return false;
-            }
-        }
-
-        return (string) $value;
-    }
-
     /**
-     * Pass options to variable 
+     * Pass options to variable.
      * 
-     * @param string $key option key
+     * @param string $key option key.
      * 
      * @return mixed $option
      */
@@ -655,10 +547,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
             return $this->options[$key];
         }
 
-        $option = $this->default[$key];
-        $this->options[$key] = $option;
-
-        return $option;
+        return $this->options[$key] = self::DEFAULT_OPTIONS[$key];
     }
     
     /** 
@@ -676,7 +565,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
                 return $_COOKIE[$name];
             }
 
-            if (json_validate($_COOKIE[$name])) {
+            if (is_string($_COOKIE[$name]) && json_validate($_COOKIE[$name])) {
                return json_decode($_COOKIE[$name], true) ?? [];
             }
 
@@ -695,7 +584,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
      * 
      * @return void
      */
-    private function saveContent(string $value = '', ?int $expiry = null, array $options = []): void
+    private function saveContent(string $value = '', ?int $expiry = null, array $options = []): bool
     {
         $name = $this->getName();
 
@@ -707,12 +596,9 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
         $isRaw = $options['raw'];
         unset($options['raw'], $options['prefix']);
 
-        if($isRaw){
-            setrawcookie($name, $value, $options);
-            return;
-        }
-
-        setcookie($name, $value, $options);
+        return $isRaw 
+            ? setrawcookie($name, $value, $options) 
+            : setcookie($name, $value, $options);
     }
 
     /**
@@ -728,21 +614,5 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
         $name ??= $this->name;
         $_COOKIE[$name] = $value;
         $this->value = $value;
-    }
-
-    /**
-     * Get cookie protected properties.
-     * 
-     * @param string $property property to retrieve.
-     * @throws CookieException Throws if property does not exist.
-     * @internal
-     */
-    public function __get(string $property): mixed 
-    {
-        if(property_exists($this, $property)){
-            return $this->{$property};
-        }
-
-        throw new CookieException(sprintf('Invalid property "%s", does not exist.', $property));
     }
 }

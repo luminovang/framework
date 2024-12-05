@@ -30,6 +30,13 @@ use \Exception;
 class Network implements NetworkInterface, LazyInterface
 {
     /**
+     * Custom flag to skip header in request.
+     * 
+     * @var int SKIP_HEADER
+     */
+    public const SKIP_HEADER = 5319;
+
+    /**
      * The network client interface to use.
      * This must be luminova NetworkClientInterface only.
      * 

@@ -46,7 +46,7 @@ class JWTAuth implements LazyInterface
      * @param string|null $aud The audience claim for the JWT, typically the API endpoint (default: APP_URL . '/api').
      * 
      * @throws EncryptionException If the provided $path is not readable or writable.
-     * @see https://luminova.ng/docs/0.0.0/security/jwt
+     * @link https://luminova.ng/docs/0.0.0/security/jwt
      */
     public function __construct(
         protected ?string $algo = null,
@@ -79,7 +79,7 @@ class JWTAuth implements LazyInterface
      *
      * @return self Returns the singleton instance of the JWTAuth class.
      * @throws EncryptionException If the provided $path is not readable or writable.
-     * @see https://luminova.ng/docs/0.0.0/security/jwt
+     * @link https://luminova.ng/docs/0.0.0/security/jwt
      */
     public static function getInstance(
         ?string $algo = null,

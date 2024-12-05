@@ -12,6 +12,7 @@ namespace Luminova\Http\Message;
 
 use \Luminova\Storages\Stream;
 use \Luminova\Http\HttpCode;
+use \Luminova\Interface\CookieJarInterface;
 use \Luminova\Functions\Normalizer;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\RuntimeException;
@@ -29,6 +30,7 @@ class Response implements Stringable
      * @param string $reasonPhrase The reason phrase associated with the status code (default: 'OK').
      * @param string $protocolVersion The HTTP protocol version (default: '1.1').
      * @param Stream|null $stream Optionally passed s stream object.
+     * @param CookieJarInterface|null $cookie Optionally HTTP cookie jar object.
      */
     public function __construct(
         private int $statusCode = 200, 
@@ -37,7 +39,8 @@ class Response implements Stringable
         private array $info = [],
         private string $reasonPhrase = 'OK',
         private string $protocolVersion = '1.1',
-        private ?Stream $stream = null
+        private ?Stream $stream = null,
+        public ?CookieJarInterface $cookie = null
     ) {}
 
     /**

@@ -17,24 +17,24 @@ final class CookieManager implements SessionManagerInterface
 { 
     /**
      * @var string $storage Session storage name 
-    */
+     */
     private string $storage = '';
 
     /**
      * @var BaseConfig $config
-    */
+     */
     private ?BaseConfig $config = null;
 
     /**
      * The session storage index name.
      * 
      * @var string $table
-    */
+     */
     private static string $table = 'default';
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function __construct(string $storage = 'global') 
     {
         $this->storage = $storage;
@@ -42,7 +42,7 @@ final class CookieManager implements SessionManagerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setConfig(BaseConfig $config): void
     {
         $this->config = $config;
@@ -50,7 +50,7 @@ final class CookieManager implements SessionManagerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setStorage(string $storage): self 
     {
         $this->storage = $storage;
@@ -59,7 +59,7 @@ final class CookieManager implements SessionManagerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setTable(string $table): self 
     {
         self::$table = $table;
@@ -68,7 +68,7 @@ final class CookieManager implements SessionManagerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getStorage(): string 
     {
         return $this->storage;
@@ -76,7 +76,7 @@ final class CookieManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function setItem(string $index, mixed $value, string $storage = ''): self
     {
         $storage = $this->getKey($storage);
@@ -90,7 +90,7 @@ final class CookieManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getItem(string $index, mixed $default = null): mixed
     {
         $result = $this->getItems();
@@ -109,7 +109,7 @@ final class CookieManager implements SessionManagerInterface
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function deleteItem(?string $index = null, string $storage = ''): self
     {
         $storage = $this->getKey($storage);
@@ -134,7 +134,7 @@ final class CookieManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function destroyItem(): bool
     {
         if(isset($_COOKIE[self::$table])) {
@@ -149,7 +149,7 @@ final class CookieManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function hasItem(string $key): bool
     {
         $result = $this->getItems();
@@ -161,9 +161,9 @@ final class CookieManager implements SessionManagerInterface
         return isset($result[$key]);
     }
 
-     /** 
+    /** 
      * {@inheritdoc}
-    */
+     */
     public function hasStorage(string $storage): bool
     {
         return isset($_COOKIE[self::$table][$storage]);
@@ -171,7 +171,7 @@ final class CookieManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getResult(string $type = 'array'): array|object
     {
         if($type === 'array'){
@@ -187,7 +187,7 @@ final class CookieManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function toAs(string $type = 'array', ?string $index = null): object|array|null
     {
         $result = $this->getItems();
@@ -215,7 +215,7 @@ final class CookieManager implements SessionManagerInterface
 
     /** 
      * {@inheritdoc}
-    */
+     */
     public function getItems(string $storage = ''): array
     {
         $storage = $this->getKey($storage);
@@ -248,7 +248,7 @@ final class CookieManager implements SessionManagerInterface
      * @param string $storage Optional storage name.
      * 
      * @return string Storage name.
-    */
+     */
     private function getKey(string $storage = ''): string 
     {
         return ($storage === '') ? $this->storage : $storage;
@@ -257,10 +257,10 @@ final class CookieManager implements SessionManagerInterface
     /**
      * Update data to cookie storage.
      *
-     * @param array $data contents
+     * @param array $data contents.
      * 
      * @return void 
-    */
+     */
     private function updateItems(array $data, string $storage = ''): void
     {
         $storage = $this->getKey($storage);
@@ -273,11 +273,11 @@ final class CookieManager implements SessionManagerInterface
     /**
      * Save delete data from cookie storage.
      *
-     * @param array $value contents
-     * @param ?int $expiry cookie expiration time
+     * @param string $value contents.
+     * @param ?int $expiry cookie expiration time.
      * 
      * @return void
-    */
+     */
     private function saveContent(string $value, ?int $expiry = null): void
     {
         $expiry ??= time() + $this->config->expiration;

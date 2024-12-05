@@ -34,8 +34,14 @@ class Guzzle implements NetworkClientInterface
      */
     public function __construct(private array $config = [])
     {
-        $this->config['headers']['X-Powered-By'] = $this->config['headers']['X-Powered-By'] ?? Foundation::copyright();
-        $this->config['headers']['User-Agent'] = $this->config['headers']['User-Agent'] ?? Foundation::copyright(true);
+        if(($this->config['headers']['X-Powered-By'] ?? true) !== false){
+            $this->config['headers']['X-Powered-By'] = $this->config['headers']['X-Powered-By'] ?? Foundation::copyright();
+        }
+        
+        if(($this->config['headers']['User-Agent'] ?? true) !== false){
+            $this->config['headers']['User-Agent'] = $this->config['headers']['User-Agent'] ?? Foundation::copyright(true);
+        }
+
         $this->client = new GuzzleClient($this->config);
     }
 
@@ -52,7 +58,9 @@ class Guzzle implements NetworkClientInterface
      */
     public function getConfig(?string $option = null): mixed
     {
-        return $this->client->getConfig($option);
+        return method_exists($this->client, 'getConfig') 
+            ? $this->client->getConfig($option)
+            : $this->config;
     }
 
     /**
@@ -67,8 +75,6 @@ class Guzzle implements NetworkClientInterface
         if ($method === 'POST') {
             $options['form_params'] = $options['form_params'] ?? [];
         }
-
-        //$options = array_extend_default($this->config, $options);
 
         try {
             return $this->client->request($method, $url, $options);
