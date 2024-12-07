@@ -9,6 +9,4 @@
  */
 namespace Luminova\Interface;
 
-interface ErrorHandlerInterface
-{
-}
+interface ErrorHandlerInterface {}

@@ -121,7 +121,7 @@ class Twig
 
      /**
      * Initialize Twig template directories
-     *Twig
+     *
      * @param string $viewPath smarty template directory
      * 
      * @return self $this Luminova Twig class instance

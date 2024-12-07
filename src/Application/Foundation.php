@@ -19,7 +19,7 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.3.9';
+    public const VERSION = '3.4.0';
 
     /**
      * Framework version name.
@@ -85,7 +85,12 @@ final class Foundation
     public static final function copyright(bool $userAgent = false): string
     {
         if($userAgent){
-            return 'LuminovaFramework/' . self::VERSION . ' (PHP; ' . PHP_VERSION . '; ' . PHP_OS_FAMILY . ')  - https://luminova.ng';
+            return sprintf(
+                'LuminovaFramework/%s (PHP; %s; %s) - https://luminova.ng',
+                self::VERSION, 
+                PHP_VERSION,
+                PHP_OS_FAMILY
+            );
         }
 
         return 'PHP Luminova (' . self::VERSION . ')';

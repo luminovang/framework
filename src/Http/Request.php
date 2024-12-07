@@ -285,6 +285,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
 
     /**
      * {@inheritdoc}
+     * @since 3.4.0
      */
     public function getCookie(?string $name = null): CookieJarInterface
     {

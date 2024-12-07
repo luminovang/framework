@@ -16,6 +16,9 @@ use \Luminova\Interface\LazyInterface;
 use \Luminova\Security\Validation;
 use \Luminova\Utils\LazyObject;
 
+/**
+ * @deprecated since version 3.4.0 Use Luminova\Base\BaseController instead.
+ */
 abstract class BaseViewController
 {
     /**
@@ -42,9 +45,16 @@ abstract class BaseViewController
     /**
      * Initialize the BaseViewController instance 
      * and pre-initialize class `$this->app` to make it accessible instantly within controller class.
+     * 
+     * @deprecated since version 3.4.0 Use Luminova\Base\BaseController instead.
      */
     public function __construct()
     {
+        trigger_error(
+            'Luminova\Base\BaseViewController is deprecated since version 3.4.0. Use Luminova\Base\BaseController instead.',
+            E_USER_DEPRECATED
+        );
+
         $this->app = LazyObject::newObject(fn() => Application::getInstance());
         $this->validate = LazyObject::newObject(Validation::class);
         $this->request = LazyObject::newObject(Request::class);

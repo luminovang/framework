@@ -224,7 +224,7 @@ class Smarty
     }
 
     /**
-     * Determin if template was checked.
+     * Determine if template was checked.
      * 
      * @param string $view Template view name.
      * 

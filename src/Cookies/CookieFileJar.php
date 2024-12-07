@@ -439,7 +439,7 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
             return $this->cookies;
         }
 
-        if (file_exists($this->filePath)) {
+        if ($this->filePath && file_exists($this->filePath)) {
             try{
                 return $this->isNetscapeCookie() 
                     ? $this->fromNetscapeCookies()
@@ -828,6 +828,10 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
      */
     protected function fromNetscapeCookies(): array
     {
+        if(!$this->filePath){
+            return [];
+        }
+        
         $cookies = [];
         $lines = file($this->filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 
@@ -877,6 +881,10 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
      */
     protected function save(): bool
     {
+        if(!$this->filePath){
+            return false;
+        }
+
         $this->size = null;
         if($this->isReadOnly()){
             return true;

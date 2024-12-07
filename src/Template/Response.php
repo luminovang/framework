@@ -21,7 +21,6 @@ use \WeakMap;
 use \Exception;
 
 class Response implements ViewResponseInterface
-
 {
     /**
      * Indicates if the response content should be minified.

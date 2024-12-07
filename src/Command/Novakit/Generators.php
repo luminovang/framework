@@ -108,10 +108,7 @@ class Generators extends BaseConsole
             ? 'namespace App\Modules\\' . ($module ==='' ? '' : uppercase_words($module) . '\\') . 'Controllers' 
             : 'namespace App\Controllers';
 
-        if($type === 'view'){
-            $use = 'use \Luminova\Base\BaseViewController;';
-            $extend = 'BaseViewController';
-        }elseif($type === 'command'){
+       if($type === 'command'){
             $use = 'use \Luminova\Base\BaseCommand;';
             $extend = 'BaseCommand';
         }else{
@@ -184,7 +181,7 @@ class Generators extends BaseConsole
 
             PHP;
         }else{
-            $this->writeln("Invalid controller --type flag: {$type}, use 'api, view or command'", 'red');
+            $this->writeln("Invalid controller --type flag: {$type}, use 'view or command'", 'red');
             return;
         }
 
