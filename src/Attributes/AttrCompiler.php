@@ -125,11 +125,7 @@ final class AttrCompiler
             }
 
             try{
-                $module = $this->hmvc ? basename(dirname($file->getPathname(), 2)) : '';
-                $namespace = $this->hmvc 
-                    ? '\\App\Modules\\' . ($module === 'Controllers' ? '' : uppercase_words($module) . '\\') . 'Controllers\\Http\\'
-                    : '\\App\\Controllers\\Http\\';
-
+                [$namespace] = $this->getNamespace($file);
                 self::$weak[$file] = new ReflectionClass("{$namespace}{$fileName}");
             }catch(ReflectionException $e){
                 throw new RouterException($e->getMessage(), $e->getCode(), $e);
@@ -235,11 +231,7 @@ final class AttrCompiler
             }
         
             try{
-                $module = $this->hmvc ? basename(dirname($file->getPathname(), 2)) : '';
-                $namespace = $this->hmvc 
-                    ? '\\App\Modules\\' . ($module === 'Controllers' ? '' : uppercase_words($module) . '\\') . 'Controllers\\Cli\\'
-                    : '\\App\\Controllers\\Cli\\';
-
+                [$namespace] = $this->getNamespace($file, 'Cli');
                 self::$weak[$file] = new ReflectionClass("{$namespace}{$fileName}");
             }catch(ReflectionException $e){
                 throw new RouterException($e->getMessage(), $e->getCode(), $e);
@@ -303,11 +295,7 @@ final class AttrCompiler
                 continue;
             }
 
-            $module = basename(dirname($file->getPathname(), 2));
-            $namespace = $this->hmvc 
-                ? '\\App\\Modules\\' . ($module === 'Controllers' ? '' : uppercase_words($module) . '\\') . 'Controllers\\'
-                : '\\App\\Controllers\\';
-
+            [$namespace, $module] = $this->getNamespace($file, null);
             try {
                 self::$weak[$file] = new ReflectionClass("{$namespace}Http\\{$fileName}");
             } catch (ReflectionException $e) {
@@ -391,7 +379,7 @@ final class AttrCompiler
                 new RecursiveCallbackFilterIterator(
                     new RecursiveDirectoryIterator(
                         root($path), 
-                        FilesystemIterator::SKIP_DOTS | FilesystemIterator::FOLLOW_SYMLINKS
+                        FilesystemIterator::SKIP_DOTS|FilesystemIterator::FOLLOW_SYMLINKS
                     ),
                     fn(SplFileInfo $entry) => $this->isValidEntry($entry, $name)
                 )
@@ -429,6 +417,44 @@ final class AttrCompiler
         }
 
         return true;
+    }
+
+    /**
+     * Determines the namespace for a given file based on the application structure.
+     *
+     * This function generates the appropriate namespace for a controller file,
+     * taking into account whether the application uses HMVC (Hierarchical Model-View-Controller)
+     * or standard MVC architecture.
+     *
+     * @param SplFileInfo $file The file object representing the controller file.
+     * @param string|null $suffix The suffix to append to the namespace, typically 'Http' or 'Cli'. Defaults to 'Http'.
+     *
+     * @return array An array containing two elements:
+     *               - The full namespace string for the controller.
+     *               - The module name (for HMVC) or the parent directory name (for MVC).
+     *
+     * @throws RouterException If an invalid HMVC module namespace is detected.
+     */
+    private function getNamespace($file, string|null $suffix = 'Http'): array 
+    {
+        $suffix = ($suffix === null) ? '' : $suffix . '\\';
+        if (!$this->hmvc) {
+            return [
+                "\\App\\Controllers\\{$suffix}", 
+                basename(dirname($file->getPathname(), 2))
+            ];
+        }
+        $matches = [];
+
+        if(preg_match('~/app/Modules/([^/]+)/~', $file->getPathname(), $matches)){
+            $module = $matches[1] ?? 'Controllers';
+            return [
+                '\\App\Modules\\' . ($module === 'Controllers' ? '' : $module . '\\') . "Controllers\\{$suffix}",
+                $module
+            ];
+        }
+
+        throw new RouterException('Invalid HMVC module namespace, make sure controllers are placed in the correct directory.');
     }
 
     /**
@@ -498,7 +524,7 @@ final class AttrCompiler
                 return write_content($lock . $context . '.php', $returnRoutes);
             }
         }catch(AppException|Exception $e){
-            logger('error', 'Failed to Cache Attributes: ' . $e->getMessage());
+            logger('error', 'Failed to Cache Attributes. ' . $e->getMessage());
         }
 
         return false;
@@ -583,15 +609,15 @@ final class AttrCompiler
      */
     private function isValidEntry(SplFileInfo $entry, string $name): bool
     {
-        $name = ucfirst($name);
-        if (!$entry->isFile() || $entry->getExtension() !== 'php') {
-            $allowed = ($name === 'Export')
-                ? ['Controllers', 'Http', 'Cli']
-                : ['Controllers', $name];
-
-            return in_array($entry->getBasename(), $allowed); 
+        if (!$entry->isFile()) {
+            return !in_array($entry->getBasename(), ['Views', 'Models', '.gitkeep', '.DS_Store']); 
         }
 
+        if($entry->getExtension() !== 'php'){
+            return false;
+        }
+
+        $name = ucfirst($name);
         return ($this->hmvc 
             ? str_contains($entry->getPathname(), '/Controllers/') 
             : $entry->getBasename() !== 'Application.php'

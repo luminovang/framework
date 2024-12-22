@@ -10,6 +10,7 @@
 namespace Luminova\Http;
 
 use \Luminova\Interface\LazyInterface;
+use \Luminova\Application\Foundation;
 use \Countable;
 
 class Server implements LazyInterface, Countable
@@ -113,5 +114,34 @@ class Server implements LazyInterface, Countable
     public function count(): int
     {
         return count($this->variables);
+    }
+
+    /**
+     * Get default server variables.
+     *
+     * This method returns an array of default server variables commonly used in HTTP requests.
+     * These variables include server name, port, host, user agent, accepted content types,
+     * languages, character sets, client IP address, script information, server protocol,
+     * and request timestamps.
+     *
+     * @return array Return an associative array containing default server variables and their values.
+     */
+    public static function getDefault(): array 
+    {
+        return [
+            'SERVER_NAME' => 'localhost',
+            'SERVER_PORT' => 80,
+            'HTTP_HOST' => 'localhost',
+            'HTTP_USER_AGENT' => Foundation::copyright(true),
+            'HTTP_ACCEPT' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'HTTP_ACCEPT_LANGUAGE' => 'en-us,en;q=0.5',
+            'HTTP_ACCEPT_CHARSET' => 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
+            'REMOTE_ADDR' => '127.0.0.1',
+            'SCRIPT_NAME' => '/' . PROJECT_ID . '/index.php',
+            'SCRIPT_FILENAME' => root('/' . PROJECT_ID . '/') . 'index.php',
+            'SERVER_PROTOCOL' => 'HTTP/1.1',
+            'REQUEST_TIME' => time(),
+            'REQUEST_TIME_FLOAT' => microtime(true),
+        ];
     }
 }

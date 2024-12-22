@@ -254,7 +254,7 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
     {
         $this->cookies = [
             ...$this->cookies,
-            ...array_change_key_case($cookies, CASE_LOWER)
+            ...self::toLowercase($cookies)
         ];
 
         $this->save();
@@ -493,6 +493,34 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
         }
 
         return $cookies;
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public static function getFromGlobal(
+        array $cookies, 
+        bool $raw = false, 
+        array $default = []
+    ): array
+    {
+        $entry = [];
+
+        if($default !== []){
+            $default = array_change_key_case($default, CASE_LOWER);
+            $default['flag'] = ($default['domain'][0] === '.');
+        }
+
+        $default['raw'] = $raw;
+
+        foreach($cookies as $name => $value){
+            $entry[$name] = [
+                'value' => $value,
+                'options' => $default,
+            ];
+        }
+
+        return $entry;
     }
 
     /** 
@@ -914,6 +942,28 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
             fn (int $index, string $name) => $index + mb_strlen("{$name}=" . $this->cookies[$name]['value'], '8bit'),
             0
         );
+    }
+
+    /**
+     * Converts all option keys in the cookies array to lowercase.
+     *
+     * This function iterates through the provided cookies array and converts
+     * all keys in the 'options' sub-array to lowercase for each cookie.
+     *
+     * @param array $cookies An associative array of cookies, where each cookie
+     *                       is represented as an array with potential 'options' key.
+     *
+     * @return array The modified cookies array with lowercase option keys.
+     */
+    protected static function toLowercase(array $cookies): array
+    {
+        foreach ($cookies as $name => $cookie) {
+            if (isset($cookie['options'])) {
+                $cookies[$name]['options'] = array_change_key_case($cookie['options'], CASE_LOWER);
+            }
+        }
+
+        return $cookies;
     }
 
     /**

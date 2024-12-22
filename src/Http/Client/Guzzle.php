@@ -10,27 +10,40 @@
 namespace Luminova\Http\Client;
 
 use \Luminova\Application\Foundation;
-use \GuzzleHttp\Client as GuzzleClient;
-use \Luminova\Interface\NetworkClientInterface;
+use \Luminova\Utils\Promise\Promise;
+use \GuzzleHttp\Client;
 use \Psr\Http\Client\ClientInterface;
 use \Psr\Http\Message\ResponseInterface;
-use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
+use \Psr\Http\Message\RequestInterface;
+use \Psr\Http\Message\UriInterface;
+use \Luminova\Interface\PromiseInterface;
 use \GuzzleHttp\Exception\GuzzleException;
 use \Luminova\Exceptions\Http\RequestException;
 use \Luminova\Exceptions\Http\ConnectException;
 use \Exception;
+use Throwable;
 
-class Guzzle implements NetworkClientInterface
+class Guzzle implements \Luminova\Interface\ClientInterface
 {
     /**
      * HTTP guzzle client.
      * 
-     * @var GuzzleClient $client
+     * @var ClientInterface|Client $client
      */
-    private ?GuzzleClient $client = null;
+    private ?ClientInterface $client = null;
 
     /**
      * {@inheritdoc}
+     * 
+     * @example - Example Request Client With base URL:
+     * 
+     * ```php
+     * <?php
+     * use Luminova\Http\Client\Guzzle;
+     * $client = new Guzzle([
+     *      'base_uri' => 'https://example.com/'
+     * ]);
+     * ```
      */
     public function __construct(private array $config = [])
     {
@@ -42,13 +55,13 @@ class Guzzle implements NetworkClientInterface
             $this->config['headers']['User-Agent'] = $this->config['headers']['User-Agent'] ?? Foundation::copyright(true);
         }
 
-        $this->client = new GuzzleClient($this->config);
+        $this->client = new Client($this->config);
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getClient(): ?ClientInterface
+    public function getClient(): ClientInterface
     {
         return $this->client;
     }
@@ -60,7 +73,52 @@ class Guzzle implements NetworkClientInterface
     {
         return method_exists($this->client, 'getConfig') 
             ? $this->client->getConfig($option)
-            : $this->config;
+            : (($option === null) 
+                ? $this->config 
+                : ($this->config[$option] ?? null)
+            );
+    }
+
+    /**
+     * {@inheritdoc}
+     * 
+     * Setting option while using Guzzle client will have no effect.
+     */
+    public function setOption(int $option, mixed $value): self
+    {
+       return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function send(RequestInterface $request, array $options = []): ResponseInterface
+    {
+        return $this->call('send', $request, $options);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function sendRequest(RequestInterface $request): ResponseInterface 
+    {
+        return $this->call('sendRequest', $request);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function sendAsync(RequestInterface $request, array $options = []): PromiseInterface
+    {
+        return $this->promise('sendAsync', $request, $options);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function requestAsync(string $method, UriInterface|string $uri = '', array $options = []): PromiseInterface
+    {
+        return $this->promise('requestAsync', $method, $uri, $options);
     }
 
     /**
@@ -68,7 +126,7 @@ class Guzzle implements NetworkClientInterface
      */
     public function request(
         string $method, 
-        string $url, 
+        UriInterface|string $uri = '', 
         array $options = []
     ): ResponseInterface
     {
@@ -76,9 +134,28 @@ class Guzzle implements NetworkClientInterface
             $options['form_params'] = $options['form_params'] ?? [];
         }
 
+       return $this->call('request', $method, (string) $uri, $options);
+    }
+
+    /**
+     * Executes a method on the Guzzle client and handles exceptions.
+     *
+     * @param string $method The name of the method to call on the Guzzle client.
+     * @param mixed ...$arguments Variable number of arguments to pass to the method.
+     *
+     * @return mixed The result of the method call, or a ResponseInterface in case of certain exceptions.
+     *
+     * @throws RequestException If a GuzzleRequestException occurs without a valid response.
+     * @throws ConnectException If a GuzzleException or general Exception occurs.
+     */
+    private function call(
+        string $method, 
+        mixed ...$arguments
+    ): mixed
+    {
         try {
-            return $this->client->request($method, $url, $options);
-        } catch (GuzzleRequestException $e) {
+            return $this->client->{$method}(...$arguments);
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
             $response = $e->getResponse();
             if ($response instanceof ResponseInterface) {
                 return $response;
@@ -88,10 +165,58 @@ class Guzzle implements NetworkClientInterface
             if ($previous instanceof GuzzleException) {
                 throw new RequestException($previous->getMessage(), $previous->getCode(), $previous);
             }
-            
+
             throw new RequestException($e->getMessage(), $e->getCode(), $e);
         } catch (GuzzleException|Exception $e) {
             throw new ConnectException($e->getMessage(), $e->getCode(), $e);
         }
+    }
+
+    private function promise(
+        string $method,
+        mixed ...$arguments
+    ): Promise {
+        return new Promise(function ($resolve, $reject) use ($method, $arguments) {
+            try {
+                $response = $this->client->{$method}(...$arguments);
+
+                if ($response instanceof \GuzzleHttp\Promise\PromiseInterface) {
+                    $response->then(
+                        fn($result) => $resolve($result),
+                        fn($error) => $reject($error instanceof Throwable ? $error : new RequestException($error))
+                    );
+                    $response->wait();
+                    return;
+                }
+    
+                $resolve($response);
+            } catch (\GuzzleHttp\Exception\RequestException $e) {
+                $this->handlePromiseException($e, $resolve, $reject);
+            } catch (GuzzleException | Exception $e) {
+                $reject(new ConnectException($e->getMessage(), $e->getCode(), $e));
+            }
+        });
+    }
+    
+    private function handlePromiseException(
+        \GuzzleHttp\Exception\RequestException $e,
+        callable $resolve,
+        callable $reject
+    ): void {
+
+        $response = $e->getResponse();
+
+        if ($response instanceof ResponseInterface) {
+            $resolve($response);
+            return;
+        }
+    
+        $previous = $e->getPrevious();
+        if ($previous instanceof GuzzleException) {
+            $reject(new RequestException($previous->getMessage(), $previous->getCode(), $previous));
+            return;
+        }
+    
+        $reject(new RequestException($e->getMessage(), $e->getCode(), $e));
     }
 }

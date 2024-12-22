@@ -15,10 +15,12 @@ use \Luminova\Template\Twig;
 use \Luminova\Http\Header;
 use \Luminova\Application\Foundation; 
 use \Luminova\Interface\ExceptionInterface; 
+use \Luminova\Interface\PromiseInterface; 
 use \Luminova\Exceptions\AppException; 
 use \Luminova\Exceptions\ViewNotFoundException; 
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Time\Time;
+use \Luminova\Utils\Promise\Promise;
 use \Luminova\Time\Timestamp;
 use \Luminova\Optimization\Minification;
 use \Luminova\Utils\WeakReference;
@@ -630,6 +632,37 @@ trait View
     public final function respond(array $options = [], int $status = 200): string
     {
         return $this->callLmv($options, $status, true);
+    }
+
+    /**
+     * Return promise that resolved to rendered contents of a view.
+     *
+     * @param array<string,mixed> $options Additional parameters to pass in the template file.
+     * @param int $status HTTP status code (default: 200 OK).
+     * 
+     * @return PromiseInterface Return promise that resolved compiled view contents or rejection.
+     * 
+     * @example - Display your template view or send as an email.
+     * 
+     * ```php
+     * $content = $this->app->view('name', 'html')
+     * ->promise(['foo' => 'bar'])
+     * ->then(function(string $content) {
+     *      echo $content;
+     * })->catch(function(Exception $e) {
+     *      echo $e->getMessage();
+     * });
+     * ```
+     */
+    public final function promise(array $options = [], int $status = 200): PromiseInterface
+    {
+        return new Promise(function ($resolve, $reject) use($options, $status){
+            try{
+                $resolve($this->callLmv($options, $status, true));
+            }catch(Exception $e){
+                $reject($e);
+            }
+        });
     }
 
     /** 

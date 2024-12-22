@@ -72,6 +72,13 @@ interface ExceptionInterface
     public function getBacktrace(): array;
 
     /**
+     * String representation of the exception.
+     * 
+     * @return string Message containing error code and line number.
+     */
+    public function toString(): string;
+
+    /**
      * Gets a string representation of the exception.
      *
      * @return string Return a formatted error message representing the exception.

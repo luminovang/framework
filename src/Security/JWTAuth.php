@@ -326,14 +326,10 @@ class JWTAuth implements LazyInterface
         
         if($user_id){
             $this->path ??= root('/writeable/auth/');
-            $filename = self::filename($user_id);
+            $file = $this->path . self::filename($user_id);
 
-            if (@file_exists($file = $this->path . $filename)) {
-                $token = @file_get_contents($file);
-
-                if($token !== false){
-                    return $this->validate($token, $user_id, $callback);
-                }
+            if (file_exists($file) && ($token = get_content($file)) !== false) {
+                return $this->validate($token, $user_id, $callback);
             }
         }
 

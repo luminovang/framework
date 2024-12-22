@@ -334,6 +334,35 @@ interface CookieJarInterface
         array $default = []
     ): array;
 
+    /**
+    * Parse and retrieve cookies from global variable `$_COOKIE` values.
+    *
+    * This method processes an array of `Cookies` key-pir value to extract cookie names, values, 
+    * And returns an array containing the extracted cookies.
+    *
+    * @param array<string,mixed> $cookies An array of `$_COOKIE` to parse.
+    * @param bool $raw Whether to handle cookies as raw values (default: false).
+    * @param array<string,mixed> $default Optional default options to apply to cookies.
+    * 
+    * @return array<string,array<string,mixed>> An associative array of extracted cookies, where 
+    *         the key is the cookie name and the value contains the cookie data and options.
+    * 
+    * @example - Parse cookies from global
+    
+    * ```php
+    * $cookies = $cookieHandler->getFromGlobal($_COOKIE, false, $defaultOptions);
+    * 
+    * foreach ($cookies as $name => $cookie) {
+    *     echo "Cookie: $name, Value: {$cookie['value']}" . PHP_EOL;
+    * }
+    * ```
+    */
+    public static function getFromGlobal(
+        array $cookies, 
+        bool $raw = false, 
+        array $default = []
+    ): array;
+
     /** 
      * Count the number of cookies in storage.
      * 

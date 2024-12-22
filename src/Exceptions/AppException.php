@@ -278,6 +278,14 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
      */
     public function __toString(): string
     {
+        return $this->message;
+    }
+    
+    /**
+     * {@inheritdoc}
+     */
+    public function toString(): string
+    {
         return sprintf(
             'Exception: (%s) %s in %s on line %d',
             (string) $this->code,

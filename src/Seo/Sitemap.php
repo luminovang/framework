@@ -12,10 +12,14 @@ namespace Luminova\Seo;
 use \App\Config\Sitemap as SitemapConfig;
 use \Luminova\Core\CoreApplication;
 use \Luminova\Base\BaseCommand;
-use \Luminova\Command\Terminal;;
+use \Luminova\Command\Terminal;
+use \Luminova\Http\Network;
+use \Luminova\Http\Client\Curl;
+use \Luminova\Utils\Async;
 use \Luminova\Command\Utils\Text;
 use \Luminova\Functions\Maths;
 use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\AppException;
 use \DOMDocument;
 
 final class Sitemap
@@ -550,57 +554,49 @@ final class Sitemap
     private static function connection(string $url): array|bool
     {
         $url = self::toUrl($url);
-        $ch = curl_init($url);
-
-        if (!$ch) {
-            self::_print('flush');
-            self::_print('[Error] Failed to initialize cURL connection.', 'red');
-            return false;
-        }
-
         $scanning = '[Scanning] ' . $url;
         self::_print($scanning, 'cyan');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_FILETIME => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HEADER => false
-        ]);
 
-        $document = curl_exec($ch);
-        $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $modified = curl_getinfo($ch, CURLINFO_FILETIME);
-        $errorCode = curl_errno($ch);
-        $error = curl_error($ch);
-        curl_close($ch);
+        try{
+            /**
+             * @var \Luminova\Interface\ResponseInterface $response
+             */
+            $response = Async::await(fn() => (new Network(new Curl([
+                'file_time' => true,
+                'onBeforeRequest' => fn(string $url, array $headers) => self::$cli->watcher(
+                    max(1, self::$config->scanSpeed), 
+                    fn() => self::_print('flush'),
+                    null,
+                    false
+                )
+            ])))->get($url));
+            
+            self::_print('flush', null, 'writeln', $scanning);
 
-        self::$cli->watcher(
-            max(1, self::$config->scanSpeed), 
-            fn() => self::_print('flush'), 
-            null,
-            false
-        );
-        
-        self::_print('flush', null, 'writeln', $scanning);
+            if ($response->getStatusCode() !== 200) {
+                self::_print("[{$response->getStatusCode()}] {$url}", 'red');
+                return false;
+            }
 
-        if ($document === false || $errorCode !== 0) {
-            self::_print('[Error] ' . ($errorCode ? $error : 'Empty response from ' . $url), 'red');
-            return false;
+            if (!$response->getContents()) {
+                self::_print('[Error] Empty response from ' . $url, 'red');
+                return false;
+            }
+
+            self::_print('[Done] ' . $url);
+            self::$visited[] = $url;
+            $modified = $response->getFileTime();
+
+            return [
+                'document' => $response->getContents(),
+                'lastmod'  => ($modified != -1) ? date("Y-m-d\TH:i:sP", $modified) : null,
+            ];
+        }catch(AppException $e){
+            self::_print('flush');
+            self::_print('flush', null, 'writeln', $scanning);
+            self::_print('[Error] ' . $e->getMessage(), 'red');
         }
 
-        if ($statusCode === 404) {
-            self::_print('[404] ' . $url, 'red');
-            return false;
-        }
-
-        self::_print('[Done] ' . $url);
-        self::$visited[] = $url;
-
-        return [
-            'document' => $document,
-            'lastmod'  => $modified != -1 ? date("Y-m-d\TH:i:sP", $modified) : null,
-        ];
+        return false;
     }
 }

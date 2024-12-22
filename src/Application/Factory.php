@@ -45,7 +45,7 @@ use \Throwable;
  * @method static Validation          validate(bool $shared = true)                              Input validation class.
  * @method static Response            response(int $status = 200, array $headers = [], bool $shared = true)           Render response class.
  * @method static Request             request(bool $shared = true)                               HTTP Request class.
- * @method static Network             network(?\Luminova\Interface\NetworkClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
+ * @method static Network             network(?\Luminova\Interface\ClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
  * @method static Caller              caller(bool $shared = true)                                Class caller class.
  * @method static Notification        notification(string $serviceAccount = 'serviceAccount.json', bool $shared = true)                              Firebase cloud message notification class.
  * @method static Escape              escaper(string|null $encoding = 'utf-8', bool $shared = true)                              Input escaper class instance.
@@ -196,7 +196,7 @@ final class Factory
             $instance->queService($boot->getServices());
             self::$instances['service'] = $instance;
         }catch(RuntimeException $e){
-            logger('critical', 'Error occurred while registering service, Exception: ' . $e->getMessage());
+            logger('critical', 'Error occurred while registering service. ' . $e->getMessage());
         }
     }
 

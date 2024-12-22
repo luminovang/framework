@@ -14,6 +14,7 @@ use \Luminova\Base\BaseCommand;
 use \Luminova\Http\Network;
 use \Luminova\Time\Time;
 use \Luminova\Command\Utils\Text;
+use \Psr\Http\Message\ResponseInterface;
 use \App\Config\Cron;
 use \Luminova\Exceptions\AppException;
 use \ReflectionClass;
@@ -226,15 +227,19 @@ class CronJobs extends BaseConsole
 
         if($task['pingOn' . $event] && isset($instance['pingOn' . $event])){
             self::$network ??= new Network();
-            try{
-                self::$network->get($instance['pingOn' . $event], [
-                    'query' => $task
-                ]);
-                $output .= $event ? "Failure ping succeeded\n" : "Completed ping succeeded\n";
-            } catch(Exception|AppException $e){
-                $output .= $event ? "Failure ping failed: " : "Completed ping failed: ";
+            $output .= ($event === 'Failure') ? "Failure ping " : "Completed ping ";
+            self::$network->fetch($instance['pingOn' . $event], [
+                'query' => $task
+            ])->then(function(ResponseInterface $res) use(&$output){
+                $output .= "succeeded: ";
+                $output .=  $res->getStatusCode() . "\n";
+            })->catch(function(Exception $e) use(&$output){
+                $output .= "failed: ";
                 $output .= $e->getMessage() . "\n";
-            }
+            })->error(function(Exception $e) use(&$output){
+                $output .= "failed: ";
+                $output .= $e->getMessage() . "\n";
+            });
         }
     }
 

@@ -9,21 +9,20 @@
  */
 namespace Luminova\Http;
 
-use \Luminova\Interface\NetworkClientInterface;
-use \Luminova\Interface\NetworkInterface;
-use \Luminova\Http\Message\Response;
-use \Luminova\Interface\LazyInterface;
 use \Luminova\Http\Client\Curl;
+use \Luminova\Utils\Promise\Promise;
+use \Luminova\Utils\Promise\RejectedPromise;
+use \Luminova\Interface\NetworkInterface;
+use \Luminova\Interface\LazyInterface;
+use \Luminova\Interface\PromiseInterface;
+use \Psr\Http\Message\ResponseInterface;
 use \Psr\Http\Message\RequestInterface;
 use \Psr\Http\Message\UriInterface;
-use \Psr\Http\Message\ResponseInterface;
 use \Psr\Http\Client\ClientInterface;
-use \GuzzleHttp\Promise\PromiseInterface;
 use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
 use \GuzzleHttp\Exception\GuzzleException;
 use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\Http\RequestException;
-use \Luminova\Exceptions\Http\ConnectException;
 use \Luminova\Exceptions\BadMethodCallException;
 use \Exception;
 
@@ -37,17 +36,58 @@ class Network implements NetworkInterface, LazyInterface
     public const SKIP_HEADER = 5319;
 
     /**
-     * The network client interface to use.
-     * This must be luminova NetworkClientInterface only.
+     * HTTP GET Method
      * 
-     * @var NetworkClientInterface|null $client
+     * @var string GET
      */
-    private ?NetworkClientInterface $client = null;
+    public const GET = 'GET';
+
+    /**
+     * HTTP POST Method
+     * 
+     * @var string POST
+     */
+    public const POST = 'POST';
+
+    /**
+     * HTTP PUT Method
+     * 
+     * @var string PUT
+     */
+    public const PUT = 'PUT';
+
+    /**
+     * HTTP PATCH Method
+     * 
+     * @var string PATCH
+     */
+    public const PATCH = 'PATCH';
+
+    /**
+     * HTTP DELETE Method
+     * 
+     * @var string DELETE
+     */
+    public const DELETE = 'DELETE';
+
+    /**
+     * HTTP OPTIONS Method
+     * 
+     * @var string OPTIONS
+     */
+    public const OPTIONS = 'OPTIONS';
+
+    /**
+     * The network client interface to use.
+     * 
+     * @var \Luminova\Interface\ClientInterface|ClientInterface|null $client
+     */
+    private ?ClientInterface $client = null;
 
     /**
      * {@inheritdoc}
      */
-    public function __construct(?NetworkClientInterface $client = null)
+    public function __construct(?ClientInterface $client = null)
     {
         $this->client = $client ?? new Curl();
     }
@@ -55,32 +95,30 @@ class Network implements NetworkInterface, LazyInterface
     /**
      * {@inheritdoc}
      */
-    public function __call(string $method, $arguments): mixed
+    public function __call(string $method, array $arguments): mixed
     {
-        $client = $this->getClient();
+        if (count($arguments) < 1) {
+            $error = new BadMethodCallException(sprintf(
+                'Bad method call: request method "->%s(...)" require a URI and optional options array',
+                $method
+            ));
 
-        if (!method_exists($client, $method)) {
-            $message = $client instanceof ClientInterface
-                ? 'Bad method call: method "%s(...)" is not supported in Curl client, use Guzzle client instead.'
-                : 'Bad method call: method "%s(...)" does not exist.';
-            throw new BadMethodCallException(sprintf($message, $method));
+            if(str_ends_with($method, 'Async')){
+                return new RejectedPromise($error);
+            }
+
+            throw $error;
         }
-    
-        try {
-            return $client->{$method}(...$arguments);
-        } catch (GuzzleRequestException $e) {
-            return $this->handleGuzzleRequestException($e);
-        } catch (AppException $e) {
-            return $this->handleAppException($e);
-        } catch (GuzzleException|Exception $e) {
-            throw new ConnectException($e->getMessage(), $e->getCode(), $e);
-        }
+
+        return str_ends_with($method, 'Async')
+            ? $this->requestAsync(substr($method, 0, -5), $arguments[0] ?? '', $arguments[1] ?? [])
+            : $this->client->request($method, $arguments[0] ?? '', $arguments[1] ?? []);
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getClient(): ClientInterface|Curl|null
+    public function getClient(): ?ClientInterface
     {
         return $this->client->getClient();
     }
@@ -89,22 +127,38 @@ class Network implements NetworkInterface, LazyInterface
      * {@inheritdoc}
      */
     public function get(
-        string $url, 
+        string $uri = '', 
         array $options = []
-    ): ResponseInterface|Response
+    ): ResponseInterface
     {
-        return $this->client->request('GET', $url, $options);
+        return $this->client->request(self::GET, $uri, $options);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function fetch(
+        UriInterface|string $uri = '', 
+        string $method = self::GET, 
+        array $options = []
+    ): PromiseInterface
+    {
+        return $this->client->requestAsync(
+            $method, 
+            $uri, 
+            $options
+        );
     }
 
     /**
      * {@inheritdoc}
      */
     public function post(
-        string $url, 
+        string $uri = '', 
         array $options = []
-    ): ResponseInterface|Response
+    ): ResponseInterface
     {
-        return $this->client->request('POST', $url, $options);
+        return $this->client->request(self::POST, $uri, $options);
     }
 
     /**
@@ -112,11 +166,22 @@ class Network implements NetworkInterface, LazyInterface
      */
     public function request(
         string $method, 
-        string $url, 
+        UriInterface|string $uri = '', 
         array $options = []
-    ): ResponseInterface|Response
+    ): ResponseInterface
     {
-        return $this->client->request($method, $url, $options);
+        return $this->client->request($method, $uri, $options);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function send(
+        RequestInterface $request, 
+        array $options = []
+    ): ResponseInterface
+    {
+        return $this->doSend($request, $options);
     }
 
     /**
@@ -127,17 +192,7 @@ class Network implements NetworkInterface, LazyInterface
         array $options = []
     ): PromiseInterface
     {
-        if(!$this->getClient() instanceof ClientInterface){
-            throw new RequestException('Request sendAsync is not supported in Curl client, use Guzzle client instead.');
-        }
-
-        try{
-            return $this->getClient()->sendAsync($request, $options);
-        }catch (GuzzleRequestException $e) {
-            return $this->handleGuzzleRequestException($e);
-        } catch (GuzzleException|Exception $e) {
-            throw new RequestException($e->getMessage(), $e->getCode(), $e);
-        }
+        return $this->doSend($request, $options, true, true);
     }
 
     /**
@@ -149,15 +204,51 @@ class Network implements NetworkInterface, LazyInterface
         array $options = []
     ): PromiseInterface
     {
-        if(!$this->getClient() instanceof ClientInterface){
-            throw new RequestException('Request requestAsync is not supported in Curl client, use Guzzle client instead.');
-        }
+        return $this->client->requestAsync(
+            $method, 
+            $uri, 
+            $options
+        );
+    }
 
+    /**
+     * Send request from request object.
+     * 
+     * @param RequestInterface $request
+     * @param array $options
+     * @param bool $async
+     * @param bool $promise
+     * 
+     * @return PromiseInterface|ResponseInterface Return guzzle promise or response object for cURL client.
+    */
+    private function doSend(
+        RequestInterface $request, 
+        array $options = [],
+        bool $async = false,
+        bool $promise = false
+    ): PromiseInterface|ResponseInterface
+    {
         try{
-            return $this->getClient()->requestAsync($method, $uri, $options);
+            return $async 
+                ? $this->client->sendAsync($request, $options)
+                : $this->client->send($request, $options);
         }catch (GuzzleRequestException $e) {
+            if($promise){
+                return new Promise(function($resolve, $reject) use($e){
+                    ($e->getResponse() instanceof ResponseInterface)
+                        ? $resolve($e->getResponse())
+                        : $reject($e);
+                });
+            }
+
             return $this->handleGuzzleRequestException($e);
         } catch (GuzzleException|Exception $e) {
+            if($promise){
+                return new RejectedPromise(
+                    ($e instanceof AppException) ? $e : new RequestException($e->getMessage(), $e->getCode(), $e)
+                );
+            }
+
             throw new RequestException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -175,18 +266,11 @@ class Network implements NetworkInterface, LazyInterface
      */
     private function handleGuzzleRequestException(GuzzleRequestException $e): ?ResponseInterface
     {
-        $response = $e->getResponse();
-
-        if ($response instanceof ResponseInterface) {
-            return $response;
+        if ($e->getResponse() instanceof ResponseInterface) {
+            return $e->getResponse();
         }
 
-        $previous = $e->getPrevious();
-        if ($previous instanceof GuzzleException) {
-            throw new RequestException($previous->getMessage(), $previous->getCode(), $previous);
-        }
-
-        throw new RequestException($e->getMessage(), $e->getCode(), $e);
+        $this->handleAppException($e);
     }
 
     /**
@@ -195,19 +279,25 @@ class Network implements NetworkInterface, LazyInterface
      * This method processes an AppException. If the exception is an instance of AppException,
      * it rethrows it; otherwise, it wraps the exception in a RequestException and throws it.
      *
-     * @param AppException $e The application-specific exception.
+     * @param AppException|GuzzleRequestException $e The application-specific or guzzle exception.
      *
      * @return never This method does not return a value and will always throw an exception.
      */
-    private function handleAppException(AppException $e): never
+    private function handleAppException(AppException|GuzzleRequestException $e): never
     {
         if ($e instanceof AppException) {
             throw $e;
         }
 
-        $previous = $e->getPrevious();
-        if ($previous instanceof AppException) {
-            throw new RequestException($previous->getMessage(), $previous->getCode(), $previous);
+        if (
+            ($e->getPrevious() instanceof AppException) || 
+            ($e->getPrevious() instanceof GuzzleException)
+        ) {
+            throw new RequestException(
+                $e->getPrevious()->getMessage(), 
+                $e->getPrevious()->getCode(), 
+                $e->getPrevious()
+            );
         }
 
         throw new RequestException($e->getMessage(), $e->getCode(), $e);

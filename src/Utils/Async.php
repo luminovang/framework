@@ -10,7 +10,11 @@
 namespace Luminova\Utils;
 
 use \Fiber;
+use \Luminova\Utils\Promise\Promise;
+use \Luminova\Interface\PromiseInterface;
 use \Luminova\Exceptions\RuntimeException;
+use \Throwable;
+use \Exception;
 
 class Async
 {
@@ -247,6 +251,7 @@ class Async
      * 
      * @return mixed Return the result of the fiber or callable.
      * @throws RuntimeException If PHP Fiber is not supported.
+     * @throws Exception If any error occurs.
      * 
      * @example - Usage Example:
      * 
@@ -293,6 +298,153 @@ class Async
     }
 
     /**
+     * Awaits the completion of a fiber or callable and return promise that resolves to the result.
+     *
+     * @param Fiber|callable $task The task to await (e.g, `Fiber` or `callable`).
+     *          Callback signature: `function(): mixed{ return fooRunAndReturnTaskResult(); }`.
+     * 
+     * @return PromiseInterface Return promise object that result to result, otherwise reject reason.
+     * 
+     * @example - Usage Example:
+     * 
+     * ```php
+     * use Luminova\Http\Network;
+     * 
+     * $promise = Async::awaitPromise(fn() => (new Network)->get('https://example.com'));
+     * $promise->then(function($result){
+     *      print_r($results);
+     * })->catch(function(Throwable $e){
+     *      echo 'error: ' . $e->getMessage();
+     * })->error(function(Throwable $e){
+     *      echo 'error: ' . $e->getMessage();
+     * })->finally(function(){
+     *      echo 'Done';
+     * });
+     * ```
+     */
+    public static function awaitPromise(Fiber|callable $task): PromiseInterface
+    {
+        return new Promise(function (callable $resolve, callable $reject) use($task): void {
+            try{
+                $result = self::await($task);
+                $resolve($result);
+            }catch(Throwable $e){
+                $reject($e);
+            }
+        });
+    }
+
+    /**
+     * Executes a given callback function after a specified timeout in milliseconds.
+     *
+     * This method runs the callback asynchronously using a Fiber and handles any
+     * errors that occur during execution by throwing a `RuntimeException`.
+     *
+     * @param callable $callback The callback function to execute after the timeout.
+     * @param int $milliseconds The delay before the callback is executed, in milliseconds.
+     *
+     * @throws RuntimeException Throws if an error occurs during execution.
+     * 
+     * @example - Usage Example:
+     * 
+     * ```php
+     * echo "Start\n";
+     * 
+     * Async::setTimeout(function () {
+     *    echo "Timeout executed at: " . date('H:i:s') . "\n";
+     * }, 2000);
+     * 
+     * echo "End\n";
+     * ```
+     */
+    public static function setTimeout(callable $callback, int $milliseconds): void
+    {
+        $seconds = $milliseconds / 1000;
+    
+        $fiber = new Fiber(function () use ($callback, $seconds) {
+            Fiber::suspend();
+            usleep($seconds * 1_000_000); 
+            try{
+                $callback();
+            }catch(Throwable $e){
+                throw new RuntimeException(
+                    'Failure while executing callback: ' . $e->getMessage(),
+                    $e->getCode(),
+                    $e
+                );
+            }
+        });
+    
+        $fiber->start();
+        usleep($milliseconds * 1_000);
+        $fiber->resume();
+    }
+
+    /**
+     * Creates a Fiber to execute a given callback after a specified timeout.
+     *
+     * The returned Fiber can be manually managed to provide fine-grained control
+     * over its execution.
+     *
+     * @param callable $callback The callback function to execute after the timeout.
+     * @param int $milliseconds The delay before the callback is executed, in milliseconds.
+     *
+     * @return Fiber The Fiber instance managing the timeout execution.
+     *
+     * @throws RuntimeException Throws if an error occurs during execution.
+     * 
+     * @example - Usage Example:
+     * ```php
+     * echo "Start\n";
+     * $fiber = Async::timeout(function () {
+     *     echo "Timeout executed in fiber at: " . date('H:i:s') . "\n";
+     * }, 2000);
+     * 
+     * usleep(1000_000); // Simulate 1 second of work
+     * 
+     * // Resume the fiber to allow the callback to execute
+     * $fiber->resume();
+     * echo "End\n";
+     * ```
+     * 
+     * @example - Another Example:
+     * 
+     * ```php
+     * $fibers = [];
+     * $fibers[] = Async::timeout(function (int $value) {
+     *     echo "Task 1 of {$value} executed after 1 second\n";
+     * }, 1000);
+     * 
+     * $fibers[] = Async::timeout(function () {
+     *     echo "Task 2 executed after 2 seconds\n";
+     * }, 2000);
+     * 
+     * foreach ($fibers as $idx => $fiber) {
+     *     $fiber->resume($idx);
+     * }
+     * ```
+     */
+    public static function timeout(callable $callback, int $milliseconds): Fiber
+    {
+        $fiber = new Fiber(function () use ($callback, $milliseconds) {
+            $value = Fiber::suspend();
+            usleep($milliseconds * 1_000);
+            try{
+                $callback($value);
+            }catch(Throwable $e){
+                throw new RuntimeException(
+                    'Failure while executing callback: ' . $e->getMessage(),
+                    $e->getCode(),
+                    $e
+                );
+            }
+        });
+
+        $fiber->start();
+        return $fiber;
+    }
+
+    /**
      * Runs all enqueued tasks asynchronously with option controls over the execution.
      *
      * @param callable|null $callback Optional callback to execute with each result.
@@ -335,6 +487,9 @@ class Async
      *
      * @return void
      * @throws RuntimeException If the method is called while another task execution (`run` or `until`) is in progress.
+     * @throws Exception If any error occurs.
+     * 
+     * @example Usage example:
      * 
      * ```php
      * use Luminova\Http\Network;

@@ -9,11 +9,12 @@
 */
 namespace Luminova\Storages;
 
+use \Psr\Http\Message\StreamInterface;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Stringable;
 
-class Stream implements Stringable
+class Stream implements StreamInterface, Stringable
 {
     /**
      * Patterns for readable stream modes.
@@ -37,7 +38,7 @@ class Stream implements Stringable
     private ?int $size = null;
 
     /**
-     * Initalize the stream constructor with an underlying resource.
+     * Initialize the stream constructor with an underlying resource.
      *
      * @param resource $resource The stream resource.
      * @throws InvalidArgumentException if the provided resource is not a valid stream.

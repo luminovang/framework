@@ -12,13 +12,16 @@ namespace Luminova\Http\Message;
 
 use \Luminova\Storages\Stream;
 use \Luminova\Http\HttpCode;
-use \Luminova\Interface\CookieJarInterface;
 use \Luminova\Functions\Normalizer;
+use \Luminova\Interface\CookieJarInterface;
+use \Luminova\Interface\ResponseInterface;
+use \Psr\Http\Message\StreamInterface;
+use \Psr\Http\Message\MessageInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\RuntimeException;
 use \Stringable;
 
-class Response implements Stringable
+class Response implements ResponseInterface, Stringable
 {
     /**
      * Initialize a new network request response object.
@@ -29,7 +32,7 @@ class Response implements Stringable
      * @param array $info Additional response information from cURL (optional).
      * @param string $reasonPhrase The reason phrase associated with the status code (default: 'OK').
      * @param string $protocolVersion The HTTP protocol version (default: '1.1').
-     * @param Stream|null $stream Optionally passed s stream object.
+     * @param StreamInterface|null $stream Optionally passed s stream object.
      * @param CookieJarInterface|null $cookie Optionally HTTP cookie jar object.
      */
     public function __construct(
@@ -39,18 +42,12 @@ class Response implements Stringable
         private array $info = [],
         private string $reasonPhrase = 'OK',
         private string $protocolVersion = '1.1',
-        private ?Stream $stream = null,
+        private ?StreamInterface $stream = null,
         public ?CookieJarInterface $cookie = null
     ) {}
 
     /**
-     * Convert the HTTP response to a formatted string.
-     *
-     * This method generates the complete HTTP response string, including
-     * the status line, headers, and body content. It checks for the
-     * 'Content-Length' header and adds it if not present.
-     *
-     * @return string Returns the complete HTTP response as string suitable for sending over the network.
+     * {@inheritdoc}
      */
     public function toString(): string 
     {
@@ -72,9 +69,7 @@ class Response implements Stringable
     }
 
     /**
-     * Convert the HTTP response to a formatted string.
-     *
-     * @return string Returns the complete HTTP response as string suitable for sending over the network.
+     * {@inheritdoc}
      */
     public function __toString(): string
     {
@@ -82,30 +77,7 @@ class Response implements Stringable
     }
 
     /**
-     * Retrieves the HTTP protocol version (e.g, `1.0`, `1.1`).
-     *
-     * Returns the version number (e.g., "1.1", "1.0"). 
-     * If not set, it returns an empty string.
-     *
-     * @return string Return the HTTP protocol version.
-     */
-    public function getProtocolVersion(): string 
-    {
-        if($this->protocolVersion === ''){
-            $status = $this->getHeader('X-Response-Protocol-Status-Phrase')[0] ?? null;
-
-            if ($status && preg_match('/^HTTP\/(\d+\.\d+)/', $status, $matches)) {
-                $this->protocolVersion = $matches[1] ?? '';
-            }
-        }
-
-        return $this->protocolVersion; 
-    }
-
-    /**
-     * Retrieves the reason phrase associated with the HTTP status code (e.g, `OK`, `Internal Server Error`).
-     *
-     * @return string Return the reason phrase.
+     * {@inheritdoc}
      */
     public function getReasonPhrase(): string
     {
@@ -117,9 +89,7 @@ class Response implements Stringable
     }
 
     /**
-     * Retrieves response HTTP status code.
-     *
-     * @return int Return the HTTP status code.
+     * {@inheritdoc}
      */
     public function getStatusCode(): int
     {
@@ -127,9 +97,7 @@ class Response implements Stringable
     }
 
     /**
-     * Retrieves request file time modified.
-     *
-     * @return int Return the file modified if available, otherwise return `-1`.
+     * {@inheritdoc}
      */
     public function getFileTime(): int
     {
@@ -137,24 +105,7 @@ class Response implements Stringable
     }
 
     /**
-     * Retrieves all request response headers.
-     *
-     * @return array<string,array> Return an associative nested arrays of response headers.
-     */
-    public function getHeaders(): array
-    {
-        return $this->headers;
-    }
-
-    /**
-     * Convert an associative array of headers into a formatted string.
-     *
-     * This method converts the response headers to a string representation suitable for HTTP responses, where each
-     * header is formatted as 'Key: Value' and separated by CRLF.
-     * 
-     * @return string Return a formatted string containing all headers, 
-     *                followed by an additional CRLF to signal the end 
-     *                of the headers section.
+     * {@inheritdoc}
      */
     public function getHeadersString(): string 
     {
@@ -173,55 +124,27 @@ class Response implements Stringable
     }
 
     /**
-     * Retrieves a specific header value by its key.
-     *
-     * @param string $name The header key to retrieve.
-     * 
-     * @return array<int,mixed> Return an array of header values.
+     * {@inheritdoc}
      */
-    public function getHeader(string $name): array
+    public function getContents(): string
     {
-        return (array) $this->headers[strtolower($name)] ?? [];
+        return $this->contents;
     }
 
     /**
-     * Retrieves a comma-separated string of the values for a single header.
-     *
-     * @param string $name The header field name to retrieve the values.
-     * 
-     * @return string Return a string of values as provided for the given header concatenated together using a comma.
+     * {@inheritdoc}
      */
-    public function getHeaderLine(string $header): string
+    public function getInfo(): array
     {
-        return implode(', ', $this->getHeader($header));
+        return $this->info;
     }
 
     /**
-     * Determine if a header exists in the response headers.
-     *
-     * @param string $name The header name to check.
-     * 
-     * @return bool Return true if the header exists, false otherwise.
+     * {@inheritdoc}
      */
-    public function hasHeader(string $name): bool 
+    public function getBody(): StreamInterface
     {
-        return isset($this->headers[strtolower($name)]);
-    }
-
-    /**
-     * Retrieves the response contents as a stream.
-     *
-     * This method opens a temporary stream, writes the response contents if available, 
-     * and rewinds the stream before returning it.
-     *
-     * @return Stream Return the response body as a stream object.
-     * @throws RuntimeException Throws if the temporary stream cannot be opened.
-     * 
-     * @see https://luminova.ng/docs/0.0.0/http/stream
-     */
-    public function getBody(): Stream
-    {
-        if($this->stream instanceof Stream){
+        if($this->stream instanceof StreamInterface){
             return $this->stream;
         }
 
@@ -240,35 +163,92 @@ class Response implements Stringable
     }
 
     /**
-     * Retrieves the extracted response contents as a string.
-     *
-     * @return string Return the processed response contents.
+     * {@inheritdoc}
      */
-    public function getContents(): string
+    public function getHeaders(): array
     {
-        return $this->contents;
+        return $this->headers;
     }
 
     /**
-     * Retrieves additional information about the response.
-     *
-     * @return array<string,mixed> Return an associative array of response metadata.
+     * {@inheritdoc}
      */
-    public function getInfo(): array
+    public function getProtocolVersion(): string 
     {
-        return $this->info;
+        if($this->protocolVersion === ''){
+            $status = $this->getHeader('X-Response-Protocol-Status-Phrase')[0] ?? null;
+
+            if ($status && preg_match('/^HTTP\/(\d+\.\d+)/', $status, $matches)) {
+                $this->protocolVersion = $matches[1] ?? '';
+            }
+        }
+
+        return $this->protocolVersion; 
     }
 
     /**
-     * Return an instance with the provided value replacing the specified header.
-     *
-     * @param string $name Case-insensitive header field name.
-     * @param string|string[] $value Header value(s).
-     * 
-     * @return Response Return new static response object.
-     * @throws InvalidArgumentException for invalid header names or values.
+     * {@inheritdoc}
      */
-    public function withHeader(string $name, array|string $value): Response
+    public function getHeader(string $name): array
+    {
+        return (array) $this->headers[strtolower($name)] ?? [];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getHeaderLine(string $header): string
+    {
+        return implode(', ', $this->getHeader($header));
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function hasHeader(string $name): bool 
+    {
+        return isset($this->headers[strtolower($name)]);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function withStatus(int $code, string $reasonPhrase = ''): ResponseInterface
+    {
+        if ($code < 100 || $code >= 600) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid HTTP status code: %d was provided, status code must be between 1xx and 5xx.',
+                $code
+            ));
+        }
+
+        $new = clone $this;
+        $new->statusCode = $code;
+        $new->reasonPhrase = $reasonPhrase ?: HttpCode::get($code);
+        return $new;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function withoutHeader(string $name): MessageInterface
+    {
+        $name = strtolower($name);
+
+        if (!isset($this->headers[$name])) {
+            return $this;
+        }
+
+        $new = clone $this;
+        unset($new->headers[$name]);
+
+        return $new;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function withHeader(string $name, $value): MessageInterface
     {
         Normalizer::assertHeader($name);
         $value = Normalizer::normalizeHeaderValue($value);
@@ -285,59 +265,10 @@ class Response implements Stringable
         return $new;
     }
 
-     /**
-     * Return an instance without the specified header.
-     * 
-     * @param string $name Case-insensitive header field name to remove.
-     * 
-     * @return Response Return new static response object.
-     */
-    public function withoutHeader(string $name): Response
-    {
-        $name = strtolower($name);
-
-        if (!isset($this->headers[$name])) {
-            return $this;
-        }
-
-        $new = clone $this;
-        unset($new->headers[$name]);
-
-        return $new;
-    }
-
     /**
-     * Return an instance with the specified status code and, optionally, reason phrase.
-     *
-     * @param int $code The 3-digit integer result code to set (e.g, `1xx` to `5xx`).
-     * @param string $reasonPhrase The reason phrase to use.
-     * 
-     * @return Response Return new static response object.
-     * @throws InvalidArgumentException For invalid status code arguments.
+     * {@inheritdoc}
      */
-    public function withStatus(int $code, string $reasonPhrase = ''): Response
-    {
-        if ($code < 100 || $code >= 600) {
-            throw new InvalidArgumentException(sprintf(
-                'Invalid HTTP status code: %d was provided, status code must be between 1xx and 5xx.',
-                $code
-            ));
-        }
-
-        $new = clone $this;
-        $new->statusCode = $code;
-        $new->reasonPhrase = $reasonPhrase ?: HttpCode::get($code);
-        return $new;
-    }
-
-    /**
-     * Return an instance with the specified HTTP protocol version.
-     *
-     * @param string $version HTTP protocol version (e.g.,`1.1`, `1.0`).
-     * 
-     * @return Response Return new static response object.
-     */
-    public function withProtocolVersion(string $version): Response
+    public function withProtocolVersion(string $version): MessageInterface
     {
         if ($this->protocolVersion === $version) {
             return $this;
@@ -345,6 +276,35 @@ class Response implements Stringable
 
         $new = clone $this;
         $new->protocolVersion = $version;
+
+        return $new;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function withAddedHeader(string $name, $value): MessageInterface
+    {
+        Normalizer::assertHeader($name);
+        $value = Normalizer::normalizeHeaderValue($value);
+        $normalized = strtolower($name);
+
+        $new = clone $this;
+        $new->headers[$normalized] = isset($new->headers[$normalized]) 
+            ? array_merge($new->headers[$normalized], [$value])
+            :$value;
+
+
+        return $new;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function withBody(StreamInterface $body): MessageInterface
+    {
+        $new = clone $this;
+        $new->stream = $body;
 
         return $new;
     }

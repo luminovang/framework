@@ -38,7 +38,9 @@ class Header implements LazyInterface, Countable
      */
     public function __construct(?array $variables = null)
     {
-        self::$variables = $variables ?? self::getHeaders();
+        self::$variables = $variables 
+            ? array_replace(self::$variables, self::getFromGlobal($variables))
+            : self::getHeaders();
     }
 
     /**
@@ -131,7 +133,9 @@ class Header implements LazyInterface, Countable
      */
     public static function server(string $key, ?string $server = null): mixed
     {
-        return self::$variables[$key] ?? $_SERVER[$server ?? $key] ?? null;
+        return self::$variables[$key] 
+            ?? $_SERVER[$server ?? $key] 
+            ?? null;
     }
 
     /**
@@ -142,12 +146,24 @@ class Header implements LazyInterface, Countable
     public static function getHeaders(): array
     {
         if (function_exists('apache_request_headers') && ($headers = apache_request_headers()) !== false) {
-            return [...self::$variables, $headers];
+            return array_replace(self::$variables, $headers);
         }
 
-        $headers = [];
         // If PHP function apache_request_headers() is not available or went wrong: manually extract headers
-        foreach ($_SERVER as $name => $value) {
+        return array_replace(self::$variables, self::getFromGlobal());
+    }
+
+    /**
+     * Parse _SERVER variables and extract headers from it.
+     *
+     * @param array<string,mixed> $server An optional custom server variable.
+     * 
+     * @return array<string,string> Return the request headers.
+     */
+    public static function getFromGlobal(?array $server = null): array
+    {
+        $headers = [];
+        foreach ($server ?? $_SERVER as $name => $value) {
             if (str_starts_with($name, 'HTTP_') || $name == 'CONTENT_TYPE' || $name == 'CONTENT_LENGTH') {
                 $header = str_replace(
                     [' ', 'Http'], 
@@ -158,7 +174,7 @@ class Header implements LazyInterface, Countable
             }
         }
 
-        return [...self::$variables, $headers];
+        return $headers;
     }
 
     /**
@@ -194,12 +210,12 @@ class Header implements LazyInterface, Countable
     }
 
     /**
-     * Get system headers.
+     * Get default system headers.
      *
      * @return array<string,string> The system headers.
      * @ignore
      */
-    public static function getSystemHeaders(): array
+    public static function getDefault(): array
     {
         return [
             'Content-Type'  => 'text/html',
@@ -262,7 +278,7 @@ class Header implements LazyInterface, Countable
         }
 
         if (isset($headers['default_headers'])) {
-            $headers = array_replace(self::getSystemHeaders(), $headers);
+            $headers = array_replace(self::getDefault(), $headers);
         }
 
         if(self::isValidRestFullHeaders($headers)){

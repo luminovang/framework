@@ -66,14 +66,14 @@ class OpenAI implements AiInterface, LazyInterface
       * {@inheritdoc}
     */
     public function __construct(
-        string $apikey, 
+        string $api_key, 
         string $version = 'v1', 
         ?string $organization = null, 
         ?string $project = null
     )
     {
         $headers = [
-            'Authorization' => 'Bearer ' . $apikey,
+            'Authorization' => 'Bearer ' . $api_key,
             'Content-Type' => 'application/json'
         ];
 

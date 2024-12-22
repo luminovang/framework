@@ -94,11 +94,13 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      * @param array<string,mixed> $body The request body, provided as an associative array 
      *                                  (e.g., `['field' => 'value']`). This may include form data, JSON, etc.
      * @param array<string,mixed> $files The request files, provided as an associative array (e.g., `['field' => array|string]`). 
+     * @param array<string,mixed>|null $cookies Optional. An associative array of Cookies (e.g, $_COOKIE).
      * @param string|null $raw Optional request raw-body. 
      * @param array<string,mixed>|null $server Optional. Server variables (e.g., `$_SERVER`). 
      *                                         If not provided, defaults to global `$_SERVER`.
      * @param array<string,mixed>|null $headers Optional. An associative array of HTTP headers. 
      *                                          If not provided, headers request headers will be extracted from `apache_request_headers` or `$_SERVER`.
+     * 
      * @link https://luminova.ng/docs/0.0.0/http/request
      */
     public function __construct(
@@ -106,12 +108,12 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         private ?string $uri = null,
         private array $body = [],
         private array $files = [],
+        private ?array $cookies = null,
         private ?string $raw = null,
         ?array $server = null,
-        ?array $headers = null
+        ?array $headers = null,
     ) {
-        $this->server = LazyObject::newObject(Server::class, $server ?? $_SERVER);
-        $this->header = LazyObject::newObject(Header::class, $headers);
+        $this->parseRequestUrl($server, $headers);
         $this->parseRequestBody();
     }
 
@@ -334,7 +336,22 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function getContentType(): string
     {
-        return $this->header->get('Content-Type') ?? $this->server->get('CONTENT_TYPE', '');
+        $type = $this->header->get('Content-Type') ?? $this->server->get('CONTENT_TYPE');
+
+        if($type){
+            return $type;
+        }
+
+        if (in_array($this->getMethod(), ['POST', 'PUT', 'DELETE', 'PATCH'], true)) {
+            $type = 'application/x-www-form-urlencoded';
+            
+            $this->header->set('Content-Type', $type);
+            $this->server->set('CONTENT_TYPE', $type);
+
+            return $type;
+        }
+
+        return '';
     }
 
     /**
@@ -430,11 +447,12 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     public function getQueries(): ?array
     {
         $queries = $this->server->get('QUERY_STRING');
+
         if(null === $queries || $queries === ''){
             return null;
         }
 
-        $queries = explode('&', $queries);
+        $queries = explode('&', html_entity_decode($queries));
         $values = [];
 
         foreach ($queries as $value) {
@@ -865,22 +883,25 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     protected function parseRequestCookies(): CookieJarInterface
     {
         $cookie = new CookieFileJar([], ['readOnly' => true]);
-        $cookies =  $this->header->get('Cookie') ?? $this->server->get('HTTP_COOKIE');
+        $cookies = $this->cookies 
+            ?? $this->header->get('Cookie') 
+            ?? $this->server->get('HTTP_COOKIE');
 
         if(!$cookies){
             return $cookie;
         }
 
-        $cookie->setCookies($cookie->getFromHeader(
-            explode('; ', $cookies),
-            false,
-            [
-                ...CookieFileJar::DEFAULT_OPTIONS,
-                'domain' => '.' . $this->getHost()
-            ]
-        ));
-
         $config = new Session();
+        $options = [
+            ...CookieFileJar::DEFAULT_OPTIONS,
+            'domain' => '.' . $this->getHost()
+        ];
+
+        $cookie->setCookies(
+            is_string($cookies) 
+                ? $cookie->getFromHeader(explode('; ', $cookies), false, $options)
+                : $cookie->getFromGlobal($cookies, false, $options)
+        );
 
         if($cookie->has($config->cookieName)){
             $cookie->getCookie($config->cookieName)
@@ -894,8 +915,93 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
                     'raw'       =>  false
                 ]);
         }
-
+        
         return $cookie;
+    }
+
+    /**
+     * Parses and sets up the request URL based on the provided server and header arrays.
+     *
+     * @param array|null $server The server array containing request information.
+     * @param array|null $headers The headers array containing request headers.
+     *
+     * @return void
+     * @throws InvalidArgumentException If the provided URI is malformed.
+     */
+    protected function parseRequestUrl(?array $server = null, ?array $headers = null): void
+    {
+        if ($this->uri === null) {
+            $this->server = LazyObject::newObject(Server::class, $server ?? $_SERVER);
+            $this->header = LazyObject::newObject(Header::class, $headers);
+
+            return;
+        }
+
+        $parts = parse_url($this->uri);
+
+        if ($parts === false) {
+            throw new InvalidArgumentException(sprintf('Malformed URI "%s".', $this->uri));
+        }
+
+        $method = strtoupper($this->method ?? 'GET');
+        $server = array_replace(Server::getDefault(), $server ?? []);
+
+        $server['PATH_INFO'] = '';
+        $server['REQUEST_METHOD'] = $method;
+
+        if (isset($parts['host'])) {
+            $server['SERVER_NAME'] = $parts['host'];
+            $server['HTTP_HOST'] = $parts['host'];
+        }
+
+        if (isset($parts['scheme'])) {
+            $server['SERVER_PORT'] = ($parts['scheme'] === 'https') ? 443 : 80;
+            $server['HTTPS'] = ($parts['scheme'] === 'https') ? 'on' : null;
+        }
+
+        if (isset($parts['port'])) {
+            $server['SERVER_PORT'] = $parts['port'];
+            $server['HTTP_HOST'] .= ':' . $parts['port'];
+        }
+
+        if (isset($parts['user'])) {
+            $server['PHP_AUTH_USER'] = $parts['user'];
+        }
+
+        if (isset($parts['pass'])) {
+            $server['PHP_AUTH_PW'] = $parts['pass'];
+        }
+
+        $path = $parts['path'] ?? '/';
+        $type = $server['CONTENT_TYPE'] ?? null;
+        $body = match ($method) {
+            'POST', 'PUT', 'DELETE', 'PATCH' => [],
+            default => $this->body[$method] ?? [],
+        };
+
+        if (
+            $body !== [] && !$type && 
+            in_array($method, ['POST', 'PUT', 'DELETE', 'PATCH'], true)
+        ) {
+            $server['CONTENT_TYPE'] = 'application/x-www-form-urlencoded';
+        }
+
+        $query = '';
+        if (isset($parts['query'])) {
+            $params = [];
+            parse_str(html_entity_decode($parts['query']), $params);
+
+            $this->body[$method] = $body ? array_replace($params, $body) : $params;
+            $query = http_build_query($this->body, '', '&');
+        } elseif ($body) {
+            $query = http_build_query($body, '', '&');
+        }
+
+        $server['REQUEST_URI'] = $path . ($query !== '' ? '?' . $query : '');
+        $server['QUERY_STRING'] = $query;
+
+        $this->server = LazyObject::newObject(Server::class, $server);
+        $this->header = LazyObject::newObject(Header::class, [...($headers ?? []), ...$server]);
     }
 
     /**
