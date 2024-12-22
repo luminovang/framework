@@ -25,6 +25,7 @@ use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\Http\RequestException;
 use \Luminova\Exceptions\BadMethodCallException;
 use \Exception;
+use Throwable;
 
 class Network implements NetworkInterface, LazyInterface
 {
@@ -259,14 +260,14 @@ class Network implements NetworkInterface, LazyInterface
      * This method processes a Guzzle request exception, checking if a valid response is present.
      * If a response is available, it returns the ResponseInterface; otherwise, it returns null.
      *
-     * @param GuzzleRequestException $e The exception thrown during a Guzzle request.
+     * @param Throwable $e The exception thrown during a Guzzle request.
      *
      * @return ResponseInterface|null Returns the response if present, or null if no response is available.
      * @throws RequestException $e Throw the exception encountered during a request.
      */
-    private function handleGuzzleRequestException(GuzzleRequestException $e): ?ResponseInterface
+    private function handleGuzzleRequestException(Throwable $e): ?ResponseInterface
     {
-        if ($e->getResponse() instanceof ResponseInterface) {
+        if (($e instanceof GuzzleRequestException) && $e->getResponse() instanceof ResponseInterface) {
             return $e->getResponse();
         }
 
@@ -279,11 +280,11 @@ class Network implements NetworkInterface, LazyInterface
      * This method processes an AppException. If the exception is an instance of AppException,
      * it rethrows it; otherwise, it wraps the exception in a RequestException and throws it.
      *
-     * @param AppException|GuzzleRequestException $e The application-specific or guzzle exception.
+     * @param Throwable $e The application-specific or guzzle exception.
      *
      * @return never This method does not return a value and will always throw an exception.
      */
-    private function handleAppException(AppException|GuzzleRequestException $e): never
+    private function handleAppException(Throwable $e): never
     {
         if ($e instanceof AppException) {
             throw $e;
