@@ -45,22 +45,22 @@ class Generators extends BaseConsole
     */
     public function run(?array $options = []): int
     {
-        $this->explain($options);
-        $command = trim($this->getCommand());
-        $name = $this->getArgument(1);
+        $this->term->explain($options);
+        $command = trim($this->term->getCommand());
+        $name = $this->term->getArgument(1);
 
         if(empty($name)){
-            $this->writeln('Generator name is required', 'red');
-            $this->beeps();
+            $this->term->writeln('Generator name is required', 'red');
+            $this->term->beeps();
 
             return STATUS_ERROR;
         }
 
-        $type = strtolower($this->getOption('type', 'view'));
-        $extend = $this->getOption('extend', null);
-        $implement = $this->getOption('implement', null);
-        $dir = $this->getOption('dir', '');
-        $module = strtolower(trim($this->getOption('module', '')));
+        $type = strtolower($this->term->getOption('type', 'view'));
+        $extend = $this->term->getOption('extend', null);
+        $implement = $this->term->getOption('implement', null);
+        $dir = $this->term->getOption('dir', '');
+        $module = strtolower(trim($this->term->getOption('module', '')));
         $hmvc = env('feature.app.hmvc', false);
         
         $runCommand = match($command){
@@ -72,7 +72,7 @@ class Generators extends BaseConsole
         };
 
         if ($runCommand === 'unknown') {
-            return $this->oops($command);
+            return $this->term->oops($command);
         } 
             
         return (int) $runCommand;
@@ -181,7 +181,7 @@ class Generators extends BaseConsole
 
             PHP;
         }else{
-            $this->writeln("Invalid controller --type flag: {$type}, use 'view or command'", 'red');
+            $this->term->writeln("Invalid controller --type flag: {$type}, use 'view or command'", 'red');
             return;
         }
 
@@ -195,7 +195,7 @@ class Generators extends BaseConsole
                 $this->createView($view, $dir, $module);
             }
         }else{
-            $this->writeln("Unable to create class {$name}", 'red');
+            $this->term->writeln("Unable to create class {$name}", 'red');
         }
     }
     
@@ -254,7 +254,7 @@ class Generators extends BaseConsole
         }
 
         if (!$this->saveFile($classContent, $path, $name . $type)) {
-            $this->writeln("Unable to create view {$name}", 'red');
+            $this->term->writeln("Unable to create view {$name}", 'red');
         }
     }
 
@@ -368,7 +368,7 @@ class Generators extends BaseConsole
             : '/app/Models/';
         
         if (!$this->saveFile($modelContent, $path, "{$name}.php")) {
-            $this->writeln("Unable to create model {$name}", 'red');
+            $this->term->writeln("Unable to create model {$name}", 'red');
         }
     }
 
@@ -415,7 +415,7 @@ class Generators extends BaseConsole
         $path = "/app/Utils/";
         
         if (!$this->saveFile($classContent, $path, "{$name}.php")) {
-            $this->writeln("Unable to create class {$name}", 'red');
+            $this->term->writeln("Unable to create class {$name}", 'red');
         }
     }
 
@@ -434,18 +434,22 @@ class Generators extends BaseConsole
         $continue = 'yes';
 
         if(file_exists($filepath)){
-            $continue = $this->prompt('File with same name "' . $filename .'", already exist in path: "' . $path . '", do you want to continue?', ["yes", "no"], 'required|in_array(yes,no)');
+            $continue = $this->term->prompt(
+                "File with same name '{$filename}', already exist in path: '{$path}', do you want to continue?", 
+                ["yes", "no"], 
+                'required|in_array(yes,no)'
+            );
         }
 
         if($continue === 'yes'){
             try {
                 if(write_content($filepath, $content)){
                     $filepath = filter_paths($filepath);
-                    $this->writeln("Completed successfully location: /{$filepath}", 'green');
+                    $this->term->writeln("Completed successfully location: /{$filepath}", 'green');
                     return true;
                 }
             } catch(Exception $e) {
-                $this->writeln($e->getMessage(), 'red');
+                $this->term->writeln($e->getMessage(), 'red');
             }
         }
 

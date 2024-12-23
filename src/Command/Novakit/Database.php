@@ -59,7 +59,7 @@ class Database extends BaseConsole
      */
     public function run(?array $options = []): int
     {
-        $this->explain($options);
+        $this->term->explain($options);
         // Temporarily enable cli exception
         setenv('throw.cli.exceptions', 'true');
         try{
@@ -69,10 +69,10 @@ class Database extends BaseConsole
             return STATUS_ERROR;
         }
 
-        self::$isDebug = (bool) $this->getAnyOption('debug', 'b', false);
+        self::$isDebug = (bool) $this->term->getAnyOption('debug', 'b', false);
         shared('SHOW_QUERY_DEBUG', self::$isDebug);
 
-        return match(trim($this->getCommand())){
+        return match(trim($this->term->getCommand())){
             'db:clear' => $this->clearLocks(),
             'db:drop' => $this->executeMigration(true),
             'db:alter' => $this->alterTable(),
@@ -100,21 +100,21 @@ class Database extends BaseConsole
      */
     private function doTruncate(mixed $table = null): int 
     {
-        $table ??= $this->getAnyOption('table', 't');
+        $table ??= $this->term->getAnyOption('table', 't');
 
         if ($table === false || $table === '') {
-            $this->writeln("Error: You must specify the table name using '--table=Foo'.", 'white', 'red');
+            $this->term->writeln("Error: You must specify the table name using '--table=Foo'.", 'white', 'red');
             return STATUS_ERROR;
         }
       
-        $noTransaction = $this->getAnyOption('no-transaction', 'n', false);
+        $noTransaction = $this->term->getAnyOption('no-transaction', 'n', false);
  
         if(self::$builder->table($table)->truncate(!$noTransaction)){
-            $this->writeln("Success: Table '{$table}' was truncated successfully.", 'white', 'green');
+            $this->term->writeln("Success: Table '{$table}' was truncated successfully.", 'white', 'green');
             return STATUS_SUCCESS;
         }
 
-        $this->writeln("Failed: No records were truncated for table '{$table}'.", 'yellow');
+        $this->term->writeln("Failed: No records were truncated for table '{$table}'.", 'yellow');
         return STATUS_ERROR;
     }
 
@@ -125,16 +125,16 @@ class Database extends BaseConsole
      */
     private function clearLocks(): int 
     {
-        $context = $this->getAnyOption('lock', 'l', null);
-        $class = $this->getAnyOption('class', 'c');
+        $context = $this->term->getAnyOption('lock', 'l', null);
+        $class = $this->term->getAnyOption('class', 'c');
         
         if ($context === true || $context === null) {
-            $this->writeln("Error: Specify '--lock=seeder' to clear seeder lock files or '--lock=migration' to clear migration lock files.", 'white', 'red');
+            $this->term->writeln("Error: Specify '--lock=seeder' to clear seeder lock files or '--lock=migration' to clear migration lock files.", 'white', 'red');
             return STATUS_ERROR;
         }
 
         if ($class === true) {
-            $this->writeln("Error: Please specify a non-empty value for '--class=Foo'.", 'white', 'red');
+            $this->term->writeln("Error: Please specify a non-empty value for '--class=Foo'.", 'white', 'red');
             return STATUS_ERROR;
         }
         
@@ -150,7 +150,7 @@ class Database extends BaseConsole
         }
         
         if ($backup === null) {
-            $this->writeln("Error: Unsupported lock context value '{$context}'. Allowed values are 'seeder' or 'migration'.", 'white', 'red');
+            $this->term->writeln("Error: Unsupported lock context value '{$context}'. Allowed values are 'seeder' or 'migration'.", 'white', 'red');
             return STATUS_ERROR;
         }
         
@@ -158,7 +158,7 @@ class Database extends BaseConsole
             FileManager::remove($backup, false, $deleted);
             
             if ($deleted > 0) {
-                $this->writeln("Success: '{$deleted}' {$context} lock file(s) deleted.", 'white', 'green');
+                $this->term->writeln("Success: '{$deleted}' {$context} lock file(s) deleted.", 'white', 'green');
                 return STATUS_SUCCESS;
             }
         } else {
@@ -170,7 +170,7 @@ class Database extends BaseConsole
             }
             
             if (empty($lock)) {
-                $this->writeln("Error: No {$context} locked versions found in lock file.", 'white', 'red');
+                $this->term->writeln("Error: No {$context} locked versions found in lock file.", 'white', 'red');
                 return STATUS_ERROR;
             }
 
@@ -178,7 +178,7 @@ class Database extends BaseConsole
             $metadata = $entry['metadata'] ?? [];
 
             if (empty($entry) || empty($metadata)) {
-                $this->writeln("Error: No {$context} locked version found for '{$class}'.", 'white', 'red');
+                $this->term->writeln("Error: No {$context} locked version found for '{$class}'.", 'white', 'red');
                 return STATUS_ERROR;
             }
 
@@ -203,13 +203,13 @@ class Database extends BaseConsole
                 }
 
                 if (write_content($filename, json_encode($lock, JSON_PRETTY_PRINT))) {
-                    $this->writeln("Success: '{$deleted}' {$context} lock file(s) for '{$class}' deleted.", 'white', 'green');
+                    $this->term->writeln("Success: '{$deleted}' {$context} lock file(s) for '{$class}' deleted.", 'white', 'green');
                     return STATUS_SUCCESS;
                 }
             }
         }
         
-        $this->writeln("Error: No {$context} lock files to clear.", 'white', 'red');
+        $this->term->writeln("Error: No {$context} lock files to clear.", 'white', 'red');
         return STATUS_ERROR;
     }
    
@@ -220,15 +220,15 @@ class Database extends BaseConsole
      */
     private function alterTable(): int 
     {
-        $class = $this->getAnyOption('class', 'c');
+        $class = $this->term->getAnyOption('class', 'c');
 
         if($class === true || empty($class)){
-            $this->writeln("Error: Alter required argument '--class=Foo' with migration class name, and does not support empty value.", 'white', 'red');
+            $this->term->writeln("Error: Alter required argument '--class=Foo' with migration class name, and does not support empty value.", 'white', 'red');
             return STATUS_ERROR;
         }
 
-        $noBackup = (bool) $this->getAnyOption('no-backup', 'n', false);
-        shared('ALTER_DROP_COLUMNS', (bool) $this->getAnyOption('drop-columns', 'd', false));
+        $noBackup = (bool) $this->term->getAnyOption('no-backup', 'n', false);
+        shared('ALTER_DROP_COLUMNS', (bool) $this->term->getAnyOption('drop-columns', 'd', false));
         shared('CHECK_ALTER_TABLE', true);
 
         $lock = [];
@@ -266,17 +266,16 @@ class Database extends BaseConsole
                 }
             }
 
-            $this->newLine();
+            $this->term->newLine();
 
             if($executed > 0){
-                $this->writeln(sprintf("'{$executed}' migration%s was altered successfully.", $executed > 1 ? 's' : ''), 'white', 'green');
+                $this->term->writeln(sprintf("'{$executed}' migration%s was altered successfully.", $executed > 1 ? 's' : ''), 'white', 'green');
                 return STATUS_SUCCESS;
             }
 
-            $this->writeln("No pending migration table to alter.", 'black', 'yellow');
-            return STATUS_ERROR;
+            $this->term->writeln("No pending migration table to alter.", 'black', 'yellow');
         } catch (AppException|Exception $e) {
-            $this->writeln("Migration alter execution failed: " . $e->getMessage(), 'white', 'red');
+            $this->term->writeln("Migration alter execution failed: " . $e->getMessage(), 'white', 'red');
         }
 
         return STATUS_ERROR;
@@ -291,17 +290,17 @@ class Database extends BaseConsole
      */
     private function executeSeeder(?string $class = null): int
     {
-        $class ??= $this->getAnyOption('class', 'c');
+        $class ??= $this->term->getAnyOption('class', 'c');
 
         if($class === true || $class === ''){
-            $this->writeln("Error: Class argument does not support empty value.", 'white', 'red');
+            $this->term->writeln("Error: Class argument does not support empty value.", 'white', 'red');
             return STATUS_ERROR;
         }
 
-        $noBackup = $this->getAnyOption('no-backup', 'n', false);
-        $invokes = $this->getAnyOption('invoke', 'i', false);
+        $noBackup = $this->term->getAnyOption('no-backup', 'n', false);
+        $invokes = $this->term->getAnyOption('invoke', 'i', false);
 
-        if($this->getAnyOption('rollback', 'r', false)){
+        if($this->term->getAnyOption('rollback', 'r', false)){
             return $this->rollbackSeeder($class, $noBackup, $invokes);
         }
 
@@ -399,15 +398,15 @@ class Database extends BaseConsole
                 usleep(100000);
             }
 
-            $this->newLine();
+            $this->term->newLine();
             if($executed > 0){
-                $this->writeln(sprintf("'{$executed}' seeder%s was executed successfully.", $executed > 1 ? 's' : ''), 'white', 'green');
+                $this->term->writeln(sprintf("'{$executed}' seeder%s was executed successfully.", $executed > 1 ? 's' : ''), 'white', 'green');
                 return STATUS_SUCCESS;
             }
 
-            $this->writeln("Failed: No seeder was execution.", 'red');
+            $this->term->writeln("Failed: No seeder was execution.", 'red');
         } catch (AppException|Exception $e) {
-            $this->writeln("Seeder execution failed: " . $e->getMessage(), 'white', 'red');
+            $this->term->writeln("Seeder execution failed: " . $e->getMessage(), 'white', 'red');
         }
 
         return STATUS_ERROR;
@@ -422,16 +421,17 @@ class Database extends BaseConsole
      */
     private function executeMigration(?bool $drop = null): int 
     {
-        $class = $this->getAnyOption('class', 'c');
+        $class = $this->term->getAnyOption('class', 'c');
        
         if($class === true || $class === ''){
-            $this->writeln("Error: Class argument does not support empty value.", 'white', 'red');
+            $this->term->writeln("Error: Class argument does not support empty value.", 'white', 'red');
             return STATUS_ERROR;
         }
 
-        $noBackup = $this->getAnyOption('no-backup', 'n', false);
-        $invokes = $this->getAnyOption('invoke', 'i', false);
-        if(!$drop && $this->getAnyOption('rollback', 'r', false)){
+        $noBackup = $this->term->getAnyOption('no-backup', 'n', false);
+        $invokes = $this->term->getAnyOption('invoke', 'i', false);
+
+        if(!$drop && $this->term->getAnyOption('rollback', 'r', false)){
             self::$isDebug = false;
             return $this->rollbackMigration($class, $noBackup, $invokes);
         }
@@ -444,7 +444,7 @@ class Database extends BaseConsole
         $lock = [];
         $backup = null; 
         $executed = 0; 
-        $drop ??= $this->getAnyOption('drop', 'd', false);
+        $drop ??= $this->term->getAnyOption('drop', 'd', false);
         self::$isDebug = $drop ? false : self::$isDebug;
         $path = root('/app/Database/Migrations/');
         $shouldGuard = (self::$isDebug === false && $drop === false);
@@ -515,25 +515,25 @@ class Database extends BaseConsole
                 return STATUS_SUCCESS;
             }
 
-            $this->newLine();
+            $this->term->newLine();
             if($executed > 0){
                 if ($drop) {
-                    $this->writeln(sprintf("'{$executed}' migration%s was downgraded successfully.", $executed > 1 ? 's' : ''), 'white', 'green');
+                    $this->term->writeln(sprintf("'{$executed}' migration%s was downgraded successfully.", $executed > 1 ? 's' : ''), 'white', 'green');
                 } else{
-                    $this->writeln(sprintf("'{$executed}' migration%s was upgraded successfully.", $executed > 1 ? 's' : ''), 'white', 'green');
+                    $this->term->writeln(sprintf("'{$executed}' migration%s was upgraded successfully.", $executed > 1 ? 's' : ''), 'white', 'green');
                 }
 
                 return STATUS_SUCCESS;
             }
 
-            $this->writeln("Failed: no migration execution", 'red');
+            $this->term->writeln("Failed: no migration execution", 'red');
         } catch (AppException|Exception $e) {
             $db = shared('DROP_TRANSACTION');
 
             if($db instanceof DatabaseInterface && $db->inTransaction()){
                 $db->rollback();
             }
-            $this->writeln("Migration execution failed: " . $e->getMessage(), 'white', 'red');
+            $this->term->writeln("Migration execution failed: " . $e->getMessage(), 'white', 'red');
         }
 
         return STATUS_ERROR;
@@ -601,7 +601,7 @@ class Database extends BaseConsole
                 $db->rollback();
             }
             
-            $this->writeln("Error: " . $e->getMessage(), 'white', 'red');
+            $this->term->writeln("Error: " . $e->getMessage(), 'white', 'red');
         }
 
         return false;
@@ -618,10 +618,10 @@ class Database extends BaseConsole
     {
         try{
             $seeder->run(self::$builder);
-            $this->writeln("[" . Color::style(get_class_name($seeder), 'green') . "] Execution completed.");
+            $this->term->writeln("[" . Color::style(get_class_name($seeder), 'green') . "] Execution completed.");
             return true;
         } catch (Exception|AppException $e) {
-            $this->writeln("Error: " . $e->getMessage(), 'white', 'red');
+            $this->term->writeln("Error: " . $e->getMessage(), 'white', 'red');
         }
         return false;
     }
@@ -644,7 +644,7 @@ class Database extends BaseConsole
     ): int 
     {
         if (empty($class)) {
-            $this->writeln('Error: Please specify a migration class name using `--class=Foo --rollback`.', 'white', 'red');
+            $this->term->writeln('Error: Please specify a migration class name using `--class=Foo --rollback`.', 'white', 'red');
             return STATUS_ERROR;
         }
 
@@ -654,7 +654,7 @@ class Database extends BaseConsole
             $lock = get_content($lockFile);
 
             if ($lock === false || $lock === '') {
-                $this->writeln('Error: Nothing to rollback, migration backup lock is empty.', 'white', 'red');
+                $this->term->writeln('Error: Nothing to rollback, migration backup lock is empty.', 'white', 'red');
                 return STATUS_ERROR;
             }
 
@@ -664,15 +664,15 @@ class Database extends BaseConsole
                 $metadata = $lock[$class]['metadata'] ?? [];
 
                 if($metadata === []){
-                    $this->writeln("Error: Backup metadata for '{$class}' not found.", 'white', 'red');
+                    $this->term->writeln("Error: Backup metadata for '{$class}' not found.", 'white', 'red');
                     return STATUS_ERROR;
                 }
 
                 $versions = $this->listLocks($lock, $class);
-                $input ??= $this->prompt('Enter the version number you want to roll back to:', $versions, 'required|in_array(' . implode(',', $versions) . ')');
+                $input ??= $this->term->prompt('Enter the version number you want to roll back to:', $versions, 'required|in_array(' . implode(',', $versions) . ')');
 
                 if ($input === $lock[$class]['latestVersion']) {
-                    $this->writeln('Error: You cannot roll back to the current version.', 'white', 'red');
+                    $this->term->writeln('Error: You cannot roll back to the current version.', 'white', 'red');
                     return STATUS_ERROR;
                 }
 
@@ -712,29 +712,29 @@ class Database extends BaseConsole
                                 }
 
                                 if ($executions > 0) {
-                                    $this->writeln("Success: Migration rolled back to version '{$input}' successfully.", 'green');
+                                    $this->term->writeln("Success: Migration rolled back to version '{$input}' successfully.", 'green');
                                     return STATUS_SUCCESS;
                                 }
                             }
                         }
 
-                        $this->writeln("Failed: No migrations were rolled back to version '{$input}'.", 'red');
+                        $this->term->writeln("Failed: No migrations were rolled back to version '{$input}'.", 'red');
                     } catch (Exception|AppException $e) {
                         $db = shared('DROP_TRANSACTION');
                         
                         if ($db instanceof DatabaseInterface && $db->inTransaction()) {
                             $db->rollback();
                         }
-                        $this->writeln("Error: {$e->getMessage()}", 'red');
+                        $this->term->writeln("Error: {$e->getMessage()}", 'red');
                     }
                 } else {
-                    $this->writeln("Error: The selected version '{$input}' does not exist.", 'white', 'red');
+                    $this->term->writeln("Error: The selected version '{$input}' does not exist.", 'white', 'red');
                 }
             } else {
-                $this->writeln("Error: No lock found for class '{$class}'.", 'white', 'red');
+                $this->term->writeln("Error: No lock found for class '{$class}'.", 'white', 'red');
             }
         } else {
-            $this->writeln("Error: Migration lock file not found.", 'white', 'red');
+            $this->term->writeln("Error: Migration lock file not found.", 'white', 'red');
         }
 
         return STATUS_ERROR;
@@ -745,19 +745,19 @@ class Database extends BaseConsole
      *
      * @param mixed $class The class name of the seeder to rollback.
      * @param bool $noBackup Weather no backup flag is passed.
-     * @param bool $invokes Weather to invokes other invokable seeders (default: false).
+     * @param bool $invokes Weather to invokes other invocable seeders (default: false).
      *
      * @return int Returns STATUS_SUCCESS on successful rollback, STATUS_ERROR on failure.
      */
     private function rollbackSeeder(mixed $class, bool $noBackup = false, bool $invokes = false): int 
     {
         if (empty($class)) {
-            $this->writeln('Error: You must specify a seeder class name to rollback using `--class=Foo --rollback`.', 'white', 'red');
+            $this->term->writeln('Error: You must specify a seeder class name to rollback using `--class=Foo --rollback`.', 'white', 'red');
             return STATUS_ERROR;
         }
 
-        shared('SHOW_QUERY_DEBUG', (bool) $this->getAnyOption('debug', 'b', false));
-        $table = $this->getAnyOption('table', 't', false);
+        shared('SHOW_QUERY_DEBUG', (bool) $this->term->getAnyOption('debug', 'b', false));
+        $table = $this->term->getAnyOption('table', 't', false);
         $backupPath = root('/writeable/database/Seeders/');
         $truncated = false;
 
@@ -765,7 +765,7 @@ class Database extends BaseConsole
             $lock = get_content($lockFile);
 
             if($lock === false || $lock === ''){
-                $this->writeln('Error: Seeder backup lock is empty.', 'white', 'red');
+                $this->term->writeln('Error: Seeder backup lock is empty.', 'white', 'red');
                 return STATUS_ERROR;
             }
 
@@ -776,7 +776,7 @@ class Database extends BaseConsole
                 $versions = $this->listLocks($lock, $class, 'Seed', ($table === true || $table === false));
                 $executions = 0;
 
-                $input = $this->prompt('Enter the version number you want to rollback to:', $versions, 'required|in_array(' . implode(',', $versions) . ')');
+                $input = $this->term->prompt('Enter the version number you want to rollback to:', $versions, 'required|in_array(' . implode(',', $versions) . ')');
 
                 if (in_array($input, $versions)) {
                     try {
@@ -793,8 +793,8 @@ class Database extends BaseConsole
                             if(self::$builder->table($table)->temp()){
                                $truncated = $this->doTruncate($table) === STATUS_SUCCESS;
                             }else{
-                                $this->writeln("Error: Unable to create backup table '{$table}'. Recovery of seed records may be impossible if rollback fails.", 'red');
-                                $continue = $this->prompt('Do you wish to continue?', ['yes' => 'green', 'no' => 'red'], 'required|in_array(yes,no)');
+                                $this->term->writeln("Error: Unable to create backup table '{$table}'. Recovery of seed records may be impossible if rollback fails.", 'red');
+                                $continue = $this->term->prompt('Do you wish to continue?', ['yes' => 'green', 'no' => 'red'], 'required|in_array(yes,no)');
                                 
                                 if($continue === 'yes'){
                                     $this->doTruncate($table);
@@ -828,26 +828,26 @@ class Database extends BaseConsole
                                 }
 
                                 if($executions > 0){
-                                    $this->writeln("Success: Seeder rolled back to version '{$input}' successfully.", 'green');
+                                    $this->term->writeln("Success: Seeder rolled back to version '{$input}' successfully.", 'green');
                                     return STATUS_SUCCESS;
                                 }
                             }
                         }
 
-                        $this->writeln("Failed: No seeder was rolled back to version '{$input}'.", 'red');
+                        $this->term->writeln("Failed: No seeder was rolled back to version '{$input}'.", 'red');
                     } catch (Exception|AppException $e) {
-                        $this->writeln("Error: {$e->getMessage()}", 'red');
+                        $this->term->writeln("Error: {$e->getMessage()}", 'red');
                     }
                 }else{
-                    $this->writeln("Error: The selected version: '{$input}' does not exists.", 'white', 'red');
+                    $this->term->writeln("Error: The selected version: '{$input}' does not exists.", 'white', 'red');
                 }
             } else {
-                $this->writeln("Error: No lock found for class: '{$class}'", 'white', 'red');
+                $this->term->writeln("Error: No lock found for class: '{$class}'", 'white', 'red');
             }
         }
 
         if($truncated && self::$builder->exec("INSERT INTO {$table} SELECT * FROM temp_{$table}") > 0){
-            $this->writeln("Table: '{$table}' records has been restored to last version");
+            $this->term->writeln("Table: '{$table}' records has been restored to last version");
         }
 
         return STATUS_ERROR;
@@ -874,10 +874,10 @@ class Database extends BaseConsole
         $versions = [];
         $metadata = $lock[$class]['metadata'] ?? [];
 
-        $this->writeln("{$title} Class: " . $lock[$class]['namespace']);
+        $this->term->writeln("{$title} Class: " . $lock[$class]['namespace']);
 
         if($warn){
-            $this->writeln(
+            $this->term->writeln(
                 "Note: To avoid adding new seed records instead of replacing them, truncate the seeder table before rolling back.\n" .
                 "Alternatively, pass the `--table` argument with your seed table name to truncate before rolling back the seeder.",
                 'yellow'
@@ -893,7 +893,7 @@ class Database extends BaseConsole
             ];
         }
 
-        $this->print($this->table($headers, $rows, null, 'green'));
+        $this->term->print($this->term->table($headers, $rows, null, 'green'));
         return $versions;
     }
 
@@ -1064,7 +1064,7 @@ class Database extends BaseConsole
 
         if(!self::versionChanged($path . $className . '.php', $backup . $last['backup'])){
             if(!$alter){
-                $this->writeln("Skipped: No changed was applied to {$namespace}.", 'black', 'yellow');
+                $this->term->writeln("Skipped: No changed was applied to {$namespace}.", 'black', 'yellow');
             }
 
             return true;

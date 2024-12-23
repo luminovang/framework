@@ -19,7 +19,6 @@ use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Core\CoreApplication;
 use \Luminova\Attributes\AttrCompiler;
-use \Luminova\Base\BaseViewController;
 use \Luminova\Base\BaseController;
 use \Luminova\Application\Factory;
 use \Luminova\Application\Foundation;
@@ -113,9 +112,9 @@ final class Router
     /**
      * Terminal command instance.
      * 
-     * @var Terminal|null $cmd 
+     * @var Terminal|null $term 
      */
-    private static ?Terminal $cmd = null;
+    private static ?Terminal $term = null;
 
     /**
      * Weather router is running in cli mode.
@@ -187,6 +186,7 @@ final class Router
         self::$is_cli = is_command() && self::cmd();
         self::reset(true);
         Foundation::profiling('start');
+        $app = null;
     }
 
     /**
@@ -675,7 +675,7 @@ final class Router
      * 
      * @param string $controller Controller class base name.
      * 
-     * @return class-string<BaseController|BaseViewController|BaseCommand|ErrorHandlerInterface> Return full qualify class namespace.
+     * @return class-string<BaseController|BaseCommand|ErrorHandlerInterface> Return full qualify class namespace.
      */
     private static function getControllerClass(string $controller): string
     {
@@ -751,7 +751,7 @@ final class Router
     ): void 
     {
         if(self::$is_cli){
-            self::$cmd?->error(sprintf('(%s) [%s] %s', $status, $header, $message));
+            self::$term?->error(sprintf('(%s) [%s] %s', $status, $header, $message));
             exit(STATUS_ERROR);
         }
         
@@ -912,11 +912,11 @@ final class Router
      */
     private static function cmd(bool $return = false): Terminal|bool
     {
-        if(!self::$cmd instanceof Terminal){
-            self::$cmd = new Terminal();
+        if(!self::$term instanceof Terminal){
+            self::$term = new Terminal();
         }
 
-        return $return ? self::$cmd : true;
+        return $return ? self::$term : true;
     }
 
     /**
@@ -931,16 +931,16 @@ final class Router
         $command = self::getArgument(2);
 
         if($group === '' || $command === ''){
-            self::$cmd->header();
+            self::$term->header();
             return STATUS_SUCCESS;
         }
 
-        if(self::$cmd->isHelp($group)){
-            if(self::$cmd->header()){
-                self::$cmd->newLine();
+        if(self::$term->isHelp($group)){
+            if(self::$term->header()){
+                self::$term->newLine();
             }
 
-            self::$cmd->helper(null, true);
+            self::$term->helper(null, true);
             return STATUS_SUCCESS;
         }
 
@@ -969,7 +969,7 @@ final class Router
         }
 
         $command = Color::style("'{$group} {$command}'", 'red');
-        self::$cmd->fwrite('Unknown command ' . $command . ' not found', Terminal::STD_ERR);
+        self::$term->fwrite('Unknown command ' . $command . ' not found', Terminal::STD_ERR);
 
         return STATUS_ERROR;
     }
@@ -1032,7 +1032,7 @@ final class Router
         self::$terminate = true;
         $err = 'Error: (503) System undergoing maintenance!';
         if(self::$is_cli || self::$uri === self::CLI_URI){
-            self::$cmd->error($err);
+            self::$term->error($err);
             return true;
         }
 
@@ -1128,9 +1128,9 @@ final class Router
      */
     private static function handleCommand(array $routes): bool
     {
-        self::$commands = self::$cmd->parseCommands($_SERVER['argv'] ?? [], true);
+        self::$commands = self::$term->parseCommands($_SERVER['argv'] ?? [], true);
         $queries = self::getArguments();
-        $isHelp = self::$cmd->isHelp(self::getArgument(2));
+        $isHelp = self::$term->isHelp(self::getArgument(2));
         
         foreach ($routes as $route) {
             if($route['middleware']){
@@ -1270,7 +1270,7 @@ final class Router
     /**
      * Execute router HTTP callback class method with the given parameters using instance callback or reflection class.
      *
-     * @param Closure|array{0:class-string<BaseController|BaseViewController|BaseCommand|RouterInterface|ErrorHandlerInterface>,1:string}|string $callback Class public callback method eg: UserController:update.
+     * @param Closure|array{0:class-string<BaseController|BaseCommand|RouterInterface|ErrorHandlerInterface>,1:string}|string $callback Class public callback method eg: UserController:update.
      * @param array $arguments Method arguments to pass to callback method.
      * @param bool $injection Force use dependency injection (default: false).
      * @param bool $is_cli_middleware Indicate weather caller is cli middleware (default: false).
@@ -1329,7 +1329,7 @@ final class Router
     /**
      * Execute class using reflection method.
      * 
-     * @param class-string<BaseController|BaseViewController|BaseCommand|RouterInterface|RouterInterface|ErrorHandlerInterface> $className Controller class name.
+     * @param class-string<BaseController|BaseCommand|RouterInterface|RouterInterface|ErrorHandlerInterface> $className Controller class name.
      * @param string $method Controller class method name.
      * @param array $arguments Optional arguments to pass to the method.
      * @param bool $injection Force use dependency injection. Default is false.
@@ -1361,8 +1361,7 @@ final class Router
             $class = new ReflectionClass($className);
 
             if (!($class->isInstantiable() && (
-                $class->isSubclassOf(BaseCommand::class) || 
-                $class->isSubclassOf(BaseViewController::class) ||
+                $class->isSubclassOf(BaseCommand::class) ||
                 $class->isSubclassOf(BaseController::class) ||
                 $class->implementsInterface(RouterInterface::class)))) {
                 RouterException::throwWith('invalid_controller', RouterException::INVALID_CONTROLLER, [
@@ -1513,15 +1512,15 @@ final class Router
         ];
 
         // Check command string to determine if it has help arguments.
-        if(!$is_middleware && self::$cmd->isHelp($arguments['command'])){
+        if(!$is_middleware && self::$term->isHelp($arguments['command'])){
             
-            if(self::$cmd->header()){
-                self::$cmd->newLine();
+            if(self::$term->header()){
+                self::$term->newLine();
             }
 
             if($instance->help($arguments[$id]) === STATUS_ERROR){
                 // Fallback to default help information if dev does not implement help.
-                self::$cmd->helper($arguments[$id]);
+                self::$term->helper($arguments[$id]);
             }
 
             return STATUS_SUCCESS;
@@ -1707,7 +1706,7 @@ final class Router
             return $views;
         }
 
-        $result = self::$cmd->extract(array_slice($_SERVER['argv'], 2), true);
+        $result = self::$term->extract(array_slice($_SERVER['argv'], 2), true);
         $views['view'] = '/' . implode('/', $result['arguments']);
         $views['options'] = $result['options'];
 

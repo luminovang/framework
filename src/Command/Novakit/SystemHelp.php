@@ -36,21 +36,21 @@ class SystemHelp extends BaseConsole
      */
     public function run(?array $options = []): int
     {
-        $this->explain($options);
+        $this->term->explain($options);
 
-        $command = $this->getArgument(1);
-        $all = $this->getOption('all', false);
+        $command = $this->term->getArgument(1);
+        $all = $this->term->getOption('all', false);
         $helps = $all ? Commands::getCommands() :  Commands::get($command ?? 'help');
 
         if($helps === []){
-            return $this->oops($command);
+            return $this->term->oops($command);
         }
 
         if($all){
             unset($helps['help']);
         }
 
-        $this->helper($helps, $all);
+        $this->term->helper($helps, $all);
         return STATUS_SUCCESS;
     }
 

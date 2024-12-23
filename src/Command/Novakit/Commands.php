@@ -570,8 +570,8 @@ final class Commands
             Text::FONT_BOLD, 'yellow'
         );
     
-        $note = Color::apply("IMPORTANT NOTE:", Text::FONT_BOLD, 'red');
-        $flags = Color::apply("--help (-h)", null, 'yellow');
+        $note = Color::apply('IMPORTANT NOTE:', Text::FONT_BOLD, 'red');
+        $flags = Color::apply('--help (-h)', null, 'yellow');
     
         return <<<TEXT
             {$title}

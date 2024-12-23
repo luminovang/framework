@@ -39,29 +39,29 @@ class Logs extends BaseConsole
      */
     public function run(?array $options = []): int
     {
-        $this->explain($options);
-        $level = $this->getAnyOption('level', 'l', null);
+        $this->term->explain($options);
+        $level = $this->term->getAnyOption('level', 'l', null);
 
         if(!$level){
-            $this->beeps(1);
-            $this->error('No log level was specified.');
+            $this->term->beeps(1);
+            $this->term->error('No log level was specified.');
             return STATUS_ERROR;
         }
 
         setenv('throw.cli.exceptions', 'true');
-        $start = $this->getAnyOption('start', 's', null);
-        $end = $this->getAnyOption('end', 'e', 5);
+        $start = $this->term->getAnyOption('start', 's', null);
+        $end = $this->term->getAnyOption('end', 'e', 5);
 
         try{
-            if($this->getAnyOption('clear', 'c', false)){
+            if($this->term->getAnyOption('clear', 'c', false)){
                 return $this->clearLogFile($level);
             }
         
             return $this->readLogFile($level, $end, $start);
         }catch(AppException|Exception $e){
-            $this->beeps(1);
-            $this->error('Log operation failed:');
-            $this->writeln($e->getMessage());
+            $this->term->beeps(1);
+            $this->term->error('Log operation failed:');
+            $this->term->writeln($e->getMessage());
         }
 
         return STATUS_ERROR;
@@ -87,7 +87,7 @@ class Logs extends BaseConsole
         $filePath = root('/writeable/logs/') . $level . '.log';
 
         if (!file_exists($filePath) || !is_readable($filePath)) {
-            $this->writeln(sprintf('Log: "%s" not found or not readable', $level), 'red');
+            $this->term->writeln(sprintf('Log: "%s" not found or not readable', $level), 'red');
             return false;
         }
 
@@ -110,11 +110,11 @@ class Logs extends BaseConsole
         }
 
         if (unlink($filePath)) {
-            $this->success(sprintf('Log %s was cleared successfully.', $level));
+            $this->term->success(sprintf('Log %s was cleared successfully.', $level));
             return STATUS_SUCCESS;
         }
 
-        $this->error(sprintf('Failed to clear log: %s.', $level));
+        $this->term->error(sprintf('Failed to clear log: %s.', $level));
         return STATUS_ERROR;
     }
 
@@ -171,11 +171,11 @@ class Logs extends BaseConsole
         }
 
         if ($lines === '') {
-            $this->writeln(sprintf('Log: "%s" is empty.', $level), 'yellow');
+            $this->term->writeln(sprintf('Log: "%s" is empty.', $level), 'yellow');
             return STATUS_SUCCESS;
         }
 
-        $this->writeln($lines);
+        $this->term->writeln($lines);
         return STATUS_SUCCESS;
     }
 

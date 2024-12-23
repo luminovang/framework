@@ -9,6 +9,7 @@
  */
 namespace Luminova\Command;
 
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Application\Foundation;
 use \Luminova\Command\Console;
 use \Luminova\Command\Utils\Text;
@@ -18,7 +19,7 @@ use \Luminova\Command\Novakit\Commands;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Closure;
 
-class Terminal 
+class Terminal implements LazyInterface
 {
     /**
      * Represents the standard output stream.

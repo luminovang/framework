@@ -40,11 +40,11 @@ class System extends BaseConsole
      */
     public function run(?array $options = []): int
     {
-        $this->explain($options);
-        $command = trim($this->getCommand());
-        $noSave = (bool) $this->getOption('no-save', false);
-        $key = $this->getOption('key');
-        $value = $this->getOption('value');
+        $this->term->explain($options);
+        $command = trim($this->term->getCommand());
+        $noSave = (bool) $this->term->getOption('no-save', false);
+        $key = $this->term->getOption('key');
+        $value = $this->term->getOption('value');
 
         $runCommand = match($command){
             'generate:key' => $this->generateKey($noSave),
@@ -55,7 +55,7 @@ class System extends BaseConsole
         };
 
         if ($runCommand === null) {
-            return $this->oops($command);
+            return $this->term->oops($command);
         } 
 
         return (int) $runCommand;
@@ -80,15 +80,15 @@ class System extends BaseConsole
     private function addEnv(string $key, string $value = ''): int 
     {
         if($key === ''){
-            $this->beeps();
-            $this->error('Environment variable key cannot be an empty string');
+            $this->term->beeps();
+            $this->term->error('Environment variable key cannot be an empty string');
 
             return STATUS_ERROR;
         }
 
         setenv($key, $value, true);
-        $this->header();
-        $this->success('Variable "' . $key . '" added successfully');
+        $this->term->header();
+        $this->term->success('Variable "' . $key . '" added successfully');
 
         return STATUS_SUCCESS;
     }
@@ -103,8 +103,8 @@ class System extends BaseConsole
     private function removeEnv(string $key): int 
     {
         if($key === ''){
-            $this->beeps();
-            $this->error('Environment variable key cannot be an empty string');
+            $this->term->beeps();
+            $this->term->error('Environment variable key cannot be an empty string');
 
             return STATUS_ERROR;
         }
@@ -113,8 +113,8 @@ class System extends BaseConsole
         $envContents = get_content($envFile);
         
         if($envContents === false){
-            $this->beeps();
-            $this->error('Failed to read environment file');
+            $this->term->beeps();
+            $this->term->error('Failed to read environment file');
             return STATUS_ERROR;
         }
         
@@ -122,15 +122,15 @@ class System extends BaseConsole
             $newContents = preg_replace("/\b$key\b.*\n?/", '', $envContents);
             if (write_content($envFile, $newContents) !== false) {
                 unset($_ENV[$key], $_SERVER[$key]);
-                $this->header();
-                $this->success('Variable "' . $key . '" was deleted successfully');
+                $this->term->header();
+                $this->term->success('Variable "' . $key . '" was deleted successfully');
 
                 return STATUS_SUCCESS;
             }
         }
 
-        $this->beeps();
-        $this->error('Variable "' . $key . '" not found or may have been deleted');
+        $this->term->beeps();
+        $this->term->error('Variable "' . $key . '" not found or may have been deleted');
 
         return STATUS_ERROR;
     }
@@ -142,13 +142,13 @@ class System extends BaseConsole
      */
     private function generateSitemap(): int 
     {
-        if(Sitemap::generate(null, $this)){
+        if(Sitemap::generate(null, $this->term)){
             return STATUS_SUCCESS;
         }
 
-        $this->beeps();
-        $this->newLine();
-        $this->error('Sitemap creation failed');
+        $this->term->beeps();
+        $this->term->newLine();
+        $this->term->error('Sitemap creation failed');
     
         return STATUS_ERROR;
     }
@@ -165,17 +165,17 @@ class System extends BaseConsole
         $key = Crypter::generate_key(); 
 
         if($key === false){
-            $this->beeps();
-            $this->error('Failed to generate application encryption key');
+            $this->term->beeps();
+            $this->term->error('Failed to generate application encryption key');
 
             return STATUS_ERROR;
         }
 
-        $this->success('Application key generated successfully.');
+        $this->term->success('Application key generated successfully.');
 
         if($noSave){
-            $this->newLine();
-            $this->print($key . PHP_EOL);
+            $this->term->newLine();
+            $this->term->print($key . PHP_EOL);
         }else{
             setenv('app.key', $key, true);
         }

@@ -36,12 +36,12 @@ class Builder extends BaseConsole
     */
     public function run(?array $options = []): int
     {
-        $this->explain($options);
-        $type = $this->getAnyOption('type', 't');
+        $this->term->explain($options);
+        $type = $this->term->getAnyOption('type', 't');
 
         if($type === false){ 
             foreach ($this->usages as $line) {
-                $this->writeln($line);
+                $this->term->writeln($line);
             }
 
             return STATUS_ERROR;

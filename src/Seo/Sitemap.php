@@ -10,8 +10,9 @@
 namespace Luminova\Seo;  
 
 use \App\Config\Sitemap as SitemapConfig;
+use \Luminova\Interface\LazyInterface;
+use \Luminova\Utils\LazyObject;
 use \Luminova\Core\CoreApplication;
-use \Luminova\Base\BaseCommand;
 use \Luminova\Command\Terminal;
 use \Luminova\Http\Network;
 use \Luminova\Http\Client\Curl;
@@ -62,9 +63,9 @@ final class Sitemap
     /**
      * Command instance.
      * 
-     * @var Terminal|BaseCommand|null $cli  
+     * @var Terminal<LazyInterface>|null $term  
      */
-    private static Terminal|BaseCommand|null $cli = null;
+    private static ?Terminal $term = null;
 
     /**
      * Sitemap configuration.
@@ -95,21 +96,39 @@ final class Sitemap
     private static string $http = '';
 
     /**
-     * Generate site map.
+     * Generate a sitemap and store in in `public` directory.
      * 
      * @param string|null $url The url to generate site map of (default: null)
-     * @param Terminal|BaseCommand|null $cli The terminal instance, to use when generating site map in cli (default: null).
+     * @param LazyInterface<Terminal>|null $term The terminal instance, to use when generating site map in cli (default: null).
+     * @param string $basename The base name to save generated sitemap as (e.g, `sitemap.xml`).
      * 
      * @return bool Return true if successful, false otherwise.
      * @throws RuntimeException If tries to call in none cli environment.
      */
-    public static function generate(?string $url = null, Terminal|BaseCommand|null $cli = null): bool  
+    public static function generate(
+        ?string $url = null, 
+        ?LazyInterface $term = null, 
+        string $basename = 'sitemap.xml'
+    ): bool  
     {
         set_time_limit(300);
         $totalMemory = ini_get('memory_limit');
 
         if (!is_command()) {
-            throw new RuntimeException('Sitemap generator should be run in cli mode.');
+            throw new RuntimeException('Sitemap generator should be run in cli mode only.');
+        }
+
+        if ($term instanceof LazyObject) {
+            if (!$term->isInstanceof(Terminal::class)) {
+                throw new RuntimeException(
+                    sprintf('Expected an instance of Terminal, but got %s.', get_class($term->getLazyInstance()))
+                );
+            }
+
+            self::$term = $term->getLazyInstance();
+            $term = null;
+        }elseif($term === null){
+            self::$term = new Terminal();
         }
 
         if ($totalMemory === '-1') {
@@ -129,8 +148,7 @@ final class Sitemap
         if($url === '' || $url === '/'){
             throw new RuntimeException(sprintf('Invalid start url: "%s", set start url in .env file "dev.app.start.url".', $url));
         }
-
-        self::$cli = $cli;
+   
         self::$visited = [];
         self::$failed = [];
         self::$urls = [];
@@ -156,16 +174,14 @@ final class Sitemap
 
         $xml .= '</urlset>';
 
-        if(write_content(root('public') . 'sitemap.xml', $xml)){
-            if(self::$cli !== null){
-                self::_print('');
-                self::_print('header');
-                self::_print(Text::block('Your sitemap was completed successfully', Text::CENTER, 1, 'white', 'green'));
-                self::_print(Text::padding('Extracted:', 20, Text::LEFT) . self::_color('[' .self::$counts  . ']', 'green'));
-                self::_print(Text::padding('Skipped:', 20, Text::LEFT) . self::_color('[' .self::$skipped  . ']', 'yellow'));
-                self::_print(Text::padding('Failed:', 20, Text::LEFT) . self::_color('[' . count(self::$failed) . ']', 'red'));
-            }
-        
+        if(write_content(root('public') . $basename, $xml)){
+            self::_print('');
+            self::_print('header');
+            self::_print(Text::block('Your sitemap was completed successfully', Text::CENTER, 1, 'white', 'green'));
+            self::_print(Text::padding('Extracted:', 20, Text::LEFT) . self::_color('[' .self::$counts  . ']', 'green'));
+            self::_print(Text::padding('Skipped:', 20, Text::LEFT) . self::_color('[' .self::$skipped  . ']', 'yellow'));
+            self::_print(Text::padding('Failed:', 20, Text::LEFT) . self::_color('[' . count(self::$failed) . ']', 'red'));
+    
             gc_mem_caches();
             return true;
         }
@@ -188,7 +204,7 @@ final class Sitemap
     private static function addXml(array $page, string $url, ?CoreApplication $app = null): string 
     {
         $link = self::toHttps($page['link'], $url);
-        $lastmod = $page['lastmod'] ?? self::getLastModified($link, $app);
+        $lastMod = $page['lastmod'] ?? self::getLastModified($link, $app);
         $priority = ($url === $page['link'] || $link === $url) ? '1.00' : '0.80';
         $changeFreq = (self::$config->changeFrequently !== null) 
             ? '       <changefreq>' . self::$config->changeFrequently . '</changefreq>' . PHP_EOL 
@@ -196,7 +212,7 @@ final class Sitemap
         
         $xml = '   <url>' . PHP_EOL;
         $xml .= '       <loc>' . htmlspecialchars($link, ENT_QUOTES | ENT_XML1) . '</loc>' . PHP_EOL;
-        $xml .= '       <lastmod>'. $lastmod .'</lastmod>' . PHP_EOL;
+        $xml .= '       <lastmod>'. $lastMod .'</lastmod>' . PHP_EOL;
         $xml .= $changeFreq;
         $xml .= '       <priority>' . $priority . '</priority>' . PHP_EOL;
         $xml .= '   </url>' . PHP_EOL;
@@ -214,7 +230,7 @@ final class Sitemap
 
                 $xml .= '   <url>' . PHP_EOL;
                 $xml .= '       <loc>' . htmlspecialchars($htmlLink, ENT_QUOTES | ENT_XML1) . '</loc>' . PHP_EOL;
-                $xml .= '       <lastmod>'. $lastmod .'</lastmod>' . PHP_EOL;
+                $xml .= '       <lastmod>'. $lastMod .'</lastmod>' . PHP_EOL;
                 $xml .= $changeFreq;
                 $xml .= '       <priority>' . $priority . '</priority>' . PHP_EOL;
                 $xml .= '   </url>' . PHP_EOL;
@@ -266,11 +282,7 @@ final class Sitemap
      */
     private static function _color(string $message, ?string $color = null): string 
     {
-        if (self::$cli instanceof Terminal || self::$cli instanceof BaseCommand) {
-            return self::$cli->color($message, $color);
-        }
-
-        return $message; 
+        return self::$term->color($message, $color);
     }
 
     /**
@@ -297,29 +309,18 @@ final class Sitemap
         ?string $flush = null
     ): void 
     {
-        if (self::$cli instanceof Terminal || self::$cli instanceof BaseCommand) {
-            if ($message === '') {
-                self::$cli->newLine();
-                return;
-            }
-
-            if ($message === 'header') {
-                self::$cli->header();
-                return;
-            }
-
-            if ($message === 'flush') {
-                self::$cli->flush($flush); 
-                return;
-            }
-
-            if ($color === 'error') {
-                self::$cli->error($message); 
-                return;
-            }
-
-            self::$cli->{$method}($message, $color);
+        if ($message === '') {
+            self::$term->newLine();
+            return;
         }
+    
+        match ($message) {
+            'header' => self::$term->header(),
+            'flush' => self::$term->flush($flush),
+            default => ($color === 'error')
+                ? self::$term->error($message)
+                : self::$term->{$method}($message, $color)
+        };
     }
 
     /**
@@ -563,7 +564,7 @@ final class Sitemap
              */
             $response = Async::await(fn() => (new Network(new Curl([
                 'file_time' => true,
-                'onBeforeRequest' => fn(string $url, array $headers) => self::$cli->watcher(
+                'onBeforeRequest' => fn(string $url, array $headers) => self::$term->watcher(
                     max(1, self::$config->scanSpeed), 
                     fn() => self::_print('flush'),
                     null,

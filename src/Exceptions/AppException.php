@@ -338,7 +338,7 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
      */
     public function log(string $level = 'exception'): void
     {
-        (new Logger())->dispatch($level, $this->__toString());
+        (new Logger())->dispatch($level, $this->toString());
     }
 
     /**

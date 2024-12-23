@@ -9,10 +9,11 @@
  */
 namespace Luminova\Core;
 
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Routing\Router;
 use \Luminova\Template\View;
 
-abstract class CoreApplication
+abstract class CoreApplication implements LazyInterface
 {
     /**
      * Utilize the View trait for handling template rendering and responses.

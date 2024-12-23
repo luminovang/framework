@@ -931,8 +931,8 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     protected function parseRequestUrl(?array $server = null, ?array $headers = null): void
     {
         if ($this->uri === null) {
-            $this->server = LazyObject::newObject(Server::class, $server ?? $_SERVER);
-            $this->header = LazyObject::newObject(Header::class, $headers);
+            $this->server = LazyObject::newObject(Server::class, fn() => [$server ?? $_SERVER]);
+            $this->header = LazyObject::newObject(Header::class, Fn() => [$headers]);
 
             return;
         }
@@ -1000,8 +1000,8 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         $server['REQUEST_URI'] = $path . ($query !== '' ? '?' . $query : '');
         $server['QUERY_STRING'] = $query;
 
-        $this->server = LazyObject::newObject(Server::class, $server);
-        $this->header = LazyObject::newObject(Header::class, [...($headers ?? []), ...$server]);
+        $this->server = LazyObject::newObject(Server::class, fn() => [$server]);
+        $this->header = LazyObject::newObject(Header::class, fn() => [[...($headers ?? []), ...$server]]);
     }
 
     /**

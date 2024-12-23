@@ -15,7 +15,6 @@ use \Luminova\Attributes\Prefix;
 use \Luminova\Routing\Router;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Base\BaseController;
-use \Luminova\Base\BaseViewController;
 use \Luminova\Interface\RouterInterface;
 use \Luminova\Exceptions\RouterException;
 use \Luminova\Exceptions\AppException;
@@ -308,7 +307,6 @@ final class AttrCompiler
 
             if (!(self::$weak[$file]->isInstantiable() && !self::$weak[$file]->isAbstract() && (
                 self::$weak[$file]->isSubclassOf(BaseCommand::class) || 
-                self::$weak[$file]->isSubclassOf(BaseViewController::class) ||
                 self::$weak[$file]->isSubclassOf(BaseController::class) ||
                 self::$weak[$file]->implementsInterface(RouterInterface::class)))) {
                 continue;
@@ -697,8 +695,7 @@ final class AttrCompiler
     private function isValidClass(ReflectionClass $class): bool
     {
         return $class->isInstantiable() && !$class->isAbstract() &&
-            ($class->isSubclassOf(BaseViewController::class) ||
-            $class->isSubclassOf(BaseController::class) ||
+            ($class->isSubclassOf(BaseController::class) ||
             $class->implementsInterface(RouterInterface::class));
     }
 

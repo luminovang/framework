@@ -37,23 +37,23 @@ class Context extends BaseConsole
     */
     public function run(?array $options = []): int
     {
-        $this->explain($options);
+        $this->term->explain($options);
 
-        $command = trim($this->getCommand());
-        $noError = (bool) $this->getAnyOption('no-error', 'n', false);
-        $isExport = (bool) $this->getAnyOption('export-attr', 'e', false);
-        $isClear = (bool) $this->getAnyOption('clear-attr', 'c', false);
+        $command = trim($this->term->getCommand());
+        $noError = (bool) $this->term->getAnyOption('no-error', 'n', false);
+        $isExport = (bool) $this->term->getAnyOption('export-attr', 'e', false);
+        $isClear = (bool) $this->term->getAnyOption('clear-attr', 'c', false);
 
         $runCommand = match($command){
             'context' => ($isExport ? $this->buildAttributes() : (
                 $isClear ? $this->clearAttributes() : 
-                $this->installContext($this->getArgument(1), $noError)
+                $this->installContext($this->term->getArgument(1), $noError)
             )),
             default => null
         };
 
         if ($runCommand === null) {
-            return $this->oops($command);
+            return $this->term->oops($command);
         } 
             
         return (int) $runCommand;
@@ -78,8 +78,8 @@ class Context extends BaseConsole
     private function installContext(mixed $name, bool $noError = false): int 
     {
         if(empty($name)){
-            $this->error('Route prefix name is required');
-            $this->beeps();
+            $this->term->error('Route prefix name is required');
+            $this->term->beeps();
 
             return STATUS_ERROR;
         }
@@ -106,14 +106,14 @@ class Context extends BaseConsole
         $content = substr_replace($indexContent, "\n$newPrefix,", $position, 0);
 
         if (strpos($name, ' ') !== false) {
-            $this->writeln('Your context name contains space characters', 'red');
+            $this->term->writeln('Your context name contains space characters', 'red');
 
             return STATUS_ERROR;
         }
 
         if (has_uppercase($name)) {
-            $this->beeps();
-            $input = $this->prompt(
+            $this->term->beeps();
+            $input = $this->term->prompt(
                 'Your context name contains uppercase character, are you sure you want to continue?', 
                 ['yes', 'no'], 
                 'required|in_array(yes,no)'
@@ -122,25 +122,25 @@ class Context extends BaseConsole
             if($input === 'yes'){
                 if(write_content($index, $content)){
                     write_content(root('routes') . $name . '.php', $handler);
-                    $this->writeln("Route context installed: {$name}", 'green');
+                    $this->term->writeln("Route context installed: {$name}", 'green');
 
                     return STATUS_SUCCESS;
                 }
             }
 
-            $this->writeln('No changes was made');
+            $this->term->writeln('No changes was made');
             
             return STATUS_ERROR;
         }else{
             if(write_content($index, $content)){
                 write_content(root('routes') . $name . '.php', $handler);
-                $this->writeln("Route context installed: {$name}", 'green');
+                $this->term->writeln("Route context installed: {$name}", 'green');
 
                 return STATUS_SUCCESS;
             }
         }
 
-        $this->writeln("Unable to install router context {$name}", 'red');
+        $this->term->writeln("Unable to install router context {$name}", 'red');
         return STATUS_ERROR;
     }
 
@@ -157,11 +157,11 @@ class Context extends BaseConsole
         FileManager::remove($backup, false, $deleted);
         
         if ($deleted > 0) {
-            $this->writeln("Success: '{$deleted}' cached attribute(s) was cleared.", 'white', 'green');
+            $this->term->writeln("Success: '{$deleted}' cached attribute(s) was cleared.", 'white', 'green');
             return STATUS_SUCCESS;
         }
 
-        $this->writeln("Error: No cached attributes to clear.", 'white', 'red');
+        $this->term->writeln("Error: No cached attributes to clear.", 'white', 'red');
         return STATUS_ERROR;
     }
 
@@ -295,7 +295,7 @@ class Context extends BaseConsole
                     $newIndexContent = $beforeContext . $newPrefixContent . $afterContext;
                     
                     if(write_content($index, $newIndexContent)){
-                        $this->writeln("Routes exported successfully.", 'green');
+                        $this->term->writeln("Routes exported successfully.", 'green');
                         setenv('feature.route.attributes', 'disable', true);
                         return STATUS_SUCCESS;
                     }
@@ -303,7 +303,7 @@ class Context extends BaseConsole
             }
         }
 
-        $this->writeln("Failed: Unable to create route from attribute.", 'red');
+        $this->term->writeln("Failed: Unable to create route from attribute.", 'red');
         return STATUS_ERROR;
     }
 
@@ -319,6 +319,7 @@ class Context extends BaseConsole
         if($methods === null){
             return 'get(';
         }
+        
         if(count($methods) >= 6){
             return "any(";
         }

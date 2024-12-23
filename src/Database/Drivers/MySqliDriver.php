@@ -300,7 +300,9 @@ final class MySqliDriver implements DatabaseInterface
 
         if ($this->stmt) {
             $this->executed = true;
-            $this->rowCount = str_starts_with($query, 'SELECT') ? $this->stmt->num_rows : $this->connection->affected_rows;
+            $this->rowCount = str_starts_with($query, 'SELECT') 
+                ? $this->stmt->num_rows 
+                : $this->connection->affected_rows;
         }
 
         $this->profiling(false);
@@ -418,7 +420,6 @@ final class MySqliDriver implements DatabaseInterface
             return false;
         }
 
-        $executed = false;
         try {
             $bindParams = ($this->bindParams ?: $this->bindValues);
 
@@ -429,12 +430,12 @@ final class MySqliDriver implements DatabaseInterface
                 $this->parseParams($bindParams, $bindType);
             }
 
-            $executed = $this->stmt->execute($params);
+            $this->executed = $this->stmt->execute($params);
 
-            if (!$executed || $this->stmt->errno) {
+            if (!$this->executed || $this->stmt->errno) {
                 throw new DatabaseException($this->stmt->error, $this->stmt->errno);
             }
-            $this->executed = true;
+
             $this->rowCount = $this->isSelect ? $this->stmt->num_rows : $this->stmt->affected_rows;
         } catch (mysqli_sql_exception|TypeError $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
@@ -443,7 +444,7 @@ final class MySqliDriver implements DatabaseInterface
         $this->bindParams = [];
         $this->bindValues = [];
 
-        return $executed;
+        return $this->executed;
     }
 
     /**
@@ -715,8 +716,7 @@ final class MySqliDriver implements DatabaseInterface
     public function close(): void 
     {
         $this->free();
-        $this->connection->close();
-        $this->connected = false;
+        $this->connected = !$this->connection->close();
     }
 
     /**

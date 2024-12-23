@@ -16,7 +16,6 @@ use \Luminova\Time\Time;
 use \Luminova\Command\Utils\Text;
 use \Psr\Http\Message\ResponseInterface;
 use \App\Config\Cron;
-use \Luminova\Exceptions\AppException;
 use \ReflectionClass;
 use \DateInterval;
 use \Exception;
@@ -60,11 +59,11 @@ class CronJobs extends BaseConsole
      */
     public function run(?array $params = null): int
     {
-        $this->explain($params);
+        $this->term->explain($params);
         setenv('throw.cli.exceptions', 'true');
-        $command = trim($this->getCommand());
-        $force = $this->getAnyOption('force', 'f', false);
-        $sleep = (int) $this->getAnyOption('sleep', 's', 100000);
+        $command = trim($this->term->getCommand());
+        $force = $this->term->getAnyOption('force', 'f', false);
+        $sleep = (int) $this->term->getAnyOption('sleep', 's', 100000);
 
         $runCommand = match($command){
             'cron:create'   => $this->createCommands($force),
@@ -73,7 +72,7 @@ class CronJobs extends BaseConsole
         };
 
         if ($runCommand === 'unknown') {
-            return $this->oops($command);
+            return $this->term->oops($command);
         } 
             
         return (int) $runCommand;
@@ -290,10 +289,11 @@ class CronJobs extends BaseConsole
 
         if($force){
             if($created){
-                $this->writeln('Cron services has been created successfully.', 'green');
-            }else{
-                $this->writeln('Failed to create cron services.', 'red');
+                $this->term->writeln('Cron services has been created successfully.', 'green');
+                return STATUS_SUCCESS;
             }
+            
+            $this->term->writeln('Failed to create cron services.', 'red');
         }
 
         return $created ? STATUS_SUCCESS : STATUS_ERROR;

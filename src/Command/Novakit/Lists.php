@@ -38,7 +38,7 @@ class Lists extends BaseConsole
      */
     public function run(?array $options = []): int
     {
-        self::listCommands();
+        $this->listCommands();
 
         return STATUS_SUCCESS;
     }
@@ -56,7 +56,7 @@ class Lists extends BaseConsole
      * 
      * @return void
      */
-    public static function listCommands(): void 
+    public function listCommands(): void 
     {
         $commands = Commands::getCommands();
         $groupedCommands = [];
@@ -66,13 +66,14 @@ class Lists extends BaseConsole
         }
 
         foreach ($groupedCommands as $group => $list) {
-            self::writeln($group);
+            $this->term->writeln($group);
+            
             foreach ($list as $command) {
                 $name = Color::style(Text::padding($command['name'], 25, Text::LEFT), 'green');
-                self::writeln('   ' . $name . $command['description']);
+                $this->term->writeln('   ' . $name . $command['description']);
             }
 
-            self::newLine();
+            $this->term->newLine();
         }
     }
 }

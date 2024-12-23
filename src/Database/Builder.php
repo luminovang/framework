@@ -15,6 +15,7 @@ use \Luminova\Base\BaseCache;
 use \Luminova\Cache\MemoryCache;
 use \Luminova\Database\Connection;
 use \Luminova\Database\Manager;
+use \Luminova\Utils\LazyObject;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\CacheException;
@@ -50,16 +51,9 @@ final class Builder implements LazyInterface
     /**
      * Database connection driver instance.
      *
-     * @var Connection|null $conn
+     * @var Connection<LazyInterface>|null $conn
      */
-    private ?Connection $conn = null;
-
-    /**
-     * Query statement handler.
-     * 
-     * @var DatabaseInterface|false|null $handler
-     */
-    private DatabaseInterface|bool|null $handler = null;
+    private ?LazyInterface $conn = null;
 
     /**
      * Cache class instance.
@@ -261,14 +255,6 @@ final class Builder implements LazyInterface
      * @var mixed $lastInsertId
      */
     private static mixed $lastInsertId = null;
-
-    /**
-     * Is database connected.
-     * 
-     * @var bool $isConnected
-     */
-    private static bool $isConnected = false;
-
     /**
      * Private constructor prevents instantiation from outside.
      * 
@@ -281,15 +267,20 @@ final class Builder implements LazyInterface
             throw new InvalidArgumentException('Invalid table argument, $table argument expected non-empty string.');
         }
 
-        $this->conn = Connection::getInstance();
-        $this->handler = null;
+        $this->conn = LazyObject::newObject(fn() => Connection::getInstance());
         $this->cacheDriver = env('database.caching.driver', 'filesystem');
         $this->tableName = $table ?? '';
         $this->tableAlias = $alias ? "AS {$alias}" : '';
-        self::$isConnected = (
-            ($this->conn->database() instanceof DatabaseInterface) &&
-            $this->conn->database()->isConnected()
-        );
+    }
+
+    /**
+     * Check if database connected.
+     * 
+     * @return bool Return true if database connected, false otherwise.
+     */
+    public function isConnected(): bool 
+    {
+        return ($this->conn->database() instanceof DatabaseInterface) && $this->conn->database()->isConnected();
     }
 
     /**
@@ -312,12 +303,15 @@ final class Builder implements LazyInterface
     /**
      * Class shared singleton class instance.
      * 
+     * @param string|null $table Optional table name (non-empty string).
+     * @param string|null $alias Optional table alias (default: null).
+     * 
      * @return Builder Return new static instance of builder class.
      * @throws DatabaseException Throws if the database connection fails.
      */
-    public static function getInstance(): static 
+    public static function getInstance(?string $table = null, ?string $alias = null): static 
     {
-        return self::$instance ??= new self();
+        return self::$instance ??= new self($table, $alias);
     }
 
     /**
@@ -338,7 +332,7 @@ final class Builder implements LazyInterface
      */
     public function database(): DatabaseInterface
     {
-        if(self::$isConnected){
+        if($this->isConnected()){
             return $this->conn->database();
         }
 
@@ -356,18 +350,19 @@ final class Builder implements LazyInterface
      */
     public static function table(string $table, ?string $alias = null): Builder
     {
-        if(!self::$instance instanceof self){
-            return self::$instance = new self($table, $alias);
-        }
-
         if($table === ''){
             throw new InvalidArgumentException('Invalid table argument, $table argument expected non-empty string.');
         }
 
-        self::$instance->tableName = $table;
-        self::$instance->tableAlias = $alias ? "AS {$alias}" : '';
+        if(self::$instance === null){
+            return new self($table, $alias);
+        }
 
-        return self::$instance;
+        $extend = new self($table, $alias);
+        $extend->caching = self::$instance->caching;
+        $extend->resultType = self::$instance->resultType;
+
+        return $extend;
     }
 
     /**
@@ -1077,7 +1072,6 @@ final class Builder implements LazyInterface
             return 0;
         }
 
-        $this->handler = null;
         $columns = array_keys($values[0]);
 
         try {
@@ -1130,9 +1124,6 @@ final class Builder implements LazyInterface
      */
     public function execute(?array $placeholder = null, int $mode = RETURN_ALL): mixed 
     {
-        $placeholder ??= [];
-        $this->handler = null;
-
         if(
             $mode !== RETURN_STMT && 
             $this->queryWithCache && 
@@ -1157,7 +1148,7 @@ final class Builder implements LazyInterface
             );
         }
 
-        $this->bindValues = $placeholder;
+        $this->bindValues = $placeholder ?? [];
 
         try {
             $response = $this->returnExecute($this->buildQuery, $mode);
@@ -1283,16 +1274,12 @@ final class Builder implements LazyInterface
         $this->resultType = 'stmt';
 
         if($this->createQueryExecution('', 'stmt', $columns)){
-            return $this->handler;
+            return $this->database();
         }
 
         $this->free();
 
-        if($this->handler instanceof DatabaseInterface){
-            $this->handler->free();
-        }
-
-        return $this->handler = null;
+        return null;
     }
 
     /**
@@ -1315,7 +1302,6 @@ final class Builder implements LazyInterface
         int $mode = FETCH_OBJ
     ): mixed
     {
-        $this->handler = null;
         if(
             !$this->printQuery && 
             $return !== 'stmt' && 
@@ -1431,24 +1417,24 @@ final class Builder implements LazyInterface
         }
 
         if($isBided){
-            $this->handler = $this->database()->prepare($sqlQuery);
+            $this->database()->prepare($sqlQuery);
             if ($this->whereCondition !== []) {
-                $this->handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+                $this->database()->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
             }
-            $this->bindConditions($this->handler, $isBided);
-            $this->handler->execute();
+            $this->bindConditions($isBided);
+            $this->database()->execute();
         }else{
-            $this->handler = $this->database()->query($sqlQuery);
+            $this->database()->query($sqlQuery);
         }
 
-        if ($this->handler->ok()) {
+        if ($this->database()->ok()) {
             $response = match ($return) {
                 'stmt' => true,
-                'select' => $this->handler->getAll($this->resultType),
-                'find' => $this->handler->getNext($this->resultType),
-                'total' => $this->handler->getCount(),
-                'fetch' => $this->handler->fetch($result, $mode),
-                default => $this->handler->getNext()->totalCalc ?? 0,
+                'select' => $this->database()->getAll($this->resultType),
+                'find' => $this->database()->getNext($this->resultType),
+                'total' => $this->database()->getCount(),
+                'fetch' => $this->database()->fetch($result, $mode),
+                default => $this->database()->getNext()->totalCalc ?? 0,
             };
         }
         
@@ -1468,7 +1454,6 @@ final class Builder implements LazyInterface
     public function update(?array $setValues = []): int 
     {
         $columns = ($setValues === []) ? $this->querySetValues : $setValues;
-        $this->handler = null;
 
         if ($columns === []) {
             throw new DatabaseException(
@@ -1500,7 +1485,7 @@ final class Builder implements LazyInterface
         }
 
         try {
-            $this->handler = $this->database()->prepare($updateQuery);
+            $this->database()->prepare($updateQuery);
             foreach($columns as $key => $value){
                 if(!is_string($key) || $key === '?'){
                     throw new DatabaseException(
@@ -1510,17 +1495,15 @@ final class Builder implements LazyInterface
                 }
 
                 $value = is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
-                $this->handler->bind(self::trimPlaceholder($key), $value);
+                $this->database()->bind(self::trimPlaceholder($key), $value);
             }
             
             if($this->whereCondition !== []){
-                $this->handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+                $this->database()->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
             }
             
-            $this->bindConditions($this->handler);
-            $this->handler->execute();
-
-            $response = ($this->handler->ok() ? $this->handler->rowCount() : 0);
+            $this->bindConditions();
+            $response = $this->database()->execute() ? $this->database()->rowCount() : 0;
             $this->reset();
 
             return $response;
@@ -1539,8 +1522,6 @@ final class Builder implements LazyInterface
      */
     public function delete(): int
     {
-        $this->handler = null;
-
         if ($this->whereCondition === []) {
             throw new DatabaseException(
                 'Delete operation without a WHERE condition is not allowed.', 
@@ -1563,12 +1544,11 @@ final class Builder implements LazyInterface
         }
 
         try {
-            $this->handler = $this->database()->prepare($deleteQuery);
-            $this->handler->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
-            $this->bindConditions($this->handler);
-            $this->handler->execute();
+            $this->database()->prepare($deleteQuery);
+            $this->database()->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            $this->bindConditions();
 
-            $response = ($this->handler->ok() ? $this->handler->rowCount() : 0);
+            $response = $this->database()->execute() ? $this->database()->rowCount() : 0;
             $this->reset();
 
             return $response;
@@ -1595,9 +1575,9 @@ final class Builder implements LazyInterface
         }
 
         if($this->bindValues === []){
-            $this->handler = $this->database()->query($buildQuery);
+            $this->database()->query($buildQuery);
         }else{
-            $this->handler = $this->database()->prepare($buildQuery);
+            $this->database()->prepare($buildQuery);
             foreach ($this->bindValues as $key => $value) {
                 if(!is_string($key) || $key === '?'){
                     throw new DatabaseException(
@@ -1606,15 +1586,16 @@ final class Builder implements LazyInterface
                     );
                 }
 
-                $this->handler->bind(self::trimPlaceholder($key), $value);
+                $this->database()->bind(self::trimPlaceholder($key), $value);
             } 
-            $this->handler->execute();
+            
+            $this->database()->execute();
         }
 
-        $response = ($this->handler->ok() ? 
+        $response = ($this->database()->ok() ? 
             (($mode === RETURN_STMT) 
-                ? $this->handler 
-                : $this->handler->getResult($mode, $this->resultType)) 
+                ? $this->database()
+                : $this->database()->getResult($mode, $this->resultType)) 
             : false);
         $this->reset();
 
@@ -1997,8 +1978,9 @@ final class Builder implements LazyInterface
             return 0;
         }
         
-        $this->handler = $this->database()->query($insertQuery);
-        $response = ($this->handler->ok() ? $this->handler->rowCount() : 0);
+        $response = $this->database()->query($insertQuery)->ok() 
+            ? $this->database()->rowCount() 
+            : 0;
 
         $this->reset();
 
@@ -2028,23 +2010,21 @@ final class Builder implements LazyInterface
             return 0;
         }
 
-        $this->handler = $this->database()->prepare($insertQuery);
+        $this->database()->prepare($insertQuery);
     
         foreach ($values as $row) {
             foreach ($row as $key => $value) {
                 $value = is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
-                $this->handler->bind(self::trimPlaceholder($key), $value);
+                $this->database()->bind(self::trimPlaceholder($key), $value);
             }
 
-            $this->handler->execute();
-
-            if($this->handler->ok()){
+            if($this->database()->execute()){
                 $count++;
             }
         }
 
         if($count > 0){
-            self::$lastInsertId = $this->handler->getLastInsertId();
+            self::$lastInsertId = $this->database()->getLastInsertId();
         }
 
         $this->reset();
@@ -2087,7 +2067,7 @@ final class Builder implements LazyInterface
                 'GROUP_AND' => self::buildGroupConditions($condition['conditions'], $index, $isBided, 'AND'),
                 'BIND_OR' => self::buildGroupBindConditions($condition['X'], $condition['Y'], $index, $isBided, 'OR', $condition['bind']),
                 'BIND_AND' => self::buildGroupBindConditions($condition['X'], $condition['Y'], $index, $isBided, 'AND', $condition['bind']),
-                default => self::buildSingleConditions($condition, $index, $isBided, !$addWhereOperator),
+                default => $this->buildSingleConditions($condition, $index, $isBided, !$addWhereOperator),
             };
 
             $firstCondition = false;
@@ -2105,7 +2085,7 @@ final class Builder implements LazyInterface
      *
      * @return string Return query string representation of the single condition.
      */
-    private static function buildSingleConditions(
+    private function buildSingleConditions(
         array $condition, 
         int $index, 
         bool $isBided = true,
@@ -2126,7 +2106,7 @@ final class Builder implements LazyInterface
             'OR' => " {$prefix}$column $operator $placeholder",
             'IN' => " {$prefix}$column IN (" . (
                 $isBided 
-                ? rtrim(self::bindInConditions($condition['values'], $column), ', ')
+                ? rtrim($this->bindInConditions($condition['values'], $column), ', ')
                 : self::quotedValues($condition['values'])
             ) . ')',
             'AGAINST' => " {$prefix}MATCH($column) AGAINST ({$placeholder} {$operator})",
@@ -2174,44 +2154,43 @@ final class Builder implements LazyInterface
     /**
      * Bind query where conditions.
      * 
-     * @param DatabaseInterface &$handler Database handler passed by reference.
      * @param bool $isBided Whether the value is bound.
      * 
      * @return void
      */
-    private function bindConditions(DatabaseInterface &$handler, bool $isBided = false): void 
+    private function bindConditions(bool $isBided = false): void 
     {
         foreach ($this->andConditions as $index => $bindings) {
             switch ($bindings['type']) {
                 case 'AGAINST':
-                    $handler->bind(":match_column_{$index}", $bindings['value']);
+                    $this->database()->bind(":match_column_{$index}", $bindings['value']);
                 break;
                 case 'GROUP_OR':
                 case 'GROUP_AND':
-                    self::bindGroupConditions($bindings['conditions'], $handler, $index);
+                    $this->bindGroupConditions($bindings['conditions'], $index);
                 break;
                 case 'BIND_OR':
                 case 'BIND_AND':
                     $last = 0;
-                    self::bindGroupConditions($bindings['X'], $handler, $index, $last);
-                    self::bindGroupConditions($bindings['Y'], $handler, $index, $last);
+                    $this->bindGroupConditions($bindings['X'], $index, $last);
+                    $this->bindGroupConditions($bindings['Y'], $index, $last);
                 break;
                 case 'IN_SET':
                     // skip
                 break;
                 case 'IN':
                     if($isBided){
-                        self::bindInConditions($bindings['values'], $bindings['column'], $handler);
+                        $this->bindInConditions($bindings['values'], $bindings['column'], true);
                     }
                 break;
                 default:
-                    $handler->bind(self::trimPlaceholder($bindings['column']), $bindings['value']);
+                    $this->database()->bind(self::trimPlaceholder($bindings['column']), $bindings['value']);
                 break;
             }
         }
 
         foreach($this->queryMatchOrder as $idx => $order){
-            $handler->bind(":match_order_{$idx}", $order['value']);
+            $this->database()->bind(":match_order_{$idx}", $order['value']);
         }
     }
 
@@ -2292,21 +2271,22 @@ final class Builder implements LazyInterface
      * 
      * @param array  $values  The column array values.
      * @param string $column  The column placeholder names.
-     * @param DatabaseInterface &$handler Database handler passed by reference.
+     * @param bool $handle Weather to handle or return placeholders.
      * 
      * @return string
      */
-    private static function bindInConditions(
+    private function bindInConditions(
         array $values, 
         string $column,
-        ?DatabaseInterface &$handler = null,
+        bool $handle = false,
     ): string 
     {
         $placeholders = '';
         foreach ($values as $idx => $value) {
             $placeholder = self::trimPlaceholder("{$column}_in_{$idx}");
-            if($handler instanceof DatabaseInterface){
-                $handler->bind($placeholder, $value);
+
+            if($handle){
+                $this->database()->bind($placeholder, $value);
             }else{
                 $placeholders .= "{$placeholder}, ";
             }
@@ -2319,15 +2299,13 @@ final class Builder implements LazyInterface
      * Bind group conditions to the database handler.
      *
      * @param array  $bindings  An array of conditions to bind.
-     * @param DatabaseInterface   $handler   The database handler to bind the values to.
      * @param int $index  The index to append to the placeholder names.
      * @param int &$last  A reference to the last counter used to ensure unique placeholder names.
      *
      * @return void
      */
-    private static function bindGroupConditions(
+    private function bindGroupConditions(
         array $bindings, 
-        DatabaseInterface &$handler, 
         int $index, 
         int &$last = 0
     ): void 
@@ -2336,7 +2314,7 @@ final class Builder implements LazyInterface
         foreach ($bindings as $idx => $bind) {
             $column = key($bind);
             $placeholder = self::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1));
-            $handler->bind($placeholder, $bind[$column]['value']);
+            $this->database()->bind($placeholder, $bind[$column]['value']);
             $count++;
         }
         $last += $count;
@@ -2618,9 +2596,7 @@ final class Builder implements LazyInterface
      */
     public function reset(): void 
     {
-        $this->tableName = ''; 
         $this->jointTableAlias = '';
-        $this->tableAlias = '';
         $this->joinTable = '';
         $this->joinType = '';
         $this->joinConditions = [];
@@ -2638,11 +2614,6 @@ final class Builder implements LazyInterface
         $this->buildQuery = '';
         if($this->resultType !== 'stmt'){
             $this->free();
-            if($this->handler instanceof DatabaseInterface){
-                $this->handler->free();
-            }
-
-            $this->handler = null;
         }
         
         $this->resultType = 'object';
@@ -2655,14 +2626,12 @@ final class Builder implements LazyInterface
      */
     public function free(): void 
     {
-        if(
-            !($this->conn instanceof Connection) || 
-            !($this->conn->database() instanceof DatabaseInterface && $this->conn->database()->isConnected())
-        ){
+        if(!($this->conn instanceof Connection) || !($this->isConnected()) ){
             return;
         }
 
         $this->conn->database()->free();
+        $this->purge();
     }
 
     /**
@@ -2672,7 +2641,7 @@ final class Builder implements LazyInterface
      */
     public function close(): void 
     {
-        if(!$this->conn instanceof Connection){
+        if(!($this->conn instanceof Connection) || !$this->isConnected()){
             return;
         }
 

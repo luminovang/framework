@@ -24,7 +24,7 @@ class RouterException extends AppException
         'invalid_module_namespace' => 'Invalid HMVC module namespace: "%s". Must start with "\App\Modules\" and end with "Controllers\" (e.g., "\App\Modules\Controllers\", "\App\Modules\<Module>\Controllers\").',
         'invalid_context' => 'The application environment is not configured correctly. The route context "%s" may be missing or incorrect.',
         'invalid_context_log' => 'The view context "%s" is missing create view context to register your application routes /routes/%s.php',
-        'invalid_controller' => 'Invalid class "%s". Only subclasses of BaseCommand, BaseController, BaseViewController, ViewErrors, or CoreApplication are allowed.',
+        'invalid_controller' => 'Invalid class "%s". Only subclasses of BaseCommand, BaseController, ViewErrors, or CoreApplication are allowed.',
         'invalid_class' => 'Class "%s" does not exist in any of application registered namespaces: (%s).',
         'invalid_method' => 'Invalid method "%s" in controller. Only public non-static methods are allowed.',
         'invalid_cli_middleware' => 'The before middleware is not used in cli context, use middleware() instead',
