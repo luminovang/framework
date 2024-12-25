@@ -124,7 +124,7 @@ class LazyObject implements LazyInterface, Stringable
      * @example Only Class Name Initialization:
      * 
      * ```php
-     * $person = LazyObject::newObject(Person::class, fn()=>[33, 'Peter', 'Nigeria']);
+     * $person = LazyObject::newLazyGhost(Person::class, fn()=>[33, 'Peter', 'Nigeria']);
      * echo $person->getName();
      * ```
      */
