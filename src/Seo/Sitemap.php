@@ -99,7 +99,7 @@ final class Sitemap
      * Generate a sitemap and store in in `public` directory.
      * 
      * @param string|null $url The url to generate site map of (default: null)
-     * @param LazyInterface<Terminal>|null $term The terminal instance, to use when generating site map in cli (default: null).
+     * @param Terminal<LazyInterface>|null $term The terminal instance, to use when generating site map in cli (default: null).
      * @param string $basename The base name to save generated sitemap as (e.g, `sitemap.xml`).
      * 
      * @return bool Return true if successful, false otherwise.
