@@ -48,7 +48,6 @@ abstract class BaseController
         $this->validate = LazyObject::newObject(Validation::class);
         $this->request = LazyObject::newObject(Request::class);
  
-
         $this->onCreate();
     }
 

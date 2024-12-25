@@ -344,11 +344,11 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     /**
      * Display a custom exception info in CLI mode.
      * 
-     * @param AppException<\T>|Exception $exception The current exception thrown.
+     * @param Throwable<AppException>|Throwable $exception The current exception thrown.
      * 
      * @return int Return status code for error.
      */
-    private static function display(AppException|Exception $exception): int 
+    private static function display(Throwable $exception): int 
     {
         include_once root('/resources/Views/system_errors/') . 'cli.php';
 

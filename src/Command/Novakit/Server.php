@@ -57,7 +57,9 @@ class Server extends BaseConsole
             $host = IP::getLocalNetworkAddress();
 
             if($host === false){
-                $this->term->error('Failed to retrieve local network address.');
+                $this->term->error("Failed to retrieve local network address.\n
+                Manually specify your network address with '--host' option.");
+                return STATUS_ERROR;
             }
         }
 

@@ -9,6 +9,4 @@
  */
 namespace Luminova\Interface;
 
-interface CallableInterface
-{
-}
+interface CallableInterface {}

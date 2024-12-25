@@ -35,7 +35,7 @@ interface ClientInterface extends PsrClientInterface
     /**
      * Retrieve the original HTTP request client object.
      * 
-     * @return PsrClientInterface<\T> Return instance of request client object.
+     * @return \T<\Psr\Http\Client\ClientInterface> Return instance of request client object.
     */
     public function getClient(): PsrClientInterface;
 
@@ -63,7 +63,7 @@ interface ClientInterface extends PsrClientInterface
     /**
      * Sends a request and returns response.
      *
-     * @param RequestInterface $request Instance of HTTP request object.
+     * @param \T<RequestInterface> $request Instance of HTTP request object.
      *
      * @return ResponseInterface Return instance of HTTP response object.
      * @throws ClientException If an error happens while processing the request.
@@ -75,10 +75,10 @@ interface ClientInterface extends PsrClientInterface
      *
      * Builds the request using the provided HTTP request object and optional configurations.
      *
-     * @param RequestInterface $request The HTTP request object containing request details.
+     * @param \T<RequestInterface> $request The HTTP request object containing request details.
      * @param array<string,mixed> $options Optional parameters to customize request behavior (e.g., headers, timeout).
      *
-     * @return \Luminova\Interface\PromiseInterface Return guzzle promise that resolves to the request response or cURL request response object.
+     * @return PromiseInterface Return guzzle promise that resolves to the request response or cURL request response object.
      *
      * @throws RequestException If the request format is invalid or fails.
      * @throws ConnectException If the server cannot be reached.
@@ -94,7 +94,7 @@ interface ClientInterface extends PsrClientInterface
      * @param UriInterface|string $uri The target URI or URL for the request (absolute or relative).
      * @param array<string,mixed> $options Optional configurations to adjust the request behavior (e.g., headers, data, timeout).
      *
-     * @return \Luminova\Interface\PromiseInterface Return guzzle promise that resolves to the request response or cURL request response object.
+     * @return PromiseInterface Return guzzle promise that resolves to the request response or cURL request response object.
      *
      * @throws RequestException If the request is improperly formatted or fails.
      * @throws ConnectException If the server is unreachable.
@@ -108,7 +108,7 @@ interface ClientInterface extends PsrClientInterface
      *
      * Uses the provided HTTP request object and optional settings to perform the request.
      *
-     * @param RequestInterface $request The HTTP request object containing request details.
+     * @param \T<RequestInterface> $request The HTTP request object containing request details.
      * @param array<string,mixed> $options Optional parameters to customize the request (e.g., headers, timeout).
      *
      * @return ResponseInterface Return guzzle promise that resolves to the request response or cURL request response object.
@@ -126,7 +126,7 @@ interface ClientInterface extends PsrClientInterface
      * Executes the request using the specified method and URI, with optional configurations to modify its behavior.
      *
      * @param string $method The HTTP method to use (e.g., `GET`, `POST`).
-     * @param UriInterface|string $uri The target URI or URL for the request (absolute or relative).
+     * @param \T<UriInterface>|string $uri The target URI or URL for the request (absolute or relative).
      * @param array<string,mixed> $options Optional configurations to adjust the request behavior (e.g., headers, data, timeout).
      *
      * @return ResponseInterface Return the psr response interface object or cURL response object depending on client.

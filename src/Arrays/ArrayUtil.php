@@ -364,6 +364,22 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
     }
 
     /**
+     * Replace the current array with another array.
+     * 
+     * @param ArrayUtil|array<string|int,mixed> $replacements The array to replace with the current array.
+     * 
+     * @return self Return the updated instance with the merged array.
+     */
+    public function replace(ArrayUtil|array $replacements): self
+    {
+        $replacements = ($replacements instanceof ArrayUtil) 
+            ? $replacements->get() 
+            : $replacements;
+        $this->array = array_replace($this->array, $replacements);
+        return $this;
+    }
+
+    /**
      * Merge another array with the current array.
      * 
      * @param ArrayUtil|array<string|int,mixed> $array The array to merge with the current array.

@@ -172,10 +172,22 @@ class Guzzle implements \Luminova\Interface\ClientInterface
         }
     }
 
+    /**
+     * Creates a Promise object for asynchronous HTTP requests.
+     *
+     * This method wraps the Guzzle client's asynchronous methods in a Promise,
+     * handling both successful responses and errors.
+     *
+     * @param string $method The name of the asynchronous method to call on the Guzzle client.
+     * @param mixed ...$arguments Variable number of arguments to pass to the method.
+     *
+     * @return Promise A Promise object that resolves with the response or rejects with an error.
+     */
     private function promise(
         string $method,
         mixed ...$arguments
-    ): Promise {
+    ): Promise 
+    {
         return new Promise(function ($resolve, $reject) use ($method, $arguments) {
             try {
                 $response = $this->client->{$method}(...$arguments);
@@ -188,35 +200,44 @@ class Guzzle implements \Luminova\Interface\ClientInterface
                     $response->wait();
                     return;
                 }
-    
+
                 $resolve($response);
-            } catch (\GuzzleHttp\Exception\RequestException $e) {
+            } catch (Throwable $e) {
                 $this->handlePromiseException($e, $resolve, $reject);
-            } catch (GuzzleException | Exception $e) {
-                $reject(new ConnectException($e->getMessage(), $e->getCode(), $e));
             }
         });
     }
     
-    private function handlePromiseException(
-        \GuzzleHttp\Exception\RequestException $e,
-        callable $resolve,
-        callable $reject
-    ): void {
+    /**
+     * Handles exceptions thrown during asynchronous requests and resolves or rejects the promise accordingly.
+     *
+     * @param Throwable $e The exception that occurred during the request.
+     * @param callable $resolve The callback function to be called when the promise is resolved.
+     * @param callable $reject The callback function to be called when the promise is rejected.
+     *
+     * @return void
+     */
+    private function handlePromiseException(Throwable $e, callable $resolve, callable $reject): void 
+    {
 
-        $response = $e->getResponse();
+        if ($e instanceof \GuzzleHttp\Exception\RequestException) {
+            $response = $e->getResponse();
 
-        if ($response instanceof ResponseInterface) {
-            $resolve($response);
-            return;
+            if ($response instanceof ResponseInterface) {
+                $resolve($response);
+                return;
+            }
         }
-    
-        $previous = $e->getPrevious();
+
+        $previous = ($e->getPrevious() instanceof GuzzleException) 
+            ? $e->getPrevious() 
+            : $e;
+
         if ($previous instanceof GuzzleException) {
-            $reject(new RequestException($previous->getMessage(), $previous->getCode(), $previous));
+            $reject(new ConnectException($previous->getMessage(), $previous->getCode(), $previous));
             return;
         }
-    
+
         $reject(new RequestException($e->getMessage(), $e->getCode(), $e));
     }
 }

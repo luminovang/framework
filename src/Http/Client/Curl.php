@@ -702,40 +702,24 @@ class Curl implements ClientInterface
      */
     private static function handleException(string $error, int $code): void
     {
-        $type = '';
-        switch ($code) {
-            case CURLE_COULDNT_CONNECT:
-                throw new ConnectException(sprintf('Connection failed: %s (code: %d).', $error, $code));
-            case CURLE_URL_MALFORMAT:
-                throw new ConnectException(sprintf('Invalid URL format: %s (code: %d).', $error, $code));
-            case CURLE_OPERATION_TIMEOUTED:
-                throw new ConnectException(sprintf('Connection timed out: %s (code: %d).', $error, $code));
-            case CURLE_SSL_CONNECT_ERROR:
-                throw new ConnectException(sprintf('SSL connection issue: %s (code: %d).', $error, $code));
-            case CURLE_GOT_NOTHING:
-                throw new ClientException(sprintf('No response received: %s (code: %d).', $error, $code));
-            case CURLE_WEIRD_SERVER_REPLY:
-                throw new ServerException(sprintf('Unexpected server response: %s (code: %d).', $error, $code));
-            case CURLE_TOO_MANY_REDIRECTS:
-                throw new ServerException(sprintf('Too many redirects: %s (code: %d).', $error, $code));
-            case CURLE_UNSUPPORTED_PROTOCOL:
-                throw new ServerException(sprintf('Unsupported protocol: %s (code: %d).', $error, $code));
-            case CURLE_PARTIAL_FILE:
-                throw new ClientException(sprintf('Partial file received: %s (code: %d).', $error, $code));
-            case CURLE_ABORTED_BY_CALLBACK:
-                throw new ClientException(sprintf('Operation aborted by callback: %s (code: %d).', $error, $code));
-            case CURLE_SEND_ERROR:
-                throw new ConnectException(sprintf('Failed to send data: %s (code: %d).', $error, $code));
-            case CURLE_RECV_ERROR:
-                throw new ClientException(sprintf('Failed to receive data: %s (code: %d).', $error, $code));
-            case CURLE_HTTP_NOT_FOUND:
-                $type = 'Resource not found';
-                break;
-            default:
-                $type = 'Request error';
-        }
+        $exception = match ($code) {
+            CURLE_COULDNT_CONNECT => ['Connection failed', ConnectException::class],
+            CURLE_URL_MALFORMAT => ['Invalid URL format', ConnectException::class],
+            CURLE_OPERATION_TIMEOUTED => ['Connection timed out', ConnectException::class],
+            CURLE_SSL_CONNECT_ERROR => ['SSL connection issue', ConnectException::class],
+            CURLE_GOT_NOTHING => ['No response received', ClientException::class],
+            CURLE_WEIRD_SERVER_REPLY => ['Unexpected server response', ServerException::class],
+            CURLE_TOO_MANY_REDIRECTS => ['Too many redirects', ServerException::class],
+            CURLE_UNSUPPORTED_PROTOCOL => ['Unsupported protocol', ServerException::class],
+            CURLE_PARTIAL_FILE => ['Partial file received', ClientException::class],
+            CURLE_ABORTED_BY_CALLBACK => ['Operation aborted by callback', ClientException::class],
+            CURLE_SEND_ERROR => ['Failed to send data', ConnectException::class],
+            CURLE_RECV_ERROR => ['Failed to receive data', ClientException::class],
+            CURLE_HTTP_NOT_FOUND => ['Resource not found', RequestException::class],
+            default => ['Request error', RequestException::class],
+        };
 
-        throw new RequestException(sprintf('%s: %s (code: %d)', $type, $error, $code));
+        throw new $exception[1](sprintf('%s: %s (code: %d)', $exception[0], $error, $code));
     }
 
     /**
