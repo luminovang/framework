@@ -129,4 +129,20 @@ interface ExceptionInterface
      * @throws AppException<\T> Throws the exception from the called class.
      */
     public static function throwException(string $message, string|int $code = 0, ?Throwable $previous = null): void;
+
+    /**
+     * Converts an existing Throwable to a specific exception class and handles it.
+     *
+     * If the provided Throwable is already an instance of the `AppException` class, it will be handled directly.
+     * Otherwise, a new exception of the specified class (or the current class by default) will be created with the
+     * same message, code, and previous exception, and then handled.
+     *
+     * @param Throwable $e The original exception or error to be thrown and handled.
+     * @param class-string<AppException>|null $exception_class The class name to throw the exception as (e.g, `Luminova\Exceptions\RuntimeException`). 
+     *          Defaults to the current class if not provided.
+     * 
+     * @return void
+     * @throws AppException<\T> Throws the exception from the called class.
+     */
+    public static function throwAs(Throwable $e, ?string $exception_class = null): void;
 }

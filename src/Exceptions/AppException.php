@@ -330,7 +330,37 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
             return;
         }
 
-        (new static($message, $code, $previous))->handle();
+        $e = new static($message, $code, $previous);
+
+        if($previous instanceof Throwable){
+            $e->setFile($previous->getFile());
+            $e->setLine($previous->getLine());
+        }
+
+        $e->handle();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function throwAs(Throwable $e, ?string $class = null): void
+    {
+        if($e instanceof self){
+            $e->handle();
+            return;
+        }
+
+        $class ??= static::class;
+        $new = new $class($e->getMessage(), $e->getCode(), $e->getPrevious() ?? $e);
+
+        if($new instanceof self){
+            $new->setFile($e->getFile());
+            $new->setLine($e->getLine());
+            $new->handle();
+            return;
+        }
+
+        throw $new;
     }
 
     /**

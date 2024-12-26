@@ -260,7 +260,7 @@ class NovaLogger extends AbstractLogger
         self::$request ??= new Request();
         $payload = [
             'app'      => APP_NAME,
-            'host'     => HOST_NAME,
+            'host'     => APP_HOSTNAME,
             'clientIp' => ip_address(),
             'details'  => self::message($this->level, $message),
             'context'  => $context,
