@@ -9,11 +9,11 @@
  */
 namespace Luminova\Sessions;
 
-use \Luminova\Interface\SessionManagerInterface;
+use \Luminova\Interface\SessionInterface;
 use \Luminova\Base\BaseConfig;
 use \Luminova\Exceptions\JsonException;
 
-final class CookieManager implements SessionManagerInterface 
+final class CookieManager implements SessionInterface 
 { 
     /**
      * @var string $storage Session storage name 

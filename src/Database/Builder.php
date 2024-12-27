@@ -956,51 +956,47 @@ final class Builder implements LazyInterface
     }
 
     /**
+     * Retrieves the current cache instance.
+     *
+     * This method returns the static cache instance used by the class.
+     * The cache instance is typically set up earlier in the class's lifecycle.
+     *
+     * @return BaseCache|null Returns the current cache instance if set, or null if no cache has been initialized.
+     */
+    public function getCache(): ?BaseCache
+    {
+        return self::$cache;
+    }
+
+    /**
      * Deletes the cached data associated with current table or a specific database table.
      * 
-     * @param string|null $table The name of the table for which to delete the cache (default: null).
+     * @param string|null $storage Optional storage name for the cache. Defaults to the current table name or 'capture' if not specified.
      * @param string|null $subfolder Optional file-based caching feature, the subfolder name used while storing the cache if any (default: null).
+     * @param string|null $persistent_id Optional memory-based caching feature, to set a unique persistent connection ID (default: `__database_builder__`).
      * 
      * @return bool Returns true if the cache was successfully cleared; otherwise, false.
      */
     public function cacheDelete(
-        ?string $table = null, 
-        ?string $subfolder = null
+        ?string $storage = null, 
+        ?string $subfolder = null,
+        ?string $persistent_id = null
     ): bool
     {
-        if (!(self::$cache instanceof BaseCache)) {
-            self::$cache = ($this->cacheDriver === 'memcached') 
-                ? MemoryCache::getInstance(null, '__database_builder__') 
-                : FileCache::getInstance(null);
-        }
-
-        if (self::$cache instanceof FileCache) {
-            self::$cache->setFolder('database' . ($subfolder ? DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS) : ''));
-        }
-
-        return self::$cache->setStorage('database_' . ($table ?? $this->tableName ?? 'capture'))->clear();
+        return $this->newCache($storage, $subfolder, $persistent_id)->clear();
     }
 
     /**
      * Deletes all cached items for the specified subfolder or the default database cache.
      *
      * @param string|null $subfolder Optional file-based caching feature, the subfolder name used while storing caches if any (default: null).
+     * @param string|null $persistent_id Optional memory-based caching feature, to set a unique persistent connection ID (default: `__database_builder__`).
      * 
      * @return bool Returns true if the cache was successfully flushed, false otherwise.
      */
-    public function cacheDeleteAll(?string $subfolder = null): bool
+    public function cacheDeleteAll(?string $subfolder = null, ?string $persistent_id = null): bool
     {
-        if (!(self::$cache instanceof BaseCache)) {
-            self::$cache = ($this->cacheDriver === 'memcached') 
-                ? MemoryCache::getInstance(null, '__database_builder__') 
-                : FileCache::getInstance(null);
-        }
-
-        if (self::$cache instanceof FileCache) {
-            self::$cache->setFolder('database' . ($subfolder ? DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS) : ''));
-        }
-
-        return self::$cache->flush();
+        return $this->newCache(null, $subfolder, $persistent_id)->flush();
     }
 
     /**
@@ -1024,16 +1020,10 @@ final class Builder implements LazyInterface
     ): self
     {
         if($this->caching){
-            if($this->cacheDriver === 'memcached'){
-                self::$cache ??= MemoryCache::getInstance(null, $persistent_id ?? '__database_builder__');
-            }else{
-                self::$cache ??= FileCache::getInstance(null);
-                self::$cache->setFolder('database' . ($subfolder ? DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS) : ''));
-            }
-
-            $this->queryWithCache = true;
-            self::$cache->setStorage('database_' . ($storage ?? $this->tableName ?? 'capture'))->setExpire($expiry);
+            self::$cache ??= $this->newCache($storage, $subfolder, $persistent_id);
+            self::$cache->setExpire($expiry);
             $this->cacheKey = md5($key);
+            $this->queryWithCache = true;
             // Check if the cache exists and not expired
             $this->hasCache = (self::$cache->hasItem($this->cacheKey) && !self::$cache->hasExpired($this->cacheKey));
         }
@@ -1181,6 +1171,17 @@ final class Builder implements LazyInterface
     }
 
     /**
+     * Determine of a records exists in table,
+     * 
+     * @return int|bool Return true if records exists in table, otherwise false.
+     * @throws DatabaseException If an error occurs.
+     */
+    public function exists(): bool 
+    {
+        return $this->createQueryExecution("SELECT COUNT(*)") > 0;
+    }
+
+    /**
      * Calculate the total sum of a numeric column in the table.
      * 
      * @param string $column The column to calculate the sum.
@@ -1323,7 +1324,7 @@ final class Builder implements LazyInterface
             $columns = ($columns === ['*']) ? '*' : implode(", ", $columns);
             $query = "SELECT {$columns}";
         }
-
+        
         $sqlQuery = "{$query} FROM {$this->tableName} {$this->tableAlias}";
 
         if ($this->joinTable !== '') {
@@ -1868,6 +1869,124 @@ final class Builder implements LazyInterface
     public function dropTemp(bool $transaction = false): bool 
     {
         return $this->dropTable(true, $transaction);
+    }
+
+    /**
+     * Retrieves the database manager instance.
+     * 
+     * Returns a singleton instance of the Manager class initialized with the current database connection.
+     * 
+     * @return Manager Database manager class instance.
+     * @throws DatabaseException Throws if database connection failed.
+     * 
+     * @see https://luminova.ng/docs/0.0.0/database/manager
+     */
+    public function manager(): Manager 
+    {
+        static $manager = null;
+        $manager ??= new Manager($this->database());
+        $manager->setTable($this->tableName);
+
+        return $manager;
+    }
+
+    /**
+     * Exports the database table and downloads it to the browser as JSON or CSV format.
+     * 
+     * @param string $as Export as csv or json format.
+     * @param string|null $filename Filename to download.
+     * @param array $columns Table columns to export (default: all).
+     * 
+     * @return bool Return true if export is successful, false otherwise.
+     * 
+     * @throws DatabaseException If an invalid format is provided or if unable to create the export.
+     */
+    public function export(string $as = 'csv', ?string $filename = null, array $columns = ['*']): bool 
+    {
+        return  $this->manager()->export($as, $filename, $columns);
+    }
+
+    /**
+     * Creates a backup of the database table.
+     * 
+     * @param string|null $filename Optional name of the backup file (default: null). If not provided, table name and timestamp will be used.
+     * 
+     * @return bool Return true if backup is successful, false otherwise.
+     * 
+     * @throws DatabaseException If unable to create the backup directory or if failed to create the backup.
+     */
+    public function backup(?string $filename = null): bool 
+    {
+        return $this->manager()->backup($filename, true);
+    }
+
+    /**
+     * Debug dump statement information for the last statement execution.
+     *
+     * @return bool|null trues else false or null.
+     */
+    public function dump(): bool|null
+    {
+        return $this->database()->dumpDebug();
+    }
+
+    /**
+     * Free database resources
+     * 
+     * @return void 
+     */
+    public function free(): void 
+    {
+        if(!($this->conn instanceof Connection) || !($this->isConnected()) ){
+            return;
+        }
+
+        $this->conn->database()->free();
+        $this->purge();
+    }
+
+    /**
+     * Close database connection
+     * 
+     * @return void 
+     */
+    public function close(): void 
+    {
+        if(!($this->conn instanceof Connection) || !$this->isConnected()){
+            return;
+        }
+
+        $this->conn->purge(true);
+    }
+
+     /**
+     * Reset query conditions and Free database resources
+     * 
+     * @return void 
+     */
+    public function reset(): void 
+    {
+        $this->jointTableAlias = '';
+        $this->joinTable = '';
+        $this->joinType = '';
+        $this->joinConditions = [];
+        $this->selectLimit = '';
+        $this->maxLimit = 0;
+        $this->queryOrder = [];
+        $this->queryMatchOrder = [];
+        $this->queryGroup = [];
+        $this->whereCondition = [];
+        $this->andConditions = [];
+        $this->querySetValues = [];
+        $this->hasCache = false;
+        $this->printQuery = false;
+        $this->bindValues = [];
+        $this->buildQuery = '';
+        if($this->resultType !== 'stmt'){
+            $this->free();
+        }
+        
+        $this->resultType = 'object';
     }
 
     /**
@@ -2430,53 +2549,29 @@ final class Builder implements LazyInterface
         $last += $count;
     }
 
-    /**
-     * Retrieves the database manager instance.
+   /**
+     * New cache instance.
      * 
-     * Returns a singleton instance of the Manager class initialized with the current database connection.
+     * @param string|null $storage Optional storage name for the cache.
+     * @param string|null $subfolder Optional file-based caching subfolder.
+     * @param string|null $persistent_id Optional memory-based caching unique persistent connection ID.
      * 
-     * @return Manager Database manager class instance.
-     * @throws DatabaseException Throws if database connection failed.
-     * 
-     * @see https://luminova.ng/docs/0.0.0/database/manager
+     * @return BaseCache Return instance of cache class.
      */
-    public function manager(): Manager 
+    private function newCache(
+        ?string $storage = null, 
+        ?string $subfolder = null,
+        ?string $persistent_id = null
+    ): BaseCache
     {
-        static $manager = null;
-        $manager ??= new Manager($this->database());
-        $manager->setTable($this->tableName);
+        if($this->cacheDriver === 'memcached'){
+            $cache = MemoryCache::getInstance(null, $persistent_id ?? '__database_builder__');
+        }else{
+            $cache = FileCache::getInstance(null);
+            $cache->setFolder('database' . ($subfolder ? DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS) : ''));
+        }
 
-        return $manager;
-    }
-
-    /**
-     * Exports the database table and downloads it to the browser as JSON or CSV format.
-     * 
-     * @param string $as Export as csv or json format.
-     * @param string|null $filename Filename to download.
-     * @param array $columns Table columns to export (default: all).
-     * 
-     * @return bool Return true if export is successful, false otherwise.
-     * 
-     * @throws DatabaseException If an invalid format is provided or if unable to create the export.
-     */
-    public function export(string $as = 'csv', ?string $filename = null, array $columns = ['*']): bool 
-    {
-        return  $this->manager()->export($as, $filename, $columns);
-    }
-
-    /**
-     * Creates a backup of the database table.
-     * 
-     * @param string|null $filename Optional name of the backup file (default: null). If not provided, table name and timestamp will be used.
-     * 
-     * @return bool Return true if backup is successful, false otherwise.
-     * 
-     * @throws DatabaseException If unable to create the backup directory or if failed to create the backup.
-     */
-    public function backup(?string $filename = null): bool 
-    {
-        return $this->manager()->backup($filename, true);
+        return $cache->setStorage('database_' . ($storage ?? $this->tableName ?? 'capture'));
     }
 
     /**
@@ -2577,74 +2672,5 @@ final class Builder implements LazyInterface
         }
 
         return $quoted;
-    }
-
-    /**
-     * Debug dump statement information for the last statement execution.
-     *
-     * @return bool|null trues else false or null.
-     */
-    public function dump(): bool|null
-    {
-        return $this->database()->dumpDebug();
-    }
-    
-    /**
-     * Reset query conditions and Free database resources
-     * 
-     * @return void 
-     */
-    public function reset(): void 
-    {
-        $this->jointTableAlias = '';
-        $this->joinTable = '';
-        $this->joinType = '';
-        $this->joinConditions = [];
-        $this->selectLimit = '';
-        $this->maxLimit = 0;
-        $this->queryOrder = [];
-        $this->queryMatchOrder = [];
-        $this->queryGroup = [];
-        $this->whereCondition = [];
-        $this->andConditions = [];
-        $this->querySetValues = [];
-        $this->hasCache = false;
-        $this->printQuery = false;
-        $this->bindValues = [];
-        $this->buildQuery = '';
-        if($this->resultType !== 'stmt'){
-            $this->free();
-        }
-        
-        $this->resultType = 'object';
-    }
-
-    /**
-     * Free database resources
-     * 
-     * @return void 
-     */
-    public function free(): void 
-    {
-        if(!($this->conn instanceof Connection) || !($this->isConnected()) ){
-            return;
-        }
-
-        $this->conn->database()->free();
-        $this->purge();
-    }
-
-    /**
-     * Close database connection
-     * 
-     * @return void 
-     */
-    public function close(): void 
-    {
-        if(!($this->conn instanceof Connection) || !$this->isConnected()){
-            return;
-        }
-
-        $this->conn->purge(true);
     }
 }

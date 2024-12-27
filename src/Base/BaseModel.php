@@ -114,6 +114,13 @@ abstract class BaseModel implements LazyInterface
     protected static ?Validation $validation = null;
 
     /**
+     * Builder class instance.
+     * 
+     * @var Builder|null $builder
+     */
+    protected ?Builder $builder = null;
+
+    /**
      * Search database controller instance.
      * 
      * @var SearchInstance $searchInstance
@@ -137,23 +144,18 @@ abstract class BaseModel implements LazyInterface
 
     /**
      * Constructor for the Model class.
-     * If null is passed framework will initialize builder lass instance.
-     * 
-     * @param Builder|null $builder Optional database query builder class instance.
      */
-    public function __construct(protected ?Builder $builder = null)
+    public function __construct()
     {
-        $this->builder = ($this->builder instanceof Builder)
-            ? $builder->table($this->table)
-            : Builder::table($this->table);
+        $this->builder = Builder::getInstance($this->table);
         $this->builder->caching($this->cacheable);
         $this->builder->returns($this->resultType);
 
+        $this->onCreate();
+       
         if($this->cacheable && static::$cacheFolder === ''){
             static::$cacheFolder = get_class_name(static::class);
         }
-
-        $this->onCreate();
     }
 
     /**
@@ -283,7 +285,10 @@ abstract class BaseModel implements LazyInterface
      * 
      * @return bool Return true if the record was successfully deleted otherwise false.
      */
-    public function delete(string|int|float|array|null $key = null, ?int $max = null): bool 
+    public function delete(
+        string|int|float|array|null $key = null, 
+        ?int $max = null
+    ): bool 
     {
         if($this->readOnly){
             return false;
@@ -295,7 +300,12 @@ abstract class BaseModel implements LazyInterface
         }
 
         if($key === null){
-            return $tbl->delete() > 0;
+            if($tbl->delete() > 0){
+                $this->purge();
+                return true;
+            }
+
+            return false;
         }
 
         if(is_array($key)){
@@ -315,6 +325,18 @@ abstract class BaseModel implements LazyInterface
         return $this->builder->table($this->table)
             ->cache('total', $this->table . '_total', $this->expiry, static::$cacheFolder)
             ->total();
+    }
+
+    /**
+     * Determine if a record exists in the database.
+     * 
+     * @param string|float|int $key The key to check if it exists in the database.
+     * 
+     * @return bool Return true if the record exists otherwise false.
+     */
+    public function exists(string|int|float $key): bool 
+    {
+        return (int) $this->count($key) > 0;
     }
 
     /**
@@ -371,7 +393,8 @@ abstract class BaseModel implements LazyInterface
 
         $columns = rtrim($columns, ' OR');
         
-        return $this->builder->query("SELECT {$fields} FROM {$this->table} {$columns} LIMIT {$offset}, {$limit}")
+        return $this->builder->table($this->table)
+            ->query("SELECT {$fields} FROM {$this->table} {$columns} LIMIT {$offset}, {$limit}")
             ->cache($cache_key, $this->table . '_search', $this->expiry, static::$cacheFolder)
             ->execute([
                 'keyword' => "%{$query}%"
@@ -415,9 +438,10 @@ abstract class BaseModel implements LazyInterface
         $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
         $sql = "SELECT {$fields} FROM {$this->table} {$queries} LIMIT {$offset}, {$limit}";
 
-        $tbl = $this->builder->query($sql);
-        $tbl->cache($cache_key, $this->table . '_doSearch', $this->expiry, static::$cacheFolder);
-        $result = $tbl->execute();
+        $result = $this->builder->table($this->table)
+            ->query($sql)
+            ->cache($cache_key, $this->table . '_doSearch', $this->expiry, static::$cacheFolder)
+            ->execute();
 
         if($result === false || empty($result)){
             return false;

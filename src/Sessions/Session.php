@@ -9,26 +9,27 @@
  */
 namespace Luminova\Sessions;
 
-use \Luminova\Interface\SessionManagerInterface;
+use \Luminova\Interface\SessionInterface;
 use \Luminova\Interface\LazyInterface;
 use \App\Config\Session as SessionConfig;
 use \Luminova\Sessions\SessionManager;
+use \SessionHandler;
 
 class Session implements LazyInterface
 {
     /**
      * session interface
      * 
-     * @var SessionManagerInterface $manager
+     * @var SessionInterface $manager
      */
-    private ?SessionManagerInterface $manager = null;
+    private ?SessionInterface $manager = null;
 
     /**
      * static class instance
      * 
-     * @var Session $instance 
+     * @var self $instance 
      */
-    private static ?Session $instance = null;
+    private static ?self $instance = null;
 
     /**
      * Session configuration.
@@ -38,11 +39,18 @@ class Session implements LazyInterface
     private static ?SessionConfig $config = null;
 
     /**
+     * Session configuration.
+     * 
+     * @var SessionHandler $handler 
+     */
+    private ?SessionHandler $handler = null;
+
+    /**
      * Initializes session constructor
      *
-     * @param SessionManagerInterface|null $manager The session manager.
+     * @param SessionInterface|null $manager The session manager.
      */
-    public function __construct(?SessionManagerInterface $manager = null)
+    public function __construct(?SessionInterface $manager = null)
     {
         self::$config ??= new SessionConfig();
         $this->manager = $manager ?? new SessionManager();
@@ -52,19 +60,32 @@ class Session implements LazyInterface
     } 
 
     /**
-     * Get an instance of the Session class.
+     * Singleton method to return an instance of the Session class.
      *
-     * @param SessionManagerInterface|null $manager The session manager.
+     * @param SessionInterface|null $manager The session manager.
      * 
-     * @return static self instance
+     * @return static Return static Session class instance.
      */
-    public static function getInstance(?SessionManagerInterface $manager = null): static
+    public static function getInstance(?SessionInterface $manager = null): static
     {
         if (self::$instance === null) {
             self::$instance = new self($manager);
         }
 
         return self::$instance;
+    }
+
+    /**
+     * Sets the session save handler.
+     *
+     * @param SessionHandler $handler The custom save handler instance.
+     *
+     * @return self Return the Session class instance.
+     */
+    public function setHandler(SessionHandler $handler): self
+    {
+        $this->handler = $handler;
+        return $this;
     }
 
     /** 
@@ -106,11 +127,11 @@ class Session implements LazyInterface
     /**
      * Sets the session manager.
      *
-     * @param SessionManagerInterface $manager The session manager to set.
+     * @param SessionInterface $manager The session manager to set.
      * 
      * @return void
      */
-    public function setManager(SessionManagerInterface $manager): void
+    public function setManager(SessionInterface $manager): void
     {
         $this->manager = $manager;
     }
@@ -118,9 +139,9 @@ class Session implements LazyInterface
     /**
      * Retrieves the session storage manager instance (`CookieStorage` or `SessionManager`).
      *
-     * @return SessionManagerInterface|null The storage manager instance.
+     * @return SessionInterface|null The storage manager instance.
      */
-    public function getManager(): ?SessionManagerInterface
+    public function getManager(): ?SessionInterface
     {
         return $this->manager;
     }
@@ -326,6 +347,7 @@ class Session implements LazyInterface
             }
 
             if (session_status() === PHP_SESSION_ACTIVE) {
+                $this->useHandler();
                 $this->ipListener();
                 logger('warning', 'Session: Sessions is enabled, and one exists. don\'t $session->start() again.');
                 return;
@@ -333,6 +355,7 @@ class Session implements LazyInterface
 
             if (session_status() === PHP_SESSION_NONE) {
                 $this->sessionConfigure();
+                $this->useHandler();
                 if($sid !== null){
                     if(preg_match('/^[-,a-zA-Z0-9]{1,128}$/', $sid) > 0){
                         session_id($sid);
@@ -348,6 +371,7 @@ class Session implements LazyInterface
         }
         
         $this->sessionConfigure();
+        $this->useHandler();
         $this->ipListener();
     }
 
@@ -446,23 +470,26 @@ class Session implements LazyInterface
      */
     private function sessionConfigure(): void
     {
-        $cookieParams = [
-            'lifetime' => time() + self::$config->expiration,
+        $sameSite = in_array(self::$config->sameSite, ['Lax', 'Strict', 'None'], true) 
+            ? self::$config->sameSite 
+            : 'Lax';
+
+        session_set_cookie_params([
+            'lifetime' => self::$config->expiration,
             'path'     => self::$config->sessionPath,
             'domain'   => self::$config->sessionDomain,
-            'secure'   => true,
+            'secure'   => true, 
             'httponly' => true,
-            'samesite' => self::$config->sameSite,
-        ];
+            'samesite' => $sameSite,
+        ]);
         ini_set('session.name', self::$config->cookieName);
-        ini_set('session.cookie_samesite', self::$config->sameSite);
-        session_set_cookie_params($cookieParams);
+        ini_set('session.cookie_samesite', $sameSite);
 
         if (self::$config->expiration > 0) {
-            ini_set('session.gc_maxlifetime', (string) $cookieParams['lifetime']);
+            ini_set('session.gc_maxlifetime', (string) self::$config->expiration);
         }
 
-        if (self::$config->savePath !== '') {
+        if (self::$config->savePath && is_writable(self::$config->savePath)) {
             ini_set('session.save_path', self::$config->savePath);
         }
 
@@ -470,5 +497,15 @@ class Session implements LazyInterface
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_cookies', '1');
         ini_set('session.use_only_cookies', '1');
+    }
+
+    /**
+     * Enable session storage handler.
+     */
+    private function useHandler(): void 
+    {
+        if ($this->handler instanceof SessionHandler) {
+            session_set_save_handler($this->handler, true);
+        }
     }
 }

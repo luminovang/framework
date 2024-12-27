@@ -35,7 +35,7 @@ use \Throwable;
  * Factory methods classes.
  *
  * @method static CoreFunction        functions(bool $shared = true)                             Utility function helper class.
- * @method static Session             session(?\Luminova\Interface\SessionManagerInterface $manager = null, bool $shared = true)                   Server-side user session class, if manager is null `\Luminova\Sessions\SessionManager` will be used instead.
+ * @method static Session             session(?\Luminova\Interface\SessionInterface $manager = null, bool $shared = true)                   Server-side user session class, if manager is null `\Luminova\Sessions\SessionManager` will be used instead.
  * @method static Cookie              cookie(string $name, mixed $value = '', array $options = [], bool $shared = true)                    Client-side cookie class
  * @method static Task                task(bool $shared = true)                      Time task utility class.
  * @method static Modules             modules(bool $shared = true)                               PSR-4 Module autoloader and file importer class.
