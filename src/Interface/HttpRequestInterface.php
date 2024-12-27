@@ -400,10 +400,12 @@ interface HttpRequestInterface
      * Check if the request origin matches the current application host.
      *
      * @param bool $subdomains Whether to consider subdomains or not (default: false).
+     * @param bool $strict When set to true, if request origin is empty it checks for referer if also empty return false (default: false).
+     *              If set to false, it checks for only the request origin is empty it returns true without further validation.
      * 
      * @return bool Returns true if the request origin matches the current host, false otherwise.
      */
-    public function isSameOrigin(bool $subdomains = false): bool;
+    public function isSameOrigin(bool $subdomains = false, bool $strict = false): bool;
 
     /**
      * Validates if the given (hostname's, origins, proxy ip or subnet) matches any of the trusted patterns.

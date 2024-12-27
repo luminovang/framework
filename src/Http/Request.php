@@ -742,12 +742,15 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function isSameOrigin(bool $subdomains = false): bool
+    public function isSameOrigin(bool $subdomains = false, bool $strict = false): bool
     {
         $origin = $this->header->get('Origin') ?? $this->server->get('HTTP_ORIGIN');
+        $origin = (!$origin && $strict) 
+            ? $this->header->get('Referer') ?? $this->server->get('HTTP_REFERER')
+            : null;
 
-        if (!$origin) {
-            return true;
+        if(!$origin){
+            return !$strict;
         }
 
         $origin = parse_url($origin, PHP_URL_HOST);
