@@ -28,9 +28,16 @@ class LazyObject implements LazyInterface, Stringable
     /**
      * The constructor logic to create the actual object instance.
      * 
-     * @var Closure|object|null $lazyClassInitializer
+     * @var Closure|object|null $lazyInitializer
      */
-    private mixed $lazyClassInitializer = null;
+    private mixed $lazyInitializer = null;
+
+    /**
+     * The constructor arguments.
+     * 
+     * @var callable|null $lazyArguments
+     */
+    private mixed $lazyArguments = null;
 
     /**
      * Indicate weather lazy-ghost is supported.
@@ -59,23 +66,23 @@ class LazyObject implements LazyInterface, Stringable
      * echo $person->getAge();
      * ```
      */
-    public function __construct(Closure|string $initializer,  ?callable $arguments = null) 
+    public function __construct(private Closure|string $initializer, ?callable $arguments = null) 
     {
-        if($initializer instanceof Closure){
-            $this->lazyClassInitializer = $initializer;
+        $this->lazyArguments = $arguments;
+
+        if($this->initializer instanceof Closure){
+            $this->lazyInitializer = $this->initializer;
             return;
         }
 
         self::$isLazySupported ??= version_compare(PHP_VERSION, '8.4.0', '>=');
 
         if (self::$isLazySupported) {
-            $this->lazyInstance = self::newLazyGhost($initializer, $arguments);
+            $this->lazyInstance = self::newLazyGhost($this->initializer, $arguments);
             return;
         }
 
-        $this->lazyClassInitializer = fn() => new $initializer(
-            ...($arguments && is_callable($arguments)) ? $arguments() : []
-        );
+        $this->lazyInitializer = fn(mixed ...$args) => new ($this->initializer)(...$args);
     }
 
     /**
@@ -144,6 +151,63 @@ class LazyObject implements LazyInterface, Stringable
     }
 
     /**
+     * Creates a new instance with arguments return the class object.
+     * 
+     * @param mixed ...$arguments The arguments to create a new class object with.
+     * 
+     * @return class-object<\T>|LazyInterface<\T> Return a new instance of the lazy loaded class or null.
+     * @throws RuntimeException If error occurs while initializing class.
+     * 
+     * > **Note:** This doesn't override the parent lazy loaded class object.
+     * 
+     * @example - Creating a new instance with arguments:
+     * 
+     * ```php 
+     * $parent = LazyObject::newObject(Person::class, fn() => [33]);
+     * echo $parent->getAge() // Outputs: 33
+     * 
+     * $child = $parent->newLazyInstance(34);
+     * echo $child->getAge() // Outputs: 34
+     * ```
+     * 
+     * @example - Creating a new instance with arguments from a callable initializer:
+     * 
+     * ```php 
+     * $parent = LazyObject::newObject(function(mixed ...$arguments){
+     *      return new Person(....$arguments);
+     * }, fn() => [33]);
+     * 
+     * echo $parent->getAge() // Outputs: 33
+     * 
+     * $child = $parent->newLazyInstance(34);
+     * echo $child->getAge() // Outputs: 34
+     * ```
+     */
+    public function newLazyInstance(mixed ...$arguments): object
+    {
+        try {
+            if (self::$isLazySupported) {
+                return self::newLazyGhost(
+                    $this->initializer, 
+                    fn() => $arguments
+                );
+            }
+
+            if($this->initializer instanceof Closure){
+                return ($this->initializer)(...$arguments);
+            }
+
+            return new ($this->initializer)(...$arguments);
+        } catch (Throwable $e) {
+            throw new RuntimeException(
+                sprintf('Failed to initialize the lazy object. Error: %s', $e->getMessage()),
+                $e->getCode(),
+                $e
+            );
+        }
+    }
+
+     /**
      * Creates and return the lazy-loaded class object.
      * 
      * @return class-object<\T>|LazyInterface<\T>|null Return lazy-loaded instance of the specified class or null.
@@ -153,6 +217,18 @@ class LazyObject implements LazyInterface, Stringable
     {
         $this->newLazyClassObject();
         return $this->lazyInstance;
+    }
+
+    /**
+     * Override the current lazy-loaded instance with a new class object.
+     * 
+     * @param class-object<\T> $instance The new class object to replace the existing lazy-loaded instance.
+     * 
+     * @return void
+     */
+    public function setLazyInstance(object $instance): void
+    {
+        $this->lazyInstance = $instance;
     }
 
     /**
@@ -366,7 +442,10 @@ class LazyObject implements LazyInterface, Stringable
         }
 
         try {
-            $this->lazyInstance = ($this->lazyClassInitializer)();
+            $this->lazyInstance = ($this->lazyInitializer)(
+                ...($this->lazyArguments ? ($this->lazyArguments)() : [])
+            );
+            $this->lazyArguments = null;
         } catch (Throwable $e) {
             throw new RuntimeException(
                 sprintf('Failed to initialize the lazy object. Error: %s', $e->getMessage()),
