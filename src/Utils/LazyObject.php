@@ -75,7 +75,9 @@ class LazyObject implements LazyInterface, Stringable
             return;
         }
 
-        self::$isLazySupported ??= version_compare(PHP_VERSION, '8.4.0', '>=');
+        self::$isLazySupported = (self::$isLazySupported === null) 
+            ? version_compare(PHP_VERSION, '8.4.0', '>=')
+            : self::$isLazySupported;
 
         if (self::$isLazySupported) {
             $this->lazyInstance = self::newLazyGhost($this->initializer, $arguments);
@@ -108,7 +110,9 @@ class LazyObject implements LazyInterface, Stringable
      */
     public static function newObject(Closure|string $initializer, ?callable $arguments = null): object
     {
-        self::$isLazySupported ??= version_compare(PHP_VERSION, '8.4.0', '>=');
+        self::$isLazySupported = (self::$isLazySupported === null) 
+            ? version_compare(PHP_VERSION, '8.4.0', '>=')
+            : self::$isLazySupported;
 
         return (self::$isLazySupported && !($initializer instanceof Closure))
             ? self::newLazyGhost($initializer, $arguments)
