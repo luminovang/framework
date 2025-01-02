@@ -322,11 +322,11 @@ final class IP
     }
 
     /**
-     * Convert an IPv6 address to its IPv4-mapped representation.
+     * Convert an IPv6-mapped address to its IPv4 representation.
      *
      * @param string|null $ipv6 The IPv6 address to convert.
      *
-     * @return string|false Return the IPv4-mapped address, or false if the input is not a valid IPv6 address.
+     * @return string|false Return the IPv4 address, or false if the input is not a valid IPv6 address.
      */
     public static function toIpv4(?string $ipv6 = null): string|bool
     {
