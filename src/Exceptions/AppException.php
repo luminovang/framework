@@ -300,30 +300,21 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
      */
     public function handle(): void
     {
-        if (Foundation::isCommand()) {
-            if (env('throw.cli.exceptions', false)) {
-                throw $this;
-            }
-
-            exit(self::display($this));
-        }
-
-        if (PRODUCTION && !Foundation::isFatal($this->code)) {
-            $this->log();
-            return;
-        }
-
-        throw $this;
+        self::safeHandler($this);
     }
 
     /**
      * {@inheritdoc}
      */
-    public static function throwException(
-        string $message, 
-        string|int $code = 0, 
-        ?Throwable $previous = null
-    ): void
+    public function log(string $dispatch = 'exception'): void
+    {
+        (new Logger())->dispatch($dispatch, $this->toString());
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function throwException(string $message, string|int $code = 0, ?Throwable $previous = null): void
     {
         if($previous instanceof self){
             $previous->handle();
@@ -360,28 +351,43 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
             return;
         }
 
-        throw $new;
+        self::safeHandler($e);
     }
 
     /**
-     * {@inheritdoc}
+     * Safely handles exceptions based on the application environment and exception type.
+     *
+     * This method determines how to handle exceptions based on whether the application
+     * is running in CLI mode, in production, and whether the exception is considered fatal.
+     * It may log the exception, display it, or re-throw it depending on the circumstances.
+     *
+     * @param Throwable $exception The exception to be handled.
+     *
+     * @return void This method doesn't return a value, but may exit the script or throw an exception.
+     *
+     * @throws Throwable Re-throws the exception if not in production or if the exception is fatal.
      */
-    public function log(string $level = 'exception'): void
+    private static function safeHandler(Throwable $exception): void
     {
-        (new Logger())->dispatch($level, $this->toString());
-    }
+        if (Foundation::isCommand()) {
+            if (env('throw.cli.exceptions', false)) {
+                throw $exception;
+            }
 
-    /**
-     * Display a custom exception info in CLI mode.
-     * 
-     * @param Throwable<AppException>|Throwable $exception The current exception thrown.
-     * 
-     * @return int Return status code for error.
-     */
-    private static function display(Throwable $exception): int 
-    {
-        include_once root('/resources/Views/system_errors/') . 'cli.php';
+            include_once root('/resources/Views/system_errors/') . 'cli.php';
+            exit(STATUS_ERROR);
+        }
 
-        return STATUS_ERROR;
+        if (PRODUCTION && !Foundation::isFatal($exception->getCode())) {
+            if($exception instanceof self){
+                $exception->log();
+                return;
+            }
+
+            (new Logger())->dispatch('exception', (string) $exception);
+            return;
+        }
+
+        throw $exception;
     }
 }

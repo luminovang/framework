@@ -90,7 +90,7 @@ interface ExceptionInterface
      * Based on your `App\Config\Logger`, if asynchronous logging is enabled, all log will use Fiber for asynchronous logging.
      * If on production, `logger.mail.logs` or `logger.remote.logs` is set, the log will be redirected to email or remote server.
      *
-     * @param string $level The log level to use (default: 'exception').
+     * @param string $dispatch A log level, email or a remote URL to send error to (default: 'exception').
      * 
      * @return void
      * 
@@ -108,7 +108,7 @@ interface ExceptionInterface
      * - php_errors - Log any php related error.
      * - metrics - Log performance metrics, specifically for api in production level.
      */
-    public function log(string $level = 'exception'): void;
+    public function log(string $dispatch = 'exception'): void;
 
     /**
      * Handles the exception gracefully based on the environment and error code.
