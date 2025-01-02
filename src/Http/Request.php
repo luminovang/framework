@@ -759,13 +759,9 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
             return false;
         }
 
-        if($origin === APP_HOSTNAME){
-            return true;
-        }
-
-        return ($subdomains) 
-            ? (Func::mainDomain($origin) === APP_HOSTNAME)
-            : false;
+        return ($origin === APP_HOSTNAME) 
+            ? true 
+            : ($subdomains && Func::mainDomain($origin) === APP_HOSTNAME);
     }
 
     /**
