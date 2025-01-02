@@ -131,7 +131,7 @@ interface ExceptionInterface
     public static function throwException(string $message, string|int $code = 0, ?Throwable $previous = null): void;
 
     /**
-     * Converts an existing Throwable to a specific exception class and handles it.
+     * Rethrow or handle an exception gracefully as a different exception class.
      *
      * If the provided Throwable is already an instance of the `AppException` class, it will be handled directly.
      * Otherwise, a new exception of the specified class (or the current class by default) will be created with the
