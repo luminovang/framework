@@ -72,9 +72,9 @@ interface ExceptionInterface
     public function getBacktrace(): array;
 
     /**
-     * String representation of the exception.
+     * Gets a formatted exception message if this format `'Exception: (%s) %s in %s on line %d'`.
      * 
-     * @return string Message containing error code and line number.
+     * @return string Return a formatted error message containing error code and line number.
      */
     public function toString(): string;
 
@@ -129,7 +129,7 @@ interface ExceptionInterface
      * @throws AppException<\T> Throws the exception from the called class.
      */
     public static function throwException(string $message, string|int $code = 0, ?Throwable $previous = null): void;
-
+    
     /**
      * Rethrow or handle an exception gracefully as a different exception class.
      *
