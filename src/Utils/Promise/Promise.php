@@ -800,7 +800,11 @@ class Promise implements PromiseInterface
 
         if ($value === $this) {
             $this->isCanceled = true;
-            Helper::rejection($this->onError, 'Cannot fulfill or reject a promise with itself',  ErrorException::LOGIC_ERROR);
+            Helper::rejection(
+                $this->onError, 
+                'Cannot fulfill or reject a promise with itself', 
+                ErrorException::LOGIC_ERROR
+            );
             return;
         }
 

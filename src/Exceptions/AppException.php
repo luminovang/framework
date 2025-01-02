@@ -193,28 +193,25 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     public const CANNOT_OPEN_DATABASE_FILE = 14;
 
     /**
+     * String error code.
+     * 
+     * @var string|int|null $strCode
+     */
+    protected string|int|null $strCode = null;
+
+    /**
      * {@inheritdoc}
      */
-    public function __construct(
-        string $message, 
-        string|int $code = 0, 
-        ?Throwable $previous = null
-    )
+    public function __construct(string $message, string|int $code = 0, ?Throwable $previous = null)
     {
         // Only pass integer error code to parent constructor.
         parent::__construct($message, is_numeric($code) ? (int) $code : 0, $previous);
 
         // Set the code directly after parent initialized in case if it's a string error code.
-        $this->code = $code;
+        $this->setCode($code);
 
         // If debug tracing is enabled then store it in shared memory
-        // In other to access it when error handler is called, since there is no other way to access trace information.
-        if(SHOW_DEBUG_BACKTRACE){
-            ErrorHandler::setBacktrace(
-                (($previous instanceof Throwable) ? $previous->getTrace() : null)
-                    ?:($this->getTrace() ?: debug_backtrace())
-            );
-        }
+        $this->setBacktrace($previous);
     }
 
     /**
@@ -222,6 +219,14 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
      */
     public function setCode(string|int $code): self
     {
+        // Set core last error code
+        ErrorHandler::setLastErrorCode($code);
+
+        if(!is_numeric($code)){
+            $this->strCode = $code;
+            return $this;
+        }
+        
         $this->code = $code;
         return $this;
     }
@@ -247,9 +252,17 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     /**
      * {@inheritdoc}
      */
+    public function getErrorCode(): string|int
+    {
+        return $this->strCode ?? $this->code;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function getName(): string
     {
-        return ErrorHandler::getErrorName($this->code);
+        return ErrorHandler::getErrorName($this->getErrorCode());
     }
 
     /**
@@ -288,7 +301,7 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     {
         return sprintf(
             'Exception: (%s) %s in %s on line %d',
-            (string) $this->code,
+            (string) $this->getErrorCode(),
             $this->message,
             $this->file,
             $this->line
@@ -322,7 +335,7 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
         }
 
         $e = new static($message, $code, $previous);
-
+        
         if($previous instanceof Throwable){
             $e->setFile($previous->getFile());
             $e->setLine($previous->getLine());
@@ -352,6 +365,29 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
         }
 
         self::safeHandler($e);
+    }
+
+    /**
+     * Set backtrace if debug tracing is enabled, store it in shared memory
+     * in other to access it when error handler is called, since there is no other way to access trace information.
+     * 
+     * @param Throwable|null $previous The previous exception.
+     * 
+     * @return void
+     */
+    private function setBacktrace(?Throwable $previous = null): void
+    {
+        if(!SHOW_DEBUG_BACKTRACE){
+            return;
+        }
+
+        $tracer = (($previous instanceof Throwable) && $previous->getTrace())
+            ? $previous->getTrace()
+            : $this->getTrace();
+        
+        if($tracer){
+            ErrorHandler::setBacktrace($tracer, false);
+        }
     }
 
     /**

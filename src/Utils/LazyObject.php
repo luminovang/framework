@@ -11,6 +11,7 @@ namespace Luminova\Utils;
 
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\LogicException;
 use \Closure;
 use \ReflectionClass;
 use \Stringable;
@@ -465,7 +466,7 @@ class LazyObject implements LazyInterface, Stringable
         }
 
         if (!is_object($this->lazyInstance)) {
-            throw new RuntimeException(sprintf(
+            throw new LogicException(sprintf(
                 'Invalid initializer return type: expected object, got %s.',
                 gettype($this->lazyInstance)
             ));
@@ -491,13 +492,10 @@ class LazyObject implements LazyInterface, Stringable
             return;
         }
 
-        throw new RuntimeException(
-            sprintf(
-                'The lazy loaded class: "%s" does not implement "%s".',
-                $this->lazyInstance::class,
-                $method
-            ),
-            RuntimeException::LOGIC_ERROR
-        );
+        throw new LogicException(sprintf(
+            'The lazy loaded class: "%s" does not implement "%s".',
+            $this->lazyInstance::class,
+            $method
+        ));
     }
 }

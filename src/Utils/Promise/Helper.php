@@ -14,6 +14,7 @@ use \Luminova\Utils\Promise\FulfilledPromise;
 use \Luminova\Utils\Promise\RejectedPromise;
 use \Luminova\Interface\PromiseInterface;
 use \Luminova\Exceptions\ErrorException;
+use \Luminova\Exceptions\LogicException;
 use \ReflectionNamedType;
 use \ReflectionUnionType;
 use \ReflectionIntersectionType;
@@ -123,7 +124,10 @@ final class Helper
         bool $throw = true,
     ): void
     {
-        $error = ($error instanceof Throwable) ? $error : new ErrorException($error, $code);
+        $class = ($code === ErrorException::LOGIC_ERROR) 
+            ? LogicException::class : ErrorException::class;
+
+        $error = ($error instanceof Throwable) ? $error : new $class($error, $code);
 
         if($onError){
             ($onError)($error);

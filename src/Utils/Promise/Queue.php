@@ -9,7 +9,8 @@
  */
 namespace Luminova\Utils\Promise;
 
-use Luminova\Interface\PromiseInterface;
+use \Luminova\Interface\PromiseInterface;
+use \Luminova\Exceptions\LogicException;
 use \Throwable;
 
 final class Queue 
@@ -69,27 +70,28 @@ final class Queue
 
     /**
      * Dequeue method to cancel all items in the queue.
+     * 
+     * @throws Throwable 
      * @ignore
      * @internal
      */
     private function dequeue(): void
     {
         foreach ($this->queues as $key => $promise) {
-            assert(method_exists($promise, 'cancel'));
-
-            $e = null;
+            if (!method_exists($promise, 'cancel')) {
+                throw new LogicException(sprintf('Promise at key "%s" does not support cancellation.', $key));
+            }
 
             try {
                 $promise->cancel();
-            } catch (Throwable $e) {}
-
-            unset($this->queues[$key]);
-
-            if ($e) {
+            } catch (Throwable $e) {
+                unset($this->queues[$key]);
                 throw $e;
             }
+
+            unset($this->queues[$key]);
         }
-        
+
         $this->queues = [];
     }
 }

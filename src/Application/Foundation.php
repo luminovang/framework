@@ -19,7 +19,7 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.4.4';
+    public const VERSION = '3.4.5';
 
     /**
      * Framework version name.
@@ -170,8 +170,8 @@ final class Foundation
         [$tracer, $view, $path] = self::errRoute($stack);
 
         // Get tracer for php error if not available
-        if(($tracer || SHOW_DEBUG_BACKTRACE) && !ErrorHandler::getBacktrace()){
-            ErrorHandler::setBacktrace(debug_backtrace());
+        if(($tracer || SHOW_DEBUG_BACKTRACE)){
+            ErrorHandler::setBacktrace(debug_backtrace(), true);
         }
         
         if ($view !== 'cli.php' && ob_get_level() > 0) {
@@ -420,7 +420,7 @@ final class Foundation
         if (($error = error_get_last()) === null || !isset($error['type'])) {
             return;
         }
- 
+
         $isFatal = self::isFatal($error['type']);
         $isDisplay = ini_get('display_errors');
         $errorCode = ErrorHandler::getErrorCode($error['message'], $error['type']);

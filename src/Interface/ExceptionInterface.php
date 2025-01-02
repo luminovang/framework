@@ -15,11 +15,14 @@ use \Throwable;
 interface ExceptionInterface
 {
     /**
-     * Constructor for the exception.
+     * Constructor to initialize a new exception object.
+     * 
+     * When an exception object is created with a message, an optional code, and a previous exception, 
+     * it can be thrown using the `throw` keyword or pass as an object to methods or return type.
      *
      * @param string $message The error message for the exception.
-     * @param string|int $code The exception code (default: 0).
-     * @param Throwable|null $previous The previous exception, if available (default: null).
+     * @param string|int $code The exception code, support `int` or `string` (default: 0).
+     * @param Throwable|null $previous The previous exception object, if available (default: null).
      */
     public function __construct(string $message, string|int $code = 0, ?Throwable $previous = null);
 
@@ -70,6 +73,17 @@ interface ExceptionInterface
      * @return array The debug backtrace or an empty array if not available.
      */
     public function getBacktrace(): array;
+
+    /**
+     * Get the string or int error code associated with this exception.
+     *
+     * Unlike `getCode` method, this method returns an `int` or `string` error code of the exception. It first checks if a string
+     * error code is set (strCode), and if not, falls back to the numeric error code.
+     *
+     * @return string|int Return the error code as either a string or an integer.
+     *                    Returns the string error code if set, otherwise returns the numeric error code.
+     */
+    public function getErrorCode(): string|int;
 
     /**
      * Gets a formatted exception message if this format `'Exception: (%s) %s in %s on line %d'`.
@@ -125,7 +139,7 @@ interface ExceptionInterface
      * @param string|int $code The exception code (default: 0).
      * @param Throwable|null $previous The previous exception, if available (default: null).
      * 
-     * @return void
+     * @return never
      * @throws AppException<\T> Throws the exception from the called class.
      */
     public static function throwException(string $message, string|int $code = 0, ?Throwable $previous = null): void;
@@ -133,16 +147,16 @@ interface ExceptionInterface
     /**
      * Rethrow or handle an exception gracefully as a different exception class.
      *
-     * If the provided Throwable is already an instance of the `AppException` class, it will be handled directly.
+     * If the provided Throwable is already an instance of the `Luminova\Exceptions\AppException` class, it will be handled directly.
      * Otherwise, a new exception of the specified class (or the current class by default) will be created with the
      * same message, code, and previous exception, and then handled.
      *
-     * @param Throwable $e The original exception or error to be thrown and handled.
+     * @param Throwable $e The original exception object to be thrown or handled.
      * @param class-string<AppException>|null $exception_class The class name to throw the exception as (e.g, `Luminova\Exceptions\RuntimeException`). 
      *          Defaults to the current class if not provided.
      * 
-     * @return void
-     * @throws AppException<\T> Throws the exception from the called class.
+     * @return never
+     * @throws Throwable<\T> Throws the exception from the called class.
      */
     public static function throwAs(Throwable $e, ?string $exception_class = null): void;
 }

@@ -15,6 +15,20 @@ use \Luminova\Exceptions\ErrorException;
 final class ErrorHandler
 {
     /**
+     * Shared memory to store the last error code.
+     * 
+     * @var string|int|null $errorCode
+     */
+    private static string|int|null $errorCode = null;
+
+    /**
+     * Shared memory to store the last debug backtrace.
+     * 
+     * @var array|null $backtrace
+     */
+    private static ?array $backtrace = null;
+
+    /**
      * Constructor for the error handler class.
      * 
      * @param string $message The error message.
@@ -31,24 +45,50 @@ final class ErrorHandler
         protected mixed $file = '',
         protected int $line = 0,
         protected mixed $name = 'ERROR'
-    ) {}
+    ) { }
+
+    /**
+     * Clears the shared error context to free up memory.
+     */
+    public function __destruct()
+    {
+        self::$errorCode = null;
+        self::$backtrace = null;
+    }
 
     /**
      * Set the last debug backtrace to the shared error context to be accessed any where when called `ErrorHandler::getBacktrace()`.
-     * This method sets the backtrace to shared variable `__ERROR_DEBUG_BACKTRACE__`.
+     * This method sets the backtrace to shared memory `$backtrace`.
      * 
      * @param array $backtrace The array of backtrace information.
+     * @param bool $push Weather to push the backtrace onto the existing one (default: true).
      * 
-     * @return bool Return true if debug backtrace was set, false otherwise.
+     * @return void
      */
-    public static function setBacktrace(array $backtrace): bool 
+    public static function setBacktrace(array $backtrace, bool $push = true): void 
     {
-        if(!defined('IS_UP')){
-            return false;
+        if($push && self::$backtrace){
+            self::$backtrace = array_merge(
+                $backtrace,
+                self::$backtrace
+            );
+            return;
         }
 
-        shared('__ERROR_DEBUG_BACKTRACE__', $backtrace);
-        return true;
+        self::$backtrace = $backtrace;
+    }
+
+    /**
+     * Set the last error code to the shared error context to be accessed any where when called `ErrorHandler::getErrorCode()`.
+     * This method sets the backtrace to shared memory `$errorCode`.
+     * 
+     * @param string|int $code The error code.
+     * 
+     * @return void
+     */
+    public static function setLastErrorCode(string|int $code): void 
+    {
+        self::$errorCode = $code;
     }
 
     /**
@@ -117,7 +157,7 @@ final class ErrorHandler
      */
     public function getCode(): string|int
     {
-        return $this->code;
+        return self::$errorCode ?? $this->code;
     }
 
     /**
@@ -188,16 +228,14 @@ final class ErrorHandler
     /**
      * Retrieves the last debug backtrace from the shared error context.
      * 
-     * This method accesses a shared variable `__ERROR_DEBUG_BACKTRACE__` to retrieve
+     * This method accesses a shared memory `$trace` to retrieve
      * the stored debug backtrace. If the backtrace is not set, it returns an empty array.
      * 
      * @return array Return the debug backtrace or an empty array if not available.
      */
     public static function getBacktrace(): array 
     {
-        return defined('IS_UP') ? 
-            (shared('__ERROR_DEBUG_BACKTRACE__', null, []) ?? []) : 
-            [];
+        return self::$backtrace ?? [];
     }
 
     /**
@@ -217,6 +255,10 @@ final class ErrorHandler
         string|int $default = E_ERROR
     ): string|int
     {
+        if(self::$errorCode !== null){
+            return self::$errorCode;
+        }
+
         if (preg_match('/^Uncaught \w+:\s*\((\d+)\)/', $message, $matches)) {
             $code = $matches[1] ?? null;
             return ($code === null) ? $default : (int) $code;
