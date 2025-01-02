@@ -54,7 +54,7 @@ class LazyObject implements LazyInterface, Stringable
      * a custom lazy initialization.
      * 
      * @param Closure|class-string<\T> $callback A class string or closure that creates the lazily initialized object.
-     * @param callable|null $arguments Optional arguments to pass to the class constructor for non-closure initializer.
+     * @param callable|null $arguments Optional arguments to pass to the class constructor or closure initializer argument.
      *              Must be a callable that returns a list array of arguments to pass to the constructor.
      * 
      * @throws RuntimeException If the class does not exist or error occurs.
@@ -62,7 +62,7 @@ class LazyObject implements LazyInterface, Stringable
      * @example - Custom Closure Initialization.
      * 
      * ```php
-     * $person = new LazyObject(fn() => new Person(33));
+     * $person = new LazyObject(fn(): Person => new Person(33));
      * echo $person->getAge();
      * ```
      */
@@ -95,7 +95,7 @@ class LazyObject implements LazyInterface, Stringable
      * a custom lazy initialization.
      *
      * @param Closure|\class-string<\T> $initializer A class string or closure that creates the lazily initialized object.
-     * @param callable|null $arguments Optional arguments to pass to the class constructor for non-closure initializer.
+     * @param callable|null $arguments Optional arguments to pass to the class constructor or closure initializer argument.
      *               Must be a callable that returns a list array of arguments to pass to the constructor.
      * 
      * @return class-object<\T>|LazyInterface<\T> Return lazy-loaded instance of the specified class.
@@ -135,7 +135,7 @@ class LazyObject implements LazyInterface, Stringable
      * @example Only Class Name Initialization:
      * 
      * ```php
-     * $person = LazyObject::newLazyGhost(Person::class, fn()=>[33, 'Peter', 'Nigeria']);
+     * $person = LazyObject::newLazyGhost(Person::class, fn(): array => [33, 'Peter', 'Nigeria']);
      * echo $person->getName();
      * ```
      */
@@ -167,7 +167,7 @@ class LazyObject implements LazyInterface, Stringable
      * @example - Creating a new instance with arguments:
      * 
      * ```php 
-     * $parent = LazyObject::newObject(Person::class, fn() => [33]);
+     * $parent = LazyObject::newObject(Person::class, fn(): array => [33]);
      * echo $parent->getAge() // Outputs: 33
      * 
      * $child = $parent->newLazyInstance(34);
@@ -177,9 +177,10 @@ class LazyObject implements LazyInterface, Stringable
      * @example - Creating a new instance with arguments from a callable initializer:
      * 
      * ```php 
-     * $parent = LazyObject::newObject(function(mixed ...$arguments){
-     *      return new Person(....$arguments);
-     * }, fn() => [33]);
+     * $parent = LazyObject::newObject(
+     *      fn(mixed ...$arguments): Person => new Person(...$arguments), 
+     *      fn(): array => [33]
+     * );
      * 
      * echo $parent->getAge() // Outputs: 33
      * 
@@ -446,10 +447,7 @@ class LazyObject implements LazyInterface, Stringable
         }
 
         try {
-            $this->lazyInstance = ($this->lazyInitializer)(
-                ...($this->lazyArguments ? ($this->lazyArguments)() : [])
-            );
-            $this->lazyArguments = null;
+            $this->lazyInstance = ($this->lazyInitializer)(...($this->lazyArguments ? ($this->lazyArguments)() : []));
         } catch (Throwable $e) {
             throw new RuntimeException(
                 sprintf('Failed to initialize the lazy object. Error: %s', $e->getMessage()),
@@ -464,6 +462,8 @@ class LazyObject implements LazyInterface, Stringable
                 gettype($this->lazyInstance)
             ));
         }
+        
+        $this->lazyArguments = null;
     }
 
     /**
@@ -488,7 +488,7 @@ class LazyObject implements LazyInterface, Stringable
                 'The lazy loaded class: "%s" does not implement "%s".',
                 $this->lazyInstance::class,
                 $method
-             ),
+            ),
             RuntimeException::LOGIC_ERROR
         );
     }
