@@ -270,12 +270,7 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
      */
     public function getFilteredMessage(): string
     {
-        $position = strpos($this->message, APP_ROOT);
-        $message = ($position !== false) ? 
-            substr($this->message, 0, $position) : 
-            $this->message;
-
-        return trim($message, ' in');
+        return ErrorHandler::filterMessage($this->message);
     }
 
     /**

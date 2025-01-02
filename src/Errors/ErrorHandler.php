@@ -207,11 +207,7 @@ final class ErrorHandler
      */
     public function getFilteredMessage(): string
     {
-        $message = str_contains($this->message, APP_ROOT) 
-            ? str_replace(APP_ROOT, '/', $this->message) 
-            : $this->message;
-
-        return trim($message, ' in');
+        return self::filterMessage($this->message);
     }
 
     /**
@@ -236,6 +232,24 @@ final class ErrorHandler
     public static function getBacktrace(): array 
     {
         return self::$backtrace ?? [];
+    }
+
+    /**
+     * Filters the error message by removing the application root path and other sensitive information.
+     * 
+     * @param string $message The error message to be filtered.
+     * 
+     * @return string Returns the filtered error message.
+     */
+    public static function filterMessage(string $message): string
+    {
+        $position = strpos($message, APP_ROOT);
+        $message = ($position !== false) ? 
+            substr($message, 0, $position) : 
+            $message;
+
+        preg_match('/^(.*) in /', $message, $matches);
+        return $matches[1] ?? trim($message, ' in');
     }
 
     /**
