@@ -401,7 +401,6 @@ final class IP
                     return '0x' . bin2hex($binary);
                 }
             } else {
-                //return '0x' . str_replace(':', '', ltrim($ip, '00'));
                 return '0x' . preg_replace('/(^|:)(0+)/', '$1', str_replace(':', '', $ip));
             }
         }

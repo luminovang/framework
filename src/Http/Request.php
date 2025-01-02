@@ -747,7 +747,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         $origin = $this->header->get('Origin') ?? $this->server->get('HTTP_ORIGIN');
         $origin = (!$origin && $strict) 
             ? $this->header->get('Referer') ?? $this->server->get('HTTP_REFERER')
-            : null;
+            : $origin;
 
         if(!$origin){
             return !$strict;
