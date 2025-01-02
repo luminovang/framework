@@ -322,7 +322,6 @@ final class ErrorHandler
             1201 => 'ERROR TIMEOUT',
             1202 => 'PROCESS ERROR',
             
-            
             // SQLite Error Codes
             6 => 'DATABASE LOCKED',
             14 => 'CANNOT OPEN DATABASE FILE',
