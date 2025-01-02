@@ -190,6 +190,14 @@ class LazyObject implements LazyInterface, Stringable
      */
     public function newLazyInstance(mixed ...$arguments): object
     {
+        if(
+            $this->lazyInstance !== null && 
+            empty($arguments) && 
+            method_exists($this->lazyInstance, '__clone')
+        ){
+            return clone $this->lazyInstance;
+        }
+
         try {
             if (self::$isLazySupported) {
                 return self::newLazyGhost(
@@ -462,7 +470,7 @@ class LazyObject implements LazyInterface, Stringable
                 gettype($this->lazyInstance)
             ));
         }
-        
+
         $this->lazyArguments = null;
     }
 
