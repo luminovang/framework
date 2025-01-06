@@ -7,13 +7,13 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Sessions;
+namespace Luminova\Sessions\Manager;
 
-use \Luminova\Interface\SessionInterface;
+use \Luminova\Interface\SessionManagerInterface;
 use \Luminova\Base\BaseConfig;
 use \Luminova\Exceptions\JsonException;
 
-final class CookieManager implements SessionInterface 
+final class Cookie implements SessionManagerInterface 
 { 
     /**
      * @var string $storage Session storage name 

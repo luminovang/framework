@@ -12,7 +12,7 @@ namespace Luminova\Interface;
 use \Luminova\Exceptions\JsonException;
 use \Luminova\Base\BaseConfig;
 
-interface SessionInterface 
+interface SessionManagerInterface 
 {
   /**
    * Initializes the session manager constructor.

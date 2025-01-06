@@ -1,53 +1,38 @@
 <?php 
 /**
- * Luminova Framework
+ * Luminova Framework.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Sessions;
+namespace Luminova\Sessions\Handler;
 
+use \Luminova\Base\BaseSessionHandler;
 use \Luminova\Security\Crypter;
 use \Luminova\Database\Builder;
 use \Luminova\Functions\Ip;
-use \SessionHandler;
+use \Luminova\Time\Time;
+use \ReturnTypeWillChange;
 use \Throwable;
 
 /**
  * Custom Database for session management with optional encryption support.
- *
- * This handler allows the use of `database` for session storage, while optionally
- * encrypting session data. It extends `SessionHandler` to provide fallback behavior for
- * file-based session handling when a model is not available.
  */
-class DatabaseSessionHandler extends SessionHandler
+class Database extends BaseSessionHandler
 {
     /**
-     * Configuration options for session handling.
-     * 
-     * @var array<string,mixed> $options
-     */
-    private array $options = [
-        'encryption'    => false,
-        'session_ip'    => false,
-        'columnPrefix'  => null,
-        'cacheable'     => false,
-        'onValidate'    => null,
-        'onCreate'      => null,
-        'onClose'       => null
-    ];
-
-    /**
-     * Constructor to initialize the session handler.
+     * Constructor to initialize the session database handler.
      *
      * @param string $table The name of the database table for session storage.
      * @param array<string,mixed> $options Configuration options for session handling.
+     * 
+     * @throws RuntimeException if an error occurred.
      */
     public function __construct(private string $table, array $options = []) 
     {
-        $this->options = array_replace($this->options, $options);
+        parent::__construct($options);
     }
 
     /**
@@ -60,7 +45,7 @@ class DatabaseSessionHandler extends SessionHandler
      * 
      * @example Example usage of `onCreate` callback:
      * ```php
-     * $handler = new DatabaseSessionHandler('sessions', [
+     * $handler = new Database('sessions', [
      *    'onCreate' => function (string $path, string $name): bool {
      *          return true; // Your logic here...
      *     }
@@ -79,7 +64,7 @@ class DatabaseSessionHandler extends SessionHandler
      * 
      * @example Example usage of `onClose` callback:
      * ```php
-     * $handler = new DatabaseSessionHandler('sessions', [
+     * $handler = new Database('sessions', [
      *    'onClose' => function (): bool {
      *          return true; // Your logic here...
      *     }
@@ -92,16 +77,6 @@ class DatabaseSessionHandler extends SessionHandler
     }
 
     /**
-     * Creates a new session ID.
-     *
-     * @return string Return a unique session ID.
-     */
-    public function create_sid(): string
-    {
-        return bin2hex(random_bytes(16));
-    }
-
-    /**
      * Validates a session ID.
      *
      * @param string $id The session ID to validate.
@@ -110,7 +85,7 @@ class DatabaseSessionHandler extends SessionHandler
      * 
      * @example Example usage of `onValidate` callback:
      * ```php
-     * $handler = new DatabaseSessionHandler('sessions', [
+     * $handler = new Database('sessions', [
      *    'onValidate' => function (string $id, bool $exists): bool {
      *          return $exists && doExtraCheck($id);
      *     }
@@ -119,13 +94,17 @@ class DatabaseSessionHandler extends SessionHandler
      */
     public function validate_sid(string $id): bool
     {
-        $exists = mb_strlen($id, '8bit') === 32;
+        $exists = preg_match('/^' . $this->pattern . '$/', $id) === 1;
 
         if ($this->table && $exists) {
-            $exists = $this->table("exists_{$id}")->where($this->prefixed('id'), '=', $id)->exists();
+            $exists = $this->table("exists_{$id}")
+                ->where($this->prefixed('id'), '=', $id)
+                ->exists();
         }
 
-        return $this->options['onValidate'] ? ($this->options['onValidate'])($id, $exists) : $exists;
+        return $this->options['onValidate'] 
+            ? ($this->options['onValidate'])($id, $exists) 
+            : $exists;
     }
 
     /**
@@ -141,7 +120,7 @@ class DatabaseSessionHandler extends SessionHandler
 
         if ($deleted) {
             $this->clearCache([$id, "exists_{$id}"]);
-            return true;
+            return $this->close() ? $this->destroySessionCookie() : true;
         }
 
         return false;
@@ -154,9 +133,10 @@ class DatabaseSessionHandler extends SessionHandler
      * 
      * @return int|false Return the number of deleted sessions, or false on failure.
      */
+    #[ReturnTypeWillChange]
     public function gc(int $max_lifetime): int|false
     {
-        $expiration = time() - $max_lifetime;
+        $expiration = Time::now()->getTimestamp() - $max_lifetime;
 
         if ($this->options['cacheable']) {
             $records = $this->table()
@@ -193,13 +173,17 @@ class DatabaseSessionHandler extends SessionHandler
         ]);
 
         if (!$data) {
+            $this->fileHash = md5('');
             return '';
         }
 
         $prefixed = $this->prefixed('data');
-        return ($data->{$prefixed} && $this->options['encryption']) 
+        $data = ($data->{$prefixed} && $this->options['encryption']) 
             ? Crypter::decrypt($data->{$prefixed}) 
             : $data->{$prefixed};
+        $this->fileHash = md5($data);
+
+        return $data;
     }
 
     /**
@@ -212,15 +196,21 @@ class DatabaseSessionHandler extends SessionHandler
      */
     public function write(string $id, string $data): bool
     {
-        $data = ($data && $this->options['encryption']) ? Crypter::encrypt($data) : $data;
+        if ($this->fileHash === md5($data)) {
+            return $this->table()->where($this->prefixed('id'), '=', $id)->update([
+                $this->prefixed('timestamp') => Time::now()->getTimestamp()
+            ]) > 0;
+        }
 
-        if ($data === false) {
+        $encrypted = ($data && $this->options['encryption']) ? Crypter::encrypt($data) : $data;
+
+        if ($encrypted === false) {
             return false;
         }
 
         $body = [
-            $this->prefixed('data')      => $data,
-            $this->prefixed('timestamp') => time(),
+            $this->prefixed('data')      => $encrypted,
+            $this->prefixed('timestamp') => Time::now()->getTimestamp(),
             $this->prefixed('lifetime')  => (int) ini_get('session.gc_maxlifetime')
         ];
 
@@ -234,6 +224,7 @@ class DatabaseSessionHandler extends SessionHandler
             $updated = $this->table()->where($this->prefixed('id'), '=', $id)->update($body);
 
             if ($updated > 0) {
+                $this->fileHash = md5($data);
                 $this->clearCache([$id]);
                 return true;
             }
@@ -242,20 +233,12 @@ class DatabaseSessionHandler extends SessionHandler
         }
 
         $body[$this->prefixed('id')] = $id;
-        return (bool) $this->table()->insert($body);
-    }
+        if($this->table()->insert($body) > 0){
+            $this->fileHash = md5($data);
+            return true;
+        }
 
-    /**
-     * Updates the session timestamp.
-     *
-     * @param string $id The session ID.
-     * @param string $data The session data.
-     * 
-     * @return bool Return true on success, false on failure.
-     */
-    public function update_timestamp(string $id, string $data): bool
-    {
-        return $this->write($id, $data);
+        return false;
     }
 
     /**

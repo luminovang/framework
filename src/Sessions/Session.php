@@ -9,20 +9,20 @@
  */
 namespace Luminova\Sessions;
 
-use \Luminova\Interface\SessionInterface;
+use \Luminova\Interface\SessionManagerInterface;
 use \Luminova\Interface\LazyInterface;
 use \App\Config\Session as SessionConfig;
-use \Luminova\Sessions\SessionManager;
-use \SessionHandler;
+use \Luminova\Sessions\Manager\Session as SessionManager;
+use \Luminova\Base\BaseSessionHandler;
 
 class Session implements LazyInterface
 {
     /**
-     * session interface
+     * Session manager interface
      * 
-     * @var SessionInterface $manager
+     * @var SessionManagerInterface $manager
      */
-    private ?SessionInterface $manager = null;
+    private ?SessionManagerInterface $manager = null;
 
     /**
      * static class instance
@@ -41,35 +41,35 @@ class Session implements LazyInterface
     /**
      * Session configuration.
      * 
-     * @var SessionHandler $handler 
+     * @var BaseSessionHandler $handler 
      */
-    private ?SessionHandler $handler = null;
+    private ?BaseSessionHandler $handler = null;
 
     /**
      * Initializes session constructor
      *
-     * @param SessionInterface|null $manager The session manager.
+     * @param SessionManagerInterface<\T>|null $manager The session manager.
      */
-    public function __construct(?SessionInterface $manager = null)
+    public function __construct(?SessionManagerInterface $manager = null)
     {
         self::$config ??= new SessionConfig();
         $this->manager = $manager ?? new SessionManager();
-        
         $this->manager->setTable(self::$config->tableIndex);
         $this->manager->setConfig(self::$config);
+        $manager = null;
     } 
 
     /**
      * Singleton method to return an instance of the Session class.
      *
-     * @param SessionInterface|null $manager The session manager.
+     * @param SessionManagerInterface<\T>|null $manager The session manager.
      * 
      * @return static Return static Session class instance.
      */
-    public static function getInstance(?SessionInterface $manager = null): static
+    public static function getInstance(?SessionManagerInterface $manager = null): static
     {
         if (self::$instance === null) {
-            self::$instance = new self($manager);
+            self::$instance = new static($manager);
         }
 
         return self::$instance;
@@ -78,11 +78,11 @@ class Session implements LazyInterface
     /**
      * Sets the session save handler.
      *
-     * @param SessionHandler $handler The custom save handler instance.
+     * @param BaseSessionHandler $handler The custom save handler instance.
      *
      * @return self Return the Session class instance.
      */
-    public function setHandler(SessionHandler $handler): self
+    public function setHandler(BaseSessionHandler $handler): self
     {
         $this->handler = $handler;
         return $this;
@@ -127,11 +127,11 @@ class Session implements LazyInterface
     /**
      * Sets the session manager.
      *
-     * @param SessionInterface $manager The session manager to set.
+     * @param SessionManagerInterface $manager The session manager to set.
      * 
      * @return void
      */
-    public function setManager(SessionInterface $manager): void
+    public function setManager(SessionManagerInterface $manager): void
     {
         $this->manager = $manager;
     }
@@ -139,9 +139,9 @@ class Session implements LazyInterface
     /**
      * Retrieves the session storage manager instance (`CookieStorage` or `SessionManager`).
      *
-     * @return SessionInterface|null The storage manager instance.
+     * @return SessionManagerInterface|null The storage manager instance.
      */
-    public function getManager(): ?SessionInterface
+    public function getManager(): ?SessionManagerInterface
     {
         return $this->manager;
     }
@@ -251,7 +251,7 @@ class Session implements LazyInterface
      * 
      * @return string|null Returns the session login datetime or null if not logged in.
      */
-    public function ssdate(): ?string
+    public function ssDate(): ?string
     {
         return $this->manager->getItem('_session_online_datetime', null);
     }
@@ -504,7 +504,11 @@ class Session implements LazyInterface
      */
     private function useHandler(): void 
     {
-        if ($this->handler instanceof SessionHandler) {
+        if ($this->handler instanceof BaseSessionHandler) {
+            if(self::$config instanceof SessionConfig){
+                $this->handler->setConfig(self::$config);
+            }
+            
             session_set_save_handler($this->handler, true);
         }
     }

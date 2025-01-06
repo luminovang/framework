@@ -243,12 +243,9 @@ final class ErrorHandler
      */
     public static function filterMessage(string $message): string
     {
-        $position = strpos($message, APP_ROOT);
-        $message = ($position !== false) ? 
-            substr($message, 0, $position) : 
-            $message;
-
+        $message = str_replace(APP_ROOT, '', $message);
         preg_match('/^(.*) in /', $message, $matches);
+        
         return $matches[1] ?? trim($message, ' in');
     }
 
