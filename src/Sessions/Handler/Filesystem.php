@@ -60,7 +60,7 @@ class Filesystem extends BaseSessionHandler
     public function __construct(?string $filePath = null, array $options = [])
     {
         parent::__construct($options);
-        
+
         if ($filePath) {
             $this->filePath = rtrim($filePath, TRIM_DS);
             ini_set('session.save_path', $this->filePath);
@@ -280,7 +280,7 @@ class Filesystem extends BaseSessionHandler
     public function gc(int $max_lifetime): int|false
     {
         if (!is_dir($this->filePath) || ($directory = opendir($this->filePath)) === false) {
-            $this->log('debug', "Session: Garbage collector couldn't list files under directory '{$this->filePath}'.");
+            $this->log('debug', "Session: Garbage collector failed to list files in directory: '{$this->filePath}'.");
             return false;
         }
 
@@ -334,14 +334,14 @@ class Filesystem extends BaseSessionHandler
         $this->fileHandle = fopen($file, 'c+b');
         
         if ($this->fileHandle === false) {
-            $this->log('error', "Session: Unable to open file '{$file}'.");
+            $this->log('error', "Session: Unable to open file: '{$file}'.");
             return false;
         }
 
         if (!flock($this->fileHandle, LOCK_EX)) {
             fclose($this->fileHandle);
             $this->fileHandle = null;
-            $this->log('error', "Session: Unable to obtain lock for file '{$file}'.");
+            $this->log('error', "Session: Unable to obtain lock for file: '{$file}'.");
             return false;
         }
 
