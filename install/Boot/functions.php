@@ -21,6 +21,8 @@ use \Luminova\Storages\FileManager;
 use \Luminova\Cache\FileCache;
 use \Luminova\Cache\MemoryCache;
 use \Luminova\Functions\Func;
+use \Luminova\Functions\IP;
+use \Luminova\Logger\Logger;
 use \Luminova\Http\Request;
 use \Luminova\Http\UserAgent;
 use \Luminova\Http\HttpCode;
@@ -28,7 +30,7 @@ use \Luminova\Cookies\Cookie;
 use \Luminova\Sessions\Session;
 use \Luminova\Interface\HttpRequestInterface;
 use \Luminova\Interface\ViewResponseInterface;
-use \Luminova\Interface\SessionInterface;
+use \Luminova\Interface\SessionManagerInterface;
 use \Luminova\Interface\ValidationInterface;
 use \Luminova\Template\Response;
 use \Luminova\Template\Layout;
@@ -49,7 +51,9 @@ if (!function_exists('root')) {
      */
     function root(?string $suffix = null): string
     {
-       $suffix = ($suffix === null ? '' : trim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $suffix), TRIM_DS) . DIRECTORY_SEPARATOR);
+        $suffix = ($suffix === null) 
+            ? '' 
+            : (trim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $suffix), TRIM_DS) . DIRECTORY_SEPARATOR);
 
         if (file_exists(APP_ROOT . '.env')) {
             return APP_ROOT . $suffix;
@@ -124,9 +128,12 @@ if (!function_exists('request')) {
      */
     function request(bool $shared = true): HttpRequestInterface 
     {
-        static $instance = null;
+        if (!$shared) {
+            return new Request();
+        }
 
-        if ($shared && $instance !== null) {
+        static $instance = null;
+        if ($instance instanceof Request) {
             return $instance;
         }
 
@@ -150,9 +157,12 @@ if (!function_exists('response')) {
         bool $shared = true
     ): ViewResponseInterface
     {
-        static $instance = null;
+        if (!$shared) {
+            return new Response($status, $headers ?? []);
+        }
 
-        if ($shared && $instance !== null) {
+        static $instance = null;
+        if ($instance instanceof Response) {
             return $instance;
         }
 
@@ -261,7 +271,7 @@ if(!function_exists('kebab_case')){
         $input = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $input);
         $input = trim(str_replace(' ', '-', $input), '-');
 
-        return ($toLower) ? strtolower($input) : $input;
+        return $toLower ? strtolower($input) : $input;
     }
 }
 
@@ -304,7 +314,7 @@ if(!function_exists('locale')){
     */
     function locale(?string $locale = null): string|bool 
     {
-        if($locale === null){
+        if(!$locale){
             return env('app.locale', 'en');
         }
 
@@ -456,7 +466,7 @@ if(!function_exists('is_tor')){
     */
     function is_tor(?string $ip = null, int $expiration = 2592000): bool
     {
-        return Factory::functions()->ip()->isTor($ip, $expiration);
+        return IP::isTor($ip, $expiration);
     }
 }
 
@@ -471,11 +481,7 @@ if(!function_exists('ip_address')){
     */
     function ip_address(bool $get_info = false, array $options = []): string|object|null
     {
-        if($get_info){
-            return Factory::functions()->ip()->info(null, $options);
-        }
-
-        return Factory::functions()->ip()->get();
+        return $get_info ? IP::info(null, $options): IP::get();
     }
 }
 
@@ -510,11 +516,11 @@ if(!function_exists('session')) {
      *
      * @param string $key Optional key to retrieve the data (default: null).
      * @param bool $shared Weather to use shared instance (default: true).
-     * @param class-object<SessionInterface> $manager The session manager interface to use (default: SessionManager).
+     * @param class-object<SessionManagerInterface> $manager The session manager interface to use (default: SessionManager).
      *
      * @return Session|mixed Return session instance or value if key is present.
     */
-    function session(?string $key = null, bool $shared = true, ?SessionInterface $manager = null): mixed
+    function session(?string $key = null, bool $shared = true, ?SessionManagerInterface $manager = null): mixed
     {
         return ($key !== null && $key !== '') 
             ? Factory::session($manager, $shared)->get($key) 
@@ -669,7 +675,7 @@ if(!function_exists('browser')) {
     function browser(?string $user_agent = null, string $return = 'object', bool $shared = true): mixed
     { 
         if($return === 'instance'){
-            return Factory::request($shared)->getUserAgent($user_agent);
+            return request($shared)->getUserAgent($user_agent);
         }
 
         $return = ($return === 'array');
@@ -682,7 +688,7 @@ if(!function_exists('browser')) {
             }
         }
 
-        return Factory::request($shared)->getUserAgent()->parse($user_agent, $return);
+        return request($shared)->getUserAgent()->parse($user_agent, $return);
     }
 }
 
@@ -732,9 +738,7 @@ if (!function_exists('text2html')) {
     */
     function text2html(?string $text): string
     { 
-        return ($text === null ||  $text === '') 
-            ? '' 
-            : htmlspecialchars($text, ENT_QUOTES|ENT_HTML5);
+        return !$text ? '' : htmlspecialchars($text, ENT_QUOTES|ENT_HTML5);
     }
 }
 
@@ -749,11 +753,7 @@ if(!function_exists('nl2html')) {
     */
     function nl2html(string|null $text): string
     {
-        if($text === null ||  $text === ''){
-            return '';
-        }
-
-        return str_replace(
+        return !$text ? '' : str_replace(
             ["\n", "\r\n", '[br/]', '<br/>', "\t"], 
             ["&#13;&#10;", "&#13;&#10;", "&#13;&#10;", "&#13;&#10;", "&#09;"], 
             $text
@@ -813,7 +813,13 @@ if(!function_exists('logger')) {
         array $context = []
     ): void
     {
-        Factory::logger()->dispatch($to, $message, $context);
+        static $instance = null;
+
+        if(!$instance instanceof Logger){
+            $instance = new Logger();
+        }
+
+        $instance->dispatch($to, $message, $context);
     }
 }
 
@@ -1085,13 +1091,13 @@ if (!function_exists('list_to_array')) {
     */
     function list_to_array(string $list): array|bool 
     {
-        if ($list === '') {
+        if (!$list) {
             return false;
         }
         
         try{
             return Lists::toArray($list);
-        }catch(Exception|AppException){
+        }catch(Throwable){
             return false;
         }
     }
@@ -1110,11 +1116,11 @@ if (!function_exists('list_in_array')) {
     */
     function list_in_array(string $list, array $array = []): bool 
     {
-        if($array === [] && $list === ''){
+        if(!$array && !$list){
             return true;
         }
 
-        if($array === [] || $list === ''){
+        if(!$array || !$list){
             return false;
         }
 
@@ -1144,7 +1150,7 @@ if (!function_exists('is_list')) {
     */
     function is_list(string $input): bool 
     {
-        if ($input === '') {
+        if (!$input) {
             return false;
         }
 
@@ -1307,7 +1313,7 @@ if (!function_exists('validate')) {
     {
         $instance = Factory::validate();
 
-        if ($inputs !== null && $rules !== null) {
+        if ($inputs && $rules) {
             $instance->setRules($rules, $messages);
             $instance->validate($inputs);
         }
@@ -1482,7 +1488,7 @@ if (!function_exists('href')) {
 
         static $relative = null;
 
-        if($relative == null){
+        if($relative === null){
             $relative = app()->link();
         }
 
@@ -1876,14 +1882,14 @@ if (!function_exists('http_status_header')) {
      */
     function http_status_header(int $status): bool
     {
-        static $codes = null;
+        static $httpCodes = null;
 
         // Cache the status codes if not already cached.
-        if ($codes === null) {
-            $codes = HttpCode::$codes;
+        if ($httpCodes === null) {
+            $httpCodes = HttpCode::$codes;
         }
 
-        $message = ($codes[$status] ?? null);
+        $message = $httpCodes[$status] ?? null;
 
         // Check if the status code is in the predefined list
         if ($message === null) {

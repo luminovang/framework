@@ -72,7 +72,7 @@ if(!function_exists('setenv')){
                 (new SplFileObject($path, 'w'))->fwrite($content);
 
                 return true;
-            } catch (RuntimeException|LogicException $e) {
+            } catch (Throwable) {
                 return false;
             }
         }
@@ -170,7 +170,7 @@ if(!function_exists('env')){
                 }
             }
             return;
-        }catch(RuntimeException|LogicException){}
+        }catch(Throwable){}
         exit("Environment file not found on: {$path}, make sure you add .env file to your project root.");
     }
 })(APP_ROOT . '.env');

@@ -14,6 +14,7 @@ use \Psr\Log\AbstractLogger;
 use \App\Config\Logger;
 use \Luminova\Time\Time;
 use \Luminova\Functions\Func;
+use \Luminova\Functions\IP;
 use \Luminova\Email\Mailer;
 use \Luminova\Http\Network;
 use \Luminova\Http\Request;
@@ -261,7 +262,7 @@ class NovaLogger extends AbstractLogger
         $payload = [
             'app'      => APP_NAME,
             'host'     => APP_HOSTNAME,
-            'clientIp' => ip_address(),
+            'clientIp' => IP::get(),
             'details'  => self::message($this->level, $message),
             'context'  => $context,
             'level'    => $this->level,
@@ -391,7 +392,7 @@ class NovaLogger extends AbstractLogger
         $url = htmlspecialchars(self::$request->getUrl());
         $method = htmlspecialchars(self::$request->getMethod());
         $userAgent = htmlspecialchars(self::$request->getUserAgent()->toString());
-        $ip = ip_address();
+        $ip = IP::get();
 
         return <<<HTML
             <body>
