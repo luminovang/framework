@@ -14,6 +14,10 @@ use \Luminova\Interface\LazyInterface;
 use \App\Config\Session as SessionConfig;
 use \Luminova\Sessions\Manager\Session as SessionManager;
 use \Luminova\Base\BaseSessionHandler;
+use \Luminova\Functions\IP;
+use \Luminova\Logger\Logger;
+use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\LogicException;
 
 class Session implements LazyInterface
 {
@@ -39,16 +43,30 @@ class Session implements LazyInterface
     private static ?SessionConfig $config = null;
 
     /**
-     * Session configuration.
+     * Session handler.
      * 
      * @var BaseSessionHandler $handler 
      */
     private ?BaseSessionHandler $handler = null;
 
     /**
-     * Initializes session constructor
+     * Callback handler for ip change.
+     * 
+     * @var callable|null $onIpChange 
+     */
+    private mixed $onIpChange = null;
+
+    /**
+     * Initializes the backend session handler class.
      *
-     * @param SessionManagerInterface<\T>|null $manager The session manager.
+     * This constructor sets up the session manager to handle user login and backend session management. 
+     * It allows for an optional custom session manager and session handler to be provided or defaults to the standard manager.
+     *
+     * @param SessionManagerInterface<\T>|null $manager Optional. A custom session manager instance.
+     *                                                  If not provided, the default `\Luminova\Sessions\Manager\Session` will be used.
+     *
+     * > **Note:** When no custom manager is provided, the default session manager is automatically 
+     * > initialized and configured using the session configuration settings.
      */
     public function __construct(?SessionManagerInterface $manager = null)
     {
@@ -81,6 +99,9 @@ class Session implements LazyInterface
      * @param BaseSessionHandler $handler The custom save handler instance.
      *
      * @return self Return the Session class instance.
+     * @see https://luminova.ng/docs/edit/0.0.0/sessions/database-handler
+     * @see https://luminova.ng/docs/edit/0.0.0/sessions/filesystem-handler
+     * @see https://luminova.ng/docs/edit/0.0.0/base/session-handler
      */
     public function setHandler(BaseSessionHandler $handler): self
     {
@@ -93,9 +114,9 @@ class Session implements LazyInterface
      * 
      * @param string $index Optional key to retrieve.
      * 
-     * @return array The retrieved data.
+     * @return array Return the retrieved data.
      */
-    public function toArray(string $index = ''): array
+    public function toArray(?string $index = null): array
     {
         return $this->manager->toAs('array', $index);
     }
@@ -103,11 +124,11 @@ class Session implements LazyInterface
     /** 
      * Retrieves data as an object from the current session storage.
      * 
-     * @param string $index Optional key to retrieve.
+     * @param string|null $index Optional key to retrieve.
      * 
-     * @return object The retrieved data.
+     * @return object Return the retrieved data.
      */
-    public function toObject(string $index = ''): object
+    public function toObject(?string $index = null): object
     {
         return $this->manager->toAs('object', $index);
     }
@@ -115,9 +136,9 @@ class Session implements LazyInterface
     /**
      * Retrieves all stored session data as an array or object.
      * 
-     * @param string $type Return type of object or array (default is 'array').
+     * @param string $type The return session data type, it can be either `object` or `array` (default is 'array').
      * 
-     * @return array|object All stored session data.
+     * @return array|object Return all the stored session data as either an array or object.
      */
     public function toExport(string $type = 'array'): array|object
     {
@@ -139,7 +160,7 @@ class Session implements LazyInterface
     /**
      * Retrieves the session storage manager instance (`CookieStorage` or `SessionManager`).
      *
-     * @return SessionManagerInterface|null The storage manager instance.
+     * @return SessionManagerInterface|null Return the storage manager instance.
      */
     public function getManager(): ?SessionManagerInterface
     {
@@ -151,7 +172,7 @@ class Session implements LazyInterface
      *
      * @param string $storage The storage key to set.
      * 
-     * @return self The Session class instance.
+     * @return self Return the Session class instance.
      */
     public function setStorage(string $storage): self
     {
@@ -163,7 +184,7 @@ class Session implements LazyInterface
     /**
      * Retrieves the current session storage name.
      * 
-     * @return string The current storage name.
+     * @return string Return the current storage name.
      */
     public function getStorage(): string 
     {
@@ -173,10 +194,10 @@ class Session implements LazyInterface
     /**
      * Retrieves a value from the session storage.
      *
-     * @param string $key The key to retrieve.
+     * @param string $key The key to identify the session data.
      * @param mixed $default Default value if the key is not found.
      * 
-     * @return mixed The retrieved data.
+     * @return mixed Return retrieved data from session storage.
      */
     public function get(string $key, mixed $default = null): mixed
     {
@@ -186,35 +207,29 @@ class Session implements LazyInterface
     /** 
      * Retrieves an item from a specified session storage instance.
      * 
-     * @param string $index The key to retrieve.
+     * @param string $index The key to identify the session data.
      * @param string $storage The storage key name.
      * 
-     * @return mixed The retrieved data.
+     * @return mixed Return the retrieved data from session storage or null.
      */
-    public function getFrom(string $index, string $storage): mixed
+    public function getFrom(string $storage, string $index): mixed
     {
         $result = $this->manager->getItems($storage);
-
-        if ($result === []) {
-            return null;
-        }
-
-        return $result[$index] ?? null;
+        return ($result === []) ? null : ($result[$index] ?? null);
     }
 
     /** 
      * Sets an item to a specified session storage instance.
      * 
-     * @param string $index The key to set.
-     * @param mixed $data The data to set.
+     * @param string $key The key to identify the session data.
+     * @param mixed $value The value to associate with the specified key.
      * @param string $storage The storage key name.
      * 
-     * @return self
+     * @return self Return the Session class instance.
      */
-    public function setTo(string $index, mixed $data, string $storage): self
+    public function setTo(string $index, mixed $value, string $storage): self
     {
-        $this->manager->setItem($index, $data, $storage);
-
+        $this->manager->setItem($index, $value, $storage);
         return $this;
     }
 
@@ -222,13 +237,13 @@ class Session implements LazyInterface
      * Checks if the session user has successfully logged in online.
      * Optionally, specify a storage name to check; otherwise, it checks the current storage.
      * 
-     * @param string $storage optional storage instance key
+     * @param string|null $storage optional storage instance key.
      * 
      * @return bool Returns true if the session user is online, false otherwise.
      */
-    public function online(string $storage = ''): bool
+    public function online(?string $storage = null): bool
     {
-        $data = $this->manager->getItems($storage);
+        $data = $this->manager->getItems($storage ?? '');
         return isset($data['_session_online']) && $data['_session_online'] === 'on';
     }
 
@@ -257,12 +272,15 @@ class Session implements LazyInterface
     }
 
     /**
-     * Set the value in the session by key.
+     * Sets a value in the session storage by key.
      *
-     * @param string $key The key to set.
-     * @param mixed $value The value to set.
+     * This method saves or updates a value in the session using the specified key. 
+     * If the key already exists, its value will be overwritten with the new value.
+     *
+     * @param string $key The key to identify the session data.
+     * @param mixed $value The value to associate with the specified key.
      * 
-     * @return self The Session class instance.
+     * @return self Returns the current Session instance.
      */
     public function set(string $key, mixed $value): self
     {
@@ -272,30 +290,36 @@ class Session implements LazyInterface
     }
 
     /**
-     * Adds an item to the session storage without overwriting existing values.
+     * Adds a value to the session storage without overwriting existing keys.
      *
-     * @param string $key The key to set.
-     * @param mixed $value The value to set.
+     * This method attempts to add a new key-value pair to the session. 
+     * If the specified key already exists in the session storage, the method does not modify the value and sets the status to `false`. 
+     * Otherwise, it adds the new key-value pair and sets the status to `true`.
+     *
+     * @param string $key The key to identify the session data.
+     * @param mixed $value The value to associate with the specified key.
+     * @param bool $status A reference variable to indicate whether the operation succeeded (`true`) or failed (`false`).
      * 
-     * @return bool True if item was added else false.
+     * @return self Returns the current Session instance.
      */
-    public function add(string $key, mixed $value): bool
+    public function add(string $key, mixed $value, bool &$status = false): self
     {
         if($this->has($key)){
-            return false;
+            $status = false;
+            return $this;
         }
 
         $this->manager->setItem($key, $value);
-
-        return true;
+        $status = true;
+        return $this;
     }
 
     /** 
      * Remove a key from the session storage by passing the key.
      * 
-     * @param string $index The key to remove.
+     * @param string $key  The session data key to remove.
      * 
-     * @return self The Session class instance.
+     * @return self Return the Session class instance.
      */
     public function remove(string $key): self
     {
@@ -307,13 +331,13 @@ class Session implements LazyInterface
     /** 
      * Clear all data from session storage by passing the storage key.
      * 
-     * @param string $storage Optionally pass storage name to clear.
+     * @param string|null $storage Optionally session storage name to clear.
      * 
-     * @return self The Session class instance.
+     * @return self Return the Session class instance.
      */
-    public function clear(string $storage = ''): self
+    public function clear(?string $storage = null): self
     {
-        $this->manager->deleteItem(null, $storage);
+        $this->manager->deleteItem(null, $storage ?? '');
         
         return $this;
     }
@@ -321,7 +345,7 @@ class Session implements LazyInterface
     /** 
      * Check if item key exists in session storage.
      * 
-     * @param string $key Key to check
+     * @param string $key The session data key to check.
      * 
      * @return bool Return true if key exists in session storage else false.
      */
@@ -334,52 +358,72 @@ class Session implements LazyInterface
      * Initializes session data and starts the session if it isn't already started.
      * This method replaces the default PHP session_start(), but with additional configuration.
      * 
-     * @param string|null $sid Optional specify session identifier from PHP `session_id`.
+     * @param string|null $ssid Optional specify session identifier from PHP `session_id`.
      *
      * @return void 
+     * @throws RuntimeException If an invalid session ID is provided.
+     * 
+     * @example Starting a session with a specified session ID:
+     * 
+     * ```php
+     * namespace App;
+     * use Luminova\Core\CoreApplication;
+     * use Luminova\Sessions\Session;
+     * class Application extends CoreApplication
+     * {
+     *      protected ?Session $session = null;
+     *      protected function onCreate(): void 
+     *      {
+     *          $this->session = new Session();
+     *          $this->session->start('optional_session_id');
+     *      }
+     * }
+     * ```
      */
-    public function start(?string $sid = null): void
+    public function start(?string $ssid = null): void
     {
         if ($this->manager instanceof SessionManager) {
             if ((bool) ini_get('session.auto_start')) {
-                logger('error', 'Session: session.auto_start is enabled in php.ini. Aborting.');
+                $this->log('error', 'Session: session.auto_start is enabled in php.ini. Aborting.');
                 return;
             }
 
             if (session_status() === PHP_SESSION_ACTIVE) {
                 $this->useHandler();
-                $this->ipListener();
-                logger('warning', 'Session: Sessions is enabled, and one exists. don\'t $session->start() again.');
+                $this->ipChangeEventListener();
+                $this->log('warning', 'Session: Sessions is enabled, and one exists. don\'t $session->start() again.');
                 return;
             }
 
             if (session_status() === PHP_SESSION_NONE) {
                 $this->sessionConfigure();
                 $this->useHandler();
-                if($sid !== null){
-                    if(preg_match('/^[-,a-zA-Z0-9]{1,128}$/', $sid) > 0){
-                        session_id($sid);
+                if($ssid !== null){
+                    if(self::isValidSessionId($ssid)){
+                        session_id($ssid);
+                    }elseif(PRODUCTION){
+                        $this->log('error', "Invalid: The sessions ID '{$ssid}' provided is invalid. Session defaulting to PHP generated session ID.");
                     }else{
-                        logger('error', "Invalid: The sessions ID '{$sid}' provided is invalid.");
+                        throw new RuntimeException("Invalid: The sessions ID '{$ssid}' provided is invalid.");
                     }
                 }
 
                 session_start();
-                $this->ipListener();
+                $this->ipChangeEventListener();
             }
             return;
         }
         
         $this->sessionConfigure();
         $this->useHandler();
-        $this->ipListener();
+        $this->ipChangeEventListener();
     }
 
     /**
-     * Empty all data stored in session table.
-     * This method doesn't behave same way as PHP `session_destroy`.
-     *
-     * @return bool Return true if storage was data was deleted successfully otherwise false.
+     * Clears all data stored in the session storage table `$tableIndex` based on your session configuration class.
+     * This method differs from PHP's `session_destroy()` as it only affects the session table data, not the entire session.
+     * 
+     * @return bool Returns true if session data was successfully destroyed; false otherwise.
      */
     public function destroy(): bool 
     {
@@ -387,80 +431,226 @@ class Session implements LazyInterface
     }
 
     /**
-     * Starts a user's online login session, optionally specifying an IP address.
-     * This method should be called to indicate that the user has successfully logged in.
-     *
-     * @param string $ip The IP address.
+     * Clears all data stored in the session for the entire application.
+     * This method uses PHP's `session_destroy()` and `setcookie` to affects the entire session.
      * 
-     * @return self The Session class instance.
+     * @return bool Returns true if session data was successfully destroyed; false otherwise.
+     * > **Note:** This will clear all session and cookie data for the entire application.
      */
-    public function synchronize(string $ip = ''): self
+    public function destroyAll(): bool
+    {
+        $params = self::$config ? [
+            'cookieName' => self::$config->cookieName,
+            'path' => self::$config->sessionPath,
+            'domain' => self::$config->sessionDomain,
+        ] : session_get_cookie_params();
+
+        if(!$params){
+            return false;
+        }
+
+        $_SESSION = [];
+        $_COOKIE = [];
+
+        setcookie(
+            $params['cookieName'] ?? session_name(),
+            '',
+            [
+                'expires' => time() - 42000, 
+                'path' => $params['path'], 
+                'domain' => $params['domain'], 
+                'secure' => true, 
+                'httponly' => true
+            ]
+        );
+        session_destroy();
+        return true;
+    }
+
+    /**
+     * Synchronizes the user's online session, optionally associating it with an IP address.
+     *
+     * This method is called once after a successful login to initialize and maintain session data,
+     * indicating that the user is online. It can also synchronize the session with a specific IP address.
+     *
+     * @param string|null $ip Optional. The IP address to associate with the session. If not provided,
+     *                        the client's current IP address will be used if strict IP validation is enabled.
+     *
+     * @return self Returns the current Session instance.
+     * @throws LogicException If strict IP validation is disabled and IP address is provided.
+     * 
+     * @example Synchronizing user login session:
+     * ```php
+     * namespace App\Controllers\Http;
+     * 
+     * use Luminova\Base\BaseController;
+     * class AdminController extends BaseController
+     * {
+     *      public function loginAction(): int 
+     *      {
+     *          $username = $this->request->getPost('username');
+     *          $password = $this->request->getPost('password');
+     *          if($username === 'admin' && $password === 'password'){
+     *              $this->app->session->set('username', $username);
+     *              $this->app->session->set('email', 'admin@example.com');
+     *              $this->app->session->synchronize();
+     *              return response()->json(['success' => true]);
+     *          }
+     * 
+     *          return response()->json(['success' => false, 'error' => 'Invalid credentials']);
+     *      }
+     * }
+     * ```
+     *
+     * > **Note:** If the `$strictSessionIp` configuration option is enabled, the session will
+     * > automatically associate with an IP address. When no IP address is provided, the client's
+     * > current IP will be detected and used.
+     */
+    public function synchronize(?string $ip = null): self
     {
         $this->set('_session_online', 'on');
         $this->set('_session_online_id', uniqid('ssid'));
         $this->set('_session_online_datetime', date('c'));
 
-        if(self::$config->strictSessionIp && $ip = ip_address()){
-            $this->set('_session_online_ip', $ip);
+        if(self::$config->strictSessionIp){
+            $this->set('_session_online_ip', $ip ?? IP::get());
+        }elseif($ip){
+            throw new LogicException(sprintf(
+                'Invalid Logic: %s %s',
+                'The strictSessionIp configuration option is disabled, but an IP address was provided.',
+                'To fix the problem, you must set the "App\Config\Session->strictSessionIp" configuration option to true.'
+            ));
         }
  
         return $this;
     }
 
     /**
-     * Listens for changes in the user's IP address to detect if it has changed since the last login.
-     * If the new IP address does not match the previous login IP address, it logs out the user and clears the session.
-     *
-     * @param string $storage Optional storage location.
-     * 
-     * @return void
-     */
-    private function ipListener(string $storage = ''): void
-    {
-        $default = $this->getStorage();
-
-        if(self::$config->strictSessionIp && $this->ipChanged($storage)){
-            
-            if($storage !== '' && $storage !== $default){
-                $this->setStorage($storage);
-            }
-
-            $this->clear();
-
-            if($storage !== '' && $storage !== $default){
-                $this->setStorage($default);
-            }
-        }
-    }
-
-    /**
      * Checks if the user's IP address has changed since the last login session.
      *
-     * @param string $storage Optional storage location
+     * @param string|null $storage Optional session storage name to perform the check.
      * 
      * @return bool Returns false if the user's IP address matches the session login IP, otherwise returns true.
      */
-    public function ipChanged(string $storage = ''): bool
+    public function ipChanged(?string $storage = null): bool
     {
         $default = $this->getStorage();
+        $changed = false;
 
-        if($storage !== '' && $storage !== $default){
+        if($storage && $storage !== $default){
             $this->setStorage($storage);
         }
 
         if($this->online()){
             $last = $this->get("_online_session_id", '');
-
-            if(!empty($last) && $last != ip_address()){
-                return true;
-            }
+            $changed = (!empty($last) && !IP::equals($last));
         }
 
-        if($storage !== '' && $storage !== $default){
+        if($storage && $storage !== $default){
             $this->setStorage($default);
         }
         
-        return false;
+        return $changed;
+    }
+
+   /**
+     * IP Address Change Listener to detect and respond to user IP changes.
+     *
+     * This method monitors the user's IP address during a session and `$strictSessionIp` is enabled. If the IP address changes, 
+     * the specified callback is executed. Based on the callback's return value:
+     * - `true`: The session is destroyed.
+     * - `false`: The session remains active, allowing manual handling of the IP change event.
+     *
+     * @param callable $onChange A callback function to handle the IP change event. 
+     *                           The function receives the `Session` instance, the previous IP, 
+     *                           and the current IP as arguments.
+     * 
+     * @return self Returns the current `Session` instance.
+     *
+     * @example Session IP address change event:
+     * 
+     * ```php
+     * namespace App;
+     * use Luminova\Core\CoreApplication;
+     * use Luminova\Sessions\Session;
+     * 
+     * class Application extends CoreApplication
+     * {
+     *     protected ?Session $session = null;
+     * 
+     *     protected function onCreate(): void 
+     *     {
+     *         $this->session = new Session();
+     *         $this->session->start();
+     * 
+     *         $this->session->onIpChanged(function (Session $instance, string $lastIp, string $currentIp): bool {
+     *             // Handle the IP address change event manually
+     *             return true; // Destroy the session, or return false to keep it or indication that it been handled
+     *         });
+     *     }
+     * }
+     * ```
+     */
+    public function onIpChanged(callable $onChange): self
+    {
+        $this->onIpChange = $onChange;
+        return $this;
+    }
+
+
+    /**
+     * Validates a session ID based on PHP's session configuration.
+     *
+     * This function checks if a given session ID is valid according to the current
+     * PHP session configuration, specifically the 'session.sid_bits_per_character'
+     * and 'session.sid_length' settings.
+     *
+     * @param string $id The session ID to validate.
+     *
+     * @return bool Returns true if the session ID is valid, false otherwise.
+     *
+     * @throws RuntimeException If the 'session.sid_bits_per_character' setting has an unsupported value.
+     */
+    public static function isValidSessionId(string $id): bool
+    {
+        $bitsPerCharacter = (int) ini_get('session.sid_bits_per_character');
+        $sidLength = (int) ini_get('session.sid_length');
+
+        $pattern = match ($bitsPerCharacter) {
+            4 => '[0-9a-f]',
+            5 => '[0-9a-v]',
+            6 => '[0-9a-zA-Z,-]',
+            default => throw new RuntimeException("Unsupported session.sid_bits_per_character value: '{$bitsPerCharacter}'.")
+        };
+
+        return preg_match('/^' . $pattern . '{' . $sidLength . '}$/', $id) === 1;
+    }
+
+    /**
+     * Handles IP address change events during a user session.
+     *
+     * This method checks if the user's IP address has changed since the last login 
+     * and takes appropriate actions based on the configuration and callback provided:
+     * - If `strictSessionIp` is enabled and the IP address has changed:
+     *   - Executes the `onIpChange` callback if defined.
+     *   - If the callback returns `true` or no callback is defined, the session is cleared.
+     * 
+     * @return void
+     */
+    private function ipChangeEventListener(): void
+    {
+        if(self::$config->strictSessionIp && $this->ipChanged()){
+            if( 
+                $this->onIpChange !== null && 
+                ($this->onIpChange)($this, $this->get("_online_session_id", ''), IP::get())
+            ){
+                $this->clear();
+            }
+
+            if($this->onIpChange === null){
+                $this->clear();
+            }
+        }
     }
 
     /**
@@ -511,5 +701,18 @@ class Session implements LazyInterface
             
             session_set_save_handler($this->handler, true);
         }
+    }
+
+    /**
+     * Log error messages for debugging purposes.
+     *
+     * @param string $level The log level.
+     * @param string $message The log message.
+     *
+     * @return void
+     */
+    private function log(string $level, string $message): void
+    {
+        (new Logger())->dispatch($level, $message);
     }
 }

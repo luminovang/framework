@@ -76,31 +76,31 @@ interface SessionManagerInterface
    * 
    * @param string $index The key to store.
    * @param mixed $data The data to store.
-   * @param string $storage The storage key name.
+   * @param string|null $storage The storage key name.
    * 
    * @return self
   */
-  public function setItem(string $index, mixed $data, string $storage = ''): self;
+  public function setItem(string $index, mixed $data, ?string $storage = null): self;
 
   /** 
    * Clears all data from session storage. 
    * If $index is provided, it will remove the specified key from the session storage.
    * 
    * @param string|null $index The key index to remove.
-   * @param string $storage Optionally specify the storage name to clear or remove an item.
+   * @param string|null $storage Optionally specify the storage name to clear or remove an item.
    * 
    * @return self
   */
-  public function deleteItem(?string $index = null, string $storage = ''): self;
+  public function deleteItem(?string $index = null, ?string $storage = null): self;
 
   /** 
    * Retrieves stored items from session storage as an array.
    * 
-   * @param string $storage Optional storage key.
+   * @param string|null $storage Optional storage key.
    * 
    * @return array The retrieved data.
   */
-  public function getItems(string $storage = ''): array;
+  public function getItems(?string $storage = null): array;
 
   /**
    * Gets all stored session data as an array or object.

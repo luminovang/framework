@@ -77,7 +77,7 @@ final class Cookie implements SessionManagerInterface
     /** 
      * {@inheritdoc}
      */
-    public function setItem(string $index, mixed $value, string $storage = ''): self
+    public function setItem(string $index, mixed $value, ?string $storage = null): self
     {
         $storage = $this->getKey($storage);
         $data = $this->getItems($storage);
@@ -110,14 +110,12 @@ final class Cookie implements SessionManagerInterface
     /**
      * {@inheritdoc}
      */
-    public function deleteItem(?string $index = null, string $storage = ''): self
+    public function deleteItem(?string $index = null, ?string $storage = null): self
     {
         $storage = $this->getKey($storage);
 
         if(isset($_COOKIE[self::$table][$storage])) {
-            if($index === '' || $index === null){
-                $this->updateItems([], $storage);
-            }else{
+            if($index){
                 $data = $this->getItems($storage);
                 $data = $data !== []?:$_COOKIE[self::$table][$storage]; 
 
@@ -126,6 +124,8 @@ final class Cookie implements SessionManagerInterface
                 }
 
                 $this->updateItems($data, $storage);
+            }else{
+                $this->updateItems([], $storage);
             }
         }
 
@@ -192,7 +192,7 @@ final class Cookie implements SessionManagerInterface
     {
         $result = $this->getItems();
 
-        if($index !== null && $index !== '') {
+        if($index) {
             $result = $result[$index]??null;
         }
 
@@ -216,7 +216,7 @@ final class Cookie implements SessionManagerInterface
     /** 
      * {@inheritdoc}
      */
-    public function getItems(string $storage = ''): array
+    public function getItems(?string $storage = null): array
     {
         $storage = $this->getKey($storage);
         $contents = null;
@@ -249,9 +249,9 @@ final class Cookie implements SessionManagerInterface
      * 
      * @return string Storage name.
      */
-    private function getKey(string $storage = ''): string 
+    private function getKey(?string $storage = null): string 
     {
-        return ($storage === '') ? $this->storage : $storage;
+        return !$storage ? $this->storage : $storage;
     }
 
     /**
@@ -261,7 +261,7 @@ final class Cookie implements SessionManagerInterface
      * 
      * @return void 
      */
-    private function updateItems(array $data, string $storage = ''): void
+    private function updateItems(array $data, ?string $storage = null): void
     {
         $storage = $this->getKey($storage);
         $data[$storage] = $data;

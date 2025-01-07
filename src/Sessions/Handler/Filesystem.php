@@ -60,7 +60,7 @@ class Filesystem extends BaseSessionHandler
     public function __construct(?string $filePath = null, array $options = [])
     {
         parent::__construct($options);
-
+        
         if ($filePath) {
             $this->filePath = rtrim($filePath, TRIM_DS);
             ini_set('session.save_path', $this->filePath);
@@ -196,7 +196,7 @@ class Filesystem extends BaseSessionHandler
             }
         }
 
-        $data = $this->options['encryption'] ? Crypter::decrypt($data) : $data;
+        $data = ($data && $this->options['encryption']) ? Crypter::decrypt($data) : $data;
         $this->fileHash = md5($data);
         return $data;
     }
@@ -226,7 +226,7 @@ class Filesystem extends BaseSessionHandler
             rewind($this->fileHandle);
         }
 
-        $encrypted = $this->options['encryption'] ? Crypter::encrypt($data) : $data;
+        $encrypted = ($data && $this->options['encryption']) ? Crypter::encrypt($data) : $data;
         if ($encrypted === false) {
             return false;
         }
@@ -280,7 +280,7 @@ class Filesystem extends BaseSessionHandler
     public function gc(int $max_lifetime): int|false
     {
         if (!is_dir($this->filePath) || ($directory = opendir($this->filePath)) === false) {
-            $this->log('debug', "Session: Garbage collector failed to list files in directory: '{$this->filePath}'.");
+            $this->log('debug', "Session: Garbage collector couldn't list files in directory: '{$this->filePath}'.");
             return false;
         }
 

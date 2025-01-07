@@ -92,10 +92,9 @@ final class Session implements SessionManagerInterface
     /** 
      * {@inheritdoc}
      */
-    public function setItem(string $index, mixed $data, string $storage = ''): self
+    public function setItem(string $index, mixed $data, ?string $storage = null): self
     {
-        $storage = ($storage === '') ? $this->storage : $storage;
-
+        $storage = !$storage ? $this->storage : $storage;
         $_SESSION[self::$table][$storage][$index] = $data;
 
         return $this;
@@ -104,15 +103,15 @@ final class Session implements SessionManagerInterface
     /** 
      * {@inheritdoc}
      */
-    public function deleteItem(?string $index = null, string $storage = ''): self
+    public function deleteItem(?string $index = null, ?string $storage = null): self
     {
-        $storage = ($storage === '') ? $this->storage : $storage;
+        $storage = !$storage ? $this->storage : $storage;
 
-        if($storage !== '' && isset($_SESSION[self::$table][$storage])){
-            if($index === '' || $index === null){
-                unset($_SESSION[self::$table][$storage]);
-            }else{
+        if($storage && isset($_SESSION[self::$table][$storage])){
+            if($index){
                 unset($_SESSION[self::$table][$storage][$index]);
+            }else{
+                unset($_SESSION[self::$table][$storage]);
             }
         }
 
@@ -184,7 +183,7 @@ final class Session implements SessionManagerInterface
     {
         $result = $this->getItems();
 
-        if($index !== null && $index !== '') {
+        if($index) {
             $result = $result[$index] ?? null;
         }
 
@@ -208,9 +207,9 @@ final class Session implements SessionManagerInterface
     /** 
      * {@inheritdoc}
      */
-    public function getItems(string $storage = ''): array
+    public function getItems(?string $storage = null): array
     {
-        $storage = ($storage === '') ? $this->storage : $storage;
+        $storage = !$storage ? $this->storage : $storage;
 
         if (isset($_SESSION[self::$table][$storage])) {
             return (array) $_SESSION[self::$table][$storage];

@@ -11,13 +11,14 @@ namespace Luminova\Base;
 
 use \SessionHandlerInterface;
 use \SessionIdInterface;
+use \Luminova\Logger\Logger;
 use \App\Config\Session;
 use \Luminova\Exceptions\RuntimeException;
 
 abstract class BaseSessionHandler implements SessionHandlerInterface, SessionIdInterface
 {
     /**
-     * Session ID length
+     * Computed session ID length.
      * 
      * @var int|null $sidLength
      */
@@ -31,14 +32,14 @@ abstract class BaseSessionHandler implements SessionHandlerInterface, SessionIdI
     protected ?Session $config = null;
 
     /**
-     * Last data hash value.
+     * Last session data hashed value.
      * 
      * @var string $fileHash
      */
     protected string $fileHash = '';
 
     /**
-     * Session ID pattern.
+     * Session ID validation pattern.
      * 
      * @var string $pattern
      */
@@ -50,17 +51,16 @@ abstract class BaseSessionHandler implements SessionHandlerInterface, SessionIdI
      * @var array<string,mixed> $options
      */
     protected array $options = [
-        'encryption'    => false,
-        'session_ip'    => false,
-        'debugging'     => false,
-        'sid_entropy_bits' => 160,
-        'dir_permission'   => 0777, // file handler
-        'debugging'     => false,
-        'columnPrefix'  => null,
-        'cacheable'     => false,
-        'onValidate'    => null,
-        'onCreate'      => null,
-        'onClose'       => null
+        'encryption'        => false,
+        'session_ip'        => false,
+        'debugging'         => false,
+        'cacheable'         => false, // database handler
+        'sid_entropy_bits'  => 160,
+        'dir_permission'    => 0777, // file handler
+        'columnPrefix'      => null, // database handler
+        'onValidate'        => null,
+        'onCreate'          => null,
+        'onClose'           => null
     ];
 
     /**
@@ -76,13 +76,13 @@ abstract class BaseSessionHandler implements SessionHandlerInterface, SessionIdI
     public function __construct(array $options = [])
     {
         $this->options = array_replace($this->options, $options);
-        $this->pattern = self::getSessionIDPattern((int) $this->options['sid_entropy_bits']);
+        $this->pattern = self::initSessionIDPattern((int) $this->options['sid_entropy_bits']);
     }
 
     /**
      * Set session configuration.
      * 
-     * @param Session<Luminova\Base\BaseConfig> $config The session configuration.
+     * @param Session<Luminova\Base\BaseConfig> $config The session configuration object.
      * 
      * @return void
      */
@@ -128,17 +128,16 @@ abstract class BaseSessionHandler implements SessionHandlerInterface, SessionIdI
     }
 
     /**
-     * Sets the session ID length and generates a pattern for session ID validation.
+     * Initializes the session ID pattern and updates session length settings if required.
+     * 
+     * @param int $bits The total number of bits to be used for the session ID (e.g., `160`, `130`).
      *
-     * This method ensures that the session ID has sufficient entropy by adjusting
-     * the session.sid_length if necessary. It also creates a regex pattern based on
-     * the bits per character setting for later use in session ID validation.
-     *
-     * @throws RuntimeException If an unsupported session.sid_bits_per_character value is encountered.
-     *
-     * @return void
+     * @return string Returns the generated regex pattern for the session ID.
+     *                The pattern ensures compatibility with the character set and length.
+     * 
+     * @throws RuntimeException If an unsupported value for `session.sid_bits_per_character` is encountered.
      */
-    protected static function getSessionIDPattern(int $bits): string
+    protected static function initSessionIDPattern(int $bits): string
     {
         $bitsPerCharacter = (int) ini_get('session.sid_bits_per_character');
         $sidLength = (int) ini_get('session.sid_length');
@@ -146,9 +145,8 @@ abstract class BaseSessionHandler implements SessionHandlerInterface, SessionIdI
 
         $updatable = ($newSidLength !== $sidLength);
         self::$sidLength = $updatable ? $newSidLength : $sidLength;
-        $totalBits = $bitsPerCharacter * self::$sidLength;
 
-        if ($totalBits < $bits) {
+        if ($bitsPerCharacter * self::$sidLength < $bits) {
             $updatable = true;
             self::$sidLength = (int) ceil($bits / $bitsPerCharacter);
         }
@@ -202,17 +200,23 @@ abstract class BaseSessionHandler implements SessionHandlerInterface, SessionIdI
      */
     protected function destroySessionCookie(): bool
     {
-        return ($this->config === null) ? true : setcookie(
-            $this->config->cookieName,
+        $params = $this->config ? [
+            'cookieName' => $this->config->cookieName,
+            'path' => $this->config->sessionPath,
+            'domain' => $this->config->sessionDomain,
+        ] : session_get_cookie_params();
+
+        return $params ? setcookie(
+            $params['cookieName'] ?? session_name(),
             '',
             [
-                'expires' => time() - $this->config->expiration, 
-                'path' => $this->config->sessionPath, 
-                'domain' => $this->config->sessionDomain, 
+                'expires' => time() - 42000, 
+                'path' => $params['path'], 
+                'domain' => $params['domain'], 
                 'secure' => true, 
                 'httponly' => true
             ]
-        );
+        ): false;
     }
 
     /**
@@ -226,7 +230,7 @@ abstract class BaseSessionHandler implements SessionHandlerInterface, SessionIdI
     protected function log(string $level, string $message): void
     {
         if($this->options['debugging']){
-            logger($level, $message);
+            (new Logger())->dispatch($level, $message);
         }
     }
 }

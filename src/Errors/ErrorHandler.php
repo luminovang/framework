@@ -240,6 +240,7 @@ final class ErrorHandler
      * @param string $message The error message to be filtered.
      * 
      * @return string Returns the filtered error message.
+     * @internal
      */
     public static function filterMessage(string $message): string
     {
