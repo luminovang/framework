@@ -100,11 +100,11 @@ class Filesystem extends BaseSessionHandler
         $path = rtrim($path, TRIM_DS) . DIRECTORY_SEPARATOR . $name;
 
         if (!is_dir($path) && !mkdir($path, $this->options['dir_permission'], true)) {
-            throw new RuntimeException(sprintf('Failed to create session save path: %s', $this->filePath));
+            throw new RuntimeException(sprintf('Failed to create session save path: "%s".', $this->filePath));
         }
 
         if (!is_writable($path)) {
-            throw new RuntimeException(sprintf('Session save path is not writable: %s', $this->filePath));
+            throw new RuntimeException(sprintf('Session save path: "%s" is not writable.', $this->filePath));
         }
 
         $this->filePath = rtrim($path, TRIM_DS);
