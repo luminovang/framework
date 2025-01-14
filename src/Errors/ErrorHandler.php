@@ -247,7 +247,7 @@ final class ErrorHandler
         $message = str_replace(APP_ROOT, '', $message);
         preg_match('/^(.*) in /', $message, $matches);
         
-        return $matches[1] ?? trim($message, ' in');
+        return $matches[1] ?? trim($message, ' thrown in ');
     }
 
     /**

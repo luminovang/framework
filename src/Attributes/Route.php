@@ -13,6 +13,38 @@ use \Attribute;
 #[Attribute(Attribute::IS_REPEATABLE | Attribute::TARGET_METHOD)]
 final class Route
 {
+    /** 
+     * Represents middleware executed before handling the main controller logic. 
+     * Typically used in HTTP authentication.
+     * 
+     * @var string BEFORE_MIDDLEWARE 
+     */
+    public const BEFORE_MIDDLEWARE = 'before'; 
+  
+    /** 
+     * Represents middleware executed after the main controller logic has been handled. 
+     * Typically used in HTTP tasks like cleanup, logging, or additional processing.
+     * 
+     * @var string AFTER_MIDDLEWARE 
+     */
+    public const AFTER_MIDDLEWARE = 'after';  
+
+    /** 
+     * Represents middleware applied globally to all commands, regardless of specific group.
+     * Typically used in CLI tasks for universal security checks.
+     * 
+     * @var string GLOBAL_MIDDLEWARE 
+     */
+    public const GLOBAL_MIDDLEWARE = 'global'; 
+
+    /** 
+     * Represents middleware executed before executing commands in the same group. 
+     * Typically used in CLI tasks for group security checks.
+     * 
+     * @var string GUARD_MIDDLEWARE 
+     */
+    public const GUARD_MIDDLEWARE = 'guard'; 
+
     /**
      * HTTP and CLI Route annotation constructor.
      *
@@ -23,27 +55,29 @@ final class Route
      * @param bool $error Indicates if this is an error handler route for HTTP methods.
      * @param string|null $group The command group name for CLI route (default: NULL).
      * @param string|null $middleware Middleware type (default: NULL).
-     *          -   HTTP middleware route - `before` or `after`.
-     *          -   CLI middleware route `global` or `before` for global middleware. Using `after` for command group middleware.
+     *          -   HTTP middleware route - `Route::BEFORE_MIDDLEWARE` or `Route::AFTER_MIDDLEWARE`.
+     *          -   CLI middleware route `Route::GLOBAL_MIDDLEWARE` for global authentication or `Route::GUARD_MIDDLEWARE` for command group authentication.
      * 
-     * @example For HTTP Route.
-     *  ```php
+     * @example - For HTTP Route.
+     * 
+     * ```php
      * #[Route('/', methods: ['GET'])]
      * public function index():int {}
      * ```
-     *  ```php
-     * #[Route('/', methods: ['GET'], middleware: 'before')]
+     * ```php
+     * #[Route('/', methods: ['GET'], middleware: Route::BEFORE_MIDDLEWARE)]
      * public function index():int {}
      * ```
      * 
-     * @example For CLI Route.
+     * @example - For CLI Route.
+     * 
      * ```php
-     * #[Route('foo', group: 'bar')]
-     * public function foo():int {}
+     * #[Route('argument', group: 'command')]
+     * public function myCommand():int {}
      * ```
      * 
      * ```php
-     * #[Route(group: 'bar', middleware: 'global')]
+     * #[Route(group: 'command', middleware: Route::GLOBAL_MIDDLEWARE)]
      * public function middleware():int {}
      * ```
      */

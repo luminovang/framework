@@ -97,7 +97,7 @@ abstract class BaseController
      * @param string $type The content type (default: `html`).
      * @param int $status HTTP status code (default: 200 OK).
      * 
-     * @return int Return STATUS_SUCCESS on success, otherwise STATUS_ERROR.
+     * @return int Return STATUS_SUCCESS on success, otherwise STATUS_SILENT.
      * 
      * Supported content types:
      * 

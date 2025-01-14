@@ -17,18 +17,15 @@ use \Luminova\Base\BaseCommand;
 use \Luminova\Base\BaseController;
 use \Luminova\Interface\RouterInterface;
 use \Luminova\Exceptions\RouterException;
-use \Luminova\Exceptions\AppException;
 use \WeakMap;
 use \ReflectionClass;
 use \ReflectionMethod;
-use \ReflectionException;
 use \RecursiveDirectoryIterator;
 use \RecursiveIteratorIterator;
 use \RecursiveCallbackFilterIterator;
 use \FilesystemIterator;
 use \SplFileInfo;
-use \UnexpectedValueException;
-use \Exception;
+use \Throwable;
 
 final class AttrCompiler
 {
@@ -126,7 +123,7 @@ final class AttrCompiler
             try{
                 [$namespace] = $this->getNamespace($file);
                 self::$weak[$file] = new ReflectionClass("{$namespace}{$fileName}");
-            }catch(ReflectionException $e){
+            }catch(Throwable $e){
                 throw new RouterException($e->getMessage(), $e->getCode(), $e);
             }
 
@@ -182,14 +179,14 @@ final class AttrCompiler
                     $pattern = Router::normalizePatterns($pattern);
 
                     foreach($attr->methods as $httpMethod){
-                        $to = ($attr->middleware === 'before') 
+                        $to = ($attr->middleware === Route::BEFORE_MIDDLEWARE) 
                             ? 'routes_middleware' 
-                            : (($attr->middleware === 'after') ? 'routes_after' : 'routes');
+                            : (($attr->middleware === Route::AFTER_MIDDLEWARE) ? 'routes_after' : 'routes');
 
                         $this->routes['controllers'][$to][$httpMethod][] = [
                             'pattern' => $pattern,
                             'callback' => $callback,
-                            'middleware' => $attr->middleware === 'before'
+                            'middleware' => $attr->middleware === Route::BEFORE_MIDDLEWARE
                         ];
                     }
                     
@@ -232,7 +229,7 @@ final class AttrCompiler
             try{
                 [$namespace] = $this->getNamespace($file, 'Cli');
                 self::$weak[$file] = new ReflectionClass("{$namespace}{$fileName}");
-            }catch(ReflectionException $e){
+            }catch(Throwable $e){
                 throw new RouterException($e->getMessage(), $e->getCode(), $e);
             }
 
@@ -256,7 +253,7 @@ final class AttrCompiler
                     $group = trim($attr->group, '/');
 
                     if($attr->middleware !== null){
-                        $security = ($attr->middleware === 'global') ? 'global' : $group;
+                        $security = ($attr->middleware === Route::GLOBAL_MIDDLEWARE) ? $attr->middleware : $group;
                         $this->routes['controllers']['cli_middleware']['CLI'][$security][] = [
                             'callback' => $callback,
                             'pattern' => $group,
@@ -297,10 +294,10 @@ final class AttrCompiler
             [$namespace, $module] = $this->getNamespace($file, null);
             try {
                 self::$weak[$file] = new ReflectionClass("{$namespace}Http\\{$fileName}");
-            } catch (ReflectionException $e) {
+            } catch (Throwable $e) {
                 try {
                     self::$weak[$file] = new ReflectionClass("{$namespace}Cli\\{$fileName}");
-                } catch (ReflectionException $e) {
+                } catch (Throwable $e) {
                     throw new RouterException($e->getMessage(), $e->getCode(), $e);
                 }
             }     
@@ -382,7 +379,7 @@ final class AttrCompiler
                     fn(SplFileInfo $entry) => $this->isValidEntry($entry, $name)
                 )
             );
-        }catch(UnexpectedValueException|Exception $e){
+        }catch(Throwable $e){
             throw new RouterException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -521,7 +518,7 @@ final class AttrCompiler
 
                 return write_content($lock . $context . '.php', $returnRoutes);
             }
-        }catch(AppException|Exception $e){
+        }catch(Throwable $e){
             logger('error', 'Failed to Cache Attributes. ' . $e->getMessage());
         }
 

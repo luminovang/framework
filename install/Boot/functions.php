@@ -1431,7 +1431,7 @@ if (!function_exists('status_code')) {
             return $return_int ? 1 : false;
         }
 
-        return $return_int ? 0 : true;
+        return $return_int ? (int) $result : true;
     }
 }
 

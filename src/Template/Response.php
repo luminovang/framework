@@ -223,7 +223,7 @@ class Response implements ViewResponseInterface
     public function render(string $content, array $headers = []): int
     {
         if($content === ''){
-            return STATUS_ERROR;
+            return STATUS_SILENT;
         }
 
         $length = 0;
@@ -253,7 +253,7 @@ class Response implements ViewResponseInterface
         }
 
         if($content === ''){
-            return STATUS_ERROR;
+            return STATUS_SILENT;
         }
 
         $headers['default_headers'] = true;
@@ -285,7 +285,7 @@ class Response implements ViewResponseInterface
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
 
-        return STATUS_ERROR;
+        return STATUS_SILENT;
     }
 
     /**

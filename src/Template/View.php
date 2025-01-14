@@ -16,7 +16,6 @@ use \Luminova\Http\Header;
 use \Luminova\Application\Foundation; 
 use \Luminova\Interface\ExceptionInterface; 
 use \Luminova\Interface\PromiseInterface; 
-use \Luminova\Exceptions\AppException; 
 use \Luminova\Exceptions\ViewNotFoundException; 
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Time\Time;
@@ -32,7 +31,7 @@ use \DateTimeZone;
 use \Closure;
 use \stdClass;
 use \WeakMap;
-use \Exception;
+use \Throwable;
 
 trait View
 { 
@@ -488,7 +487,7 @@ trait View
         $this->forceCache = false;
         $cache = self::getCache($this->cacheExpiry);
 
-        return $cache->read() ? STATUS_SUCCESS : STATUS_ERROR;
+        return $cache->read() ? STATUS_SUCCESS : STATUS_SILENT;
     }
 
     /**
@@ -598,7 +597,7 @@ trait View
      * @param array<string,mixed> $options Additional parameters to pass in the template file.
      * @param int $status The HTTP status code (default: 200 OK).
      * 
-     * @return int Return status code STATUS_SUCCESS or STATUS_ERROR on failure.
+     * @return int Return status code STATUS_SUCCESS or STATUS_SILENT on failure.
      * @throws RuntimeException If the view rendering fails.
      * 
      * @example - Display your template view with options.
@@ -611,7 +610,7 @@ trait View
     {
         return $this->callLmv($options, $status) 
             ? STATUS_SUCCESS 
-            : STATUS_ERROR;
+            : STATUS_SILENT;
     }
 
     /**
@@ -658,8 +657,9 @@ trait View
     {
         return new Promise(function ($resolve, $reject) use($options, $status){
             try{
-                $resolve($this->callLmv($options, $status, true));
-            }catch(Exception $e){
+                $content = $this->callLmv($options, $status, true);
+                $content ? $resolve($content) : $reject(new ViewNotFoundException('Not content'));
+            }catch(Throwable $e){
                 $reject($e);
             }
         });
@@ -833,13 +833,8 @@ trait View
                     $this->headers
                 );
             }
-        } catch (ExceptionInterface|Exception $e) {
-            if($e instanceof ExceptionInterface){
-                self::handleLmvException($e, $this->lmvViewOptions($options));
-                return false;
-            }
-
-            RuntimeException::throwException($e->getMessage(), $e->getCode(), $e);
+        } catch (Throwable $e) {
+            self::throwException($e, $this->lmvViewOptions($options));
         }
         return false;
     }
@@ -920,8 +915,8 @@ trait View
             }
 
             return $instance->display($view, $return);
-        }catch(AppException $e){
-            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+        }catch(Throwable $e){
+            self::throwException($e);
         }
 
         return false;
@@ -976,8 +971,8 @@ trait View
             $instance->assignClasses(self::$weak[self::$reference]);
 
             return $instance->display($view, $options, $return);
-        }catch(AppException $e){
-            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+        }catch(Throwable $e){
+            self::throwException($e);
         }
 
         return false;
@@ -1234,10 +1229,7 @@ trait View
      *
      * @return void 
      */
-    private static function handleLmvException(
-        ExceptionInterface $exception, 
-        array $options = []
-    ): void 
+    private static function handleLmvException(ExceptionInterface $exception, array $options = []): void 
     {
         extract($options);
         unset($options);
@@ -1247,6 +1239,34 @@ trait View
             $exception->log();
         }
         exit(STATUS_SUCCESS);
+    }
+
+    /** 
+     * Re-throw or handle an exceptions.
+     *
+     * @param Throwable $exception The exception to manage.
+     * @param array<string,mixed>|null $options Optional options for view error.
+     *
+     * @return void 
+     * @throws RuntimeException
+     */
+    private static function throwException(Throwable $e, ?array $options = null): void 
+    {
+        if($e instanceof ExceptionInterface){
+            if($options !== null){
+                self::handleLmvException($e, $options);
+                return;
+            }
+
+            throw $e;
+        }
+
+        if($options !== null){
+            RuntimeException::throwException($e->getMessage(), $e->getCode(), $e);
+            return;
+        }
+
+        throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
     }
 
     /**

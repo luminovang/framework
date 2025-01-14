@@ -198,6 +198,11 @@ defined('STATUS_SUCCESS') || define('STATUS_SUCCESS', 0);
 defined('STATUS_ERROR') || define('STATUS_ERROR', 1);
 
 /**
+ * @var int STATUS_SILENT Finish controller method without error or success status.
+*/
+defined('STATUS_SILENT') || define('STATUS_SILENT', 2);
+
+/**
  * @var string APP_VERSION application version
 */
 defined('APP_VERSION') || define('APP_VERSION', env('app.version', '1.0.0'));

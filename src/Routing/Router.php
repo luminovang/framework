@@ -24,6 +24,7 @@ use \Luminova\Application\Factory;
 use \Luminova\Application\Foundation;
 use \Luminova\Cache\ViewCache;
 use \Luminova\Exceptions\RouterException;
+use \Luminova\Exceptions\AppException;
 use \Luminova\Interface\RouterInterface;
 use \Luminova\Interface\ErrorHandlerInterface;
 use \Luminova\Utils\WeakReference;
@@ -37,16 +38,17 @@ use \ReflectionIntersectionType;
 use \ReflectionClass;
 use \Closure;
 use \Exception;
+use \Throwable;
 
 /**
  * Router shorthand methods for capture, to handle http methods by it name.
  *
- * @method static void get(string $pattern, Closure|string $callback) Route to handle http `GET` requests.
- * @method static void post(string $pattern, Closure|string $callback) Route to handle http `POST` requests.
- * @method static void patch(string $pattern, Closure|string $callback) Route to handle http `PATCH` requests.
- * @method static void delete(string $pattern, Closure|string $callback) Route to handle http `DELETE` requests.
- * @method static void put(string $pattern, Closure|string $callback) Route to handle http `PUT` requests.
- * @method static void options(string $pattern, Closure|string $callback) Route to handle http `OPTIONS` requests.
+ * @method void get(string $pattern, Closure|string $callback) Route to handle http `GET` requests.
+ * @method void post(string $pattern, Closure|string $callback) Route to handle http `POST` requests.
+ * @method void patch(string $pattern, Closure|string $callback) Route to handle http `PATCH` requests.
+ * @method void delete(string $pattern, Closure|string $callback) Route to handle http `DELETE` requests.
+ * @method void put(string $pattern, Closure|string $callback) Route to handle http `PUT` requests.
+ * @method void options(string $pattern, Closure|string $callback) Route to handle http `OPTIONS` requests.
  */
 final class Router 
 {
@@ -165,11 +167,11 @@ final class Router
     */
     private static ?WeakMap $weak = null;
 
-     /**
+    /**
      * Router object reference.
      * 
      * @var WeakReference|null $reference
-    */
+     */
     private static ?WeakReference $reference = null;
 
     /**
@@ -192,34 +194,34 @@ final class Router
     /**
      * A shorthand for route capture https methods to handle "METHOD" request method.
      *
-     * @param string $name Method to call.
-     * @param array $arguments Method arguments.
+     * @param string $method The called method name as HTTP method.
+     * @param array<int,mixed> $arguments The method arguments.
      * 
      * Expected arguments:
      * 
      *  - string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
      *  - Closure|string $callback Handle callback for router.
      * 
-     * @return mixed Return value of method.
+     * @return void
      * @throws RouterException Throw if method does not exist.
      */
-    public function __call(string $name, array $arguments): mixed
+    public function __call(string $method, array $arguments): void
     {
-        $method = strtoupper($name);
+        $method = strtoupper($method);
 
         if ($method !== 'CLI' && isset(self::$http_methods[$method])) {
             $this->capture($method, ...$arguments);
-            return null;
+            return;
         }
 
         RouterException::throwWith('no_method', RouterException::INVALID_REQUEST_METHOD, [
             self::class,
-            $name,
+            $method,
         ]);
     }
 
     /**
-     * Initialize application routing with proper context web, cli, api, console etc...
+     * Initialize application routing with supported context URI prefixing `web`, `cli`, `api`, `console` etc...
      * 
      * Define URI prefixes and error handlers for specific URI prefix names.
      * Ensures only required routes for handling requests are loaded based on the URI prefix.
@@ -274,14 +276,17 @@ final class Router
     }
 
     /**
-     * Before middleware, to handle router middleware authentication.
+     * Registers an HTTP "before" middleware to authenticate requests before handling controllers.
      * 
-     * @param string  $methods  The allowed methods, can be serrated with `|` pipe symbol (e.g,. `GET|POST`).
-     * @param string  $pattern The route URL pattern or template view name (e.g, `{segment}`, `(:type)`, `/.*`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback Callback function to execute.
+     * This method allows you to apply middleware logic that executes prior to any associated controllers. 
+     * If the middleware callback returns `STATUS_ERROR`, the routing process will terminate, preventing further execution.
+     * 
+     * @param string $methods The allowed HTTP methods, separated by a `|` pipe symbol (e.g., `GET|POST`).
+     * @param string $pattern The route URL pattern or template (e.g., `{segment}`, `(:type)`, `/.*`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
      * 
      * @return void
-     * @throws RouterException Throws when called in wrong context or if blank method is passed.
+     * @throws RouterException Thrown if the method is called in an invalid context or the `$methods` parameter is empty.
      */
     public function middleware(string $methods, string $pattern, Closure|string $callback): void
     {
@@ -296,14 +301,17 @@ final class Router
     }
 
     /**
-     * After middleware route, executes the callback function after request was executed successfully.
-     *
-     * @param string  $methods  The allowed methods, can be serrated with `|` pipe symbol (e.g, `GET|POST`).
-     * @param string  $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
-     * @param Closure|string $callback The callback function to execute (e.g, `ControllerClass::methodName`).
+     * Registers an HTTP "after" middleware to execute logic after a controller has been handled.
+     * 
+     * This method applies middleware logic that runs after a controller processes a request. 
+     * It is typically used for tasks such as cleanup or additional post-processing.
+     * 
+     * @param string $methods The allowed HTTP methods, separated by a `|` pipe symbol (e.g., `GET|POST`).
+     * @param string $pattern The route URL pattern or template (e.g., `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
+     * @param Closure|string $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
      * 
      * @return void
-     * @throws RouterException Throws if blank method is passed.
+     * @throws RouterException Thrown if the `$methods` parameter is empty.
      */
     public function after(string $methods, string $pattern, Closure|string $callback): void
     {
@@ -318,67 +326,19 @@ final class Router
     }
 
     /**
-     * Capture front controller request method based on pattern and execute the callback.
-     *
-     * @param string $methods The allowed methods, can be separated with `` pipe symbol (e.g, `GET|POST|PUT`).
-     * @param string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
-     * @param Closure|string $callback The callback function to execute (e.g, `ControllerClass::methodName`).
+     * Registers a CLI "before" middleware guard to authenticate commands within a specific group.
+     * 
+     * This method applies middleware logic to CLI commands within a specified group. The middleware is executed 
+     * before any command in the group. If the middleware callback returns `STATUS_ERROR`, the routing process will 
+     * terminate, preventing further commands from executing.
+     * 
+     * @param string $group The command group name or default `global` for middleware that applies to all commands.
+     * @param Closure|string|null $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
      * 
      * @return void
-     * @throws RouterException Throws if blank method is passed.
+     * @throws RouterException Thrown if the method is called outside a CLI context.
      */
-    public function capture(string $methods, string $pattern, Closure|string $callback): void
-    {
-        if ($methods === '') {
-            RouterException::throwWith('empty_argument', RouterException::INVALID_ARGUMENTS, [
-               '$methods'
-            ]);
-            return;
-        }
-
-        $this->addHttpRoute('routes', $methods, $pattern, $callback);
-    }
-
-    /**
-     * An alias for route capture method to handle any type of request method.
-     *
-     * @param string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
-     * @param Closure|string $callback The callback to execute (e.g, `ControllerClass::methodName`).
-     * 
-     * @return void
-     */
-    public function any(string $pattern, Closure|string $callback): void
-    {
-        $this->capture(self::ANY_METHODS, $pattern, $callback);
-    }
-
-    /**
-     * Capture front controller command request names and execute callback.
-     *
-     * @param string $command The allowed command name or command with filters (e.g, `foo`, `foo/(:int)/bar/(:string)`).
-     * @param Closure|string $callback The callback function to execute (e.g, `ControllerClass::methodName`).
-     * 
-     * @return void
-     */
-    public function command(string $command, Closure|string $callback): void
-    {
-        self::$weak[self::$reference]['cli_commands']['CLI'][] = [
-            'callback' => $callback,
-            'pattern' => self::normalizePatterns(trim($command, '/'), true),
-            'middleware' => false
-        ];
-    }
-
-    /**
-     * Before middleware, for command middleware authentication.
-     *
-     * @param string $group The command middleware group name or `global` for global middleware.
-     * @param Closure|string $callback Callback controller handler (e.g, `ControllerClass::methodName`).
-     * 
-     * @return void
-     * @throws RouterException Throws when called in wrong context.
-     */
-    public function before(string $group, Closure|string $callback = null): void
+    public function guard(string $group, Closure|string $callback): void
     {
         if(!self::$is_cli){
             RouterException::throwWith('invalid_cli_middleware');
@@ -393,18 +353,100 @@ final class Router
     }
 
     /**
-     *The Bind method allow you to group a collection nested `URI`  together in a single base path prefix or pattern.
+     * Before middleware, for command middleware authentication.
      *
-     * @param string $prefix The path prefix name or pattern (e.g,. `/blog`, `{segment}`, `(:type)`, `/account/([a-z])`).
-     * @param Closure $callback The callback function to handle routes group binding.
+     * @param string $group The command middleware group name or `global` for global middleware.
+     * @param Closure|string $callback Callback controller handler (e.g, `ControllerClass::methodName`).
      * 
      * @return void
-     * @example - Example blog website binding.
+     * @throws RouterException Throws when called in wrong context.
+     * @deprecated This method is deprecated and will be removed in a future release use `guard` instead. 
+     */
+    public function before(string $group, Closure|string $callback): void
+    {
+        $this->guard($group, $callback);
+    }
+
+    /**
+     * Registers HTTP request methods, URI patterns, and corresponding callback or controller methods.
      * 
+     * This method allows you to define routes by specifying supported HTTP methods, a URL pattern, 
+     * and the callback or controller method to execute when the pattern matches a client request.
+     * Multiple HTTP methods can be specified using the pipe (`|`) symbol.
+     * 
+     * @param string $methods The allowed HTTP methods, separated by the pipe symbol (e.g., `GET|POST|PUT`).
+     * @param string $pattern The route URL pattern or template name (e.g., `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9]+)`).
+     * @param Closure|string $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
+     * 
+     * @return void
+     * 
+     * @throws RouterException Thrown if an empty method string is provided.
+     */
+    public function capture(string $methods, string $pattern, Closure|string $callback): void
+    {
+        if (!$methods) {
+            RouterException::throwWith('empty_argument', RouterException::INVALID_ARGUMENTS, [
+               '$methods'
+            ]);
+            return;
+        }
+
+        $this->addHttpRoute('routes', $methods, $pattern, $callback);
+    }
+
+    /**
+     * Registers a CLI command and its corresponding callback or controller method.
+     * 
+     * This method is used to define CLI commands, specifying the command name and the function 
+     * or controller method to execute when the command is run in the terminal. 
+     * Unlike HTTP routes, CLI commands are defined using this method specifically within the `group` method.
+     * 
+     * @param string $command The name of the command or a command pattern with filters (e.g., `foo`, `foo/(:int)/bar/(:string)`).
+     * @param Closure|string $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
+     * 
+     * @return void
+     */
+    public function command(string $command, Closure|string $callback): void
+    {
+        self::$weak[self::$reference]['cli_commands']['CLI'][] = [
+            'callback' => $callback,
+            'pattern' => self::normalizePatterns(trim($command, '/'), true),
+            'middleware' => false
+        ];
+    }
+
+    /**
+     * Capture and handle requests for any HTTP method.
+     * 
+     * This method leverages `Router::ANY_METHODS` to match and handle requests for any HTTP method.
+     * It is a convenient way to define routes that respond to all HTTP methods without explicitly specifying them.
+     *
+     * @param string $pattern The route URL pattern or template name (e.g., `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
+     * @param Closure|string $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
+     * 
+     * @return void
+     */
+    public function any(string $pattern, Closure|string $callback): void
+    {
+        $this->capture(self::ANY_METHODS, $pattern, $callback);
+    }
+
+    /**
+     * Binds a URI prefix to a group of routes under the specified prefix.
+     * 
+     * This method allows you to organize and group related routes under a common base path or pattern. 
+     * It simplifies route management by associating multiple nested `URI` patterns with a shared prefix.
+     * 
+     * @param string $prefix The base path or URI pattern (e.g., `/blog`, `{segment}`, `(:type)`, `/account/([a-z])`).
+     * @param Closure $callback The closure containing the route definitions for the group.
+     * 
+     * @return void
+     * 
+     * @example Example of grouping routes under a `/blog/` prefix:
      * ```php
-     * $router->bind('/blog/', static function(Router $router){
-     *      $router->get('/', 'BlogController::blogs');
-     *      $router->get('/id/([aZ-Az-0-9-])', 'BlogController::blog');
+     * $router->bind('/blog/', static function(Router $router) {
+     *     $router->get('/', 'BlogController::blogs');
+     *     $router->get('/id/([a-zA-Z0-9-]+)', 'BlogController::blog');
      * });
      * ```
      */
@@ -418,19 +460,27 @@ final class Router
     }
 
     /**
-     * Binds commands route within a group.
-     *
-     * @param string $group The command group name (e.g, `foo`, `bar`). 
-     * @param Closure $callback Callback command function to handle group.
+     * Binds a group of CLI commands under a specific group name.
+     * 
+     * Similar to the HTTP `bind` method, this method organizes CLI commands into groups, 
+     * making it easier to manage commands related to the same functionality or controller class.
+     * 
+     * @param string $group The name of the command group (e.g., `blog`, `user`).
+     * @param Closure $callback A callback function that defines the commands for the group.
      * 
      * @return void
-     * @example - Example blog command grouping.
      * 
+     * @example Example of grouping CLI commands under a `blog` group:
      * ```php
-     * $router->group('blog', static function(Router $router){
-     *      $router->command('list', 'BlogController::blogs');
-     *      $router->command('id/(:mixed)', 'BlogController::blog');
+     * $router->group('blog', static function(Router $router) {
+     *     $router->command('list', 'BlogController::blogs');
+     *     $router->command('id/(:int)', 'BlogController::blog');
      * });
+     * ```
+     * **Usage in CLI:**
+     * ```bash
+     * php index.php blog list
+     * php index.php blog id=4
      * ```
      */
     public function group(string $group, Closure $callback): void
@@ -439,12 +489,21 @@ final class Router
     }
 
     /**
-     * Registers module controller class namespace group for use in application routing.
+     * Registers MVC controllers or HMVC module controller class namespace group for use in application routing.
      *
-     * @param string $namespace The class namespace to be registered (e.g,, `\App\Controllers\Http\`, `\App\Modules\FooModule\Controllers\`).
+     * This method allows you to register new routable namespaces for both HMVC and MVC applications.
+     * 
+     * **Namespace Pattern:**
+     * - **HMVC**: Register a namespace up to the controller path, omitting the `Http` and `Cli` suffixes.  
+     *   Example: `\App\Modules\FooModule\Controllers\` instead of `\App\Modules\FooModule\Controllers\Http`. 
+     *   This captures both `Http` and `Cli` namespaces.
      *
-     * @return self Return instance of router class.
-     * @throws RouterException Throw if the namespace is empty or contains invalid characters.
+     * @param string $namespace The namespace to register (e.g., `\App\Controllers\`, `\App\Modules\FooModule\Controllers\`).
+     *
+     * @return self Returns the instance of the router class.
+     * @throws RouterException If the namespace is empty or contains invalid characters.
+     * 
+     * **Note:** The base controllers for MVC and HMVC applications are predefined in the `Luminova\Core\CoreApplication` class.
      */
     public function addNamespace(string $namespace): self
     {
@@ -458,14 +517,13 @@ final class Router
 
         $namespace = '\\' . trim($namespace, '\\') . '\\';
 
-        if(!str_starts_with($namespace, '\\App\\') || !str_ends_with($namespace, '\Controllers\\')){
+        if(!str_starts_with($namespace, '\\App\\') || !str_ends_with($namespace, '\\Controllers\\')){
             RouterException::throwWith(
                 env('feature.app.hmvc', false)
                     ? 'invalid_module_namespace'
                     : 'invalid_namespace', 
-                RouterException::NOT_ALLOWED, [
-                    $namespace
-                ]
+                RouterException::NOT_ALLOWED, 
+                [$namespace]
             );
             return $this;
         }
@@ -475,11 +533,16 @@ final class Router
     }
 
     /**
-     * Run application routes, loop all defined routing methods to call controller 
-     * if method matches view  or command name.
-     * 
+     * Execute application routes and handle incoming requests.
+     *
+     * This method processes all defined routes and dispatches incoming HTTP or CLI requests to the appropriate 
+     * controller methods. It also manages application profiling, ensuring computed profiling data is sent to the UI for rendering. 
+     * Additionally, it triggers the `onFinish` application event before termination.
+     *
      * @return void
-     * @throws RouterException Throw if encountered error while executing controller callback.
+     * @throws RouterException Thrown if an error occurs during request processing or route resolution.
+     * 
+     * **Note:** This method is typically invoked once in the `/public/index.php` file, which serves as the application front controller.
      */
     public function run(): void
     {
@@ -504,10 +567,7 @@ final class Router
         }
 
         self::$application->__on('onFinish', self::$classInfo);
-        if($exit_code === STATUS_SUCCESS){
-            Foundation::profiling('stop', $context);
-        }
-
+        Foundation::profiling('stop', $context);
         exit($exit_code);
     }
 
@@ -551,33 +611,27 @@ final class Router
             $matches = [];
             if (
                 self::uriCapture($pattern, self::$uri, $matches) && 
-                self::call($callable, self::matchesToArgs($matches), true)
+                self::call($callable, self::matchesToArgs($matches), true) === STATUS_SUCCESS
             ) {
                 return;
             }
         }
       
-        $error = (self::$weak[self::$reference]['errors']['/'] ?? null);
+        $error = self::$weak[self::$reference]['errors']['/'] ?? null;
+        $error = $error ? self::call($error, [], true) : STATUS_ERROR;
 
-        if ($error !== null && self::call($error, [], true)) {
+        if ($error === STATUS_SUCCESS || $error === STATUS_SILENT) {
             return;
         }
 
-        if (PRODUCTION) {
-            self::printError(
-                'Resource Not Found', 
-                'The requested resource could not be found on the server.', 
-                $status
-            );
-            return;
-        }
-    
         self::printError(
             'Resource Not Found', 
-            "An error occurred:\n\n" . 
-            "- No controller is registered to handle the requested URL.\n" . 
-            "- Alternatively, a custom error handler is missing for this URL prefix in the controller.\n" . 
-            "- Additionally, check your Controller class's prefix pattern to ensure it doesn't exclude the URL.",
+            PRODUCTION 
+                ? 'The requested resource could not be found on the server.'
+                :   "An error occurred:\n\n" . 
+                    "- No controller is registered to handle the requested URL.\n" . 
+                    "- Alternatively, a custom error handler is missing for this URL prefix in the controller.\n" . 
+                    "- Additionally, check your Controller class's prefix pattern to ensure it doesn't exclude the URL.",
             $status
         );
     }
@@ -619,6 +673,7 @@ final class Router
      * Get the routed controller class information.
      *
      * @return array<string,string> Return array of controller information.
+     * @internal
      */
     public static function getClassInfo(): array
     {
@@ -632,6 +687,7 @@ final class Router
      * @param mixed $value The value to store.
      *
      * @return void
+     * @internal
      */
     public static function setClassInfo(string $key, mixed $value): void
     {
@@ -639,17 +695,17 @@ final class Router
     }
 
     /**
-     * Boot route context.
-     * Allow accessing router and application instance within the context.
+     * Load the route URI context prefix.
+     * Allow accessing router and application instance within the context file as global variable.
      *
-     * @param string $context Route context name.
-     * @param Router $router  Make router instance available in route.
-     * @param CoreApplication $app Make application instance available in route.
+     * @param string $context Route URI context prefix name.
+     * @param Router $router Make router instance available in context file.
+     * @param CoreApplication $app Make application instance available in context file.
      * 
      * @return void
      * @throws RouterException
      */
-    private static function bootContext(
+    private static function onContext(
         string $context, 
         Router $router, 
         CoreApplication $app
@@ -792,9 +848,8 @@ final class Router
 
         $pattern = $this->baseGroup . '/' . trim($pattern, '/');
         $pattern = self::normalizePatterns(($this->baseGroup !== '') ? rtrim($pattern, '/') : $pattern);
-        $pipes = explode('|', $methods);
 
-        foreach ($pipes as $method) {
+        foreach (explode('|', $methods) as $method) {
             self::$weak[self::$reference][$to][$method][] = [
                 'pattern' => $pattern,
                 'callback' => $callback,
@@ -900,7 +955,11 @@ final class Router
      */
     private static function isWeContext(string $result, ?string $first = null): bool 
     {
-        return ($first === null || $first === '' || $result === Prefix::WEB) && $result !== Prefix::CLI && $result !== Prefix::API;
+        return (
+            $first === null || 
+            $first === '' || 
+            $result === Prefix::WEB
+        ) && $result !== Prefix::CLI && $result !== Prefix::API;
     }
 
     /**
@@ -930,7 +989,7 @@ final class Router
         $group = self::getArgument();
         $command = self::getArgument(2);
 
-        if($group === '' || $command === ''){
+        if(!$group || !$command){
             self::$term->header();
             return STATUS_SUCCESS;
         }
@@ -984,13 +1043,21 @@ final class Router
     private static function runAsHttp(): int
     {
         $middleware = self::getRoutes('routes_middleware'); 
-        if ($middleware !== [] && !self::handleWebsite($middleware, self::$uri)) {
+        if (
+            $middleware !== [] && 
+            self::handleWebsite($middleware, self::$uri) !== STATUS_SUCCESS
+        ) {
             return STATUS_ERROR;
         }
 
         $routes = self::getRoutes('routes');
+        $status = $routes !== [] ? self::handleWebsite($routes, self::$uri) : STATUS_ERROR;
 
-        if ($routes !== [] && self::handleWebsite($routes, self::$uri)) {
+        if ($status === STATUS_SILENT) {
+            return STATUS_ERROR;
+        }
+
+        if ($status === STATUS_SUCCESS) {
             $after = self::getRoutes('routes_after');
             
             if($after !== []){
@@ -1031,6 +1098,7 @@ final class Router
     {
         self::$terminate = true;
         $err = 'Error: (503) System undergoing maintenance!';
+
         if(self::$is_cli || self::$uri === self::CLI_URI){
             self::$term->error($err);
             return true;
@@ -1094,27 +1162,28 @@ final class Router
      * @param array $routes Collection of route patterns and their handling functions.
      * @param string $uri The view request URI path.
      *
-     * @return bool Return true if controller was handled, otherwise false.
+     * @return int Return status code
      * @throws RouterException if method is not callable or doesn't exist.
      */
-    private static function handleWebsite(array $routes, string $uri): bool
+    private static function handleWebsite(array $routes, string $uri): int
     {
-        $match = false;
-
         foreach ($routes as $route) {
             $matches = [];
             $match = self::uriCapture($route['pattern'], $uri, $matches);
-
-            if ($match) {
-                $passed = self::call($route['callback'], self::matchesToArgs($matches));
+            $passed = $match 
+                ? self::call($route['callback'], self::matchesToArgs($matches))
+                : STATUS_ERROR;
+      
+            if ((!$match && $route['middleware']) || ($match && $passed === STATUS_SUCCESS)) {
+                return STATUS_SUCCESS;
             }
 
-            if ((!$match && $route['middleware']) || ($match && $passed)) {
-                return true;
+            if($match && $passed === STATUS_SILENT){
+                return STATUS_SILENT;
             }
         }
        
-        return false;
+        return STATUS_ERROR;
     }
 
     /**
@@ -1134,18 +1203,19 @@ final class Router
         
         foreach ($routes as $route) {
             if($route['middleware']){
-                return self::call($route['callback'], self::$commands, false, true);
+                return self::call($route['callback'], self::$commands, false, true) === STATUS_SUCCESS;
             }
 
             $matches = [];
 
             if (self::uriCapture($route['pattern'], $queries['view'], $matches)) {
                 self::$commands['params'] = self::matchesToArgs($matches);
-                return self::call($route['callback'], self::$commands);
+
+                return self::call($route['callback'], self::$commands) === STATUS_SUCCESS;
             } 
             
             if ($queries['view'] === $route['pattern'] || $isHelp) {
-                return self::call($route['callback'], self::$commands);
+                return self::call($route['callback'], self::$commands) === STATUS_SUCCESS;
             }
         }
 
@@ -1275,7 +1345,7 @@ final class Router
      * @param bool $injection Force use dependency injection (default: false).
      * @param bool $is_cli_middleware Indicate weather caller is cli middleware (default: false).
      *
-     * @return bool Return true if controller method was executed successfully, false otherwise.
+     * @return int Return status if controller method was executed successfully, error or silent otherwise.
      * @throws RouterException if method is not callable or doesn't exist.
      */
     private static function call(
@@ -1283,9 +1353,19 @@ final class Router
         array $arguments = [], 
         bool $injection = false,
         bool $is_cli_middleware = false
-    ): bool
+    ): int
     {
         if ($callback instanceof Closure) {
+            if(!self::isMethodReturnInt($callback)){
+                throw new RouterException(
+                    sprintf(
+                        'Invalid closure controller "%s" return type, routable closures must return status int: STATUS_*',
+                        "function(...)"
+                    ),
+                    RouterException::INVALID_CONTROLLER
+                );
+            }
+
             $arguments = (self::$is_cli && isset($arguments['command'])) 
                 ? ($arguments['params'] ?? []) 
                 : $arguments;
@@ -1293,11 +1373,11 @@ final class Router
             self::$classInfo['namespace'] = '\\Closure';
             self::$classInfo['method'] = 'function';
 
-            return status_code($callback(...self::injection(
+            return $callback(...self::injection(
                 $callback, 
                 $arguments, 
                 $injection
-            )), false);
+            ));
         }
 
         if (is_array($callback)) {
@@ -1323,7 +1403,7 @@ final class Router
             );
         }
 
-        return false;
+        return STATUS_ERROR;
     }
 
     /**
@@ -1335,7 +1415,7 @@ final class Router
      * @param bool $injection Force use dependency injection. Default is false.
      * @param bool $is_cli_middleware Indicate weather caller is cli middleware (default: false).
      *
-     * @return bool If method was called successfully.
+     * @return int Return status code.
      * @throws RouterException if method is not callable or doesn't exist.
      */
     private static function reflection(
@@ -1344,14 +1424,15 @@ final class Router
         array $arguments = [], 
         bool $injection = false,
         bool $is_cli_middleware = false
-    ): bool 
+    ): int 
     {
         if ($className === '') {
             RouterException::throwWith('invalid_class', RouterException::CLASS_NOT_FOUND, [
                 $className, 
                 implode(',  ', self::$namespace)
             ]);
-            return false;
+
+            return STATUS_ERROR;
         }
 
         self::$classInfo['namespace'] = $className;
@@ -1367,13 +1448,27 @@ final class Router
                 RouterException::throwWith('invalid_controller', RouterException::INVALID_CONTROLLER, [
                     $className
                 ]);
-                return false;
+                
+                return STATUS_ERROR;
             }
 
             $caller = $class->getMethod($method);
+            if(!self::isMethodReturnInt($caller)){
+                throw new RouterException(
+                    sprintf(
+                        'Invalid controller method "%s" return type, routable controller method must return status int: STATUS_*',
+                        "{$className}->{$method}(...)"
+                    ),
+                    RouterException::INVALID_CONTROLLER
+                );
+            }
             
             if ($caller->isPublic() && !$caller->isAbstract() && 
-                (!$caller->isStatic() || $class->implementsInterface(ErrorHandlerInterface::class) || $class->implementsInterface(RouterInterface::class))
+                (
+                    !$caller->isStatic() || 
+                    $class->implementsInterface(ErrorHandlerInterface::class) || 
+                    $class->implementsInterface(RouterInterface::class)
+                )
             ) {
                 if (isset($arguments['command']) && self::$is_cli) {;
                     if($class->getProperty('group')->getDefaultValue() === self::getArgument(1)) {
@@ -1393,19 +1488,46 @@ final class Router
                     );
                 }
 
-                return status_code($result, false);
+                return $result;
             }
-        } catch (ReflectionException $e) {
-            if($e->getCode() === RouterException::INVALID_CONTROLLER){
-                throw new RouterException($e->getMessage(), $e->getCode(), $e);
+        } catch (RouterException $e) {
+            $e->handle();
+            return STATUS_ERROR;
+        } catch (ReflectionException|Throwable $e) {
+            if($e instanceof AppException){
+                $e->handle();
+                return STATUS_ERROR;
             }
 
             RouterException::throwException($e->getMessage(), $e->getCode(), $e);
-            return false;
+            return STATUS_ERROR;
         }
 
         RouterException::throwWith('invalid_method', RouterException::INVALID_METHOD, [$method]);
-        return false;
+        return STATUS_ERROR;
+    }
+
+    /**
+     * Checks if a method's return type is an integer.
+     *
+     * This function is used to ensure that routable methods (controller methods and closures)
+     * return a status code (STATUS_* constants) as required by the router.
+     *
+     * @param ReflectionMethod|Closure $method The method to check.
+     *
+     * @return bool Return true if the method's return type is an integer, false otherwise.
+     */
+    private static function isMethodReturnInt(ReflectionMethod|Closure $method): bool 
+    {
+        try {
+            $returnType = ($method instanceof ReflectionMethod) 
+                ? $method->getReturnType() 
+                : (new ReflectionFunction($method))->getReturnType();
+
+            return $returnType && $returnType->getName() === 'int';
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -1472,7 +1594,7 @@ final class Router
             }
 
             if($result === true){
-                self::bootContext($name, $this, self::$application);
+                self::onContext($name, $this, self::$application);
                 break;
             }
         }
