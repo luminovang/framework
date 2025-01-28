@@ -579,7 +579,7 @@ class Database extends BaseConsole
 
             /**
              * @var DatabaseInterface $db
-            */
+             */
             $db = shared('DROP_TRANSACTION');
             $hasTnx = ($db instanceof DatabaseInterface && $db->inTransaction());
 

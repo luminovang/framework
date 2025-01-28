@@ -182,7 +182,7 @@ final class Crypter
      */
 	public static function password(string $password, ?array $options = null): string|bool
 	{
-		if($password === ''){
+		if(!$password){
 			return false;
 		}
 
@@ -202,30 +202,55 @@ final class Crypter
 	 *
 	 * @return bool Return true if password matches with the hash, otherwise false.
 	 */
-	public static function verify(string $password, string $hash): bool 
+	public static function isPassword(string $password, string $hash): bool 
 	{
-		if($password === '' || $hash === ''){
+		if(!$password || !$hash){
 			return false;
 		}
 
 		return password_verify($password, $hash);
 	}
 
+    /** 
+	 * Verify a password against it stored hash value to determine if if they match.
+	 *
+	 * @param string $password The password string to verify.
+	 * @param string $hash The password stored hash value.
+	 *
+	 * @return bool Return true if password matches with the hash, otherwise false.
+     * @deprecated This method is deprecated and will be removed in a future release. Use `isPassword()` instead.
+	 */
+    public static function verify(string $password, string $hash): bool 
+	{
+		return self::isPassword($password, $hash);
+	}
+
     /**
-     * Generate a random encryption key string using your default encryption handler.
-     * For private key, or public key generation it uses openssl rsa.
+     * Generates a random encryption key or key pair based on the specified type and options.
      *
-     * @param string $type The type of key to generate: (e.g, 'random', 'private', or 'public').
-     * @param array<string,mixed> $options Additional options for key generation.
-     * 
-     * @return string|array<string,string>|false Return the generated key(s), an array of private and public key, or false on failure. 
-     * 
-     * Options Keys: 
-     *      - For 'random' type, use key 'length' to specifies the length of the random string.
-     *      - For 'private' type, use key 'private_key_bits default(2048)' to specifies the number of bits in the private key,
-     *        and 'private_key_type (default: OPENSSL_KEYTYPE_RSA)' specifies the type of the private key (e.g., OPENSSL_KEYTYPE_RSA).
-     *      - For 'public' type, use key 'private_key' to specify the private key string from which to derive the public key
-     *        if the key private_key is not specified, it generate a new private key to use.
+     * This method can generate random keys, private keys, or public/private key pairs using
+     * the default encryption handler (OpenSSL or Sodium) or OpenSSL RSA for key pairs.
+     *
+     * @param string $type The type of key to generate. Possible values:
+     *                     - 'random': Generates a random encryption key.
+     *                     - 'private': Generates a private key.
+     *                     - 'public': Generates a public/private key pair.
+     *                     Default is 'random'.
+     * @param array<string,mixed> $options Additional options for key generation:
+     *                     - For 'random' type:
+     *                       'length': Specifies the length of the random string.
+     *                     - For 'private' type:
+     *                       'private_key_bits': Number of bits for the private key (default: 2048).
+     *                       'private_key_type': Type of private key (default: OPENSSL_KEYTYPE_RSA).
+     *                     - For 'public' type:
+     *                       'private_key': Private key string to derive the public key from.
+     *                                      If not specified, a new private key is generated.
+     *
+     * @return string|array<string,string>|false Return the generated key(s):
+     *                     - For 'random' type: A string containing the generated random key.
+     *                     - For 'private' type: A string containing the generated private key.
+     *                     - For 'public' type: An array containing both 'private_key' and 'public_key'.
+     *                     - False on failure or if an invalid type is specified.
      */
     public static function generate_key(string $type = 'random', array $options = []): array|string|bool
     {
@@ -259,7 +284,6 @@ final class Crypter
             }
 
             openssl_pkey_export($private, $key);
-
             return $key;
         }
 
@@ -309,6 +333,8 @@ final class Crypter
 
     /**
      * Initialize the configuration
+     * 
+     * @return void
      */
     private static function initConfig(): void 
     {

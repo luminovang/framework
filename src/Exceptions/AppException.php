@@ -316,7 +316,7 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
      */
     public function log(string $dispatch = 'exception'): void
     {
-        (new Logger())->dispatch($dispatch, $this->toString());
+        Logger::dispatch($dispatch, $this->toString());
     }
 
     /**
@@ -415,7 +415,7 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
                 return;
             }
 
-            (new Logger())->dispatch('exception', (string) $exception);
+            Logger::dispatch('exception', (string) $exception);
             return;
         }
 

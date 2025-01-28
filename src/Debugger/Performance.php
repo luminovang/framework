@@ -15,6 +15,7 @@ use \Luminova\Functions\IP;
 use \Luminova\Command\Terminal;
 use \Luminova\Routing\Router;
 use \Luminova\Http\Request;
+use \Luminova\Logger\Logger;
 
 final class Performance
 {
@@ -160,7 +161,7 @@ final class Performance
         $logData['included_files'] = $files;
 
         // Log the complete data
-        @logger('metrics', json_encode($logData, JSON_PRETTY_PRINT), [], true);
+        Logger::metrics(json_encode($logData, JSON_PRETTY_PRINT));
     }
 
     /**

@@ -119,7 +119,7 @@ interface ExceptionInterface
      * - info - Log an information.
      * - debug - Log for debugging purpose.
      * - exception - Log an exception message.
-     * - php_errors - Log any php related error.
+     * - php_error - Log any php related error.
      * - metrics - Log performance metrics, specifically for api in production level.
      */
     public function log(string $dispatch = 'exception'): void;

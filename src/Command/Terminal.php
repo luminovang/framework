@@ -1149,18 +1149,35 @@ class Terminal implements LazyInterface
     }
 
     /**
-     * Sets command line queries to make it available using `getOptions` etc.
-     * The explain is a setter method exposes executed command information making it ready to be accessed withing 
-     * the extended child class.
+     * Extract and expose command arguments and options.
      * 
-     * @param array $values The custom extracted command arguments, options and flags.
+     * This method processes the executed command within the controller class, making it accessible using methods like 
+     * `getOption` and `getAnyOption`. It acts as a setter to store and expose command information for use within extended child classes.
+     * 
+     * @param array<string,mixed> $options Command arguments, options, and flags extracted from the executed command.
      * 
      * @return void
      * @internal
+     * 
+     * @example Usage Example:
+     * ```php
+     * class Command extends Luminova\Base\BaseConsole 
+     * {
+     *      public function run(?array $options = []): int
+     *      {
+     *          $this->term->explain($options);
+     *          
+     *          // Access the command and options
+     *          $command = $this->term->getCommand();
+     *          $foo = $this->term->getOption('foo');
+     *          $fooAlias = $this->term->getAnyOption('foo', 'f');
+     *      }
+     * }
+     * ```
      */
-    public static final function explain(array $values): void
+    public static final function explain(array $options): void
     {
-        self::$explained = $values;
+        self::$explained = $options;
     }
 
     /**

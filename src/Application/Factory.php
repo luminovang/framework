@@ -145,7 +145,6 @@ final class Factory
     {
         if(isset(self::$instances[$factory])){
             unset(self::$instances[$factory]);
-
             return true;
         }
 
@@ -196,7 +195,7 @@ final class Factory
             $instance->queService($boot->getServices());
             self::$instances['service'] = $instance;
         }catch(RuntimeException $e){
-            logger('critical', 'Error occurred while registering service. ' . $e->getMessage());
+            Logger::dispatch('critical', 'Error occurred while registering service. ' . $e->getMessage());
         }
     }
 

@@ -95,7 +95,7 @@ interface NetworkInterface
      */
     public function post(string $uri = '', array $options = []): ResponseInterface;
 
-   /**
+    /**
      * Sends an HTTP request and returns a promise that resolves with the response.
      *
      * This method supports both asynchronous and synchronous requests. To disable 

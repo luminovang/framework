@@ -23,7 +23,7 @@ use \Luminova\Utils\Promise\Promise;
 use \Luminova\Time\Timestamp;
 use \Luminova\Optimization\Minification;
 use \Luminova\Utils\WeakReference;
-use \Luminova\Cache\ViewCache;
+use \Luminova\Cache\TemplateCache;
 use \App\Config\Template as TemplateConfig;
 use \DateTimeInterface;
 use \DateTimeImmutable;
@@ -982,7 +982,7 @@ trait View
      * Render without smarty using default .php template engine.
      * 
      * @param array $options View options.
-     * @param ViewCache|null $_lmv_cache Cache instance if should cache page contents.
+     * @param TemplateCache|null $_lmv_cache Cache instance if should cache page contents.
      * @param bool $_lmv_return Should return view contents.
      * @param array $customHeaders Additional headers.
      * 
@@ -990,7 +990,7 @@ trait View
      */
     private function defaultLmv(
         array $options, 
-        ?ViewCache $_lmv_cache = null, 
+        ?TemplateCache $_lmv_cache = null, 
         bool $_lmv_return = false,
         array $customHeaders = []
     ): bool|string
@@ -1020,7 +1020,7 @@ trait View
         Header::validate($_lmv_headers);
         echo $_lmv_contents;
 
-        if($_lmv_is_cacheable && $_lmv_cache instanceof ViewCache){
+        if($_lmv_is_cacheable && $_lmv_cache instanceof TemplateCache){
             $_lmv_cache->setFile($this->filepath);
             $_lmv_cache->saveCache($_lmv_contents, $_lmv_headers, $lmv_view_type);
         }
@@ -1033,7 +1033,7 @@ trait View
      * 
      * @param string $_lmv_view_file View template file.
      * @param array $options View options.
-     * @param ViewCache|null $_lmv_cache Cache instance if should cache page contents.
+     * @param TemplateCache|null $_lmv_cache Cache instance if should cache page contents.
      * @param bool $_lmv_ignore Ignore html codeblock during minimizing.
      * @param bool $_lmv_copy Allow copy on html code tag or not.
      * @param bool $_lmv_return Should return view contents.
@@ -1045,7 +1045,7 @@ trait View
     private static function isolateLmv(
         string $_lmv_view_file, 
         array $options,
-        ?ViewCache $_lmv_cache = null,
+        ?TemplateCache $_lmv_cache = null,
         bool $_lmv_ignore = true, 
         bool $_lmv_copy = false,
         bool $_lmv_return = false,
@@ -1084,7 +1084,7 @@ trait View
         Header::validate($_lmv_headers);
         echo $_lmv_contents;
         
-        if($_lmv_is_cacheable && $_lmv_cache instanceof ViewCache){
+        if($_lmv_is_cacheable && $_lmv_cache instanceof TemplateCache){
             $_lmv_cache->setFile($_lmv_view_file);
             $_lmv_cache->saveCache($_lmv_contents, $_lmv_headers, $lmv_view_type);
         }
@@ -1131,7 +1131,7 @@ trait View
      * @param string $type The view content type.
      * @param bool $ignore Ignore codeblocks.
      * @param bool $copy Add copy button to codeblocks.
-     * @param ViewCache|null $cache Cache instance.
+     * @param TemplateCache|null $cache Cache instance.
      * @param array $customHeaders Additional headers.
      * 
      * @return array<int,mixed> Return array of contents and headers.
@@ -1514,11 +1514,11 @@ trait View
      *
      * @param DateTimeInterface|int|null $expiry  Cache expiration ttl (default: 0).
      *
-     * @return ViewCache Return page view cache instance.
+     * @return TemplateCache Return page view cache instance.
      */
-    private static function getCache(DateTimeInterface|int|null $expiry = 0): ViewCache
+    private static function getCache(DateTimeInterface|int|null $expiry = 0): TemplateCache
     {
-        return self::$weak[new stdClass()] ??= (new ViewCache())
+        return self::$weak[new stdClass()] ??= (new TemplateCache())
             ->setExpiry($expiry)
             ->setDirectory(self::$cacheFolder)
             ->setKey(Foundation::getCacheId())

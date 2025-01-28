@@ -12,6 +12,7 @@ namespace Luminova\Security;
 use \Firebase\JWT\JWT;
 use \Firebase\JWT\Key;
 use \Luminova\Time\Time;
+use \Luminova\Logger\Logger;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Application\Foundation;
 use \Luminova\Exceptions\AppException;
@@ -521,7 +522,7 @@ class JWTAuth implements LazyInterface
 			return write_content($this->path . $filename, $key);
 		}catch(AppException|Throwable $e){
 			if(PRODUCTION){
-                logger('emergency', $e->getMessage());
+                Logger::dispatch('emergency', $e->getMessage());
                 return false;
             }
 
@@ -547,7 +548,7 @@ class JWTAuth implements LazyInterface
         $e = ($e->getPrevious() === null) ? $e : $e->getPrevious();
 
         if(PRODUCTION){
-            logger('emergency', 'JWT validate error: ' . $e->getMessage(), [
+            Logger::dispatch('emergency', 'JWT validate error: ' . $e->getMessage(), [
                 'user_id' => $user_id
             ]);
         }

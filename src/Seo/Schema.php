@@ -110,7 +110,9 @@ final class Schema implements LazyInterface
      */
     public function setTitle(string $title): self
     {
-        self::$defaultConfig['title'] = str_contains($title, '| ' . APP_NAME) ? $title : "{$title} | " . APP_NAME;
+        self::$defaultConfig['title'] = str_contains($title, '| ' . APP_NAME) 
+            ? $title 
+            : "{$title} | " . APP_NAME;
         return $this;
     }
 
@@ -262,7 +264,7 @@ final class Schema implements LazyInterface
             'description' => self::getConfig('page_description'),
         ];
 
-        $schema['organisation'] = [
+        $schema['organization'] = [
             '@type' => 'Organization',
             '@id' => self::getManifest('site_id', '') . '/#organization',
             'name' => self::getConfig('company_name'),

@@ -16,11 +16,8 @@ use \Luminova\Exceptions\JsonException;
 final class Session implements SessionManagerInterface 
 {
     /**
-     * @var string $storage Session storage name 
-     */
-    private string $storage = '';
-
-    /**
+     * Session configuration. 
+     * 
      * @var BaseConfig $config
      */
     private ?BaseConfig $config = null;
@@ -35,10 +32,7 @@ final class Session implements SessionManagerInterface
     /**
      * {@inheritdoc}
      */
-    public function __construct(string $storage = 'global') 
-    {
-        $this->storage = $storage;
-    }
+    public function __construct(private string $storage = 'global') {}
 
     /**
      * {@inheritdoc}
@@ -54,7 +48,6 @@ final class Session implements SessionManagerInterface
     public function setStorage(string $storage): self 
     {
         $this->storage = $storage;
-
         return $this;
     }
 
@@ -94,7 +87,7 @@ final class Session implements SessionManagerInterface
      */
     public function setItem(string $index, mixed $data, ?string $storage = null): self
     {
-        $storage = !$storage ? $this->storage : $storage;
+        $storage = $storage ?? $this->storage;
         $_SESSION[self::$table][$storage][$index] = $data;
 
         return $this;
@@ -105,7 +98,7 @@ final class Session implements SessionManagerInterface
      */
     public function deleteItem(?string $index = null, ?string $storage = null): self
     {
-        $storage = !$storage ? $this->storage : $storage;
+        $storage = $storage ?? $this->storage;
 
         if($storage && isset($_SESSION[self::$table][$storage])){
             if($index){
@@ -169,7 +162,6 @@ final class Session implements SessionManagerInterface
 
         try {
             $result = json_encode($result, JSON_THROW_ON_ERROR);
-
             return (object) json_decode($result);
         }catch(\JsonException $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
@@ -182,10 +174,7 @@ final class Session implements SessionManagerInterface
     public function toAs(string $type = 'array', ?string $index = null): object|array|null
     {
         $result = $this->getItems();
-
-        if($index) {
-            $result = $result[$index] ?? null;
-        }
+        $result = $index ? ($result[$index] ?? null) : $result;
 
         if($result === null){
             return null;
@@ -197,7 +186,6 @@ final class Session implements SessionManagerInterface
 
         try {
             $result = json_encode($result, JSON_THROW_ON_ERROR);
-
             return (object) json_decode($result);
         }catch(\JsonException $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
@@ -209,7 +197,7 @@ final class Session implements SessionManagerInterface
      */
     public function getItems(?string $storage = null): array
     {
-        $storage = !$storage ? $this->storage : $storage;
+        $storage = $storage ?? $this->storage;
 
         if (isset($_SESSION[self::$table][$storage])) {
             return (array) $_SESSION[self::$table][$storage];

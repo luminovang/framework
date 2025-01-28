@@ -11,6 +11,7 @@ namespace Luminova\Storages;
 
 use \Luminova\Http\Header;
 use \App\Config\Files;
+use \Luminova\Logger\Logger;
 use \Luminova\Exceptions\FileException;
 use \Luminova\Exceptions\RuntimeException;
 use \RecursiveIteratorIterator;
@@ -153,7 +154,7 @@ class FileManager
         }
 
         if (PRODUCTION && !$throw) {
-            logger('critical', sprintf($error, $file));
+            Logger::dispatch('critical', sprintf($error, $file));
             return false;
         }
 
@@ -607,7 +608,7 @@ class FileManager
         }
         closedir($dir);
 
-        if (rmdir($origin)) {
+        if (@rmdir($origin)) {
             $moved++;
         }
 
@@ -803,13 +804,12 @@ class FileManager
 		foreach ($files as $file) {
 			if (is_dir($file)) {
 				self::remove($file, true, $deleted);
-			} else {
-				unlink($file);
+			} elseif(@unlink($file)){
 				$deleted++;
 			}
 		}
 
-        if($delete_base && is_dir($location) &&  rmdir($location)){
+        if($delete_base && is_dir($location) && @rmdir($location)){
             $deleted++;
         }
 
@@ -827,18 +827,18 @@ class FileManager
     public static function symbolic(string $target, string $link): bool
     {
         if (!file_exists($target)) {
-            logger('alert', 'The symlink target file does not exist');
+            Logger::dispatch('alert', 'The symlink target file does not exist');
             return false;
         }
 
         $linkPath = dirname($link);
         if(!file_exists($linkPath) && !self::mkdir($linkPath, 0755)){
-            logger('alert', 'Unable to create symlink destination directory');
+            Logger::dispatch('alert', 'Unable to create symlink destination directory');
             return false;
         }
 
         if(file_exists($link) || is_link($link)){
-            unlink($link);
+            @unlink($link);
         }
        
         error_clear_last();
@@ -848,7 +848,7 @@ class FileManager
             exec("mklink /{$mode} " . escapeshellarg($link) . ' ' . escapeshellarg($target), $output, $result);
 
             if($result === 1){
-                logger('alert', 'Symlink creation failed:',[$output]);
+                Logger::dispatch('alert', 'Symlink creation failed:',[$output]);
             }
 
             return $result === 0;
@@ -856,7 +856,7 @@ class FileManager
         
         if (symlink($target, $link) === false) {
             $error = error_get_last();
-            logger('alert', ($error === null) 
+            Logger::dispatch('alert', ($error === null) 
                 ? 'Unknown error occurred while creating symlink.' 
                 : 'Symlink creation failed: ' . $error['message'] ?? ''
             );

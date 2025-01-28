@@ -41,9 +41,9 @@ abstract class BaseCommand extends Terminal
      * Command usage instructions.
      * Keys represent the command usage, and values describe the usage.
      * 
-     * @var array<string|int,string>|string $usage
+     * @var array<string|int,string>|string $usages
      */
-    protected array|string $usage = '';
+    protected array|string $usages = '';
 
     /**
      * Available command options.

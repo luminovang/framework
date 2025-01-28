@@ -133,11 +133,11 @@ if (!function_exists('request')) {
         }
 
         static $instance = null;
-        if ($instance instanceof Request) {
-            return $instance;
+        if (!$instance instanceof Request) {
+            $instance = new Request();
         }
 
-        return $instance = new Request();
+        return $instance;
     }
 }
 
@@ -162,11 +162,11 @@ if (!function_exists('response')) {
         }
 
         static $instance = null;
-        if ($instance instanceof Response) {
-            return $instance;
+        if (!$instance instanceof Response) {
+            $instance = new Response($status, $headers ?? []);
         }
 
-        return $instance = new Response($status, $headers ?? []);
+        return $instance;
     }
 }
 
@@ -813,30 +813,38 @@ if(!function_exists('logger')) {
         array $context = []
     ): void
     {
-        static $instance = null;
-
-        if(!$instance instanceof Logger){
-            $instance = new Logger();
-        }
-
-        $instance->dispatch($to, $message, $context);
+        Logger::dispatch($to, $message, $context);
     }
 }
 
 if (!function_exists('lang')) {
     /**
      * Translate multiple languages it supports nested array.
+     * 
+     * Placeholder Pattern:
+     * 
+     * - sing index: "Error name {0} and email {1}"
+     * - Using keys: "Error name {name} and email {email}"
      *
-     * @param string $lookup The language context annotation line to lookup.
-     * @param string|null $default Optional fallback translation if not found.
-     * @param string|null $locale The locale to use for translation (optional).
-     * @param array $placeholders Optional matching placeholders for translation.
-     *    - @example - Using index `['Peter', 'peter@foo.com] // "Error name {0} and email {1}"`.
-     *    - @example Using keys `['name' => 'Peter', 'email' => 'peter@foo.com]` // "Error name {name} and email {email}"`.
+     * @param string $lookup The language context annotation line to lookup (e.g, `App.error.foo.bar`).
+     * @param string|null $default Optional fallback message or translation if not found.
+     * @param string|null $locale OPtion translation locale to use. If null the default application will be used.
+     * @param array<string|int,string|int> $placeholders Optional replaceable placeholders key-pir to translate in message.
      * 
      * 
-     * @return string Return translated string.
+     * @return string Return translated message.
      * @throws NotFoundException if translation is not found and default is not provided.
+     * 
+     * @example - Using index:
+     * 
+     * ```php 
+     *   echo lang('User.error.all', null, 'en', ['Peter', 'peter@foo.com]);
+     * ```
+     * @example - Using keys:
+     * 
+     * ```php
+     *  echo lang('User.error.all', null, 'en', ['name' => 'Peter', 'email' => 'peter@foo.com]);
+     * ```
     */
     function lang(
         string $lookup, 
@@ -1882,14 +1890,7 @@ if (!function_exists('http_status_header')) {
      */
     function http_status_header(int $status): bool
     {
-        static $httpCodes = null;
-
-        // Cache the status codes if not already cached.
-        if ($httpCodes === null) {
-            $httpCodes = HttpCode::$codes;
-        }
-
-        $message = $httpCodes[$status] ?? null;
+        $message = HttpCode::$codes[$status] ?? null;
 
         // Check if the status code is in the predefined list
         if ($message === null) {

@@ -14,13 +14,10 @@ use \Luminova\Base\BaseConfig;
 use \Luminova\Exceptions\JsonException;
 
 final class Cookie implements SessionManagerInterface 
-{ 
+{
     /**
-     * @var string $storage Session storage name 
-     */
-    private string $storage = '';
-
-    /**
+     * Cookie config. 
+     * 
      * @var BaseConfig $config
      */
     private ?BaseConfig $config = null;
@@ -35,10 +32,7 @@ final class Cookie implements SessionManagerInterface
     /**
      * {@inheritdoc}
      */
-    public function __construct(string $storage = 'global') 
-    {
-        $this->storage = $storage;
-    }
+    public function __construct(private string $storage = 'global') {}
 
     /**
      * {@inheritdoc}
@@ -206,7 +200,6 @@ final class Cookie implements SessionManagerInterface
 
         try {
             $result = json_encode($result, JSON_THROW_ON_ERROR);
-
             return (object) json_decode($result);
         }catch(\JsonException $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
@@ -251,7 +244,7 @@ final class Cookie implements SessionManagerInterface
      */
     private function getKey(?string $storage = null): string 
     {
-        return !$storage ? $this->storage : $storage;
+        return $storage ?? $this->storage;
     }
 
     /**
@@ -263,8 +256,7 @@ final class Cookie implements SessionManagerInterface
      */
     private function updateItems(array $data, ?string $storage = null): void
     {
-        $storage = $this->getKey($storage);
-        $data[$storage] = $data;
+        $data[$this->getKey($storage)] = $data;
         $_COOKIE[self::$table] = $data;
 
         $this->saveContent(json_encode($data));

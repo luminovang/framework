@@ -17,7 +17,9 @@ use \Luminova\Exceptions\InvalidArgumentException;
 class Escape
 {
     /**
-     * @var Escaper $escaper Escaper object
+     * Escaper object.
+     * 
+     * @var Escaper $escaper
      */
     private ?Escaper $escaper = null;
 
@@ -29,17 +31,23 @@ class Escape
     private static bool $isEscaper = false;
 
     /**
-     * @var string $encoding Escaper encoding
+     * Escaper encoding. 
+     * 
+     * @var string $encoding
      */
     protected string $encoding = 'utf-8';
 
     /**
-     * @var int $encodingFlags Escaper encoding flag
+     * Escaper encoding flag. 
+     * 
+     * @var int $encodingFlags
      */
     protected int $encodingFlags = 0;
 
     /**
-     * @var string[] $supportedEncodings Escaper supported encodings
+     * Escaper supported encodings. 
+     * 
+     * @var string[] $supportedEncodings
      */
     protected array $supportedEncodings = [
         'iso-8859-1',
@@ -87,9 +95,8 @@ class Escape
      */
     public function __construct(string|null $encoding = 'utf-8')
     {
-        $encoding ??= 'utf-8';
         self::$isEscaper = class_exists(Escaper::class);
-        $this->setEncoding($encoding);
+        $this->setEncoding($encoding ?? 'utf-8');
     }
 
     /**

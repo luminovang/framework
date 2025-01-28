@@ -595,7 +595,7 @@ class Promise implements PromiseInterface
         return $this->state === $state;
     }
 
-     /**
+    /**
      * {@inheritdoc}
      */
     public function getState(): string

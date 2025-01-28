@@ -26,6 +26,6 @@ interface ServicesInterface
      * 
      * @return void
      * @throws RuntimeException Throws If the service already exists causing duplicate service or invalid class arguments.
-    */
+     */
     public function bootstrap(): void;
 }

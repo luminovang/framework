@@ -104,7 +104,6 @@ interface MailerInterface
         string $disposition = 'attachment'
     ): bool;
 
-
     /**
      * Send messages using SMTP.
      * 

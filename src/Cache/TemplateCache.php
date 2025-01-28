@@ -15,7 +15,7 @@ use \Luminova\Routing\Router;
 use \Luminova\Storages\FileManager;
 use \DateTimeInterface;
 
-final class ViewCache
+final class TemplateCache
 {
     /**
      * The expiration time for cached.

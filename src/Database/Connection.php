@@ -14,6 +14,7 @@ use \Luminova\Database\Drivers\PdoDriver;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Core\CoreDatabase;
+use \Luminova\Logger\Logger;
 use \Luminova\Exceptions\DatabaseException;
 use \App\Config\Database;
 use \Countable;
@@ -236,7 +237,7 @@ class Connection implements LazyInterface, Countable
         }
     
         if(PRODUCTION){
-            logger('critical', 'Failed all attempts to establish a database connection.');
+            Logger::dispatch('critical', 'Failed all attempts to establish a database connection.');
             return null;
         }
 
@@ -307,7 +308,7 @@ class Connection implements LazyInterface, Countable
                         }
     
                         if(PRODUCTION){
-                            logger('critical', sprintf(
+                            Logger::dispatch('critical', sprintf(
                                 'Successfully connected to backup database: (%s@%s).',  
                                 $config['database'],
                                 $config['host']
@@ -317,13 +318,13 @@ class Connection implements LazyInterface, Countable
                         return $connection;
                     }
 
-                    logger('critical', sprintf(
+                    Logger::dispatch('critical', sprintf(
                         'Backup database connection attempt failed (%s@%s).',  
                         $config['database'],
                         $config['host']
                     ));
                 } catch (DatabaseException|Exception $e) {
-                    logger('critical', sprintf(
+                    Logger::dispatch('critical', sprintf(
                         'Failed to connect to backup database (%s@%s) with error: %s',
                         $config['database'],
                         $config['host'],
@@ -348,9 +349,9 @@ class Connection implements LazyInterface, Countable
                     return $connection;
                 }
 
-                logger('critical', 'Database connection attempt (' . $attempt . ') failed.');
+                Logger::dispatch('critical', 'Database connection attempt (' . $attempt . ') failed.');
             } catch (DatabaseException|Exception $e) {
-                logger('critical', 'Attempt (' . $attempt . ') failed with error: ' . $e->getMessage());
+                Logger::dispatch('critical', 'Attempt (' . $attempt . ') failed with error: ' . $e->getMessage());
             }
         }
 

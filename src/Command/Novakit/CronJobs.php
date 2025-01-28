@@ -13,6 +13,7 @@ use \Luminova\Base\BaseConsole;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Http\Network;
 use \Luminova\Time\Time;
+use \Luminova\Logger\Logger;
 use \Luminova\Command\Utils\Text;
 use \Psr\Http\Message\ResponseInterface;
 use \App\Config\Cron;
@@ -299,7 +300,7 @@ class CronJobs extends BaseConsole
         return $created ? STATUS_SUCCESS : STATUS_ERROR;
     }
 
-     /**
+    /**
      * Log the execution outputs and error logs.
      * 
      * @param array $outputs The execution outputs to log.
@@ -309,7 +310,7 @@ class CronJobs extends BaseConsole
     private static function logCronOutputs(array $logger, string|bool $iniBody = false): void 
     {
         if($iniBody !== false && !empty(trim($iniBody))){
-            logger('debug', "Cron Task Initialization Error: {$iniBody}.");
+            Logger::dispatch('debug', "Cron Task Initialization Error: {$iniBody}.");
         }
 
         foreach ($logger as $key => $list) {
@@ -324,7 +325,7 @@ class CronJobs extends BaseConsole
                     make_dir(pathinfo($to)['dirname']);
                     write_content($to, $content, LOCK_EX);
                 } elseif ($key === 'logs') {
-                    logger($to, $content);
+                    Logger::dispatch($to, $content);
                 }
 
                 usleep(1000);

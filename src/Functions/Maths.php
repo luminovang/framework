@@ -154,7 +154,7 @@ final class Maths
      * 
      * @return float|null The average of the passed numbers.
      * @example average(10, 20, 30, 40, 50) - return 30 as the average.
-    */
+     */
     public static function average(int|float ...$numbers): ?float 
     {
         if ($numbers === []) {

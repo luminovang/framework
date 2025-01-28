@@ -464,7 +464,81 @@ final class Commands
                 'php novakit cache:clear --key=TestKey',
                 'php novakit cache:list',
             ],
-        ]
+        ],
+        'clear:caches' => [
+            'name' => 'clear:caches',
+            'group' => 'Clear',
+            'description' => 'Clears cached pages, database cache files, and route files from the writeable caches directory. If no directory is specified, all cached files will be cleared.',
+            'usages' => [
+                'php novakit clear:caches',
+            ],
+            'options' => [
+                '-d, --dir=<name>' => 'Specify a subdirectory within caches to clear (e.g., routes).',
+                '--help' => 'Displays help for this command.',
+            ],
+            'examples' => [
+                'php novakit clear:caches --dir=routes' => 'Clears cached route files in the writeable caches directory.',
+            ],
+        ],
+        'clear:routes' => [
+            'name' => 'clear:routes',
+            'group' => 'Clear',
+            'description' => 'Clear all cached route attributes files from the writeable routes directory.',
+            'usages' => [
+                'php novakit clear:routes',
+            ],
+            'options' => [
+                '--help' => 'This help.',
+            ],
+            'examples' => [
+                'php novakit clear:routes' => 'Clears cached route files.',
+            ],
+        ],
+        'clear:storage' => [
+            'name' => 'clear:storage',
+            'group' => 'Clear',
+            'description' => 'Clear all files in the writeable private storages directory.',
+            'usages' => [
+                'php novakit clear:storage',
+            ],
+            'options' => [
+                '--help' => 'This help.',
+            ],
+            'examples' => [
+                'php novakit clear:storage' => 'Clears all files in writeable storages directory.',
+            ],
+        ],
+        'clear:temp' => [
+            'name' => 'clear:temp',
+            'group' => 'Clear',
+            'description' => 'Clear all temporary files from the writeable temp directory.',
+            'usages' => [
+                'php novakit clear:temp',
+            ],
+            'options' => [
+                '--help' => 'This help.',
+            ],
+            'examples' => [
+                'php novakit clear:temp' => 'Clears all temporary files in writeable temp directory.',
+            ],
+        ],
+        'clear:writable' => [
+            'name' => 'clear:writable',
+            'group' => 'Clear',
+            'description' => 'Clear files and directories from the writeable directory.',
+            'usages' => [
+                'php novakit clear:writable',
+            ],
+            'options' => [
+                '-d, --dir=<name>' => 'Specify the directory to clear in writeable.',
+                '-p, --parent' => 'If set, removes the specified directory itself.',
+                '--help' => 'This help.',
+            ],
+            'examples' => [
+                'php novakit clear:writable --dir=temp' => 'Clears all files in the writeable/temp directory.',
+                'php novakit clear:writable --dir=temp --parent' => 'Clears the writeable/temp directory and deletes the temp folder itself.',
+            ],
+        ],
     ];
 
     /**
@@ -496,7 +570,7 @@ final class Commands
      * @param string $key The command name to check.
      * 
      * @return bool Return true if the command exists, false otherwise.
-    */
+     */
     public static function has(string $key): bool
     {
         return self::get($key) !== [];

@@ -177,7 +177,6 @@ class Session implements LazyInterface
     public function setStorage(string $storage): self
     {
         $this->manager->setStorage($storage);
-
         return $this;
     }
 
@@ -324,7 +323,6 @@ class Session implements LazyInterface
     public function remove(string $key): self
     {
         $this->manager->deleteItem($key);
-
         return $this;
     }
 
@@ -338,7 +336,6 @@ class Session implements LazyInterface
     public function clear(?string $storage = null): self
     {
         $this->manager->deleteItem(null, $storage ?? '');
-        
         return $this;
     }
 
@@ -384,27 +381,35 @@ class Session implements LazyInterface
     {
         if ($this->manager instanceof SessionManager) {
             if ((bool) ini_get('session.auto_start')) {
-                $this->log('error', 'Session: session.auto_start is enabled in php.ini. Aborting.');
+                $this->log('error', 'Session Error: The "session.auto_start" directive is enabled in php.ini. Disable to allow luminova manage sessions internally.');
                 return;
             }
 
-            if (session_status() === PHP_SESSION_ACTIVE) {
+            $status = session_status();
+
+            if ($status === PHP_SESSION_ACTIVE) {
                 $this->useHandler();
                 $this->ipChangeEventListener();
-                $this->log('warning', 'Session: Sessions is enabled, and one exists. don\'t $session->start() again.');
+                $this->log('warning', 'Session Warning: A session is already active. Avoid calling $session->start() again.');
                 return;
             }
+            
+            if ($status === PHP_SESSION_DISABLED) {
+                throw new RuntimeException(
+                    'Session Error: Sessions are disabled in the current environment. Please enable the "session" extension in php.ini to use session functionality.'
+                );
+            }            
 
-            if (session_status() === PHP_SESSION_NONE) {
+            if ($status === PHP_SESSION_NONE) {
                 $this->sessionConfigure();
                 $this->useHandler();
                 if($ssid !== null){
                     if(self::isValidSessionId($ssid)){
                         session_id($ssid);
                     }elseif(PRODUCTION){
-                        $this->log('error', "Invalid: The sessions ID '{$ssid}' provided is invalid. Session defaulting to PHP generated session ID.");
+                        $this->log('error', "Session Error: The provided session ID '{$ssid}' is invalid. A new session ID will be generated.");
                     }else{
-                        throw new RuntimeException("Invalid: The sessions ID '{$ssid}' provided is invalid.");
+                        throw new RuntimeException("Session Error: The provided session ID '{$ssid}' is invalid.");
                     }
                 }
 
@@ -713,6 +718,6 @@ class Session implements LazyInterface
      */
     private function log(string $level, string $message): void
     {
-        (new Logger())->dispatch($level, $message);
+        Logger::dispatch($level, $message);
     }
 }

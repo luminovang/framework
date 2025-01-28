@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -7,9 +8,6 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Interface;
+use \Luminova\Debugger\PhpCsFixer;
 
-/**
- * Marker interface for callable parameter.
- */
-interface CallableInterface {}
+return (new PhpCsFixer(__DIR__, PhpCsFixer::FIX_FRAMEWORK))->getRules();

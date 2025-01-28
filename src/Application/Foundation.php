@@ -11,6 +11,7 @@ namespace Luminova\Application;
 
 use \Luminova\Errors\ErrorHandler;
 use \Luminova\Debugger\Performance;
+use \Luminova\Logger\Logger;
 
 final class Foundation 
 {
@@ -19,14 +20,14 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.4.6';
+    public const VERSION = '3.4.7';
 
     /**
      * Framework version name.
      * 
      * @var string VERSION_NAME
      */
-    public const VERSION_NAME = 'Nobu';
+    public const VERSION_NAME = 'Obiniru';
 
     /**
      * Minimum required php version.
@@ -152,7 +153,7 @@ final class Foundation
             E_DEPRECATED, E_USER_DEPRECATED => 'debug',
             E_RECOVERABLE_ERROR => 'error',
             E_ALL, 0 => 'exception',
-            default => 'php_errors'
+            default => 'php_error'
         };
     }
 
@@ -517,7 +518,7 @@ final class Foundation
         // If the error allowed framework to boot,
         // Then we use logger to log the error
         if(defined('IS_UP')){
-            logger($level, $message);
+            Logger::dispatch($level, $message);
             return;
         }
 

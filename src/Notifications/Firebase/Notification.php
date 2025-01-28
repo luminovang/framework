@@ -245,7 +245,7 @@ class Notification implements LazyInterface
      * @param Message $config The configuration for the push message.
      * 
      * @return MessageCaster|null The constructed CloudMessage instance, or null on failure.
-    */
+     */
     private function rawMessage(Message $config): ?MessageCaster
     {
         $payload = $config->fromArray();

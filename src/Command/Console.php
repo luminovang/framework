@@ -23,6 +23,7 @@ use \Luminova\Command\Novakit\Context;
 use \Luminova\Command\Novakit\Commands;
 use \Luminova\Command\Novakit\CronJobs;
 use \Luminova\Command\Novakit\Logs;
+use \Luminova\Command\Novakit\ClearWritable;
 
 final class Console 
 {
@@ -130,17 +131,19 @@ final class Console
      */
     public static function find(string $command): string 
     {
-        return  match($command){
+        $pos = strpos($command, ':');
+        return match(($pos !== false) ? substr($command, 0, $pos) : $command){
             '-h', '--help' => SystemHelp::class,
-            'create:controller','create:view','create:class', 'create:model', => Generators::class,
+            'create', => Generators::class,
             'list' => Lists::class,
-            'db:drop','db:truncate','db:seed','db:migrate', 'db:alter', 'db:clear' => Database::class,
+            'db', => Database::class,
             'server', 'serve' => Server::class,
-            'generate:key','generate:sitemap','env:add','env:remove' => System::class,
-            'build:project' => Builder::class,
+            'generate', 'env' => System::class,
+            'build' => Builder::class,
             'context' => Context::class,
             'log' => Logs::class,
-            'cron:create', 'cron:run' => CronJobs::class,
+            'clear' => ClearWritable::class,
+            'cron' => CronJobs::class,
             default => ''
         };
     }

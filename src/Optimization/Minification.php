@@ -77,7 +77,6 @@ final class Minification
 	public function codeblocks(bool $ignore): self 
     {
 		$this->codeblocks = $ignore;
-
 		return $this;
 	}
 
@@ -91,7 +90,6 @@ final class Minification
 	public function copyable(bool $allow): self 
     {
 		$this->copyable = $allow;
-
 		return $this;
 	}
 
@@ -231,7 +229,7 @@ final class Minification
         }, $content);
 
         // Restore the code blocks back to its original state
-        $content = preg_replace_callback('/' . $ignorePattern . '/', function () use (&$ignores, $button) {
+        return preg_replace_callback('/' . $ignorePattern . '/', function () use (&$ignores, $button) {
             $formatter = '';
             if ($button) {
                 $formatter .= '<div class="lmv-snippet-header">';
@@ -240,7 +238,7 @@ final class Minification
             }
 
             $formatter .= '<pre $1 class="lmv-pre-block $2" $3 data-info="code sample">';
-            $formatter =  preg_replace(
+            $formatter = preg_replace(
                 '/<pre\b(?:\s+([^=>\s]+)="[^"]*")*\s*(?:class="([^"]*)")?(.*?)(?:\s+([^=>\s]+)="[^"]*")*\s*>/i',
                 $formatter,
                 array_shift($ignores)
@@ -248,7 +246,5 @@ final class Minification
 
             return "<div class='lmv-snippet-container'>{$formatter}</div>";
         }, self::minify($content));
-
-        return $content;
     }
 }

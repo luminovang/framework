@@ -38,7 +38,6 @@ use \Generator;
  * @property Header|null $header The header instance providing HTTP request headers information.
  * @property UserAgent|null $agent The user-agent instance containing client browser details.
  */
-
 interface HttpRequestInterface
 {
     /**

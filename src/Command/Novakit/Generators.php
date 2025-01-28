@@ -17,17 +17,17 @@ class Generators extends BaseConsole
 {
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $group = 'Generators';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $name = 'create:*';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected array $usages = [
         'php novakit create:controller --help',
         'php novakit create:class --help',
@@ -37,12 +37,12 @@ class Generators extends BaseConsole
 
     /**
      * {@inheritdoc}
-    */
+     */
     private static ?string $engine = null;
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function run(?array $options = []): int
     {
         $this->term->explain($options);
@@ -78,9 +78,9 @@ class Generators extends BaseConsole
         return (int) $runCommand;
     }
 
-   /**
+    /**
      * {@inheritdoc}
-    */
+     */
     public function help(array $helps): int
     {
         return STATUS_ERROR;
@@ -199,7 +199,7 @@ class Generators extends BaseConsole
         }
     }
     
-     /**
+    /**
      * Create a view.
      *
      * @param string  $name View name
@@ -258,7 +258,7 @@ class Generators extends BaseConsole
         }
     }
 
-     /**
+    /**
      * Create a model class.
      *
      * @param string  $name Model name.

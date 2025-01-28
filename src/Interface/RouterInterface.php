@@ -1,7 +1,6 @@
 <?php
 /**
- * Luminova Framework Interface for creating routeable classes.
- * Implement this interface in any class you want to be rendered by the router.
+ * Luminova Framework Interface for creating routable classes.
  * 
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -10,6 +9,9 @@
  */
 namespace Luminova\Interface;
 
-interface RouterInterface 
-{
-}
+/**
+ * Marker interface for custom routable controller class.
+ * 
+ * Implement this interface in any non-base controller class, required to be routable.
+ */
+interface RouterInterface {}

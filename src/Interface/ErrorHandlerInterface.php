@@ -9,4 +9,7 @@
  */
 namespace Luminova\Interface;
 
+/**
+ * Marker interface for routable error handler controller class.
+ */
 interface ErrorHandlerInterface {}

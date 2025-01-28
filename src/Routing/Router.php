@@ -22,7 +22,7 @@ use \Luminova\Attributes\AttrCompiler;
 use \Luminova\Base\BaseController;
 use \Luminova\Application\Factory;
 use \Luminova\Application\Foundation;
-use \Luminova\Cache\ViewCache;
+use \Luminova\Cache\TemplateCache;
 use \Luminova\Exceptions\RouterException;
 use \Luminova\Exceptions\AppException;
 use \Luminova\Interface\RouterInterface;
@@ -1129,7 +1129,7 @@ final class Router
         // Supported extension types to match.
         $types = env('page.caching.statics', false);
         if ($types && $types !== '' && preg_match('/\.(' . $types . ')$/i', self::$uri, $matches)) {
-            self::$weak[self::$application] = new ViewCache(0, root(rtrim((new Template())->cacheFolder, TRIM_DS) . '/default/'));
+            self::$weak[self::$application] = new TemplateCache(0, root(rtrim((new Template())->cacheFolder, TRIM_DS) . '/default/'));
 
             // If expiration return mismatched int code 404 ignore and do not try to replace to actual url.
             $expired = self::$weak[self::$application]->setKey(Foundation::getCacheId())
@@ -1658,15 +1658,15 @@ final class Router
     }
     
     /**
-    * Replace all curly braces matches {} into word patterns (like Laravel)
-    * Convert pattern to a regex pattern  & Checks if there is a routing match.
-    *
-    * @param string $pattern Url current route pattern.
-    * @param string $uri The current request uri path.
-    * @param array &$matches URI matches passed by reference.
-    *
-    * @return bool Return true if is match, otherwise false.
-    */
+     * Replace all curly braces matches {} into word patterns (like Laravel)
+     * Convert pattern to a regex pattern  & Checks if there is a routing match.
+     *
+     * @param string $pattern Url current route pattern.
+     * @param string $uri The current request uri path.
+     * @param array &$matches URI matches passed by reference.
+     *
+     * @return bool Return true if is match, otherwise false.
+     */
     private static function uriCapture(string $pattern, string $uri, array &$matches): bool
     {
         $result = (bool) preg_match_all("#^{$pattern}$#", $uri, $matches, PREG_OFFSET_CAPTURE);
@@ -1816,7 +1816,7 @@ final class Router
      * Get the current command controller views.
      * 
      * @return array<string,mixed> $views Return array of command routes parameters as URI.
-    */
+     */
     public static function getArguments(): array
     {
         $views = [
@@ -1839,7 +1839,7 @@ final class Router
      * Gets request command name.
      *
      * @return string Return command argument index.
-    */
+     */
     private static function getArgument(int $index = 1): string 
     {
         if(isset($_SERVER['argv'])){
@@ -1853,7 +1853,7 @@ final class Router
      * Reset register routes to avoid conflicts.
      * 
      * @return void
-    */
+     */
     private static function reset(bool $init = false): void
     {
         self::$weak[self::$reference] = [

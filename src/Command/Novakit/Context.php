@@ -17,24 +17,24 @@ class Context extends BaseConsole
 {
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $group = 'Context';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $name = 'context';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected array $usages = [
         'php novakit context --help'
     ];
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function run(?array $options = []): int
     {
         $this->term->explain($options);
@@ -61,7 +61,7 @@ class Context extends BaseConsole
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function help(array $helps): int
     {
         return STATUS_ERROR;
@@ -313,7 +313,7 @@ class Context extends BaseConsole
      * @param array|null $methods The attribute methods,
      * 
      * @return string class method name.
-    */
+     */
     private function getMethodType(array|null $methods): string 
     {
         if($methods === null){

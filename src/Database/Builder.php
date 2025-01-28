@@ -15,6 +15,7 @@ use \Luminova\Base\BaseCache;
 use \Luminova\Cache\MemoryCache;
 use \Luminova\Database\Connection;
 use \Luminova\Database\Manager;
+use \Luminova\Logger\Logger;
 use \Luminova\Utils\LazyObject;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Interface\LazyInterface;
@@ -2497,7 +2498,7 @@ final class Builder implements LazyInterface
         ];
 
         if (PRODUCTION) {
-            logger('debug', json_encode( $this->debugQuery, JSON_PRETTY_PRINT));
+            Logger::dispatch('debug', json_encode( $this->debugQuery, JSON_PRETTY_PRINT));
             return false;
         }
 

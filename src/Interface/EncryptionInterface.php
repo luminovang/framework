@@ -21,7 +21,7 @@ interface EncryptionInterface
      * @param int $size Key size for encryption (default: 16).
      * 
      * @throws EncryptionException If the method or block size is invalid while using openssl.
-    */
+     */
     public function __construct(?string $key = null, ?string $method = null, int $size = 16);
 
     /**
@@ -89,6 +89,6 @@ interface EncryptionInterface
      * Free up resources.
      * 
      * @return void 
-    */
+     */
     public function free(): void;
 }

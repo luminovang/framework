@@ -52,7 +52,6 @@ abstract class CoreApplication implements LazyInterface
      */
     public function __construct() 
     {
-        // Prevent multiple re-initializations
         if(self::$lifecycle > 0){
             if((self::$instance instanceof static) && !($this->router instanceof Router)){
                 $this->router = self::$instance->router;
@@ -220,7 +219,6 @@ abstract class CoreApplication implements LazyInterface
     public function __get(string $key): mixed
     {
         $value = self::attrGetter($key);
-
         return ($value === self::$KEY_NOT_FOUND) 
             ? ($this->{$key} ?? static::${$key} ?? null)
             : $value;

@@ -11,8 +11,7 @@ namespace Luminova\Security;
 
 use \Luminova\Interface\ValidationInterface;
 use \Luminova\Interface\LazyInterface;
-use \Exception;
-use \JsonException;
+use \Throwable;
 
 final class Validation implements ValidationInterface, LazyInterface
 {
@@ -118,7 +117,7 @@ final class Validation implements ValidationInterface, LazyInterface
                             }
                         break;
                         default:
-                            if (!self::validation($ruleName, $fieldValue, $rulePart, $ruleParam)) {
+                            if (!self::validation($ruleName, $fieldValue, $ruleParam)) {
                                 $this->addError($field, $ruleName, $fieldValue);
                             }
                         break;
@@ -207,7 +206,6 @@ final class Validation implements ValidationInterface, LazyInterface
 
         // Remove the parent key from the error array
         unset($this->failures[$field]);
-
         return $infos;
     }
 
@@ -252,12 +250,11 @@ final class Validation implements ValidationInterface, LazyInterface
      * 
      * @param string $ruleName The name of the rule to validate.
      * @param string $value The value to validate.
-     * @param string $rule The rule line.
      * @param string $param additional validation parameters.
      * 
      * @return boolean Return true if the rule passed else false.
      */
-    private static function validation(string $ruleName, mixed $value, string $rule, mixed $param = null): bool
+    private static function validation(string $ruleName, mixed $value, mixed $param): bool
     {
         try {
             return match ($ruleName) {
@@ -278,7 +275,7 @@ final class Validation implements ValidationInterface, LazyInterface
                 'path', 'scheme' => self::validatePath($ruleName, $value, $param),
                 default => self::validateOthers($ruleName, $value, $param)
             };
-        } catch (Exception|JsonException) {
+        } catch (Throwable) {
             return false;
         }
     }
@@ -434,10 +431,8 @@ final class Validation implements ValidationInterface, LazyInterface
      */
     private static function replace(string $message, array $placeholders = []): string 
     {
-        if($placeholders === []){
-            return $message;
-        }
-
-        return str_replace(['{field}', '{rule}', '{value}'], $placeholders, $message);
+        return ($placeholders === []) 
+            ? $message 
+            : str_replace(['{field}', '{rule}', '{value}'], $placeholders, $message);
     }
 }

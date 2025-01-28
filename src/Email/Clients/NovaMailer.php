@@ -12,6 +12,7 @@ namespace Luminova\Email\Clients;
 use \Luminova\Storages\FileManager;
 use \Luminova\Interface\MailerInterface;
 use \Luminova\Exceptions\MailerException;
+use \Luminova\Logger\Logger;
 
 class NovaMailer implements MailerInterface
 {
@@ -233,7 +234,7 @@ class NovaMailer implements MailerInterface
             if ($this->exceptions) {
                 throw MailerException::throwWith($e->getMessage());
             }
-            logger('exception', $e->getMessage());
+            Logger::dispatch('exception', $e->getMessage());
 
             return false;
         }
@@ -479,7 +480,7 @@ class NovaMailer implements MailerInterface
         if (is_resource($this->connection)) {
             $status = stream_get_meta_data($this->connection);
             if ($status['eof']) {
-                logger('debug', 'SMTP NOTICE: EOF caught while checking if connected');
+                Logger::dispatch('debug', 'SMTP NOTICE: EOF caught while checking if connected');
                 $this->close();
 
                 return false;
@@ -499,7 +500,7 @@ class NovaMailer implements MailerInterface
         if (is_resource($this->connection)) {
             fclose($this->connection);
             $this->connection = null;
-            logger('debug', 'Connection: closed');
+            Logger::debug('Connection: closed');
         }
     }
 
@@ -524,7 +525,7 @@ class NovaMailer implements MailerInterface
                     throw new MailerException($error);
                 }
 
-                logger('debug', $error);
+                Logger::dispatch('debug', $error);
             }
         }
     }

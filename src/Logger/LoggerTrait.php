@@ -14,7 +14,7 @@ use \Luminova\Logger\LogLevel;
 trait LoggerTrait
 {
     /**
-     * Log an emergency message.
+     * Support for other custom log levels.
      *
      * @param string $message The emergency message to log.
      * @param array $context Additional context data (optional).

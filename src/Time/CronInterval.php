@@ -101,7 +101,7 @@ class CronInterval
      * |    |    +--------------- day of month (1 - 31)
      * |    +-------------------- hour (0 - 23)
      * +------------------------- minute (0 - 59)
-    */
+     */
     public static function convert(string $expression, DateTimeZone|string|null $timezone = null): array|string
     {
         if($expression === '' || strlen($expression) < 5){

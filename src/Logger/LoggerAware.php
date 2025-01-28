@@ -21,9 +21,9 @@ class LoggerAware implements LoggerInterface, LoggerAwareInterface
     use LoggerTrait;
 
     /**
-     * Initialize NovaLogger
+     * Initialize LoggerAware with preferred psr logger.
      * 
-     * @param LoggerInterface $logger The logger instance.
+     * @param LoggerInterface|null $logger The logger class instance.
      */
     public function __construct(protected ?LoggerInterface $logger = null)
     {

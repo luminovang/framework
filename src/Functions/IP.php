@@ -57,6 +57,8 @@ final class IP
     private static ?string $cip = null;
 
     /**
+     * IP Error message.
+     * 
      * @var array $errors
      */
     private static array $errors = [
@@ -518,7 +520,6 @@ final class IP
     {
         return Tor::isTor($ip ?? self::get(), $expiration);
     }
-
 
     /**
      * Check if value is a hexadecimal representation.

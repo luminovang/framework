@@ -23,7 +23,7 @@ class Timestamp
      * 
      * @return int $timestamp Returns Unix timestamp.
      * @throws DateTimeException
-    */
+     */
     public static function ttlTimestamp(DateTimeInterface|int|string $expires = 0): int
     {
         if ($expires instanceof DateTimeInterface) {
@@ -52,8 +52,8 @@ class Timestamp
      * 
      * @param DateInterval|DateTimeInterface $ttl Time 
      * 
-     * @return int seconds.
-    */
+     * @return int Return converted date interval in seconds.
+     */
     public static function ttlToSeconds(DateInterval|DateTimeInterface|int|null $ttl): int
     {
         if($ttl === null){

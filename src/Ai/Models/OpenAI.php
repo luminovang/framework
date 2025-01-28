@@ -23,22 +23,22 @@ class OpenAI implements AiInterface, LazyInterface
 {
     /**
      * @var Network|null $network
-    */
+     */
     private static ?Network $network = null;
 
     /**
      * @var string $version
-    */
+     */
     private static string $version = 'v1';
 
     /**
      * @var string $url
-    */
+     */
     private static string $url = 'https://api.openai.com/';
 
     /**
      * @var array $endpoints
-    */
+     */
     private static array $endpoints = [
         'completions'           => '/completions',
         'chatCompletions'       => '/chat/completions',
@@ -54,17 +54,17 @@ class OpenAI implements AiInterface, LazyInterface
 
     /**
      * @var CurlFile|null $fileInstance
-    */
+     */
     private ?CurlFile $fileInstance = null;
 
     /**
      * @var string $lastFilename
-    */
+     */
     private string $lastFilename = '';
 
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function __construct(
         string $api_key, 
         string $version = 'v1', 
@@ -91,8 +91,8 @@ class OpenAI implements AiInterface, LazyInterface
     }
 
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function models(?string $name = null): array
     {
         $url = self::getUrl('models', (($name === null) ? '' : '/' . $name));
@@ -117,8 +117,8 @@ class OpenAI implements AiInterface, LazyInterface
     }
 
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function completion(string $prompt, array $options = []): array
     {
         $url = self::getUrl('completions');
@@ -149,8 +149,8 @@ class OpenAI implements AiInterface, LazyInterface
     }
 
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function suggestions(string $prompt, array $options = []): array
     {
         $options['__suggestions'] = true;
@@ -158,8 +158,8 @@ class OpenAI implements AiInterface, LazyInterface
     }
 
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function message(string $prompt, array $options = []): array
     {
         $url = self::getUrl('chatCompletions');
@@ -187,8 +187,8 @@ class OpenAI implements AiInterface, LazyInterface
     }
 
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function embed(string|array $input, array $options = []): array
     {
         $url = self::getUrl('embeddings');
@@ -217,8 +217,8 @@ class OpenAI implements AiInterface, LazyInterface
     }
 
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function fineTune(string $trainingFile, array $options = []): array
     {
         $url = self::getUrl('fineTune');
@@ -245,8 +245,8 @@ class OpenAI implements AiInterface, LazyInterface
     }
 
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function image(string $prompt, array $options = []): array|bool
     {
         $url = self::getUrl('images');
@@ -275,8 +275,8 @@ class OpenAI implements AiInterface, LazyInterface
     }
 
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function imageEdit(string $prompt, array $options): array|bool
     {
         if (!file_exists($options['image'])) {
@@ -333,8 +333,8 @@ class OpenAI implements AiInterface, LazyInterface
     }
 
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function speech(string $text, array $options = []): string|bool
     {
         $url = self::getUrl('speech');
@@ -377,8 +377,8 @@ class OpenAI implements AiInterface, LazyInterface
     }
 
     /**
-      * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     public function audio(string $filename, array $options = []): string|bool
     {
         if(!file_exists($filename)){
@@ -388,11 +388,11 @@ class OpenAI implements AiInterface, LazyInterface
         $fileSize = filesize($filename);
 
         if(!$fileSize){
-            self::error('Invalid file size or curruped file', 204);
+            self::error('Invalid file size or corrupted file', 204);
         }
 
         if ($fileSize > (25 * 1024 * 1024)) {
-            self::error('File is too large, maximun allowed size is 25MB', 204);
+            self::error('File is too large, maximum allowed size is 25MB', 204);
         }
 
         $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
@@ -439,15 +439,15 @@ class OpenAI implements AiInterface, LazyInterface
      * Get the URL for the specified endpoint.
      *
      * @param string $endpoint The endpoint name.
-     * @param string $sufix Suffix for the endpoint.
+     * @param string $suffix Suffix for the endpoint.
      * 
      * @return string The complete URL for the endpoint.
      * @throws RuntimeException When the endpoint is not available or not implemented.
-    */
-    private static function getUrl(string $endpoint, string $sufix = ''): string 
+     */
+    private static function getUrl(string $endpoint, string $suffix = ''): string 
     {
         if(isset(self::$endpoints[$endpoint])){
-            return self::$url . self::$version . self::$endpoints[$endpoint] . $sufix;
+            return self::$url . self::$version . self::$endpoints[$endpoint] . $suffix;
         }
 
         throw new RuntimeException('The endpoint: ' . $endpoint . ' is not available or not implemented yet.', 501);
@@ -457,7 +457,8 @@ class OpenAI implements AiInterface, LazyInterface
      * Throw an exception.
      * 
      * @param string|null $error The exception message.
-    */
+     * @param int $code The exception code (default: `202`).
+     */
     private static function error(?string $error = null, int $code = 202): void 
     {
         throw new RuntimeException($error ?? 'Unable complete request', $code);
@@ -480,7 +481,7 @@ class OpenAI implements AiInterface, LazyInterface
      * 
      * @param bool $isChat Whether the request is for a chat-based model. Default is false.
      * 
-     * @return array The parameters formatted for the API request.
+     * @return array Return the parameters formatted for the API request.
      */
     private function getParams(string $prompt, array $options = [], bool $isChat = false): array 
     {

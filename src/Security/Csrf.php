@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework Cross-Site Request Forgery Protection.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -9,50 +9,38 @@
  */
 namespace Luminova\Security;
 
+use \Luminova\Sessions\Session;
 use \App\Config\Session as CookieConfig;
-use \Luminova\Exceptions\BadMethodCallException;
 
 final class Csrf 
 {
     /**
-     * Token session input name
+     * Token session input name.
      *
      * @var string $tokenName
      */
     private static $tokenName = "csrf_token";
 
     /**
-     * Token session key name
+     * Token session key name.
      *
      * @var string $token
      */
     private static $token = "csrf_token_token";
 
     /**
-     * Cookie config
+     * Backend session handler.
+     * 
+     * @var Session|null $session
+     */
+    private static ?Session $session = null;
+
+    /**
+     * Cookie config.
      *
      * @var CookieConfig $config
      */
     private static ?CookieConfig $config = null;
-
-    /**
-     * Call static method as none static 
-     * 
-     * @param string $name method name 
-     * @param array $arguments method arguments
-     * 
-     * @return mixed 
-     * @throws BadMethodCallException
-     * @internal
-     */
-    public function __call(string $name, array $arguments): mixed
-    {
-        if (method_exists(self::class, $name)) {
-            return self::{$name}(...$arguments);
-        }
-        
-        throw new BadMethodCallException("Call to undefined or inaccessible method " . self::class . "::" . $name);
-    }
 
     /**
      * Initialize the session configuration.
@@ -63,25 +51,19 @@ final class Csrf
     }
 
     /**
-     * Retrieves a previously generated CSRF token or generates a new token if none was found, then stores it.
+     * Retrieves a previously generated CSRF token or generates a new token 
+     * if none was found, then stores it.
      *
-     * @return string The CSRF token.
+     * @return string Return the CSRF token.
      */
     public static function getToken(): string 
     {
         if (self::hasToken()) {
-            $storage = self::tokenStorage();
-
-            if($storage === 'cookie'){
-                return $_COOKIE[self::$token];
-            }
-
-            return $_SESSION[self::$token];
+            return (self::tokenStorage() === 'cookie') ? $_COOKIE[self::$token] : $_SESSION[self::$token];
         }
 
         $token = self::generateToken();
         self::saveToken($token);
-
         return $token;
     }
 
@@ -89,7 +71,7 @@ final class Csrf
      * Generates a new CSRF token and stores it. 
      * Use this method when you need to regenerate a token after validation.
      * 
-     * @return string The generated CSRF token.
+     * @return string Return the generated CSRF token.
      */
     public static function refresh(): string 
     {
@@ -150,18 +132,17 @@ final class Csrf
         $storage = self::tokenStorage();
         $tokenHash = '';
 
-        if ($storage === 'cookie' && self::hasCookie()) {
-            $tokenHash = $_COOKIE[self::$token];
+        if ($storage === 'cookie') {
+            $tokenHash = self::hasCookie() ? $_COOKIE[self::$token] : '';
         } elseif(isset($_SESSION[self::$token])) {
             $tokenHash = $_SESSION[self::$token];
         }
 
-        if (empty($tokenHash)) {
-            return false;
-        }
+        if ($tokenHash && hash_equals($tokenHash, $token)) {
+            if(!$reuse) {
+                self::delete();
+            }
 
-        if (hash_equals($tokenHash, $token)) {
-            if(!$reuse) {self::delete();}
             return true;
         }
 
@@ -175,20 +156,16 @@ final class Csrf
      */
     public static function hasToken(): bool 
     {
-        $storage = self::tokenStorage();
-
-        if ($storage === 'cookie' && self::hasCookie()) {
-            return true;
-        }
-
-        return isset($_SESSION[self::$token]);
+        return (self::tokenStorage() === 'cookie') 
+            ? self::hasCookie() 
+            : isset($_SESSION[self::$token]);
     }
 
 
     /**
-     * Generates a CSRF token.
+     * Generates a new CSRF token.
      *
-     * @return string The generated CSRF token.
+     * @return string Return a new generated token.
      */
     private static function generateToken(): string
     {
@@ -196,17 +173,24 @@ final class Csrf
     }
 
     /**
-     * Detain which storage engin to use
-     * If session is not started but dev fallback to using cookie storage.
+     * Determine which storage location to use.
      * 
+     * If session is not enabled fallback to using cookie storage.
      * 
-     * @return string cookie or session.
+     * @return string Return cookie or session based on csrf storage configuration.
      */
     private static function tokenStorage(): string 
     {
         self::intConfig();
-        if (self::$config->csrfStorage === 'cookie' || session_status() === PHP_SESSION_NONE) {
+        $status = session_status();
+
+        if (self::$config->csrfStorage === 'cookie' || $status === PHP_SESSION_DISABLED) {
             return 'cookie';
+        }
+
+        if($status === PHP_SESSION_NONE){
+            self::$session ??= new Session();
+            self::$session->start();
         }
 
         return 'session';
@@ -215,8 +199,8 @@ final class Csrf
     /**
      * Save token depending on storage.
      * 
-     * @param string $token
-     * @param ?int $expiry
+     * @param string $token The generated csrf token to save.
+     * @param ?int $expiry The expiration time of the token in seconds.
      * 
      * @return void 
      */
@@ -248,6 +232,6 @@ final class Csrf
      */
     private static function hasCookie(): bool 
     {
-        return isset($_COOKIE[self::$token]) && !empty($_COOKIE[self::$token]);
+        return isset($_COOKIE[self::$token]) && $_COOKIE[self::$token] !== '';
     }
 }

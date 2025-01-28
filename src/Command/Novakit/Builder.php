@@ -16,24 +16,24 @@ class Builder extends BaseConsole
 {
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $group = 'Builder';
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected string $name = 'builder';
 
     /**
-    * {@inheritdoc}
-    */
+     * {@inheritdoc}
+     */
     protected string|array $usages = [
         "php novakit build:project --help"
     ];
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function run(?array $options = []): int
     {
         $this->term->explain($options);
@@ -58,7 +58,7 @@ class Builder extends BaseConsole
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function help(array $helps): int
     {
         return STATUS_ERROR;

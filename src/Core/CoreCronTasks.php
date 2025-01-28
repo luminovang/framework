@@ -11,6 +11,7 @@ namespace Luminova\Core;
 
 use \Luminova\Time\Time;
 use \Luminova\Time\CronInterval;
+use \Luminova\Logger\LogLevel;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
@@ -44,24 +45,6 @@ abstract class CoreCronTasks
      * @var string|null
      */
     protected static ?string $timezone = null;
-
-    /**
-     * Supported Log levels.
-     * 
-     * @var array $logLevels
-     */
-    private static $logLevels = [
-        'emergency',
-        'alert',
-        'critical',
-        'error',
-        'warning',
-        'notice',
-        'info',
-        'debug',
-        'exception',
-        'php_errors'
-    ];
 
     /**
      * Constructs the Cron instance with optional configuration settings.
@@ -174,22 +157,14 @@ abstract class CoreCronTasks
      * @param string $level The log level to use while logging execution response.
      * 
      * **Supported Log levels:**
-     * [emergency, alert, critical, error, warning, notice, info, debug, exception, php_errors]
+     * [emergency, alert, critical, error, warning, notice, info, debug, exception, php_error]
      * 
      * @return self Return cron class instance.
      * @throws InvalidArgumentException If invalid or unsupported log level is provided.
      */
     protected function log(string $level): self
     {
-        if (!in_array($level, self::$logLevels, true)) {
-            throw new InvalidArgumentException(sprintf(
-                'Invalid or unsupported log level: "%s" provided in %s(string $level). Supported log levels are: [%s]',
-                $level,
-                __FUNCTION__,
-                implode(', ', self::$logLevels)
-            ));
-        }
-
+        LogLevel::assert($level, __FUNCTION__);
         self::$controllers[self::getId()]['log'] = $level;
 
         return $this;

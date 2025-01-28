@@ -9,6 +9,8 @@
  */
 namespace Luminova\Logger;
 
+use \Luminova\Exceptions\InvalidArgumentException;
+
 /**
  * Defines various logging levels used for categorizing log messages.
  */
@@ -82,7 +84,7 @@ final class LogLevel
      * 
      * @var string PHP
      */
-    public const PHP       = 'php_errors';
+    public const PHP       = 'php_error';
 
     /**
      * PHP level: Performance metrics, specifically for api or production level.
@@ -106,12 +108,13 @@ final class LogLevel
         'info'          => self::INFO,
         'debug'         => self::DEBUG,
         'exception'     => self::EXCEPTION,
-        'php_errors'    => self::PHP,
+        'php_error'     => self::PHP,
+        'php'           => self::PHP,
         'metrics'       => self::METRICS,
     ];
 
     /**
-     * Checks if the specified log level exists.
+     * Checks if the specified log level is valid and exists.
      *
      * @param string $level The log level to check (e.g., 'error', 'info', 'debug').
      * 
@@ -120,5 +123,29 @@ final class LogLevel
     public static function has(string $level): bool
     {
         return isset(self::LEVELS[$level]);
+    }
+
+    /**
+     * Asserts that the given log level is valid.
+     *
+     * This function checks if the provided log level exists in the predefined set of log levels.
+     * If the level is invalid, it throws an InvalidArgumentException with a detailed error message.
+     *
+     * @param string $level The log level to validate.
+     * @param string|null $function Optional. The name of the calling function for context in the error message.
+     *
+     * @return void
+     * @throws InvalidArgumentException If the provided log level is not valid.
+     */
+    public static function assert(string $level, ?string $function = null): void
+    {
+        if (!isset(self::LEVELS[$level])) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid log level "%s" in %s. Supported levels: %s.',
+                $level,
+                $function ? "\"$function\"(...)" : 'the given context',
+                implode(', ', self::LEVELS)
+            ));
+        }
     }
 }

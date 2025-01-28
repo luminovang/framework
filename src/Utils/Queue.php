@@ -9,10 +9,11 @@
  */
 namespace Luminova\Utils;
 
+use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Logger\Logger;
 use \Fiber;
 use \Closure;
 use \Countable;
-use \Luminova\Exceptions\RuntimeException;
 use \FiberError;
 use \Exception;
 use function \pcntl_fork;
@@ -843,7 +844,7 @@ final class Queue implements Countable
     private function report(string $message): void 
     {
         if($this->eReporting === self::E_LOG){
-            logger('debug', $message);
+            Logger::dispatch('debug', $message);
             return;
         }
 

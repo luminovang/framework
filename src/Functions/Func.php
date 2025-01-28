@@ -86,7 +86,7 @@ class Func
  	 *   - `bytes` - Returns a raw binary string of the specified length.
  	 *   - `hex` - Returns a hexadecimal representation of random bytes.
  	 *   - `int|integer` - Contains only numeric characters (0-9).
-
+	 *
 	 * @example Examples:
  	 * - `Func::random(16, 'password')` - Generates a secure password of 16 characters.
  	 * - `Func::random(8, 'alphabet', true)` - Generates an 8-character string in uppercase letters.
@@ -137,10 +137,10 @@ class Func
 	}
 	
 	/** 
-	 * Generate product EAN13 id
+	 * Generate product EAN13 id.
 	 * 
-	 * @param int $country start prefix country code
-	 * @param int $length maximum length
+	 * @param int $country start prefix country code.
+	 * @param int $length maximum length.
 	 * 
 	 * @return string Product ean code.
 	 */
@@ -433,7 +433,7 @@ class Func
 	 * @param int $min minimum allowed password length (default: 6).
 	 * @param int $max maximum allowed password length (default: 50).
 	 * 
-	 * @return bool Return trues if passed otherwise false
+	 * @return bool Return trues if passed otherwise false.
 	 */
 	public static function strength(string $password, int $complexity = 4, int $min = 6, int $max = 50): bool 
 	{

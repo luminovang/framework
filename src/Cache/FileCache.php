@@ -11,6 +11,7 @@ namespace Luminova\Cache;
 
 use \Luminova\Base\BaseCache;
 use \Luminova\Storages\FileManager;
+use \Luminova\Logger\Logger;
 use \Luminova\Time\Timestamp;
 use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\InvalidArgumentException;
@@ -485,7 +486,7 @@ final class FileCache extends BaseCache
             unlink($filepath);
 
             if(PRODUCTION){
-                logger('error',sprintf('Failed to read cache content: %s', $e->getMessage()), [
+                Logger::dispatch('error',sprintf('Failed to read cache content: %s', $e->getMessage()), [
                     'class' => self::class
                 ]);
 
@@ -517,7 +518,7 @@ final class FileCache extends BaseCache
             );
         }catch(Exception|AppException|JsonException $e){
             if(PRODUCTION){
-                logger('error', sprintf('Unable to commit cache: %s', $e->getMessage()), [
+                Logger::dispatch('error', sprintf('Unable to commit cache: %s', $e->getMessage()), [
                     'class' => self::class
                 ]);
 

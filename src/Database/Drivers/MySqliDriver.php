@@ -13,6 +13,7 @@ use \Luminova\Core\CoreDatabase;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Interface\ConnInterface;
+use \Luminova\Logger\Logger;
 use \mysqli;
 use \mysqli_stmt;
 use \mysqli_result;
@@ -644,7 +645,7 @@ final class MySqliDriver implements DatabaseInterface
                 return $reflection->newInstanceArgs([$objects, ...$arguments]);
             }
         } catch (ReflectionException $e) {
-            logger('error', $e->getMessage(), [
+            Logger::dispatch('error', $e->getMessage(), [
                 'class' => $class
             ]);
         }

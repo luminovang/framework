@@ -33,24 +33,24 @@ interface SessionManagerInterface
    *
    * @param string $storage The session storage key.
    * 
-   * @return self
+   * @return self Return instance of session manager class.
    */
   public function setStorage(string $storage): self;
 
-   /**
+  /**
    * Sets the session storage table index name to separate user session from other sessions and cookies.
    *
    * @param string $table The session storage table index.
    * 
-   * @return self
-  */
+   * @return self Return instance of session manager class.
+   */
   public function setTable(string $table): self;
 
   /**
    * Gets the current session storage instance name.
    * 
-   * @return string The session storage name.
-  */
+   * @return string Return the session storage name.
+   */
   public function getStorage(): string;
 
   /**
@@ -58,7 +58,7 @@ interface SessionManagerInterface
    * This method doesn't behave same way as PHP `session_destroy`.
    *
    * @return bool Return true if storage was data was deleted successfully otherwise false.
-  */
+   */
   public function destroyItem(): bool;
 
   /** 
@@ -67,8 +67,8 @@ interface SessionManagerInterface
    * @param string $index The key to retrieve.
    * @param mixed $default The default value if the key is not found.
    * 
-   * @return mixed The retrieved data.
-  */
+   * @return mixed Return the retrieved data.
+   */
   public function getItem(string $index, mixed $default = null): mixed;
 
   /** 
@@ -78,8 +78,8 @@ interface SessionManagerInterface
    * @param mixed $data The data to store.
    * @param string|null $storage The storage key name.
    * 
-   * @return self
-  */
+   * @return self Return instance of session manager class.
+   */
   public function setItem(string $index, mixed $data, ?string $storage = null): self;
 
   /** 
@@ -89,8 +89,8 @@ interface SessionManagerInterface
    * @param string|null $index The key index to remove.
    * @param string|null $storage Optionally specify the storage name to clear or remove an item.
    * 
-   * @return self
-  */
+   * @return self Return instance of session manager class.
+   */
   public function deleteItem(?string $index = null, ?string $storage = null): self;
 
   /** 
@@ -98,18 +98,18 @@ interface SessionManagerInterface
    * 
    * @param string|null $storage Optional storage key.
    * 
-   * @return array The retrieved data.
-  */
+   * @return array Return the retrieved data.
+   */
   public function getItems(?string $storage = null): array;
 
   /**
    * Gets all stored session data as an array or object.
    *
-   * @param string $type Return type of 'array' or 'object'. Default is 'array'.
+   * @param string $type The return session data type: e.g, 'array' or 'object' (default: `array`).
    * 
-   * @return array|object All stored session data.
+   * @return array|object Return all stored session data as an array or object.
    * @throws JsonException Throws if json error occurs.
-  */
+   */
   public function getResult(string $type = 'array'): array|object;
 
   /** 
@@ -117,27 +117,27 @@ interface SessionManagerInterface
    * 
    * @param string $key The key to check.
    * 
-   * @return bool True if the key exists, false otherwise.
-  */
+   * @return bool Return true if the key exists, false otherwise.
+   */
   public function hasItem(string $key): bool;
 
-    /** 
+  /** 
    * Checks if a storage key exists in the session.
    * 
    * @param string $storage The storage key to check.
    * 
-   * @return bool True if the storage key exists, false otherwise.
-  */
+   * @return bool Return true if the storage key exists, false otherwise.
+   */
   public function hasStorage(string $storage): bool;
 
   /** 
-   * Retrieves data as an object or array from the current session storage.
+   * Retrieves data as an array or object from the current session storage.
    * 
-   * @param string $type Return type of 'array' or 'object'. Default is 'array'.
-   * @param string $index Optional key to retrieve.
+   * @param string $type The return session data type: e.g, 'array' or 'object' (default: `array`).
+   * @param string|null $index Optional property key to retrieve.
    * 
-   * @return object|array|null The retrieved data or null if key index not found.
+   * @return object|array|null Return the retrieved data or null if key index not found.
    * @throws JsonException Throws if json error occurs.
-  */
+   */
   public function toAs(string $type = 'array', ?string $index = null): object|array|null;
 }

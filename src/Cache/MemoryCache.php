@@ -11,6 +11,7 @@ namespace Luminova\Cache;
 
 use \Luminova\Base\BaseCache;
 use \Luminova\Time\Timestamp;
+use \Luminova\Logger\Logger;
 use \Luminova\Exceptions\CacheException;
 use \Memcached;
 use \DateTimeInterface;
@@ -600,7 +601,7 @@ final class MemoryCache extends BaseCache
             return $this->getConn()->setMultiByKey($this->storage, $this->items, 0);
         } catch (Exception $e) {
             if (PRODUCTION) {
-                logger('error', sprintf('Unable to commit cache: %s', $e->getMessage()), [
+                Logger::dispatch('error', sprintf('Unable to commit cache: %s', $e->getMessage()), [
                     'class' => self::class
                 ]);
                 return false;

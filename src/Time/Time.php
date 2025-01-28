@@ -205,7 +205,10 @@ class Time extends DateTimeImmutable implements Stringable
         $minutes ??= 0;
         $seconds ??= 0;
 
-        return new self(date(self::$defaultFormat, strtotime("{$year}-{$month}-{$day} {$hour}:{$minutes}:{$seconds}")), $timezone);
+        return new self(
+            date(self::$defaultFormat, strtotime("{$year}-{$month}-{$day} {$hour}:{$minutes}:{$seconds}")), 
+            $timezone
+        );
     }
 
     /**
@@ -591,7 +594,6 @@ class Time extends DateTimeImmutable implements Stringable
         }
 
         $datetime = $now->format('Y-m-d H:i:s.u');
-
         return $datetime;
     }
 
@@ -755,9 +757,7 @@ class Time extends DateTimeImmutable implements Stringable
      */
     public static function hours(int $interval = 30): array 
     {
-        $steps = range(0, 24 * 60 * 60, $interval * 60);
-
-        return array_map(fn($timestamp) => date('g:iA', $timestamp), $steps);
+        return array_map(fn($timestamp) => date('g:iA', $timestamp), range(0, 24 * 60 * 60, $interval * 60));
     }
 
     /**

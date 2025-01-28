@@ -13,6 +13,7 @@ use \Luminova\Attributes\Route;
 use \Luminova\Attributes\Error;
 use \Luminova\Attributes\Prefix;
 use \Luminova\Routing\Router;
+use \Luminova\Logger\Logger;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Base\BaseController;
 use \Luminova\Interface\RouterInterface;
@@ -519,7 +520,7 @@ final class AttrCompiler
                 return write_content($lock . $context . '.php', $returnRoutes);
             }
         }catch(Throwable $e){
-            logger('error', 'Failed to Cache Attributes. ' . $e->getMessage());
+            Logger::dispatch('error', 'Failed to Cache Attributes. ' . $e->getMessage());
         }
 
         return false;

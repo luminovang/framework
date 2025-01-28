@@ -10,6 +10,7 @@
 namespace Luminova\Base;
 
 use \Luminova\Interface\LazyInterface;
+use \Luminova\Interface\HttpRequestInterface;
 
 abstract class BaseConfig implements LazyInterface
 {
@@ -247,5 +248,25 @@ abstract class BaseConfig implements LazyInterface
             'application/octet-stream' => 'bin',
             default => ltrim(self::$extensions[$mimeType] ?? '', '.'),
         };
+    }
+
+    /**
+     * Customize and generate an HTML email template for logging system notifications.
+     *
+     * @param HttpRequestInterface $request The HTTP request object containing information about the request.
+     * @param string $message The log message.
+     * @param string $level The log level (e.g., 'info', 'warning', 'error').
+     * @param array<string|int,mixed> $context Additional context information for the log message.
+     *
+     * @return string|null Return the HTML email template or null to use default.
+     */
+    public static function getEmailLogTemplate(
+        HttpRequestInterface $request, 
+        string $message, 
+        string $level, 
+        array $context
+    ): ?string 
+    {
+        return null;
     }
 }

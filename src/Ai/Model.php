@@ -19,31 +19,40 @@ use \Throwable;
 final class Model
 {
     /**
-     * @var AiInterface|null $ai The AI object.
-    */
+     * The AI object.
+     * 
+     * @var AiInterface|null $ai
+     */
     private ?AiInterface $ai = null;
 
     /**
+     * Application AI configuration.
+     * 
      * @var AI|null $config
-    */
+     */
     private static ?AI $config = null;
 
     /**
      * Initialize model instance with AI interface.
      * 
      * @param AiInterface $ai The AI object to use (default: Openai).
-    */
+     */
     public function __construct(AiInterface $ai = null)
     {
         self::$config ??= new AI();
-        $this->ai = ($ai ?? new OpenAI(self::$config->apiKey, self::$config->version, self::$config->organization, self::$config->project));
+        $this->ai = $ai ?? new OpenAI(
+            self::$config->apiKey, 
+            self::$config->version, 
+            self::$config->organization, 
+            self::$config->project
+        );
     }
 
     /**
      * Get instance of the AI interface.
      * 
      * @return AiInterface Return the AI object.
-    */
+     */
     public function getAiModel(): ?AiInterface 
     {
         return $this->ai;
@@ -56,7 +65,7 @@ final class Model
      * @param array $arguments An array of arguments to the method.
      * 
      * @return mixed The return value of the method.
-    */
+     */
     public function __call(string $method, array $arguments): mixed
     {
         try{

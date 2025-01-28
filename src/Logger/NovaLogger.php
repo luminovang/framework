@@ -9,9 +9,10 @@
  */
 namespace Luminova\Logger;
 
-use \Luminova\Logger\LogLevel;
-use \Psr\Log\AbstractLogger;
+use \Psr\Log\LoggerInterface;
 use \App\Config\Logger;
+use \Luminova\Logger\LogLevel;
+use \Luminova\Logger\LoggerTrait;
 use \Luminova\Time\Time;
 use \Luminova\Functions\Func;
 use \Luminova\Functions\IP;
@@ -21,11 +22,12 @@ use \Luminova\Http\Request;
 use \Luminova\Storages\FileManager;
 use \Luminova\Storages\Archive;
 use \Luminova\Exceptions\FileException;
+use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\AppException;
 use \Throwable;
 use \Fiber;
 
-class NovaLogger extends AbstractLogger
+class NovaLogger implements LoggerInterface
 {
     /**
      * Default log path.
@@ -60,7 +62,9 @@ class NovaLogger extends AbstractLogger
      * 
      * @var string $level
      */
-    private string $level = 'alert';
+    private string $level = LogLevel::ALERT;
+
+    use LoggerTrait;
 
     /**
      * Initialize NovaLogger
@@ -77,50 +81,16 @@ class NovaLogger extends AbstractLogger
     /**
      * Sets the log level for the remote and email logging.
      *
-     * @param string $level The log level to set (e.g., 'error', 'info', 'debug').
+     * @param string $level The log level to set (e.g., `LogLevel::*`, 'error', 'info', 'debug').
      *
      * @return self Returns the current NovaLogger instance.
+     * @throws InvalidArgumentException if an invalid log level is specified.
      */
     public function setLevel(string $level): self 
     {
-        if(LogLevel::has($level)){
-            $this->level = $level;
-        }
-
+        LogLevel::assert($level, __METHOD__);
+        $this->level = $level;
         return $this;
-    }
-
-    /**
-     * Log an exception message.
-     *
-     * @param string $message The EXCEPTION message to log.
-     * @param array $context Additional context data (optional).
-     */
-    public function exception($message, array $context = []): void
-    {
-        $this->log(LogLevel::EXCEPTION, $message, $context);
-    }
-
-    /**
-     * Log an php message.
-     *
-     * @param string $message The php message to log.
-     * @param array $context Additional context data (optional).
-     */
-    public function php($message, array $context = []): void
-    {
-        $this->log(LogLevel::PHP, $message, $context);
-    }
-
-    /**
-     * Log an performance metric.
-     *
-     * @param string $message The php message to log.
-     * @param array $context Additional context data (optional).
-     */
-    public function metrics($message, array $context = []): void
-    {
-        $this->log(LogLevel::METRICS, $message, $context);
     }
 
     /**
@@ -132,9 +102,11 @@ class NovaLogger extends AbstractLogger
      *
      * @return void
      * @throws FileException — If unable to write log to file.
+     * @throws InvalidArgumentException If an invalid log level is specified.
      */
     public function log($level, $message, array $context = []): void
     {
+        LogLevel::assert($level, __METHOD__);
         if(!Logger::$asyncLogging){
             $this->write($level, $message, $context, true);
             return;
@@ -166,7 +138,7 @@ class NovaLogger extends AbstractLogger
      * @return bool Returns true if the log written to file, false otherwise.
      * @throws FileException — If unable to write log to file.
      */
-    public function write($level, $message, array $context = [], bool $auth_backup = false): bool
+    public function write(string $level, string $message, array $context = [], bool $auth_backup = false): bool
     {
         if(make_dir(self::$path)){
             $level = LogLevel::LEVELS[$level] ?? LogLevel::INFO;
@@ -260,13 +232,13 @@ class NovaLogger extends AbstractLogger
 
         self::$request ??= new Request();
         $payload = [
-            'app'      => APP_NAME,
-            'host'     => APP_HOSTNAME,
-            'clientIp' => IP::get(),
-            'details'  => self::message($this->level, $message),
-            'context'  => $context,
-            'level'    => $this->level,
-            'version'  => APP_VERSION,
+            'app'        => APP_NAME,
+            'host'       => APP_HOSTNAME,
+            'clientIp'   => IP::get(),
+            'details'    => self::message($this->level, $message),
+            'context'    => $context,
+            'level'      => $this->level,
+            'version'    => APP_VERSION,
             'url'        => self::$request->getUrl(),
             'method'     => self::$request->getMethod(),
             'userAgent'  => self::$request->getUserAgent()->toString(),
@@ -311,32 +283,62 @@ class NovaLogger extends AbstractLogger
      */
     public function clear(string $level): bool 
     {
-        $path = self::$path . "{$level}{$this->extension}";
-        return FileManager::write($path, '', LOCK_EX);
+        return FileManager::write(self::$path . "{$level}{$this->extension}", '', LOCK_EX);
     }
 
     /**
-     * Formats a log message with the given level, message, and optional context.
-     *
-     * @param string $level   The log level (e.g., 'INFO', 'ERROR').
+     * Construct a log message and format timestamp to ISO 8601 with microseconds
+     * with the given level, message, and optional context.
+     * 
+     * @param string $level The log level (e.g., 'INFO', 'ERROR').
      * @param string $message The primary log message.
-     * @param array  $context Optional associative array providing context data.
-     * @param bool  $html_context If true the context will be formatted as HTML `<pre><code>` (default: false).
+     * @param array<string,mixed> $context Optional associative array providing context data.
+     * @param bool $htmlContext If true the message and context will be formatted as HTML (default: false).
      *
      * @return string Return the formatted log message.
      */
-    public static function message(string $level, string $message, array $context = [], $html_context = false): string
+    public static function message(
+        string $level, 
+        string $message, 
+        array $context = [],
+        bool $htmlContext = false
+    ): string
     {
-        $now = Time::now()->format('Y-m-d\TH:i:s.uP');
-        $message = "[{$level}] [{$now}]: {$message}";
-        
-        if ($context !== []) {
-            $message .= $html_context 
-                ? ' <h3>Context</h3><pre><code>' . print_r($context, true) . '</code></pre>'
-                : ' Context: ' . print_r($context, true);
+        if($htmlContext){
+            $html = '<p style="font-size: 14px; color: #555;">No additional context provided.</p>';
+
+            if ($context !== []) {
+                $formatter = '<tr>
+                    <td style="padding: 8px; border: 1px solid #ddd; background-color: #f9f9f9; font-weight: bold;">%s</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">%s</td>
+                </tr>';
+
+                $html = '<h3 style="font-size: 18px; color: #333; margin-top: 20px; margin-bottom: 10px;">Additional Context</h3>';
+                $html .= '<table style="width: 100%; border-collapse: collapse; font-size: 14px;margin-bottom: 15px;">';
+                foreach ($context as $key => $value) {
+                    $html .= sprintf(
+                        $formatter,
+                        htmlspecialchars((string) $key, ENT_QUOTES, 'UTF-8'),
+                        htmlspecialchars(is_scalar($value) ? $value : json_encode($value), ENT_QUOTES, 'UTF-8')
+                    );
+                }
+                $html .= '</table>';
+            }
+
+            return sprintf(
+                '<p style="font-size: 16px; margin-bottom: 15px;"><strong>[%s]</strong>: %s</p>%s', 
+                strtoupper($level), 
+                $message, 
+                $html
+            );
         }
 
-        return $message;
+        $message = sprintf('[%s] [%s]: %s', strtoupper($level), Time::now()->format('Y-m-d\TH:i:s.uP'), $message);
+        $formatted = ($context === []) ? '' : print_r($context, true);
+
+        return $formatted 
+            ? sprintf('%s [CONTEXT] %s', $message, $formatted) 
+            : $message;
     }
 
     /**
@@ -388,48 +390,14 @@ class NovaLogger extends AbstractLogger
     public function getHtmlMessage(string $level, string $message, array $context = []): string 
     {
         self::$request ??= new Request();
-        $message = self::message($level, $message, $context, true);
-        $url = htmlspecialchars(self::$request->getUrl());
-        $method = htmlspecialchars(self::$request->getMethod());
-        $userAgent = htmlspecialchars(self::$request->getUserAgent()->toString());
-        $ip = IP::get();
-
-        return <<<HTML
-            <body>
-                <p>{$message}</p>
-                <br/>
-                <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 14px;">
-                    <tr>
-                        <th style="text-align: left;">Key</th>
-                        <th style="text-align: left;">Value</th>
-                    </tr>
-                    <tr>
-                        <td>URL</td>
-                        <td>{$url}</td>
-                    </tr>
-                    <tr>
-                        <td>Method</td>
-                        <td>{$method}</td>
-                    </tr>
-                    <tr>
-                        <td>Level</td>
-                        <td>{$level}</td>
-                    </tr>
-                    <tr>
-                        <td>User Agent</td>
-                        <td>{$userAgent}</td>
-                    </tr>
-                    <tr>
-                        <td>Client IP Address</td>
-                        <td>{$ip}</td>
-                    </tr>
-                </table>
-                <p style="text-align:center; color:red; font-size:small;">
-                    This email was auto-generated by the PHP Luminova System Logger.<br/>
-                    To disable these messages, set the value to <code>null</code> or remove the email address from <code>env('logger.mail.logs')</code>.
-                </p>
-            </body>
-        HTML;
+        $template = Logger::getEmailLogTemplate(
+            self::$request, 
+            $message,
+            $level,
+            $context
+        );
+        
+        return $template ? $template : self::message($level, $message, $context, true);
     }
 
     /**
