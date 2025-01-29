@@ -480,7 +480,7 @@ class NovaMailer implements MailerInterface
         if (is_resource($this->connection)) {
             $status = stream_get_meta_data($this->connection);
             if ($status['eof']) {
-                Logger::dispatch('debug', 'SMTP NOTICE: EOF caught while checking if connected');
+                Logger::debug('SMTP NOTICE: EOF caught while checking if connected');
                 $this->close();
 
                 return false;
@@ -525,7 +525,7 @@ class NovaMailer implements MailerInterface
                     throw new MailerException($error);
                 }
 
-                Logger::dispatch('debug', $error);
+                Logger::debug($error);
             }
         }
     }
