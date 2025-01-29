@@ -18,21 +18,6 @@ use \Luminova\Functions\Func;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
 
-/**
- * Static logger methods.
- *
- * @method static void  error(string $message, array $context = []) Log message as error level.
- * @method static void  info(string $message, array $context = []) Log message as info level.
- * @method static void  debug(string $message, array $context = []) Log message as debug level.
- * @method static void  warning(string $message, array $context = []) Log message as warning level.
- * @method static void  emergency(string $message, array $context = []) Log message as emergency level.
- * @method static void  alert(string $message, array $context = []) Log message as alert level.
- * @method static void  critical(string $message, array $context = []) Log message as critical level.
- * @method static void  notice(string $message, array $context = []) Log message as notice level.
- * @method static void  exception(string $message, array $context = []) Log message as exception level.
- * @method static void  php(string $message, array $context = []) Log message as php error level.
- * @method static void  metrics(string $message, array $context = []) Log performance metrics.
- */
 class Logger implements LoggerInterface
 {
     use LoggerTrait;
@@ -48,30 +33,6 @@ class Logger implements LoggerInterface
      * Initialize logger instance.
      */
     public function __construct(){}
-
-    /**
-     * Static logger helper.
-     *
-     * @param string $method The log level as method name to call (e.g., `Logger::error(...)`, `Logger::info(...)`).
-     * @param array{0:string,1:array} $arguments Argument holding the log message and optional context.
-     *
-     * @return void
-     * @throws InvalidArgumentException If an invalid logger method-level is called.
-     * @throws RuntimeException If logger does not implement PSR LoggerInterface.
-     */
-    public static function __callStatic(string $method, array $arguments)
-    {
-        if(self::getLogger() instanceof NovaLogger){
-            if(!LogLevel::has($method)){
-                throw new InvalidArgumentException(sprintf(
-                    'Invalid Method: %s, is not a valid NovaLogger log level. See https://luminova.ng/docs/0.0.0/logging/levels', 
-                    $method
-                ));
-            }
-        }
-
-        self::write($method, ...$arguments);
-    }
 
     /**
      * Get shared instance of  your application PSR logger class.

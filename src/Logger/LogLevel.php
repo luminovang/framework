@@ -154,7 +154,7 @@ final class LogLevel
     {
         if (!isset(self::LEVELS[$level])) {
             throw new InvalidArgumentException(sprintf(
-                'Invalid log level "%s" in %s. Supported levels: %s.',
+                'Invalid log level "%s" in %s. Supported levels: %s. See https://luminova.ng/docs/0.0.0/logging/levels',
                 $level,
                 $function ? "\"$function\"(...)" : 'the given context',
                 implode(', ', self::LEVELS)

@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework
+ * Luminova Framework static logger helper class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -10,20 +10,25 @@
 namespace Luminova\Logger;
 
 use \Luminova\Logger\LogLevel;
+use \Luminova\Logger\Logger;
+use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\InvalidArgumentException;
 
-trait LoggerTrait
+final class Log
 {
     /**
-     * Support for other custom log levels.
+     * Static logger helper.
      *
-     * @param string $message The emergency message to log.
-     * @param array $context Additional context data (optional).
-     * 
-     * @return void 
+     * @param string $method The log level as method name to call (e.g., `Log::error(...)`, `Log::info(...)`).
+     * @param array{0:string,1:array} $arguments Argument holding the log message and optional context.
+     *
+     * @return void
+     * @throws InvalidArgumentException If an invalid logger method-level is called.
+     * @throws RuntimeException If logger does not implement PSR LoggerInterface.
      */
-    public function __call(string $method, array $arguments = [])
+    public static function __callStatic(string $method, array $arguments)
     {
-        $this->log($method, ...$arguments);
+        Logger::getLogger()->log($method, ...$arguments);
     }
 
     /**
@@ -34,9 +39,9 @@ trait LoggerTrait
      * 
      * @return void 
      */
-    public function emergency($message, array $context = [])
+    public static function emergency(string $message, array $context = []): void
     {
-        $this->log(LogLevel::EMERGENCY, $message, $context);
+        Logger::dispatch(LogLevel::EMERGENCY, $message, $context);
     }
 
     /**
@@ -47,9 +52,9 @@ trait LoggerTrait
      * 
      * @return void 
      */
-    public function alert($message, array $context = [])
+    public static function alert(string $message, array $context = []): void
     {
-        $this->log(LogLevel::ALERT, $message, $context);
+        Logger::dispatch(LogLevel::ALERT, $message, $context);
     }
 
     /**
@@ -60,9 +65,9 @@ trait LoggerTrait
      * 
      * @return void 
      */
-    public function critical($message, array $context = [])
+    public static function critical(string $message, array $context = []): void
     {
-        $this->log(LogLevel::CRITICAL, $message, $context);
+        Logger::dispatch(LogLevel::CRITICAL, $message, $context);
     }
 
     /**
@@ -73,9 +78,9 @@ trait LoggerTrait
      * 
      * @return void 
      */
-    public function error($message, array $context = [])
+    public static function error(string $message, array $context = []): void
     {
-        $this->log(LogLevel::ERROR, $message, $context);
+        Logger::dispatch(LogLevel::ERROR, $message, $context);
     }
 
     /**
@@ -86,9 +91,9 @@ trait LoggerTrait
      * 
      * @return void 
      */
-    public function warning($message, array $context = [])
+    public static function warning(string $message, array $context = []): void
     {
-        $this->log(LogLevel::WARNING, $message, $context);
+        Logger::dispatch(LogLevel::WARNING, $message, $context);
     }
 
     /**
@@ -99,9 +104,9 @@ trait LoggerTrait
      * 
      * @return void 
      */
-    public function notice($message, array $context = [])
+    public static function notice(string $message, array $context = []): void
     {
-        $this->log(LogLevel::NOTICE, $message, $context);
+        Logger::dispatch(LogLevel::NOTICE, $message, $context);
     }
 
     /**
@@ -112,9 +117,9 @@ trait LoggerTrait
      * 
      * @return void 
      */
-    public function info($message, array $context = [])
+    public static function info(string $message, array $context = []): void
     {
-        $this->log(LogLevel::INFO, $message, $context);
+        Logger::dispatch(LogLevel::INFO, $message, $context);
     }
 
     /**
@@ -125,9 +130,9 @@ trait LoggerTrait
      * 
      * @return void 
      */
-    public function debug($message, array $context = [])
+    public static function debug(string $message, array $context = []): void
     {
-        $this->log(LogLevel::DEBUG, $message, $context);
+        Logger::dispatch(LogLevel::DEBUG, $message, $context);
     }
 
     /**
@@ -138,9 +143,9 @@ trait LoggerTrait
      * 
      * @return void 
      */
-    public function exception($message, array $context = []): void
+    public static function exception(string $message, array $context = []): void
     {
-        $this->log(LogLevel::EXCEPTION, $message, $context);
+        Logger::dispatch(LogLevel::EXCEPTION, $message, $context);
     }
 
     /**
@@ -151,21 +156,8 @@ trait LoggerTrait
      * 
      * @return void 
      */
-    public function php($message, array $context = []): void
+    public static function php(string $message, array $context = []): void
     {
-        $this->log(LogLevel::PHP, $message, $context);
-    }
-
-    /**
-     * Log an performance metric.
-     *
-     * @param string $message The php message to log.
-     * @param array $context Additional context data (optional).
-     * 
-     * @return void 
-     */
-    public function metrics($message, array $context = []): void
-    {
-        $this->log(LogLevel::METRICS, $message, $context);
+        Logger::dispatch(LogLevel::PHP, $message, $context);
     }
 }

@@ -230,7 +230,7 @@ abstract class BaseSessionHandler implements SessionHandlerInterface, SessionIdI
     protected function log(string $level, string $message): void
     {
         if($this->options['debugging']){
-            Logger::{$level}($message);
+            Logger::dispatch($level, $message);
         }
     }
 }

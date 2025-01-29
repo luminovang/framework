@@ -161,7 +161,7 @@ final class Performance
         $logData['included_files'] = $files;
 
         // Log the complete data
-        Logger::metrics(json_encode($logData, JSON_PRETTY_PRINT));
+        Logger::dispatch('metrics', json_encode($logData, JSON_PRETTY_PRINT));
     }
 
     /**
