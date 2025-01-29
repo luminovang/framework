@@ -28,7 +28,7 @@ class Generators extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected array $usages = [
+    protected array|string $usages = [
         'php novakit create:controller --help',
         'php novakit create:class --help',
         'php novakit create:view --help',

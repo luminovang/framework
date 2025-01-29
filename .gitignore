@@ -5,8 +5,8 @@
 /log
 /dump
 /.git
-/src/Command/Auth/*
 /src/Command/Auth
+/src/Command/Auth/*
 /src/Ftp/*
 /src/Ftp
 composer.lock

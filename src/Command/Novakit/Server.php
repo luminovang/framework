@@ -29,7 +29,7 @@ class Server extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected array $usages = [
+    protected array|string $usages = [
         'php novakit server --help'
     ];
 

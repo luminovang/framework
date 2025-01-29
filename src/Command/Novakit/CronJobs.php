@@ -36,7 +36,7 @@ class CronJobs extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected array $usages = [
+    protected array|string $usages = [
         'php novakit cron:create --help',
         'php novakit cron:run --help'
     ];

@@ -28,7 +28,7 @@ class Context extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected array $usages = [
+    protected array|string $usages = [
         'php novakit context --help'
     ];
 

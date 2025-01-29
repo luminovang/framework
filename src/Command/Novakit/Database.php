@@ -35,7 +35,7 @@ class Database extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected array $usages = [
+    protected array|string $usages = [
         'php novakit db:clear --help',
         'php novakit db:drop --help',
         'php novakit db:alter --help',
