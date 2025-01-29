@@ -130,9 +130,16 @@ class Logger implements LoggerInterface
             return;
         }
 
-        $level = ($to && LogLevel::has($to)) ? $to : LogLevel::ALERT;
-        $to = self::getLogDestination($to ?? '');
+        $isFile = ($to && LogLevel::has($to));
+        
+        if($isFile && !LogLevel::isCritical($to)){
+            self::write($to, $message, $context);
+            return;
+        }
 
+        $level = $isFile ? $to : LogLevel::ALERT;
+        $to = self::getLogDestination($to ?? '');
+        
         if ($to && LogLevel::has($to)) {
             self::write($to, $message, $context);
             return;

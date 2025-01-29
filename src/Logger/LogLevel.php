@@ -114,6 +114,19 @@ final class LogLevel
     ];
 
     /**
+     * List of critical log levels.
+     * 
+     * @var array<string,true> $critical
+     */
+    private static array $critical = [
+        self::EMERGENCY => true,
+        self::ERROR => true,
+        self::ALERT     => true,
+        self::EXCEPTION  => true,
+        self::CRITICAL  => true,
+    ];
+
+    /**
      * Checks if the specified log level is valid and exists.
      *
      * @param string $level The log level to check (e.g., 'error', 'info', 'debug').
@@ -147,5 +160,28 @@ final class LogLevel
                 implode(', ', self::LEVELS)
             ));
         }
+    }
+
+    /**
+     * Checks if a given log level is considered critical.
+     *
+     * Critical levels represent severe issues that require 
+     * immediate attention, such as system failures or 
+     * security breaches.
+     *
+     * The following log levels are considered critical:
+     * - `emergency`
+     * - `alert`
+     * - `critical`
+     * - `exception`
+     * - `error`
+     *
+     * @param string $level The log level to check.
+     * 
+     * @return bool Returns true if the level is critical, otherwise false.
+     */
+    public static function isCritical(string $level): bool
+    {
+        return isset(self::$critical[$level]);
     }
 }
