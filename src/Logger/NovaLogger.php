@@ -180,8 +180,7 @@ class NovaLogger implements LoggerInterface
         }
 
         $body = $this->getHtmlMessage($this->level, $message, $context);
-        $subject = sprintf('%s (v%.1f) Message Log: %s', APP_NAME, APP_VERSION, $this->level);
-
+        $subject = sprintf('%s (v%.1f) - [%s] Message Log', APP_NAME, APP_VERSION, strtoupper($this->level));
         $fiber = new Fiber(function () use ($email, $subject, $body, $message, $context) {
             try {
                 if (!Mailer::to($email)->subject($subject)->body($body)->text(strip_tags($body))->send()) {
