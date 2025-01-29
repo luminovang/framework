@@ -310,7 +310,7 @@ class CronJobs extends BaseConsole
     private static function logCronOutputs(array $logger, string|bool $iniBody = false): void 
     {
         if($iniBody !== false && !empty(trim($iniBody))){
-            Logger::debug("Cron Task Initialization Error: {$iniBody}.");
+            Logger::dispatch('debug', "Cron Task Initialization Error: {$iniBody}.");
         }
 
         foreach ($logger as $key => $list) {
