@@ -188,7 +188,7 @@ final class TOTP
      * @return string Return the URL for the QR code image.
      * @throws EncryptionException If called without a valid authentication secret.
      */
-    private function generateQrCodeImageLink(int $size = 200, string $format = 'svg'): string
+    private function generateQrCodeImageLink(int $size, string $format): string
     {
         return sprintf(
             "%s%s%s%s",
@@ -207,7 +207,7 @@ final class TOTP
      * 
      * @return string|null Return the generated QR code in the desired format.
      */
-    private function generateQrCodeImage(int $size = 200, string $output): string
+    private function generateQrCodeImage(int $size, string $output): string
     {
         $image = match ($output) {
             'svg' => (new SvgWriter())->write(new QrCode(data: $this->url(), size: $size))->getString(),

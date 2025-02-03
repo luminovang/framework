@@ -71,7 +71,7 @@ abstract class BaseCommand extends Terminal
     /**
      * Application instance.
      * 
-     * @var Application<LazyInterface>|null $app
+     * @var LazyInterface<Application>|Application|null $app
      */
     protected ?LazyInterface $app = null;
 

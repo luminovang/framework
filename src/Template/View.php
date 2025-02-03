@@ -408,14 +408,18 @@ trait View
      * 
      * @example - Usage example with cache.
      * ```php
-     * $cache = $this-app->cache(60); 
-     * //Check if already cached before caching again.
-     * if($cache->expired()){
-     *      $heavy = $db->doHeavyProcess();
-     *      $cache->view('foo')->render(['data' => $heavy]);
-     * }else{
-     *      $cache->reuse();
-     * }```
+     * public function fooView(): int 
+     * {
+     *      $cache = $this-app->cache(60); 
+     * 
+     *      //Check if already cached before caching again.
+     *      if($cache->expired()){
+     *          $heavy = $model->doHeavyProcess();
+     *          return $cache->view('foo')->render(['data' => $heavy]);
+     *      }
+     *      return $cache->reuse();
+     * }
+     * ```
      */
     public final function cache(DateTimeInterface|int|null $expiry = null): self 
     {
@@ -473,9 +477,11 @@ trait View
     }
 
     /**
-     * Render cached content if cache exist.
+     * Reuse a cached view content if exist in cache.
      * 
-     * @return int Returns status code success if cache exist and rendered else return error.
+     * @return int Return one of the following status codes:  
+     * - `STATUS_SUCCESS` if the cache exist and handled successfully,  
+     * - `STATUS_SILENT` if failed, silently terminate without error page allowing you to manually handle the state.
      * @throws RuntimeException Throws if called without calling `cache` method.
      */
     public final function reuse(): int
@@ -541,26 +547,34 @@ trait View
     }
 
     /** 
-     * Render template view file withing the `resources/Views` directory.
-     * Do not include the extension type (e.g, `.php`, `.tpl`, `.twg`), only the file name.
-     *
-     * @param string $viewName The view file name without extension type (e.g, `index`).
-     * @param string $viewType The view content extension type (default: `html`).
+     * Sets the template view name and content type before invoking methods like `render`, `response`, or `promise`. 
      * 
-     * Supported View Types: 
-     * 
-     * - html Html content.
-     * - json Json content.
-     * - text|txt Plain text content.
-     * - xml  Xml content.
-     * - js   JavaScript content.
-     * - css  CSS content.
-     * - rdf  RDF content.
-     * - atom Atom content.
-     * - rss  RSS feed content.
+     * This method allows you to specify a view file within the `resources/Views` directory and the content type for rendering. 
+     * The view name should exclude the file extension (e.g., `.php`, `.tpl`, `.twg`), only the base file name is allowed.
      *
-     * @return self Return instance of View or CoreApplication depending on where its called.
-     * @throws RuntimeException Throw if invalid or unsupported view type specified.
+     * @param string $viewName The view file name (without extension, e.g., `index`).
+     * @param string $viewType The content type for the view (default: `html`).
+     * 
+     * Supported View Types:
+     * - `html`  : HTML content.
+     * - `json`  : JSON content.
+     * - `text|txt`: Plain text content.
+     * - `xml`   : XML content.
+     * - `js`    : JavaScript content.
+     * - `css`   : CSS content.
+     * - `rdf`   : RDF content.
+     * - `atom`  : Atom content.
+     * - `rss`   : RSS feed content.
+     *
+     * @return self Returns the instance of CoreApplication.
+     * @throws RuntimeException If an unsupported view type is specified.
+     * 
+     * @example Usage:
+     * ```php
+     * $this->app->view('name', 'html')->render([...]);  // Render and return status int.
+     * $this->app->view('name', 'html')->response([...]);  // Render and return content.
+     * $this->app->view('name', 'html')->promise([...]);  // Render and return a promise object.
+     * ```
      */
     public final function view(string $viewName, string $viewType = 'html'): self 
     {
@@ -597,13 +611,18 @@ trait View
      * @param array<string,mixed> $options Additional parameters to pass in the template file.
      * @param int $status The HTTP status code (default: 200 OK).
      * 
-     * @return int Return status code STATUS_SUCCESS or STATUS_SILENT on failure.
+     * @return int Return one of the following status codes:  
+     * - `STATUS_SUCCESS` if the view is handled successfully,  
+     * - `STATUS_SILENT` if failed, silently terminate without error page allowing you to manually handle the state.
      * @throws RuntimeException If the view rendering fails.
      * 
-     * @example - Display your template view with options.
+     * @example - Display template view with options.
      * 
      * ```php
-     * $this->app->view('name')->render([...])
+     * public function fooView(): int 
+     * {
+     *      return $this->app->view('name')->render([...], 200);
+     * }
      * ```
      */
     public final function render(array $options = [], int $status = 200): int 
@@ -625,7 +644,11 @@ trait View
      * @example - Display your template view or send as an email.
      * 
      * ```php
-     * $content = $this->app->view('name', 'html')->respond(['foo' => 'bar']);
+     * public function fooView(): int 
+     * {
+     *      $content = $this->app->view('name', 'html')
+     *          ->respond(['foo' => 'bar'], 200);
+     * }
      * ```
      */
     public final function respond(array $options = [], int $status = 200): string
@@ -644,13 +667,16 @@ trait View
      * @example - Display your template view or send as an email.
      * 
      * ```php
-     * $content = $this->app->view('name', 'html')
-     * ->promise(['foo' => 'bar'])
-     * ->then(function(string $content) {
-     *      echo $content;
-     * })->catch(function(Exception $e) {
-     *      echo $e->getMessage();
-     * });
+     * public function fooView(): int 
+     * {
+     *      $content = $this->app->view('name', 'html')
+     *          ->promise(['foo' => 'bar'])
+     *          ->then(function(string $content) {
+     *              echo $content;
+     *          })->catch(function(Exception $e) {
+     *              echo $e->getMessage();
+     *          });
+     * }
      * ```
      */
     public final function promise(array $options = [], int $status = 200): PromiseInterface
@@ -666,17 +692,16 @@ trait View
     }
 
     /** 
-     * Redirect to another view url.
+     * Redirect to another view URI.
      *
-     * @param string $view The view name or view path to redirect to.
+     * @param string $uri The view URI to redirect to.
      * @param int $response_code The redirect response status code (default: 0).
      *
      * @return void
      */
-    public final function redirect(string $view, int $response_code = 0): void 
+    public final function redirect(string $uri, int $response_code = 0): void 
     {
-        $view = start_url($view);
-        header("Location: {$view}", true, $response_code);
+        header('Location: ' . start_url($uri), true, $response_code);
         exit(STATUS_SUCCESS);
     }
 
@@ -854,7 +879,7 @@ trait View
             Header::headerNoCache(404);
             throw new ViewNotFoundException(sprintf(
                 'The view "%s" could not be found in the view directory "%s".', 
-                $this->activeView, 
+                $this->activeView . self::lmvTplExe(), 
                 filter_paths($this->viewsDirectory)
             ));
         } 

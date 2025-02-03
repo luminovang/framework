@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework
+ * Luminova Framework Default application psr logger class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -9,10 +9,9 @@
  */
 namespace Luminova\Logger;
 
-use \Psr\Log\LoggerInterface;
+use \Psr\Log\AbstractLogger;
 use \App\Config\Logger;
 use \Luminova\Logger\LogLevel;
-use \Luminova\Logger\LoggerTrait;
 use \Luminova\Time\Time;
 use \Luminova\Functions\Func;
 use \Luminova\Functions\IP;
@@ -27,28 +26,28 @@ use \Luminova\Exceptions\AppException;
 use \Throwable;
 use \Fiber;
 
-class NovaLogger implements LoggerInterface
+class NovaLogger extends AbstractLogger
 {
     /**
      * Default log path.
      * 
      * @var string|null $path
      */
-    protected static ?string $path = null;
+    private static ?string $path = null;
 
     /**
      * The maximum log size in bytes.
      * 
-     * @var int|null $maxSize
+     * @var int $maxSize
      */
-    protected static ?int $maxSize = null;
+    protected int $maxSize = 0;
 
     /**
      * Flag indicating if backup should be created.
      * 
-     * @var bool|null $autoBackup
+     * @var bool $autoBackup
      */
-    protected static ?bool $autoBackup = null;
+    protected bool $autoBackup = false;
 
     /**
      * HTTP Request class.
@@ -64,18 +63,66 @@ class NovaLogger implements LoggerInterface
      */
     private string $level = LogLevel::ALERT;
 
-    use LoggerTrait;
-
     /**
-     * Initialize NovaLogger
+     * Initialize NovaLogger class.
      * 
-     * @param string $extension log file dot file extension
+     * @param string $name The Logging system identifier name (default: `default`).
+     * @param string $extension The log file name extension (default: `.log`).
      */
-    public function __construct(protected string $extension = '.log' )
+    public function __construct(
+        protected string $name = 'default', 
+        protected string $extension = '.log'
+    )
     {
         self::$path ??= root('/writeable/logs/');
-        self::$maxSize ??=  (int) env('logger.max.size', Logger::$maxSize);
-        self::$autoBackup ??= env('logger.create.backup', Logger::$autoBackup);
+        $this->maxSize = (int) env('logger.max.size', Logger::$maxSize);
+        $this->autoBackup = env('logger.create.backup', Logger::$autoBackup);
+    }
+
+    /**
+     * Sets the log name for application identifier.
+     *
+     * @param string $name The Logging system name.
+     *
+     * @return self Returns the instance of NovaLogger class.
+     */
+    public function setName(string $name): self 
+    {
+        $this->name = $name;
+        return $this;
+    }
+
+    /**
+     * Sets the maximum size for log files.
+     *
+     * This method allows setting a custom maximum size for log files. When a log file
+     * reaches this size, it may trigger backup or clearing operations depending on
+     * other configuration settings.
+     *
+     * @param int $size The maximum size of the log file in bytes.
+     *
+     * @return self Returns the instance of NovaLogger class.
+     */
+    public function setMaxLogSize(int $size): self 
+    {
+        $this->maxSize = $size;
+        return $this;
+    }
+
+    /**
+     * Enables or disables automatic log file backup based on maximum log size configuration.
+     * 
+     * When enabled, old log files will be automatically archived 
+     * to prevent excessive log size and improve performance.
+     * 
+     * @param bool $backup Set to `true` to enable auto-backup, `false` to disable it (default: `true`).
+     * 
+     * @return self Returns the instance of NovaLogger class.
+     */
+    public function setAutoBackup(bool $backup = true): self 
+    {
+        $this->autoBackup = $backup;
+        return $this;
     }
 
     /**
@@ -83,7 +130,7 @@ class NovaLogger implements LoggerInterface
      *
      * @param string $level The log level to set (e.g., `LogLevel::*`, 'error', 'info', 'debug').
      *
-     * @return self Returns the current NovaLogger instance.
+     * @return self Returns the instance of NovaLogger class.
      * @throws InvalidArgumentException if an invalid log level is specified.
      */
     public function setLevel(string $level): self 
@@ -98,7 +145,7 @@ class NovaLogger implements LoggerInterface
      *
      * @param string $level The log level (e.g., "emergency," "error," "info").
      * @param string $message The log message.
-     * @param array $context Optional additional context to include in log.
+     * @param array<string|int,mixed> $context Optional additional context to include in log.
      *
      * @return void
      * @throws FileException — If unable to write log to file.
@@ -108,13 +155,13 @@ class NovaLogger implements LoggerInterface
     {
         LogLevel::assert($level, __METHOD__);
         if(!Logger::$asyncLogging){
-            $this->write($level, $message, $context, true);
+            $this->write($level, $message, $context);
             return;
         }
 
         $fiber = new Fiber(function () use ($level, $message, $context) {
             try {
-                $this->write($level, $message, $context, true);
+                $this->write($level, $message, $context);
             } catch (Throwable $e) {
                 $this->level = $level;
                 $this->e(
@@ -128,33 +175,46 @@ class NovaLogger implements LoggerInterface
     }
 
     /**
-     * Writes a log message to the specified file.
+     * Log an exception message.
      *
-     * @param string $level   The log level (e.g., 'info', 'error', 'debug').
-     * @param string $message The primary log message.
-     * @param array  $context Optional associative array providing context data.
-     * @param bool  $auth_backup Weather to automatically create backup if max size is reached (default: false).
-     *
-     * @return bool Returns true if the log written to file, false otherwise.
-     * @throws FileException — If unable to write log to file.
+     * @param Throwable|string $message The EXCEPTION message to log.
+     * @param array<string|int,mixed> $context Additional context data (optional).
+     * 
+     * @return void 
      */
-    public function write(string $level, string $message, array $context = [], bool $auth_backup = false): bool
+    public function exception(Throwable|string $message, array $context = []): void
     {
-        if(make_dir(self::$path)){
-            $level = LogLevel::LEVELS[$level] ?? LogLevel::INFO;
-            $path = self::$path . "{$level}{$this->extension}";
-            $message = self::message($level, $message, $context);
+        $this->log(
+            LogLevel::EXCEPTION, 
+            ($message instanceof Throwable) ? $message->getMessage() : $message,
+            $context
+        );
+    }
 
-            if(FileManager::write($path, $message . PHP_EOL, FILE_APPEND|LOCK_EX)){
-                if($auth_backup){
-                    $this->backup($path, $level);
-                }
+    /**
+     * Log an php message.
+     *
+     * @param string $message The php message to log.
+     * @param array<string|int,mixed> $context Additional context data (optional).
+     * 
+     * @return void 
+     */
+    public function php(string $message, array $context = []): void
+    {
+        $this->log(LogLevel::PHP, $message, $context);
+    }
 
-                return true;
-            }
-        }
-
-        return false;
+    /**
+     * Log an performance metric.
+     *
+     * @param string $data The profiling data to log.
+     * @param array<string|int,mixed> $context Additional context data (optional).
+     * 
+     * @return void 
+     */
+    public function metrics(string $data, array $context = []): void
+    {
+        $this->log(LogLevel::METRICS, $data, $context);
     }
 
     /**
@@ -162,7 +222,7 @@ class NovaLogger implements LoggerInterface
      *
      * @param string $email The recipient email address.
      * @param string $message The message to log.
-     * @param array $context Additional context data (optional).
+     * @param array<string|int,mixed> $context Additional context data (optional).
      *
      * @return void
      * > Note: If error occurs during mailing log, file logger will be used instead.
@@ -179,16 +239,21 @@ class NovaLogger implements LoggerInterface
             return;
         }
 
-        $body = $this->getHtmlMessage($this->level, $message, $context);
-        $subject = sprintf('%s (v%.1f) - [%s] Message Log', APP_NAME, APP_VERSION, strtoupper($this->level));
+        $body = $this->emailTemplate($this->level, $message, $context);
+        $subject = sprintf(
+            '%s (v%.1f) - [%s] %s message Log',
+            APP_NAME, 
+            APP_VERSION, 
+            strtoupper($this->level),
+            self::$name
+        );
         $fiber = new Fiber(function () use ($email, $subject, $body, $message, $context) {
             try {
                 if (!Mailer::to($email)->subject($subject)->body($body)->text(strip_tags($body))->send()) {
                     $this->write(
                         $this->level, 
                         "Failed to send email log: {$message}", 
-                        $context, 
-                        true
+                        $context
                     );
                 }
             } catch (AppException $e) {
@@ -210,18 +275,18 @@ class NovaLogger implements LoggerInterface
     /**
      * Send log message to a remote URL asynchronously.
      *
-     * @param string $url_endpoint The URL to which the log should be sent.
+     * @param string $url The URL to which the log should be sent.
      * @param string $message The message to log.
-     * @param array $context Additional context data (optional).
+     * @param array<string|int,mixed> $context Additional context data (optional).
      *
      * @return void
      * > Note: If error occurs during network log, file logger will be used instead.
      * > If exception occurs during network log, file logger with level `exception` be used.
      */
-    public function remote(string $url_endpoint, string $message, array $context = []): void 
+    public function remote(string $url, string $message, array $context = []): void 
     {
-        if(!$url_endpoint || !Func::isUrl($url_endpoint)){
-            $this->log(LogLevel::CRITICAL, sprintf('Invalid network logger URL endpoint: %s', $url_endpoint), [
+        if(!$url || !Func::isUrl($url)){
+            $this->log(LogLevel::CRITICAL, sprintf('Invalid network logger URL endpoint: %s', $url), [
                 'originalMessage' => $message,
                 'originalContext' => $context,
                 'originalLevel' =>  $this->level,
@@ -234,18 +299,19 @@ class NovaLogger implements LoggerInterface
             'app'        => APP_NAME,
             'host'       => APP_HOSTNAME,
             'clientIp'   => IP::get(),
-            'details'    => self::message($this->level, $message),
+            'details'    => $this->message($this->level, $message),
             'context'    => $context,
             'level'      => $this->level,
+            'name'       => $this->name,
             'version'    => APP_VERSION,
             'url'        => self::$request->getUrl(),
             'method'     => self::$request->getMethod(),
             'userAgent'  => self::$request->getUserAgent()->toString(),
         ];
 
-        $fiber = new Fiber(function () use ($url_endpoint, $payload, $message) {
+        $fiber = new Fiber(function () use ($url, $payload, $message) {
             try {
-                $response = (new Network())->post($url_endpoint, ['body' => $payload]);
+                $response = (new Network())->post($url, ['body' => $payload]);
                 if ($response->getStatusCode() !== 200) {
                     $this->write($this->level, 
                         sprintf(
@@ -253,8 +319,7 @@ class NovaLogger implements LoggerInterface
                             $payload['details'], 
                             $response->getContents()
                         ), 
-                        $payload['context'],
-                        true
+                        $payload['context']
                     );
                 }
             } catch (AppException $e) {
@@ -282,7 +347,11 @@ class NovaLogger implements LoggerInterface
      */
     public function clear(string $level): bool 
     {
-        return FileManager::write(self::$path . "{$level}{$this->extension}", '', LOCK_EX);
+        $extension = ($level === LogLevel::METRICS) 
+            ? '.json' 
+            : $this->extension;
+            
+        return FileManager::write(self::$path . "{$level}{$extension}", '', LOCK_EX);
     }
 
     /**
@@ -296,7 +365,7 @@ class NovaLogger implements LoggerInterface
      *
      * @return string Return the formatted log message.
      */
-    public static function message(
+    public function message(
         string $level, 
         string $message, 
         array $context = [],
@@ -332,7 +401,14 @@ class NovaLogger implements LoggerInterface
             );
         }
 
-        $message = sprintf('[%s] [%s]: %s', strtoupper($level), Time::now()->format('Y-m-d\TH:i:s.uP'), $message);
+        $message = sprintf(
+            '[%s] [%s] [%s]: %s', 
+            strtoupper($level), 
+            $this->name,
+            Time::now()->format('Y-m-d\TH:i:s.uP'), 
+            $message
+        );
+
         $formatted = ($context === []) ? '' : print_r($context, true);
 
         return $formatted 
@@ -343,42 +419,48 @@ class NovaLogger implements LoggerInterface
     /**
      * Creates a backup of the log file if it exceeds a specified maximum size.
      *
-     * @param string $filepath The path to the current log file.
-     * @param string $level    The log level, used in the backup file's naming convention.
+     * @param string $level The log level to create backup for.
      *
-     * @return void 
+     * @return bool Return true if the backup was created, otherwise false.
      */
-    protected function backup(string $filepath, string $level): void 
+    public function backup(string $level): bool 
     {
-        if(self::$maxSize && FileManager::size($filepath) >= (int) self::$maxSize){
-            if(self::$autoBackup){
-                $backup_time = Time::now()->format('Ymd_His');
-                $backup = self::$path . 'backups' . DIRECTORY_SEPARATOR;
-                
-                if(make_dir($backup)){
-                    $backup .= "{$level}_v" . str_replace('.', '_', APP_VERSION) . "_{$backup_time}.zip";
+        $filepath = self::$path . "{$level}{$this->extension}";
 
-                    try{
-                        if(Archive::zip($backup, $filepath)){
-                           $this->clear($level);
-                        }
-                    }catch(FileException $e){
-                        FileManager::write(
-                            $filepath, 
-                            self::message($level, 'Failed to create backup: ' . $e->getMessage()) . PHP_EOL, 
-                            FILE_APPEND|LOCK_EX
-                        );
-                    }
-                }
-                return;
+        if($this->maxSize && FileManager::size($filepath) >= (int) $this->maxSize){
+
+            if(!$this->autoBackup){
+                return $this->clear($level);
             }
+
+            $backup_time = Time::now()->format('Ymd_His');
+            $backup = self::$path . 'backups' . DIRECTORY_SEPARATOR;
             
-            $this->clear($level);
+            if(make_dir($backup)){
+                $backup .= "{$level}_v" . str_replace('.', '_', APP_VERSION) . "_{$backup_time}.zip";
+
+                try{
+                    if(Archive::zip($backup, $filepath)){
+                        return $this->clear($level);
+                    }
+                }catch(FileException $e){
+                    FileManager::write(
+                        $filepath, 
+                        $this->message(
+                            $level, 
+                            sprintf('Failed to create backup for %s: error: %s', $level, $e->getMessage() . PHP_EOL)
+                        ), 
+                        FILE_APPEND|LOCK_EX
+                    );
+                }
+            }
         }
+
+        return false;
     }
 
     /**
-     * Generates the HTML message body for log.
+     * Generates the HTML message body for mail logging.
      * 
      * @param string $level The log level (e.g., 'info', 'error', 'debug').
      * @param string $message The log message.
@@ -386,17 +468,116 @@ class NovaLogger implements LoggerInterface
      * 
      * @return string Return formatted HTML email message body.
      */
-    public function getHtmlMessage(string $level, string $message, array $context = []): string 
+    protected function emailTemplate(string $level, string $message, array $context = []): string 
     {
         self::$request ??= new Request();
         $template = Logger::getEmailLogTemplate(
-            self::$request, 
+            self::$request,
+            $this,
             $message,
             $level,
             $context
         );
         
-        return $template ? $template : self::message($level, $message, $context, true);
+        return $template ? $template : $this->message($level, $message, $context, true);
+    }
+
+    /**
+     * Writes a log message to the specified file.
+     *
+     * @param string $level The log level (e.g., 'info', 'error', 'debug').
+     * @param string $message The primary log message.
+     * @param array<string|int,mixed>  $context Optional associative array providing context data.
+     *
+     * @return bool Returns true if the log written to file, false otherwise.
+     * @throws FileException — If unable to write log to file.
+     */
+    protected function write(string $level, string $message, array $context = []): bool
+    {
+        if(make_dir(self::$path)){
+            if($level === LogLevel::METRICS){
+                return $this->logMetric($message, $context['key'] ?? '');
+            }
+
+            $level = LogLevel::LEVELS[$level] ?? LogLevel::INFO;
+            $path = self::$path . "{$level}{$this->extension}";
+            $message = $this->message($level, $message, $context);
+
+            if(FileManager::write($path, $message . PHP_EOL, FILE_APPEND|LOCK_EX)){
+                return ($this->autoBackup && $this->maxSize) 
+                    ? $this->backup($level) 
+                    : true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Logs performance metrics data to a JSON file.
+     *
+     * @param string $data The performance metrics data to log.
+     * @param string $key  The unique identifier for the metrics data.
+     *
+     * @return bool Returns true if the metrics data was successfully logged, false otherwise.
+     */
+    protected function logMetric(string $data, string $key): bool 
+    {
+        if(!$data || !$key){
+            return false;
+        }
+
+        $path = self::$path . 'metrics.json';
+        $contents = file_exists($path) ? file_get_contents($path) : null;
+        if ($contents === false) {
+            return false;
+        }
+
+        $key = md5($key);
+        $contents = ($contents === null) ? [] : json_decode($contents, true);
+        $contents[$key] = $this->normalizeArrayKeys(json_decode($data, true));
+        $contents[$key]['info']['DateTime'] = Time::now()->format('Y-m-d\TH:i:s.uP');
+        
+        if ($contents[$key] === null) {
+            return false;
+        }
+
+        $updated = json_encode($contents, JSON_PRETTY_PRINT);
+        if ($updated === false) {
+            return false;
+        }
+
+        return FileManager::write($path, $updated, LOCK_EX);
+    }
+
+    /**
+     * Normalizes the keys of an array by removing spaces from them.
+     *
+     * This function takes an array and removes any spaces from its keys.
+     * If the input is not an array or is empty, it returns an empty array.
+     *
+     * @param mixed $array The input array to normalize.
+     *
+     * @return array An array with normalized keys (spaces removed), or an empty array if input is invalid.
+     */
+    private function normalizeArrayKeys(mixed $array): array 
+    {
+        if(!$array || !is_array($array)){
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($array as $key => $value) {
+            $newKey = str_replace(' ', '', $key);
+            if (is_array($value)) {
+                $value = $this->normalizeArrayKeys($value);
+            }
+            
+            $normalized[$newKey] = $value;
+        }
+    
+        return $normalized;
     }
 
     /**

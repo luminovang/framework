@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework Logger class.
+ * Luminova Framework static logger class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -12,22 +12,34 @@ namespace Luminova\Logger;
 use \Psr\Log\LoggerInterface;
 use \Luminova\Logger\LogLevel;
 use \Luminova\Logger\NovaLogger;
-use \Luminova\Logger\LoggerTrait;
 use \App\Config\Logger as LoggerConfig;
 use \Luminova\Functions\Func;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
+use \Throwable;
 
-class Logger implements LoggerInterface
+/**
+ * Static logger class methods.
+ *
+ * @method static void emergency(string $message, array $context = [])  Logs a system emergency (highest severity).
+ * @method static void alert(string $message, array $context = [])      Logs an alert that requires immediate action.
+ * @method static void critical(string $message, array $context = [])   Logs a critical condition that requires prompt attention.
+ * @method static void error(string $message, array $context = [])      Logs an error that prevents execution but does not require immediate shutdown.
+ * @method static void warning(string $message, array $context = [])    Logs a warning about a potential issue.
+ * @method static void notice(string $message, array $context = [])     Logs a normal but significant event.
+ * @method static void info(string $message, array $context = [])       Logs general informational messages.
+ * @method static void debug(string $message, array $context = [])      Logs debugging information for developers.
+ * @method static void phpError(string $message, array $context = [])   Logs a PHP runtime error.
+ * @method static void php(string $message, array $context = [])        Alias for `phpError`, logs PHP-related issues.
+ */
+final class Logger
 {
-    use LoggerTrait;
-
     /**
      * PSR logger interface.
      * 
      * @var LoggerInterface|null $logger
      */
-    protected static ?LoggerInterface $logger = null;
+    private static ?LoggerInterface $logger = null;
 
     /**
      * Initialize logger instance.
@@ -35,11 +47,41 @@ class Logger implements LoggerInterface
     public function __construct(){}
 
     /**
-     * Get shared instance of  your application PSR logger class.
+     * Support for other custom log levels.
+     *
+     * @param string $method The log level as method name to call (e.g., `$logger->error(...)`, `$logger->info(...)`).
+     * @param array{0:string,1:array{0:string,1:array<string|int,mixed>}} $arguments Argument holding the log message and optional context.
      * 
-     * If no logger was specified in `App\Config\Logger->getLogger()` method, default NovaLogger will be returned.
-     * 
-     * @return LoggerInterface|NovaLogger Return instance of app logger class in-use.
+     * @return void 
+     * @throws InvalidArgumentException If an invalid logger method-level is called.
+     * @throws RuntimeException If logger does not implement PSR LoggerInterface.
+     */
+    public function __call(string $method, array $arguments = [])
+    {
+        self::log($method, ...$arguments);
+    }
+
+    /**
+     * Static logger helper.
+     *
+     * @param string $method The log level as method name to call (e.g., `Logger::error(...)`, `Logger::info(...)`).
+     * @param array{0:string,1:array{0:string,1:array<string|int,mixed>}} $arguments Argument holding the log message and optional context.
+     *
+     * @return void
+     * @throws InvalidArgumentException If an invalid logger method-level is called.
+     * @throws RuntimeException If logger does not implement PSR LoggerInterface.
+     */
+    public static function __callStatic(string $method, array $arguments)
+    {
+        self::log($method, ...$arguments);
+    }
+
+    /**
+     * Get the shared instance of the application's PSR-compliant logger.
+     *
+     * If no logger is specified in `App\Config\Logger->getLogger()`, the default `NovaLogger` is used.
+     *
+     * @return LoggerInterface|NovaLogger Return the active logger instance.
      */
     public static function getLogger(): LoggerInterface
     {
@@ -51,18 +93,53 @@ class Logger implements LoggerInterface
     }
 
     /**
-     * Log a message at a specified log level.
+     * Write log a message at a specified log level.
      *
-     * @param string $level The log level (e.g., "emergency," "error," "info").
+     * @param string $level The log level (e.g., `LogLevel::INFO`, `emergency`).
      * @param string $message The log message.
-     * @param array $context Additional context data (optional).
+     * @param array<string|int,mixed> $context Additional context data (optional).
      *
      * @return void
      * @throws RuntimeException If logger does not implement PSR LoggerInterface.
      */
-    public function log($level, $message, array $context = []): void
+    public static function log(string $level, string $message, array $context = []): void
     {
-        self::write($level, $message, $context);
+        self::assertPsrLogger();
+        self::getLogger()->log(
+            ($level === 'phpError') ? LogLevel::PHP : $level, 
+            $message, 
+            $context
+        );
+    }
+
+    /**
+     * Logs performance and metric data.
+     *
+     * @param string $message The profiling data to log.
+     * @param array<string|int,mixed> $context Additional context data (optional).
+     * 
+     * @return void 
+     */
+    public static function metrics(string $data, array $context = []): void
+    {
+        self::log(LogLevel::METRICS, $data, $context);
+    }
+
+    /**
+     * Logs an exception with additional context.
+     *
+     * @param Throwable|string $message The exception message to log.
+     * @param array<string|int,mixed> $context Additional context data (optional).
+     * 
+     * @return void 
+     */
+    public static function exception(Throwable|string $message, array $context = []): void
+    {
+        self::log(
+            LogLevel::EXCEPTION, 
+            $message instanceof Throwable ? $message->getMessage() : $message, 
+            $context
+        );
     }
 
     /**
@@ -77,7 +154,7 @@ class Logger implements LoggerInterface
      * 
      * @param string|null $to The destination for the log message (log level, email address, URL, or NULL).
      * @param string $message The message to be logged.
-     * @param array $context Optional additional data to provide context for the log.
+     * @param array<string|int,mixed> $context Optional additional data to provide context for the log.
      *
      * @return void
      * @throws InvalidArgumentException If the provided destination is invalid (not a valid log level, 
@@ -94,7 +171,7 @@ class Logger implements LoggerInterface
         $isFile = ($to && LogLevel::has($to));
         
         if($isFile && !LogLevel::isCritical($to)){
-            self::write($to, $message, $context);
+            self::log($to, $message, $context);
             return;
         }
 
@@ -102,7 +179,7 @@ class Logger implements LoggerInterface
         $to = self::getLogDestination($to ?? '');
         
         if ($to && LogLevel::has($to)) {
-            self::write($to, $message, $context);
+            self::log($to, $message, $context);
             return;
         }
 
@@ -139,7 +216,7 @@ class Logger implements LoggerInterface
      *
      * @param string $url The URL of the remote server to send the log message to.
      * @param string $message The log message to be sent.
-     * @param array $context Additional context data to be included in the log message (optional).
+     * @param array<string|int,mixed> $context Additional context data to be included in the log message (optional).
      *
      * @return void
      *
@@ -170,7 +247,7 @@ class Logger implements LoggerInterface
      *
      * @param string $email The email address to send the log message to.
      * @param string $message The log message to be sent.
-     * @param array $context Additional context data to be included in the log message (optional).
+     * @param array<string|int,mixed> $context Additional context data to be included in the log message (optional).
      *
      * @return void
      *
@@ -209,22 +286,6 @@ class Logger implements LoggerInterface
        return PRODUCTION 
             ? (env('logger.mail.logs', false) ?: (env('logger.remote.logs', false) ?: $to))
             : $to;
-    }
-
-    /**
-     * Write log a message at a specified log level.
-     *
-     * @param string $level The log level (e.g., "emergency," "error," "info").
-     * @param string $message The log message.
-     * @param array $context Additional context data (optional).
-     *
-     * @return void
-     * @throws RuntimeException If logger does not implement LoggerInterface.
-     */
-    private static function write(string $level, string $message, array $context = []): void
-    {
-        self::assertPsrLogger();
-        self::getLogger()->log($level, $message, $context);
     }
 
     /**

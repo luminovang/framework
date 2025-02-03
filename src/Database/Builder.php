@@ -2489,6 +2489,7 @@ final class Builder implements LazyInterface
                 }
             }
         }
+        
         $this->reset();
         $this->debugQuery = [
             'method' => $method,
@@ -2498,7 +2499,7 @@ final class Builder implements LazyInterface
         ];
 
         if (PRODUCTION) {
-            Logger::dispatch('debug', json_encode($this->debugQuery, JSON_PRETTY_PRINT));
+            Logger::debug(json_encode($this->debugQuery, JSON_PRETTY_PRINT));
             return false;
         }
 

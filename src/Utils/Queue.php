@@ -844,7 +844,7 @@ final class Queue implements Countable
     private function report(string $message): void 
     {
         if($this->eReporting === self::E_LOG){
-            Logger::dispatch('debug', $message);
+            Logger::debug($message);
             return;
         }
 

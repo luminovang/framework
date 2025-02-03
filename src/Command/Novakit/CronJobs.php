@@ -20,6 +20,7 @@ use \App\Config\Cron;
 use \ReflectionClass;
 use \DateInterval;
 use \Exception;
+//g9BKhSPKjCvm
 
 class CronJobs extends BaseConsole 
 {
@@ -179,7 +180,7 @@ class CronJobs extends BaseConsole
                 }
 
                 if($task['log'] !== null && ($body = ob_get_clean()) !== false){
-                    if(!empty(trim($body))){
+                    if(trim($body) !== ''){
                         $logger['logs'][$task['log']][] = self::setCronOutputHead(
                             $task['controller'], 
                             $task['description'] ?? 'Cron Execution',
@@ -310,7 +311,7 @@ class CronJobs extends BaseConsole
     private static function logCronOutputs(array $logger, string|bool $iniBody = false): void 
     {
         if($iniBody !== false && !empty(trim($iniBody))){
-            Logger::dispatch('debug', "Cron Task Initialization Error: {$iniBody}.");
+            Logger::debug("Cron Task Initialization Error: {$iniBody}.");
         }
 
         foreach ($logger as $key => $list) {

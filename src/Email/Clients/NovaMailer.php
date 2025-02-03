@@ -86,7 +86,7 @@ class NovaMailer implements MailerInterface
 
     /**
      * @var string $XMailer 
-    */
+     */
     public string $XMailer = '';
 
     /**
@@ -234,8 +234,8 @@ class NovaMailer implements MailerInterface
             if ($this->exceptions) {
                 throw MailerException::throwWith($e->getMessage());
             }
-            Logger::dispatch('exception', $e->getMessage());
 
+            Logger::dispatch('exception', $e->getMessage());
             return false;
         }
 
@@ -480,7 +480,7 @@ class NovaMailer implements MailerInterface
         if (is_resource($this->connection)) {
             $status = stream_get_meta_data($this->connection);
             if ($status['eof']) {
-                Logger::dispatch('debug', 'SMTP NOTICE: EOF caught while checking if connected');
+                Logger::debug('SMTP NOTICE: EOF caught while checking if connected');
                 $this->close();
 
                 return false;
@@ -500,7 +500,7 @@ class NovaMailer implements MailerInterface
         if (is_resource($this->connection)) {
             fclose($this->connection);
             $this->connection = null;
-            Logger::dispatch('debug', 'Connection: closed');
+            Logger::debug('Connection: closed');
         }
     }
 
@@ -525,7 +525,7 @@ class NovaMailer implements MailerInterface
                     throw new MailerException($error);
                 }
 
-                Logger::dispatch('debug', $error);
+                Logger::debug($error);
             }
         }
     }

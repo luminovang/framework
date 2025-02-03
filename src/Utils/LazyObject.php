@@ -58,6 +58,7 @@ class LazyObject implements LazyInterface, Stringable
      * @param callable|null $arguments Optional arguments to pass to the class constructor or closure initializer argument.
      *              Must be a callable that returns a list array of arguments to pass to the constructor.
      * 
+     * @return LazyInterface<\T> Return instance of lazy object that wraps the given class object.
      * @throws RuntimeException If the class does not exist or error occurs.
      * 
      * @example - Custom Closure Initialization.
@@ -99,7 +100,7 @@ class LazyObject implements LazyInterface, Stringable
      * @param callable|null $arguments Optional arguments to pass to the class constructor or closure initializer argument.
      *               Must be a callable that returns a list array of arguments to pass to the constructor.
      * 
-     * @return class-object<\T>|LazyInterface<\T> Return lazy-loaded instance of the specified class.
+     * @return class-object<\T>|LazyInterface<\T> Return lazy-loaded instance that wraps the given class object.
      * @throws RuntimeException If the class does not exist or error occurs.
      * 
      * @example Class Name Initialization:
@@ -382,7 +383,7 @@ class LazyObject implements LazyInterface, Stringable
     }
 
     /**
-     * Unserializes the lazy-loaded instance.
+     * Unserialize the lazy-loaded instance.
      *
      * This method is called when unserializing the lazy-loaded object. It ensures that the instance is initialized
      * and implements the __unserialize() method before applying the unserialization data.

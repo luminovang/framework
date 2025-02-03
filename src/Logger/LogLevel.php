@@ -17,28 +17,28 @@ use \Luminova\Exceptions\InvalidArgumentException;
 final class LogLevel
 {
     /**
-     * Emergency level: System is unusable. Critical issues that require immediate attention.
+     * Emergency level: System is unusable.
      * 
      * @var string EMERGENCY
      */
     public const EMERGENCY = 'emergency';
 
     /**
-     * Alert level: Action must be taken immediately. Usually used for critical issues that need urgent resolution.
+     * Alert level: Action must be taken immediately.
      * 
      * @var string ALERT
      */
     public const ALERT     = 'alert';
 
     /**
-     * Critical level: Critical conditions, such as an application or service being down. Requires immediate attention.
+     * Critical level: Critical conditions, such as an application or service being down.
      * 
      * @var string CRITICAL
      */
     public const CRITICAL  = 'critical';
 
     /**
-     * Error level: Runtime errors that require attention. Indicates a problem that needs to be investigated.
+     * Error level: Runtime errors that require attention.
      * 
      * @var string ERROR
      */
@@ -52,7 +52,7 @@ final class LogLevel
     public const WARNING   = 'warning';
 
     /**
-     * Notice level: Normal but significant conditions that require attention. Provides useful information.
+     * Notice level: Normal but significant conditions that require attention.
      * 
      * @var string NOTICE
      */
@@ -66,7 +66,7 @@ final class LogLevel
     public const INFO      = 'info';
 
     /**
-     * Debug level: Detailed information used for debugging and diagnosing issues. Typically used during development.
+     * Debug level: Detailed information used for debugging and diagnosing issues.
      * 
      * @var string DEBUG
      */
@@ -120,7 +120,6 @@ final class LogLevel
      */
     private static array $critical = [
         self::EMERGENCY => true,
-        self::ERROR => true,
         self::ALERT     => true,
         self::EXCEPTION  => true,
         self::CRITICAL  => true,
@@ -174,7 +173,6 @@ final class LogLevel
      * - `alert`
      * - `critical`
      * - `exception`
-     * - `error`
      *
      * @param string $level The log level to check.
      * 

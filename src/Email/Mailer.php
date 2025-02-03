@@ -333,7 +333,7 @@ class Mailer implements LazyInterface
      */
     private function initialize(): void
     {
-        $this->client->SMTPDebug = self::isDebugable() ? 3 : 0;
+        $this->client->SMTPDebug = self::isDebuggable() ? 3 : 0;
         $this->client->CharSet = self::getCharset(env('smtp.charset'));
         $this->client->XMailer = Foundation::copyright();
 
@@ -365,7 +365,7 @@ class Mailer implements LazyInterface
      *
      * @return bool True if debugging is enabled, false otherwise.
      */
-    private static function isDebugable(): bool
+    private static function isDebuggable(): bool
     {
         return !PRODUCTION && (bool) env('smtp.debug');
     }

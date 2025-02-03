@@ -15,6 +15,7 @@ use \Luminova\Logger\NovaLogger;
 use \Luminova\Time\Time;
 use \Luminova\Functions\IP;
 use \Psr\Log\LoggerInterface;
+use \Psr\Log\AbstractLogger;
 
 final class Logger extends BaseConfig
 {
@@ -65,12 +66,15 @@ final class Logger extends BaseConfig
      */
     public static function getEmailLogTemplate(
         HttpRequestInterface $request, 
+        AbstractLogger $logger,
         string $message, 
         string $level, 
         array $context
     ): ?string 
     {
-        $message = NovaLogger::message($level, $message, $context, true);
+        $message = ($logger instanceof NovaLogger) 
+            ? $logger->message($level, $message, $context, true)
+            : $message;
         $url = htmlspecialchars($request->getUrl());
         $method = htmlspecialchars($request->getMethod());
         $userAgent = htmlspecialchars($request->getUserAgent()->toString());

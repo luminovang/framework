@@ -69,14 +69,14 @@ abstract class BaseConsole
     /**
      * Application instance.
      * 
-     * @var Application<LazyInterface>|null $app
+     * @var LazyInterface<Application>|Application|null $app
      */
     protected ?LazyInterface $app = null;
 
     /**
      * Terminal Commands instance.
      * 
-     * @var Terminal<LazyInterface>|null $term
+     * @var LazyInterface<Terminal>|Terminal|null $term
      */
     protected ?LazyInterface $term = null;
 

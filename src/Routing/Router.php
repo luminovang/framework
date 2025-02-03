@@ -591,7 +591,10 @@ final class Router
         } 
 
         if(!is_string($match)){
-           throw new RouterException('Invalid arguments, "$match" must be a segment pattern string.', RouterException::INVALID_ARGUMENTS);
+           throw new RouterException(
+                'Invalid arguments, "$match" must be a segment pattern string.', 
+                RouterException::INVALID_ARGUMENTS
+            );
         }
 
         $match = self::normalizePatterns($match);
@@ -1051,7 +1054,7 @@ final class Router
         }
 
         $routes = self::getRoutes('routes');
-        $status = $routes !== [] ? self::handleWebsite($routes, self::$uri) : STATUS_ERROR;
+        $status = ($routes !== []) ? self::handleWebsite($routes, self::$uri) : STATUS_ERROR;
 
         if ($status === STATUS_SILENT) {
             return STATUS_ERROR;
@@ -1171,7 +1174,7 @@ final class Router
             $matches = [];
             $match = self::uriCapture($route['pattern'], $uri, $matches);
             $passed = $match 
-                ? self::call($route['callback'], self::matchesToArgs($matches))
+                ? self::call($route['callback'], self::matchesToArgs($matches), false, false, $route['middleware'])
                 : STATUS_ERROR;
       
             if ((!$match && $route['middleware']) || ($match && $passed === STATUS_SUCCESS)) {
@@ -1343,7 +1346,8 @@ final class Router
      * @param Closure|array{0:class-string<BaseController|BaseCommand|RouterInterface|ErrorHandlerInterface>,1:string}|string $callback Class public callback method eg: UserController:update.
      * @param array $arguments Method arguments to pass to callback method.
      * @param bool $injection Force use dependency injection (default: false).
-     * @param bool $is_cli_middleware Indicate weather caller is cli middleware (default: false).
+     * @param bool $is_cli_middleware Indicate weather caller is CLI middleware (default: false).
+     * @param bool $is_http_middleware Indicate weather caller is HTTP middleware (default: false).
      *
      * @return int Return status if controller method was executed successfully, error or silent otherwise.
      * @throws RouterException if method is not callable or doesn't exist.
@@ -1352,7 +1356,8 @@ final class Router
         Closure|string|array $callback, 
         array $arguments = [], 
         bool $injection = false,
-        bool $is_cli_middleware = false
+        bool $is_cli_middleware = false,
+        bool $is_http_middleware = false
     ): int
     {
         if ($callback instanceof Closure) {
@@ -1387,7 +1392,8 @@ final class Router
                 $callback[1], 
                 $arguments, 
                 $injection,
-                $is_cli_middleware
+                $is_cli_middleware,
+                $is_http_middleware
             );
         }
 
@@ -1399,7 +1405,8 @@ final class Router
                 $method, 
                 $arguments, 
                 $injection,
-                $is_cli_middleware
+                $is_cli_middleware,
+                $is_http_middleware
             );
         }
 
@@ -1414,6 +1421,7 @@ final class Router
      * @param array $arguments Optional arguments to pass to the method.
      * @param bool $injection Force use dependency injection. Default is false.
      * @param bool $is_cli_middleware Indicate weather caller is cli middleware (default: false).
+     * @param bool $is_http_middleware Indicate weather caller is HTTP middleware (default: false).
      *
      * @return int Return status code.
      * @throws RouterException if method is not callable or doesn't exist.
@@ -1423,7 +1431,8 @@ final class Router
         string $method, 
         array $arguments = [], 
         bool $injection = false,
-        bool $is_cli_middleware = false
+        bool $is_cli_middleware = false,
+        bool $is_http_middleware = false
     ): int 
     {
         if ($className === '') {
@@ -1437,14 +1446,17 @@ final class Router
 
         self::$classInfo['namespace'] = $className;
         self::$classInfo['method'] = $method;
+        self::$classInfo['uri'] = self::$uri;
 
         try {
             $class = new ReflectionClass($className);
 
             if (!($class->isInstantiable() && (
-                $class->isSubclassOf(BaseCommand::class) ||
-                $class->isSubclassOf(BaseController::class) ||
-                $class->implementsInterface(RouterInterface::class)))) {
+                    $class->isSubclassOf(BaseCommand::class) ||
+                    $class->isSubclassOf(BaseController::class) ||
+                    $class->implementsInterface(RouterInterface::class))
+                )
+            ) {
                 RouterException::throwWith('invalid_controller', RouterException::INVALID_CONTROLLER, [
                     $className
                 ]);
@@ -1453,6 +1465,7 @@ final class Router
             }
 
             $caller = $class->getMethod($method);
+
             if(!self::isMethodReturnInt($caller)){
                 throw new RouterException(
                     sprintf(
@@ -1466,14 +1479,16 @@ final class Router
             if ($caller->isPublic() && !$caller->isAbstract() && 
                 (
                     !$caller->isStatic() || 
-                    $class->implementsInterface(ErrorHandlerInterface::class) || 
-                    $class->implementsInterface(RouterInterface::class)
+                    ($caller->isStatic() && $class->implementsInterface(ErrorHandlerInterface::class))
                 )
             ) {
-                if (isset($arguments['command']) && self::$is_cli) {;
-                    if($class->getProperty('group')->getDefaultValue() === self::getArgument(1)) {
+                if (isset($arguments['command']) && self::$is_cli) {
+                    $controllerGroup = $class->getProperty('group')->getDefaultValue();
+                    
+                    if($controllerGroup === self::getArgument(1)) {
                         $arguments['classMethod'] = $method;
-                        $result = self::invokeCommandArgs(
+
+                        return self::invokeCommandArgs(
                             $class->newInstance(), 
                             $arguments, 
                             $className, 
@@ -1481,14 +1496,36 @@ final class Router
                             $is_cli_middleware
                         );
                     }
-                } else {
+
+                    self::$term->error(sprintf(
+                        'Command group "%s" does not match the expected controller group "%s".',
+                        self::getArgument(1),
+                        $controllerGroup
+                    ));
+
+                    return STATUS_SUCCESS;
+                } 
+
+                if($is_http_middleware){
+                    $instance = $class->newInstance();
                     $result = $caller->invokeArgs(
-                        $caller->isStatic() ? null: $class->newInstance(), 
+                        $instance, 
                         self::injection($caller, $arguments, $injection)
                     );
+
+                    if($result !== STATUS_SUCCESS){
+                        $failed = $class->getMethod('onMiddlewareFailure');
+                        $failed->setAccessible(true);
+                        $failed->invokeArgs($instance, [self::$uri, self::$classInfo]);
+                    }
+
+                    return $result;
                 }
 
-                return $result;
+                return $caller->invokeArgs(
+                    $caller->isStatic() ? null: $class->newInstance(), 
+                    self::injection($caller, $arguments, $injection)
+                );
             }
         } catch (RouterException $e) {
             $e->handle();
@@ -1872,6 +1909,7 @@ final class Router
 
         self::$classInfo = [
             'filename'    => null,
+            'uri'    => null,
             'namespace'   => null,
             'method'      => null,
             'attrFiles'   => 1,
