@@ -222,6 +222,11 @@ final class Crypter
 	 */
     public static function verify(string $password, string $hash): bool 
 	{
+        \Luminova\Errors\ErrorHandler::depreciate(
+            'Method %s::verify() is deprecated. Use %s::isPassword(...) instead.',
+            [self::class, self::class]
+        );
+
 		return self::isPassword($password, $hash);
 	}
 

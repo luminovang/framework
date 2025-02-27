@@ -222,15 +222,15 @@ final class Manager implements LazyInterface
     private function writeTableStructure($handle, string $table): void
     {
         if ($handle && $this->db instanceof DatabaseInterface) {
-            $tableStructure = $this->db->query("SHOW CREATE TABLE $table")->fetch('next', FETCH_ASSOC)['Create Table'];
+            $tableStructure = $this->db->query("SHOW CREATE TABLE {$table}")->fetch('next', FETCH_ASSOC)['Create Table'];
 
-            fwrite($handle, "-- Table structure for $table\n\n");
+            fwrite($handle, "-- Table structure for {$table}\n\n");
             fwrite($handle, "$tableStructure;\n\n");
 
-            $rows = $this->db->query("SELECT * FROM $table")->fetch('all', FETCH_ASSOC);
+            $rows = $this->db->query("SELECT * FROM {$table}")->fetch('all', FETCH_ASSOC);
 
             if ($rows) {
-                fwrite($handle, "-- Data for $table\n\n");
+                fwrite($handle, "-- Data for {$table}\n\n");
                 foreach ($rows as $row) {
                     $escapedRow = array_map(fn($value) => is_string($value) ? addslashes($value) : $value, $row);
                     $rowValues = implode("', '", $escapedRow);

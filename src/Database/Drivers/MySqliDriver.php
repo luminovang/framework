@@ -23,7 +23,7 @@ use \Exception;
 use \ReflectionClass;
 use \ReflectionException;
 
-final class MySqliDriver implements DatabaseInterface 
+final class MysqliDriver implements DatabaseInterface 
 {
     /**
      * Mysqli Database connection instance.
@@ -145,7 +145,7 @@ final class MySqliDriver implements DatabaseInterface
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
 
-        self::$showProfiling = ($this->connected && !PRODUCTION && env('debug.show.performance.profiling', false));
+        self::$showProfiling = ($this->isConnected() && !PRODUCTION && env('debug.show.performance.profiling', false));
     }
 
     /**
@@ -163,11 +163,30 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function getDriver(): ?string 
     {
-        if($this->connection === null){
+        if($this->isConnected()){
+            return 'mysqli';
+        }
+
+        return null;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getConfig(string $property): mixed
+    {
+        $property = strtolower($property);
+
+        if(
+            $property === 'username' || 
+            $property === 'password' || 
+            $property === 'port' || 
+            $property === 'host'
+        ){
             return null;
         }
 
-        return 'mysqli';
+        return $this->config->{$property} ?? null;
     }
 
     /**
@@ -175,7 +194,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function isConnected(): bool 
     {
-        return $this->connected;
+        return ($this->connected && $this->connection instanceof mysqli);
     }
 
     /**
@@ -214,7 +233,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function error(): string 
     {
-        return $this->stmt->error ?? $this->connection->error;
+        return $this->isStatement() ? $this->stmt->error : $this->connection->error;
     }
 
     /**
@@ -224,12 +243,12 @@ final class MySqliDriver implements DatabaseInterface
     {
         return [
             'statement' => [
-                'errno' => $this->stmt->errno ?? null,
-                'error' => $this->stmt->error ?? null
+                'errno' => $this->isStatement() ? $this->stmt->errno : -1,
+                'error' => $this->isStatement() ? $this->stmt->error : null
             ],
             'connection' => [
-                'errno' => $this->connection->errno ?? null,
-                'error' => $this->connection->error ?? null
+                'errno' => $this->isConnected() ? $this->connection->errno : -1,
+                'error' => $this->isConnected() ? $this->connection->error : 'Connection not established'
             ]
         ];
     }
@@ -239,10 +258,16 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function info(): array 
     {
-        preg_match_all('/(\S[^:]+): (\d+)/',  $this->connection->info, $matches); 
-        $info = array_combine($matches[1], $matches[2]);
+        if(!$this->isConnected()){
+            return ['status' => 'disconnected'];
+        }
 
-        return $info;
+        if(!$this->connection->info){
+            return ['status' => 'idle'];
+        }
+
+        preg_match_all('/(\S[^:]+): (\d+)/',  $this->connection->info, $matches); 
+        return array_combine($matches[1], $matches[2]) ?: [];
     }
 
     /**
@@ -250,7 +275,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function dumpDebug(): bool 
     {
-        if (!$this->onDebug || !$this->stmt) {
+        if (!$this->onDebug || is_bool($this->stmt)) {
             return false;
         }
 
@@ -279,6 +304,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function prepare(string $query): self 
     {
+        $this->assertConnection();
         $this->profiling(true);
         $query = preg_replace('/:([a-zA-Z0-9_]+)/', '?', $query);
         $this->rowCount = 0;
@@ -294,6 +320,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function query(string $query): self 
     {
+        $this->assertConnection();
         $this->profiling(true);
         $this->executed = false;
         $this->rowCount = 0;
@@ -301,9 +328,12 @@ final class MySqliDriver implements DatabaseInterface
 
         if ($this->stmt) {
             $this->executed = true;
-            $this->rowCount = str_starts_with($query, 'SELECT') 
-                ? $this->stmt->num_rows 
-                : $this->connection->affected_rows;
+            $this->rowCount = (int) ($this->stmt instanceof mysqli_result) 
+                    ? (str_starts_with($query, 'SELECT') 
+                        ? $this->stmt->num_rows 
+                        : $this->connection->affected_rows
+                     )
+                    : $this->connection->affected_rows;
         }
 
         $this->profiling(false);
@@ -317,7 +347,11 @@ final class MySqliDriver implements DatabaseInterface
     public function exec(string $query): int 
     {
         $this->query($query);
-        return !$this->stmt ? 0 : $this->rowCount;
+        if(!$this->executed || $this->stmt === false){
+            return 0;
+        }
+
+        return ($this->rowCount === 0 && CoreDatabase::isDDLQuery($query)) ? 1 : $this->rowCount;
     }
 
     /**
@@ -325,6 +359,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function beginTransaction(int $flags = 0, ?string $name = null): bool
     {
+        $this->assertConnection();
         $this->profiling(true);
         if($this->connection->begin_transaction($flags, $name)){
             $this->inTransaction = true;
@@ -340,6 +375,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function commit(int $flags = 0, ?string $name = null): bool 
     {
+        $this->assertConnection();
         if($this->connection->commit($flags, $name)){
             $this->profiling(false, true);
             $this->inTransaction = false;
@@ -355,6 +391,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
+        $this->assertConnection();
         if($this->connection->rollback($flags, $name)){
             $this->profiling(false, true);
             $this->inTransaction = false;
@@ -391,6 +428,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function bind(string $param, mixed $value, int|null $type = null): self 
     {
+        $this->assertStatement();
         $this->bindValues[$param] = $value;
 
         return $this;
@@ -401,6 +439,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function param(string $param, mixed &$value, int|null $type = null): self 
     {
+        $this->assertStatement();
         $this->bindParams[$param] = &$value;
 
         return $this;
@@ -412,14 +451,7 @@ final class MySqliDriver implements DatabaseInterface
     public function execute(?array $params = null): bool 
     {
         $this->executed = false;
-        if($this->stmt === null || $this->stmt === false){
-            DatabaseException::throwException(
-                'Database execution error, no statement to execute.', 
-                DatabaseException::NO_STATEMENT_TO_EXECUTE
-            );
-
-            return false;
-        }
+        $this->assertStatement();
 
         try {
             $bindParams = ($this->bindParams ?: $this->bindValues);
@@ -437,7 +469,7 @@ final class MySqliDriver implements DatabaseInterface
                 throw new DatabaseException($this->stmt->error, $this->stmt->errno);
             }
 
-            $this->rowCount = $this->isSelect ? $this->stmt->num_rows : $this->stmt->affected_rows;
+            $this->rowCount = (int) ($this->isSelect ? $this->stmt->num_rows : $this->stmt->affected_rows);
         } catch (mysqli_sql_exception|TypeError $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
@@ -477,7 +509,8 @@ final class MySqliDriver implements DatabaseInterface
             RETURN_COUNT => $this->rowCount(),
             RETURN_COLUMN => $this->getColumns(),
             RETURN_ALL => $this->getAll($fetch),
-            RETURN_STMT => $this->stmt,
+            RETURN_STMT => $this->getStatement(),
+            RETURN_RESULT => ($this->stmt instanceof mysqli_result) ? $this->stmt : null,
             default => false
         };
     }
@@ -535,9 +568,9 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function getStatement(): mysqli_stmt|mysqli_result|null
+    public function getStatement(): ?mysqli_stmt
     {
-        return $this->stmt ? $this->stmt : null;
+        return ($this->stmt instanceof mysqli_stmt) ? $this->stmt : null;
     }
 
     /**
@@ -545,10 +578,11 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function fetch(string $type = 'all', int $mode = FETCH_OBJ): mixed
     {
-        if (!$this->stmt) {
-            return false;
+        if ($this->stmt === true) {
+            return null;
         }
 
+        $this->assertStatement(true);
         $modes = match($mode){
             FETCH_ASSOC => 'default',
             FETCH_BOTH => 'default',
@@ -563,21 +597,23 @@ final class MySqliDriver implements DatabaseInterface
 
         if ($modes === null) {
             throw new DatabaseException(
-                sprintf('Unsupported databse fetch mode: %d', $mode),
+                sprintf('Unsupported database fetch mode: %d', $mode),
                 DatabaseException::NOT_SUPPORTED
             );
         }
 
-        if ($this->stmt instanceof mysqli_stmt) {
+        if ($this->isStatement()) {
             $this->stmt = $this->stmt->get_result();
         }
 
-        if (!$this->stmt) {
+        if (!$this->stmt instanceof mysqli_result) {
             return false;
         }
 
         $mysqliMode = null;
-        $method = (($type === 'next') ? (($mode === FETCH_OBJ) ? 'fetch_object' : 'fetch_assoc') : 'fetch_all');
+        $method = ($type === 'next') 
+            ? (($mode === FETCH_OBJ) ? 'fetch_object' : 'fetch_assoc') 
+            : 'fetch_all';
 
         if($method === 'fetch_all'){
             $mapping = [
@@ -599,11 +635,9 @@ final class MySqliDriver implements DatabaseInterface
         if($mode === FETCH_NUM_OBJ || $mode === FETCH_OBJ){
             $json = json_encode($response);
 
-            if($json === false){
-                return (object) $response;
-            }
-            
-            return (object) json_decode($json);
+            return ($json === false) 
+                ? (object) $response 
+                : (object) json_decode($json);
         }
 
         if($mode === FETCH_COLUMN){
@@ -670,19 +704,19 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function getCount(): int|bool
+    public function getCount(): int
     {
         $integers = $this->getInt();
-        
-        if($integers === false || $integers === []){
-            return false;
+
+        if (!$integers || $integers === []) {
+            return 0;
         }
 
-        if(isset($integers[0][0])) {
-            return (int) $integers[0][0];
-        }
+        $integers = $integers[0] ?? null;
 
-        return (int) $integers ?? 0;
+        return ($integers && is_array($integers)) 
+            ? (int) ($integers[0] ?? 0) 
+            : (int) $integers;
     }
     
     /**
@@ -690,7 +724,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function getLastInsertId(?string $name = null): string|int|null|bool
     {
-        return $this->connection->insert_id;
+        return $this->isConnected() ? $this->connection->insert_id : false;
     }
 
     /**
@@ -698,7 +732,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     public function free(): void 
     {
-        if(!$this->stmt){
+        if($this->stmt === false){
             return;
         }
 
@@ -723,9 +757,9 @@ final class MySqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function profiling(bool $start = true, bool $finished_transaction = false): void
+    public function profiling(bool $start = true, bool $finishedTransaction = false): void
     {
-        if(!self::$showProfiling || (!$start && $this->inTransaction && !$finished_transaction)){
+        if(!self::$showProfiling || (!$start && $this->inTransaction && !$finishedTransaction)){
             return;
         }
          
@@ -743,6 +777,53 @@ final class MySqliDriver implements DatabaseInterface
     }
 
     /**
+     * Determine weather the executed query returned prepared statement object.
+     * 
+     * @return bool Return true if is a prepared statement.
+     */
+    private function isStatement(): bool 
+    {
+        return ($this->stmt instanceof mysqli_stmt);
+    }
+
+    /**
+     * Ensures that a database connection is established before proceeding.
+     * 
+     * @throws DatabaseException If the database connection is not active.
+     */
+    private function assertConnection(): void 
+    {
+        if (!$this->isConnected()) {
+            throw new DatabaseException(
+                'Database Connection Error: No active connection found. Connect before executing queries.',
+                DatabaseException::CONNECTION_DENIED
+            );
+        } 
+    }
+
+    /**
+     * Ensures that a valid SQL statement is available before execution.
+     * 
+     * @param bool $assertResult If true, also checks for a valid mysqli_result.
+     * 
+     * @throws DatabaseException If no valid SQL statement or result set exists.
+     */
+    private function assertStatement(bool $assertResult = false): void 
+    {
+        $noResult = $assertResult && (!$this->stmt instanceof mysqli_result);
+
+        if (!$this->isStatement() || $noResult) {
+            throw new DatabaseException(
+                sprintf(
+                    'Database Statement Error: No valid SQL statement%s set found. Ensure a query is prepared or available.',
+                    $assertResult ? ' or result' : ''
+                ),
+                DatabaseException::NO_STATEMENT_TO_EXECUTE
+            );
+        }
+    }
+
+    /**
      * Parses the query parameters and binds them to the statement.
      * 
      * @param array<int,array> $values An array of parameter values.
@@ -750,7 +831,7 @@ final class MySqliDriver implements DatabaseInterface
      * 
      * @return void 
      */
-    private function parseParams(array $values, $type = 'values'): void 
+    private function parseParams(array $values, string $type = 'values'): void 
     {
         if($values === []){
             return;
@@ -783,7 +864,7 @@ final class MySqliDriver implements DatabaseInterface
      */
     private function newConnection(): void 
     {
-        if ($this->connection !== null) {
+        if ($this->connection instanceof mysqli) {
             return;
         }
 

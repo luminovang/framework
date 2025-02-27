@@ -10,6 +10,7 @@
 namespace Luminova\Errors;
 
 use \Throwable;
+use \Luminova\Logger\Logger;
 use \Luminova\Exceptions\ErrorException;
 
 final class ErrorHandler
@@ -120,6 +121,42 @@ final class ErrorHandler
         }
 
         throw $e;
+    }
+
+    /**
+     * Triggers a deprecation warning or log warning on production using `notice` log level.
+     * 
+     * This method generates a user-level deprecation warning using `trigger_error()`. 
+     * It allows formatting the warning message dynamically using placeholders and arguments.
+     * 
+     * Developers should use this method to notify about deprecated methods, features, 
+     * or behaviors that will be removed in future versions.
+     * 
+     * @param string $message The deprecation message. Supports placeholders for dynamic values.
+     * @param array|null  $arguments Optional array of arguments to replace placeholders in `$message`.
+     * 
+     * @return bool Returns `true` if the warning was successfully triggered.
+     * 
+     * @example Triggering a simple deprecation warning:
+     * ```php
+     * self::depreciate('Method foo() is deprecated. Use getFoo() instead.');
+     * ```
+     * 
+     * @example Triggering a formatted deprecation warning:
+     * ```php
+     * self::depreciate('Method %s() is deprecated. Use %s() instead.', ['foo', 'getFoo']);
+     * ```
+     */
+    public static function depreciate(string $message, ?array $arguments = null): bool
+    {
+        $message = ($arguments ? vsprintf($message, $arguments) : $message);
+
+        if(PRODUCTION){
+            Logger::notice($message);
+            return true;
+        }
+
+        return trigger_error($message, E_USER_DEPRECATED);
     }
 
     /** 

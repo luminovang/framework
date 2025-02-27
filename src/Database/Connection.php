@@ -9,7 +9,7 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Database\Drivers\MySqliDriver;
+use \Luminova\Database\Drivers\MysqliDriver;
 use \Luminova\Database\Drivers\PdoDriver;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Interface\LazyInterface;
@@ -65,15 +65,15 @@ class Connection implements LazyInterface, Countable
      *
      * @param bool|null $pool Optional. Weather to enables or disables connection pooling.
      *                        Defaults to the value of `database.connection.pool` from the environment.
-     * @param int|null  $max  Optional. Specifies the maximum number of database connections.
+     * @param int|null  $maxConnections  Optional. Specifies the maximum number of database connections.
      *                        Defaults to the value of `database.max.connections` from the environment.
      *
      * @throws DatabaseException If connection retries fail, the max connection limit is exceeded, 
      * an invalid driver or driver interface is detected, or a connection error occurs.
      */
-    public function __construct(?bool $pool = null, ?int $max = null)
+    public function __construct(?bool $pool = null, ?int $maxConnections = null)
     {
-        $this->maxConnections = $max ?? (int) env('database.max.connections', 3);
+        $this->maxConnections = $maxConnections ?? (int) env('database.max.connections', 3);
         $this->pool = $pool ?? (bool) env('database.connection.pool', false);
         $this->db = $this->connect();
     }
@@ -126,14 +126,14 @@ class Connection implements LazyInterface, Countable
      * Retrieves the shared singleton instance of the Connection class.
      *
      * @param bool|null $pool Optional. Weather to enables or disables connection pooling (default: `database.connection.pool`).
-     * @param int|null  $max  Optional. Specifies the maximum number of database connections (default: `database.max.connections`).
+     * @param int|null  $maxConnections  Optional. Specifies the maximum number of database connections (default: `database.max.connections`).
      * 
      * @return static Return the singleton instance of the Connection class.
      * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
      */
-    public static function getInstance(?bool $pool = null, ?int $max = null): static 
+    public static function getInstance(?bool $pool = null, ?int $maxConnections = null): static 
     {
-        return self::$instance ??= new self($pool, $max);
+        return self::$instance ??= new self($pool, $maxConnections);
     }
 
     /**
@@ -192,7 +192,7 @@ class Connection implements LazyInterface, Countable
     {
         $config ??= self::getDefaultConfig();
         $drivers = [
-            'mysqli' => MySqliDriver::class,
+            'mysqli' => MysqliDriver::class,
             'pdo' => PdoDriver::class
         ];
 
@@ -225,7 +225,7 @@ class Connection implements LazyInterface, Countable
      *
      * @param int|null $retry Number of retry attempts (default: 1).
      *
-     * @return DatabaseInterface|null Return the database driver instance (either MySqliDriver or PdoDriver), or null if connection fails.
+     * @return DatabaseInterface|null Return the database driver instance (either MysqliDriver or PdoDriver), or null if connection fails.
      * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
      */
     public function connect(): ?DatabaseInterface

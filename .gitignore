@@ -9,6 +9,7 @@
 /src/Command/Auth/*
 /src/Ftp/*
 /src/Ftp
+/src/Cache/RedisCache.php
 composer.lock
 command.phar
 phpdoc.xml

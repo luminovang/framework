@@ -29,13 +29,6 @@ final class Csrf
     private static $token = "csrf_token_token";
 
     /**
-     * Backend session handler.
-     * 
-     * @var Session|null $session
-     */
-    private static ?Session $session = null;
-
-    /**
      * Cookie config.
      *
      * @var CookieConfig $config
@@ -59,7 +52,9 @@ final class Csrf
     public static function getToken(): string 
     {
         if (self::hasToken()) {
-            return (self::tokenStorage() === 'cookie') ? $_COOKIE[self::$token] : $_SESSION[self::$token];
+            return (self::tokenStorage() === 'cookie') 
+                ? $_COOKIE[self::$token] 
+                : $_SESSION[self::$token];
         }
 
         $token = self::generateToken();
@@ -189,8 +184,7 @@ final class Csrf
         }
 
         if($status === PHP_SESSION_NONE){
-            self::$session ??= new Session();
-            self::$session->start();
+            (new Session())->start();
         }
 
         return 'session';

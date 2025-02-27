@@ -110,7 +110,7 @@ final class PdoDriver implements DatabaseInterface
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
 
-        self::$showProfiling = ($this->connected && !PRODUCTION && env('debug.show.performance.profiling', false));
+        self::$showProfiling = ($this->isConnected() && !PRODUCTION && env('debug.show.performance.profiling', false));
     }
 
     /**
@@ -119,7 +119,6 @@ final class PdoDriver implements DatabaseInterface
     public function setDebug(bool $debug): self 
     {
         $this->onDebug = $debug;
-
         return $this;
     }
 
@@ -128,14 +127,30 @@ final class PdoDriver implements DatabaseInterface
      */
     public function getDriver(): ?string 
     {
-        return ($this->connection === null) 
-            ? null 
-            : $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME);
+        return $this->isConnected() 
+            ? $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME) ?? $this->config->pdo_engine
+            : null;
     }
 
     /**
      * {@inheritdoc}
      */
+    public function getConfig(string $property): mixed
+    {
+        $property = strtolower($property);
+
+        if(
+            $property === 'username' || 
+            $property === 'password' || 
+            $property === 'port' || 
+            $property === 'host'
+        ){
+            return null;
+        }
+
+        return $this->config->{$property} ?? null;
+    }
+
     public function getQueryTime(): float|int 
     {
         return $this->queryTime;
@@ -154,7 +169,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function isConnected(): bool 
     {
-        return $this->connected;
+        return ($this->connected && $this->connection instanceof PDO);
     }
 
     /**
@@ -193,7 +208,9 @@ final class PdoDriver implements DatabaseInterface
      */
     public function error(): string 
     {
-        return $this->stmt?->errorInfo()[2] ?? $this->connection?->errorInfo()[2];
+        return $this->isStatement() 
+            ? $this->stmt->errorInfo()[2] ?? '' 
+            : ($this->isConnected() ? ($this->connection->errorInfo()[2] ?? '') : 'Connection is not established');
     }
 
     /**
@@ -203,12 +220,14 @@ final class PdoDriver implements DatabaseInterface
     {
         return [
             'statement' => [
-                'errno' => $this->stmt?->errorCode() ?? null,
-                'error' => $this->stmt?->errorInfo()[2] ?? null
+                'errno' => $this->isStatement() ? $this->stmt->errorCode() : -1,
+                'error' => $this->isStatement() ? $this->stmt->errorInfo()[2] : null
             ],
             'connection' => [
-                'errno' => $this->connection?->errorCode() ?? null,
-                'error' => $this->connection?->errorInfo()[2] ?? null
+                'errno' => ($this->isConnected() ? $this->connection->errorCode() : -1) ?? -1,
+                'error' => $this->isConnected() 
+                    ? ($this->connection->errorInfo()[2] ?? null) 
+                    : 'Connection is not established'
             ]
         ];
     }
@@ -218,12 +237,21 @@ final class PdoDriver implements DatabaseInterface
      */
     public function info(): array 
     {
-        $driverInfo = $this->connection?->getAttribute(PDO::ATTR_CONNECTION_STATUS);
+        if(!$this->isConnected()){
+            return ['status' => 'disconnected'];
+        }
 
-        preg_match_all('/(\S[^:]+): (\S+)/', $driverInfo, $matches);
-        $info = array_combine($matches[1], $matches[2]);
+        $info = $this->connection->getAttribute(PDO::ATTR_CONNECTION_STATUS);
+        if(!$info){
+            return ['status' => 'idle'];
+        }
 
-        return $info;
+        preg_match_all(
+            '/(\S[^:]+): (\S+)/', 
+            $info, 
+            $matches
+        );
+        return array_combine($matches[1], $matches[2]) ?: [];
     }
 
     /**
@@ -231,7 +259,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function dumpDebug(): bool
     {
-        return (!$this->onDebug || !$this->stmt) 
+        return (!$this->onDebug || !$this->isStatement()) 
             ? false 
             : $this->stmt->debugDumpParams();
     }
@@ -241,6 +269,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function prepare(string $query): self 
     {
+        $this->assertConnection();
         $this->profiling(true);
         $this->stmt = $this->connection->prepare($query);
         $this->profiling(false);
@@ -253,11 +282,12 @@ final class PdoDriver implements DatabaseInterface
      */
     public function query(string $query): self
     {
+        $this->assertConnection();
         $this->profiling(true);
         $this->executed = false;
         $this->stmt = $this->connection->query($query);
 
-        if($this->stmt){
+        if($this->stmt instanceof PDOStatement){
             $this->executed = true;
         }
 
@@ -270,17 +300,20 @@ final class PdoDriver implements DatabaseInterface
      */
     public function exec(string $query): int 
     {
+        $this->assertConnection();
         $this->profiling(true);
         $this->executed = false;
         $executed = $this->connection->exec($query);
         $this->profiling(false);
 
-        if($executed !== false){
-            $this->executed = true;
-            return ($executed === 0) ? 1 :$executed;
+        if($executed === false){
+            return 0;
         }
 
-        return 0;
+        $executed = ($executed === 0 && CoreDatabase::isDDLQuery($query)) ? 1 : $executed;
+        $this->executed = $executed > 0;
+
+        return $executed;
     }
 
     /**
@@ -290,6 +323,7 @@ final class PdoDriver implements DatabaseInterface
     {
         $readonly = true;
         $savepoint = true;
+        $this->assertConnection();
         $this->profiling(true);
 
         if ($flags === 4) {
@@ -344,6 +378,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function commit(int $flags = 0, ?string $name = null): bool 
     {
+        $this->assertConnection();
         $result = $this->connection->commit();
         $this->profiling(false, true);
 
@@ -355,6 +390,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
+        $this->assertConnection();
         $result = false;
         if ($name === null) {
             $result = $this->connection->rollBack();
@@ -384,7 +420,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function inTransaction(): bool 
     {
-        return $this->connection->inTransaction();
+        return $this->isConnected() ? $this->connection->inTransaction() : false;
     }
 
     /**
@@ -403,9 +439,10 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function bind(string $param, mixed $value, int|null $type = null): self 
+    public function bind(string $param, mixed $value, ?int $type = null): self 
     {
-        $this->stmt->bindValue($param, $value, self::getType($value));
+        $this->assertStatement();
+        $this->stmt->bindValue($param, $value, $type ?? self::getType($value));
         $this->parseParams = true;
 
         return $this;
@@ -414,9 +451,10 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function param(string $param, mixed &$value, int|null $type = null): self 
+    public function param(string $param, mixed &$value, ?int $type = null): self 
     {
-        $this->stmt->bindParam($param, $value, self::getType($value));
+        $this->assertStatement();
+        $this->stmt->bindParam($param, $value, $type ?? self::getType($value));
         $this->parseParams = true;
         
         return $this;
@@ -428,16 +466,8 @@ final class PdoDriver implements DatabaseInterface
     public function execute(?array $params = null): bool 
     {
         $this->executed = false;
+        $this->assertStatement();
 
-        if(!$this->stmt){
-            DatabaseException::throwException(
-                'Database operation error: Statement execution failed.', 
-                DatabaseException::NO_STATEMENT_TO_EXECUTE
-            );
-
-            return false;
-        }
-        
         try {
            $this->executed = $this->stmt->execute(($this->parseParams ? null : $params));
            $this->parseParams = false;
@@ -453,7 +483,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function rowCount(): int 
     {
-        return $this->stmt ? $this->stmt->rowCount() : 0;
+        return $this->isStatement() ? $this->stmt->rowCount() : 0;
     }
 
     /**
@@ -469,7 +499,7 @@ final class PdoDriver implements DatabaseInterface
             RETURN_COUNT => $this->rowCount(),
             RETURN_COLUMN => $this->getColumns(),
             RETURN_ALL => $this->getAll($fetch),
-            RETURN_STMT => $this->stmt,
+            RETURN_STMT, RETURN_RESULT => $this->getStatement(),
             default => false
         };
     }
@@ -479,7 +509,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function getNext(string $fetch = 'object'): array|object|bool 
     {
-        $result = $this->fetch('next', $fetch === 'array' ? FETCH_ASSOC : FETCH_OBJ);
+        $result = $this->fetch('next', ($fetch === 'array') ? FETCH_ASSOC : FETCH_OBJ);
 
         if($result === false || $result === null){
             return false;
@@ -495,7 +525,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function getAll(string $fetch = 'object'): array|object|bool 
     {
-        $result = $this->fetch('all', $fetch === 'array' ? FETCH_ASSOC : FETCH_OBJ);
+        $result = $this->fetch('all', ($fetch === 'array') ? FETCH_ASSOC : FETCH_OBJ);
 
         if($result === false || $result === null){
             return false;
@@ -528,12 +558,12 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function getCount(): int|bool
+    public function getCount(): int
     {
         $integers = $this->getInt();
 
         if(!$integers || $integers === []){
-            return false;
+            return 0;
         }
 
         return isset($integers[0][0]) 
@@ -546,7 +576,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function getStatement(): ?PDOStatement
     {
-        return $this->stmt;
+        return ($this->stmt instanceof PDOStatement) ? $this->stmt : null;
     }
 
     /**
@@ -554,10 +584,7 @@ final class PdoDriver implements DatabaseInterface
      */ 
     public function fetch(string $type = 'all', int $mode = FETCH_OBJ): mixed  
     {
-        if(!$this->stmt){
-            return false;
-        }
-
+        $this->assertStatement();
         $modes = [
             FETCH_ASSOC => PDO::FETCH_ASSOC,
             FETCH_BOTH => PDO::FETCH_BOTH,
@@ -570,7 +597,7 @@ final class PdoDriver implements DatabaseInterface
         ];
 
         $pdoMode = $modes[$mode] ?? PDO::FETCH_OBJ;
-        $method = $type === 'all' ? 'fetchAll' : 'fetch';
+        $method = ($type === 'all') ? 'fetchAll' : 'fetch';
 
         return $this->stmt->$method($pdoMode);
     }
@@ -588,7 +615,7 @@ final class PdoDriver implements DatabaseInterface
      */ 
     public function fetchObject(string|null $class = 'stdClass', mixed ...$arguments): object|bool 
     {
-        return $this->stmt 
+        return $this->isStatement() 
             ? $this->stmt->fetchObject($class, $arguments) 
             : false;
     }
@@ -598,7 +625,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function getLastInsertId(?string $name = null): string|int|null|bool
     {
-        return $this->connection 
+        return $this->isConnected() 
             ? $this->connection->lastInsertId($name)
             : false;
     }
@@ -608,7 +635,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function free(): void 
     {
-        if(!$this->stmt){
+        if($this->stmt === null){
             return;
         }
 
@@ -629,9 +656,9 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function profiling(bool $start = true, bool $finished_transaction = false): void
+    public function profiling(bool $start = true, bool $finishedTransaction = false): void
     {
-        if(!self::$showProfiling || (!$start && $this->inTransaction() && !$finished_transaction)){
+        if(!self::$showProfiling || (!$start && $this->inTransaction() && !$finishedTransaction)){
             return;
         }
          
@@ -650,6 +677,46 @@ final class PdoDriver implements DatabaseInterface
     }
 
     /**
+     * Determine weather the executed query returned prepared statement object.
+     * 
+     * @return bool Return true if is a prepared statement.
+     */
+    private function isStatement(): bool 
+    {
+        return ($this->stmt instanceof PDOStatement);
+    }
+
+    /**
+     * Ensures that a database connection is established before proceeding.
+     * 
+     * @throws DatabaseException If the database connection is not active.
+     */
+    private function assertConnection(): void 
+    {
+        if (!$this->isConnected()) {
+            throw new DatabaseException(
+                'Database Connection Error: No active connection found. Connect before executing queries.',
+                DatabaseException::CONNECTION_DENIED
+            );
+        } 
+    }
+
+    /**
+     * Ensures that a valid SQL statement is available before execution.
+     * 
+     * @throws DatabaseException If no prepared or valid statement exists.
+     */
+    private function assertStatement(): void 
+    {
+        if(!$this->isStatement()){
+            throw new DatabaseException(
+                'Database Statement Error: No valid SQL statement to execute. Ensure a query is prepared or available.',
+                DatabaseException::NO_STATEMENT_TO_EXECUTE
+            );
+        }
+    }
+
+    /**
      * Initializes the database connection.
      * This method is called internally and should not be called directly.
      * 
@@ -659,7 +726,7 @@ final class PdoDriver implements DatabaseInterface
      */
     private function newConnection(): void
     {
-        if ($this->connection !== null) {
+        if ($this->connection instanceof PDO) {
             return;
         }
 

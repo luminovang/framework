@@ -7,7 +7,7 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Sessions\Handler;
+namespace Luminova\Sessions\Handlers;
 
 use \Luminova\Base\BaseSessionHandler;
 use \Luminova\Security\Crypter;
@@ -56,6 +56,7 @@ class Filesystem extends BaseSessionHandler
      * @param array<string,mixed> $options Configuration options for session handling.
      * 
      * @throws RuntimeException if failed to create session save path, path is not writable or an error occurred.
+     * @see https://luminova.ng/docs/0.0.0/sessions/filesystem-handler
      */
     public function __construct(?string $filePath = null, array $options = [])
     {
@@ -121,7 +122,7 @@ class Filesystem extends BaseSessionHandler
      * @example Example usage of `onClose` callback:
      * ```php
      * $handler = new Filesystem('path/to/sessions', [
-     *    'onClose' => function (): bool {
+     *    'onClose' => function (bool $status): bool {
      *          return true; // Your logic here...
      *     }
      * ]);
@@ -137,7 +138,7 @@ class Filesystem extends BaseSessionHandler
             $this->isNewSession = false;
         }
 
-        return $this->options['onClose'] ? ($this->options['onClose'])() : true;
+        return $this->options['onClose'] ? ($this->options['onClose'])(true) : true;
     }
 
     /**
@@ -272,19 +273,19 @@ class Filesystem extends BaseSessionHandler
     /**
      * Performs garbage collection for expired sessions.
      *
-     * @param int $max_lifetime The maximum session lifetime in seconds.
+     * @param int $maxLifetime The maximum session lifetime in seconds.
      * 
      * @return int|false Return the number of deleted sessions, or false on failure.
      */
     #[ReturnTypeWillChange]
-    public function gc(int $max_lifetime): int|false
+    public function gc(int $maxLifetime): int|false
     {
         if (!is_dir($this->filePath) || ($directory = opendir($this->filePath)) === false) {
             $this->log('debug', "Session: Garbage collector couldn't list files in directory: '{$this->filePath}'.");
             return false;
         }
 
-        $expiration = Time::now()->getTimestamp() - $max_lifetime;
+        $expiration = Time::now()->getTimestamp() - $maxLifetime;
         $basePath = rtrim($this->filePath, TRIM_DS) . DIRECTORY_SEPARATOR;
         $deleted = 0;
 

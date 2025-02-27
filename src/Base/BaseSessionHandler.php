@@ -58,6 +58,7 @@ abstract class BaseSessionHandler implements SessionHandlerInterface, SessionIdI
         'sid_entropy_bits'  => 160,
         'dir_permission'    => 0777, // file handler
         'columnPrefix'      => null, // database handler
+        'autoLockDatabase'  => false, // database handler
         'onValidate'        => null,
         'onCreate'          => null,
         'onClose'           => null

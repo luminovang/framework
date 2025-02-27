@@ -176,6 +176,21 @@ abstract class CoreDatabase implements LazyInterface
     }
 
     /**
+     * Check if SQL query is DDL.
+     * 
+     * @param string $query The SQL query to check.
+     * 
+     * @return bool Return true if the query is DDL, false otherwise.
+     */
+    public static function isDDLQuery(string $query): bool 
+    {
+        return preg_match(
+            '/^\s*(CREATE|ALTER|DROP|TRUNCATE|RENAME|COMMENT|GRANT|REVOKE|ANALYZE|DISCARD|CLUSTER|VACUUM)\b/i', 
+            $query
+        ) === 1;
+    }
+
+    /**
      * Set database configuration properties
      * 
      * @param array<string,mixed> $config Database configuration.

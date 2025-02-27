@@ -1,6 +1,7 @@
 <?php
+declare(strict_types=1);
 /**
- * Luminova Framework Routing.
+ * Luminova Framework Routing system.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -364,6 +365,11 @@ final class Router
      */
     public function before(string $group, Closure|string $callback): void
     {
+        \Luminova\Errors\ErrorHandler::depreciate(
+            'Method %s->before() is deprecated. Use %s->guard(...) instead.',
+            [self::class, self::class]
+        );
+
         $this->guard($group, $callback);
     }
 

@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework bastract model.
+ * Luminova Framework abstract model.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter

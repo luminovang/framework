@@ -7,12 +7,13 @@
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  */
-namespace Luminova\Sessions\Handler;
+namespace Luminova\Sessions\Handlers;
 
 use \Luminova\Base\BaseSessionHandler;
 use \Luminova\Security\Crypter;
 use \Luminova\Database\Builder;
 use \Luminova\Functions\Ip;
+use \Luminova\Logger\Logger;
 use \Luminova\Time\Time;
 use \ReturnTypeWillChange;
 use \Throwable;
@@ -22,6 +23,9 @@ use \Throwable;
  */
 class Database extends BaseSessionHandler
 {
+    protected static string|bool $ipAddress = false;
+    private ?string $lockId = null;
+
     /**
      * Constructor to initialize the session database handler.
      *
@@ -29,6 +33,7 @@ class Database extends BaseSessionHandler
      * @param array<string,mixed> $options Configuration options for session handling.
      * 
      * @throws RuntimeException if an error occurred.
+     * @see https://luminova.ng/docs/0.0.0/sessions/database-handler
      */
     public function __construct(private string $table, array $options = []) 
     {
@@ -65,7 +70,7 @@ class Database extends BaseSessionHandler
      * @example Example usage of `onClose` callback:
      * ```php
      * $handler = new Database('sessions', [
-     *    'onClose' => function (): bool {
+     *    'onClose' => function (bool $status): bool {
      *          return true; // Your logic here...
      *     }
      * ]);
@@ -73,7 +78,10 @@ class Database extends BaseSessionHandler
      */
     public function close(): bool
     {
-        return $this->options['onClose'] ? ($this->options['onClose'])() : true;
+        $closed = $this->isLocked() ? $this->unlock() : true;
+        return $this->options['onClose'] 
+            ? ($this->options['onClose'])($closed) 
+            : $closed;
     }
 
     /**
@@ -99,7 +107,7 @@ class Database extends BaseSessionHandler
         if ($this->table && $exists) {
             $exists = $this->table("exists_{$id}")
                 ->where($this->prefixed('id'), '=', $id)
-                ->exists();
+                ->has();
         }
 
         return $this->options['onValidate'] 
@@ -116,46 +124,49 @@ class Database extends BaseSessionHandler
      */
     public function destroy(string $id): bool
     {
-        $deleted = $this->table()->where($this->prefixed('id'), '=', $id)->delete();
-
-        if ($deleted) {
-            $this->clearCache([$id, "exists_{$id}"]);
-            return $this->close() ? $this->destroySessionCookie() : true;
+        if ($this->isLocked() && $this->table()->where($this->prefixed('id'), '=', $id)->delete() < 1) {
+            return false;
         }
 
-        return false;
+        $this->clearCache([$id, "exists_{$id}"]);
+        return $this->close() 
+            ? $this->destroySessionCookie() 
+            : false;
     }
 
     /**
      * Performs garbage collection for expired sessions.
      *
-     * @param int $max_lifetime The maximum session lifetime in seconds.
+     * @param int $maxLifetime The maximum session lifetime in seconds.
      * 
      * @return int|false Return the number of deleted sessions, or false on failure.
      */
     #[ReturnTypeWillChange]
-    public function gc(int $max_lifetime): int|false
+    public function gc(int $maxLifetime): int|false
     {
-        $expiration = Time::now()->getTimestamp() - $max_lifetime;
+        $expiration = Time::now()->getTimestamp() - $maxLifetime;
 
         if ($this->options['cacheable']) {
             $records = $this->table()
                 ->where($this->prefixed('timestamp'), '<', $expiration)
+                ->returns('array')
                 ->select([$this->prefixed('id')]);
-
+                
             if (!$records) {
                 return false;
             }
-
+           
             $id = $this->prefixed('id');
-            $ids = array_map(fn($record) => ['exists_' . $record->{$id}, $record->{$id}], $records);
-
+            $ids = array_map(fn($record) => ['exists_' . $record[$id], $record[$id]], $records);
+        
             if ($ids !== []) {
                 $this->clearCache(array_merge(...$ids));
             }
         }
 
-        return $this->table()->where($this->prefixed('timestamp'), '<', $expiration)->delete();
+        return $this->table()
+            ->where($this->prefixed('timestamp'), '<', $expiration)
+            ->delete();
     }
 
     /**
@@ -167,6 +178,11 @@ class Database extends BaseSessionHandler
      */
     public function read(string $id): string
     {
+        if ($this->lock($id) === false) {
+            $this->fileHash = md5('');
+            return '';
+        }
+
         $data = $this->table($id)->where($this->prefixed('id'), '=', $id)->find([
             $this->prefixed('data'), 
             $this->prefixed('ip')
@@ -176,11 +192,13 @@ class Database extends BaseSessionHandler
             $this->fileHash = md5('');
             return '';
         }
-
+ 
         $prefixed = $this->prefixed('data');
-        $data = ($data->{$prefixed} && $this->options['encryption']) 
-            ? Crypter::decrypt($data->{$prefixed}) 
-            : $data->{$prefixed};
+        $data = $data->{$prefixed} ?? '';
+        $data = ($data && $this->options['encryption']) 
+            ? Crypter::decrypt($data) 
+            : $data;
+        
         $this->fileHash = md5($data);
 
         return $data;
@@ -196,6 +214,10 @@ class Database extends BaseSessionHandler
      */
     public function write(string $id, string $data): bool
     {
+        if ($this->isLocked()) {
+            return false;
+        }
+
         if ($this->fileHash === md5($data)) {
             return $this->table()->where($this->prefixed('id'), '=', $id)->update([
                 $this->prefixed('timestamp') => Time::now()->getTimestamp()
@@ -207,7 +229,7 @@ class Database extends BaseSessionHandler
         if ($encrypted === false) {
             return false;
         }
-
+        
         $body = [
             $this->prefixed('data')      => $encrypted,
             $this->prefixed('timestamp') => Time::now()->getTimestamp(),
@@ -215,10 +237,10 @@ class Database extends BaseSessionHandler
         ];
 
         if ($this->options['session_ip']) {
-            $body[$this->prefixed('ip')] = Ip::toNumeric();
+            $body[$this->prefixed('ip')] = $this->getIp();
         }
 
-        $existing = $this->table("exists_{$id}")->where($this->prefixed('id'), '=', $id)->exists();
+        $existing = $this->table("exists_{$id}")->where($this->prefixed('id'), '=', $id)->has();
 
         if ($existing) {
             $updated = $this->table()->where($this->prefixed('id'), '=', $id)->update($body);
@@ -250,7 +272,7 @@ class Database extends BaseSessionHandler
      */
     private function table(?string $key = null): Builder
     {
-        $builder = Builder::table($this->table);
+        $builder = Builder::table($this->table)->returns('object');
 
         if ($key && $this->options['cacheable']) {
             $builder->cache($key);
@@ -293,5 +315,94 @@ class Database extends BaseSessionHandler
                 }
             }catch(Throwable){}
         }
+    }
+
+    /**
+     * Check if database session is locked.
+     * 
+     * @return bool Return true if session is locked, false otherwise.
+     */
+    protected function isLocked(): bool
+    {
+        if (!$this->options['autoLockDatabase']) {
+            return false;
+        }
+
+        return $this->lockId !== null;
+    }
+
+    /**
+     * Lock database session.
+     * 
+     * @return bool Return true if successful, otherwise false.
+     */
+    protected function lock(string $id): bool
+    {
+        if (!$this->options['autoLockDatabase']) {
+            return true;
+        }
+
+        $lockId = md5($id . $this->getIp());
+        try{
+            if(Builder::lock($lockId)){
+                $this->lockId = $lockId;
+                return true;
+            }
+        }catch(Throwable $e){
+            Logger::dispatch(
+                'critical',
+                'Session Database Handler Error: Failed to lock database: '.$e->getMessage(),
+                [
+                    'session_id' => $id,
+                    'session_client_ip' => $this->getIp()
+                ]
+            );
+        }
+
+        return false;
+    }
+
+    /**
+     * Releases database session lock.
+     * 
+     * @return bool Return true if successful, otherwise false.
+     */
+    protected function unlock(): bool
+    {
+        if (!$this->lockId || !$this->options['autoLockDatabase']) {
+            return true;
+        }
+
+        try{
+            if (Builder::unlock($this->lockId)) {
+                $this->lockId = null;
+                return true;
+            }
+        }catch(Throwable $e){
+            Logger::dispatch(
+                'critical', 
+                'Session Database Handler Error: Failed to unlock database: '.$e->getMessage(),
+                [
+                    'session_lock_id' => $this->lockId,
+                    'session_client_ip' => $this->getIp()
+                ]
+            );
+        }
+
+        return false;
+    }
+
+    /**
+     * Get client IP address.
+     * 
+     * @return string Return numeric IP address.
+     */
+    private function getIp(): string 
+    {
+        if (!$this->options['session_ip']) {
+            return '';
+        }
+        
+        return self::$ipAddress ??= Ip::toNumeric() ?: '';
     }
 }

@@ -999,6 +999,11 @@ class Terminal implements LazyInterface
         ?int $format = null
     ): string
     {
+        \Luminova\Errors\ErrorHandler::depreciate(
+            'Method %s::color() is deprecated. Use %s::apply(...) or %s::style(...) instead.',
+            [self::class, Color::class, Color::class]
+        );
+
         if (!self::isColorSupported()) {
             return $text;
         }

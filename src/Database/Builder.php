@@ -54,7 +54,7 @@ final class Builder implements LazyInterface
      *
      * @var Connection<LazyInterface>|null $conn
      */
-    private ?LazyInterface $conn = null;
+    private static ?LazyInterface $conn = null;
 
     /**
      * Cache class instance.
@@ -268,7 +268,7 @@ final class Builder implements LazyInterface
             throw new InvalidArgumentException('Invalid table argument, $table argument expected non-empty string.');
         }
 
-        $this->conn = LazyObject::newObject(fn() => Connection::getInstance());
+        self::$conn ??= LazyObject::newObject(fn() => Connection::getInstance());
         $this->cacheDriver = env('database.caching.driver', 'filesystem');
         $this->tableName = $table ?? '';
         $this->tableAlias = $alias ? "AS {$alias}" : '';
@@ -279,9 +279,22 @@ final class Builder implements LazyInterface
      * 
      * @return bool Return true if database connected, false otherwise.
      */
-    public function isConnected(): bool 
+    public static function isConnected(): bool 
     {
-        return ($this->conn->database() instanceof DatabaseInterface) && $this->conn->database()->isConnected();
+        return (self::$conn->database() instanceof DatabaseInterface) && self::$conn->database()->isConnected();
+    }
+
+    /**
+     * Checks if the given lock is free.
+     *
+     * @param string|int $identifier Lock identifier (must be an integer for PostgreSQL).
+     * 
+     * @return bool Return true if the lock is free, false if it is currently held.
+     * @throws DatabaseException If an invalid action is provided or an invalid PostgreSQL lock name is used.
+     */
+    public static function isLocked(string|int $identifier): bool 
+    {
+        return self::administration($identifier, 'isLocked');
     }
 
     /**
@@ -331,10 +344,10 @@ final class Builder implements LazyInterface
      * @return DatabaseInterface Return database driver instance.
      * @throws DatabaseException Throws if database connection failed.
      */
-    public function database(): DatabaseInterface
+    public static function database(): DatabaseInterface
     {
-        if($this->isConnected()){
-            return $this->conn->database();
+        if(self::isConnected()){
+            return self::$conn->database();
         }
 
         throw new DatabaseException('Database connection error.');
@@ -1172,14 +1185,56 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Determine of a records exists in table,
+     * Determine of a records exists in table.
      * 
-     * @return int|bool Return true if records exists in table, otherwise false.
+     * @return bool Return true if records exists in table, otherwise false.
      * @throws DatabaseException If an error occurs.
+     * 
+     * @example Check if users in country Nigeria exists in table:
+     * 
+     * ```php
+     * Builder::table('users')->where('country', '=', 'NG)->has();
+     * ```
+     */
+    public function has(): bool 
+    {
+        return $this->createQueryExecution("SELECT COUNT(*)") > 0;
+    }
+
+    /**
+     * Determine if a database table exists.
+     * 
+     * @return bool Return true if table exists in database, otherwise false.
+     * @throws DatabaseException If an error occurs.
+     * 
+     * @example Check if user table exists in database:
+     * 
+     * ```php
+     * Builder::table('users')->exists();
+     * ```
      */
     public function exists(): bool 
     {
-        return $this->createQueryExecution("SELECT COUNT(*)") > 0;
+        $driver = self::database()->getDriver();
+        $query = match ($driver) {
+            'mysql', 'mysqli' => 'information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tableName',
+            'pgsql'     => "pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename = :tableName",
+            'sqlite'    => "sqlite_master WHERE type = 'table' AND name = :tableName",
+            'sqlsrv', 'mssql' => 'sys.tables WHERE name = :tableName',
+            'cubrid'          => 'db_class WHERE class_name = :tableName',
+            'dblib'           => "sysobjects WHERE xtype = 'U' AND name = :tableName",
+            'oci', 'oracle'   => 'user_tables WHERE table_name = UPPER(:tableName)',
+            default => throw new DatabaseException(
+                "Unsupported database driver: {$driver}", 
+                DatabaseException::INVALID_ARGUMENTS
+            ),
+        };
+
+        $stmt = self::database()
+            ->prepare("SELECT COUNT(*) FROM {$query}")
+            ->bind('tableName', $this->tableName);
+        
+        return (bool) $stmt->execute() && $stmt->getCount();
     }
 
     /**
@@ -1276,7 +1331,7 @@ final class Builder implements LazyInterface
         $this->resultType = 'stmt';
 
         if($this->createQueryExecution('', 'stmt', $columns)){
-            return $this->database();
+            return self::database();
         }
 
         $this->free();
@@ -1419,24 +1474,24 @@ final class Builder implements LazyInterface
         }
 
         if($isBided){
-            $this->database()->prepare($sqlQuery);
+            self::database()->prepare($sqlQuery);
             if ($this->whereCondition !== []) {
-                $this->database()->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+                self::database()->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
             }
             $this->bindConditions($isBided);
-            $this->database()->execute();
+            self::database()->execute();
         }else{
-            $this->database()->query($sqlQuery);
+            self::database()->query($sqlQuery);
         }
 
-        if ($this->database()->ok()) {
+        if (self::database()->ok()) {
             $response = match ($return) {
                 'stmt' => true,
-                'select' => $this->database()->getAll($this->resultType),
-                'find' => $this->database()->getNext($this->resultType),
-                'total' => $this->database()->getCount(),
-                'fetch' => $this->database()->fetch($result, $mode),
-                default => $this->database()->getNext()->totalCalc ?? 0,
+                'select' => self::database()->getAll($this->resultType),
+                'find' => self::database()->getNext($this->resultType),
+                'total' => self::database()->getCount(),
+                'fetch' => self::database()->fetch($result, $mode),
+                default => self::database()->getNext()->totalCalc ?? 0,
             };
         }
         
@@ -1487,7 +1542,7 @@ final class Builder implements LazyInterface
         }
 
         try {
-            $this->database()->prepare($updateQuery);
+            self::database()->prepare($updateQuery);
             foreach($columns as $key => $value){
                 if(!is_string($key) || $key === '?'){
                     throw new DatabaseException(
@@ -1497,15 +1552,15 @@ final class Builder implements LazyInterface
                 }
 
                 $value = is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
-                $this->database()->bind(self::trimPlaceholder($key), $value);
+                self::database()->bind(self::trimPlaceholder($key), $value);
             }
             
             if($this->whereCondition !== []){
-                $this->database()->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+                self::database()->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
             }
             
             $this->bindConditions();
-            $response = $this->database()->execute() ? $this->database()->rowCount() : 0;
+            $response = self::database()->execute() ? self::database()->rowCount() : 0;
             $this->reset();
 
             return $response;
@@ -1546,11 +1601,11 @@ final class Builder implements LazyInterface
         }
 
         try {
-            $this->database()->prepare($deleteQuery);
-            $this->database()->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            self::database()->prepare($deleteQuery);
+            self::database()->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
             $this->bindConditions();
 
-            $response = $this->database()->execute() ? $this->database()->rowCount() : 0;
+            $response = self::database()->execute() ? self::database()->rowCount() : 0;
             $this->reset();
 
             return $response;
@@ -1577,9 +1632,9 @@ final class Builder implements LazyInterface
         }
 
         if($this->bindValues === []){
-            $this->database()->query($buildQuery);
+            self::database()->query($buildQuery);
         }else{
-            $this->database()->prepare($buildQuery);
+            self::database()->prepare($buildQuery);
             foreach ($this->bindValues as $key => $value) {
                 if(!is_string($key) || $key === '?'){
                     throw new DatabaseException(
@@ -1588,16 +1643,16 @@ final class Builder implements LazyInterface
                     );
                 }
 
-                $this->database()->bind(self::trimPlaceholder($key), $value);
+                self::database()->bind(self::trimPlaceholder($key), $value);
             } 
             
-            $this->database()->execute();
+            self::database()->execute();
         }
 
-        $response = ($this->database()->ok() ? 
+        $response = (self::database()->ok() ? 
             (($mode === RETURN_STMT) 
-                ? $this->database()
-                : $this->database()->getResult($mode, $this->resultType)) 
+                ? self::database()
+                : self::database()->getResult($mode, $this->resultType)) 
             : false);
         $this->reset();
 
@@ -1611,7 +1666,7 @@ final class Builder implements LazyInterface
      */
     public function errors(): array 
     {
-        return $this->database()->errors();
+        return self::database()->errors();
     }
 
     /**
@@ -1630,7 +1685,7 @@ final class Builder implements LazyInterface
      */
     public function transaction(int $flags = 0, ?string $name = null): bool 
     {
-        return $this->database()->beginTransaction($flags, $name);
+        return self::database()->beginTransaction($flags, $name);
     }
 
     /**
@@ -1645,7 +1700,7 @@ final class Builder implements LazyInterface
      */
     public function commit(int $flags = 0, ?string $name = null): bool 
     {
-        return $this->database()->commit($flags, $name);
+        return self::database()->commit($flags, $name);
     }
 
     /**
@@ -1661,7 +1716,37 @@ final class Builder implements LazyInterface
      */
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
-        return $this->database()->rollback($flags, $name);
+        return self::database()->rollback($flags, $name);
+    }
+
+    /**
+     * Handles database-level locking using advisory locks for PostgreSQL and MySQL.
+     * 
+     * - **PostgreSQL**: Uses `pg_advisory_lock()` and `pg_advisory_unlock()`, requiring an **integer** lock name.
+     * - **MySQL**: Uses `GET_LOCK()`, `RELEASE_LOCK()`, and `IS_FREE_LOCK()`, allowing **string** lock names.
+     *
+     * @param string|int $identifier Lock identifier (must be an integer for PostgreSQL).
+     * @param int $timeout Lock timeout in seconds (only applicable for MySQL).
+     * 
+     * @return bool Return true if the operation was successful, false otherwise.
+     * @throws DatabaseException If an invalid action is provided or an invalid PostgreSQL lock name is used.
+     */
+    public static function lock(string|int $identifier, int $timeout = 300): bool 
+    {
+        return self::administration($identifier, 'lock', $timeout);
+    }
+
+    /**
+     * Releases the lock for the given name.
+     *
+     * @param string|int $identifier Lock identifier (must be an integer for PostgreSQL).
+     * 
+     * @return bool Return true if the lock was successfully released, false otherwise.
+     * @throws DatabaseException If an invalid action is provided or an invalid PostgreSQL lock name is used.
+     */
+    public static function unlock(string|int $identifier): bool 
+    {
+        return self::administration($identifier, 'unlock');
     }
 
     /**
@@ -1672,14 +1757,14 @@ final class Builder implements LazyInterface
      * 
      * @return bool Return true truncation was completed, otherwise false.
      * @throws DatabaseException Throws if an error occurred during execution.
-    */
+     */
     public function truncate(bool $transaction = true): bool 
     {
         try {
-            $driverName = $this->database()->getDriver();
+            $driverName = self::database()->getDriver();
             $transaction = ($transaction && $driverName !== 'sqlite');
 
-            if ($transaction && !$this->database()->beginTransaction()) {
+            if ($transaction && !self::database()->beginTransaction()) {
                 DatabaseException::throwException(
                     'Failed: Unable to start transaction', 
                     DatabaseException::DATABASE_TRANSACTION_FAILED
@@ -1687,36 +1772,36 @@ final class Builder implements LazyInterface
                 return false;
             }
 
-            if ($driverName === 'mysql' || $driverName === 'pgsql') {
-                $completed = $this->database()->exec("TRUNCATE TABLE {$this->tableName}");
+            if ($driverName === 'mysql' || $driverName === 'mysqli' || $driverName === 'pgsql') {
+                $completed = self::database()->exec("TRUNCATE TABLE {$this->tableName}");
             } elseif ($driverName === 'sqlite') {
-                $deleteSuccess = $this->database()->exec("DELETE FROM {$this->tableName}");
+                $deleteSuccess = self::database()->exec("DELETE FROM {$this->tableName}");
                 $resetSuccess = true;
 
-                $result = $this->database()->query("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'")->getNext('array');
+                $result = self::database()->query("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'")->getNext('array');
                 if ($result) {
-                    $resetSuccess = $this->database()->exec("DELETE FROM sqlite_sequence WHERE name = '{$this->tableName}'");
+                    $resetSuccess = self::database()->exec("DELETE FROM sqlite_sequence WHERE name = '{$this->tableName}'");
                 }
 
                 $completed = $deleteSuccess && $resetSuccess;
 
-                if ($completed && !$this->database()->exec("VACUUM")) {
+                if ($completed && !self::database()->exec("VACUUM")) {
                     $completed = false;
                 }
             } else {
-                $deleteSuccess = $this->database()->exec("DELETE FROM {$this->tableName}");
-                $resetSuccess = $this->database()->exec("ALTER TABLE {$this->tableName} AUTO_INCREMENT = 1");
+                $deleteSuccess = self::database()->exec("DELETE FROM {$this->tableName}");
+                $resetSuccess = self::database()->exec("ALTER TABLE {$this->tableName} AUTO_INCREMENT = 1");
 
                 $completed = $deleteSuccess && $resetSuccess;
             }
 
-            if ($transaction && $this->database()->inTransaction()) {
-                if ($completed && $this->database()->commit()) {
+            if ($transaction && self::database()->inTransaction()) {
+                if ($completed && self::database()->commit()) {
                     $this->reset();
                     return true;
                 }
 
-                $this->database()->rollback();
+                self::database()->rollback();
                 $completed = false;
             }
 
@@ -1724,8 +1809,8 @@ final class Builder implements LazyInterface
             return (bool) $completed;
 
         } catch (DatabaseException|Exception $e) {
-            if ($transaction && $this->database()->inTransaction()) {
-                $this->database()->rollback();
+            if ($transaction && self::database()->inTransaction()) {
+                self::database()->rollback();
             }
 
             $this->reset();
@@ -1733,8 +1818,8 @@ final class Builder implements LazyInterface
             return false;
         }
 
-        if ($transaction && $this->database()->inTransaction()) {
-            $this->database()->rollback();
+        if ($transaction && self::database()->inTransaction()) {
+            self::database()->rollback();
         }
 
         $this->reset();
@@ -1773,7 +1858,7 @@ final class Builder implements LazyInterface
             $create = "CREATE TEMPORARY TABLE IF NOT EXISTS temp_{$this->tableName} 
             AS (SELECT * FROM {$this->tableName} WHERE 1 = 0)";
             
-            if($transaction && !$this->database()->beginTransaction()){
+            if($transaction && !self::database()->beginTransaction()){
                 DatabaseException::throwException(
                     'Failed: Unable to start transaction', 
                     DatabaseException::DATABASE_TRANSACTION_FAILED
@@ -1781,15 +1866,15 @@ final class Builder implements LazyInterface
                 return false;
             }
 
-            if ($this->database()->exec($create) > 0 && 
-                $this->database()->exec("INSERT INTO temp_{$this->tableName} SELECT * FROM {$this->tableName}") > 0
+            if (self::database()->exec($create) > 0 && 
+                self::database()->exec("INSERT INTO temp_{$this->tableName} SELECT * FROM {$this->tableName}") > 0
             ) {
                 $result = false;
-                if($transaction && $this->database()->inTransaction()){
-                    if($this->database()->commit()){
+                if($transaction && self::database()->inTransaction()){
+                    if(self::database()->commit()){
                         $result = true;
                     }else{
-                        $this->database()->rollBack();
+                        self::database()->rollBack();
                     }
                 }
 
@@ -1797,15 +1882,15 @@ final class Builder implements LazyInterface
                 return $result;
             }
 
-            if ($this->database()->inTransaction()) {
-                $this->database()->rollBack();
+            if (self::database()->inTransaction()) {
+                self::database()->rollBack();
             }
 
             $this->reset();
             return false;
         } catch (DatabaseException | Exception $e) {
-            if ($this->database()->inTransaction()) {
-                $this->database()->rollBack();
+            if (self::database()->inTransaction()) {
+                self::database()->rollBack();
             }
 
             $this->reset();
@@ -1813,8 +1898,8 @@ final class Builder implements LazyInterface
             return false;
         }
 
-        if ($this->database()->inTransaction()) {
-            $this->database()->rollBack();
+        if (self::database()->inTransaction()) {
+            self::database()->rollBack();
         }
 
         $this->reset();
@@ -1826,7 +1911,7 @@ final class Builder implements LazyInterface
      * 
      * @param string $query Query string to execute.
      * 
-     * @return int Return number affected rows.
+     * @return int Return number affected rows or `0` if failed.
      * 
      * @throws InvalidArgumentException Thrown if query string is empty.
      * @throws DatabaseException Throws if error occurs.
@@ -1834,11 +1919,13 @@ final class Builder implements LazyInterface
     public function exec(string $query): int 
     {
         if ($query === '') {
-            throw new InvalidArgumentException('Invalid: The parameter $query requires a valid and non-empty SQL query string.');
+            throw new InvalidArgumentException(
+                'Invalid: The parameter $query requires a valid and non-empty SQL query string.'
+            );
         }
 
         try {
-            return $this->database()->exec($query);
+            return self::database()->exec($query);
         } catch (DatabaseException|Exception $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
@@ -1847,31 +1934,66 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Drop database table if table exists.
+     * Drop database table table or temporal if it exists.
      * 
      * @param bool $transaction Whether to use a transaction (default: false).
+     * @param bool $isTemporalTable Whether the table is a temporary table (default false).
      * 
      * @return bool Return true if table was successfully dropped, false otherwise.
      * @throws DatabaseException Throws if error occurs.
      */
-    public function drop(bool $transaction = false): bool 
+    public function drop(bool $transaction = false, bool $isTemporalTable = false): bool 
     {
-        return $this->dropTable(false, $transaction);
-    }
+        if ($this->tableName === '') {
+            throw new DatabaseException(
+                'You must specify a table name before dropping a temporary table.', 
+                DatabaseException::VALUE_FORBIDDEN
+            );
+        }
 
-    /**
-     * Drop a temporal database table if table exists.
-     * 
-     * @param bool $transaction Whether to use a transaction (default: false).
-     * 
-     * @return bool Return true if table was successfully dropped, false otherwise.
-     * @throws DatabaseException Throws if error occurs.
-     */
-    public function dropTemp(bool $transaction = false): bool 
-    {
-        return $this->dropTable(true, $transaction);
-    }
+        try {
+            if ($transaction && !self::database()->beginTransaction()) {
+                DatabaseException::throwException(
+                    'Failed: Unable to start transaction for drop table.', 
+                    DatabaseException::DATABASE_TRANSACTION_FAILED
+                );
+                return false;
+            }
 
+            $drop = $this->getDropTableSQL($isTemporalTable);
+
+            if (self::database()->exec($drop) > 1) {
+                $result = false;
+                if ($transaction && self::database()->inTransaction()) {
+                    if (self::database()->commit()) {
+                        $result = true;
+                    } else {
+                        self::database()->rollBack();
+                    }
+                }
+
+                $this->reset();
+                return $result;
+            }
+
+            if (self::database()->inTransaction()) {
+                self::database()->rollBack();
+            }
+
+            $this->reset();
+        } catch (DatabaseException | Exception $e) {
+            if (self::database()->inTransaction()) {
+                self::database()->rollBack();
+            }
+
+            $this->reset();
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            return false;
+        }
+
+        return false;
+    }
+    
     /**
      * Retrieves the database manager instance.
      * 
@@ -1885,7 +2007,7 @@ final class Builder implements LazyInterface
     public function manager(): Manager 
     {
         static $manager = null;
-        $manager ??= new Manager($this->database());
+        $manager ??= new Manager(self::database());
         $manager->setTable($this->tableName);
 
         return $manager;
@@ -1928,7 +2050,7 @@ final class Builder implements LazyInterface
      */
     public function dump(): bool|null
     {
-        return $this->database()->dumpDebug();
+        return self::database()->dumpDebug();
     }
 
     /**
@@ -1938,11 +2060,11 @@ final class Builder implements LazyInterface
      */
     public function free(): void 
     {
-        if(!($this->conn instanceof Connection) || !($this->isConnected()) ){
+        if(!(self::$conn instanceof Connection) || !(self::isConnected()) ){
             return;
         }
 
-        $this->conn->database()->free();
+        self::$conn->database()->free();
         $this->purge();
     }
 
@@ -1953,11 +2075,11 @@ final class Builder implements LazyInterface
      */
     public function close(): void 
     {
-        if(!($this->conn instanceof Connection) || !$this->isConnected()){
+        if(!(self::$conn instanceof Connection) || !self::isConnected()){
             return;
         }
 
-        $this->conn->purge(true);
+        self::$conn->purge(true);
     }
 
      /**
@@ -1991,64 +2113,108 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Drop main or temporal database table if table exists.
+     * Executes the appropriate lock/unlock/free query based on the database type.
+     *
+     * @param string|int $identifier Lock identifier (integer required for PostgreSQL).
+     * @param string $action Action to perform: 'lock', 'unlock', or 'isLocked'.
+     * @param int $timeout Lock timeout in seconds (only applicable for MySQL).
      * 
-     * @param bool $isTempTable Whether to drop temporary table (default false).
-     * @param bool $transaction Whether to use a transaction (default: false).
-     * 
-     * @return bool Return true if table was successfully dropped, false otherwise.
-     * @throws DatabaseException Throws if error occurs.
+     * @return bool Return true if the operation was successful, false otherwise.
+     * @throws DatabaseException If an invalid action is provided or an invalid PostgreSQL lock name is used.
      */
-    private function dropTable(bool $isTempTable = false, bool $transaction = false): bool
+    private static function administration(string|int $identifier, string $action, int $timeout = 300): bool 
     {
-        if ($this->tableName === '') {
+        $tbl = self::table('locks');
+        $driver = $tbl->database()->getDriver();
+        $pgsqlPlaceholder = ($driver === 'pgsql') 
+            ? (is_int($identifier) ? ':lockName' : 'hashtext(:lockName)')
+            : null;
+
+        if ($driver === 'sqlite') {
+            static $exists = null;
+            $exists = ($exists === null) ? $tbl->exists() : $exists;
+
+            if(!$exists){
+                $createTblQuery = 'CREATE TABLE IF NOT EXISTS locks (name TEXT PRIMARY KEY, acquired_at INTEGER)';
+                $exists = (bool) $tbl->database()->exec($createTblQuery);
+
+                if(!$exists){
+                    throw new DatabaseException(
+                        "SQLite Error: Failed to create lock table with query: '{$createTblQuery}'",
+                        DatabaseException::INVALID_ARGUMENTS
+                    );
+                }
+            }
+        }
+
+        $query = match ($driver) {
+            'pgsql' => match ($action) {
+                'lock'     => "SELECT pg_advisory_lock({$pgsqlPlaceholder})",
+                'unlock'   => "SELECT pg_advisory_unlock({$pgsqlPlaceholder})",
+                'isLocked' => "SELECT pg_try_advisory_lock({$pgsqlPlaceholder})",
+                default    => null
+            },
+            'mysql', 'mysqli', 'cubrid' => match ($action) {
+                'lock'     => 'SELECT GET_LOCK(:lockName, :waitTimeout) AS isLockDone',
+                'unlock'   => 'SELECT RELEASE_LOCK(:lockName) AS isLockDone',
+                'isLocked' => 'SELECT IS_FREE_LOCK(:lockName) AS isLockDone',
+                default    => null
+            },
+            'sqlite' => match ($action) {
+                'lock'     => 'INSERT INTO locks (name, acquired_at) VALUES (:lockName, strftime("%s", "now")) ON CONFLICT(name) DO NOTHING',
+                'unlock'   => 'DELETE FROM locks WHERE name = :lockName',
+                'isLocked' => 'SELECT COUNT(*) AS lockCount FROM locks WHERE name = :lockName',
+                default    => null,
+            },
+            'sqlsrv', 'mssql', 'dblib' => match ($action) {
+                'lock'     => "EXEC sp_getapplock @Resource = :lockName, @LockMode = 'Exclusive', @LockOwner = 'Session', @Timeout = :waitTimeout",
+                'unlock'   => "EXEC sp_releaseapplock @Resource = :lockName, @LockOwner = 'Session'",
+                'isLocked' => "SELECT COUNT(*) FROM sys.dm_tran_locks WHERE request_mode = 'X' AND resource_description = :lockName",
+                default    => null,
+            },
+            'oci', 'oracle' => match ($action) {
+                'lock'     => "DECLARE v_result NUMBER; BEGIN DBMS_LOCK.REQUEST(:lockName, 6, :waitTimeout, TRUE, v_result); END;",
+                'unlock'   => "DECLARE v_result NUMBER; BEGIN DBMS_LOCK.RELEASE(:lockName); END;",
+                'isLocked' => "SELECT COUNT(*) FROM V\$LOCK WHERE ID1 = DBMS_LOCK.ALLOCATE_UNIQUE(:lockName) AND REQUEST = 6",
+                default    => null,
+            },
+            default => throw new DatabaseException(
+                "Database driver '{$driver}' does not support locks.",
+                DatabaseException::INVALID_ARGUMENTS
+            )
+        };
+
+        if($query === null){
             throw new DatabaseException(
-                'You must specify a table name before dropping a temporary table.', 
-                DatabaseException::VALUE_FORBIDDEN
+                "Invalid {$driver} lock operation: {$action}",
+                DatabaseException::INVALID_ARGUMENTS
             );
         }
 
         try {
-            if ($transaction && !$this->database()->beginTransaction()) {
-                DatabaseException::throwException(
-                    'Failed: Unable to start transaction for drop table.', 
-                    DatabaseException::DATABASE_TRANSACTION_FAILED
-                );
+            $stmt = $tbl->database()->prepare($query)->bind('lockName', $identifier);
+            $tbl = null;
+            if (
+                $action === 'lock' && 
+                in_array($driver, ['mysql', 'mysqli', 'cubrid', 'sqlsrv', 'mssql', 'dblib', 'oci', 'oracle'], true)
+            ) {
+                $stmt->bind('waitTimeout', $timeout);
+            }
+
+            if (!$stmt->execute() || !$stmt->ok()) {
                 return false;
             }
 
-            $drop = $this->getDropTableSQL($isTempTable);
-
-            if ($this->database()->exec($drop) >= 0) {
-                $result = false;
-                if ($transaction && $this->database()->inTransaction()) {
-                    if ($this->database()->commit()) {
-                        $result = true;
-                    } else {
-                        $this->database()->rollBack();
-                    }
-                }
-
-                $this->reset();
-                return $result;
-            }
-
-            if ($this->database()->inTransaction()) {
-                $this->database()->rollBack();
-            }
-
-            $this->reset();
-        } catch (DatabaseException | Exception $e) {
-            if ($this->database()->inTransaction()) {
-                $this->database()->rollBack();
-            }
-
-            $this->reset();
+            return match ($action) {
+                'isLocked' => ($driver === 'sqlite') 
+                    ? $stmt->getNext()->lockCount > 0 
+                    : (bool) $stmt->getNext()->isLockDone,
+                default => true
+            };
+        } catch (DatabaseException|Exception $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
             return false;
         }
-
-        return false;
     }
 
     /**
@@ -2063,8 +2229,8 @@ final class Builder implements LazyInterface
         $tablePrefix = $isTempTable ? 'temp_' : '';
         $tableIdentifier = $isTempTable ? "#temp_{$this->tableName}" : $this->tableName;
 
-        return match ($this->database()->getDriver()) {
-            'mysql' => "DROP " . ($isTempTable ? "TEMPORARY " : "") . "TABLE IF EXISTS {$tablePrefix}{$this->tableName}",
+        return match (self::database()->getDriver()) {
+            'mysql', 'mysqli' => "DROP " . ($isTempTable ? "TEMPORARY " : "") . "TABLE IF EXISTS {$tablePrefix}{$this->tableName}",
             'dblib' => "DROP TABLE IF EXISTS {$tableIdentifier}",
             'sqlsrv' => "IF OBJECT_ID('{$tablePrefix}{$this->tableName}', 'U') IS NOT NULL DROP TABLE {$tablePrefix}{$this->tableName}",
             'oracle', 'oci' => "BEGIN EXECUTE IMMEDIATE 'DROP TABLE {$tablePrefix}{$this->tableName}'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;",
@@ -2098,8 +2264,8 @@ final class Builder implements LazyInterface
             return 0;
         }
         
-        $response = $this->database()->query($insertQuery)->ok() 
-            ? $this->database()->rowCount() 
+        $response = self::database()->query($insertQuery)->ok() 
+            ? self::database()->rowCount() 
             : 0;
 
         $this->reset();
@@ -2130,21 +2296,21 @@ final class Builder implements LazyInterface
             return 0;
         }
 
-        $this->database()->prepare($insertQuery);
+        self::database()->prepare($insertQuery);
     
         foreach ($values as $row) {
             foreach ($row as $key => $value) {
                 $value = is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
-                $this->database()->bind(self::trimPlaceholder($key), $value);
+                self::database()->bind(self::trimPlaceholder($key), $value);
             }
 
-            if($this->database()->execute()){
+            if(self::database()->execute()){
                 $count++;
             }
         }
 
         if($count > 0){
-            self::$lastInsertId = $this->database()->getLastInsertId();
+            self::$lastInsertId = self::database()->getLastInsertId();
         }
 
         $this->reset();
@@ -2283,7 +2449,7 @@ final class Builder implements LazyInterface
         foreach ($this->andConditions as $index => $bindings) {
             switch ($bindings['type']) {
                 case 'AGAINST':
-                    $this->database()->bind(":match_column_{$index}", $bindings['value']);
+                    self::database()->bind(":match_column_{$index}", $bindings['value']);
                 break;
                 case 'GROUP_OR':
                 case 'GROUP_AND':
@@ -2304,13 +2470,13 @@ final class Builder implements LazyInterface
                     }
                 break;
                 default:
-                    $this->database()->bind(self::trimPlaceholder($bindings['column']), $bindings['value']);
+                    self::database()->bind(self::trimPlaceholder($bindings['column']), $bindings['value']);
                 break;
             }
         }
 
         foreach($this->queryMatchOrder as $idx => $order){
-            $this->database()->bind(":match_order_{$idx}", $order['value']);
+            self::database()->bind(":match_order_{$idx}", $order['value']);
         }
     }
 
@@ -2341,7 +2507,9 @@ final class Builder implements LazyInterface
         foreach ($conditions as $idx => $condition) {
             $column = key($condition);
             $operator = $condition[$column]['operator'] ?? '=';
-            $placeholder = $isBided ? self::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1)) : addslashes($condition[$column]['value']);
+            $placeholder = $isBided 
+                ? self::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1)) 
+                : addslashes($condition[$column]['value']);
 
             if ($idx > 0) {
                 $group .= " {$type} ";
@@ -2406,7 +2574,7 @@ final class Builder implements LazyInterface
             $placeholder = self::trimPlaceholder("{$column}_in_{$idx}");
 
             if($handle){
-                $this->database()->bind($placeholder, $value);
+                self::database()->bind($placeholder, $value);
             }else{
                 $placeholders .= "{$placeholder}, ";
             }
@@ -2434,7 +2602,7 @@ final class Builder implements LazyInterface
         foreach ($bindings as $idx => $bind) {
             $column = key($bind);
             $placeholder = self::trimPlaceholder("{$column}_{$index}_" . ($idx + $last + 1));
-            $this->database()->bind($placeholder, $bind[$column]['value']);
+            self::database()->bind($placeholder, $bind[$column]['value']);
             $count++;
         }
         $last += $count;
@@ -2459,7 +2627,9 @@ final class Builder implements LazyInterface
         if($method === 'insert'){
             foreach($values as $bindings){
                 $column = key($bindings);
-                $value = is_array($bindings[$column]) ? json_encode($bindings[$column], JSON_THROW_ON_ERROR) : $bindings[$column];
+                $value = is_array($bindings[$column]) 
+                    ? json_encode($bindings[$column], JSON_THROW_ON_ERROR) 
+                    : $bindings[$column];
                 $params[] = ":{$column} = " . $value;
             }
         }else{
@@ -2519,10 +2689,12 @@ final class Builder implements LazyInterface
     {
         $orders = $isOrdered ? ' , ' : ' ORDER BY';
         foreach($this->queryMatchOrder as $idx => $order){
-            $value =  ($isBided ? ":order_match_{$idx}" : 
-                (is_string($order['value']) ? "'" . addslashes($order['value']) . "'" :
-                 $order['value'])
-            );
+            $value = $isBided 
+                ? ":order_match_{$idx}" 
+                : (is_string($order['value']) 
+                    ? "'" . addslashes($order['value']) . "'" 
+                    : $order['value']
+                );
             $orders .= "MATCH({$order['column']}) AGAINST ({$value} {$order['mode']}) {$order['order']}, ";
         }
 
@@ -2566,12 +2738,10 @@ final class Builder implements LazyInterface
         ?string $persistent_id = null
     ): BaseCache
     {
-        if($this->cacheDriver === 'memcached'){
-            $cache = MemoryCache::getInstance(null, $persistent_id ?? '__database_builder__');
-        }else{
-            $cache = FileCache::getInstance(null);
-            $cache->setFolder('database' . ($subfolder ? DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS) : ''));
-        }
+        $cache = ($this->cacheDriver === 'memcached') 
+            ? MemoryCache::getInstance(null, $persistent_id ?? '__database_builder__')
+            : FileCache::getInstance(null)
+                ->setFolder('database' . ($subfolder ? DIRECTORY_SEPARATOR . trim($subfolder, TRIM_DS) : ''));
 
         return $cache->setStorage('database_' . ($storage ?? $this->tableName ?? 'capture'));
     }
@@ -2656,10 +2826,8 @@ final class Builder implements LazyInterface
         foreach ($columns as $item) {
             if(is_array($item)){
                 $value = "'" . json_encode($item, JSON_THROW_ON_ERROR) . "'" ;
-            }elseif(is_numeric($item)){
-                $value = $item;
             }else{
-                $value = "'" . addslashes($item) . "'";
+                $value = is_numeric($item) ? $item : "'" . addslashes($item) . "'";
             }
 
             if($return === 'string'){

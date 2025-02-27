@@ -14,7 +14,6 @@ use \Luminova\Interface\ConnInterface;
 use \Luminova\Exceptions\DatabaseException;
 use \PDOStatement;
 use \mysqli_stmt;
-use \mysqli_result;
 
 interface DatabaseInterface  
 {
@@ -33,6 +32,35 @@ interface DatabaseInterface
      * @return string|null Returns the driver name if the connection is open, otherwise null.
      */
     public function getDriver(): ?string;
+
+    /**
+    * Retrieve a specific database configuration property.
+    * 
+    * This method allows fetching configuration values related to the database connection.
+    * If the requested property does not exist, `null` is returned.
+    * 
+    * ### Available Properties:
+    * - **port** *(null)*: The database server port (always: `null`).
+    * - **host** *(null)*: The database server hostname or IP (always: `null`).
+    * - **connection** *(string)*: The connection method, typically `'pdo'` or other (default: `'pdo'`).
+    * - **pdo_engine** *(string)*: The PDO driver to use (e.g., `'mysql'`, `'sqlite'`, etc.) (default: `'mysql'`).
+    * - **charset** *(string)*: The character encoding for the connection (default: `'utf8mb4'`).
+    * - **sqlite_path** *(string|null)*: Path to the SQLite database file (default: `null`).
+    * - **production** *(bool)*: Indicates if the connection is in a production environment (default: `false`).
+    * - **username** *(null)*: The database username (always: `null`).
+    * - **password** *(null)*: The database password (always: `null`).
+    * - **database** *(string)*: The name of the selected database (default: `''`).
+    * - **persistent** *(bool)*: Whether to use persistent connections (default: `true`).
+    * - **socket** *(bool)*: Whether to use a Unix socket instead of TCP/IP (default: `false`).
+    * - **socket_path** *(string)*: The Unix socket path if `socket` is enabled (default: `''`).
+    * - **emulate_preparse** *(bool)*: Enables query emulation before execution (default: `false`).
+    * 
+    * @param string $property The name of the configuration property.
+    * 
+    * @return mixed Returns the property value if it exists, otherwise `null`.
+    */
+    public function getConfig(string $property): mixed;
+
 
     /**
      * Check if the database is connected.
@@ -86,7 +114,7 @@ interface DatabaseInterface
      * Note: To call this method you must first enable `debug.show.performance.profiling` in environment variables file.
      *
      * @param bool $start Indicates whether to start or stop recording (default: true).
-     * @param bool $finished_transaction Indicates whether is stopping recording for a transaction commit or rollback (default: false).
+     * @param bool $finishedTransaction Indicates whether is stopping recording for a transaction commit or rollback (default: false).
      *              This is used internally to stop recording after transaction has been committed or rolled back.
      * 
      * @return void
@@ -97,7 +125,7 @@ interface DatabaseInterface
      * $time = shared('__DB_QUERY_EXECUTION_TIME__', null, 0);
      * ```
      */
-    public function profiling(bool $start = true, bool $finished_transaction = false): void;
+    public function profiling(bool $start = true, bool $finishedTransaction = false): void;
 
     /**
      * Get information about the last executed statement.
@@ -126,6 +154,7 @@ interface DatabaseInterface
      * @param string $query The SQL query string to execute.
      * 
      * @return self Returns the current instance.
+     * @throws DatabaseException Throw if an called when no connection is established.
      */
     public function prepare(string $query): self;
 
@@ -135,6 +164,7 @@ interface DatabaseInterface
      * @param string $query The SQL query string to execute.
      * 
      * @return self Returns the current instance.
+     * @throws DatabaseException Throw if an called when no connection is established.
      */
     public function query(string $query): self;
 
@@ -144,6 +174,7 @@ interface DatabaseInterface
      * @param string $query The SQL query string to execute.
      * 
      * @return int Returns the number of affected rows.
+     * @throws DatabaseException Throw if an called when no connection is established.
      */
     public function exec(string $query): int;
 
@@ -170,6 +201,7 @@ interface DatabaseInterface
      * @param string|null $name Optional name for a savepoint (MySQLi only).
      * 
      * @return bool Returns true if the transaction was successfully committed.
+     * @throws DatabaseException Throw if an called when no connection is established.
      */
     public function commit(int $flags = 0, ?string $name = null): bool;
 
@@ -189,6 +221,7 @@ interface DatabaseInterface
      * Check if there is an active transaction.
      * 
      * @return bool Returns true if there is an active transaction, otherwise false.
+     * @throws DatabaseException Throw if an called when no connection is established.
      */
     public function inTransaction(): bool;
 
@@ -209,6 +242,7 @@ interface DatabaseInterface
      * @param int|null $type The parameter type.
      *
      * @return self Returns the current instance.
+     * @throws DatabaseException Throw if an called with preparing query.
      */
     public function bind(string $param, mixed $value, ?int $type = null): self;
 
@@ -220,6 +254,7 @@ interface DatabaseInterface
      * @param int|null $type The parameter type.
      *
      * @return self Returns the current instance.
+     * @throws DatabaseException Throw if an called with preparing query.
      */
     public function param(string $param, mixed &$value, ?int $type = null): self;
 
@@ -229,7 +264,7 @@ interface DatabaseInterface
      * @param array|null $params Optional array of parameters to bind during statement execution. Each value is treated as a string.
      * 
      * @return bool Returns true on success, false on failure.
-     * @throws DatabaseException Throws if any error occurs while executing query.
+     * @throws DatabaseException Throws if an error occurs while executing query.
      */
     public function execute(?array $params = null): bool;
 
@@ -262,12 +297,13 @@ interface DatabaseInterface
      *                  - RETURN_COLUMN: Fetch specific columns (same as `$db->getColumns()`).
      *                  - RETURN_ALL: Fetch all rows (same as `$db->getAll($return)`).
      *                  - RETURN_STMT: Return the statement object itself (same as `$db->getStatement()`).
+     *                  - RETURN_RESULT: Return the query result in mysqli or statement in PDO.
      * 
      * @param string $return The return type when applicable (e.g., `array` or `object`).
      *                       Used only with `RETURN_NEXT` and `RETURN_ALL` modes.
      *
      * @return mixed|false Return the result based on the specified mode and return type.
-     * @throws DatabaseException Throws if any error occurs.
+     * @throws DatabaseException Throw if an error occurs.
      */
     public function getResult(int $mode = RETURN_ALL, string $return = 'object'): mixed;
 
@@ -299,9 +335,9 @@ interface DatabaseInterface
     /**
      * Get the total count of selected rows as an integer.
      *
-     * @return int|false Returns the total count as an integer, or false on failure.
+     * @return int Returns the total count as an integer, or `0` on failure.
      */
-    public function getCount(): int|bool;
+    public function getCount(): int;
 
     /**
      * Get columns from the result set.
@@ -313,11 +349,11 @@ interface DatabaseInterface
     public function getColumns(int $mode = FETCH_COLUMN): array;
 
     /**
-     * Get the prepared statement of the last executed query.
+     * Retrieve mysqli or PDO prepared statement of the last executed query.
      *
-     * @return PDOStatement|mysqli_stmt|mysqli_result|null Returns the statement instance, or null on failure.
+     * @return PDOStatement|mysqli_stmt|null Returns the statement object, or null on failure.
      */
-    public function getStatement(): PDOStatement|mysqli_stmt|mysqli_result|null;
+    public function getStatement(): PDOStatement|mysqli_stmt|null;
 
     /**
      * Fetch the result with a specific type and mode.
@@ -326,7 +362,7 @@ interface DatabaseInterface
      * @param int $mode The fetch mode.
      * 
      * @return mixed Returns the fetched result.
-     * @throws DatabaseException Throws if any error occurs.
+     * @throws DatabaseException Throw if an error occurs.
      */
     public function fetch(string $type = 'all', int $mode = FETCH_OBJ): mixed;
 
