@@ -23,7 +23,18 @@ use \Throwable;
  */
 class Database extends BaseSessionHandler
 {
+    /**
+     * Client session ip address.
+     * 
+     * @var string|false $ipAddress
+     */
     protected static string|bool $ipAddress = false;
+
+    /**
+     * Session database lock id.
+     * 
+     * @var string|null $lockId
+     */
     private ?string $lockId = null;
 
     /**
