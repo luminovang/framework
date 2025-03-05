@@ -339,6 +339,78 @@ class NovaLogger extends AbstractLogger
     }
 
     /**
+     * Sends a log message to a Telegram chat using the Telegram Bot API.
+     *
+     * @param string|int|null $chatId The chat ID to send the message to. 
+     *      If null, the chat ID is retrieved from the environment variable 'telegram.bot.chat.id'.
+     * @param string $message The log message to send.
+     * @param array $context Additional contextual data related to the log message.
+     *
+     * @return void
+     */
+    public function telegram(string|int|null $chatId, string $message, array $context = []): void 
+    {
+        $token = env('telegram.bot.token');
+        $chatId ??= env('telegram.bot.chat.id');
+
+        if (!$token || !$chatId) {
+            self::log(LogLevel::CRITICAL, 'Telegram bot token or chat ID is missing', [
+                'originalMessage' => $message,
+                'originalContext' => $context,
+            ]);
+            return;
+        }
+
+        self::$request ??= new Request();
+        $telegramMessage = sprintf(
+            "<b>Application:</b> %s\n<b>Version:</b> %s\n<b>Host:</b> %s\n<b>Client IP:</b> %s\n<b>Log Name:</b> %s\n<b>Level:</b> %s\n<b>Datetime:</b> %s\n\n<b>Message:</b> %s\n\n<b>URL:</b> %s\n<b>Method:</b> %s\n<b>User-Agent:</b> %s",
+            APP_NAME,
+            APP_VERSION,
+            APP_HOSTNAME,
+            IP::get(),
+            $this->name,
+            $this->level,
+            Time::now()->format('Y-m-d\TH:i:s.uP'),
+            $message,
+            self::$request->getUrl(),
+            self::$request->getMethod(),
+            self::$request->getUserAgent()->toString()
+        );
+
+        $fiber = new Fiber(function () use ($token, $chatId, $message, $telegramMessage, $context) {
+            try {
+                $response = (new Network())->post("https://api.telegram.org/bot{$token}/sendMessage", ['body' => [
+                    'chat_id'    => $chatId,
+                    'text'       => $telegramMessage,
+                    'parse_mode' => 'HTML'
+                ]]);
+                if ($response->getStatusCode() !== 200) {
+                    self::log(LogLevel::ERROR, 
+                        sprintf(
+                            'Failed to send log message to Telegram: %s | Response: %s', 
+                            $this->message($this->level, $message), 
+                            $response->getContents()
+                        ),
+                        $context
+                    );
+                }
+            } catch (AppException $e) {
+                self::log(LogLevel::CRITICAL, 'Telegram Network Error: ' . $e->getMessage(), [
+                    'message' => $this->message($this->level, $message),
+                    'context' => $context,
+                ]);
+            } catch (Throwable $fe) {
+                self::log(LogLevel::CRITICAL, 'Unexpected Telegram Error: ' . $fe->getMessage(), [
+                    'message' => $this->message($this->level, $message),
+                    'context' => $context,
+                ]);
+            }
+        });
+
+        $fiber->start();
+    }
+
+    /**
      * Clears the contents of the specified log file for a given log level.
      * 
      * @param string $level The log level whose log file should be cleared (e.g., 'info', 'error').

@@ -43,8 +43,6 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     public const NOTICE = E_NOTICE;
     /** @var int USER_NOTICE */
     public const USER_NOTICE = E_USER_NOTICE;
-    /** @var int STRICT_NOTICE */
-    public const STRICT_NOTICE = E_STRICT;
 
     /** @var int USER_ERROR */
     public const USER_ERROR = E_USER_ERROR;

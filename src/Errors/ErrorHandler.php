@@ -343,7 +343,6 @@ final class ErrorHandler
             
             E_NOTICE => 'NOTICE',
             E_USER_NOTICE => 'USER NOTICE',
-            E_STRICT => 'STRICT NOTICE',
             
             E_USER_ERROR => 'USER ERROR',
             E_RECOVERABLE_ERROR => 'RECOVERABLE ERROR',

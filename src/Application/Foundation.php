@@ -20,7 +20,7 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.5.0';
+    public const VERSION = '3.5.1';
 
     /**
      * Framework version name.
@@ -149,8 +149,7 @@ final class Foundation
             E_WARNING, E_CORE_WARNING, E_COMPILE_WARNING, E_USER_WARNING => 'warning',
             E_PARSE => 'emergency',
             E_NOTICE, E_USER_NOTICE => 'notice',
-            E_STRICT => 'info',
-            E_DEPRECATED, E_USER_DEPRECATED => 'debug',
+            E_DEPRECATED, E_USER_DEPRECATED => 'info',
             E_RECOVERABLE_ERROR => 'error',
             E_ALL, 0 => 'exception',
             default => 'php_error'

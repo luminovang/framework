@@ -146,13 +146,13 @@ final class Logger
      * Dispatches a log message to a specified destination (file, email, or remote server) asynchronously.
      * 
      * The destination is determined by the provided parameter (`$to`) which can be a log level, email address, 
-     * URL, or null. Email and remote logging are handled asynchronously. By default, in development, logs 
+     * URL, Telegram bot chat Id or null. Email and remote logging are handled asynchronously. By default, in development, logs 
      * are written to a file unless an explicit email address or URL is specified.
      * 
      * In production, if no destination is provided, the method checks for default email or remote URL 
      * configurations in the environment file (`logger.mail.logs` or `logger.remote.logs`).
      * 
-     * @param string|null $to The destination for the log message (log level, email address, URL, or NULL).
+     * @param string|int|null $to The destination for the log message (log level, email address, telegram bot chat Id, URL, or NULL).
      * @param string $message The message to be logged.
      * @param array<string|int,mixed> $context Optional additional data to provide context for the log.
      *
@@ -162,7 +162,7 @@ final class Logger
      * @throws RuntimeException If email or remote logging is attempted with an invalid logger class or 
      *                           the logger does not implement the PSR LoggerInterface.
      */
-    public static function dispatch(string|null $to, string $message, array $context = []): void 
+    public static function dispatch(string|int|null $to, string $message, array $context = []): void 
     {
         if(trim($message) === ''){
             return;
@@ -191,6 +191,9 @@ final class Logger
         } elseif($to && Func::isUrl($to)) {
             self::assertInterface('Remote dispatch');
             self::getLogger()->setLevel($level)->remote($to, $message, $context);
+        } elseif($to && self::isTelegramChatId($to)) {
+            self::assertInterface('Telegram dispatch');
+            self::getLogger()->setLevel($level)->telegram($to, $message, $context);
         }else{
             $valid = false;
         }
@@ -199,10 +202,11 @@ final class Logger
 
         if(!$valid){
             throw new InvalidArgumentException(sprintf(
-                'Invalid destination "%s" provided. A valid log level, URL, or email address is required. %s%s',
+                'Invalid destination "%s" provided. A valid log level, URL, email address or telegram bot chat id is required. %s%s%s',
                 $to,
                 'For auto-dispatch logging, ensure you specify a valid email address using `logger.mail.logs` ',
-                'or a remote URL using `logger.remote.logs` in your environment configuration file.'
+                ', a remote URL using `logger.remote.logs` ',
+                'or a telegram both chat ID `telegram.bot.chat.id` in your environment configuration file.'
             ));
         }
     }
@@ -221,6 +225,7 @@ final class Logger
      * @return void
      *
      * @throws InvalidArgumentException If the provided URL is invalid.
+     * @throws RuntimeException         If the logger doesn't support remote logging functionality.
      */
     public static function remote(string $url, string $message, array $context = []): void 
     {
@@ -273,6 +278,35 @@ final class Logger
     }
 
     /**
+     * Sends a log message to a Telegram chat using the Telegram Bot API.
+     *
+     * @param string|int $chatId The chat ID to send the message to.
+     * @param string $message The log message to send.
+     * @param array<string|int,mixed> $context Additional context data to be included in the log message (optional).
+     *
+     * @return void
+     * @throws InvalidArgumentException If the provided chat Id is invalid.
+     * @throws RuntimeException         If the logger doesn't support telegram logging functionality.
+     */
+    public static function telegram(string|int $chatId, string $message, array $context = []): void 
+    {
+        if(!$chatId || trim($message) === ''){
+            return;
+        }
+
+        self::assertInterface('Telegram');
+
+        if (!self::isTelegramChatId($chatId)) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid logger destination: "%s" was provided. A valid telegram both chat Id is required.', 
+                $chatId
+            ));
+        }
+
+        self::getLogger()->telegram($chatId, $message, $context); 
+    }
+
+    /**
      * Determines the appropriate log destination based on the environment and configuration.
      *
      * @param string $to The initial log destination.
@@ -284,8 +318,27 @@ final class Logger
     private static function getLogDestination(string $to): string
     {
        return PRODUCTION 
-            ? (env('logger.mail.logs', false) ?: (env('logger.remote.logs', false) ?: $to))
+            ? (env('logger.mail.logs', false) 
+                ?: (env('logger.remote.logs', false) 
+                ?: (env('telegram.bot.chat.id', false) ?: $to))
+             )
             : $to;
+    }
+
+    /**
+     * Validates if the given input is a valid Telegram chat ID.
+     *
+     * This method checks if the provided chat ID is in the correct format for Telegram
+     * and if a Telegram bot token is set in the environment configuration.
+     *
+     * @param string|int $chatId The chat ID to validate. Can be a string or an integer.
+     *
+     * @return bool Returns true if the chat ID is valid and a Telegram bot token is set,
+     *              false otherwise.
+     */
+    private static function isTelegramChatId(string|int $chatId): bool
+    {
+        return $chatId && preg_match('/^(-100\d{10,13}|\d{5,12})$/', (string) $chatId) === 1;
     }
 
     /**

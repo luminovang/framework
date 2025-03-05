@@ -91,19 +91,25 @@ final class Validation implements ValidationInterface, LazyInterface
                         case 'in_array':
                             if ($ruleParam !== '') {
                                 $matches = list_to_array($ruleParam);
-                                if (!in_array($fieldValue, $matches)) {
+                                $inArray = ($matches === false) ? false : in_array($fieldValue, $matches);
+                                if (!$inArray) {
                                     $this->addError($field, $ruleName, $fieldValue);
                                 }
                             }
                         break;
                         case 'keys_exist':
+                        case 'keys_exists':
                             if ($ruleParam !== '') {
                                 $matches = list_to_array($ruleParam);
-                                if (is_array($fieldValue)) {
-                                    $intersection = array_intersect($matches, $fieldValue);
-                                    $exist = count($intersection) === count($fieldValue);
-                                } else {
-                                    $exist = list_in_array($fieldValue, $matches);
+                                $exist = false;
+
+                                if($matches !== false) {
+                                    if (is_array($fieldValue)) {
+                                        $intersection = array_intersect($matches, $fieldValue);
+                                        $exist = count($intersection) === count($fieldValue);
+                                    } else {
+                                        $exist = list_in_array($fieldValue, $matches);
+                                    }
                                 }
 
                                 if (!$exist) {

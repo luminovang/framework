@@ -24,16 +24,24 @@ class Lists implements LazyInterface
      */
     public static function isList(string $list): bool
     {
-        if ($list === '' || !preg_match('/^[\w\s"\'=,;\[\]]+$/', $list)) {
+        if(
+            $list === '' || 
+            !str_contains($list, ',') || 
+            !str_contains($list, ';')
+        ){
             return false;
         }
-        
+
         try{
-            self::toArray($list);
-            return true;
+            if (preg_match('/^[\w\s"\'=,;\[\]]+$/', $list)) {
+                self::toArray($list);
+                return true;
+            }
         }catch(RuntimeException){
             return false;
         }
+
+        return false;
     }
 
     /**

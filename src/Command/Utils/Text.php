@@ -33,7 +33,7 @@ final class Text
     /**
      * Default to no font style applied.
      * 
-     * @var null NO_FONT
+     * @var int NO_FONT
      */
     public const NO_FONT = 0b100000000;
 
@@ -155,6 +155,13 @@ final class Text
      * @var int BORDER_THICKER
      */
     public const BORDER_THICKER = 0b10;
+
+    /**
+     * Emoji pattern.
+     * 
+     * @var string $emojiPattern
+     */
+    private static string $emojiPattern = '/[\x{1F300}-\x{1F6FF}\x{1F900}-\x{1F9FF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}]/u';
 
     /**
      * Handles dynamic static method calls for text styling.
@@ -587,7 +594,7 @@ final class Text
     }
 
     /**
-     * Calculate the character length of a string, ignoring any applied ANSI color or style codes.
+     * Calculate the character length of a string, ignoring any applied emoji, ANSI color or style codes.
      *
      * @param string $string The string to calculate its length.
      * @param string $encoding The text encoding to use (default: `UTF-8`).
@@ -601,7 +608,55 @@ final class Text
         }
 
         $string = self::hasAnsi($string) ? self::strip($string) : $string;
+        $string = self::hasEmoji($string) ? self::stripEmojis($string) : $string;
+
         return mb_strlen($string, $encoding);
+    }
+
+    /**
+     * Calculate the total character length of an emoji in a string.
+     * 
+     * @param string $string The string to calculate its emoji length.
+     * 
+     * @return int Return the number of emojis length in the string.
+     */
+    public static function emojiStrlen(string $string): int 
+    {
+        preg_match_all('/\X/u', $string, $matches);
+        
+        $emojiLength = 0;
+        foreach ($matches[0] as $char) {
+            if (preg_match(self::$emojiPattern, $char)) {
+                $emojiLength += mb_strlen($char, 'UTF-8');
+            }
+        }
+        
+        return $emojiLength;
+    }
+
+    /**
+     * Count the total number of emojis in a string.
+     * 
+     * @param string $string The string to count emojis.
+     * 
+     * @return int Return the number of emojis in the string.
+     */
+    public static function countEmojis(string $string): int 
+    {
+        preg_match_all(self::$emojiPattern, $string, $matches);
+        return count($matches[0]);
+    }
+
+    /**
+     * Remove any emojis in a given string.
+     * 
+     * @param string $string The string to strip emojis.
+     * 
+     * @return int Return string without any emojis.
+     */
+    public static function stripEmojis(string $string): string 
+    {
+        return preg_replace(self::$emojiPattern, '', $string);
     }
 
     /**
@@ -690,11 +745,9 @@ final class Text
      */
     public static function lines(string $text): array
     {
-        if($text === ''){
-            return [];
-        }
-
-        return explode("\n", preg_replace('/\r\n|\r/', "\n", $text));
+        return ($text === '') 
+            ? [] 
+            : explode("\n", preg_replace('/\r\n|\r/', "\n", $text));
     }
 
     /**
@@ -718,11 +771,9 @@ final class Text
      */
     public static function line(string $text, string $replace = ' '): string
     {
-        if($text === ''){
-            return '';
-        }
-
-        return preg_replace('/\r\n|\r|\n/', $replace, $text);
+        return ($text === '') 
+            ? '' 
+            : preg_replace('/\r\n|\r|\n/', $replace, $text);
     }
 
     /**
@@ -900,10 +951,10 @@ final class Text
             return [false, false, false];
         }
 
-        $resqult = [true];
-        $resqult[] = ($borders & self::BORDER_RADIUS);
-        $resqult[] = ($borders & self::BORDER_THICKER);
-        return $resqult;
+        $result = [true];
+        $result[] = ($borders & self::BORDER_RADIUS);
+        $result[] = ($borders & self::BORDER_THICKER);
+        return $result;
     }
 
     /**
@@ -979,6 +1030,18 @@ final class Text
     public static function hasAnsi(string $text): bool
     {
         return preg_match('/\033\[[0-9;]*m/u', $text) === 1;
+    }
+
+    /**
+     * Determine if the given text contains Emoji.
+     * 
+     * @param string $text The text to check for emoji codes.
+     * 
+     * @return bool Returns true if the text contains emoji, otherwise false.
+     */
+    public static function hasEmoji(string $text): bool 
+    {
+        return preg_match(self::$emojiPattern, $text) > 0;
     }
 
     /**

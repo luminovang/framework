@@ -49,6 +49,7 @@ final class Commands
                 'php novakit generate:key --help' => "Displays help for generating an application encryption key and storing it in environment variables.",
                 'php novakit generate:sitemap --help' => "Displays help for generating the website sitemap.",
                 'php novakit env:add --help' => "Displays help for adding or updating an environment variable.",
+                'php novakit env:setup --help' => "Displays help for configuring environment variable based on context.",
                 'php novakit env:remove --help' => "Displays help for removing a variable from the .env file.",
                 'php novakit create:controller --help' => "Displays help for creating a new controller class.",
                 'php novakit create:view --help' => "Displays help for creating a new template view.",
@@ -174,6 +175,24 @@ final class Commands
             ],
             'examples' => [
                 'php novakit env:add --key="test.key" --value="test key value"',
+            ],
+        ],
+        'env:setup' => [
+            'name' => 'env:setup',
+            'group' => 'System',
+            'description' => "Adds or updates environment variables for a specific context.\nThis command simplifies configuring all required variables for supported contexts.",
+            'usages' => [
+                'php novakit env:setup -t=<TARGET>',
+            ],
+            'options' => [
+                '-t, --target' => 'Specify the environment context (e.g., `database`, `telegram`).',
+                '--token' => 'Set the Telegram bot token.',
+                '--chatid' => 'Set the Telegram bot chat ID.',
+                '--help' => 'Show help information.',
+            ],
+            'examples' => [
+                'php novakit env:setup --target=database',
+                'php novakit env:setup --target=telegram',
             ],
         ],
         'env:remove' => [

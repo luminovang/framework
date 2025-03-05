@@ -346,9 +346,12 @@ class Terminal implements LazyInterface
         }
 
         $rules = $validations ?? $textOptions;
-        $rules = ($validations === 'none' 
-            ? false : ($rules !== [] && is_array($rules)
-            ? "required|in_array(" .  implode(",", $rules) . ")" : $rules));
+        $rules = (($validations === 'none')
+            ? false 
+            : (($rules !== [] && is_array($rules))
+                ? "required|in_array(" .  implode(",", $rules) . ")" 
+                : $rules)
+            );
 
         if ($rules && str_contains($rules, 'required')) {
             $default = '';
@@ -369,26 +372,35 @@ class Terminal implements LazyInterface
     }
 
     /**
-     * Prompt user with multiple option selection.
+     * Prompt user with multiple choice selection.
+     * 
      * Display array index key as the option identifier to select.
      * If you use associative array users will still see index key instead.
      *
      *
      * @param string $text  The chooser description message to prompt.
      * @param array  $options The list of options to prompt (e.g, ['male' => 'Male', 'female' => 'Female] or ['male', 'female']).
-     * @param bool $required Require user to choose any option else the first array will be return as default.
+     * @param bool $required Require user to choose any option else the first array will be return as default (default: false).
+     * @param bool $multiChoice Weather multiple options are allowed (default: true).
      *
      * @return array<string|int,mixed> Return the client selected array keys and values.
      * @throws InvalidArgumentException Throw if options is not specified or an empty array.
      */
-    public static function chooser(string $text, array $options, bool $required = false): array
+    public static function chooser(
+        string $text, 
+        array $options, 
+        bool $required = false,
+        bool $multiChoice = true
+    ): array
     {
         if ($options == []) {
             throw new InvalidArgumentException('Invalid argument, $options is required for chooser.');
         }
 
         $lastIndex = 0;
-        $placeholder = 'To specify multiple values, separate them with commas.';
+        $placeholder = $multiChoice 
+            ? 'To specify multiple values, separate them with commas.'
+            : '';
         $rules = '';
         $optionValues = [];
         $index = 0;
@@ -417,9 +429,15 @@ class Terminal implements LazyInterface
 
             $input = self::input();
             $input = ($input === '') ? '0' : $input;
-        } while ($required && !self::validate($input, ['input' => $rules]));
 
-        return self::getInputValues(list_to_array($input), $optionValues);
+            if(!$multiChoice && str_contains($input, ',')){
+                $input = null;
+                self::fwrite('Multiple options is not allowed, select one option to continue.');
+                self::newLine();
+            }
+        } while ($required && ($input === null) ? true : !self::validate($input, ['input' => $rules]));
+
+        return self::getInputValues($multiChoice ? list_to_array($input) : [$input], $optionValues);
     }
 
      /**
@@ -641,8 +659,6 @@ class Terminal implements LazyInterface
 
             self::writeln($name . Text::wrap($value['value'], 125, $max));
         }
-
-        self::newLine();
     }
 
     /**
@@ -681,22 +697,23 @@ class Terminal implements LazyInterface
      * Get user input from the shell, after requesting for user to type or select an option.
      *
      * @param string|null $prompt Optional message to prompt the user after they have typed.
-     * @param bool $use_fopen Weather to use `fopen`, this opens `STDIN` stream in read-only binary mode (default: false). 
+     * @param string $default Optional default value to return if no value is provided (default: '').
+     * @param bool $useFopen Weather to use `fopen`, this opens `STDIN` stream in read-only binary mode (default: false). 
      *                      This creates a new file resource.
      * 
      * @return string Return user input string.
      */
-    public static function input(?string $prompt = null, bool $use_fopen = false): string
+    public static function input(?string $prompt = null, string $default = '', bool $useFopen = false): string
     {
         if (self::$isReadLine && ENVIRONMENT !== 'testing') {
-            return @readline($prompt);
+            return @readline($prompt)?:$default;
         }
 
         if ($prompt !== null) {
             self::print($prompt);
         }
 
-        if ($use_fopen) {
+        if ($useFopen) {
             $handle = fopen(STDIN, 'rb');
             $input = fgets($handle);
             fclose($handle);
@@ -704,7 +721,106 @@ class Terminal implements LazyInterface
             $input = fgets(STDIN);
         }
 
-        return ($input === false) ? '' : trim($input);
+        return ($input === false) ? $default : trim($input);
+    }
+
+    /**
+     * Captures a key press event and returns the corresponding key name.
+     * Supports arrow keys, tab, enter, escape, and Ctrl+C.
+     *
+     * @param callable|null $callback Optional callback function that receives the raw key and its name.
+     * 
+     * @return array<key:ansi,name:string>|mixed Return an array key nnd name or the result of the callback function.
+     */
+    public static function keyEvent(?callable $callback = null): mixed
+    {
+        system("stty -echo raw");
+        $key = fread(STDIN, 3);
+        $name = match($key){
+            "\033[A" => 'up',
+            "\033[B" => 'down',
+            "\033[Z" => 'shift+tab',
+            "\n", "\r"     => 'enter',
+            "\t"     => 'tab',
+            "\x03"   => 'ctrl+c',
+            "\033"   => 'escape',
+            default  => null
+        };
+        system("stty echo cooked");
+
+        if($callback !== null){
+            return $callback($key, $name);
+        }
+     
+        return ['key' => $key, 'name' => $name];
+    }
+
+    /**
+     * Displays a selectable list in the terminal and allows navigation using arrow keys or tab.
+     *
+     * @param array<int,string|int> $options The list of options to choose from.
+     * @param int $default The default selected index.
+     * @param string|null $placeholder Optional placeholder text to display.
+     * @param bool $clearOnSelect Whether to clear the screen after selection.
+     * @param string $foreground The foreground color for the highlighted selection.
+     * @param string|null $background The optional background color for the highlighted selection.
+     * 
+     * @return string Return the selected option value as a string.
+     */
+    public static function tablist(
+        array $options, 
+        int $default = 0,
+        ?string $placeholder = null,
+        bool $clearOnSelect = true,
+        string $foreground = 'green', 
+        ?string $background = null
+    ): string 
+    {
+        if($options === []){
+            return '';
+        }
+
+        self::cursorVisibility(false);
+        $totalOptions = count($options);
+        $index = ($default >= 0 && $default < $totalOptions) ? $default : 0;
+        $value = null;
+
+        while ($value === null) {
+            if($placeholder){
+                self::writeln($placeholder);
+            }
+
+            self::writeln(self::tablistUpdate($options, $index, $foreground, $background));
+            switch (self::keyEvent()['name']) {
+                case 'up':
+                case 'shift+tab':
+                    $index = ($index - 1 + $totalOptions) % $totalOptions;
+                    break;
+                case 'down':
+                case 'tab':
+                    $index = ($index + 1) % $totalOptions;
+                    break;
+                case 'enter':
+                    self::cursorVisibility(true);
+                    $value = $options[$index] ?? '';
+                    break;
+                case 'escape': 
+                    self::cursorVisibility(true);
+                    $clearOnSelect = true;
+                    $value = '';
+                    break;
+                case 'ctrl+c':
+                    self::cursorVisibility(true);
+                    self::clear();
+                    exit(0);
+            }
+        }
+
+        if($clearOnSelect){
+            self::clear();
+        }
+
+        return (string) $value;
     }
 
     /**
@@ -753,8 +869,11 @@ class Terminal implements LazyInterface
         }
 
         if (preg_match('/[\/()%!^"<>&|\s]/', $argument)) {
-            $argument = preg_replace('/(\\\\+)$/', '$1$1', $argument);
-            return '"' . str_replace(['"', '^', '%', '!', "\n"], ['""', '"^^"', '"^%"', '"^!"', '!LF!'], $argument) . '"';
+            return '"' . str_replace(
+                ['"', '^', '%', '!', "\n"], 
+                ['""', '"^^"', '"^%"', '"^!"', '!LF!'], 
+                preg_replace('/(\\\\+)$/', '$1$1', $argument)
+            ) . '"';
         }
 
         return $argument;
@@ -936,19 +1055,43 @@ class Terminal implements LazyInterface
     }
 
     /**
-     * Clears the entire console screen for both Windows and Unix-based systems.
+     * Controls the cursor visibility in the terminal.
+     *
+     * @param bool $showCursor Set to true to show the cursor, false to hide it.
+     * @return void
+     */
+    public static function cursorVisibility(bool $showCursor):  void
+    {
+        self::print($showCursor ? "\033[?25h" : "\033[?25l");
+    }
+
+    /**
+     * Clears the console screen with optional clearing modes.
+     *
+     * @param string $mode The clearing mode: 'default', 'partial', or 'full'.
+     *                     - 'default' (default): Clears the entire screen.
+     *                     - 'partial': Clears from the cursor position downward.
+     *                     - 'full': Clears the entire screen and scrollback buffer.
      *
      * @return void
      */
-    public static function clear(): void
+    public static function clear(string $mode = 'default'): void
     {
         if (is_platform('windows') && !self::isStreamSupports('sapi_windows_vt100_support', self::STD_OUT)) {
-            self::fwrite(self::_shell('cls'));
-            self::newLine(40);
+            if(self::_shell('cls')){
+                return;
+            }
+            self::newLine(self::getHeight(40));
             return;
         }
-   
-        self::fwrite("\033[H\033[2J");
+
+        $sequences = [
+            'default' => "\033[H\033[2J",
+            'partial' => "\033[J",
+            'full'    => "\033[H\033[2J\033[3J"
+        ];
+        
+        self::fwrite($sequences[$mode] ?? $sequences['default']);
     }
 
     /**
@@ -1928,6 +2071,38 @@ class Terminal implements LazyInterface
         }
 
         return $tCell . PHP_EOL;
+    }
+
+    /**
+     * Generates and returns the formatted menu list with the selected option highlighted.
+     *
+     * @param array $options The list of options to display.
+     * @param int $index The current selected index.
+     * @param string $foreground The foreground color for the highlighted selection.
+     * @param string|null $background The optional background color for the highlighted selection.
+     * 
+     * @return string Return the formatted list output.
+     */
+    private static function tablistUpdate(
+        $options, 
+        $index,
+        string $foreground = 'green', 
+        ?string $background = null
+    ): string
+    {
+        self::clear();
+        self::writeln('Use Arrow keys (↑ ↓) or Tab to navigate, Enter to select:');
+        self::newLine();
+        $list = '';
+
+        foreach ($options as $i => $option) {
+            $list .= ($i === $index) 
+                ? Color::style("> {$option}", $foreground, $background) . "\n"
+                : " {$option}\n"
+            ;
+        }
+
+        return $list;
     }
 
     /**

@@ -207,7 +207,7 @@ final class Schema implements LazyInterface
      */
     public function getMeta(): string 
     {
-        $meta = '<meta name="keywords" content="' . implode(', ', (array) self::getConfig("keywords")) . '">
+        $meta = '<meta name="keywords" content="' . implode(', ', (array) (self::getConfig("keywords") + self::getConfig('article_keywords', []))) . '">
             <meta name="description" content="' . self::getConfig("page_description") . '" />';
         
         if (!empty(self::getConfig("canonical"))) {
