@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Application;
 
@@ -20,7 +21,7 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.5.1';
+    public const VERSION = '3.5.2';
 
     /**
      * Framework version name.
@@ -120,7 +121,9 @@ final class Foundation
     public static final function profiling(string $action, ?array $context = null): void
     {
         if(!PRODUCTION && env('debug.show.performance.profiling', false)){
-            ($action === 'start' ? Performance::start() : Performance::stop(null, $context));
+            ($action === 'start')
+                ? Performance::start() 
+                : Performance::stop(null, $context);
         }
     }
 
@@ -334,7 +337,7 @@ final class Foundation
     public static function isApiPrefix(): bool
     {
         $segments = self::getSegments();
-        return $segments === [] 
+        return ($segments === []) 
             ? false 
             : $segments[0] === (defined('IS_UP') ? env('app.api.prefix', 'api') : 'api');
     }
@@ -353,7 +356,7 @@ final class Foundation
         return (
             php_sapi_name() === 'cli' || 
             isset($_SERVER['argv']) || 
-            defined('STDIN')|| 
+            defined('STDIN') || 
             array_key_exists('SHELL', $_ENV)
         );
     }

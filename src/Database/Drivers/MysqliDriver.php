@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Database\Drivers;
 
@@ -17,9 +18,8 @@ use \Luminova\Logger\Logger;
 use \mysqli;
 use \mysqli_stmt;
 use \mysqli_result;
-use \mysqli_sql_exception;
 use \TypeError;
-use \Exception;
+use \Throwable;
 use \ReflectionClass;
 use \ReflectionException;
 
@@ -140,9 +140,12 @@ final class MysqliDriver implements DatabaseInterface
         try{
             $this->newConnection();
             $this->connected = true;
-        }catch(Exception|DatabaseException $e){
-            $this->connected = false;
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+        }catch(Throwable $e){
+            if($e instanceof DatabaseException){
+                throw $e;
+            }
+
+            throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
         }
 
         self::$showProfiling = ($this->isConnected() && !PRODUCTION && env('debug.show.performance.profiling', false));
@@ -163,11 +166,7 @@ final class MysqliDriver implements DatabaseInterface
      */
     public function getDriver(): ?string 
     {
-        if($this->isConnected()){
-            return 'mysqli';
-        }
-
-        return null;
+        return $this->isConnected() ? 'mysqli' : null;
     }
 
     /**
@@ -470,8 +469,12 @@ final class MysqliDriver implements DatabaseInterface
             }
 
             $this->rowCount = (int) ($this->isSelect ? $this->stmt->num_rows : $this->stmt->affected_rows);
-        } catch (mysqli_sql_exception|TypeError $e) {
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+        } catch (Throwable|TypeError $e) {
+            if($e instanceof DatabaseException){
+                throw $e;
+            }
+
+            throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
         }
         
         $this->bindParams = [];
@@ -869,35 +872,36 @@ final class MysqliDriver implements DatabaseInterface
         }
 
         mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-        try{
-            $socket = null;
-            if (is_command() || NOVAKIT_ENV !== null || $this->config->socket) {
-                $socket = (($this->config->socket_path === '' || $this->config->socket_path === null) 
-                    ? ini_get('mysqli.default_socket') 
-                    : $this->config->socket_path);
-            }
-         
-            $this->connection = new mysqli(
-                $this->config->host,
-                $this->config->username,
-                $this->config->password,
-                $this->config->database,
-                $this->config->port,
-                $socket
+        $socket = null;
+        if (is_command() || NOVAKIT_ENV !== null || $this->config->socket) {
+            $socket = (($this->config->socket_path === '' || $this->config->socket_path === null) 
+                ? ini_get('mysqli.default_socket') 
+                : $this->config->socket_path);
+        }
+        
+        $this->connection = new mysqli(
+            $this->config->host,
+            $this->config->username,
+            $this->config->password,
+            $this->config->database,
+            $this->config->port,
+            $socket
+        );
+
+        if ($this->connection->connect_error) {
+            throw new DatabaseException(
+                $this->connection->connect_error, 
+                $this->connection->connect_errno
             );
+        }
 
-            if ($this->connection->connect_error) {
-                DatabaseException::throwException($this->connection->connect_error, $this->connection->connect_errno);
-                return;
-            }
+        $this->connection->options(
+            MYSQLI_OPT_INT_AND_FLOAT_NATIVE, 
+            (int) $this->config->emulate_preparse
+        );
 
-            $this->connection->options(MYSQLI_OPT_INT_AND_FLOAT_NATIVE, (int) $this->config->emulate_preparse);
-
-            if($this->config->charset !== ''){
-                $this->connection->set_charset($this->config->charset);
-            }
-        }catch(Exception|mysqli_sql_exception $e){
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+        if($this->config->charset !== ''){
+            $this->connection->set_charset($this->config->charset);
         }
     }
 }

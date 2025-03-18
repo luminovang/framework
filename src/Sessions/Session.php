@@ -9,6 +9,7 @@ declare(strict_types=1);
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Sessions;
 
@@ -88,6 +89,13 @@ class Session implements LazyInterface
      * @var callable|null $onIpChange 
      */
     private mixed $onIpChange = null;
+
+    /**
+     * Is session started in context.
+     * 
+     * @var bool $isStarted 
+     */
+    private static bool $isStarted = false;
 
     /**
      * Stacked items.
@@ -888,7 +896,7 @@ class Session implements LazyInterface
 
             if ((bool) ini_get('session.auto_start')) {
                 Logger::error('Session Error: The "session.auto_start" directive is enabled in php.ini. Disable to allow luminova manage sessions internally.');
-                return false;
+                return self::$isStarted = false;
             }
 
             $this->setSaveHandler();
@@ -906,9 +914,13 @@ class Session implements LazyInterface
 
         if ($status === self::ACTIVE) {
             $this->setIpChangeEventListener();
-            Logger::warning('Session' . ($isSession ? '' : ' Cookie') . ' Warning: A session is already active. Avoid calling $session->start() again.');
+            
+            if(self::$isStarted){
+                Logger::warning('Session' . ($isSession ? '' : ' Cookie') . ' Warning: A session is already active. Avoid calling $session->start() again.');
+            }
+
             self::$status = self::STARTED;
-            return true;
+            return self::$isStarted = true;
         }
 
         if ($status === self::NONE) {
@@ -917,11 +929,11 @@ class Session implements LazyInterface
             if($this->manager->start($sessionId)){
                 $this->setIpChangeEventListener();
                 self::$status = self::STARTED;
-                return true;
+                return self::$isStarted = true;
             }
         }
 
-        return false;
+        return self::$isStarted = false;
     }
 
     /**

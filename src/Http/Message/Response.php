@@ -6,8 +6,9 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  * @link https://luminova.ng/docs/0.0.0/http/response
-*/
+ */
 namespace Luminova\Http\Message;
 
 use \Luminova\Storages\Stream;

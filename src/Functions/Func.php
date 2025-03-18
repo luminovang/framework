@@ -6,10 +6,14 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Functions;
 
 use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Storages\FileManager;
+use \Luminova\Base\BaseConfig;
 
 class Func
 {
@@ -121,19 +125,38 @@ class Func
 	}
 
 	/** 
-	 * Create a random integer based on minimum and maximum.
+	 * Generate a random BIGINT within a specified range.
 	 * 
-	 * @param int $min The minimum number.
-	 * @param int $max The maximin number.
+	 * UNSIGNED BIGINT: 0 to 18,446,744,073,709,551,615 (20 digits):
+	 * $min = 0
+	 * $max = 18446744073709551615
 	 * 
-	 * @return string String representation of big integer.
+	 * SIGNED BIGINT: -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807 (19 digits):
+	 * $min = -9223372036854775808
+	 * $max = 9223372036854775807
+	 *
+	 * @param int|null $min The minimum value (default: 0).
+	 * @param int|null $max The maximum value (default: 18446744073709551615).
+	 *
+	 * @return string Return a string representation of the generated BIGINT.
 	 */
-	public static function bigInteger(int $min, int $max): string 
+	public static function bigInteger(?string $min = null, ?string $max = null): string 
 	{
-		$difference = (string) bcadd(bcsub((string) $max, (string) $min), '1');
-		$rand_percent = (string) bcdiv((string) mt_rand(), (string) mt_getrandmax(), 8);
-
-		return bcadd((string) $min, bcmul($difference, $rand_percent, 8), 0);
+		$min ??= '0';
+		$max ??= '18446744073709551615';
+		do {
+			$random = bcadd(
+				$min,
+				bcmul(
+					bcadd(bcsub($max, $min), '1'),
+					bcdiv((string) mt_rand(0, mt_getrandmax()), (string) mt_getrandmax(), 8),
+					0
+				),
+				0
+			);
+		} while (bccomp($random, $min) < 0 || bccomp($random, $max) > 0);
+	
+		return $random;
 	}
 	
 	/** 
@@ -782,5 +805,116 @@ class Func
 				'replace' => "/<[^>]*>.*?<\/[^>]*>/s", // Remove HTML tags with their content
 			]
 		};
+	}
+
+	/**
+     * Converts a hexadecimal string into its binary representation.
+     *
+     * @param string      $hexStr      The input string containing hexadecimal data.
+     * @param string|null $destination Optional. If specified, saves the binary data to a file.
+     *                                 - If it's a `file path`, the binary data is saved directly.
+     *                                 - If it's a `directory`, a unique filename is generated.
+     *
+     * @return string|bool Return the binary string if no destination is provided.
+     *                     If a file is written, returns `true` on success, `false` on failure.
+	 * @throws RuntimeException Throws if an invalid hex is encountered.
+     */
+	public static function hexToBinary(string $hexStr, ?string $destination = null): string|bool 
+	{
+		$binary = '';
+		$lines = explode("\n", trim($hexStr));
+		
+		foreach ($lines as $line) {
+			if (preg_match('/:\s*([0-9A-Fa-f\s]+)/', $line, $matches)) {
+				$hex = trim(preg_replace('/[^0-9A-Fa-f]/', '', $matches[1]));
+
+				if (!ctype_xdigit($hex)) {
+					throw new RuntimeException("Invalid hexadecimal string: {$hex}", RuntimeException::INVALID);
+				}				
+
+				if (strlen($hex) % 2 !== 0) {
+					$hex = '0' . $hex;
+				}
+
+				$bin = hex2bin($hex);
+				if ($binary === false) {
+					throw new RuntimeException('hexadecimal to binary conversion failed.');
+				}
+
+				$binary .= $bin;
+			}
+		}
+
+		if (!$destination) {
+			return $binary;
+		}
+	
+		if (str_ends_with($destination, DIRECTORY_SEPARATOR) || !preg_match('/\.\w+$/', $destination)) {
+			$destination = root($destination);
+			
+			FileManager::mkdir($destination);
+
+			do {
+				$filename = uniqid('bin_', true);
+				$filePath = "{$destination}{$filename}";
+			} while (file_exists($filePath));
+
+			return FileManager::write(
+				"{$filePath}." . self::getBinaryExtension($binary, $filePath), 
+				$binary
+			);
+		}
+
+		return FileManager::write($destination, $binary);
+	}
+	
+	/**
+     * Determines the file extension based on the binary data using MIME detection and magic numbers.
+     *
+     * @param string $binaryData  The raw binary data.
+     * @param string $destination The temporary file location for MIME type detection.
+     *
+     * @return string Return the detected file extension (e.g., 'png', 'jpg', 'zip').
+     *                Returns 'bin' if no known extension is found.
+     */
+	private static function getBinaryExtension(string $binaryData, string $destination): string 
+	{
+		$destination = "{$destination}-hex";
+		if(FileManager::write($destination, $binaryData)){
+			$finfo = finfo_open(FILEINFO_MIME_TYPE);
+			$mimeType = finfo_file($finfo, $destination);
+			finfo_close($finfo);
+			unlink($destination);
+
+			$extension = BaseConfig::getExtension($mimeType);
+
+			if ($extension) {
+				return $extension;
+			}
+		}
+
+		$magicNumbers = [
+			"\x89PNG\r\n\x1A\n" => 'png',
+			"\xFF\xD8\xFF" => 'jpg',
+			"\x25\x50\x44\x46" => 'pdf',
+			"\x50\x4B\x03\x04" => 'zip',
+			"\x49\x44\x33" => 'mp3',
+			"\x47\x49\x46\x38" => 'gif',
+			"\xD0\xCF\x11\xE0" => 'doc', 
+			"\x50\x4B\x03\x04" => 'docx', 
+			"\x50\x4B\x07\x08" => 'xlsx',
+			"\x52\x49\x46\x46" => 'wav',
+			"\x00\x00\x01\xBA" => 'mpg',
+			"\x00\x00\x01\xB3" => 'mpg',
+			"\x1A\x45\xDF\xA3" => 'mkv'
+		];
+
+		foreach ($magicNumbers as $signature => $ext) {
+			if (strncmp($binaryData, $signature, strlen($signature)) === 0) {
+				return $ext;
+			}
+		}
+
+		return 'bin';
 	}
 }

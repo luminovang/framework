@@ -6,7 +6,8 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
-*/
+ * @link https://luminova.ng
+ */
 namespace Luminova\Command\Novakit;
 
 use \Luminova\Base\BaseConsole;
@@ -131,7 +132,7 @@ class Generators extends BaseConsole
                     /**
                      * Constructor logic goes here.
                      * parent::__construct();
-                    */
+                     */
                 }
 
             PHP;
@@ -162,7 +163,7 @@ class Generators extends BaseConsole
                  * @param array \$helps Helps information.
                  * 
                  * @return int return STATUS_SUCCESS if you implemented your own help else return STATUS_ERROR.
-                */
+                 */
                 public function help(array \$helps): int
                 {
                     return STATUS_ERROR;
@@ -172,7 +173,7 @@ class Generators extends BaseConsole
                  * Run text command.
                  * 
                  * @return int Return status code.
-                */
+                 */
                 public function runTest(): int
                 {
                     \$this->header();
@@ -295,70 +296,70 @@ class Generators extends BaseConsole
              * The name of the model's table.
              * 
              * @var string \$table
-            */
+             */
             protected string \$table = '$table'; 
         
             /**
              * The default primary key column.
              * 
              * @var string \$primaryKey
-            */
+             */
             protected string \$primaryKey = ''; 
         
             /**
              * Searchable table column names.
              * 
              * @var array<int,string> \$searchable
-            */
+             */
             protected array \$searchable = [];
         
             /**
              *  Enable database caching for query builder.
              * 
              * @var bool \$cacheable
-            */
+             */
             protected bool \$cacheable = true; 
         
             /**
              * Database cache expiration time in seconds.
              * 
              * @var DateTimeInterface|int \$expiry
-            */
+             */
             protected DateTimeInterface|int \$expiry = 7 * 24 * 60 * 60;
         
             /**
              * Specify whether the model's table is updatable, deletable, and insertable.
              * 
              * @var bool \$readOnly
-            */
+             */
             protected bool \$readOnly = false; 
         
             /**
              * Fields that can be inserted.
              * 
              * @var array<int,string> \$insertable
-            */
+             */
             protected array \$insertable = []; 
         
             /**
              * Fields that can be updated.
              * 
              * @var array \$updatable
-            */
+             */
             protected array \$updatable = []; 
         
             /**
              * Input validation rules.
              * 
              * @var array<string,string> \$rules
-            */
+             */
             protected array \$rules = [];
         
             /**
              * Input validation error messages for rules.
              * 
              * @var array<string,array> \$messages.
-            */
+             */
             protected array \$messages = [];
         }
         PHP;

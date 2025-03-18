@@ -6,9 +6,9 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
-
- namespace Luminova\Notifications\Firebase;
+namespace Luminova\Notifications\Firebase;
 
 use \Kreait\Firebase\Factory;
 use \Kreait\Firebase\Contract\Database as RealtimeDatabase;

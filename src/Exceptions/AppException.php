@@ -8,6 +8,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Exceptions;
 
@@ -198,6 +199,13 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     protected string|int|null $strCode = null;
 
     /**
+     * Handling status.
+     * 
+     * @var bool $handlingException
+     */
+    private static bool $handlingException = false;
+
+    /**
      * {@inheritdoc}
      */
     public function __construct(string $message, string|int $code = 0, ?Throwable $previous = null)
@@ -314,7 +322,7 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
      */
     public function log(string $dispatch = 'exception'): void
     {
-        Logger::dispatch($dispatch, $this->toString());
+        self::logging($this->toString(), $dispatch);
     }
 
     /**
@@ -398,25 +406,54 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
      */
     private static function safeHandler(Throwable $exception): void
     {
-        if (Foundation::isCommand()) {
-            if (env('throw.cli.exceptions', false)) {
-                throw $exception;
-            }
-
-            include_once root('/resources/Views/system_errors/') . 'cli.php';
-            exit(STATUS_ERROR);
-        }
-
-        if (PRODUCTION && !Foundation::isFatal($exception->getCode())) {
-            if($exception instanceof self){
-                $exception->log();
-                return;
-            }
-
-            Logger::dispatch('exception', (string) $exception);
+        if (self::$handlingException) {
+            error_log("[Recursive Exception Prevented]: " . $exception->getMessage());
             return;
         }
 
-        throw $exception;
+        self::$handlingException = true;
+
+        try {
+            if (Foundation::isCommand()) {
+                if (env('throw.cli.exceptions', false)) {
+                    throw $exception;
+                }
+
+                include_once root('/resources/Views/system_errors/') . 'cli.php';
+                exit(STATUS_ERROR);
+            }
+
+            if (PRODUCTION && !Foundation::isFatal($exception->getCode())) {
+                if ($exception instanceof self) {
+                    $exception->log();
+                    return;
+                }
+
+                self::logging((string) $exception);
+                return;
+            }
+
+            throw $exception;
+        } finally {
+            self::$handlingException = false;
+        }
+    }
+
+    /**
+     * Logs an exception message to the application log.
+     *
+     * @param string $exception The exception message to be logged.
+     * @param string $level The log level at which the exception message should be dispatched.
+     *                       The default log level is 'exception'.
+     *
+     * @return void 
+     */
+    private static function logging(string $exception, string $level = 'exception'): void 
+    {
+        try{
+            Logger::dispatch($level, (string) $exception);
+        }catch(Throwable $e){
+            error_log("[Exception Logging Failed]: " . $e->getMessage());
+        }
     }
 }

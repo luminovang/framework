@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Storages;
 
@@ -94,7 +95,7 @@ final class FileDelivery
     }
 
     /**
-     * Modify image height, width and qaulity before outputs the image content with appropriate headers.
+     * Modify image height, width and quality before outputs the image content with appropriate headers.
      *
      * @param string $basename The file name (e.g: image.png).
      * @param int $expiry Expiry time in seconds for cache control (default: 0), indicating no cache.
@@ -126,20 +127,24 @@ final class FileDelivery
             return false;
         }
 
-        $img = new NanoImage();
+        $width = $options['width'] ?? null;
+        $height = $options['height'] ?? null;
+
         try{
-            $img->open($filename);
-            $img->resize(
-                max($options['width'] ?? 200, 1),
-                max($options['height'] ?? 200, 1),
-                (bool) ($options['ratio'] ?? true)
-            );
+            $img = (new NanoImage())->open($filename);
+            if($width || $height){
+                $img->resize(
+                    max($width ?? $height, 1),
+                    max($height ?? $width, 1),
+                    (bool) ($options['ratio'] ?? true)
+                );
+            }
 
             self::cacheHeaders($headers, $basename, null, $expiry);
-            $result = $img->get($options['quality']??100);
+            $result = $img->get($options['quality'] ?? 100);
             $img->free();
 
-            return $result;
+            return (bool) $result;
         }catch(Exception $e){
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }

@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Storages;
 
@@ -84,6 +85,10 @@ final class Uploader
         ?string &$destination = null
     ): bool
     {
+        if(!$file->getTemp()){
+            return false;
+        }
+
         $destination = self::beforeUpload($file, $path, $symlink);
 
         if ($destination === null) {
@@ -92,6 +97,7 @@ final class Uploader
 
         if (move_uploaded_file($file->getTemp(),  $destination)) {
             $file->free();
+
             if($symlink !== null){
                 FileManager::symbolic($destination, $symlink);
             }
@@ -104,26 +110,31 @@ final class Uploader
     }
 
     /**
-     * Uploads a file in chunks to a specified destination, supporting large file uploads by dividing
-     * the file into manageable parts. This chunk splitting is usually done from client side (e.g, `PluUpload Js`).
+     * Uploads a file in chunks to a specified destination.
      *
-     * @param File $file The instance of file object being uploaded.
-     * @param string|null $path Directory path for the upload, if not set in file configuration.
-     * @param int $chunk The current chunk index, starting at 0 (default: 0).
-     * @param int $chunks The total number of chunks to be uploaded, starting at 0 (default: 0).
-     * @param int $delay Optional delay in microseconds between chunks to control resource usage (default: 0).
-     * @param string|null $destination Output variable holding the final destination path or null if upload fails.
-     * 
-     * @return bool|int Return true if upload is complete, false otherwise. 
-     *          If upload is still in progress, returns remaining chunks count.
-     * @throws StorageException Throws if the upload path is not configured or permission to create it was denied.
+     * This method enables large file uploads by splitting the file into smaller, manageable chunks.
+     * The client-side (e.g., `PluUpload Js`) typically handles chunking before sending data.
+     *
+     * If the file object does not specify a chunk read size, it defaults to 5MB per chunk files larger than 5MB.
+     *
+     * @param File $file The file instance being uploaded.
+     * @param string|null $path Optional directory path for the upload. If not provided, it falls back to the file configuration.
+     * @param int $chunkIndex The current chunk's index, starting from 0 (default: 0).
+     * @param int $totalChunks The total number of chunks for the file, starting from 0 (default: 0).
+     * @param int $uploadDelay Optional microsecond delay between chunk writes to manage resource usage (default: 0).
+     * @param string|null $destination Output variable storing the final destination path or null if the upload fails.
+     *
+     * @return bool|int Returns `true` if the upload is complete, `false` on failure.
+     *                  If the upload is still in progress, returns the remaining chunk count.
+     *
+     * @throws StorageException If the upload path is not configured or lacks proper permissions.
      */
     public static function chunk(
         File $file, 
         ?string $path = null, 
-        int $chunk = 0, 
-        int $chunks = 0,
-        int $delay = 0,
+        int $chunkIndex = 0, 
+        int $totalChunks = 0,
+        int $uploadDelay = 0,
         ?string &$destination = null
     ): bool|int
     {
@@ -136,7 +147,7 @@ final class Uploader
         $config = $file->getConfig();
         $length = (isset($config->chunkLength) ? (int) $config->chunkLength : 5_242_880);
         $temp = $destination . '.part';
-        $out = fopen($temp, $chunk === 0 ? 'wb' : 'ab');
+        $out = fopen($temp, $chunkIndex === 0 ? 'wb' : 'ab');
 
         if ($out === false) {
             $destination = null;
@@ -151,12 +162,12 @@ final class Uploader
             return false;
         }
 
-        $delay = ($delay === 0 && $length > 10_000_000) ? 10000 : $delay;
+        $uploadDelay = ($uploadDelay === 0 && $length > 10_000_000) ? 10000 : $uploadDelay;
         while ($buffer = fread($in, $length)) {
             fwrite($out, $buffer);
 
-            if($delay > 0){
-                usleep($delay);
+            if($uploadDelay > 0){
+                usleep($uploadDelay);
             }
         }
 
@@ -164,7 +175,7 @@ final class Uploader
         fclose($out);
         $file->free();
 
-        if (!$chunks || $chunk === $chunks - 1) {
+        if (!$totalChunks || $chunkIndex === $totalChunks - 1) {
             if (rename($temp, $destination)) {
                 if($symlink !== null){
                     FileManager::symbolic($destination, $symlink);
@@ -177,7 +188,7 @@ final class Uploader
         }
 
         $destination = null;
-        return $chunks - $chunk;
+        return $totalChunks - $chunkIndex;
     }
 
     /**

@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Logger;
 
@@ -14,6 +15,7 @@ use \Luminova\Logger\LogLevel;
 use \Luminova\Logger\NovaLogger;
 use \App\Config\Logger as LoggerConfig;
 use \Luminova\Functions\Func;
+use \Luminova\Time\Time;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Throwable;
@@ -140,6 +142,40 @@ final class Logger
             $message instanceof Throwable ? $message->getMessage() : $message, 
             $context
         );
+    }
+
+    /**
+     * Generates a log entry with an ISO 8601 timestamp (including microseconds).
+     * 
+     * Useful for logging multiple messages that share the same severity level, especially in loops or batch operations. 
+     * Instead of logging each entry separately, you can construct multiple log entries and log them all at once for better efficiency.
+     *
+     * @param string $level The log severity level (e.g., 'INFO', 'ERROR').
+     * @param string $message The main log message.
+     * @param array<string,mixed> $context Optional contextual data for the log entry.
+     *
+     * @return string Return the formatted log entry in plain text, ending with a newline.
+     */
+    public static function entry(
+        string $level, 
+        string $message, 
+        array  $context = [],
+    ): string
+    {
+        if(self::getLogger() instanceof NovaLogger){
+            return self::getLogger()->message($level, $message, $context) . PHP_EOL;
+        }
+
+        $message = sprintf(
+            '[%s] [%s]: %s', 
+            strtoupper($level), 
+            Time::now()->format('Y-m-d\TH:i:s.uP'), 
+            $message
+        );
+
+        return ($context === []) 
+            ? $message . PHP_EOL
+            : sprintf('%s [CONTEXT] %s', $message, print_r($context, true)) . PHP_EOL;
     }
 
     /**

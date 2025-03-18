@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Database\Drivers;
 
@@ -15,6 +16,7 @@ use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Interface\ConnInterface;
 use \PDO;
 use \PDOStatement;
+use \Throwable;
 use \PDOException;
 
 final class PdoDriver implements DatabaseInterface 
@@ -102,12 +104,16 @@ final class PdoDriver implements DatabaseInterface
     public function __construct(CoreDatabase $config) 
     {
         $this->config = $config;
+
         try{
             $this->newConnection();
             $this->connected = true;
-        }catch(PDOException|DatabaseException $e){
-            $this->connected = false;
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+        }catch(Throwable $e){
+            if($e instanceof DatabaseException){
+                throw $e;
+            }
+
+            throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
         }
 
         self::$showProfiling = ($this->isConnected() && !PRODUCTION && env('debug.show.performance.profiling', false));
@@ -331,12 +337,10 @@ final class PdoDriver implements DatabaseInterface
             
             if ($readonly === false) {
                 $this->profiling(false, true);
-                DatabaseException::throwException(
+                throw new DatabaseException(
                     'Failed to set transaction isolation level for read-only.', 
                     DatabaseException::DATABASE_TRANSACTION_READONLY_FAILED
                 );
-
-                return false;
             }
         }
 
@@ -352,12 +356,10 @@ final class PdoDriver implements DatabaseInterface
             if ($name === false) {
                 $this->profiling(false, true);
 
-                DatabaseException::throwException(
+                throw new DatabaseException(
                     'Failed to create savepoint name.', 
                     DatabaseException::TRANSACTION_SAVEPOINT_FAILED
                 );
-
-                return false;
             }
 
             $savepoint = $this->connection->exec("SAVEPOINT {$name}") !== false;
@@ -400,12 +402,10 @@ final class PdoDriver implements DatabaseInterface
             if ($name === false) {
                 $this->profiling(false, true);
 
-                DatabaseException::throwException(
+                throw new DatabaseException(
                     'Failed to create savepoint name.', 
                     DatabaseException::TRANSACTION_SAVEPOINT_FAILED
                 );
-
-                return false;
             }
 
             $result = $this->connection->exec("ROLLBACK TO SAVEPOINT {$name}") !== false;
@@ -471,8 +471,8 @@ final class PdoDriver implements DatabaseInterface
         try {
            $this->executed = $this->stmt->execute(($this->parseParams ? null : $params));
            $this->parseParams = false;
-        } catch (PDOException $e) {
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+        } catch (Throwable $e) {
+            throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
         }
 
         return $this->executed;
@@ -541,8 +541,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function getColumns(int $mode = FETCH_COLUMN): array 
     {
-        $response = $this->fetch('all', $mode);
-        return $response ? $response : [];
+        return $this->fetch('all', $mode)?:[];
     }
 
     /**
@@ -550,9 +549,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function getInt(): array|bool
     {
-        $integers = $this->fetch('all', FETCH_NUM);
-
-        return $integers ? $integers : false;
+        return $this->fetch('all', FETCH_NUM)?:false;
     }
 
     /**

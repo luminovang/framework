@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Database;
 
@@ -56,6 +57,13 @@ class Connection implements LazyInterface, Countable
      * @var int $maxConnections
      */
     private int $maxConnections = 0;
+
+    /**
+     * Accumulate critical log messages
+     * 
+     * @var string $logEntry
+     */
+    private static string $logEntry = '';
 
     /**
      * Initializes a database connection based on provided parameters or default to `.env` configuration.
@@ -230,21 +238,28 @@ class Connection implements LazyInterface, Countable
      */
     public function connect(): ?DatabaseInterface
     {
+        self::$logEntry = '';
         $connection = $this->retry((int) env('database.connection.retry', 1)) ?: $this->retry(null);
 
         if ($connection instanceof DatabaseInterface) {
+            self::eCritical();
             return $connection;
         }
     
+        $err = 'Failed all attempts to establish a database connection.';
+
         if(PRODUCTION){
-            Logger::dispatch('critical', 'Failed all attempts to establish a database connection.');
+            if(!self::$logEntry){
+                Logger::dispatch('critical', $err);
+                return null;
+            }
+
+            self::$logEntry .= Logger::entry('critical', $err);
+            self::eCritical();
             return null;
         }
 
-        throw new DatabaseException(
-            'Failed all attempts to establish a database connection', 
-            DatabaseException::FAILED_ALL_CONNECTION_ATTEMPTS
-        );
+        throw new DatabaseException($err, DatabaseException::FAILED_ALL_CONNECTION_ATTEMPTS);
     }
 
     /**
@@ -297,7 +312,7 @@ class Connection implements LazyInterface, Countable
         // Retry from backup databases
         if ($retry === null) {
             $servers = Database::getBackups();
-    
+
             foreach ($servers as $config) {
                 try {
                     $connection = self::newInstance(self::newConfig($config));
@@ -308,7 +323,7 @@ class Connection implements LazyInterface, Countable
                         }
     
                         if(PRODUCTION){
-                            Logger::dispatch('critical', sprintf(
+                            Logger::dispatch('info', sprintf(
                                 'Successfully connected to backup database: (%s@%s).',  
                                 $config['database'],
                                 $config['host']
@@ -318,13 +333,13 @@ class Connection implements LazyInterface, Countable
                         return $connection;
                     }
 
-                    Logger::dispatch('critical', sprintf(
+                    self::$logEntry .= Logger::entry('critical', sprintf(
                         'Backup database connection attempt failed (%s@%s).',  
                         $config['database'],
                         $config['host']
                     ));
                 } catch (DatabaseException|Exception $e) {
-                    Logger::dispatch('critical', sprintf(
+                    self::$logEntry .= Logger::entry('critical', sprintf(
                         'Failed to connect to backup database (%s@%s) with error: %s',
                         $config['database'],
                         $config['host'],
@@ -349,9 +364,15 @@ class Connection implements LazyInterface, Countable
                     return $connection;
                 }
 
-                Logger::dispatch('critical', 'Database connection attempt (' . $attempt . ') failed.');
+                self::$logEntry .= Logger::entry(
+                    'critical', 
+                    'Database connection attempt (' . $attempt . ') failed.'
+                );
             } catch (DatabaseException|Exception $e) {
-                Logger::dispatch('critical', 'Attempt (' . $attempt . ') failed with error: ' . $e->getMessage());
+                self::$logEntry .= Logger::entry(
+                    'critical', 
+                    'Attempt (' . $attempt . ') failed with error: ' . $e->getMessage()
+                );
             }
         }
 
@@ -484,15 +505,15 @@ class Connection implements LazyInterface, Countable
         ));
     }
 
-   /**
-    * Anonymizes class to extend base database.
-    * 
-    * @param array<string,mixed> $config Database configuration.
-    * 
-    * @return \T<CoreDatabase> Return based database instance with loaded configuration
-    */
-   private static function newConfig(array $config): CoreDatabase
-   {
+    /**
+     * Anonymizes class to extend base database.
+     * 
+     * @param array<string,mixed> $config Database configuration.
+     * 
+     * @return \T<CoreDatabase> Return based database instance with loaded configuration
+     */
+    private static function newConfig(array $config): CoreDatabase
+    {
         return new class($config) extends CoreDatabase 
         { 
             public function __construct(array $config) 
@@ -500,5 +521,20 @@ class Connection implements LazyInterface, Countable
                 parent::__construct($config);
             }
         };
-   }
+    }
+
+    /**
+     * Dispatch all accumulated log messages.
+     * 
+     * return void
+     */
+    private static function eCritical(): void
+    {
+        if(!self::$logEntry){
+            return;
+        }
+
+        Logger::dispatch('critical', self::$logEntry);
+        self::$logEntry = '';
+    }
 }

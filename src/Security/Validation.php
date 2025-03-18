@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Security;
 
@@ -48,89 +49,91 @@ final class Validation implements ValidationInterface, LazyInterface
         }
 
         $this->failures = [];
+     
         foreach ($rules as $field => $rule) {
-            if(isset($input[$field])){
-                $fieldValue = $input[$field] ?? null;
-                $ruleParts = explode('|', $rule);
+            $fieldValue = $input[$field] ?? null;
+            $ruleParts = ($rule === '') ? [] : explode('|', $rule);
 
-                if($ruleParts === []){
+            if($ruleParts === []){
+                continue;
+            }
+
+            foreach ($ruleParts as $rulePart) {
+                [$ruleName, $ruleParam] = self::parseRule($rulePart);
+
+                if($ruleName === ''){
                     continue;
                 }
 
-                foreach ($ruleParts as $rulePart) {
-                    [$ruleName, $ruleParam] = self::parseRule($rulePart);
+                switch ($ruleName) {
+                    case 'none':
+                    case 'nullable':
+                        return true;
+                    case 'required':
+                        if ($this->isEmpty($fieldValue)) {
+                            $this->addError($field, $ruleName, $fieldValue);
+                        }
+                    break;
+                    case 'callback':
+                        if ($ruleParam !== '' && is_callable($ruleParam) && !$ruleParam($fieldValue, $field)) {
+                            $this->addError($field, $ruleName, $fieldValue);
+                        }
+                    break;
+                    case 'match':
+                        if ($ruleParam !== '' && !preg_match('/' . $ruleParam . '/', $fieldValue)) {
+                            $this->addError($field, $ruleName, $fieldValue);
+                        }
+                    break;
+                    case 'equals':
+                        if ($fieldValue !== $input[$ruleParam]) {
+                            $this->addError($field, $ruleName, $fieldValue);
+                        }
+                    break;
+                    case 'not_equal':
+                        if ($fieldValue === $input[$ruleParam]) {
+                            $this->addError($field, $ruleName, $fieldValue);
+                        }
+                    break;
+                    case 'in_array':
+                        if ($ruleParam !== '') {
+                            $matches = list_to_array($ruleParam);
+                            $inArray = ($matches === false) ? false : in_array($fieldValue, $matches);
+                            if (!$inArray) {
+                                $this->addError($field, $ruleName, $fieldValue);
+                            }
+                        }
+                    break;
+                    case 'keys_exist':
+                    case 'keys_exists':
+                        if ($ruleParam !== '') {
+                            $matches = list_to_array($ruleParam);
+                            $exist = false;
 
-                    if($ruleName === ''){
-                        continue;
-                    }
-
-                    switch ($ruleName) {
-                        case 'none':
-                        case 'nullable':
-                            return true;
-                        case 'required':
-                            if ($this->isEmpty($fieldValue)) {
-                                $this->addError($field, $ruleName, $fieldValue);
-                            }
-                        break;
-                        case 'callback':
-                            if ($ruleParam !== '' && is_callable($ruleParam) && !$ruleParam($fieldValue, $field)) {
-                                $this->addError($field, $ruleName, $fieldValue);
-                            }
-                        break;
-                        case 'match':
-                            if ($ruleParam !== '' && !preg_match('/' . $ruleParam . '/', $fieldValue)) {
-                                $this->addError($field, $ruleName, $fieldValue);
-                            }
-                        break;
-                        case 'equals':
-                            if ($fieldValue !== $input[$ruleParam]) {
-                                $this->addError($field, $ruleName, $fieldValue);
-                            }
-                        break;
-                        case 'in_array':
-                            if ($ruleParam !== '') {
-                                $matches = list_to_array($ruleParam);
-                                $inArray = ($matches === false) ? false : in_array($fieldValue, $matches);
-                                if (!$inArray) {
-                                    $this->addError($field, $ruleName, $fieldValue);
+                            if($matches !== false) {
+                                if (is_array($fieldValue)) {
+                                    $intersection = array_intersect($matches, $fieldValue);
+                                    $exist = count($intersection) === count($fieldValue);
+                                } else {
+                                    $exist = list_in_array($fieldValue, $matches);
                                 }
                             }
-                        break;
-                        case 'keys_exist':
-                        case 'keys_exists':
-                            if ($ruleParam !== '') {
-                                $matches = list_to_array($ruleParam);
-                                $exist = false;
 
-                                if($matches !== false) {
-                                    if (is_array($fieldValue)) {
-                                        $intersection = array_intersect($matches, $fieldValue);
-                                        $exist = count($intersection) === count($fieldValue);
-                                    } else {
-                                        $exist = list_in_array($fieldValue, $matches);
-                                    }
-                                }
-
-                                if (!$exist) {
-                                    $this->addError($field, $ruleName, $fieldValue);
-                                }
-                            }
-                        break;
-                        case 'fallback':
-                            if ($this->isEmpty($fieldValue)) {
-                                $input[$field] = (strtolower($ruleParam) === 'null') ? null : $ruleParam;
-                            }
-                        break;
-                        default:
-                            if (!self::validation($ruleName, $fieldValue, $ruleParam)) {
+                            if (!$exist) {
                                 $this->addError($field, $ruleName, $fieldValue);
                             }
-                        break;
-                    }
+                        }
+                    break;
+                    case 'fallback':
+                        if ($this->isEmpty($fieldValue)) {
+                            $input[$field] = (strtolower($ruleParam) === 'null') ? null : $ruleParam;
+                        }
+                    break;
+                    default:
+                        if (!self::validation($ruleName, $fieldValue, $ruleParam)) {
+                            $this->addError($field, $ruleName, $fieldValue);
+                        }
+                    break;
                 }
-            }else{
-                $this->addError($field, '*', 'Form input field [' . $field . '] is missing');
             }
         }
 
@@ -148,49 +151,38 @@ final class Validation implements ValidationInterface, LazyInterface
     /**
      * {@inheritdoc}
      */
-    public function getError(string|int $fieldIndex = 0, string $type = 'message'): string
+    public function getError(string|int $fieldIndex = 0, int $errorIndex = 0): string
     {
-        $errors = $this->getErrorField($fieldIndex);
-
-        if($errors === []){
-            return '';
-        }
-
-        return $errors[0][$type] ?? '';
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getErrorFieldLine(string $prefix = ''): string
-    {
-        return $prefix . $this->getError(0, 'field');
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getErrorLine(string|int $fieldIndex = 0, int $errorIndex = 0): string
-    {
-        $errors = $this->getErrorField($fieldIndex);
-
+        $errors = $this->getErrorFields($fieldIndex);
+    
         if($errors === []){
             return '';
         }
         
-        $error = $errors[$errorIndex] ?? null;
-
-        if($error === null){
-            return '';
-        }
-
+        $errors = $errors[$errorIndex] ?? [];
         return $errors['message'] ?? '';
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getErrorField(string|int $fieldIndex = 0): array
+    public function getErrorMessage(string|int $fieldIndex = 0): string
+    {
+        return ($this->getErrorFields($fieldIndex)[0]['message'] ?? '');
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getErrorField(string|int $fieldIndex = 0): string
+    {
+        return ($this->getErrorFields($fieldIndex)[0]['field'] ?? '');
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getErrorFields(string|int $fieldIndex = 0): array
     {
         if($this->failures === []){
             return [];
@@ -210,7 +202,6 @@ final class Validation implements ValidationInterface, LazyInterface
             return [];
         }
 
-        // Remove the parent key from the error array
         unset($this->failures[$field]);
         return $infos;
     }
@@ -269,11 +260,12 @@ final class Validation implements ValidationInterface, LazyInterface
                 'exact_length', 'length' => is_string($value) && mb_strlen($value) === (int) $param,
                 'string' => is_string($value),
                 'integer' => self::validateInteger($value, $param),
+                'float' => self::validateFloat($value, $param),
                 'email' => filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
                 'alphanumeric' => ctype_alnum($value),
                 'alphabet' => ctype_alpha($value),
                 'url' => filter_var($value, FILTER_VALIDATE_URL) !== false,
-                'decimal' => filter_var($value, FILTER_VALIDATE_FLOAT) !== false && str_contains((string) $value, '.'),
+                'decimal' => self::validateFloat($value, $param, true),
                 'binary' => ctype_print($value) && !preg_match('/[^\x20-\x7E\t\r\n]/', $value),
                 'hexadecimal' => ctype_xdigit($value),
                 'array' => is_array($value) || is_array(json_decode($value, true, 512, JSON_THROW_ON_ERROR)),
@@ -296,13 +288,49 @@ final class Validation implements ValidationInterface, LazyInterface
      */
     private static function validateInteger(mixed $value, mixed $param = 'none'): bool
     {
-        if (filter_var($value, FILTER_VALIDATE_INT) === false) {
+        if (str_contains((string) $value, '.') || !is_numeric($value)) {
             return false;
         }
 
-        return ($param === 'positive') 
-            ? (int) $value > 0 
-            : (($param === 'negative') ? (int) $value < 0 : true);
+        $value = (int) $value;
+
+        return match ($param) {
+            'positive' => $value > 0,
+            'negative' => $value < 0,
+            default => true,
+        };
+    }
+
+    /**
+     * Validates if the given value is an float or decimal number and optionally checks if it meets specific conditions.
+     *
+     * @param mixed $value The value to be validated.
+     * @param mixed $param The condition to check for the integer value. Accepts 'positive', 'negative', or any other string to validate the integer without additional conditions.
+     * @param bool $isDecimal Weather is decimal mode.
+     *
+     * @return bool Return true if the value is a valid integer and meets the condition (if provided); `false` otherwise.
+     */
+    private static function validateFloat(mixed $value, mixed $param = 'none', bool $isDecimal = false): bool
+    {
+        if (!is_numeric($value) || is_int($value)) {
+            return false;
+        }
+
+        $isInvalid = $isDecimal 
+            ? !str_contains((string) $value, '.') || ctype_digit((string) $value)
+            : str_contains((string) $value, 'e');
+
+        if ($isInvalid) {
+            return false;
+        }
+
+        $value = (float) $value;
+
+        return match ($param) {
+            'positive' => $value > 0,
+            'negative' => $value < 0,
+            default => true,
+        };
     }
 
     /**
@@ -411,14 +439,9 @@ final class Validation implements ValidationInterface, LazyInterface
     private function addError(string $field, string $ruleName, mixed $value = null): void
     {
         $message = $this->messages[$field][$ruleName] ?? null;
-
-        if($message === null){
-            $message = "Validation failed for field: '{$field}', while validating [{$ruleName}].";
-        }else{
-            $message = self::replace($message, [
-                $field, $ruleName, $value
-            ]);
-        }
+        $message = ($message === null) 
+            ? "Validation failed for field: '{$field}', while validating [{$ruleName}]."
+            : self::replace($message, [$field, $ruleName, $value]);
 
         $this->failures[$field][] = [
             'message' => $message,

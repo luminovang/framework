@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  * @link https://luminova.ng/docs/3.0.2/configs/schema
  */
 namespace Luminova\Seo;  

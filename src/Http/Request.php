@@ -1,11 +1,12 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework Incoming HTTP Request Handler Class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Http;
 
@@ -43,32 +44,144 @@ use \JsonException;
  * @method mixed getMove(string|null $field, mixed $default = null)
  * @method mixed getLock(string|null $field, mixed $default = null)
  * @method mixed getUnlock(string|null $field, mixed $default = null)
+ * @method mixed getAny(string $field, mixed $default = null)
  */
 final class Request implements HttpRequestInterface, LazyInterface, Stringable
 {
-    /**
-     * Http request methods.
-     *
-     * @var array<int,string> $methods
-     */ 
+    /** 
+     * HTTP GET method: Used to retrieve data from the server without modifying it.
+     * 
+     * @var string GET
+     */
+    public const GET = 'GET';
+
+    /** 
+     * HTTP POST method: Used to submit data to the server for processing (e.g., form submission, creating resources).
+     * 
+     * @var string POST
+     */
+    public const POST = 'POST';
+
+    /** 
+     * HTTP PUT method: Used to fully update or replace an existing resource.
+     * 
+     * @var string PUT
+     */
+    public const PUT = 'PUT';
+
+    /** 
+     * HTTP DELETE method: Used to remove a resource from the server.
+     * 
+     * @var string DELETE
+     */
+    public const DELETE = 'DELETE';
+
+    /** 
+     * HTTP OPTIONS method: Used to describe communication options for the target resource.
+     * 
+     * @var string OPTIONS
+     */
+    public const OPTIONS = 'OPTIONS';
+
+    /** 
+     * HTTP PATCH method: Used for partial updates to an existing resource.
+     * 
+     * @var string PATCH
+     */
+    public const PATCH = 'PATCH';
+
+    /** 
+     * HTTP HEAD method: Similar to GET, but only returns response headers (no body).
+     * 
+     * @var string HEAD
+     */
+    public const HEAD = 'HEAD';
+
+    /** 
+     * HTTP CONNECT method: Used for establishing a tunnel to a server (e.g., HTTPS via a proxy).
+     * 
+     * @var string CONNECT
+     */
+    public const CONNECT = 'CONNECT';
+
+    /** 
+     * HTTP TRACE method: Used for diagnostic purposes, returning the request received by the server.
+     * 
+     * @var string TRACE
+     */
+    public const TRACE = 'TRACE';
+
+    /** 
+     * WebDAV PROPFIND method: Retrieves properties of a resource (used in WebDAV).
+     * 
+     * @var string PROPFIND
+     */
+    public const PROPFIND = 'PROPFIND';
+
+    /** 
+     * WebDAV MKCOL method: Creates a new collection (folder) at the specified location.
+     * 
+     * @var string MKCOL
+     */
+    public const MKCOL = 'MKCOL';
+
+    /** 
+     * WebDAV COPY method: Copies a resource from one location to another.
+     * 
+     * @var string COPY
+     */
+    public const COPY = 'COPY';
+
+    /** 
+     * WebDAV MOVE method: Moves a resource from one location to another.
+     * 
+     * @var string MOVE
+     */
+    public const MOVE = 'MOVE';
+
+    /** 
+     * WebDAV LOCK method: Locks a resource to prevent modification by others.
+     * 
+     * @var string LOCK
+     */
+    public const LOCK = 'LOCK';
+
+    /** 
+     * WebDAV UNLOCK method: Unlocks a previously locked resource.
+     * 
+     * @var string UNLOCK
+     */
+    public const UNLOCK = 'UNLOCK';
+
+    /** 
+     * List of all supported HTTP methods.
+     * 
+     * @var array<string> $methods
+     */
     public static array $methods = [
-        'GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 
-        'PATCH', 'HEAD', 'CONNECT', 'TRACE', 'PROPFIND', 
-        'MKCOL', 'COPY', 'MOVE', 'LOCK', 'UNLOCK'
-    ]; 
+        self::GET, self::POST, self::PUT, self::DELETE, self::OPTIONS,
+        self::PATCH, self::HEAD, self::CONNECT, self::TRACE, self::PROPFIND,
+        self::MKCOL, self::COPY, self::MOVE, self::LOCK, self::UNLOCK
+    ];
 
     /**
-     * {@inheritdoc}
+     * Server object representing HTTP server parameters and configurations.
+     * 
+     * @var LazyInterface<Server>|Server|null $server
      */
     public Server|LazyInterface|null $server = null;
 
     /**
-     * {@inheritdoc}
+     * Header object providing HTTP request headers information.
+     * 
+     * @var LazyInterface<Header>|Header|null $header
      */
     public Header|LazyInterface|null $header = null;
 
     /**
-     * {@inheritdoc}
+     * UserAgent object containing client browser details.
+     * 
+     * @var LazyInterface<UserAgent>|UserAgent|null $agent
      */
     public ?UserAgent $agent = null;
 
@@ -124,6 +237,12 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     {
         $field = $arguments[0] ?? null;
         $httpMethod = strtoupper(substr($method, 3));
+
+        if($httpMethod === 'ANY' && !$field){
+            throw new InvalidArgumentException('The method: "getAny()" requires a valid field name.');
+        }
+        
+        $httpMethod = ($httpMethod === 'ANY') ? $this->getMethod() : $httpMethod;
         $body = $this->body[$httpMethod] ?? [];
 
         return ($field === null) 
@@ -220,11 +339,24 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * {@inheritdoc}
      */
+    public function removeField(string $field, ?string $method = null): self
+    {
+        if($field){
+            $method = ($method === null) ? $this->getMethod() : strtoupper($method);
+            unset($this->body[$method][$field]);
+        }
+
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function getGet(string|null $field, mixed $default = null): mixed
     {
         return ($field === null)
-            ? ($this->body['GET'] ?? []) 
-            : ($this->body['GET'][$field] ?? $default);
+            ? ($this->body[self::GET] ?? []) 
+            : ($this->body[self::GET][$field] ?? $default);
     }
 
     /**
@@ -233,8 +365,8 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     public function getPost(string|null $field, mixed $default = null): mixed
     {
         return ($field === null)
-            ? ($this->body['POST'] ?? []) 
-            : ($this->body['POST'][$field] ?? $default);
+            ? ($this->body[self::POST] ?? []) 
+            : ($this->body[self::POST][$field] ?? $default);
     }
 
     /**
@@ -271,9 +403,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
 
             if(json_validate($result)) {
                 try{
-                    $result = json_decode($result, true, 512, JSON_THROW_ON_ERROR);
-
-                    return $result ? $result : $default;
+                    return (json_decode($result, true, 512, JSON_THROW_ON_ERROR) ?: $default);
                 }catch(JsonException){
                     return $default;
                 }
@@ -342,16 +472,15 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
             return $type;
         }
 
-        if (in_array($this->getMethod(), ['POST', 'PUT', 'DELETE', 'PATCH'], true)) {
-            $type = 'application/x-www-form-urlencoded';
-            
-            $this->header->set('Content-Type', $type);
-            $this->server->set('CONTENT_TYPE', $type);
-
-            return $type;
+        if (!$this->isFormEncoded()) {
+            return '';
         }
 
-        return '';
+        $type = 'application/x-www-form-urlencoded';
+        $this->header->set('Content-Type', $type);
+        $this->server->set('CONTENT_TYPE', $type);
+
+        return $type;
     }
 
     /**
@@ -397,32 +526,47 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
 
             [$rawHeaders, $content] = explode("\r\n\r\n", $part, 2) + [null, null];
             $content = rtrim($content ?? '');
-            $headers = [];
-
-            foreach (explode("\r\n", $rawHeaders) as $headerLine) {
-                if (str_contains($headerLine, ': ')) {
-                    [$key, $value] = explode(': ', $headerLine, 2);
-                    $headers[strtolower($key)] = $value;
-                }
-            }
+            $headers = self::getMultipartHeaders($rawHeaders);
 
             if (
+                $headers !== [] &&
                 isset($headers['content-disposition']) && 
                 preg_match('/name="([^"]+)"/', $headers['content-disposition'], $matches)
             ) {
-                if (preg_match('/filename="([^"]+)"/', $headers['content-disposition'], $fileMatches)) {
-                    $files[$matches[1]] = [
-                        'name' => $fileMatches[1],
-                        'type' => $headers['content-type'] ?? 'application/octet-stream',
-                        'size' => strlen($content),
-                        'error' => UPLOAD_ERR_OK,
-                        'content' => $content,
-                        'tmp_name' => null
-                    ];
-                } else {
-                    $params[$matches[1]] = json_validate($content) 
-                        ? json_decode($content, true) 
-                        : $content;
+                $isFile = preg_match('/filename="([^"]+)"/', $headers['content-disposition'], $fileMatches);
+                $value = $isFile ? [
+                    'name' => $fileMatches[1],
+                    'type' => $headers['content-type'] ?? 'application/octet-stream',
+                    'size' => strlen($content),
+                    'error' => UPLOAD_ERR_OK,
+                    'content' => $content,
+                    'tmp_name' => null
+                ] : (json_validate($content) ? json_decode($content, true) : $content);
+
+                if(str_contains($matches[1], '[') && str_ends_with($matches[1], ']')){
+                    $info = self::getFieldInfo($matches[1]);
+
+                    if($isFile){
+                        $files[$info['field']] = self::getArrayField($files[$info['field']] ?? []);
+
+                        if($info['key'] === null){
+                            $files[$info['field']][] = $value;
+                        }else{
+                            $files[$info['field']][$info['key']] = $value;
+                        }
+                    }else{
+                        $params[$info['field']] = self::getArrayField($params[$info['field']] ?? []);
+
+                        if($info['key'] === null){
+                            $params[$info['field']][] = $value;
+                        }else{
+                            $params[$info['field']][$info['key']] = $value;
+                        }
+                    }
+                }elseif($isFile){
+                    $files[$matches[1]] = $value;
+                }else{
+                    $params[$matches[1]] = $value;
                 }
             }
         }
@@ -646,7 +790,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function isGet(): bool
     {
-        return $this->getMethod() === 'GET';
+        return $this->getMethod() === self::GET;
     }
 
     /**
@@ -654,13 +798,13 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function isPost(): bool
     {
-        return $this->getMethod() === 'POST';
+        return $this->getMethod() === self::POST;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function isMethod(string $method = 'GET'): bool
+    public function isMethod(string $method = self::GET): bool
     {
         return $this->getMethod() === strtoupper($method);
     }
@@ -682,9 +826,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
 
         $name = explode(' ', $auth, 2)[0] ?? '';
 
-        return ($name === '') 
-            ? false 
-            : strcasecmp($name, $type) === 0;
+        return ($name === '') ? false : strcasecmp($name, $type) === 0;
     }
 
     /**
@@ -942,7 +1084,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
             throw new InvalidArgumentException(sprintf('Malformed URI "%s".', $this->uri));
         }
 
-        $method = strtoupper($this->method ?? 'GET');
+        $method = strtoupper($this->method ?? self::GET);
         $server = array_replace(Server::getDefault(), $server ?? []);
 
         $server['PATH_INFO'] = '';
@@ -974,14 +1116,11 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         $path = $parts['path'] ?? '/';
         $type = $server['CONTENT_TYPE'] ?? null;
         $body = match ($method) {
-            'POST', 'PUT', 'DELETE', 'PATCH' => [],
+            self::POST, self::PUT, self::DELETE, self::PATCH => [],
             default => $this->body[$method] ?? [],
         };
 
-        if (
-            $body !== [] && !$type && 
-            in_array($method, ['POST', 'PUT', 'DELETE', 'PATCH'], true)
-        ) {
+        if ($body !== [] && !$type && $this->isFormEncoded($method)) {
             $server['CONTENT_TYPE'] = 'application/x-www-form-urlencoded';
         }
 
@@ -1021,7 +1160,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         }
 
         $this->body = [];
-        $this->body[$method] = ($method === 'POST') ? $_POST : $_GET;
+        $this->body[$method] = ($method === self::POST) ? $_POST : $_GET;
 
         if($this->body[$method] === []){
             $input = file_get_contents('php://input');
@@ -1081,6 +1220,83 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         }
 
         return $this->createFileInstance($file, null);
+    }
+
+    /**
+     * Parses raw multipart headers into an associative array.
+     *
+     * @param string $rawHeaders The raw header string from a multipart request.
+     * 
+     * @return array Return an associative array where keys are lowercase header names and values are their corresponding values.
+     */
+    private static function getMultipartHeaders(string $rawHeaders): array 
+    {
+        $headers = [];
+        foreach (explode("\r\n", $rawHeaders) as $headerLine) {
+            if (str_contains($headerLine, ': ')) {
+                [$key, $value] = explode(': ', $headerLine, 2);
+                $headers[strtolower($key)] = $value;
+            }
+        }
+
+        return $headers;
+    }
+
+    /**
+     * Determines if the request method is typically associated with form-encoded data.
+     *
+     * This method checks if the given HTTP method (or the current request method if not specified)
+     * is one that typically involves form-encoded data submission (POST, PUT, DELETE, or PATCH).
+     *
+     * @param string|null $method The HTTP method to check. If null, the current request method is used.
+     *
+     * @return bool Returns true if the method is associated with form-encoded data, false otherwise.
+     */
+    private function isFormEncoded(?string $method = null): bool 
+    {
+        return in_array(
+            $method ?? $this->getMethod(), 
+            [self::POST, self::PUT, self::DELETE, self::PATCH], 
+            true
+        );
+    }
+
+    /**
+     * Extracts the base field name and key from a given field string.
+     *
+     * @param string $field The field name, which may include array-style brackets (e.g., "foo[bar]").
+     * @return array An associative array with:
+     *               - 'field' => The base field name.
+     *               - 'key'   => The key inside brackets, or null if absent.
+     */
+    private static function getFieldInfo(string $field): array 
+    {
+        if (preg_match('/^([^\[]+)\[([^\]]*)\]$/', $field, $matches)) {
+            return [
+                'field' => $matches[1], 
+                'key' => ($matches[2] === '') ? null : $matches[2]
+            ];
+        }
+
+        return ['field' => $field, 'key' => null];
+    }
+
+    /**
+     * Ensures field value is always returned as an array.
+     *
+     * @param mixed $field The input value, which may be a scalar, an array, or null.
+     * 
+     * @return array If the input is already an array, it is returned as-is. 
+     *               If null or an empty array, returns an empty array.
+     *               Otherwise, wraps the input in an array.
+     */
+    private static function getArrayField(mixed $field): array 
+    {
+        if (!$field || $field === []) {
+            return [];
+        }
+
+        return is_array($field) ? $field : [$field];
     }
 
     /**

@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Interface;
 
@@ -13,6 +14,7 @@ use \Luminova\Http\File;
 use \Luminova\Http\Server;
 use \Luminova\Http\Header;
 use \Luminova\Http\UserAgent;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Interface\CookieJarInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\SecurityException;
@@ -34,9 +36,9 @@ use \Generator;
  * @method mixed getLock(string|null $field, mixed $default = null)      Get a field value from HTTP LOCK request or entire fields if `$field` param is null.
  * @method mixed getUnlock(string|null $field, mixed $default = null)    Get a field value from HTTP UNLOCK request or entire fields if `$field` param is null.
  * 
- * @property Server|null $server The server instance representing HTTP server parameters and configurations.
- * @property Header|null $header The header instance providing HTTP request headers information.
- * @property UserAgent|null $agent The user-agent instance containing client browser details.
+ * @property LazyInterface<Server>|Server|null $server  The server instance representing HTTP server parameters and configurations.
+ * @property LazyInterface<Header>|Header|null $header  The header instance providing HTTP request headers information.
+ * @property LazyInterface<UserAgent>|UserAgent|null $agent The user-agent instance containing client browser details.
  */
 interface HttpRequestInterface
 {
@@ -88,6 +90,16 @@ interface HttpRequestInterface
      * @return self Returns the instance request class.
      */
     public function setField(string $field, mixed $value, ?string $method = null): self;
+
+    /**
+     * Remove a specific field from the request body for the given HTTP method.
+     * 
+     * @param string $field The name of the field to remove.
+     * @param string|null $method Optional HTTP method, if null the current request method will be used (e.g, `GET`, `POST`).
+     * 
+     * @return self Returns the instance request class.
+     */
+    public function removeField(string $field, ?string $method = null): self;
 
     /**
      * Get a field value from HTTP GET request or entire fields if `$field` param is null.

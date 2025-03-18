@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Logger;
 
@@ -80,6 +81,16 @@ class NovaLogger extends AbstractLogger
     }
 
     /**
+     * Gets the logging system name identifier.
+     *
+     * @return string Return the logging system name.
+     */
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    /**
      * Sets the log name for application identifier.
      *
      * @param string $name The Logging system name.
@@ -145,7 +156,7 @@ class NovaLogger extends AbstractLogger
      *
      * @param string $level The log level (e.g., "emergency," "error," "info").
      * @param string $message The log message.
-     * @param array<string|int,mixed> $context Optional additional context to include in log.
+     * @param array<string,mixed> $context Optional additional context to include in log.
      *
      * @return void
      * @throws FileException — If unable to write log to file.
@@ -178,7 +189,7 @@ class NovaLogger extends AbstractLogger
      * Log an exception message.
      *
      * @param Throwable|string $message The EXCEPTION message to log.
-     * @param array<string|int,mixed> $context Additional context data (optional).
+     * @param array<string,mixed> $context Additional context data (optional).
      * 
      * @return void 
      */
@@ -195,7 +206,7 @@ class NovaLogger extends AbstractLogger
      * Log an php message.
      *
      * @param string $message The php message to log.
-     * @param array<string|int,mixed> $context Additional context data (optional).
+     * @param array<string,mixed> $context Additional context data (optional).
      * 
      * @return void 
      */
@@ -208,7 +219,7 @@ class NovaLogger extends AbstractLogger
      * Log an performance metric.
      *
      * @param string $data The profiling data to log.
-     * @param array<string|int,mixed> $context Additional context data (optional).
+     * @param array<string,mixed> $context Additional context data (optional).
      * 
      * @return void 
      */
@@ -222,7 +233,7 @@ class NovaLogger extends AbstractLogger
      *
      * @param string $email The recipient email address.
      * @param string $message The message to log.
-     * @param array<string|int,mixed> $context Additional context data (optional).
+     * @param array<string,mixed> $context Additional context data (optional).
      *
      * @return void
      * > Note: If error occurs during mailing log, file logger will be used instead.
@@ -239,7 +250,7 @@ class NovaLogger extends AbstractLogger
             return;
         }
 
-        $body = $this->emailTemplate($this->level, $message, $context);
+        $body = $this->getEmailTemplate($this->level, $message, $context);
         $subject = sprintf(
             '%s (v%.1f) - [%s] %s message Log',
             APP_NAME, 
@@ -258,12 +269,12 @@ class NovaLogger extends AbstractLogger
                 }
             } catch (AppException $e) {
                 $this->e(
-                    'Mailer', $e->getMessage(), 
+                    'Mailer Error', $e->getMessage(), 
                     $message, $context
                 );
             } catch (Throwable $fe) {
                 $this->e(
-                    'Fiber', $fe->getMessage(), 
+                    'Unexpected Mailer Error', $fe->getMessage(), 
                     $message, $context
                 );
             }
@@ -277,7 +288,7 @@ class NovaLogger extends AbstractLogger
      *
      * @param string $url The URL to which the log should be sent.
      * @param string $message The message to log.
-     * @param array<string|int,mixed> $context Additional context data (optional).
+     * @param array<string,mixed> $context Additional context data (optional).
      *
      * @return void
      * > Note: If error occurs during network log, file logger will be used instead.
@@ -299,7 +310,7 @@ class NovaLogger extends AbstractLogger
             'app'        => APP_NAME,
             'host'       => APP_HOSTNAME,
             'clientIp'   => IP::get(),
-            'details'    => $this->message($this->level, $message),
+            'message'    => $this->getPlainMessage($this->level, $message),
             'context'    => $context,
             'level'      => $this->level,
             'name'       => $this->name,
@@ -309,33 +320,7 @@ class NovaLogger extends AbstractLogger
             'userAgent'  => self::$request->getUserAgent()->toString(),
         ];
 
-        $fiber = new Fiber(function () use ($url, $payload, $message) {
-            try {
-                $response = (new Network())->post($url, ['body' => $payload]);
-                if ($response->getStatusCode() !== 200) {
-                    $this->write($this->level, 
-                        sprintf(
-                            'Failed to send error to remote server: %s | Response: %s', 
-                            $payload['details'], 
-                            $response->getContents()
-                        ), 
-                        $payload['context']
-                    );
-                }
-            } catch (AppException $e) {
-                $this->e(
-                    'Network', $e->getMessage(), 
-                    $message, $payload['context']
-                );
-            } catch (Throwable $fe) {
-                $this->e(
-                    'Unexpected', $fe->getMessage(), 
-                    $message, $payload['context']
-                );
-            }
-        });
-
-        $fiber->start();
+        $this->sendHttpRequest('Remote Server', $url, $payload, $message, $context);
     }
 
     /**
@@ -344,7 +329,7 @@ class NovaLogger extends AbstractLogger
      * @param string|int|null $chatId The chat ID to send the message to. 
      *      If null, the chat ID is retrieved from the environment variable 'telegram.bot.chat.id'.
      * @param string $message The log message to send.
-     * @param array $context Additional contextual data related to the log message.
+     * @param array<string,mixed> $context Additional contextual data related to the log message.
      *
      * @return void
      */
@@ -362,52 +347,30 @@ class NovaLogger extends AbstractLogger
         }
 
         self::$request ??= new Request();
-        $telegramMessage = sprintf(
-            "<b>Application:</b> %s\n<b>Version:</b> %s\n<b>Host:</b> %s\n<b>Client IP:</b> %s\n<b>Log Name:</b> %s\n<b>Level:</b> %s\n<b>Datetime:</b> %s\n\n<b>Message:</b> %s\n\n<b>URL:</b> %s\n<b>Method:</b> %s\n<b>User-Agent:</b> %s",
-            APP_NAME,
-            APP_VERSION,
-            APP_HOSTNAME,
-            IP::get(),
-            $this->name,
-            $this->level,
-            Time::now()->format('Y-m-d\TH:i:s.uP'),
+        $this->sendHttpRequest(
+            'Telegram',
+            "https://api.telegram.org/bot{$token}/sendMessage",
+            [
+                'chat_id'    => $chatId,
+                'text'       => sprintf(
+                    "<b>Application:</b> %s\n<b>Version:</b> %s\n<b>Host:</b> %s\n<b>Client IP:</b> %s\n<b>Log Name:</b> %s\n<b>Level:</b> %s\n<b>Datetime:</b> %s\n\n<b>Message:</b> %s\n\n<b>URL:</b> %s\n<b>Method:</b> %s\n<b>User-Agent:</b> %s",
+                    APP_NAME,
+                    APP_VERSION,
+                    APP_HOSTNAME,
+                    IP::get(),
+                    $this->name,
+                    $this->level,
+                    Time::now()->format('Y-m-d\TH:i:s.uP'),
+                    $message,
+                    self::$request->getUrl(),
+                    self::$request->getMethod(),
+                    self::$request->getUserAgent()->toString()
+                ),
+                'parse_mode' => 'HTML'
+            ],
             $message,
-            self::$request->getUrl(),
-            self::$request->getMethod(),
-            self::$request->getUserAgent()->toString()
+            $context
         );
-
-        $fiber = new Fiber(function () use ($token, $chatId, $message, $telegramMessage, $context) {
-            try {
-                $response = (new Network())->post("https://api.telegram.org/bot{$token}/sendMessage", ['body' => [
-                    'chat_id'    => $chatId,
-                    'text'       => $telegramMessage,
-                    'parse_mode' => 'HTML'
-                ]]);
-                if ($response->getStatusCode() !== 200) {
-                    self::log(LogLevel::ERROR, 
-                        sprintf(
-                            'Failed to send log message to Telegram: %s | Response: %s', 
-                            $this->message($this->level, $message), 
-                            $response->getContents()
-                        ),
-                        $context
-                    );
-                }
-            } catch (AppException $e) {
-                self::log(LogLevel::CRITICAL, 'Telegram Network Error: ' . $e->getMessage(), [
-                    'message' => $this->message($this->level, $message),
-                    'context' => $context,
-                ]);
-            } catch (Throwable $fe) {
-                self::log(LogLevel::CRITICAL, 'Unexpected Telegram Error: ' . $fe->getMessage(), [
-                    'message' => $this->message($this->level, $message),
-                    'context' => $context,
-                ]);
-            }
-        });
-
-        $fiber->start();
     }
 
     /**
@@ -427,65 +390,25 @@ class NovaLogger extends AbstractLogger
     }
 
     /**
-     * Construct a log message and format timestamp to ISO 8601 with microseconds
-     * with the given level, message, and optional context.
-     * 
-     * @param string $level The log level (e.g., 'INFO', 'ERROR').
-     * @param string $message The primary log message.
-     * @param array<string,mixed> $context Optional associative array providing context data.
-     * @param bool $htmlContext If true the message and context will be formatted as HTML (default: false).
+     * Constructs a formatted log message with an ISO 8601 timestamp (including microseconds).
      *
-     * @return string Return the formatted log message.
+     * @param string $level The log severity level (e.g., 'INFO', 'ERROR').
+     * @param string $message The main log message.
+     * @param array<string,mixed> $context Optional contextual data for the log entry.
+     * @param bool $htmlFormat Whether to format the message and context as HTML (default: false).
+     *
+     * @return string The formatted log message in plain text or HTML.
      */
     public function message(
         string $level, 
         string $message, 
-        array $context = [],
-        bool $htmlContext = false
+        array  $context = [],
+        bool   $htmlFormat = false
     ): string
     {
-        if($htmlContext){
-            $html = '<p style="font-size: 14px; color: #555;">No additional context provided.</p>';
-
-            if ($context !== []) {
-                $formatter = '<tr>
-                    <td style="padding: 8px; border: 1px solid #ddd; background-color: #f9f9f9; font-weight: bold;">%s</td>
-                    <td style="padding: 8px; border: 1px solid #ddd;">%s</td>
-                </tr>';
-
-                $html = '<h3 style="font-size: 18px; color: #333; margin-top: 20px; margin-bottom: 10px;">Additional Context</h3>';
-                $html .= '<table style="width: 100%; border-collapse: collapse; font-size: 14px;margin-bottom: 15px;">';
-                foreach ($context as $key => $value) {
-                    $html .= sprintf(
-                        $formatter,
-                        htmlspecialchars((string) $key, ENT_QUOTES, 'UTF-8'),
-                        htmlspecialchars(is_scalar($value) ? $value : json_encode($value), ENT_QUOTES, 'UTF-8')
-                    );
-                }
-                $html .= '</table>';
-            }
-
-            return sprintf(
-                '<p style="font-size: 16px; margin-bottom: 15px;"><strong>[%s]</strong>: %s</p>%s', 
-                strtoupper($level), 
-                $message, 
-                $html
-            );
-        }
-
-        $message = sprintf(
-            '[%s] [%s] [%s]: %s', 
-            strtoupper($level), 
-            $this->name,
-            Time::now()->format('Y-m-d\TH:i:s.uP'), 
-            $message
-        );
-
-        $formatted = ($context === []) ? '' : print_r($context, true);
-
-        return $formatted 
-            ? sprintf('%s [CONTEXT] %s', $message, $formatted) 
-            : $message;
+        return $htmlFormat 
+            ? $this->getHtmlMessage($level, $message, $context) 
+            : $this->getPlainMessage($level, $message, $context);
     }
 
     /**
@@ -505,11 +428,11 @@ class NovaLogger extends AbstractLogger
                 return $this->clear($level);
             }
 
-            $backup_time = Time::now()->format('Ymd_His');
             $backup = self::$path . 'backups' . DIRECTORY_SEPARATOR;
             
             if(make_dir($backup)){
-                $backup .= "{$level}_v" . str_replace('.', '_', APP_VERSION) . "_{$backup_time}.zip";
+                $backupTime = Time::now()->format('Ymd_His');
+                $backup .= "{$level}_v" . str_replace('.', '_', APP_VERSION) . "_{$backupTime}.zip";
 
                 try{
                     if(Archive::zip($backup, $filepath)){
@@ -518,7 +441,7 @@ class NovaLogger extends AbstractLogger
                 }catch(FileException $e){
                     FileManager::write(
                         $filepath, 
-                        $this->message(
+                        $this->getPlainMessage(
                             $level, 
                             sprintf('Failed to create backup for %s: error: %s', $level, $e->getMessage() . PHP_EOL)
                         ), 
@@ -540,18 +463,16 @@ class NovaLogger extends AbstractLogger
      * 
      * @return string Return formatted HTML email message body.
      */
-    protected function emailTemplate(string $level, string $message, array $context = []): string 
+    protected function getEmailTemplate(string $level, string $message, array $context = []): string 
     {
         self::$request ??= new Request();
-        $template = Logger::getEmailLogTemplate(
+        return Logger::getEmailLogTemplate(
             self::$request,
             $this,
             $message,
             $level,
             $context
-        );
-        
-        return $template ? $template : $this->message($level, $message, $context, true);
+        ) ?: $this->getHtmlMessage($level, $message, $context);
     }
 
     /**
@@ -564,16 +485,18 @@ class NovaLogger extends AbstractLogger
      * @return bool Returns true if the log written to file, false otherwise.
      * @throws FileException — If unable to write log to file.
      */
-    protected function write(string $level, string $message, array $context = []): bool
+    private function write(string $level, string $message, array $context = []): bool
     {
         if(make_dir(self::$path)){
             if($level === LogLevel::METRICS){
-                return $this->logMetric($message, $context['key'] ?? '');
+                return $this->writeMetric($message, $context['key'] ?? '');
             }
 
             $level = LogLevel::LEVELS[$level] ?? LogLevel::INFO;
             $path = self::$path . "{$level}{$this->extension}";
-            $message = $this->message($level, $message, $context);
+            $message = str_contains($message, '[' . strtoupper($level) . '] [') 
+                ? trim($message, PHP_EOL)
+                : $this->getPlainMessage($level, $message, $context);
 
             if(FileManager::write($path, $message . PHP_EOL, FILE_APPEND|LOCK_EX)){
                 return ($this->autoBackup && $this->maxSize) 
@@ -593,7 +516,7 @@ class NovaLogger extends AbstractLogger
      *
      * @return bool Returns true if the metrics data was successfully logged, false otherwise.
      */
-    protected function logMetric(string $data, string $key): bool 
+    private function writeMetric(string $data, string $key): bool 
     {
         if(!$data || !$key){
             return false;
@@ -620,6 +543,90 @@ class NovaLogger extends AbstractLogger
         }
 
         return FileManager::write($path, $updated, LOCK_EX);
+    }
+
+    /**
+     * Formats a log message with level, name, timestamp, and optional context.
+     *
+     * This method creates a formatted log message string that includes the log level,
+     * logger name, current timestamp, the main message, and optionally, any additional
+     * context data.
+     *
+     * @param string $level   The log level (e.g., 'INFO', 'ERROR').
+     * @param string $message The main log message.
+     * @param array  $context Optional. Additional contextual information for the log entry.
+     *                        Default is an empty array.
+     *
+     * @return string The formatted log message. If context is provided, it will be
+     *                appended to the message.
+     */
+    protected function getPlainMessage(
+        string $level, 
+        string $message, 
+        array $context = []
+    ): string 
+    {
+        $message = sprintf(
+            '[%s] [%s] [%s]: %s', 
+            strtoupper($level), 
+            $this->name,
+            Time::now()->format('Y-m-d\TH:i:s.uP'), 
+            $message
+        );
+
+        return ($context === []) 
+            ? $message
+            : sprintf('%s [CONTEXT] %s', $message, print_r($context, true));
+    }
+
+    /**
+     * Generates an HTML-formatted log message.
+     *
+     * This method creates an HTML representation of a log message, including the log level,
+     * the main message, and any additional context data. The context is formatted as a table
+     * if present.
+     *
+     * @param string $level   The log level (e.g., 'INFO', 'ERROR').
+     * @param string $message The main log message.
+     * @param array  $context Optional. Additional contextual information for the log entry.
+     *                        Default is an empty array.
+     * @param string $name    Optional. The name of the logger. Default is 'default'.
+     *                        Note: This parameter is not used in the current implementation.
+     *
+     * @return string An HTML-formatted string representing the log message and context.
+     */
+    protected function getHtmlMessage(
+        string $level, 
+        string $message, 
+        array $context = []
+    ): string 
+    {
+        $html = '<p style="font-size: 14px; color: #555;">No additional context provided.</p>';
+
+        if ($context !== []) {
+            $formatter = '<tr>
+                <td style="padding: 8px; border: 1px solid #ddd; background-color: #f9f9f9; font-weight: bold;">%s</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">%s</td>
+            </tr>';
+
+            $html = '<h3 style="font-size: 18px; color: #333; margin-top: 20px; margin-bottom: 10px;">Additional Context</h3>';
+            $html .= '<table style="width: 100%; border-collapse: collapse; font-size: 14px;margin-bottom: 15px;">';
+            foreach ($context as $key => $value) {
+                $html .= sprintf(
+                    $formatter,
+                    htmlspecialchars((string) $key, ENT_QUOTES, 'UTF-8'),
+                    htmlspecialchars(is_scalar($value) ? $value : json_encode($value), ENT_QUOTES, 'UTF-8')
+                );
+            }
+            $html .= '</table>';
+        }
+
+        return sprintf(
+            '<p style="font-size: 16px; margin-bottom: 15px;"><strong>[%s]</strong>: %s</p>%s', 
+            strtoupper($level), 
+            $message, 
+            $html
+        );
     }
 
     /**
@@ -653,6 +660,58 @@ class NovaLogger extends AbstractLogger
     }
 
     /**
+     * Sends an HTTP request asynchronously using a Fiber.
+     *
+     * This method sends a POST request to a specified URL with the given body. It handles
+     * the request asynchronously and manages potential errors, logging them appropriately.
+     *
+     * @param string $from    The identifier of the source sending the request (e.g., 'Remote Server', 'Telegram').
+     * @param string $url     The URL to which the HTTP request will be sent.
+     * @param array<string,mixed>  $body    The body of the HTTP request to be sent.
+     * @param string $message The original log message that triggered this request.
+     * @param array<string,mixed>  $context Additional context information for logging purposes (optional).
+     *
+     * @return void
+     */
+    private function sendHttpRequest(
+        string $from,
+        string $url, 
+        array $body, 
+        string $message, 
+        array $context = []
+    ): void 
+    {
+        $fiber = new Fiber(function () use ($from, $url, $body, $message, $context) {
+            $error = null;
+            try {
+                $response = (new Network())->post($url, ['body' => $body]);
+                if ($response->getStatusCode() !== 200) {
+                    $this->write($this->level, 
+                        sprintf(
+                            'Failed to send log message to %s: %s | Response: %s', 
+                            $from,
+                            "({$this->level}) {$message}", 
+                            $response->getContents()
+                        ),
+                        $context
+                    );
+                }
+                return;
+            } catch (AppException $e) {
+                $error = $e->getMessage();
+                $from = "{$from} Network Error";
+            } catch (Throwable $fe) {
+                $error = $fe->getMessage();
+                $from = "Unexpected {$from} Error";
+            }
+
+            $this->e($from, $error, "({$this->level}) {$message}", $context);
+        });
+
+        $fiber->start();
+    }
+
+    /**
      * Logs an exception error message with original log information.
      *
      * @param string $from     The source or context where the error originated.
@@ -669,6 +728,6 @@ class NovaLogger extends AbstractLogger
             'originalMessage' => $message,
             'originalContext' => $context,
             'originalLevel' => $this->level,
-        ], true);
+        ]);
     }
 }

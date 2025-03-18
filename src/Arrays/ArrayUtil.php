@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Arrays;
 
@@ -126,9 +127,25 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
      * 
      * @return mixed Return the value for the specified key or default value, If key is null return the entire array.
      */
-    public function get(string|int|null $key = null, mixed $default = null): mixed
+    public function get(
+        string|int|null $key = null, 
+        mixed $default = null
+    ): mixed
     {
         return ($key === null) ? $this->array : ($this->array[$key] ?? $default);
+    }
+
+    /**
+     * Retrieve the modified array after processing.
+     *
+     * This method returns the internally stored array, which may have been modified
+     * by other operations such as merging, filtering, or reordering.
+     *
+     * @return array Return the processed array.
+     */
+    public function getArray(): array
+    {
+        return $this->array;
     }
 
     /**
@@ -404,13 +421,78 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
     public function mergeRecursive(ArrayUtil|array $array, bool $distinct = false): self
     {
         $array = ($array instanceof ArrayUtil) ? $array->get() : $array;
+        $this->array = ($distinct) 
+            ? array_merge_recursive_distinct($this->array, $array)
+            : array_merge_recursive($this->array, $array);
 
-        if($distinct){
-            $this->array = array_merge_recursive_distinct($this->array, $array);
+        return $this;
+    }
+
+    /**
+     * Merges the given array into the current array at specified intervals.
+     *
+     * This method inserts elements from the provided array (`$array`) into the
+     * existing array (`$this->array`) at every `$position` interval. If there are 
+     * remaining elements in `$array` after merging, they will be inserted randomly.
+     *
+     * @param ArrayUtil|array $array The array to merge into the current array.
+     * @param int $intervals The interval at which elements from `$array` should be inserted.
+     * 
+     * @return self Returns the instance with the modified array.
+     * 
+     * @example - Merging Posts with Advertisements:
+     * 
+     * ```php
+     * $posts = [
+     *    ["id" => 1, "title" => "Post 1"],
+     *    ["id" => 2, "title" => "Post 2"],
+     *    ["id" => 3, "title" => "Post 3"],
+     *    ["id" => 4, "title" => "Post 4"]
+     * ];
+     *
+     * $ads = [
+     *    ["id" => 101, "title" => "Ad 1"],
+     *    ["id" => 102, "title" => "Ad 2"],
+     *    ["id" => 103, "title" => "Ad 3"],
+     * ];
+     *
+     * $array = (new ArrayUtil($posts))->mergeIntervals($ads, 2);
+     * print_r($array->getArray());
+     * ```
+     */
+    public function mergeIntervals(ArrayUtil|array $array, int $intervals = 4): self 
+    {
+        $array = ($array instanceof ArrayUtil) ? $array->getArray() : $array;
+
+        if(!$this->array && !$array || $this->array && !$array){
             return $this;
         }
 
-        $this->array = array_merge_recursive($this->array, $array);
+        if(!$this->array && $array){
+            $this->array = $array;
+            return $this;
+        }
+
+        $mergedToArray = [];
+        $addIndex = 0;
+        $count = count($array);
+    
+        foreach ($this->array as $index => $value) {
+            $mergedToArray[] = $value;
+            
+            if (($index + 1) % $intervals === 0 && $addIndex < $count) {
+                $mergedToArray[] = $array[$addIndex];
+                $addIndex++;
+            }
+        }
+    
+        while ($addIndex < $count) {
+            $randomIndex = array_rand($mergedToArray);
+            array_splice($mergedToArray, $randomIndex, 0, [$array[$addIndex]]);
+            $addIndex++;
+        }
+    
+        $this->array = $mergedToArray;
         return $this;
     }
 

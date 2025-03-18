@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Storages;
 
@@ -173,9 +174,13 @@ class FileManager
     {
         error_clear_last();
         if (!@chmod($location, $permission)) {
-            if (($error = error_get_last()) !== null) {
-                FileException::handlePermission($location, $error['message']);
-            }
+            $error = error_get_last();
+            FileException::handlePermission(
+                $location, 
+                ($error === null) 
+                    ? 'Failed to set permission' 
+                    : $error['message']
+            );
 
             return false;
         }
@@ -512,9 +517,13 @@ class FileManager
             error_clear_last();
 
             if(!@mkdir($path, $permissions, $recursive)){
-                if (($error = error_get_last()) !== null) {
-                    FileException::handleDirectory($path, $error['message']);
-                }
+                $error = error_get_last();
+                FileException::handleDirectory(
+                    $path, 
+                    ($error === null) 
+                        ? 'Could not create directory' 
+                        : $error['message']
+                );
                 
                 return false;
             }
@@ -856,9 +865,11 @@ class FileManager
         
         if (symlink($target, $link) === false) {
             $error = error_get_last();
-            Logger::dispatch('alert', ($error === null) 
-                ? 'Unknown error occurred while creating symlink.' 
-                : 'Symlink creation failed: ' . $error['message'] ?? ''
+            Logger::dispatch(
+                'alert', 
+                ($error === null) 
+                    ? 'Unknown error occurred while creating symlink.' 
+                    : 'Symlink creation failed: ' . $error['message'] ?? ''
             );
 
             return false;

@@ -6,7 +6,8 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
-*/
+ * @link https://luminova.ng
+ */
 namespace Luminova\Attributes;
 
 use \Luminova\Attributes\Route;
@@ -513,6 +514,7 @@ final class AttrCompiler
                  * @author Ujah Chigozie Peter
                  * @copyright (c) Nanoblock Technology Ltd
                  * @license See LICENSE file
+                 * @link https://luminova.ng
                  */
                 return $routes;
                 PHP;

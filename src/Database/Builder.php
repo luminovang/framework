@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Database;
 
@@ -50,6 +51,13 @@ final class Builder implements LazyInterface
     public const RETURN_STATEMENT = 'stmt';
 
     /**
+     * Copy between tables.
+     * 
+     * @var int MODE_COPY 
+     */
+    private const MODE_COPY = 3881;
+
+    /**
      * Database connection driver instance.
      *
      * @var Connection<LazyInterface>|null $conn
@@ -78,18 +86,11 @@ final class Builder implements LazyInterface
     private string $tableName = '';
 
     /**
-     * Table name to join query.
+     * Table copy selection query.
      * 
-     * @var string $joinTable 
+     * @var string $copySelections 
      */
-    private string $joinTable = '';
-
-    /**
-     * Table join query type.
-     * 
-     * @var string $joinType 
-     */
-    private string $joinType = '';
+    private string $copySelections = '';
 
     /**
      * Table join bind parameters.
@@ -223,13 +224,13 @@ final class Builder implements LazyInterface
     private string $tableAlias = '';
 
     /**
-     * Join table alias.
+     * Join table.
      * 
-     * @var string $jointTableAlias 
+     * @var array $tableJoin 
      */
-    private string $jointTableAlias = '';
+    private array $tableJoin = [];
 
-    /**
+     /**
      * Bind values.
      * 
      * @var array $bindValues 
@@ -272,6 +273,29 @@ final class Builder implements LazyInterface
         $this->cacheDriver = env('database.caching.driver', 'filesystem');
         $this->tableName = $table ?? '';
         $this->tableAlias = $alias ? "AS {$alias}" : '';
+    }
+
+    /**
+     * Initializes a new instance of the Builder class.
+     *
+     * @param string|null $table The name of the table to initialize the builder with.
+     * @param string|null $alias The alias for the table.
+     *
+     * @return self A new instance of the Builder class.
+     *
+     * @throws Exception If an error occurs during initialization.
+     */
+    private static function initializer(?string $table = null, ?string $alias = null): Builder
+    {
+        if(self::$instance === null){
+            return new self($table, $alias);
+        }
+
+        $extend = new self($table, $alias);
+        $extend->caching = self::$instance->caching;
+        $extend->resultType = self::$instance->resultType;
+
+        return $extend;
     }
 
     /**
@@ -354,81 +378,152 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Create instance of builder class and sets the database table name to execute query for.
+     * Creates an instance of the builder class and sets the target database table.
      *
-     * @param string $table The table name (non-empty string).
-     * @param string|null $alias Optional table alias (default: NULL).
+     * @param string $table The name of the database table (must be a non-empty string).
+     * @param string|null $alias Optional alias for the table (default: `null`).
      * 
-     * @return Builder Returns the instance of builder class.
-     * @throws InvalidArgumentException Throws if an invalid table name is provided.
+     * @return Builder Returns an instance of the builder class.
+     * @throws InvalidArgumentException If the provided table name is empty.
+     * 
+     * @example - Performing a table join and executing queries:
+     * ```php
+     * $tbl = Builder::table('users', 'u')
+     *     ->innerJoin('roles', 'r')
+     *      ->on('u.user_id', '=', 'r.role_user_id')
+     *     ->where('u.user_id', '=', 1);
+     *
+     * // Updating records
+     * $result = $tbl->update(['r.role_id' => 1]);
+     * 
+     * // Selecting records
+     * $result = $tbl->select(['r.role_id', 'u.name']);
+     * ```
      */
     public static function table(string $table, ?string $alias = null): Builder
     {
-        if($table === ''){
-            throw new InvalidArgumentException('Invalid table argument, $table argument expected non-empty string.');
+        if(!$table){
+            throw new InvalidArgumentException(
+                'Invalid table argument, $table argument expected non-empty string.'
+            );
         }
 
-        if(self::$instance === null){
-            return new self($table, $alias);
+        return self::initializer($table, $alias);
+    }
+
+    /**
+     * Builds a custom SQL query string for execution.
+     * 
+     * This method allows direct execution of raw SQL queries. If an array of values 
+     * is passed to the `execute` method, prepared statements are used for security.
+     * Otherwise, ensure that manually embedded values in the query are properly escaped.
+     * 
+     * @param string $query The SQL query string (must be non-empty).
+     * 
+     * @return self Returns an instance of the builder class.
+     * @throws InvalidArgumentException If the provided query string is empty.
+     * 
+     * @example Executing a raw query:
+     * ```php
+     * $builder = Builder::query("SELECT * FROM users WHERE id = :user_id");
+     * $result = $builder->execute(['user_id' => 1]);
+     * ```
+     * @see execute()
+     */
+    public static function query(string $query): self 
+    {
+        if (!$query) {
+            throw new InvalidArgumentException(
+                'Invalid: The parameter $query requires a valid and non-empty SQL query string.'
+            );
         }
 
-        $extend = new self($table, $alias);
-        $extend->caching = self::$instance->caching;
-        $extend->resultType = self::$instance->resultType;
+        $extend = self::initializer();
+        $extend->buildQuery = $query;
 
         return $extend;
     }
 
     /**
-     * Specifies a join operation in query execution.
+     * Specifies a table join operation in the query.
+     *
+     * This method defines how another table should be joined to the current query.
      *
      * @param string $table The name of the table to join.
-     * @param string $type The type of join (default: "INNER").
-     * @param string|null $alias Optional table join alias (default: NULL).
+     * @param string $type The type of join to perform (default: `"INNER"`).
+     * @param string|null $alias Optional alias for the joined table (default: `null`).
      * 
      * @return self Returns the instance of builder class.
-     * @throws InvalidArgumentException Throws if invalid argument is provided.
      * 
+     * @throws InvalidArgumentException If either `$table` or `$type` is an empty string.
+     *
      * **Join Types**
-     * 
-     * `INNER` - Returns rows with matching values in both tables.
-     * `LEFT`  - Returns all rows from the left table and matching rows from the right table, or NULLs for non-matching rows from the right table.
-     * `RIGHT` - Returns all rows from the right table and matching rows from the left table, or NULLs for non-matching rows from the left table.
-     * `CROSS` - Returns the Cartesian product of the two tables.
-     * `FULL`  - Returns rows with matching values in either table, with NULLs for non-matching rows from either table.
-     * `FULL OUTER` - Returns all rows when there is a match in either the left or right table, or NULL from the side that does not have a match.
+     *
+     * - `INNER` - Returns only rows with matching values in both tables.
+     * - `LEFT`  - Returns all rows from the left table and matching rows from the right table, filling in `NULL` for non-matching rows.
+     * - `RIGHT` - Returns all rows from the right table and matching rows from the left table, filling in `NULL` for non-matching rows.
+     * - `CROSS` - Returns the Cartesian product of the two tables.
+     * - `FULL`  - Returns rows with matches in either table, filling in `NULL` for non-matching rows.
+     * - `FULL OUTER` - Returns all rows from both tables, with `NULL` in places where there is no match.
+     *
+     * @example Basic join usage:
+     * ```php
+     * Builder::table('product', 'p')->join('users', 'LEFT', 'u');
+     * ```
+     * @example Joining without an alias:
+     * ```php
+     * Builder::table('users')->join('orders', 'INNER');
+     * ```
      */
     public function join(string $table, string $type = 'INNER', ?string $alias = null): self
     {
-        if($table === '' || $type === ''){
+        if(!$table || !$type){
             throw new InvalidArgumentException('Invalid join argument, $table or $type argument expected non-empty string.');
         }
 
-        $this->joinType = strtoupper($type);
-        $this->joinTable = $table;
-        
-        if($alias !== null){
-            $this->jointTableAlias = "AS {$alias}";
-        }
+        $this->tableJoin[$table] = [
+            'type' => strtoupper($type),
+            'table' => $table,
+            'alias' => $alias ? "AS {$alias}" : ''
+        ];
         
         return $this;
     }
 
     /**
-     * Specifies join conditions for the query.
+     * Adds a join conditions to the table query.
      *
-     * @param string $condition Join condition or column name.
-     * @param string $operator Join operator (default: '=').
-     * @param mixed $value Value to bind to the condition or another table column.
-     * 
-     * @example string $tbl->on('a.column', '=', 'b.column);
-     * 
+     * This method defines a condition for joining tables, allowing comparisons 
+     * between columns or values.
+     *
+     * @param string $condition The column name or condition to join on.
+     * @param string $operator The comparison operator (default: `=`).
+     * @param mixed  $value The value to compare or another table column.
+     *                      - String literals must be wrapped in quotes.
+     *                      - Unquoted values are treated as column names.
+     *
      * @return self Returns the instance of builder class.
+     *
+     * @example Using `on()` for table joins:
+     * ```php
+     * $builder->leftJoin('users', 'u')
+     *     ->on('u.user_id', '=', 'r.role_user_id') // Column comparison
+     *     ->on('u.user_group', '=', 1)             // Value comparison
+     *     ->on('u.user_name', '=', '"peter"');     // String literal (quoted)
+     * ```
+     *
+     * @see join()
+     * @see leftJoin()
+     * @see rightJoin()
+     * @see innerJoin()
+     * @see crossJoin()
+     * @see fullJoin()
+     *
+     * > **Note:** When using multiple joins in one query, always call `on()` immediately after each `join()`.
      */
     public function on(string $condition, string $operator, mixed $value): self
     {
-        $this->joinConditions[] = "{$condition} {$operator} {$value}";
-
+        $this->joinConditions[array_key_last($this->tableJoin)][] = "{$condition} {$operator} {$value}";
         return $this;
     }
 
@@ -440,6 +535,9 @@ final class Builder implements LazyInterface
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
+     * 
+     * @see on(...)
+     * @see join(...)
      */
     public function innerJoin(string $table, ?string $alias = null): self
     {
@@ -454,6 +552,9 @@ final class Builder implements LazyInterface
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
+     * 
+     * @see on(...)
+     * @see join(...)
      */
     public function leftJoin(string $table, ?string $alias = null): self
     {
@@ -468,6 +569,9 @@ final class Builder implements LazyInterface
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
+     * 
+     * @see on(...)
+     * @see join(...)
      */
     public function rightJoin(string $table, ?string $alias = null): self
     {
@@ -482,6 +586,9 @@ final class Builder implements LazyInterface
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
+     * 
+     * @see on(...)
+     * @see join(...)
      */
     public function crossJoin(string $table, ?string $alias = null): self
     {
@@ -496,6 +603,9 @@ final class Builder implements LazyInterface
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
+     * 
+     * @see on(...)
+     * @see join(...)
      */
     public function fullJoin(string $table, ?string $alias = null): self
     {
@@ -510,6 +620,9 @@ final class Builder implements LazyInterface
      * 
      * @return self Returns the instance of the class.
      * @throws InvalidArgumentException Throws if invalid argument is provided.
+     * 
+     * @see on(...)
+     * @see join(...)
      */
     public function fullOuterJoin(string $table, ?string $alias = null): self
     {
@@ -517,12 +630,25 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Sets the query limit for SELECT and UPDATE statements.
+     * Sets the query limit for SELECT statements.
      *
-     * @param int $limit  The maximum number of results to return.
-     * @param int $offset The starting offset for the results (default is 0).
+     * This method adds a `LIMIT` clause to the query, restricting the number of 
+     * rows returned and optionally specifying an offset.
+     *
+     * @param int $limit  The maximum number of results to return. Must be greater than 0.
+     * @param int $offset The starting offset for the results (default: `0`).
      *
      * @return self Returns the instance of the builder class.
+     *
+     * @example - Limiting number of results:
+     * 
+     * ```php
+     * Builder::table('users')
+     *      ->where('country', '=', 'NG')
+     *      ->limit(10, 5)
+     *      ->select();
+     * ```
+     * This will generate: `LIMIT 5,10`
      */
     public function limit(int $limit, int $offset = 0): self
     {
@@ -535,11 +661,24 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Set max limit for update, delete methods.
+     * Sets a maximum limit for `UPDATE` or `DELETE` operations.
+     *
+     * This method applies a `LIMIT` clause to restrict the number of 
+     * rows affected by `UPDATE` or `DELETE` queries.
+     *
+     * @param int $limit The maximum number of rows to update or delete.
+     *
+     * @return self  Returns the instance of the builder class.
+     *
+     * @example - Limiting number of rows to affect:
      * 
-     * @param int $limit number of records to update or delete.
-     * 
-     * @return self Return instance of builder class.
+     * ```php
+     * Builder::table('users')
+     *  ->where('country', '=','NG')
+     *  ->max(50)
+     *  ->update(['is_local' => 1]);
+     * ```
+     * This ensures the query affects at most 50 rows.
      */
     public function max(int $limit): self
     {
@@ -549,12 +688,23 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Set result return order for query selection (e.g., "id ASC", "date DESC").
+     * Sets the sorting order for the query results.
+     *
+     * This method applies an `ORDER BY` clause to the query, allowing 
+     * results to be sorted in ascending (`ASC`) or descending (`DESC`) order.
+     *
+     * @param string $column The name of the column to sort by.
+     * @param string $order The sorting direction (default: `ASC`) 
+     *              (e.g, `ASC` for ascending, `DESC` for descending).
      * 
-     * @param string $column The column name to index order.
-     * @param string $order The order algorithm to use (either "ASC" or "DESC").
      * 
      * @return self Returns the instance of the class.
+     *
+     * @example - Ordering results:
+     * ```php
+     * $builder->order('created_at', 'DESC');
+     * ```
+     * This will generate: `ORDER BY created_at DESC`
      */
     public function order(string $column, string $order = 'ASC'): self 
     {
@@ -595,11 +745,20 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Set query grouping for the SELECT statement.
-     * 
-     * @param string $group The column name to group by.
+     * Sets a `GROUP BY` clause for the query.
+     *
+     * This method adds a column to the `GROUP BY` clause, allowing 
+     * aggregation of results based on the specified column.
+     *
+     * @param string $column The name of the column to group by.
      * 
      * @return self Returns the instance of the class.
+     *
+     * @example - Grouping results:
+     * ```php
+     * $builder->group('category_id');
+     * ```
+     * This will generate: `GROUP BY category_id`
      */
     public function group(string $group): self 
     {
@@ -609,13 +768,22 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Set query condition for `WHERE` operator.
-     * 
-     * @param string $column The column name.
-     * @param string $operator The comparison operator (e.g. `=`, `>=`, `<>`).
-     * @param mixed $value The where condition column value.
+     * Adds a `WHERE` condition to the query.
+     *
+     * This method sets a conditional clause where the specified column 
+     * must satisfy the given comparison operator and value.
+     *
+     * @param string $column The name of the column to filter by.
+     * @param string $operator The comparison operator (e.g., `=`, `>=`, `<>`, `LIKE`).
+     * @param mixed $value The value to compare against.
      * 
      * @return self Return instance of builder class.
+     *
+     * @example - Using the `WHERE` conditioning:
+     * ```php
+     * Builder::table('users')->where('status', '=', 'active');
+     * ```
+     * This will generate: `WHERE status = 'active'`
      */
     public function where(string $column, string $operator, mixed $value): self
     {
@@ -633,13 +801,23 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Set query condition for `AND` operator.
-     * 
-     * @param string $column The column name.
-     * @param string $operator The comparison operator (e.g. `=`, `>=`, `<>`).
-     * @param mixed $value The and condition column value.
+     * Adds an `AND` condition to the query.
+     *
+     * This method appends an additional condition using the `AND` operator, 
+     * requiring multiple conditions to be met.
+     *
+     * @param string $column The name of the column to filter by.
+     * @param string $operator The comparison operator (e.g., `=`, `>=`, `<>`, `LIKE`).
+     * @param mixed $value The value to compare against.
      * 
      * @return self Return instance of builder class.
+     *
+     * @example - Using the `AND` conditioning:
+     * ```php
+     * Builder::table('users')->where('status', '=', 'active')
+     *         ->and('role', '=', 'admin');
+     * ```
+     * This will generate: `WHERE status = 'active' AND role = 'admin'`
      */
     public function and(string $column, string $operator, mixed $value): self
     {
@@ -650,6 +828,36 @@ final class Builder implements LazyInterface
             'operator' => $operator
         ];
 
+        return $this;
+    }
+
+    /**
+     * Add a condition to the query using the `OR` operator.
+     * 
+     * This method appends a conditional clause where the specified column 
+     * must satisfy the given comparison operator and value.
+     * 
+     * @param string $column The name of the column to apply the condition.
+     * @param string $operator The comparison operator to use (e.g., `=`, `>=`, `<>`, `LIKE`).
+     * @param mixed $value The value to compare the column against.
+     * 
+     * @return self Return instance of builder class.
+     * 
+     * @example - Using the `OR` conditioning:
+     * ```php
+     * $builder->or('status', '=', 'active')
+     *         ->or('role', '!=', 'admin');
+     * ```
+     * This will generate: `WHERE status = 'active' OR role != 'admin'`
+     */
+    public function or(string $column, string $operator, mixed $value): self
+    {
+        $this->andConditions[] = [
+            'type' => 'OR', 
+            'column' => $column, 
+            'value' => $value,
+            'operator' => $operator
+        ];
         return $this;
     }
 
@@ -681,12 +889,21 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Set update columns and values.
-     * This should be called before calling update method.
-     * @param string $column The column name to update.
-     * @param mixed $value The column name value to update.
+     * Set columns and values to be updated in the query.
+     * 
+     * This method should be invoked before the `update()` method to specify which columns to update.
+     *
+     * @param string $column The name of the column to update.
+     * @param mixed $value The value to set for the column.
      * 
      * @return self Return instance of builder class.
+     * 
+     * @example - Setting update columns and values:
+     * ```php
+     * $builder->set('status', 'active')
+     *         ->set('updated_at', time());
+     * ```
+     * This will generate: `UPDATE table SET status = 'active', updated_at = 1699999999`
      */
     public function set(string $column, mixed $value): self
     {
@@ -696,33 +913,23 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Set query condition for `OR` operator.
-     * 
-     * @param string $column The column name.
-     * @param string $operator The comparison operator to use.
-     * @param mixed $value The column key value.
-     * 
-     * @return self Return instance of builder class.
-     */
-    public function or(string $column, string $operator, mixed $value): self
-    {
-        $this->andConditions[] = [
-            'type' => 'OR', 
-            'column' => $column, 
-            'value' => $value,
-            'operator' => $operator
-        ];
-        return $this;
-    }
-
-    /**
-     * Adds a group of conditions combined with OR to the query.
+     * Groups multiple conditions using the `OR` operator and adds them to the query.
      *
-     * @example 'WHERE (foo = 1 OR bar = 2)'.
-     * 
-     * @param array $conditions Array of conditions to be grouped with OR.
-     * 
+     * This method creates a logical group where conditions are combined with `OR`, 
+     * ensuring that at least one of them must be met.
+     *
+     * @param array<int,array<string,array<string,mixed>>> $conditions The list of conditions to be grouped using `OR`.
+     *
      * @return self Return instance of builder class.
+     *
+     * @example Using `orGroup()` to structure a query:
+     * ```php
+     * $builder->orGroup([
+     *     ['column1' => ['operator' => '=', 'value' => 1]],
+     *     ['column2' => ['operator' => '=', 'value' => 2]]
+     * ]);
+     * ```
+     * This will generate: `WHERE (column1 = 1 OR column2 = 2)`
      */
     public function orGroup(array $conditions): self
     {
@@ -735,16 +942,59 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Adds two groups of conditions combined with OR to the query.
+     * Groups multiple conditions using the `AND` operator and adds them to the query.
      *
-     * @example 'WHERE ((foo = 1 OR bar = 2) OR (baz = 3 AND bra = 4))'.
+     * This method creates a logical group where all conditions must be met simultaneously.
+     *
+     * @param array<int,array<string,array<string,mixed>>> $conditions The list of conditions to be grouped using `AND`.
+     *
+     * @return self Return instance of builder class.
+     *
+     * @example Using `andGroup()` to structure a query:
+     * ```php
+     * $builder->andGroup([
+     *     ['column1' => ['operator' => '=', 'value' => 1]],
+     *     ['column2' => ['operator' => '=', 'value' => 2]]
+     * ]);
+     * ```
+     * This will generate: `WHERE (column1 = 1 AND column2 = 2)`
+     */
+    public function andGroup(array $conditions): self
+    {
+        $this->andConditions[] = [
+            'type' => 'GROUP_AND',
+            'conditions' => $conditions
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Combines two condition groups using the `OR` operator and wraps them in a single condition group.
      * 
-     * @param array $group1 First group of conditions.
-     * @param array $group2 Second group of conditions.
-     * @param string $bind The type of logical operator to use in binding groups (default: 'OR').
-     *      - `AND` or `OR`.
+     * This method allows you to group conditions using logical `OR` and then bind the entire group 
+     * to the query using either `AND` or `OR`.
+     * 
+     * @param array<int,array<string,array<string,mixed>>> $group1 First group of conditions.
+     * @param array<int,array<string,array<string,mixed>>> $group2 Second group of conditions.
+     * @param string $bind The logical operator to bind both groups (default: 'OR').
+     *       - `AND` - Groups are combined with AND (e.g., WHERE ((a OR b) AND (c OR d))).
+     *       - `OR`  - Groups are combined with OR (e.g., WHERE ((a OR b) OR (c OR d))).
      * 
      * @return self Return instance of builder class.
+     * @example - Generating a query with `OR` conditions:
+     * ```php
+     * Builder::table('fooTable')
+     * ->orBind([
+     *      ['foo' => ['operator' => '=', 'value' => 1]],
+     *      ['bar' => ['operator' => '=', 'value' => 2]]
+     * ],
+     * [
+     *      ['baz' => ['operator' => '=', 'value' => 3]],
+     *      ['bra' => ['operator' => '=', 'value' => 4]]
+     * ]);
+     * ```
+     * This will generate: `WHERE ((foo = 1 OR bar = 2) OR (baz = 3 AND bra = 4))`
      */
     public function orBind(array $group1, array $group2, string $bind = 'OR'): self
     {
@@ -759,35 +1009,31 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Adds a group of conditions combined with AND to the query.
-     *
-     * @example 'WHERE (foo = 1 AND bar = 2)'.
+     * Combines two condition groups using the `AND` operator and wraps them in a single condition group.
      * 
-     * @param array $conditions Array of conditions to be grouped with AND.
+     * This method allows you to group conditions using logical `AND` and then bind the entire group 
+     * to the query using either `AND` or `OR`.
      * 
-     * @return self Return instance of builder class.
-     */
-    public function andGroup(array $conditions): self
-    {
-        $this->andConditions[] = [
-            'type' => 'GROUP_AND',
-            'conditions' => $conditions
-        ];
-
-        return $this;
-    }
-
-    /**
-     * Adds two groups of conditions combined with AND condition.
-     * 
-     * @example 'WHERE ((foo = 1 AND bar = 2) AND (baz = 3 AND bra = 4))'.
-     * 
-     * @param array $group1 First group of conditions.
-     * @param array $group2 Second group of conditions.
+     * @param array<int,array<string,array<string,mixed>>> $group1 First group of conditions.
+     * @param array<int,array<string,array<string,mixed>>> $group2 Second group of conditions.
      * @param string $bind The type of logical operator to use in binding groups (default: 'AND').
-     *      - `AND` or `OR`.
+     *      - `AND` - Groups are combined with AND (e.g., WHERE ((a AND b) AND (c AND d))).
+     *      - `OR`  - Groups are combined with OR (e.g., WHERE ((a AND b) OR (c AND d))).
      * 
      * @return self Return instance of builder class.
+     * @example - Generating a query with `AND` conditions:
+     * ```php
+     * Builder::table('fooTable')
+     * ->andBind([
+     *      ['foo' => ['operator' => '=', 'value' => 1]],
+     *      ['bar' => ['operator' => '=', 'value' => 2]]
+     * ],
+     * [
+     *      ['baz' => ['operator' => '=', 'value' => 3]],
+     *      ['bra' => ['operator' => '=', 'value' => 4]]
+     * ]);
+     * ```
+     * This will generate: `WHERE ((foo = 1 AND bar = 2) AND (baz = 3 AND bra = 4))`
      */
     public function andBind(array $group1, array $group2, string $bind = 'AND'): self
     {
@@ -889,9 +1135,12 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Set result return type type, object or array (default: object).
+     * Set result return type to an `object` or `array` (default: `object`).
      * 
-     * @param string $type Return type 'object' or 'array'.
+     * This method changes the result return type to either `object` or `array`, 
+     * this method should be called before `fetch`, `find` or `select` method.
+     * 
+     * @param string $type Return type (e.g, 'object' or 'array').
      * 
      * @return self Return instance of builder class.
      * @throws InvalidArgumentException Throws if an invalid type is provided.
@@ -906,7 +1155,7 @@ final class Builder implements LazyInterface
             return $this;
         }
 
-        throw new InvalidArgumentException('Invalid return type "' . $type . '", expected array or object');
+        throw new InvalidArgumentException(sprintf('Invalid return type: "%s", expected "array" or "object".', $type));
     }
 
     /**
@@ -949,14 +1198,17 @@ final class Builder implements LazyInterface
      */
     public static function datetime(string $format = 'datetime', ?int $timestamp = null): string
     {
-        $format = ($format === 'time') ? 'H:i:s' : (($format === 'date') ? 'Y-m-d' : 'Y-m-d H:i:s');
-        $time = ($timestamp === null) ? Time::now() : Time::fromTimestamp($timestamp);
+        $format = ($format === 'time') 
+            ? 'H:i:s' 
+            : (($format === 'date') ? 'Y-m-d' : 'Y-m-d H:i:s');
 
-        return $time->format($format);
+        return ($timestamp === null) 
+            ? Time::now()->format($format)
+            : Time::fromTimestamp($timestamp)->format($format);
     }
 
     /**
-     * Enable or disabled all caching subsequent select operations.
+     * Globally enable or disabled all caching for subsequent select operations.
      *
      * @param bool $enable The caching status action.
      * 
@@ -987,30 +1239,30 @@ final class Builder implements LazyInterface
      * 
      * @param string|null $storage Optional storage name for the cache. Defaults to the current table name or 'capture' if not specified.
      * @param string|null $subfolder Optional file-based caching feature, the subfolder name used while storing the cache if any (default: null).
-     * @param string|null $persistent_id Optional memory-based caching feature, to set a unique persistent connection ID (default: `__database_builder__`).
+     * @param string|null $persistentId Optional memory-based caching feature, to set a unique persistent connection ID (default: `__database_builder__`).
      * 
      * @return bool Returns true if the cache was successfully cleared; otherwise, false.
      */
     public function cacheDelete(
         ?string $storage = null, 
         ?string $subfolder = null,
-        ?string $persistent_id = null
+        ?string $persistentId = null
     ): bool
     {
-        return $this->newCache($storage, $subfolder, $persistent_id)->clear();
+        return $this->newCache($storage, $subfolder, $persistentId)->clear();
     }
 
     /**
      * Deletes all cached items for the specified subfolder or the default database cache.
      *
      * @param string|null $subfolder Optional file-based caching feature, the subfolder name used while storing caches if any (default: null).
-     * @param string|null $persistent_id Optional memory-based caching feature, to set a unique persistent connection ID (default: `__database_builder__`).
+     * @param string|null $persistentId Optional memory-based caching feature, to set a unique persistent connection ID (default: `__database_builder__`).
      * 
      * @return bool Returns true if the cache was successfully flushed, false otherwise.
      */
-    public function cacheDeleteAll(?string $subfolder = null, ?string $persistent_id = null): bool
+    public function cacheDeleteAll(?string $subfolder = null, ?string $persistentId = null): bool
     {
-        return $this->newCache(null, $subfolder, $persistent_id)->flush();
+        return $this->newCache(null, $subfolder, $persistentId)->flush();
     }
 
     /**
@@ -1020,7 +1272,7 @@ final class Builder implements LazyInterface
      * @param string|null $storage Optional storage name for the cache. Defaults to the current table name or 'capture' if not specified.
      * @param DateTimeInterface|int $expiry The cache expiration time (default: to 7 days).
      * @param string|null $subfolder Optional file-based caching feature, to set subfolder within the cache root directory (default: `database`).
-     * @param string|null $persistent_id Optional memory-based caching feature, to set a unique persistent connection ID (default: `__database_builder__`).
+     * @param string|null $persistentId Optional memory-based caching feature, to set a unique persistent connection ID (default: `__database_builder__`).
      * 
      * @return self Return instance of builder class.
      * @throws CacheException If an error occurs while creating cache or reading expired cache.
@@ -1030,11 +1282,11 @@ final class Builder implements LazyInterface
         ?string $storage = null, 
         DateTimeInterface|int $expiry = 7 * 24 * 60 * 60, 
         ?string $subfolder = null,
-        ?string $persistent_id = null
+        ?string $persistentId = null
     ): self
     {
         if($this->caching){
-            self::$cache ??= $this->newCache($storage, $subfolder, $persistent_id);
+            self::$cache ??= $this->newCache($storage, $subfolder, $persistentId);
             self::$cache->setExpire($expiry);
             $this->cacheKey = md5($key);
             $this->queryWithCache = true;
@@ -1046,85 +1298,153 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Insert records into a specified database table, this allows for inserting multiple records at once by accepting an array of associative arrays.
+     * Insert records into a specified database table.
+     * 
+     * This method allows for inserting multiple records at once by accepting an array of associative arrays.
      * Each associative array should contain the column names as keys and their corresponding values as values.
      * 
      * @param array<int,array<string,mixed>> $values An array of associative arrays,
      *      where each associative array represents a record to be inserted into the table.
-     * @param bool $prepare If set to true, uses prepared statements with bound values for the insert operation.
+     * @param bool $usePrepare If set to true, uses prepared statements with bound values for the insert operation.
      *      If false, executes a raw query instead (default: true).
      * 
      * @return int Returns the number of affected rows, 0 if no rows were inserted.
      * @throws DatabaseException If an error occurs during the insert operation or if the provided values are not associative arrays.
      * @throws JsonException If an error occurs while encoding array values to JSON format.
      */
-    public function insert(array $values, bool $prepare = true): int
+    public function insert(array $values, bool $usePrepare = true): int
     {
-        if ($values === []) {
-            return 0;
-        }
-
-        if (!isset($values[0])) {
-            $values = [$values];
-        }
-        
-        if (!is_associative($values[0])) {
-            DatabaseException::throwException(
-                'Invalid insert values, values must be an associative array.', 
-                DatabaseException::VALUE_FORBIDDEN
-            );
-            return 0;
-        }
-
-        $columns = array_keys($values[0]);
-
-        try {
-            if($prepare){
-                return $this->executeInsertPrepared($columns, $values);
-            }
-            return $this->executeInsertQuery($columns, $values);
-        } catch (DatabaseException|Exception $e) {
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
-        }
-
-        return 0;
+        return $this->insertOrReplace($values, 'INSERT', $usePrepare);
     }
 
     /**
-     * Build a custom SQL query string to execute when calling the execute method.
-     * This method also supports caching and uses prepared statements if array values are passed to the execute method.
-     * Otherwise, it uses query execution to execute the query, so ensure that values passed directly to the query are escaped.
+     * Replaces records in the specified database table.
      * 
-     * @param string $query The SQL query string.
+     * This method replaces existing records, it will first **deletes** existing rows with the same primary key 
+     * or unique key before inserting new ones. 
      * 
-     * @return self Returns an instance of the builder class.
-     * @throws InvalidArgumentException If the query is empty string.
+     * This may lead to unintended data loss, especially if foreign key constraints exist.
+     * 
+     * @param array<int,array<string,mixed>> $values An array of associative arrays,
+     *      where each associative array represents a record to be replaced in the table.
+     * @param bool $prepare If `true`, executes the operation using prepared statements with bound values.
+     *      If `false`, executes a raw SQL query instead (default: `true`).
+     * 
+     * @return int Returns the number of affected rows (each `REPLACE` may count as **two**: one delete + one insert).
+     * @throws DatabaseException If an error occurs during the operation or if the provided values are invalid.
+     * @throws JsonException If an error occurs while encoding array values to JSON format.
+     * 
+     * > **Warning:** Since `replace` removes and re-inserts data, it can reset auto-increment values 
+     * and trigger delete/insert events instead of update events.
      */
-    public function query(string $query): self 
+    public function replace(array $values, bool $prepare = true): int
     {
-        if ($query === '') {
-            throw new InvalidArgumentException('Invalid: The parameter $query requires a valid and non-empty SQL query string.');
-        }
+        return $this->insertOrReplace($values, 'REPLACE', $prepare);
+    }
 
-        $this->buildQuery = $query;
-
+    /**
+     * Prepares a copy selection query for copying data from the current table.
+     *
+     * This method selects the specified columns from the current table context, allowing the data 
+     * to be copied into another table using the `to()` method.
+     *
+     * @param array<int,string> $columns The list of column names to be selected for copying.
+     *
+     * @return self Return instance of builder class.
+     * @throws DatabaseException Throws if an error occurs.
+     * @see to()
+     * 
+     * @example - Prepare a copy of specific columns
+     * 
+     * ```php
+     * Builder::table('users')
+     *  ->where('id', '=', 1)
+     *  ->copy(['id', 'email', 'created_at'])
+     *  ->to('backup_users', ['id', 'email', 'created_at']);
+     * ```
+     */
+    public function copy(array $columns): self
+    {
+        $this->copySelections = $this->createQueryExecution(
+            '', 'select', $columns, 'all', self::MODE_COPY
+        );
         return $this;
     }
 
     /**
-     * Executes an SQL query string that was previously prepared in the `query()` method.
+     * Executes the selected columns from `copy` method and insert into a target table.
+     *
+     * This method must be used after calling `copy()`, as it executes the previously prepared 
+     * `selection query and inserts the results into the specified target table.
+     *
+     * @param string $table The name of the target table where the copied data will be inserted.
+     * @param array<int,string> $columns The list of target table column names that should receive the copied values.
+     *
+     * @return int Return the number of affected rows or 0 if the operation fails.
+     * @throws DatabaseException Throws if an error occurs.
+     * @throws InvalidArgumentException Throws if empty table is specified.
+     * @see copy()
      * 
-     * @param array<string,mixed>|null $placeholder Binds placeholder and value to the query.
-     * @param int $mode Result return mode RETURN_* (default: RETURN_ALL).
-     *                - RETURN_ALL: Returns all rows (default).
-     *                - RETURN_NEXT: Returns the single/next row from the result set.
-     *                - RETURN_2D_NUM: Returns a 2D array with numerical indices.
-     *                - RETURN_ID: Returns the last inserted ID.
-     *                - RETURN_INT: Returns an integer count of records.
-     *                - RETURN_STMT: Returns an prepared statement object.
+     * > **Warning:** Ensure the column structure of both tables is compatible; otherwise, the query may fail.
+     */
+    public function to(string $targetTable, array $columns): int
+    {
+        if(!$targetTable){
+            throw new InvalidArgumentException('Copy target table cannot be empty.');
+        }
+
+        if(!$this->copySelections){
+            return 0;
+        }
+
+        $inserts = trim(implode(',', $columns), ',');
+        $sqlQuery = "INSERT INTO {$targetTable} ({$inserts}) {$this->copySelections}";
+
+        if($this->printQuery){
+            return $this->printDebugQuery($sqlQuery, 'copy') ? 1 : 0;
+        }
+
+        $result = self::database()->query($sqlQuery)->ok() 
+            ? self::database()->rowCount() 
+            : 0;
+
+        $this->reset();
+        return $result;
+    }
+
+    /**
+     * Executes an SQL query that was previously set using the `query()` method.
      * 
-     * @return mixed|DatabaseInterface Returns the query result, prepared statement object, otherwise false on failure.
-     * @throws DatabaseException Throws if called executed without query conditions.
+     * @param array<string,mixed>|null $placeholder An associative array of placeholder values to bind to the query.
+     * @param int $mode The result return mode (default: `RETURN_ALL`).
+     * 
+     * **Available Return Modes:**
+     * - `RETURN_ALL` - Returns all rows (default).
+     * - `RETURN_NEXT` - Returns a single row or the next row from the result set.
+     * - `RETURN_2D_NUM` - Returns a 2D array with numerical indices.
+     * - `RETURN_ID` - Returns the last inserted ID.
+     * - `RETURN_COUNT` - Returns the number of affected rows.
+     * - `RETURN_COLUMN` - Returns columns from the result.
+     * - `RETURN_INT` - Returns an integer count of records.
+     * - `RETURN_STMT` - Returns a PDO or MySQLi prepared statement object.
+     * - `RETURN_RESULT` - Returns a MySQLi result object or a PDO statement object.
+     * 
+     * @return mixed|\PDOStatement|\mysqli_result|\mysqli_stmt Returns the query result, a prepared statement object, or `false` on failure.
+     *      - `PDOStatement` - If `env(database.connection)` is `PDO` and return mode is set to `RETURN_STMT` or `RETURN_RESULT`.
+     *      - `mysqli_stmt` - If `env(database.connection)` is `MYSQLI` and return mode is set to `RETURN_STMT`.
+     *      - `mysqli_result` - If `env(database.connection)` is `MYSQLI` and return mode is set to `RETURN_RESULT`.
+     * @throws DatabaseException If `execute()` is called without setting a query.
+     * 
+     * @see query()
+     * 
+     * @example Executing a prepared query:
+     * ```php
+     * $query = Builder::query("SELECT * FROM users WHERE user_id = :id");
+     * $result = $query->execute(['id' => 1]);
+     * 
+     * // Fetching a single row:
+     * $user = $query->execute(['id' => 1], RETURN_NEXT);
+     * ```
      */
     public function execute(?array $placeholder = null, int $mode = RETURN_ALL): mixed 
     {
@@ -1193,7 +1513,9 @@ final class Builder implements LazyInterface
      * @example Check if users in country Nigeria exists in table:
      * 
      * ```php
-     * Builder::table('users')->where('country', '=', 'NG)->has();
+     * $bool = Builder::table('users')
+     *      ->where('country', '=', 'NG')
+     *      ->has();
      * ```
      */
     public function has(): bool 
@@ -1210,7 +1532,7 @@ final class Builder implements LazyInterface
      * @example Check if user table exists in database:
      * 
      * ```php
-     * Builder::table('users')->exists();
+     * $bool = Builder::table('users')->exists();
      * ```
      */
     public function exists(): bool 
@@ -1361,6 +1683,7 @@ final class Builder implements LazyInterface
     {
         if(
             !$this->printQuery && 
+            $mode !== self::MODE_COPY &&
             $return !== 'stmt' && 
             $this->queryWithCache && 
             $this->hasCache &&
@@ -1377,28 +1700,19 @@ final class Builder implements LazyInterface
         }
 
         if($return === 'select' || $return === 'find' || $return === 'stmt'|| $return === 'fetch'){
-            $columns = ($columns === ['*']) ? '*' : implode(", ", $columns);
+            $columns = ($columns === ['*']) ? '*' : implode(', ', $columns);
             $query = "SELECT {$columns}";
         }
         
         $sqlQuery = "{$query} FROM {$this->tableName} {$this->tableAlias}";
+        $sqlQuery .= $this->getJoinConditions();
 
-        if ($this->joinTable !== '') {
-            $sqlQuery .= " {$this->joinType} JOIN {$this->joinTable} {$this->jointTableAlias}";
-
-            if ($this->joinConditions !== []) {
-                $sqlQuery .= " ON {$this->joinConditions[0]}";
-
-                if(($joins = count($this->joinConditions)) > 1){
-                    for ($i = 1; $i < $joins; $i++) {
-                        $sqlQuery .= " AND {$this->joinConditions[$i]}";
-                    }
-                }
-            } 
-        }
-    
         try {
             $response = $this->returnExecutedResult($sqlQuery, $return, $result, $mode);
+
+            if($mode === self::MODE_COPY){
+                return $response;
+            }
 
             if(
                 !$this->printQuery &&
@@ -1469,6 +1783,10 @@ final class Builder implements LazyInterface
             $sqlQuery .= $this->selectLimit;
         }
 
+        if($mode === self::MODE_COPY){
+            return $sqlQuery;
+        }
+
         if($this->printQuery){
             return $this->printDebugQuery($sqlQuery, $return);
         }
@@ -1526,10 +1844,10 @@ final class Builder implements LazyInterface
             );
         }
 
-        $updateColumns = self::buildPlaceholder($columns, true);
-        $updateQuery = "UPDATE {$this->tableName} SET {$updateColumns}";
+        $updateQuery = "UPDATE {$this->tableName} {$this->tableAlias}";
+        $updateQuery .= $this->getJoinConditions();
+        $updateQuery .= ' SET ' . self::buildPlaceholder($columns, true);
         $updateQuery .= $this->whereCondition['query'] ?? '';
- 
         $this->buildConditions($updateQuery, true, $this->whereCondition === []);
 
         if($this->maxLimit > 0){
@@ -1601,8 +1919,8 @@ final class Builder implements LazyInterface
         }
 
         try {
-            self::database()->prepare($deleteQuery);
-            self::database()->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
+            self::database()->prepare($deleteQuery)
+                ->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
             $this->bindConditions();
 
             $response = self::database()->execute() ? self::database()->rowCount() : 0;
@@ -1614,49 +1932,6 @@ final class Builder implements LazyInterface
         }
         
         return 0;
-    }
-
-    /**
-     * Return custom builder result from table.
-     * 
-     * @param string $buildQuery query.
-     * @param int $mode return result type.
-     * 
-     * @return mixed|DatabaseInterface Return query result, prepared statement object, otherwise false on failure.
-     * @throws DatabaseException If placeholder key is not a string.
-    */
-    private function returnExecute(string $buildQuery, int $mode): mixed
-    {
-        if($this->printQuery){
-            return $this->printDebugQuery($buildQuery, 'execute');
-        }
-
-        if($this->bindValues === []){
-            self::database()->query($buildQuery);
-        }else{
-            self::database()->prepare($buildQuery);
-            foreach ($this->bindValues as $key => $value) {
-                if(!is_string($key) || $key === '?'){
-                    throw new DatabaseException(
-                        "Invalid bind placeholder {$key}, placeholder key must be same with your table mapped column key, (e.g, :foo, :bar).", 
-                        DatabaseException::VALUE_FORBIDDEN
-                    );
-                }
-
-                self::database()->bind(self::trimPlaceholder($key), $value);
-            } 
-            
-            self::database()->execute();
-        }
-
-        $response = (self::database()->ok() ? 
-            (($mode === RETURN_STMT) 
-                ? self::database()
-                : self::database()->getResult($mode, $this->resultType)) 
-            : false);
-        $this->reset();
-
-        return $response;
     }
 
     /**
@@ -2089,9 +2364,7 @@ final class Builder implements LazyInterface
      */
     public function reset(): void 
     {
-        $this->jointTableAlias = '';
-        $this->joinTable = '';
-        $this->joinType = '';
+        $this->tableJoin = [];
         $this->joinConditions = [];
         $this->selectLimit = '';
         $this->maxLimit = 0;
@@ -2103,6 +2376,7 @@ final class Builder implements LazyInterface
         $this->querySetValues = [];
         $this->hasCache = false;
         $this->printQuery = false;
+        $this->copySelections = '';
         $this->bindValues = [];
         $this->buildQuery = '';
         if($this->resultType !== 'stmt'){
@@ -2110,6 +2384,124 @@ final class Builder implements LazyInterface
         }
         
         $this->resultType = 'object';
+    }
+
+    /**
+     * Handle insert or replace statement.
+     * 
+     * @param array $values The values to insert or replace.
+     * @param string $type The type of statement to be executed.
+     * @param bool $prepare Weather to use the prepared statement or query execution.
+     * 
+     * @return int Return the number of affected rows.
+     * @throws DatabaseException If an error occurs during the operation or if the provided values are invalid.
+     * @throws JsonException If an error occurs while encoding array values to JSON format.
+     */
+    private function insertOrReplace(array $values, string $type, bool $prepare = true): int
+    {
+        if ($values === []) {
+            return 0;
+        }
+
+        if (!isset($values[0])) {
+            $values = [$values];
+        }
+        
+        if (!is_associative($values[0])) {
+            DatabaseException::throwException(
+                sprintf('Invalid %s values, values must be an associative array.', strtolower($type)), 
+                DatabaseException::VALUE_FORBIDDEN
+            );
+            return 0;
+        }
+
+        $columns = array_keys($values[0]);
+
+        try {
+            if($prepare){
+                return $this->executeInsertPrepared($columns, $values, $type);
+            }
+            return $this->executeInsertQuery($columns, $values, $type);
+        } catch (DatabaseException|Exception $e) {
+            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Return custom builder result from table.
+     * 
+     * @param string $buildQuery query.
+     * @param int $mode return result type.
+     * 
+     * @return mixed|DatabaseInterface Return query result, prepared statement object, otherwise false on failure.
+     * @throws DatabaseException If placeholder key is not a string.
+    */
+    private function returnExecute(string $buildQuery, int $mode): mixed
+    {
+        if($this->printQuery){
+            return $this->printDebugQuery($buildQuery, 'execute');
+        }
+
+        if($this->bindValues === []){
+            self::database()->query($buildQuery);
+        }else{
+            self::database()->prepare($buildQuery);
+            foreach ($this->bindValues as $key => $value) {
+                if(!is_string($key) || $key === '?'){
+                    throw new DatabaseException(
+                        "Invalid bind placeholder {$key}, placeholder key must be same with your table mapped column key, (e.g, :foo, :bar).", 
+                        DatabaseException::VALUE_FORBIDDEN
+                    );
+                }
+
+                self::database()->bind(self::trimPlaceholder($key), $value);
+            } 
+            
+            self::database()->execute();
+        }
+
+        $response = (self::database()->ok() ? 
+            (($mode === RETURN_STMT) 
+                ? self::database()
+                : self::database()->getResult($mode, $this->resultType)) 
+            : false);
+        $this->reset();
+
+        return $response;
+    }
+
+    /**
+     * Constructs and returns the SQL JOIN conditions for the query.
+     *
+     * This method builds the JOIN part of the SQL query based on the join table,
+     * join type, and join conditions that have been set.
+     *
+     * @return string Return the constructed JOIN clause of the SQL query, or an empty string if no join is set.
+     */
+    private function getJoinConditions(): string 
+    {
+        if ($this->tableJoin === []) {
+            return '';
+        }
+
+        $sql = '';
+        foreach($this->tableJoin as $table => $values){
+            $sql .= " {$values['type']} JOIN {$table} {$values['alias']}";
+
+            if($this->joinConditions !== [] && isset($this->joinConditions[$table])){
+                $sql .= " ON {$this->joinConditions[$table][0]}";
+
+                if(($joins = count($this->joinConditions[$table])) > 1){
+                    for ($i = 1; $i < $joins; $i++) {
+                        $sql .= " AND {$this->joinConditions[$table][$i]}";
+                    }
+                }
+            }
+        }
+
+        return $sql;
     }
 
     /**
@@ -2248,7 +2640,7 @@ final class Builder implements LazyInterface
      * @throws DatabaseException If an error occurs.
      * @throws JsonException If an error occurs while encoding values.
      */
-    private function executeInsertQuery(array $columns, array $values): int 
+    private function executeInsertQuery(array $columns, array $values, string $type): int 
     {
         $inserts = '';
         foreach ($values as $row) {
@@ -2257,10 +2649,10 @@ final class Builder implements LazyInterface
 
         $keys = implode(', ', $columns);
         $inserts = rtrim($inserts, ', ');
-        $insertQuery = "INSERT INTO {$this->tableName} ({$keys}) VALUES {$inserts}";
+        $insertQuery = "{$type} INTO {$this->tableName} ({$keys}) VALUES {$inserts}";
 
         if($this->printQuery){
-            $this->printDebugQuery($insertQuery, 'insert');
+            $this->printDebugQuery($insertQuery, strtolower($type));
             return 0;
         }
         
@@ -2283,16 +2675,16 @@ final class Builder implements LazyInterface
      * @throws DatabaseException If an error occurs.
      * @throws JsonException If an error occurs while encoding values.
      */
-    private function executeInsertPrepared(array $columns, array $values): int
+    private function executeInsertPrepared(array $columns, array $values, string $type): int
     {
         $count = 0;
         self::$lastInsertId = null;
 
         [$placeholders, $inserts] = self::mapParams($columns);
-        $insertQuery = "INSERT INTO {$this->tableName} ({$inserts}) VALUES ($placeholders)";
+        $insertQuery = "{$type} INTO {$this->tableName} ({$inserts}) VALUES ($placeholders)";
        
         if($this->printQuery){
-            $this->printDebugQuery($insertQuery, 'insert', $values);
+            $this->printDebugQuery($insertQuery, strtolower($type), $values);
             return 0;
         }
 
@@ -2397,7 +2789,7 @@ final class Builder implements LazyInterface
             ) . ')',
             'AGAINST' => " {$prefix}MATCH($column) AGAINST ({$placeholder} {$operator})",
             'IN_SET' => self::insetQuery($condition, $prefix, $operator),
-            'LIKE' => " {$prefix}$column LIKE ?",
+            'LIKE' => " {$prefix}{$column} LIKE ?",
             default => '',
         }; 
     }
@@ -2624,7 +3016,7 @@ final class Builder implements LazyInterface
     private function printDebugQuery(string $query, string $method, array $values = []): bool
     {
         $params = [];
-        if($method === 'insert'){
+        if($method === 'insert' || $method === 'replace'){
             foreach($values as $bindings){
                 $column = key($bindings);
                 $value = is_array($bindings[$column]) 
@@ -2763,10 +3155,11 @@ final class Builder implements LazyInterface
             $input = $matches[1];
         }
     
-        $lastDotPosition = strrpos($input, '.');
-        $placeholder = ($lastDotPosition === false) ? $input : substr($input, $lastDotPosition + 1);
-  
-        return ":$placeholder";
+        // $lastDotPosition = strrpos($input, '.');
+        // $placeholder = ($lastDotPosition === false) ? $input : substr($input, $lastDotPosition + 1);
+        // return ":$placeholder";
+
+        return ':' . (str_contains($input, '.') ? str_replace('.', '_', $input) : $input);
     }
     
     /**
@@ -2800,7 +3193,7 @@ final class Builder implements LazyInterface
     {
         $updateColumns = [];
         foreach ($columns as $column => $value) {
-            $updateColumns[] = "$column = :$column";
+            $updateColumns[] = "{$column} = :" . str_replace('.', '_', $column);
         }
 
         if($implode){

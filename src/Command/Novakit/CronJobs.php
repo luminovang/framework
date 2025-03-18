@@ -6,7 +6,8 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
-*/
+ * @link https://luminova.ng
+ */
 namespace Luminova\Command\Novakit;
 
 use \Luminova\Base\BaseConsole;
@@ -20,7 +21,6 @@ use \App\Config\Cron;
 use \ReflectionClass;
 use \DateInterval;
 use \Exception;
-//g9BKhSPKjCvm
 
 class CronJobs extends BaseConsole 
 {

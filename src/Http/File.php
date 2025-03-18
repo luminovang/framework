@@ -6,6 +6,7 @@
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
+ * @link https://luminova.ng
  */
 namespace Luminova\Http;
 
@@ -300,23 +301,24 @@ class File implements LazyInterface
      * Sets the file name, with an option to replace its extension.
      *
      * @param string $name The desired name of the file, without directory paths.
-     * @param bool $replace_extension (optional) If true, updates the file extension based on 
+     * @param bool $replaceExtension (optional) If true, updates the file extension based on 
      * the provided name (default: true).
      * 
      * @return self Return instance of file object.
      * 
      * @throws ErrorException Throws if the file name contains directory paths or, when 
-     * `replace_extension` is enabled, lacks a valid file extension.
+     * `replaceExtension` is enabled, lacks a valid file extension.
      */
-    public function setName(string $name, bool $replace_extension = true): self
+    public function setName(string $name, bool $replaceExtension = true): self
     {
         if (str_contains($name, DIRECTORY_SEPARATOR)) {
             throw new ErrorException('Filename cannot contain paths.');
         }
 
-        if($replace_extension){
+        if($replaceExtension){
             $extension = pathinfo($name, PATHINFO_EXTENSION);
-            if ($extension === '') {
+
+            if (!$extension) {
                 throw new ErrorException('Filename does not have a valid file extension type.');
             }
 
@@ -373,7 +375,7 @@ class File implements LazyInterface
         $this->is_blob = false;
         $this->mime = null;
 
-        if (is_file($this->temp)) {
+        if ($this->temp && is_file($this->temp)) {
             @unlink($this->temp);
         }
         $this->temp = null;
@@ -418,6 +420,7 @@ class File implements LazyInterface
 
         if (isset($this->config->allowedTypes) && $this->config->allowedTypes) {
             $isArray = is_array($this->config->allowedTypes);
+          
             $allowed = $isArray 
                 ? $this->config->allowedTypes 
                 : explode('|', strtolower($this->config->allowedTypes));
