@@ -148,14 +148,30 @@ class Updater
             if (is_dir($path)) {
                 self::removeRecursive($path, $main);
             } else {
-                unlink($path);
+                self::delete($path);
             }
         }
 
         if ($main === null || (basename($dir) !== $main && is_dir($dir))) {
             rmdir($dir); 
         }
-    }    
+    }
+    
+    /**
+     * Deletes a file if it exists.
+     * 
+     * @param string $file The path to the file to be deleted.
+     *
+     * @return bool Returns true if the file is successfully deleted, or false if the file does not exist.
+     */
+    private static function delete(string $file): bool 
+    {
+        if(!file_exists($file)){
+            return false;
+        }
+
+        return unlink($file);
+    }
 
     /**
      * Returns a formatted version of the given file path.
@@ -302,7 +318,7 @@ class Updater
         if (!$main && file_exists($to)) {
             if (file_exists($sample)) {
                 if(self::fileChanged($from, $sample)){
-                    unlink($sample);
+                    self::delete($sample);
                     self::$toReplace[] = $sample;
                     return rename($from, $sample);
                 }
@@ -314,7 +330,7 @@ class Updater
         }
 
         if($main){
-            unlink($to);
+            self::delete($to);
         }
 
         return rename($from, $to);
@@ -333,7 +349,7 @@ class Updater
         if (file_exists($to)) {
             if(self::fileChanged($from, $to)){
                 if(file_exists($to)){
-                    unlink($to);
+                    self::delete($to);
                 }
 
                 return rename($from, $to);
@@ -379,7 +395,7 @@ class Updater
                     if (!is_dir($srcFile)) {
                         if (!file_exists($dstFile) || self::fileChanged($srcFile, $dstFile)) {
                             if(file_exists($dstFile)){
-                                unlink($dstFile);
+                                self::delete($dstFile);
                             }
                             
                             rename($srcFile, $dstFile);
@@ -399,7 +415,7 @@ class Updater
                 if(file_exists($toDos) && self::fileChanged($toDos, $currentTodo)){
                     $hasTodo = true;
                     if (copy($toDos, $currentTodo)) {
-                        unlink($toDos);
+                        self::delete($toDos);
                     }
                 }
 
