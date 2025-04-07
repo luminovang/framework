@@ -863,14 +863,12 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function isAJAX(): bool
+    public function isAjax(): bool
     {
         $ajax = $this->header->get('X-Requested-With') 
             ?? $this->server->get('HTTP_X_REQUESTED_WITH', '');
 
-        return ($ajax === '')
-            ? false 
-            : strtolower($ajax) === 'xmlhttprequest';
+        return $ajax && strcasecmp($ajax, 'XMLHttpRequest') === 0;
     }
 
     /**

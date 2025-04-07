@@ -85,6 +85,7 @@ class Func
 	 * **Supported Types:**
 	 * 
 	 *   - `character` - Includes special characters like `%#*^,?+$`;"{}][|\/:=)(@!.-`.
+	 * 	 - `alphanumeric` - Contains only alphanumeric characters.
  	 *   - `alphabet` - Contains only alphabetical characters (both uppercase and lowercase).
  	 *   - `password` - Combines letters, numbers, and an expanded set of special characters (`%#^_-@!$&*+=|~?<>[]{}()`).
  	 *   - `bytes` - Returns a raw binary string of the specified length.
@@ -110,6 +111,7 @@ class Func
 		$char = match ($type) {
 			'character' => $special,
 			'alphabet' => $alphabets,
+			'alphanumeric' => $alphabets . $integers,
 			'password' => $alphabets . $integers . '%#^_-@!$&*+=|~?<>[]{}()',
 			'int', 'integer' => $integers,
 			default => $alphabets . $integers . $special
@@ -655,7 +657,7 @@ class Func
 	 * 
 	 * @return string Return base64 encoded string.
 	 */
-	public static function base64_url_encode(string $input): string 
+	public static function base64UrlEncode(string $input): string 
 	{
 		return str_replace(['+', '/', '='], ['.', '_', '-'], base64_encode($input));
 	}
@@ -667,7 +669,7 @@ class Func
 	 * 
 	 * @return string Return base64 decoded string.
 	 */
-	public static function base64_url_decode(string $input): string
+	public static function base64UrlDecode(string $input): string
 	{
 		return base64_decode(str_replace(['.', '_', '-'], ['+', '/', '='], $input));
 	}

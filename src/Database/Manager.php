@@ -32,11 +32,12 @@ final class Manager implements LazyInterface
      * Set the database table to back up.
      * 
      * @param string $table The name of the database table name.
-     * @return void 
+     * @return self Return instance of manager class. 
      */
-    public function setTable(string $table): void 
+    public function setTable(string $table): self 
     {
         $this->table = $table;
+        return $this;
     }
 
     /**

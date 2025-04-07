@@ -27,6 +27,13 @@ interface MailerInterface
     public function initialize(): void;
 
     /**
+     * Retrieve the mailer client instance.
+     * 
+     * @return Luminova\Email\Clients\NovaMailer|\PHPMailer\PHPMailer\PHPMailer|\Swift_Mailer Return instance of mailer client in use.
+     */
+    public function getMailer(): mixed;
+
+    /**
      * Send the email.
      *
      * @return bool Return true if the email was sent successfully, false otherwise.
@@ -44,6 +51,61 @@ interface MailerInterface
      * @return bool Return true if the sender's address was set successfully, false otherwise.
      */
     public function setFrom(string $address, string $name = '', bool $auto = true): bool;
+
+    /**
+     * Set the notification address for read and delivery receipts.
+     *
+     * This method allows you to specify an email address where notifications should 
+     * be sent regarding the status of the email, such as delivery or read receipts. 
+     * It sets both `Return-Receipt-To` (for delivery receipts) and 
+     * `Disposition-Notification-To` (for read receipts), depending on your email client and configuration.
+     *
+     * @param string $address The email address to receive the notification.
+     *
+     * @return bool Return true if address was set successfully, false otherwise.
+     */
+    public function setNotificationTo(string $address): bool;
+
+    /**
+     * Add custom header.
+     * 
+     * @param string $name Header name.
+     * @param string|null $value Optional header value.
+     * 
+     * @return bool Return true if header was added.
+     */
+    public function addHeader(string $name, ?string $value = null): bool;
+
+    /**
+     * Add one or more email addresses to the CC list.
+     *
+     * Accepts a single email string, an array of email addresses,
+     * or an associative array of name => email pairs.
+     *
+     * @param string|array<int|string,string> $address  A single email string, an array of emails, or an array of name => email pairs.
+     * 
+     * @return bool Returns true if at least one address was added.
+     * 
+     * @example - Add multiple addresses:
+     * 
+     * ```php
+     * // as comma-separated string
+     * $mailer->addresses('example@gmail.com,example@yahoo.com');
+     *
+     * // as an indexed array
+     * $mailer->addresses([
+     *     'example@gmail.com',
+     *     'example@yahoo.com'
+     * ]);
+     *
+     * // as associated names
+     * $mailer->addresses([
+     *     'John' => 'john@gmail.com',
+     *     'Deo' => 'deo@yahoo.com'
+     * ]);
+     * ```
+     */
+    public function addAddresses(string|array $address): bool;
 
     /**
      * Add an email address to the recipient list.

@@ -148,7 +148,7 @@ abstract class BaseModel implements LazyInterface
      */
     public function __construct()
     {
-        $this->builder = Builder::getInstance($this->table);
+        $this->builder = Builder::getInstance();
         $this->builder->caching($this->cacheable);
         $this->builder->returns($this->resultType);
 
@@ -182,7 +182,8 @@ abstract class BaseModel implements LazyInterface
         }
 
         $this->assertAllowedColumns($this->insertable, $values, 'insert');
-        return $this->builder->table($this->table)->insert($values) > 0;
+        return $this->builder->table($this->table)
+            ->insert($values) > 0;
     }
 
     /**
@@ -195,7 +196,7 @@ abstract class BaseModel implements LazyInterface
      * @return bool Return true if records was updated, otherwise false.
      * @throws RuntimeException Throws if update columns contains column names that isn't defined in `$updatable`.
      */
-    public function update(string|array|float|int|null $key, array $data, ?int $max = null): bool  
+    public function update(mixed $key, array $data, ?int $max = null): bool  
     {
         if($this->readOnly){
             return false;
@@ -209,14 +210,17 @@ abstract class BaseModel implements LazyInterface
         }
 
         if($key === null){
-            return $tbl->update($data) > 0;
+            return $tbl->strict(false)
+                ->update($data) > 0;
         }
 
         if(is_array($key)){
-            return $tbl->in($this->primaryKey, $key)->update($data) > 0;
+            return $tbl->in($this->primaryKey, $key)
+                ->update($data) > 0;
         }
         
-        return $tbl->where($this->primaryKey, '=', $key)->update($data) > 0;
+        return $tbl->where($this->primaryKey, '=', $key)
+            ->update($data) > 0;
     }
 
     /**
@@ -227,7 +231,7 @@ abstract class BaseModel implements LazyInterface
      * 
      * @return mixed Return selected records or false on failure.
      */
-    public function find(string|array|float|int $key, array $fields = ['*']): mixed 
+    public function find(mixed $key, array $fields = ['*']): mixed 
     {
         $tbl = $this->builder->table($this->table);
 
@@ -238,8 +242,8 @@ abstract class BaseModel implements LazyInterface
         }
 
         $cache_key = self::cacheKey($key, $fields, 'find');
-        $tbl->cache($cache_key, $this->table . '_find', $this->expiry, static::$cacheFolder);
-        return $tbl->find($fields);
+        return $tbl->cache($cache_key, $this->table . '_find', $this->expiry, static::$cacheFolder)
+            ->find($fields);
     }
 
     /**
@@ -253,14 +257,14 @@ abstract class BaseModel implements LazyInterface
      * @return mixed Return selected records or false on failure.
      */
     public function select(
-        string|int|float|array|null $key = null, 
+        mixed $key = null, 
         array $fields = ['*'],  
         int $limit = 100, 
         int $offset = 0
     ): mixed 
     {
         $tbl = $this->builder->table($this->table);
-        if($key){
+        if($key !== null){
             if(is_array($key)){
                 $tbl->in($this->primaryKey, $key);
             }else{
@@ -287,7 +291,7 @@ abstract class BaseModel implements LazyInterface
      * @return bool Return true if the record was successfully deleted otherwise false.
      */
     public function delete(
-        string|int|float|array|null $key = null, 
+        mixed $key = null, 
         ?int $max = null
     ): bool 
     {
@@ -301,7 +305,7 @@ abstract class BaseModel implements LazyInterface
         }
 
         if($key === null){
-            if($tbl->delete() > 0){
+            if($tbl->strict(false)->delete() > 0){
                 $this->purge();
                 return true;
             }
@@ -335,7 +339,7 @@ abstract class BaseModel implements LazyInterface
      * 
      * @return bool Return true if the record exists otherwise false.
      */
-    public function exists(string|int|float $key): bool 
+    public function exists(mixed $key): bool 
     {
         return (int) $this->count($key) > 0;
     }
@@ -347,7 +351,7 @@ abstract class BaseModel implements LazyInterface
      * 
      * @return int|bool Return the number of records.
      */
-    public function count(string|int|float|array $key): int|bool 
+    public function count(mixed $key): int|bool 
     {
         $tbl = $this->builder->table($this->table);
 
@@ -357,14 +361,12 @@ abstract class BaseModel implements LazyInterface
             $tbl->where($this->primaryKey, '=', $key);
         }
 
-        $tbl->cache(
+        return $tbl->cache(
             self::cacheKey($key, [], 'count'), 
             $this->table . '_total', 
             $this->expiry, 
             static::$cacheFolder
-        );
-
-        return $tbl->total();
+        )->total();
     }
 
     /**

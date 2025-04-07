@@ -416,11 +416,11 @@ class Connection implements LazyInterface, Countable
      *
      * If the $conn parameter is true, the database connection will be closed; otherwise, only the pooled connections will be closed.
      *
-     * @param bool $close_current If true, close the current database connection also (default: false).
+     * @param bool $closeCurrent If true, close the current database connection also (default: false).
      *
      * @return bool Return true when connections are closed, otherwise false.
      */
-    public function purge(bool $close_current = false): bool
+    public function purge(bool $closeCurrent = false): bool
     {
         foreach (self::$pools as $connection) {
             if($connection instanceof DatabaseInterface){
@@ -431,7 +431,7 @@ class Connection implements LazyInterface, Countable
 
         self::$pools = [];
 
-        return $close_current 
+        return $closeCurrent 
             ? $this->disconnect() 
             : true;
     }

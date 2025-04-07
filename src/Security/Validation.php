@@ -12,6 +12,8 @@ namespace Luminova\Security;
 
 use \Luminova\Interface\ValidationInterface;
 use \Luminova\Interface\LazyInterface;
+use \Luminova\Functions\Func;
+use \Luminova\Functions\IP;
 use \Throwable;
 
 final class Validation implements ValidationInterface, LazyInterface
@@ -86,6 +88,11 @@ final class Validation implements ValidationInterface, LazyInterface
                     break;
                     case 'equals':
                         if ($fieldValue !== $input[$ruleParam]) {
+                            $this->addError($field, $ruleName, $fieldValue);
+                        }
+                    break;
+                    case 'is_value':
+                        if ($fieldValue !== $ruleParam) {
                             $this->addError($field, $ruleName, $fieldValue);
                         }
                     break;
@@ -255,15 +262,15 @@ final class Validation implements ValidationInterface, LazyInterface
     {
         try {
             return match ($ruleName) {
-                'max_length', 'max' => is_string($value) && mb_strlen($value) <= (int) $param,
-                'min_length', 'min' => is_string($value) && mb_strlen($value) >= (int) $param,
-                'exact_length', 'length' => is_string($value) && mb_strlen($value) === (int) $param,
+                'max_length', 'max' => mb_strlen((string) $value) <= (int) $param,
+                'min_length', 'min' => mb_strlen((string) $value) >= (int) $param,
+                'exact_length', 'length' => mb_strlen((string) $value) === (int) $param,
                 'string' => is_string($value),
                 'integer' => self::validateInteger($value, $param),
                 'float' => self::validateFloat($value, $param),
                 'email' => filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
-                'alphanumeric' => ctype_alnum($value),
-                'alphabet' => ctype_alpha($value),
+                'alphanumeric' => is_string($value) && ctype_alnum($value),
+                'alphabet' => is_string($value) && ctype_alpha($value),
                 'url' => filter_var($value, FILTER_VALIDATE_URL) !== false,
                 'decimal' => self::validateFloat($value, $param, true),
                 'binary' => ctype_print($value) && !preg_match('/[^\x20-\x7E\t\r\n]/', $value),
@@ -372,22 +379,12 @@ final class Validation implements ValidationInterface, LazyInterface
      */
     private static function validateOthers(string $name, mixed $value, string $param): bool
     {
-        if($name === 'uuid' || $name === 'ip' || $name === 'phone'){
-            static $func = null;
-            $func ??= func();
-
-            return ($name === 'phone')
-                ? $func->isPhone((string) $value, ($param === '') ? 10 : (int) $param)
-                : (($name === 'uuid')
-                    ? $func->isUuid((string) $value, ($param === '') ? 4 : (int) $param)
-                    : (($name === 'ip') 
-                            ? $func->ip()->isValid((string) $value, ($param === '') ? 0 : (int) $param) 
-                            : true
-                        )
-                    );
-        }
-
-       return true;
+        return match($name){
+            'uuid' => Func::isUuid((string) $value, ($param === '') ? 4 : (int) $param),
+            'phone' => Func::isPhone((string) $value, ($param === '') ? 10 : (int) $param),
+            'ip' => IP::isValid((string) $value, ($param === '') ? 0 : (int) $param),
+            default => true
+        };
     }
 
     /**

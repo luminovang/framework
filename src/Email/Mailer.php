@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework Mailer Helper Class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -24,7 +24,7 @@ class Mailer implements LazyInterface
     /**
      * Mailer singleton instance
      * 
-     * @var self $instance
+     * @var self|null $instance
      */
     private static ?self $instance = null;
 
@@ -36,22 +36,28 @@ class Mailer implements LazyInterface
     private ?MailerInterface $client = null;
 
     /**
+     * From email address. 
+     * 
      * @var string $from 
      */
     private string $from = '';
 
     /**
+     * From name. 
+     * 
      * @var string $fromName 
      */
     private string $fromName = '';
 
     /**
+     * From auto email name. 
+     * 
      * @var bool $fromAuto 
      */
     private bool $fromAuto = true;
 
     /**
-     * Mailer constructor.
+     * Initialize mailer constructor class.
      *
      * @param MailerInterface|string|null $interface The mailer client interface.
      * 
@@ -98,6 +104,49 @@ class Mailer implements LazyInterface
     }
 
     /**
+     * Magic method to dynamically set a property in the mail `client` instance.
+     *
+     * This allows assigning arbitrary properties that are not explicitly declared in the class.
+     *
+     * @param string $name  The name of the property being set.
+     * @param mixed  $value The value to assign to the property.
+     * 
+     * @return void
+     */
+    public function __set(string $name, mixed $value): void 
+    {
+        $this->mailer->{$name} = $value;
+    }
+
+    /**
+     * Magic method to retrieve a dynamically set property from the mail `client` instance.
+     *
+     * If the property is not set, it returns `null` instead of triggering an error.
+     *
+     * @param string $name The name of the property being accessed.
+     * 
+     * @return mixed|null Return the value of the property if it exists, otherwise `null`.
+     */
+    public function __get(string $name): mixed 
+    {
+        return $this->mailer->{$name} ?? null;
+    }
+
+    /**
+     * Magic method to check if a dynamic property exists in the mail `client` instance.
+     *
+     * This is useful for `isset()` checks to determine whether a property has been set.
+     *
+     * @param string $name The name of the property to check.
+     * 
+     * @return bool Return `true` if the property exists, otherwise `false`.
+     */
+    public function __isset(string $name): bool 
+    {
+        return isset($this->mailer->{$name});
+    }
+
+    /**
      * Initialize and retrieve the singleton instance of the Mailer class.
      *
      * @param MailerInterface|string|null $interface The mailer client interface to be used for instantiation.
@@ -127,13 +176,103 @@ class Mailer implements LazyInterface
     }
 
     /**
-     * Get the Mailer client instance.
+     * Retrieve the Mailer client instance.
      * 
-     * @return MailerInterface The Mailer client instance.
+     * This method returns an instance of the mail client in use.
+     * 
+     * @return MailerInterface Return he Mailer client instance.
+     * @example - Example:
+     * 
+     * ```php
+     * $client = $mailer->getClient() // Luminova mailer client interface
+     *      ->getMailer(); // e.g, PHPMailer instance
+     * ```
      */
     public function getClient(): ?MailerInterface
     {
         return $this->client;
+    }
+
+    /**
+     * Set SMTP stream options.
+     * 
+     * This method allows you to define custom stream context options for the SMTP connection.
+     * It can be used to configure SSL/TLS behavior, such as disabling peer verification or allowing self-signed certificates.
+     * 
+     * @param array $smtpOptions An associative array of stream context options.
+     * 
+     * @return self Return the Mailer class instance.
+     * 
+     * @example - Example:
+     * ```php
+     * $mailer->options([
+     *      'ssl' => [
+     *           'verify_peer' => false,
+     *           'verify_peer_name' => false,
+     *           'allow_self_signed' => true,
+     *      ]
+     * ]);
+     * ```
+     */
+    public function options(array $smtpOptions): self 
+    {
+        $this->client->SMTPOptions = $smtpOptions;
+        return $this;
+    }
+
+    /**
+     * Set the email format to HTML or plain text.
+     *
+     * This method sets whether the email should be sent as HTML or plain text.
+     * By default, it sends HTML. If you want to send a plain text email,
+     * pass `false` to the method.
+     *
+     * @param bool $html Whether the email should be sent as HTML (default is true).
+     *
+     * @return self Return the Mailer class instance.
+     */
+    public function isHtml(bool $html = true): self 
+    {
+        $this->client->isHTML($html);
+        return $this;
+    }
+
+    /**
+     * Set the mail transport method to either Mail or SMTP.
+     *
+     * This method determines whether to send emails using the PHP `mail()` function 
+     * or via SMTP. By default, it uses `mail()`. To send emails via SMTP, pass 
+     * `false` to this method.
+     *
+     * @param bool $mail Whether to use PHP `mail()` (default is true). Set to `false` to use SMTP.
+     *
+     * @return self Return the Mailer class instance.
+     */
+    public function isMail(bool $mail = true): self 
+    {
+        if($mail){
+            $this->client->isMail();
+        }else{
+            $this->client->isSmtp();
+        }
+        
+        return $this;
+    }
+
+    /**
+     * Add a custom header to the email.
+     * 
+     * This method allows you to add custom headers to the email message.
+     * 
+     * @param string $key The header name.
+     * @param string|null $value The header value (optional).
+     *
+     * @return self Return the Mailer class instance.
+     */
+    public function addHeader(string $key, ?string $value = null): self 
+    {
+        $this->client->addHeader($key, $value);
+        return $this;
     }
 
     /**
@@ -152,6 +291,59 @@ class Mailer implements LazyInterface
     }
 
     /**
+     * Add one or more email addresses to the recipient list.
+     *
+     * This method supports various input formats, including a comma-separated string, 
+     * a numeric array of addresses, or an associative array of name-email pairs.
+     *
+     * @param string|array<int|string,string> $address A single email string, an array of emails, or an array of name => email pairs.
+     *
+     * @return self Return the Mailer class instance.
+     *
+     * @example - Add multiple addresses:
+     * 
+     * ```php
+     * // as comma-separated string
+     * $mailer->addresses('example@gmail.com,example@yahoo.com');
+     *
+     * // as an indexed array
+     * $mailer->addresses([
+     *     'example@gmail.com',
+     *     'example@yahoo.com'
+     * ]);
+     *
+     * // as associated names
+     * $mailer->addresses([
+     *     'John' => 'john@gmail.com',
+     *     'Deo' => 'deo@yahoo.com'
+     * ]);
+     * ```
+     */
+    public function addresses(string|array $address): self
+    {
+        $this->client->addAddresses($address);
+
+        return $this;
+    }
+
+    /**
+     * Set the notification address for read and delivery receipts.
+     *
+     * This method allows you to specify an email address where notifications should 
+     * be sent regarding the status of the email, such as delivery or read receipts.
+     *
+     * @param string $address The email address to receive the notification.
+     *
+     * @return self Return the Mailer class instance.
+     */
+    public function notification(string $address): self
+    {
+        $this->client->setNotificationTo($address);
+
+        return $this;
+    }
+
+    /**
      * Add a reply-to address.
      *
      * @param string $address The email address.
@@ -159,7 +351,7 @@ class Mailer implements LazyInterface
      *
      * @return self Return the Mailer class instance.
      */
-    public function reply($address, $name = ''): self
+    public function reply(string $address, string $name = ''): self
     {
         $this->client->addReplyTo($address, $name);
 
@@ -380,12 +572,7 @@ class Mailer implements LazyInterface
      */
     private static function getEncryption(string $encryption): string
     {
-        $types = [
-            'tls' => 'tls',
-            'ssl' => 'ssl'
-        ];
-
-        return $types[$encryption] ?? 'tls';
+        return ['tls' => 'tls','ssl' => 'ssl'][$encryption] ?? 'tls';
     }
 
     /**
@@ -397,12 +584,36 @@ class Mailer implements LazyInterface
      */
     private static function getCharset(string $charset): string
     {
-        $types = [
-            'utf8' => 'utf-8',
-            'iso88591' => 'iso-8859-1',
-            'ascii' => 'us-ascii',
-        ];
+        return ['utf8' => 'utf-8','iso88591' => 'iso-8859-1','ascii' => 'us-ascii'][$charset] ?? 'utf-8';
+    }
 
-        return $types[$charset] ?? 'utf-8';
+    /**
+     * Parse the input string to separate the name and email address.
+     *
+     * Supports:
+     * - "Name <email@example.com>" → ['Name', 'email@example.com']
+     * - "email@example.com" → ['', 'email@example.com']
+     * - "<email@example.com>" → ['', 'email@example.com']
+     *
+     * @param string $input The input string containing name and/or email address.
+     * @return array Return the parsed name and email address.
+     */
+    public static function getAddress(string $input): array
+    {
+        $input = trim(preg_replace('/[\r\n]+/', '', $input));
+
+        if ($input === '') {
+            return ['', ''];
+        }
+
+        if (preg_match('/^(.+?)\s*<([^>]+)>$/', $input, $match)) {
+            return [trim($match[1]), $match[2]];
+        }
+
+        if (preg_match('/^<([^>]+)>$/', $input, $match)) {
+            return ['', $match[1]];
+        }
+        
+        return ['', $input];
     }
 }

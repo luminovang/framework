@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework
+ * Luminova Framework Composer Updater Helper.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -19,30 +19,42 @@ use \Luminova\Application\Foundation;
 class Updater
 {
     /**
-     * @var string $frameworkPath framework directory
+     * Path to the framework directory.
+     * 
+     * @var string $frameworkPath
      */
     private static string $frameworkPath = 'system/plugins/luminovang/framework/';
 
     /**
+     * CLI terminal instance.
+     * 
      * @var Terminal $terminal 
      */
     private static ?Terminal $terminal = null;
 
     /**
-     * New sample changes.
+     * List of files to be replaced during updates.
      * 
      * @param array $toReplace
      */
     private static array $toReplace = [];
 
     /**
-     * Update framework 
+     * Updates the framework by copying necessary files and configurations.
      * 
-     * @return void 
+     * This method checks if the framework requires an update and then:
+     * 
+     * - Copies the `novakit` to root directory.
+     * - Updates configuration files in the `app/` directory.
+     * - Updates sample configurations in `samples/Main/`.
+     * - Performs additional updates on the `system/` directory.
+     * 
+     * @return void
      */
     public static function update(): void 
     {
         if(self::onInstallAndUpdate('bootstrap/', self::$frameworkPath, 'install/Boot/')){
+            self::doCopy(self::$frameworkPath . 'novakit', 'novakit');
             self::updateConfigurations(self::$frameworkPath . 'install/App/', 'app/');
             self::updateConfigurations(self::$frameworkPath . 'install/Main/', 'samples/Main/', true);
             self::onInstallAndUpdate('system/', self::$frameworkPath, 'src/', true);
@@ -50,9 +62,12 @@ class Updater
     }
 
     /**
-     * Install, update framework and configure project
+     * Installs the framework and configures the project.
      * 
-     * @return void 
+     * This method ensures that all required files and directories 
+     * are properly installed and set up.
+     * 
+     * @return void
      */
     public static function install(): void 
     {
@@ -60,12 +75,11 @@ class Updater
     }
 
     /**
-     * Is the current destination updater
-     * If yet skip it.
+     * Checks if the destination path is the updater itself to avoid self-update.
      * 
-     * @param string $dest
+     * @param string $dest Destination path to check.
      * 
-     * @return bool 
+     * @return bool True if the destination is the updater file, otherwise false.
      */
     private static function isUpdater(string $dest): bool 
     {
@@ -73,9 +87,9 @@ class Updater
     }
 
     /**
-     * Get prepared cli instance 
+     * Returns a prepared CLI instance, initializing it if necessary.
      * 
-     * @return Terminal 
+     * @return Terminal CLI instance.
      */
     private static function cli(): Terminal
     {
@@ -83,12 +97,12 @@ class Updater
     }
 
     /**
-     * Check and move files and directory to destination
+     * Recursively moves files and directories to the specified destination.
      * 
-     * @param string $destination. File destination path.
-     * @param string $source File source.
+     * @param string $destination Target directory.
+     * @param string $source Source directory.
      * 
-     * @return void  
+     * @return void
      */
     private static function checkAndMoveFolderRecursive(string $destination, string $source): void
     {
@@ -119,12 +133,12 @@ class Updater
     }
 
     /**
-     * Delete directory recursively 
+     * Recursively deletes a directory and its contents.
      * 
      * @param string $dir Directory to delete.
-     * @param string|null $main main directory to ignore deletion
+     * @param string|null $main Root directory to protect from deletion.
      * 
-     * @return void  
+     * @return void
      */
     private static function removeRecursive(string $dir, ?string $main = null): void
     {
@@ -144,11 +158,11 @@ class Updater
     }    
 
     /**
-     * Get relative path to print
+     * Returns a formatted version of the given file path.
      * 
-     * @param string $path File path.
+     * @param string $path Full file path.
      * 
-     * @return string  
+     * @return string Relative or formatted file path.
      */
     private static function displayPath(string $path): string 
     {
@@ -156,11 +170,11 @@ class Updater
     }
 
     /**
-     * Create directory if not exist
+     * Creates a directory if it does not already exist.
      * 
-     * @param string $path
+     * @param string $path Directory path.
      * 
-     * @return void  
+     * @return void
      */
     private static function makeDirectoryIfNotExist(string $path): void 
     {
@@ -170,12 +184,12 @@ class Updater
     }
 
     /**
-     * Compare two files to check if their hashes differ.
+     * Compares two files to determine if their contents differ.
      * 
-     * @param string $source File source.
-     * @param string $destination. File destination path.
+     * @param string $source Source file.
+     * @param string $destination Destination file.
      * 
-     * @return bool Return true if the files are different or if the destination doesn't exist, otherwise false.
+     * @return bool True if the files differ or if the destination does not exist.
      */
     private static function fileChanged(string $source, string $destination): bool
     {
@@ -196,12 +210,13 @@ class Updater
     }
 
     /**
-     * Compare two files to see if any changes in the hash
+     * Updates configuration files by copying and organizing them appropriately.
      * 
-     * @param string $source File source.
-     * @param string $destination. File destination path.
+     * @param string $source Source directory.
+     * @param string $destination Target directory.
+     * @param bool $main Whether the directory is the main config directory.
      * 
-     * @return bool  
+     * @return void
      */
     private static function updateConfigurations(string $source, string $destination, bool $main = false): void
     {
@@ -232,13 +247,14 @@ class Updater
     }
 
     /**
-     * Check and move files and directory to destination
+     * Moves application configuration files to the appropriate directories.
      * 
-     * @param string $destination. File destination path.
-     * @param string $sampleFolder File sample destination path.
-     * @param string $source File source.
+     * @param string $destination Target directory.
+     * @param string $sampleFolder Sample directory.
+     * @param string $source Source directory.
+     * @param bool $main Whether it's a main configuration.
      * 
-     * @return void  
+     * @return void
      */
     private static function updateDevConfigs(
         string $destination, 
@@ -272,40 +288,72 @@ class Updater
     }
 
     /**
-     * Do move file to it destination.
+     * Moves a configuration file to its destination.
+     * 
+     * @param string $from Source file.
+     * @param string $to Destination file.
+     * @param string $sample Sample file path.
+     * @param bool $main Whether it's a main configuration.
+     * 
+     * @return bool True if moved successfully, false otherwise.
      */
     private static function doConfigCopy(string $from, string $to, string $sample, bool $main = false): bool
     {
-        if (file_exists($to)) {
-            if($main){
-                unlink($to);
-            }else{
-                if (file_exists($sample)) {
-                    if(self::fileChanged($from, $sample)){
-                        unlink($sample);
-                        self::$toReplace[] = $sample;
-                        return rename($from, $sample);
-                    }
-
-                    return true;
+        if (!$main && file_exists($to)) {
+            if (file_exists($sample)) {
+                if(self::fileChanged($from, $sample)){
+                    unlink($sample);
+                    self::$toReplace[] = $sample;
+                    return rename($from, $sample);
                 }
 
-                return rename($from, $sample);
+                return true;
             }
+
+            return rename($from, $sample);
+        }
+
+        if($main){
+            unlink($to);
         }
 
         return rename($from, $to);
     }
 
     /**
-     * Update framework codes after installation and update 
+     * Moves a file to its destination.
      * 
-     * @param string $destination. File destination path.
-     * @param string $source File source.
-     * @param string $codes sub folder to start looking.
-     * @param bool $complete complete.
+     * @param string $from Source file.
+     * @param string $to Destination file.
      * 
-     * @return bool  
+     * @return bool True if moved successfully, false otherwise.
+     */
+    private static function doCopy(string $from, string $to): bool
+    {
+        if (file_exists($to)) {
+            if(self::fileChanged($from, $to)){
+                if(file_exists($to)){
+                    unlink($to);
+                }
+
+                return rename($from, $to);
+            }
+
+            return false;
+        }
+
+        return rename($from, $to);
+    }
+
+    /**
+     * Handles the installation and update of framework components.
+     * 
+     * @param string $destination Target directory.
+     * @param string $source Source directory.
+     * @param string $codes Subdirectory to process.
+     * @param bool $complete Whether to perform a full installation.
+     * 
+     * @return bool True if successful, false otherwise.
      */
     private static function onInstallAndUpdate(
         string $destination, 
@@ -363,16 +411,18 @@ class Updater
 
                 if ($returnCode === 0) {
                     self::cli()->writeln('Update was completed version [' . (Foundation::VERSION??'1.5.0') . ']', 'white', 'green');
+                    self::cli()->newLine();
+
                     if($hasTodo || self::$toReplace !== []){
                         self::cli()->beeps(2);
                         self::cli()->writeln('TODO ATTENTION!', 'yellow');
 
                         if(self::$toReplace !== []){
-                            self::cli()->writeln('Please see /samples/ to manual replace your configuration files accordingly.');
+                            self::cli()->writeln('See "/samples/*" to manually replace your configuration files accordingly.');
                         }
 
                         if($hasTodo){
-                            self::cli()->writeln('Please see /TODO.md to follow few manual associated with the current version update.');
+                            self::cli()->writeln('See "/TODO.md" to follow a few manual steps associated with the current version update.');
                         }
                     }
                 }

@@ -10,6 +10,7 @@
  */
 namespace Luminova\Database\Drivers;
 
+use JsonException;
 use \Luminova\Core\CoreDatabase;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Interface\DatabaseInterface;
@@ -54,11 +55,11 @@ final class MysqliDriver implements DatabaseInterface
     private ?CoreDatabase $config = null;  
 
     /**
-     * Database queries bind params.
+     * Weather queries is bind params or values.
      * 
-     * @var array $bindParams
+     * @var bool $isParams
      */
-    private array $bindParams = [];
+    private bool $isParams = false;
 
     /**
      * Database queries bind values.
@@ -129,6 +130,27 @@ final class MysqliDriver implements DatabaseInterface
      * @var float|int $startTime
      */
     private static float|int $startTime = 0;
+
+    /**
+     * Result fetch modes.
+     * 
+     * @var array<int,string> $fetchModes
+     */
+    private static array $fetchModes = [
+        FETCH_ASSOC     => 'default',
+        FETCH_BOTH      => 'default',
+        FETCH_OBJ       => 'fetch_object', 
+        FETCH_COLUMN    => 'default',
+        FETCH_COLUMN_ASSOC => 'default',
+        FETCH_NUM       => 'default',
+        FETCH_NUM_OBJ   => 'default',
+        FETCH_ALL       => 'fetch_all',
+        'mysqli'        => [
+            FETCH_ASSOC => MYSQLI_ASSOC,
+            FETCH_BOTH => MYSQLI_BOTH,
+            FETCH_NUM => MYSQLI_NUM
+        ]
+    ];
 
     /**
      * {@inheritdoc}
@@ -305,6 +327,7 @@ final class MysqliDriver implements DatabaseInterface
     {
         $this->assertConnection();
         $this->profiling(true);
+        $this->executed = false;
         $query = preg_replace('/:([a-zA-Z0-9_]+)/', '?', $query);
         $this->rowCount = 0;
         $this->stmt = $this->connection->prepare($query);
@@ -331,7 +354,7 @@ final class MysqliDriver implements DatabaseInterface
                     ? (str_starts_with($query, 'SELECT') 
                         ? $this->stmt->num_rows 
                         : $this->connection->affected_rows
-                     )
+                      )
                     : $this->connection->affected_rows;
         }
 
@@ -425,10 +448,11 @@ final class MysqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function bind(string $param, mixed $value, int|null $type = null): self 
+    public function bind(string $param, mixed $value, ?int $type = null): self 
     {
         $this->assertStatement();
         $this->bindValues[$param] = $value;
+        $this->isParams = false;
 
         return $this;
     }
@@ -436,10 +460,19 @@ final class MysqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function param(string $param, mixed &$value, int|null $type = null): self 
+    public function value(string $param, mixed $value, ?int $type = null): self 
+    {
+        return $this->bind($param, $value, $type);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function param(string $param, mixed &$value, ?int $type = null): self 
     {
         $this->assertStatement();
-        $this->bindParams[$param] = &$value;
+        $this->bindValues[$param] = &$value;
+        $this->isParams = true;
 
         return $this;
     }
@@ -449,19 +482,14 @@ final class MysqliDriver implements DatabaseInterface
      */
     public function execute(?array $params = null): bool 
     {
-        $this->executed = false;
+        if($this->executed){
+            return false;
+        }
+        
         $this->assertStatement();
 
         try {
-            $bindParams = ($this->bindParams ?: $this->bindValues);
-
-            if($bindParams !== []){
-                $params = null;
-                $bindType = ($this->bindParams === []) ? 'values' : 'params';
-
-                $this->parseParams($bindParams, $bindType);
-            }
-
+            $params = $this->parseParams() ? null : $params;
             $this->executed = $this->stmt->execute($params);
 
             if (!$this->executed || $this->stmt->errno) {
@@ -477,7 +505,7 @@ final class MysqliDriver implements DatabaseInterface
             throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
         }
         
-        $this->bindParams = [];
+        $this->isParams = false;
         $this->bindValues = [];
 
         return $this->executed;
@@ -505,13 +533,13 @@ final class MysqliDriver implements DatabaseInterface
     public function getResult(int $mode = RETURN_ALL, string $fetch = 'object'): mixed 
     {
         return match ($mode) {
-            RETURN_NEXT => $this->getNext($fetch),
+            RETURN_NEXT => $this->fetchNext($fetch),
             RETURN_2D_NUM => $this->getInt(),
             RETURN_INT => $this->getCount(),
             RETURN_ID => $this->getLastInsertId(),
             RETURN_COUNT => $this->rowCount(),
             RETURN_COLUMN => $this->getColumns(),
-            RETURN_ALL => $this->getAll($fetch),
+            RETURN_ALL => $this->fetchAll($fetch),
             RETURN_STMT => $this->getStatement(),
             RETURN_RESULT => ($this->stmt instanceof mysqli_result) ? $this->stmt : null,
             default => false
@@ -521,37 +549,49 @@ final class MysqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function getNext(string $fetch = 'object'): array|object|bool 
+    public function fetchNext(string $type = 'object'): array|object|bool 
     {
-        $result = $this->fetch('next', ($fetch === 'object') ? FETCH_NUM_OBJ : FETCH_ASSOC);
+        $result = $this->fetch('next', ($type === 'object') ? FETCH_NUM_OBJ : FETCH_ASSOC);
 
         if($result === false || $result === null){
             return false;
         }
 
-        if($fetch === 'array'){
-            return (array) $result;
-        }
-
-        return (object) $result;
+        return ($type === 'array') 
+            ? (array) $result 
+            : (object) $result;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getAll(string $fetch = 'object'): array|object|bool 
+    public function getNext(string $type = 'object'): array|object|bool 
     {
-        $result = $this->fetch('all', ($fetch === 'object') ? FETCH_NUM_OBJ : FETCH_ASSOC);
+        return $this->fetchNext($type);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function fetchAll(string $type = 'object'): array|object|bool 
+    {
+        $result = $this->fetch('all', ($type === 'object') ? FETCH_NUM_OBJ : FETCH_ASSOC);
 
         if($result === false || $result === null){
             return false;
         }
 
-        if($fetch === 'array'){
-            return (array) $result;
-        }
+        return ($type === 'array') 
+            ? (array) $result 
+            : (object) $result;
+    }
 
-        return (object) $result;
+    /**
+     * {@inheritdoc}
+     */
+    public function getAll(string $type = 'object'): array|object|bool 
+    {
+        return $this->fetchAll($type);
     }
 
     /**
@@ -586,21 +626,11 @@ final class MysqliDriver implements DatabaseInterface
         }
 
         $this->assertStatement(true);
-        $modes = match($mode){
-            FETCH_ASSOC => 'default',
-            FETCH_BOTH => 'default',
-            FETCH_OBJ => 'fetch_object', 
-            FETCH_COLUMN => 'default',
-            FETCH_COLUMN_ASSOC => 'default',
-            FETCH_NUM => 'default',
-            FETCH_NUM_OBJ => 'default',
-            FETCH_ALL => 'fetch_all',
-            default => null
-        };
+        $fetchMode = self::$fetchModes[$mode] ?? null;
 
-        if ($modes === null) {
+        if ($fetchMode === null) {
             throw new DatabaseException(
-                sprintf('Unsupported database fetch mode: %d', $mode),
+                sprintf('Unsupported database fetch mode: %d. Use FETCH_*', $mode),
                 DatabaseException::NOT_SUPPORTED
             );
         }
@@ -613,34 +643,31 @@ final class MysqliDriver implements DatabaseInterface
             return false;
         }
 
-        $mysqliMode = null;
         $method = ($type === 'next') 
             ? (($mode === FETCH_OBJ) ? 'fetch_object' : 'fetch_assoc') 
             : 'fetch_all';
 
-        if($method === 'fetch_all'){
-            $mapping = [
-                FETCH_ASSOC => MYSQLI_ASSOC,
-                FETCH_BOTH => MYSQLI_BOTH,
-                FETCH_NUM => MYSQLI_NUM
-            ];
-            $mysqliMode = $mapping[$mode] ?? MYSQLI_ASSOC;
-        }
+        $fetchMode = ($method === 'fetch_all') 
+            ? (self::$fetchModes['mysqli'][$mode] ?? MYSQLI_ASSOC)
+            : null;
 
-        $response = ($mysqliMode === null) 
-            ? $this->stmt->$method() 
-            : $this->stmt->$method($mysqliMode);
+        $response = ($fetchMode === null) 
+            ? $this->stmt->{$method}() 
+            : $this->stmt->{$method}($fetchMode);
 
         if(empty($response) || $response === false){
             return false;
         }
 
-        if($mode === FETCH_NUM_OBJ || $mode === FETCH_OBJ){
-            $json = json_encode($response);
-
-            return ($json === false) 
-                ? (object) $response 
-                : (object) json_decode($json);
+        if(($mode === FETCH_NUM_OBJ || $mode === FETCH_OBJ) && !is_object($response)){
+            try{
+                $toObject = json_encode($response, JSON_THROW_ON_ERROR);
+                return ($toObject === false) 
+                    ? (object) $response 
+                    : (object) json_decode($toObject);
+            }catch(JsonException){
+                return (object) $response;
+            }
         }
 
         if($mode === FETCH_COLUMN){
@@ -693,12 +720,12 @@ final class MysqliDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function getInt(): array|bool
+    public function getInt(): array
     {
         $integers = $this->fetch('all', FETCH_NUM);
 
-        if($integers === false || $integers === null){
-            return false;
+        if(!$integers){
+            return [];
         }
 
         return $integers;
@@ -829,27 +856,25 @@ final class MysqliDriver implements DatabaseInterface
     /**
      * Parses the query parameters and binds them to the statement.
      * 
-     * @param array<int,array> $values An array of parameter values.
-     * @param string $type The value type.
-     * 
-     * @return void 
+     * @return bool 
      */
-    private function parseParams(array $values, string $type = 'values'): void 
+    private function parseParams(): bool 
     {
-        if($values === []){
-            return;
+        if($this->bindValues === []){
+            return false;
         }
 
+        $type = $this->isParams ? 'params' : 'values';
         $types = '';
         $params = [];
         
         if($type === 'values'){
-            foreach ($values as $value) {
+            foreach ($this->bindValues as $value) {
                 $types .= self::getType($value);
                 $params[] = $value;
             }
         }else{
-            foreach ($values as &$value) {
+            foreach ($this->bindValues as &$value) {
                 $types .= self::getType($value);
                 $params[] = $value;
             }
@@ -857,6 +882,7 @@ final class MysqliDriver implements DatabaseInterface
 
         array_unshift($params, $types);
         $this->stmt->bind_param(...$params);
+        return true;
     }
 
     /**

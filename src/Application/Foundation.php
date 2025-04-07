@@ -21,14 +21,14 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.5.2';
+    public const VERSION = '3.5.3';
 
     /**
      * Framework version name.
      * 
      * @var string VERSION_NAME
      */
-    public const VERSION_NAME = 'Obiniru';
+    public const VERSION_NAME = 'Xtra';
 
     /**
      * Minimum required php version.
@@ -330,16 +330,28 @@ final class Foundation
 
     /**
      * Check if the request URL indicates an API prefix endpoint.
-     * This method checks if the URL path starts with '/api' or 'public/api'.
      * 
-     * @return bool Returns true if the URL indicates an API endpoint, false otherwise.
+     * This method checks if the request URL starts with API prefix (e.g, `/api` or `public/api`).
+     * 
+     * @param bool $includeAjax Whether to also consider AJAX request as an API request.
+     * 
+     * @return bool Returns true if the request matches the API prefix or (if enabled) is an AJAX request, , false otherwise.
      */
-    public static function isApiPrefix(): bool
+    public static function isApiPrefix(bool $includeAjax = false): bool
     {
+        static $prefix = null;
         $segments = self::getSegments();
-        return ($segments === []) 
-            ? false 
-            : $segments[0] === (defined('IS_UP') ? env('app.api.prefix', 'api') : 'api');
+
+        if ($prefix === null) {
+            $prefix ??= defined('IS_UP') ? env('app.api.prefix', 'api') : 'api';
+        }
+
+        if ($segments !== [] && $segments[0] === $prefix) {
+            return true;
+        }
+
+        return $includeAjax && isset($_SERVER['HTTP_X_REQUESTED_WITH']) 
+            && strcasecmp($_SERVER['HTTP_X_REQUESTED_WITH'], 'XMLHttpRequest') === 0;
     }
 
     /**
@@ -349,16 +361,17 @@ final class Foundation
      */
     public static function isCommand(): bool
     {
-        if(isset($_SERVER['REMOTE_ADDR']) || isset($_SERVER['HTTP_USER_AGENT'])){
-            return false;
+        static $cli = null;
+
+        if ($cli !== null) {
+            return $cli;
         }
 
-        return (
-            php_sapi_name() === 'cli' || 
-            isset($_SERVER['argv']) || 
-            defined('STDIN') || 
-            array_key_exists('SHELL', $_ENV)
-        );
+        if (!empty($_SERVER['REMOTE_ADDR']) || !empty($_SERVER['HTTP_USER_AGENT'])) {
+            return $cli = false;
+        }
+
+        return $cli = (PHP_SAPI === 'cli' || isset($_SERVER['argv']) || defined('STDIN') || !empty($_ENV['SHELL']));
     }
 
     /**
@@ -495,7 +508,7 @@ final class Foundation
         if($view === null){
             $view = match (true) {
                 self::isCommand() => 'cli.php',
-                self::isApiPrefix() => (defined('IS_UP') ? env('app.api.prefix', 'api') . '.php' : 'api.php'),
+                self::isApiPrefix(true) => (defined('IS_UP') ? env('app.api.prefix', 'api') . '.php' : 'api.php'),
                 default => ($stack instanceof ErrorHandler ? 'errors.php' : 'info.php')
             };
         }

@@ -67,7 +67,7 @@ final class Schema
      */
     protected static function db(): DatabaseInterface
     {
-        if (self::$db === null) {
+        if (!self::$db instanceof DatabaseInterface) {
             self::$db = (new Connection())->database();
         }
 
@@ -81,7 +81,7 @@ final class Schema
      */
     protected static function cli(): Terminal
     {
-        if (self::$cli === null) {
+        if (!self::$cli instanceof Terminal) {
             self::$cli = new Terminal();
         }
 

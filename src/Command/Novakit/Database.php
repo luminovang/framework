@@ -932,7 +932,7 @@ class Database extends BaseConsole
         }else{
             $timestamp = date('Y-m-d-H:i:s'); 
             $backupName = str_replace(':', '', $timestamp) . $className . '.php';
-            $version = $entry === [] ? 1 : $entry['latestVersion'] + 1;
+            $version = ($entry === []) ? 1 : ($entry['latestVersion'] + 1);
 
             $lock[$className]['namespace'] = $namespace;
             $lock[$className]['lastVersion'] = 0;
@@ -1057,7 +1057,9 @@ class Database extends BaseConsole
         }
 
         $metadata = $entry['metadata'];
-        $last = ($version === null) ? $metadata[$entry['latestVersion']]??null : $metadata[$version]??null;
+        $last = ($version === null) 
+            ? ($metadata[$entry['latestVersion']]??null) 
+            : $metadata[$version]??null;
 
         if($last === null){
             return false;

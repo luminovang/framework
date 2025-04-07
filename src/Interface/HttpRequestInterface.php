@@ -389,7 +389,7 @@ interface HttpRequestInterface
      * 
      * @return bool Return true if request is ajax request, false otherwise.
      */
-    public function isAJAX(): bool;
+    public function isAjax(): bool;
 
     /**
      * Check if the request URL indicates an API endpoint.

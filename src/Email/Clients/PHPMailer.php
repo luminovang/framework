@@ -11,6 +11,7 @@
 namespace Luminova\Email\Clients;
 
 use \Luminova\Interface\MailerInterface;
+use \Luminova\Email\Mailer;
 use \PHPMailer\PHPMailer\PHPMailer as MailerClient;
 
 class PHPMailer implements MailerInterface
@@ -28,6 +29,15 @@ class PHPMailer implements MailerInterface
     public function __construct(bool $exceptions = false)
     {
         $this->mailer = new MailerClient($exceptions);
+        $this->mailer->Hostname = APP_HOSTNAME;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getMailer(): MailerClient
+    {
+        return $this->mailer;
     }
 
     /**
@@ -44,6 +54,63 @@ class PHPMailer implements MailerInterface
     }
 
     /**
+     * Magic method to dynamically set a property in the `$mailer` instance.
+     *
+     * This allows assigning arbitrary properties that are not explicitly declared in the class.
+     *
+     * @param string $name  The name of the property being set.
+     * @param mixed  $value The value to assign to the property.
+     * 
+     * @return void
+     */
+    public function __set(string $name, mixed $value): void 
+    {
+        $this->mailer->{$name} = $value;
+    }
+
+    /**
+     * Magic method to retrieve a dynamically set property from the `$mailer` instance.
+     *
+     * If the property is not set, it returns `null` instead of triggering an error.
+     *
+     * @param string $name The name of the property being accessed.
+     * 
+     * @return mixed|null The value of the property if it exists, otherwise `null`.
+     */
+    public function __get(string $name): mixed 
+    {
+        return $this->mailer->{$name} ?? null;
+    }
+
+    /**
+     * Magic method to check if a dynamic property exists in the `$mailer` instance.
+     *
+     * This is useful for `isset()` checks to determine whether a property has been set.
+     *
+     * @param string $name The name of the property to check.
+     * 
+     * @return bool `true` if the property exists, otherwise `false`.
+     */
+    public function __isset(string $name): bool 
+    {
+        return isset($this->mailer->{$name});
+    }
+
+    /**
+     * Magic method to unset a dynamically set property in the `$mailer` instance.
+     *
+     * This removes the property from the instance, making it unavailable for future access.
+     *
+     * @param string $name The name of the property to unset.
+     * 
+     * @return void
+     */
+    public function __unset(string $name): void 
+    {
+        unset($this->mailer->{$name});
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function initialize(): void {}
@@ -54,6 +121,42 @@ class PHPMailer implements MailerInterface
     public function setFrom(string $address, string $name = '', bool $auto = true): bool
     {
         return $this->mailer->setFrom($address, $name, $auto);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function setNotificationTo(string $address): bool
+    {
+        $x = $this->addHeader('Return-Receipt-To', $address);
+        $y = $this->addHeader('Disposition-Notification-To', $address);
+    
+        return $x || $y;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function addHeader(string $key, ?string $value = null): bool 
+    {
+        return $this->mailer->addCustomHeader($key, $value);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function addAddresses(string|array $address): bool
+    {
+        $count = 0;
+        $address = is_string($address) ? explode(',', $address) : $address;
+
+        foreach ($address as $name => $email) {
+            [$name, $address] = Mailer::getAddress(trim($email));
+            $this->mailer->addAddress($address, $name);
+            $count++;
+        }
+
+        return $count > 0;
     }
 
     /**

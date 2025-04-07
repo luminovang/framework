@@ -99,6 +99,22 @@ final class PdoDriver implements DatabaseInterface
     private static float|int $startTime = 0;
 
     /**
+     * Result fetch modes.
+     * 
+     * @var array<int,string> $fetchModes
+     */
+    private static array $fetchModes = [
+        FETCH_ASSOC     => PDO::FETCH_ASSOC,
+        FETCH_BOTH      => PDO::FETCH_BOTH,
+        FETCH_OBJ       => PDO::FETCH_OBJ, 
+        FETCH_COLUMN    => PDO::FETCH_COLUMN,
+        FETCH_COLUMN_ASSOC => PDO::FETCH_KEY_PAIR,
+        FETCH_NUM       => PDO::FETCH_NUM,
+        FETCH_ALL       => PDO::FETCH_ASSOC,
+        FETCH_NUM_OBJ   => PDO::FETCH_OBJ
+    ];
+
+    /**
      * {@inheritdoc}
      */
     public function __construct(CoreDatabase $config) 
@@ -277,6 +293,7 @@ final class PdoDriver implements DatabaseInterface
     {
         $this->assertConnection();
         $this->profiling(true);
+        $this->executed = false;
         $this->stmt = $this->connection->prepare($query);
         $this->profiling(false);
 
@@ -451,6 +468,14 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
+    public function value(string $param, mixed $value, ?int $type = null): self 
+    {
+        return $this->bind($param, $value, $type);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function param(string $param, mixed &$value, ?int $type = null): self 
     {
         $this->assertStatement();
@@ -465,11 +490,14 @@ final class PdoDriver implements DatabaseInterface
      */
     public function execute(?array $params = null): bool 
     {
-        $this->executed = false;
+        if($this->executed){
+            return false;
+        }
+
         $this->assertStatement();
 
         try {
-           $this->executed = $this->stmt->execute(($this->parseParams ? null : $params));
+           $this->executed = $this->stmt->execute($this->parseParams ? null : $params);
            $this->parseParams = false;
         } catch (Throwable $e) {
             throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
@@ -489,16 +517,16 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function getResult(int $mode = RETURN_ALL, string $fetch = 'object'): mixed 
+    public function getResult(int $mode = RETURN_ALL, string $type = 'object'): mixed 
     {
         return match ($mode) {
-            RETURN_NEXT => $this->getNext($fetch),
+            RETURN_NEXT => $this->fetchNext($type),
             RETURN_2D_NUM => $this->getInt(),
             RETURN_INT => $this->getCount(),
             RETURN_ID => $this->getLastInsertId(),
             RETURN_COUNT => $this->rowCount(),
             RETURN_COLUMN => $this->getColumns(),
-            RETURN_ALL => $this->getAll($fetch),
+            RETURN_ALL => $this->fetchAll($type),
             RETURN_STMT, RETURN_RESULT => $this->getStatement(),
             default => false
         };
@@ -507,15 +535,15 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function getNext(string $fetch = 'object'): array|object|bool 
+    public function fetchNext(string $type = 'object'): array|object|bool 
     {
-        $result = $this->fetch('next', ($fetch === 'array') ? FETCH_ASSOC : FETCH_OBJ);
+        $result = $this->fetch('next', ($type === 'array') ? FETCH_ASSOC : FETCH_OBJ);
 
-        if($result === false || $result === null){
+        if(!$result){
             return false;
         }
 
-        return ($fetch === 'array') 
+        return ($type === 'array') 
             ? (array) $result 
             : (object) $result;
     }
@@ -523,17 +551,33 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function getAll(string $fetch = 'object'): array|object|bool 
+    public function getNext(string $type = 'object'): array|object|bool 
     {
-        $result = $this->fetch('all', ($fetch === 'array') ? FETCH_ASSOC : FETCH_OBJ);
+        return $this->fetchNext($type);
+    }
 
-        if($result === false || $result === null){
+    /**
+     * {@inheritdoc}
+     */
+    public function fetchAll(string $type = 'object'): array|object|bool 
+    {
+        $result = $this->fetch('all', ($type === 'array') ? FETCH_ASSOC : FETCH_OBJ);
+
+        if(!$result){
             return false;
         }
 
-        return ($fetch === 'array') 
+        return ($type === 'array') 
             ? (array) $result 
             : (object) $result;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getAll(string $type = 'object'): array|object|bool 
+    {
+        return $this->fetchAll($type);
     }
 
     /**
@@ -547,9 +591,9 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function getInt(): array|bool
+    public function getInt(): array
     {
-        return $this->fetch('all', FETCH_NUM)?:false;
+        return $this->fetch('all', FETCH_NUM)?:[];
     }
 
     /**
@@ -582,21 +626,18 @@ final class PdoDriver implements DatabaseInterface
     public function fetch(string $type = 'all', int $mode = FETCH_OBJ): mixed  
     {
         $this->assertStatement();
-        $modes = [
-            FETCH_ASSOC => PDO::FETCH_ASSOC,
-            FETCH_BOTH => PDO::FETCH_BOTH,
-            FETCH_OBJ => PDO::FETCH_OBJ, 
-            FETCH_COLUMN => PDO::FETCH_COLUMN,
-            FETCH_COLUMN_ASSOC => PDO::FETCH_KEY_PAIR,
-            FETCH_NUM => PDO::FETCH_NUM,
-            FETCH_ALL => PDO::FETCH_ASSOC,
-            FETCH_NUM_OBJ => PDO::FETCH_OBJ
-        ];
+        $fetchMode = self::$fetchModes[$mode] ?? PDO::FETCH_OBJ;
 
-        $pdoMode = $modes[$mode] ?? PDO::FETCH_OBJ;
+        if ($fetchMode === null) {
+            throw new DatabaseException(
+                sprintf('Unsupported database fetch mode: %d. Use FETCH_*', $mode),
+                DatabaseException::NOT_SUPPORTED
+            );
+        }
+
         $method = ($type === 'all') ? 'fetchAll' : 'fetch';
 
-        return $this->stmt->$method($pdoMode);
+        return $this->stmt->{$method}($fetchMode);
     }
 
     /**
