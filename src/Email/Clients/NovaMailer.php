@@ -529,7 +529,8 @@ class NovaMailer implements MailerInterface
             );
         }
 
-        $this->setMaxExecution($conn, $this->Timeout);
+        set_max_execution_time($this->Timeout);
+        stream_set_timeout($conn, $this->Timeout, 0);
         return $conn;
     }
 
@@ -824,31 +825,6 @@ class NovaMailer implements MailerInterface
     }
 
     /**
-     * Set the maximum execution and stream timeout on non-Windows platforms and `set_time_limit` is not disabled.
-     *
-     * THis method ensures the SMTP has enough time to complete long-running operations.
-     * By increasing the maximum execution time and sets the stream connection timeout.
-     * 
-     *
-     * @param resource $conn The connection stream resource.
-     * @param int $timeout The timeout duration in seconds.
-     */
-    protected function setMaxExecution($conn, int $timeout): void 
-    {
-        if (stripos(PHP_OS, 'WIN') === 0) {
-            return;
-        }
-
-        $maxExecution = (int) ini_get('max_execution_time');
-
-        if ($maxExecution !== 0 && $timeout > $maxExecution && strpos(ini_get('disable_functions'), 'set_time_limit') === false) {
-            set_time_limit($timeout);
-        }
-
-        stream_set_timeout($conn, $timeout, 0);
-    }
-
-    /**
      * Generate a unique MIME boundary ID.
      *
      * Used to separate parts of a multipart email. This boundary is a URL-safe base64-encoded
@@ -873,7 +849,7 @@ class NovaMailer implements MailerInterface
     */
     protected function getStatus(string $name = ''): int 
     {
-        $this->line =$this->getLines($name);
+        $this->line = $this->getLines($name);
         return (int) substr($this->line, 0, 3);
     }
 

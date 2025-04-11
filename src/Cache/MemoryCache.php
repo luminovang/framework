@@ -37,14 +37,14 @@ final class MemoryCache extends BaseCache
      * Memcached connection instances.
      * 
      * @var array<string,Memcached> $instances
-    */
+     */
     private static array $instances = [];
 
     /**
      * Initializes memcache extension class instance with an optional storage name and an optional persistent ID.
      * 
      * @param string|null $storage The cache storage name (default: null). If null, you must call `create` method later.
-     * @param string|null $persistent_id Optional unique ID for persistent connections (default: null).
+     * @param string|null $persistentId Optional unique ID for persistent connections (default: null).
      *                      - If null is specified, will used the default persistent id from environment variables.
      *                      - If not set in environment variables `default` will be used instead,
      * 
@@ -52,11 +52,11 @@ final class MemoryCache extends BaseCache
      */
     public function __construct(
         ?string $storage = null, 
-        private ?string $persistent_id = null
+        private ?string $persistentId = null
     )
     {
         parent::__construct();
-        $this->persistent_id ??= env('memcached.persistent.id', 'default');
+        $this->persistentId ??= env('memcached.persistent.id', 'default');
         //$this->config = ($this->config === []) ? (configs('Storage', [])['memcache'] ?? []) : $this->config;
 
         if(!$this->connect()){
@@ -72,7 +72,7 @@ final class MemoryCache extends BaseCache
      * Retrieves or creates a singleton instance of the memcache extension class.
      * 
      * @param string|null $storage The cache storage name (default: null). If null, you must call `create` method later.
-     * @param string|null $persistent_id Optional unique ID for persistent connections (default: null).
+     * @param string|null $persistentId Optional unique ID for persistent connections (default: null).
      *                      - If null is specified, will used the default persistent id from environment variables.
      *                      - If not set in environment variables `default` will be used instead,
      * 
@@ -81,11 +81,11 @@ final class MemoryCache extends BaseCache
      */
     public static function getInstance(
         ?string $storage = null, 
-        ?string $persistent_id = null
+        ?string $persistentId = null
     ): static 
     {
         if (self::$instance === null) {
-            self::$instance = new static($storage, $persistent_id);
+            self::$instance = new static($storage, $persistentId);
         }
 
         return self::$instance;
@@ -98,7 +98,7 @@ final class MemoryCache extends BaseCache
      */
     public function getConn(): ?Memcached
     {
-        return self::$instances[$this->persistent_id] ?? null;
+        return self::$instances[$this->persistentId] ?? null;
     }
 
     /**
@@ -108,7 +108,7 @@ final class MemoryCache extends BaseCache
      */
     public function getId(): ?string
     {
-        return $this->persistent_id;
+        return $this->persistentId;
     }
 
     /**
@@ -119,11 +119,14 @@ final class MemoryCache extends BaseCache
      * @return self Returns the memory cache instance.
      * @throws CacheException Throws if unable to reconnect after changing persistent id.
      */
-    public function setId(string $persistent_id): self 
+    public function setId(string $persistentId): self 
     {
-        $this->persistent_id = $persistent_id;
+        $this->persistentId = $persistentId;
+        
         if(!$this->connect()){
-            throw new CacheException(sprintf('Could not connect to memcache server using persistent id: %s', $this->persistent_id));
+            throw new CacheException(
+                sprintf('Could not connect to memcache server using persistent id: %s', $this->persistentId)
+            );
         }
         
         return $this;
@@ -189,7 +192,7 @@ final class MemoryCache extends BaseCache
         $result = true;
 
         if($conn === null){
-            $conn = new Memcached($this->persistent_id);
+            $conn = new Memcached($this->persistentId);
             $conn->setOption(Memcached::OPT_LIBKETAMA_COMPATIBLE, true);
             
             if(($prefix = env('memcached.key.prefix', null)) !== null){
@@ -205,8 +208,31 @@ final class MemoryCache extends BaseCache
             ) : $conn->addServers($this->config);
         }
     
-        self::$instances[$this->persistent_id] = $conn;
+        self::$instances[$this->persistentId] = $conn;
         return $result;
+    }
+
+    /**
+     * Pings the Memcached server to check its availability.
+     *
+     * This method attempts to set a key-value pair with a short expiration time and then retrieves it.
+     * If the server responds within a reasonable time, it is considered available and the method returns 'PONG'.
+     * If the server does not respond or an exception is thrown, the method returns null.
+     *
+     * @return string|null Returns 'PONG' if the server is available, otherwise null.
+     */
+    public function ping(): ?string
+    {
+        if(!$this->getConn()){
+            return null;
+        }
+
+        try {
+            $this->getConn()->set('__ping__', 'PONG', 10);
+            return $this->getConn()->get('__ping__');
+        } catch (Exception) {
+            return null;
+        }
     }
 
     /**
@@ -237,7 +263,7 @@ final class MemoryCache extends BaseCache
         }
 
         if($this->getConn()->resetServerList() && $this->getConn()->quit()){
-            self::$instances[$this->persistent_id] = null;
+            self::$instances[$this->persistentId] = null;
             return true;
         }
 
@@ -258,7 +284,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setStorage(string $storage): self
     {
         $this->storage = self::hashStorage($storage);
@@ -268,7 +294,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function execute(
         array $keys, 
         bool $withCas = false, 
@@ -293,7 +319,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function getItem(string $key, bool $onlyContent = true): mixed
     {
         $this->assertStorageAndKey($key);
@@ -325,7 +351,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setItem(
         string $key, 
         mixed $content, 
@@ -364,7 +390,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function hasItem(string $key): bool
     {
         if (!$key || !$this->read($key)) {
@@ -376,7 +402,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function isLocked(string $key): bool 
     {
         if (!$this->hasItem($key)) {
@@ -388,7 +414,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function hasExpired(string $key): bool 
     {
         if (!$this->hasItem($key)) {
@@ -400,7 +426,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function deleteItem(string $key, bool $includeLocked = false): bool 
     {
         if(!$key || !$this->getConn()){
@@ -421,7 +447,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function deleteItems(iterable $keys, bool $includeLocked = false): bool 
     {
         $deletedCount = 0;
@@ -436,7 +462,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function flush(): bool
     {
         if (!$this->getConn()) {
@@ -453,7 +479,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function clear(): bool
     {
         if (!$this->storage || !$this->getConn()) {
@@ -478,7 +504,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function delete(string $storage, array $keys): bool
     {
         $storage = self::hashStorage($storage);
@@ -487,7 +513,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected function deleteIfExpired(): void 
     {
         if(!$this->autoDeleteExpired || !$this->storage || !$this->getConn()){
@@ -548,7 +574,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected function read(?string $key = null): bool
     {
         if(!$this->storage || !$this->getConn()){
@@ -589,7 +615,7 @@ final class MemoryCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected function commit(): bool
     {
         if(!$this->storage || !$this->items || !$this->getConn()){

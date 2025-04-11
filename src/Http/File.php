@@ -54,7 +54,7 @@ class File implements LazyInterface
     protected ?string $message = null;
 
     /**
-     * Mime from temp file.
+     * The extracted Mime from file path or binary data.
      *
      * @var string|null $mime
      */
@@ -87,7 +87,7 @@ class File implements LazyInterface
      *
      * @param int $index The index of the file in the uploaded file array, typically representing the position in a multi-file upload scenario.
      * @param string|null $name The original name of the uploaded file (e.g., `document.pdf`).
-     * @param string|null $type The MIME type of the file (e.g., `image/jpeg`, `application/pdf`).
+     * @param string|null $type The MIME type of the file, detected during upload (e.g., `image/jpeg`, `application/pdf`).
      * @param int $size The size of the uploaded file in bytes.
      * @param string|null $extension The file extension (e.g., `jpg`, `png`, `pdf`).
      * @param string|null $temp The temporary file path where the uploaded file is stored on the server.
@@ -164,20 +164,45 @@ class File implements LazyInterface
     }
 
     /**
+     * Detect and cache the MIME type from a temporary file or raw binary content.
+     * 
+     * Useful for cases where the file is uploaded as (`BLOB`), typically, 
+     * the MIME type may default to 'application/octet-stream'.
+     *
+     * This method will:
+     * 
+     * 1. If a temp file path ($file->temp) is set, use it for detection.
+     * 2. Otherwise, fall back to raw binary data ($file->content).
+     * 3. Cache the result in $file->mime and return it.
+     *
+     * @return string|null return the detected MIME type (e.g., "image/png"), or null if no source is available or detection fails.
+     * @since 3.5.4
+     */
+    public function getMimeFromFile(): ?string
+    {
+        if($this->mime !== null || ($this->temp === null && $this->content === null)){
+            return $this->mime;
+        }
+
+        return $this->mime = get_mime($this->temp ?? $this->content ?? '') ?: null;
+    }
+
+    /**
      * Retrieves the MIME type directly from the temporary file path.
+     * 
      * Useful for cases where the file is uploaded as a large object (BLOB).
      * Typically, the MIME type may default to 'application/octet-stream'.
      *
      * @return string|null Returns the MIME type of the file, or null if no temporary file exists.
+     * @deprecated Method getMimeFromTemp() is deprecated. Use getMimeFromFile() instead.
      */
     public function getMimeFromTemp(): ?string
     {
-        if($this->temp === null || $this->mime !== null){
-            return $this->mime;
-        }
+        \Luminova\Errors\ErrorHandler::depreciate(
+            'Method getMimeFromTemp() is deprecated. Use getMimeFromFile() instead.'
+        );
 
-        $mime = get_mime($this->temp);
-        return $this->mime = ($mime === false) ? null : $mime;
+        return $this->getMimeFromFile();
     }
 
     /**
@@ -408,13 +433,21 @@ class File implements LazyInterface
 
         if (isset($this->config->maxSize) && $this->size > $this->config->maxSize) {
             $this->error = UPLOAD_ERR_INI_SIZE;
-            $this->message = 'File size exceeds maximum limit. Maximum allowed size: ' . Maths::toUnit($this->config->maxSize, true) . '.';
+            $this->message = sprintf(
+                'File size: "%s" exceeds maximum limit. Maximum allowed size: %s',
+                Maths::toUnit($this->size, true),
+                Maths::toUnit($this->config->maxSize, true)
+            );
             return false;
         }
 
         if (isset($this->config->minSize) && $this->size < $this->config->minSize) {
             $this->error = self::UPLOAD_ERR_MIN_SIZE;
-            $this->message = 'File size is too small. Minimum allowed size: ' . Maths::toUnit($this->config->minSize, true) . '.';
+            $this->message = sprintf(
+                'File size: "%s" is too small. Minimum allowed size: %s.', 
+                Maths::toUnit($this->size, true),
+                Maths::toUnit($this->config->minSize, true)
+            );
             return false;
         }
 
@@ -427,7 +460,11 @@ class File implements LazyInterface
             
             if ($allowed !== [] && !in_array($this->extension, $allowed)) {
                 $this->error = UPLOAD_ERR_EXTENSION;
-                $this->message = 'File type is not supported. Allowed file types: "[' . ($isArray ? implode('|', $this->config->allowedTypes) : $this->config->allowedTypes) . ']".';
+                $this->message = sprintf(
+                    'File type: "%s" is not supported. Allowed file types: [%s])', 
+                    $this->extension ?? '',
+                    ($isArray ? implode('|', $this->config->allowedTypes) : $this->config->allowedTypes)
+                );
                 return false;
             }
         }
@@ -435,5 +472,5 @@ class File implements LazyInterface
         $this->error = UPLOAD_ERR_OK;
         $this->message = 'File upload is valid.';
         return true;
-    }  
+    }
 }

@@ -118,7 +118,7 @@ final class FileCache extends BaseCache
      * Gets the cache storage sub folder.
      * 
      * @return string Return the cache storage sub folder.
-    */
+     */
     public function getFolder(): ?string 
     {
         return $this->subfolder;
@@ -126,7 +126,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setFolder(string $subfolder): self 
     {
         if (str_starts_with($subfolder, self::$root)) {
@@ -144,7 +144,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setStorage(string $storage): self
     {
         $this->storage = static::hashStorage($storage);
@@ -170,7 +170,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function execute(
         array $keys, 
         bool $withCas = false, 
@@ -199,9 +199,9 @@ final class FileCache extends BaseCache
         return true;
     }
 
-   /**
+    /**
      * {@inheritdoc}
-    */
+     */
     public function getItem(string $key, bool $onlyContent = true): mixed
     {
         $this->assertStorageAndKey($key);
@@ -229,7 +229,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function setItem(
         string $key, 
         mixed $content, 
@@ -266,7 +266,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function hasItem(string $key): bool 
     {
         if (!$this->storage || !$key) {
@@ -286,7 +286,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function isLocked(string $key): bool 
     {
         if (!$this->read()) {
@@ -298,7 +298,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function hasExpired(string $key): bool 
     {
         if (!$this->hasItem($key)) {
@@ -310,7 +310,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function deleteItem(string $key, bool $includeLocked = false): bool 
     {
         if(!$key){
@@ -327,7 +327,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function deleteItems(iterable $keys, bool $includeLocked = false): bool 
     {
         if(!$this->storage){
@@ -351,7 +351,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function flush(): bool
     {
         if(FileManager::remove($this->getRoot())){
@@ -364,7 +364,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function clear(): bool 
     {
         if(!$this->storage){
@@ -383,7 +383,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     public function delete(string $storage, array $keys): bool
     {
         if($storage === '' || $keys === []){
@@ -434,7 +434,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected function deleteIfExpired(): void 
     {
         if(!$this->autoDeleteExpired || !$this->storage){
@@ -456,7 +456,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected function read(?string $key = null): bool 
     {
         if(!$this->storage){
@@ -500,7 +500,7 @@ final class FileCache extends BaseCache
 
     /**
      * {@inheritdoc}
-    */
+     */
     protected function commit(): bool 
      {
         try{

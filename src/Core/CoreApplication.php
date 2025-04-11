@@ -46,7 +46,15 @@ abstract class CoreApplication implements LazyInterface
     private static int $lifecycle = 0;
 
     /**
+     * Is application terminated.
+     * 
+     * @var array<string,mixed> $termination
+     */
+    public array $termination = ['isTerminated' => false, 'info' => []];
+
+    /**
      * CoreApplication constructor.
+     * 
      * Initializes the router, sets the controller namespace, and sets up the template engine.
      * 
      * > Note: 
@@ -62,6 +70,13 @@ abstract class CoreApplication implements LazyInterface
             return;
         }
 
+        $this->onPreCreate();
+
+        if($this->termination['isTerminated']){
+            $this->__doTermination();
+            return;
+        }
+        
         $this->onInitialized();
         $this->router ??= new Router($this);
         $this->router->addNamespace('\\App\\Controllers\\')
@@ -85,6 +100,58 @@ abstract class CoreApplication implements LazyInterface
     }
 
     /**
+     * Trigger application early termination.
+     *
+     * This method allows you to terminate the application execution early.
+     *
+     * @param bool $terminate (optional) If set to true, the application will be terminated.
+     *                        If set to false (default), the application will continue to run.
+     * @param array $info Additional termination information to be included in `onterminated` event hook.
+     *
+     * @return void
+     *
+     * @example - Terminates application:
+     * 
+     * ```php
+     * class Application extends CoreApplication
+     * {
+     *      protected function onPreCreate(): void 
+     *      {
+     *          if($instance->ofSomethingIsTrue()){
+     *              $this->terminate();
+     *          }
+     *      }
+     * 
+     *      protected function onTerminate(array $info): bool 
+     *      {
+     *          if(isset($info['foo']) && $info['foo']['bar'] === true){
+     *              // Allow termination
+     *              return true;
+     *          }
+     * 
+     *          // Deny Termination
+     *          return false;
+     *      }
+     * 
+     *      protected function onTerminated(array $info): void 
+     *      {
+     *          Logger::debug('Application was terminated', $info);
+     *      }
+     * }
+     * ```
+     * > **Note:** The `terminate` method should be call before object creation.
+     */
+    protected final function terminate(array $info = []): void 
+    {
+        $info += ['uri' =>  Router::getUriSegments()];
+
+        $this->termination = [
+            'isTerminated' => $this->onTerminate($info),
+            'info' => $info
+        ];
+    }
+
+    /**
      * Trigger an application event or lifecycle hook.
      * 
      * @param string $event The event or hook method name to trigger.
@@ -98,8 +165,31 @@ abstract class CoreApplication implements LazyInterface
     }
 
     /**
-     * Lifecycle onCreate hook: Triggered once on object creation.
-     * Override in subclasses for custom initialization.
+     * Lifecycle onPreCreate hook: Triggers once before application object creation.
+     * 
+     * This allows you to override or create a custom initialization logic before routing system is initialized.
+     * 
+     * @return void
+     * @example - Example using Luminova Rate Limiter:
+     * 
+     * ```php
+     * use Luminova\Security\RateLimiter;
+     * protected function onPreCreate(): void 
+     * {
+     *      $rate = new RateLimiter();
+     *      if(!$rate->check('key')->isAllowed()){
+     *          $rate->respond();
+     *          $this->terminate(); // Optionally terminate application.
+     *      }
+     * }
+     * ```
+     */
+    protected function onPreCreate(): void {}
+
+    /**
+     * Lifecycle onCreate hook: Triggers once before application object creation.
+     * 
+     * This allows you to override properties and initialize other function requires in application.
      * 
      * @return void
      */
@@ -110,12 +200,18 @@ abstract class CoreApplication implements LazyInterface
      * Override in subclasses for custom cleanup.
      * 
      * @return void
-     * > Optionally Add `gc_collect_cycles()` to your onDestroy hook to forces collection of any existing garbage cycles.
+     * @example - Example:
+     * 
+     * Optionally Add `gc_collect_cycles()` to your onDestroy hook to forces collection of any existing garbage cycles.
+     * 
+     * ```
+     * protected function onDestroy(): void 
+     * {
+     *      gc_collect_cycles();
+     * }
+     * ```
      */
-    protected function onDestroy(): void 
-    {
-        gc_collect_cycles();
-    }
+    protected function onDestroy(): void {}
 
     /**
      * Lifecycle onStart hook: Triggered when the application starts handling a request.
@@ -159,6 +255,38 @@ abstract class CoreApplication implements LazyInterface
      * @return void 
      */
     protected function onViewPresent(string $uri): void {}
+   
+    /**
+     * Called before the application is allowed to terminate.
+     *
+     * This method is invoked internally after `terminate()` is called. It determines
+     * whether the application termination should proceed or be canceled.
+     * 
+     * You can override this method to inspect the `$info` payload and return
+     * `true` to allow termination or `false` to prevent it. If termination is allowed,
+     * the `onTerminated()` method will be triggered.
+     *
+     * @param array $info Additional termination context data passed from `terminate()`.
+     *
+     * @return bool Return `true` to allow termination or `false` to cancel it.
+     */
+    protected function onTerminate(array $info): bool 
+    {
+       return true;
+    }
+
+    /**
+     * Triggered after the application has been terminated.
+     *
+     * This method is called only if `onTerminate()` returns `true`, indicating that 
+     * the application is allowed to terminate. Use this hook to perform any final 
+     * cleanup, logging, or notification logic after termination.
+     *
+     * @param array $info Contextual information related to the termination request.
+     *
+     * @return void
+     */
+    protected function onTerminated(array $info): void {}
 
     /**
      * Triggered after a command controller is called.
@@ -224,5 +352,25 @@ abstract class CoreApplication implements LazyInterface
         return ($value === self::$KEY_NOT_FOUND) 
             ? ($this->{$key} ?? static::${$key} ?? null)
             : $value;
+    }
+
+     /**
+     * Terminates the application if it is marked as terminated.
+     *
+     * This function checks if the application instance is marked as terminated. If it is, it triggers the 'onTerminated' 
+     * event with the context (either 'CLI' or 'HTTP'), the request method, and the URI segments. Finally, it exits the script.
+     *
+     * @return void
+     *
+     * @throws RouterException If the application instance is not provided.
+     */
+    private function __doTermination(): void 
+    {
+        if(!$this->termination['isTerminated']){
+            return;
+        }
+
+        $this->onTerminated($this->termination['info']);
+        exit(0);
     }
 }

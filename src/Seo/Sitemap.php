@@ -15,6 +15,7 @@ use \Luminova\Interface\LazyInterface;
 use \Luminova\Utils\LazyObject;
 use \Luminova\Core\CoreApplication;
 use \Luminova\Command\Terminal;
+use \Luminova\Command\Utils\Color;
 use \Luminova\Http\Network;
 use \Luminova\Http\Client\Curl;
 use \Luminova\Utils\Async;
@@ -112,7 +113,6 @@ final class Sitemap
         string $basename = 'sitemap.xml'
     ): bool  
     {
-        set_time_limit(300);
         $totalMemory = ini_get('memory_limit');
 
         if (!is_command()) {
@@ -144,6 +144,8 @@ final class Sitemap
         http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">' . PHP_EOL;
 
         self::$config ??= new SitemapConfig();
+        set_max_execution_time(self::$config->maxExecutionTime);
+
         $url = ($url === null) ? self::startUrl() : self::toUrl($url);
        
         if($url === '' || $url === '/'){
@@ -179,9 +181,9 @@ final class Sitemap
             self::_print('');
             self::_print('header');
             self::_print(Text::block('Your sitemap was completed successfully', Text::CENTER, 1, 'white', 'green'));
-            self::_print(Text::padding('Extracted:', 20, Text::LEFT) . self::_color('[' .self::$counts  . ']', 'green'));
-            self::_print(Text::padding('Skipped:', 20, Text::LEFT) . self::_color('[' .self::$skipped  . ']', 'yellow'));
-            self::_print(Text::padding('Failed:', 20, Text::LEFT) . self::_color('[' . count(self::$failed) . ']', 'red'));
+            self::_print(Text::padding('Extracted:', 20, Text::LEFT) . Color::style('[' .self::$counts  . ']', 'green'));
+            self::_print(Text::padding('Skipped:', 20, Text::LEFT) . Color::style('[' .self::$skipped  . ']', 'yellow'));
+            self::_print(Text::padding('Failed:', 20, Text::LEFT) . Color::style('[' . count(self::$failed) . ']', 'red'));
     
             gc_mem_caches();
             return true;
@@ -272,20 +274,7 @@ final class Sitemap
         
         return date('Y-m-d\TH:i:sP', $timestamp);
     }
-
-    /**
-     * Apply a color formatting to a message for CLI output.
-     *
-     * @param string $message The message to be formatted.
-     * @param string|null $color The color to apply (optional).
-     * 
-     * @return string The formatted message, or the original message if color is not applied.
-     */
-    private static function _color(string $message, ?string $color = null): string 
-    {
-        return self::$term->color($message, $color);
-    }
-
+    
     /**
      * Print a message to the CLI with optional color formatting.
      *
@@ -372,7 +361,7 @@ final class Sitemap
             return false;
         }
 
-        return !self::matchesIgnore($href, self::$config->ignoreUrls);
+        return !self::matchesIgnore($href, self::$config->ignoreUrls, true);
     }
 
     /**
@@ -390,20 +379,32 @@ final class Sitemap
     /**
      * Check if URL ignore pattern matches URL.
      * 
+     * If line starts with '@', treat as raw regex otherwise convert glob pattern to regex.
+     * 
      * @param string $url The URL to check.
      * @param array $patterns The URL patterns to check.
      * 
      * @return bool Return true if URL is in ignore pattern, false otherwise.
      */
-    private static function matchesIgnore(string $url, array $patterns): bool 
+    private static function matchesIgnore(string $url, array $patterns, bool $output = false): bool 
     {
-        if($patterns === []){
+        if ($patterns === []) {
             return false;
         }
 
         foreach ($patterns as $line) {
-            $pattern = str_replace(['/', '*'], ['\/', '.+?'], $line);
-            if (preg_match('/^' . $pattern . '$/', $url) || $url === $line) {
+            if ($line === '') {
+                continue;
+            }
+
+            $pattern = str_starts_with($line, '@') 
+                ? '#' . substr($line, 1) . '#i'
+                : '/^' . str_replace(['\*'], '.*', preg_quote($line, '/')) . '$/i';
+          
+            if ($url === $line || preg_match($pattern, $url)) {
+                if($output){
+                    self::_print('[Ignore] ' . self::replaceUrls($url), 'yellow');
+                }
                 return true;
             }
         }

@@ -21,7 +21,7 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.5.3';
+    public const VERSION = '3.5.4';
 
     /**
      * Framework version name.

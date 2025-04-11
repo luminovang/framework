@@ -18,6 +18,26 @@ use \Luminova\Base\BaseConfig;
 class Func
 {
 	/**
+	 * Binary magic numbers.
+	 * 
+	 * @var array $magicNumbers
+	 */
+	private static array $magicNumbers = [
+		"\x89PNG\r\n\x1A\n" => 'png',
+		"\xFF\xD8\xFF" => 'jpg',
+		"\x25\x50\x44\x46" => 'pdf',
+		"\x50\x4B\x03\x04" => 'zip',
+		"\x49\x44\x33" => 'mp3',
+		"\x47\x49\x46\x38" => 'gif',
+		"\xD0\xCF\x11\xE0" => 'doc', 
+		"\x50\x4B\x03\x04" => 'docx', 
+		"\x50\x4B\x07\x08" => 'xlsx',
+		"\x52\x49\x46\x46" => 'wav',
+		"\x00\x00\x01\xBA" => 'mpg',
+		"\x00\x00\x01\xB3" => 'mpg',
+		"\x1A\x45\xDF\xA3" => 'mkv'
+	];
+	/**
 	 * Format text before display by matching links, email, phone, 
 	 * hashtags and mentions with a link representation and replace multiple new lines.
 	 * 
@@ -882,36 +902,20 @@ class Func
 	private static function getBinaryExtension(string $binaryData, string $destination): string 
 	{
 		$destination = "{$destination}-hex";
-		if(FileManager::write($destination, $binaryData)){
-			$finfo = finfo_open(FILEINFO_MIME_TYPE);
-			$mimeType = finfo_file($finfo, $destination);
-			finfo_close($finfo);
+		$mime = get_mime($binaryData);
+
+		if($mime === false && FileManager::write($destination, $binaryData)){
+			$mime = get_mime($destination);
 			unlink($destination);
-
-			$extension = BaseConfig::getExtension($mimeType);
-
-			if ($extension) {
-				return $extension;
-			}
 		}
 
-		$magicNumbers = [
-			"\x89PNG\r\n\x1A\n" => 'png',
-			"\xFF\xD8\xFF" => 'jpg',
-			"\x25\x50\x44\x46" => 'pdf',
-			"\x50\x4B\x03\x04" => 'zip',
-			"\x49\x44\x33" => 'mp3',
-			"\x47\x49\x46\x38" => 'gif',
-			"\xD0\xCF\x11\xE0" => 'doc', 
-			"\x50\x4B\x03\x04" => 'docx', 
-			"\x50\x4B\x07\x08" => 'xlsx',
-			"\x52\x49\x46\x46" => 'wav',
-			"\x00\x00\x01\xBA" => 'mpg',
-			"\x00\x00\x01\xB3" => 'mpg',
-			"\x1A\x45\xDF\xA3" => 'mkv'
-		];
+		$extension = $mime ? BaseConfig::getExtension($mime) : false;
 
-		foreach ($magicNumbers as $signature => $ext) {
+		if ($extension) {
+			return $extension;
+		}
+
+		foreach (self::$magicNumbers as $signature => $ext) {
 			if (strncmp($binaryData, $signature, strlen($signature)) === 0) {
 				return $ext;
 			}

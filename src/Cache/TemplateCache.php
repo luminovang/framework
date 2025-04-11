@@ -95,7 +95,7 @@ final class TemplateCache
      * @param string $filename The file to extract metadata.
      * 
      * @return self Return class instance.
-    */
+     */
     public function setFile(string $filename): self
     {
         $this->filename = $filename;

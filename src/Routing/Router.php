@@ -568,7 +568,7 @@ final class Router
             }
         }else{
             $exit_code = self::runAsHttp();
-            if (self::$method === 'HEAD') {
+            if (self::$method === 'HEAD' && ob_get_level() > 0) {
                 ob_end_clean();
             }
         }

@@ -12,7 +12,7 @@ namespace Luminova\Sessions\Handlers;
 
 use \Luminova\Base\BaseSessionHandler;
 use \Luminova\Security\Crypter;
-use \Luminova\Functions\Ip;
+use \Luminova\Functions\IP;
 use \Luminova\Time\Time;
 use \Luminova\Exceptions\RuntimeException;
 use \ReturnTypeWillChange;
@@ -110,7 +110,7 @@ class Filesystem extends BaseSessionHandler
         }
 
         $this->filePath = rtrim($path, TRIM_DS);
-        $this->fileName = ($this->options['session_ip'] ? md5(Ip::get()) . '_': '');
+        $this->fileName = ($this->options['session_ip'] ? md5(IP::get()) . '_': '');
 
         return $this->options['onCreate'] ? ($this->options['onCreate'])($path, $name, $this->fileName) : true;
     }

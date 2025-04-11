@@ -13,7 +13,7 @@ namespace Luminova\Sessions\Handlers;
 use \Luminova\Base\BaseSessionHandler;
 use \Luminova\Security\Crypter;
 use \Luminova\Database\Builder;
-use \Luminova\Functions\Ip;
+use \Luminova\Functions\IP;
 use \Luminova\Logger\Logger;
 use \Luminova\Time\Time;
 use \ReturnTypeWillChange;
@@ -415,6 +415,6 @@ class Database extends BaseSessionHandler
             return '';
         }
         
-        return self::$ipAddress ??= Ip::toNumeric() ?: '';
+        return self::$ipAddress ??= IP::toNumeric() ?: '';
     }
 }

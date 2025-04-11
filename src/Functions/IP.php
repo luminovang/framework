@@ -314,14 +314,16 @@ final class IP
      */
     public static function equals(string $ip1, ?string $ip2 = null): bool 
     {
-        $packedIp1 = self::toNumeric($ip1);
-        $packedIp2 = self::toNumeric($ip2);
+        $ip2 ??= self::get();
 
-        if ($packedIp1 === false || $packedIp2 === false) {
-            return false;
+        if($ip1 === $ip2){
+            return true;
         }
 
-        return $packedIp1 === $packedIp2;
+        $ip1 = self::toNumeric($ip1);
+        $ip2 = self::toNumeric($ip2);
+
+        return ($ip1 !== false && $ip2 !== false && $ip1 === $ip2);
     }
 
     /**

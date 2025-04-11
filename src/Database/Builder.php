@@ -487,7 +487,9 @@ final class Builder implements LazyInterface
         }
 
         try {
-            return self::initializer()->exec($query);
+            return self::getInstance()
+                ->database()
+                ->exec($query);
         } catch (DatabaseException|Exception $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
