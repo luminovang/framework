@@ -362,9 +362,11 @@ final class Table
      * @param string $query The entry query string to add.
      * 
      * @return self Returns the table class instance.
-     * @example Adding a new column entry.
+     * @example - Adding a new column entry:
      * 
-     * `$table->entry("name VARCHAR(50) NOT NULL DEFAULT 'default value'");`
+     * ```php
+     * $table->entry("name VARCHAR(50) NOT NULL DEFAULT 'default value'");
+     * ```
      */
     public function entry(string $query): self
     {

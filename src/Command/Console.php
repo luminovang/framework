@@ -108,9 +108,7 @@ final class Console
         if($terminal::isHelp($options['options'])){
             $info = self::getCommand($command);
 
-            if($terminal::header()){
-               $terminal::newLine();
-            }
+            $terminal::header();
 
             if($newCommand->help($info) === STATUS_ERROR){
                 $terminal->helper($info);

@@ -10,7 +10,7 @@
  */
 namespace Luminova\Template;
 
-use Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\RuntimeException;
 
 final class Layout
 {
@@ -71,7 +71,12 @@ final class Layout
      * 
      * @return static Return the instance of Layout class.
      * 
-     * @example import(foo) or import(foo/bar).
+     * @example - Example:
+     * ```php 
+     * layout(...)->import('foo');
+     * //or 
+     * layout(...)->import('foo/bar');
+     * ```
      */
     protected static function import(string $layout, string $module = ''): self 
     {
@@ -87,7 +92,13 @@ final class Layout
      * @return self Return the instance of Layout class.
      * @throws RuntimeException Throws when layout file is not found.
      * 
-     * @example import(foo) or import(foo/bar)
+     *  @example - Example:
+     * 
+     * ```php 
+     * layout('main')->import('foo');
+     * //or 
+     * layout('main')->import('foo/bar');
+     * ```
      */
     public function layout(string $layout, string $module = ''): self
     {
@@ -180,7 +191,12 @@ final class Layout
      * 
      * @return string Return the extended or inherited layout contents.
      * 
-     * @example extend('foo') or nested extend extend('foo.bar').
+     * @example - Example:
+     * ```php 
+     * layout(...)->extend('foo');
+     * // or nested extend  
+     * layout(...)->import('foo.bar');
+     * ```
      */
     public function extend(?string $section = null): string
     {

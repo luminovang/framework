@@ -125,7 +125,7 @@ abstract class BaseCommand extends Terminal
      *
      * @return string Return the full command-line string.
      * 
-     * @example Given a command with `php index.php foo user=1 --no-nocache`
+     * @example - Given a command with `php index.php foo user=1 --no-nocache`
      * 
      *```bash 
      * index.php index.php foo user=1 --no-nocache
@@ -146,11 +146,11 @@ abstract class BaseCommand extends Terminal
      * 
      * @return mixed Return the value of the option, or the default if not found.
      * 
-     * @example Given a command with options `--verbose` or `-v`
+     * @example - Given a command with options `--verbose` or `-v`
      * ```php
      * $verbose = $this->option('verbose', 'v', false); // Returns true if either option is set.
      * ```
-     * @example Given a command with options `--address=192.160.0.1` or `-a=192.160.0.1`
+     * @example - Given a command with options `--address=192.160.0.1` or `-a=192.160.0.1`
      * ```php
      * $address = $this->option('address', 'a', null); // Returns 192.160.0.1 if either option is set.
      */
@@ -170,7 +170,7 @@ abstract class BaseCommand extends Terminal
      * 
      * @return mixed Return the argument value, or the full argument if no '=' is found, or null if not found.
      * 
-     * @example Given a command with arguments 'php index.php foo file=example.txt mode=write'.
+     * @example - Given a command with arguments 'php index.php foo file=example.txt mode=write'.
      * ```php
      * $file = $this->argument('file'); // Returns 'example.txt'
      * $file = $this->argument(1); // Returns 'example.txt'

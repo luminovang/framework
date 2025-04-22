@@ -52,7 +52,7 @@ abstract class CoreCronTasks
      * 
      * To override the default cron `$path`, set the property before invoking the parent constructor.
      * 
-     * @example In your cron configuration class:
+     * @example - In your cron configuration class:
      * ```php
      * class Cron extends Luminova\Core\CoreCronTasks
      * {

@@ -96,10 +96,14 @@ final class Schema
      * 
      * @return void
      * @throws DatabaseException If any error occurred.
-     * @example Implementation `Schema::create('foo', function(\Luminova\Database\Table $table){
+     * @example - Implementation:
+     * 
+     * ```php
+     * Schema::create('foo', function(\Luminova\Database\Table $table){
      *      $table->string('bar');
      *      return $table;
-     * })`;
+     * });
+     * ```
      */
     public static function create(string $tableName, Closure $tableCallback): void
     {
@@ -152,10 +156,14 @@ final class Schema
      * 
      * @return void
      * @throws DatabaseException If any error occurred.
-     * @example Implementation `Schema::modify('foo', function(\Luminova\Database\Table $table){
+     * @example - Implementation:
+     * 
+     * ```php
+     * Schema::modify('foo', function(\Luminova\Database\Table $table){
      *      $table->string('bar');
      *      return $table;
-     * })`;
+     * });
+     * ```
      */
     public static function modify(string $tableName, Closure $tableCallback): void
     {

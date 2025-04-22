@@ -615,6 +615,7 @@ class FileManager
                 usleep(10000);
             }
         }
+        
         closedir($dir);
 
         if (@rmdir($origin)) {
@@ -705,8 +706,8 @@ class FileManager
             }
         }
 
-        if ($isPartial && ob_get_level() > 0) {
-            ob_end_clean();
+        if ($isPartial) {
+            Header::clearOutputBuffers();
         }
 
         Header::send($headers, false);
@@ -764,28 +765,28 @@ class FileManager
     }
 
     /**
-     * Handle byte-range requests from HTTP_RANGE.
+     * Parses the HTTP Range header and returns the content range details.
      * 
-     * @param int $filesize The original content length.
+     * @param int $size The total size of the content in bytes.
      * 
      * @return array<int,mixed> Return content length and range.
      *      - [length, offset, limit, rangeHeader].
      */
-    public static function getHttpContentRange(int $filesize): array
+    public static function getHttpContentRange(int $size): array
     {
         $offset = 0;
-        $length = $filesize;
+        $length = $size;
         $header = null;
-        $limit = $filesize - 1;
-        $httpRange = $_SERVER['HTTP_RANGE'] ?? false;
+        $limit = $size - 1;
+        $range = $_SERVER['HTTP_RANGE'] ?? null;
 
-        if ($httpRange && preg_match('/bytes=(\d+)-(\d+)?/', $httpRange, $matches)) {
+        if ($range && preg_match('/bytes=(\d+)-(\d+)?/', $range, $matches)) {
             $offset = (int) $matches[1];
-            $limit = isset($matches[2]) ? (int) $matches[2] : $filesize - 1;
+            $limit = isset($matches[2]) ? (int) $matches[2] : $size - 1;
             
-            $limit = min($limit, $filesize - 1);
-            $length = ($limit - $offset) + 1;
-            $header = "bytes $offset-$limit/$filesize";
+            $limit = min($limit, $size - 1);
+            $length = max(0, $limit - $offset + 1);
+            $header = "bytes $offset-$limit/$size";
         }
 
         return [$length, $offset, $limit, $header];
@@ -795,12 +796,12 @@ class FileManager
 	 * Deletes files and folders recursively.
 	 *
 	 * @param string $location  Directory or file to delete.
-	 * @param bool $delete_base  Remove the base directory once done (default is false).
+	 * @param bool $deleteBase  Remove the base directory once done (default is false).
      * @param int &$deleted Reference to a variable to store the number of deleted items.
      * 
 	 * @return int Returns count of deleted files.
 	 */
-	public static function remove(string $location, bool $delete_base = false, int &$deleted = 0): int 
+	public static function remove(string $location, bool $deleteBase = false, int &$deleted = 0): int 
 	{
 		if (!file_exists($location)) {
 			return $deleted;
@@ -818,11 +819,27 @@ class FileManager
 			}
 		}
 
-        if($delete_base && is_dir($location) && @rmdir($location)){
+        if($deleteBase && is_dir($location) && @rmdir($location)){
             $deleted++;
         }
 
 		return $deleted;
+	}
+
+    /**
+	 * Deletes files and folders recursively.
+	 *
+	 * @param string $location  Directory or file to delete.
+	 * @param bool $deleteBase  Remove the base directory once done (default is false).
+     * @param int &$deleted Reference to a variable to store the number of deleted items.
+     * 
+	 * @return int Returns count of deleted files.
+     * 
+     * Alias of {@see remove()}.
+	 */
+	public static function delete(string $location, bool $deleteBase = false, int &$deleted = 0): int 
+	{
+		return self::remove($location, $deleteBase, $deleted);
 	}
 
     /**
@@ -928,8 +945,7 @@ class FileManager
             $chunk = fread($handler, $length);
 
             if ($chunk === false) {
-                fclose($handler);
-                return false;
+                break;
             }
 
             echo $chunk;
@@ -941,7 +957,10 @@ class FileManager
             }
         }
 
-        fclose($handler);
+        if (is_resource($handler)) {
+            fclose($handler);
+        }
+
         return true;
     }
 
@@ -957,11 +976,11 @@ class FileManager
      */
     public static function readText($handler, int $filesize, int $length = (1 << 21), int $delay = 0): bool
     {
-        if(!is_resource($handler)){
+        if (!is_resource($handler)) {
             return false;
-        }
+        }    
 
-        if($filesize === 0){
+        if($filesize <= 0){
             fclose($handler);
             return false;
         }
@@ -972,8 +991,7 @@ class FileManager
             $chunk = fread($handler, $length);
 
             if ($chunk === false) {
-                fclose($handler);
-                return false;
+                break;
             }
 
             $last = strrpos($chunk, "\n");
@@ -996,12 +1014,17 @@ class FileManager
             }
         }
 
-        fclose($handler);
+        if (is_resource($handler)) {
+            fclose($handler);
+        }
+
         return true;
     }
 
     /**
-     * Reads a file in chunks with type-specific handling and customizable delay, for optimized performance.
+     * Reads a file in chunks with type-specific handling and customizable delay, 
+     * for optimized performance.
+     * 
      * For text-based files, it reads while preserving line endings. For binary files, it reads in raw chunks.
      * 
      * @param resource $handler The file handler.
@@ -1020,16 +1043,25 @@ class FileManager
         int $delay = 0
     ): bool
     {
-        $result = false;
+        if ($filesize <= 0 || !is_resource($handler)) {
+            return false;
+        }
 
-        if ($filesize > 0 && is_resource($handler)) {
-            if ($filesize > 5 * 1024 * 1024) {
-                $result = ($mime && (str_starts_with($mime, 'text/') || preg_match('/^(application\/(?:json|xml|javascript)|image\/svg\+xml)$/i', $mime)))
-                    ? self::readText($handler, $filesize, $length, $delay)
-                    : self::readBinary($handler, $length, $delay);
-            }else{
-                $result = fpassthru($handler) > 0;
-            }
+        $isLargeFile = $filesize > 5 * 1024 * 1024;
+
+        if ($isLargeFile) {
+            $isText = $mime && (
+                str_starts_with($mime, 'text/') ||
+                preg_match('/^(application\/(?:json|xml|javascript)|image\/svg\+xml)$/i', $mime)
+            );
+
+            Header::clearOutputBuffers();
+
+            $result = $isText
+                ? self::readText($handler, $filesize, $length, $delay)
+                : self::readBinary($handler, $length, $delay);
+        }else{
+            $result = fpassthru($handler) > 0;
         }
 
         if($handler && is_resource($handler)){

@@ -12,7 +12,6 @@ namespace Luminova\Command\Novakit;
 
 use \Luminova\Base\BaseConsole;
 use \Luminova\Command\Utils\Color;
-use \Luminova\Exceptions\AppException;
 use \SplFileObject;
 use \Exception;
 
@@ -59,7 +58,7 @@ class Logs extends BaseConsole
             }
         
             return $this->readLogFile($level, $end, $start);
-        }catch(AppException|Exception $e){
+        }catch(Exception $e){
             $this->term->beeps(1);
             $this->term->error('Log operation failed:');
             $this->term->writeln($e->getMessage());

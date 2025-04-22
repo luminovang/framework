@@ -36,7 +36,7 @@ abstract class CoreServices implements ServicesInterface, LazyInterface
      *
      * @throws RuntimeException If the service is already queued or if the `arguments` parameter is not a list.
      * 
-     * @example Usage examples:
+     * @example - Usage examples:
      *     - self::newService(Configuration::class) // access via service('Configuration')
      *     - self::newService('\Luminova\Config\Configuration') // access via service('Configuration')
      *     - self::newService(Configuration::class, 'config') // access via service('config')

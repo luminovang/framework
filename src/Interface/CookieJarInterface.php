@@ -310,7 +310,7 @@ interface CookieJarInterface
     * @return array<string,array<string,mixed>> An associative array of extracted cookies, where 
     *         the key is the cookie name and the value contains the cookie data and options.
     * 
-    * @example
+    * @example - Example:
     * ```php
     * $headers = [
     *     "SessionID=abc123; Path=/; HttpOnly",
@@ -348,7 +348,7 @@ interface CookieJarInterface
     * @return array<string,array<string,mixed>> An associative array of extracted cookies, where 
     *         the key is the cookie name and the value contains the cookie data and options.
     * 
-    * @example - Parse cookies from global
+    * @example - Parse cookies from global:
     
     * ```php
     * $cookies = $cookieHandler->getFromGlobal($_COOKIE, false, $defaultOptions);

@@ -21,12 +21,14 @@ abstract class Migration
      * Run the migrations.
      *
      * @return void
-     * @example Implementation.
+     * @example - Implementation.
      * 
-     * `Schema::create('foo', function(\Luminova\Database\Table $table){
+     * ```php 
+     * Schema::create('foo', function(\Luminova\Database\Table $table){
      *      $table->string('bar');
      *      return $table;
-     * });`
+     * });
+     * ```
      */
     public abstract function up(): void;
 
@@ -34,13 +36,17 @@ abstract class Migration
      * Reverse the migrations.
      *
      * @return void
-     * @example Implementation.
+     * @example - Implementation:
      * 
-     * `Schema::drop('foo');`
+     * ```php 
+     * Schema::drop('foo');
+     * ```
      * 
-     * @example Implementation.
+     * @example - Implementation.
      * 
-     * `Schema::dropIfExists('foo');`
+     * ```php 
+     * Schema::dropIfExists('foo');
+     * ```
      */
     public abstract function down(): void;
 
@@ -48,16 +54,21 @@ abstract class Migration
      * Modify table migrations.
      *
      * @return void
-     * @example Implementation.
      * 
-     * `Schema::modify('foo', function(\Luminova\Database\Table $table){
+     * @example - Implementation.
+     * 
+     * ```php
+     * Schema::modify('foo', function(\Luminova\Database\Table $table){
      *      $table->string('bar');
      *      return $table;
-     * });`
+     * });
+     * ```
      * 
-     * @example Implementation.
+     * @example - Implementation.
      * 
-     * `Schema::rename('foo', 'bar');`
+     * ```php 
+     * Schema::rename('foo', 'bar');
+     * ```
      */
     public abstract function alter(): void;
 
@@ -68,8 +79,10 @@ abstract class Migration
      * 
      * @return void
      * 
-     * @example Implementation.
-     * `Schema::invoke('\App\Database\Migration\AnotherMigration')`
+     * @example - Implementation:
+     * ```php 
+     * Schema::invoke('\App\Database\Migration\AnotherMigration')
+     * ```
      */
     protected final function invoke(string $migrate): void
     {

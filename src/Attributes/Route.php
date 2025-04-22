@@ -59,27 +59,52 @@ final class Route
      *          -   HTTP middleware route - `Route::BEFORE_MIDDLEWARE` or `Route::AFTER_MIDDLEWARE`.
      *          -   CLI middleware route `Route::GLOBAL_MIDDLEWARE` for global authentication or `Route::GUARD_MIDDLEWARE` for command group authentication.
      * 
-     * @example - For HTTP Route.
+     * @example - For HTTP Routing.
      * 
      * ```php
-     * #[Route('/', methods: ['GET'])]
-     * public function index():int {}
+     * // /app/Controllers/Http/MyController.php
+     * 
+     * namespace App\Controllers\Http;
+     * 
+     * use Luminova\Base\BaseController;
+     * use Luminova\Attributes\Route;
+     * 
+     * class MyController extends BaseController
+     * {
+     *      #[Route('/(:root)', methods: ['ANY'], middleware: Route::BEFORE_MIDDLEWARE)]
+     *      public function middleware():int {
+     *             // Middleware implemenation
+     *      }
+     * 
+     *      #[Route('/', methods: ['GET'])]
+     *      public function index():int {
+     *          // Method implemenation
+     *      }
+     * }
      * ```
-     * ```php
-     * #[Route('/', methods: ['GET'], middleware: Route::BEFORE_MIDDLEWARE)]
-     * public function index():int {}
-     * ```
      * 
-     * @example - For CLI Route.
+     * @example - For CLI Routing.
      * 
      * ```php
-     * #[Route('argument', group: 'command')]
-     * public function myCommand():int {}
-     * ```
+     * // /app/Controllers/Cli/MyCommand.php
      * 
-     * ```php
-     * #[Route(group: 'command', middleware: Route::GLOBAL_MIDDLEWARE)]
-     * public function middleware():int {}
+     * namespace App\Controllers\Cli;
+     * 
+     * use Luminova\Base\BaseCommand;
+     * use Luminova\Attributes\Route;
+     * 
+     * class MyCommand extends BaseCommand
+     * {
+     *      #[Route(group: 'command', middleware: Route::GLOBAL_MIDDLEWARE)]
+     *      public function middleware():int {
+     *           // CLI middleware implemenation
+     *      }
+     * 
+     *      #[Route('argument', group: 'command')]
+     *      public function doFoo():int {
+     *          // CLI method implemenation
+     *      }
+     * }
      * ```
      */
     public function __construct(

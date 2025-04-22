@@ -104,7 +104,7 @@ class LazyObject implements LazyInterface, Stringable
      * @return class-object<\T>|LazyInterface<\T> Return lazy-loaded instance that wraps the given class object.
      * @throws RuntimeException If the class does not exist or error occurs.
      * 
-     * @example Class Name Initialization:
+     * @example - Class Name Initialization:
      * 
      * ```php
      * $person = LazyObject::newObject(Person::class, 33);
@@ -135,7 +135,7 @@ class LazyObject implements LazyInterface, Stringable
      * @return object Return a lazy ghost object of the specified class.
      * @throws RuntimeException If the lazy ghost creation fails for any reason.
      * 
-     * @example Only Class Name Initialization:
+     * @example - Only Class Name Initialization:
      * 
      * ```php
      * $person = LazyObject::newLazyGhost(Person::class, fn(): array => [33, 'Peter', 'Nigeria']);
@@ -256,7 +256,7 @@ class LazyObject implements LazyInterface, Stringable
      * @param class-string<\T> $class The fully qualified class or interface name to check against.
      *
      * @return bool Returns true if the lazy-loaded instance is of the specified class type, false otherwise.
-     * @example Check if the lazy-loaded instance Example:
+     * @example - Check if the lazy-loaded instance Example:
      * 
      * ```php
      * $object->isInstanceof(Example::class);

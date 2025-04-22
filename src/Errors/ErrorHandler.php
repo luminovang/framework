@@ -138,12 +138,12 @@ final class ErrorHandler
      * 
      * @return bool Returns `true` if the warning was successfully triggered.
      * 
-     * @example Triggering a simple deprecation warning:
+     * @example - Triggering a simple deprecation warning:
      * ```php
      * self::depreciate('Method foo() is deprecated. Use getFoo() instead.');
      * ```
      * 
-     * @example Triggering a formatted deprecation warning:
+     * @example - Triggering a formatted deprecation warning:
      * ```php
      * self::depreciate('Method %s() is deprecated. Use %s() instead.', ['foo', 'getFoo']);
      * ```
@@ -383,6 +383,7 @@ final class ErrorHandler
             5079 => 'STORAGE ERROR',
             404 => 'VIEW NOT FOUND',
             4070 => 'INPUT VALIDATION ERROR',
+            4080 => 'INPUT/OUTPUT ERROR',
             4161 => 'ROUTING ERROR',
             4040 => 'NOT FOUND',
             4051 => 'BAD METHOD CALL',

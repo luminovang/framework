@@ -15,7 +15,7 @@ use \Luminova\Logger\LogLevel;
 use \Luminova\Logger\NovaLogger;
 use \App\Config\Logger as LoggerConfig;
 use \Luminova\Functions\Func;
-use \Luminova\Time\Time;
+use \Luminova\Http\Request;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Throwable;
@@ -42,6 +42,20 @@ final class Logger
      * @var LoggerInterface|null $logger
      */
     private static ?LoggerInterface $logger = null;
+
+    /**
+     * HTTP request object.
+     * 
+     * @var Request|null $request
+     */
+    private static ?Request $request = null;
+
+    /**
+     * Telegram bot token.
+     * 
+     * @var string|null $telegramToken
+     */
+    private static ?string $telegramToken = null;
 
     /**
      * Initialize logger instance.
@@ -107,10 +121,11 @@ final class Logger
     public static function log(string $level, string $message, array $context = []): void
     {
         self::assertPsrLogger();
+       
         self::getLogger()->log(
             ($level === 'phpError') ? LogLevel::PHP : $level, 
             $message, 
-            $context
+            $context + self::getAutoContext()
         );
     }
 
@@ -159,23 +174,14 @@ final class Logger
     public static function entry(
         string $level, 
         string $message, 
-        array  $context = [],
+        array $context = [],
     ): string
     {
         if(self::getLogger() instanceof NovaLogger){
             return self::getLogger()->message($level, $message, $context) . PHP_EOL;
         }
 
-        $message = sprintf(
-            '[%s] [%s]: %s', 
-            strtoupper($level), 
-            Time::now()->format('Y-m-d\TH:i:s.uP'), 
-            $message
-        );
-
-        return ($context === []) 
-            ? $message . PHP_EOL
-            : sprintf('%s [CONTEXT] %s', $message, print_r($context, true)) . PHP_EOL;
+        return NovaLogger::formatMessage($level, $message, '', $context) . PHP_EOL;
     }
 
     /**
@@ -220,6 +226,7 @@ final class Logger
         }
 
         $valid = true;
+        $context += self::getAutoContext();
 
         if ($to && Func::isEmail($to)) {
             self::assertInterface('Email dispatch');
@@ -229,7 +236,7 @@ final class Logger
             self::getLogger()->setLevel($level)->remote($to, $message, $context);
         } elseif($to && self::isTelegramChatId($to)) {
             self::assertInterface('Telegram dispatch');
-            self::getLogger()->setLevel($level)->telegram($to, $message, $context);
+            self::getLogger()->setLevel($level)->telegram($to, self::getTelegramToken(), $message, $context);
         }else{
             $valid = false;
         }
@@ -238,12 +245,11 @@ final class Logger
 
         if(!$valid){
             throw new InvalidArgumentException(sprintf(
-                'Invalid destination "%s" provided. A valid log level, URL, email address or telegram bot chat id is required. %s%s%s',
-                $to,
-                'For auto-dispatch logging, ensure you specify a valid email address using `logger.mail.logs` ',
-                ', a remote URL using `logger.remote.logs` ',
-                'or a telegram both chat ID `telegram.bot.chat.id` in your environment configuration file.'
-            ));
+                'Invalid log destination "%s" provided. Expected a valid log level, email address, remote URL, or Telegram chat ID. ' .
+                'To enable auto-dispatch logging, configure one of the following in your environment file: ' .
+                '"logger.mail.logs" for email, "logger.remote.logs" for remote logging, or both "telegram.bot.token" and "telegram.bot.chat.id" for Telegram.',
+                $to
+            ));            
         }
     }
 
@@ -277,7 +283,7 @@ final class Logger
             ));
         }
 
-        self::getLogger()->remote($url, $message, $context);
+        self::getLogger()->remote($url, $message, $context + self::getAutoContext());
     }
 
     /**
@@ -310,7 +316,7 @@ final class Logger
             ));
         }
 
-        self::getLogger()->mail($email, $message, $context); 
+        self::getLogger()->mail($email, $message, $context + self::getAutoContext()); 
     }
 
     /**
@@ -339,26 +345,75 @@ final class Logger
             ));
         }
 
-        self::getLogger()->telegram($chatId, $message, $context); 
+        self::getLogger()->telegram($chatId, self::getTelegramToken(), $message, $context + self::getAutoContext()); 
     }
 
     /**
-     * Determines the appropriate log destination based on the environment and configuration.
+     * Determines the appropriate log destination based on the environment.
+     * 
+     * In production, prioritizes:
+     * 1. Email log address (`logger.mail.logs`)
+     * 2. Remote log URL (`logger.remote.logs`)
+     * 3. Telegram chat ID (`telegram.bot.chat.id`)
+     * Falls back to the provided destination if none are set.
      *
-     * @param string $to The initial log destination.
+     * @param string $to The fallback destination provided.
      *
-     * @return string The determined log destination. In production, it may be an email
-     *                address, a remote URL, or the original input. In non-production
-     *                environments, it returns the original input.
+     * @return string Return the resolved destination.
      */
     private static function getLogDestination(string $to): string
     {
-       return PRODUCTION 
-            ? (env('logger.mail.logs', false) 
-                ?: (env('logger.remote.logs', false) 
-                ?: (env('telegram.bot.chat.id', false) ?: $to))
-             )
-            : $to;
+        if (!PRODUCTION) {
+            return $to;
+        }
+
+        return env('logger.mail.logs')
+            ?: env('logger.remote.logs')
+            ?: env('telegram.bot.chat.id')
+            ?: $to;
+    }
+
+    /**
+     * Automatically builds a context array from the request, based on configured
+     * header and body field names in LoggerConfig.
+     *
+     * This method helps enrich log entries by extracting an identifier (e.g., user ID,
+     * API key, or username) from either a request header or body field, if configured.
+     *
+     * @return array Return an associative context array with extracted values, prefixed with `__`.
+     */
+    private static function getAutoContext(): array
+    {
+        $header = LoggerConfig::$contextHeaderName ?? null;
+        $field = LoggerConfig::$contextFieldName ?? null;
+        $context = [];
+        
+        if ($header || $field) {
+
+            if (!self::$request instanceof Request) {
+                self::$request = new Request();
+            }
+
+            if ($field) {
+                $context["__{$field}"] = self::$request->getAny($field);
+            }
+
+            if ($header) {
+                $context["__{$header}"] = self::$request->header->get($header) ?? self::$request->server->get($header);
+            }
+        }
+
+        return $context;
+    }
+
+    /**
+     * Get the telegram bot token.
+     * 
+     * @return string|null Return telegram token or null.
+     */
+    private static function getTelegramToken(): ?string
+    {
+        return self::$telegramToken ??= env('telegram.bot.token');
     }
 
     /**
@@ -374,6 +429,10 @@ final class Logger
      */
     private static function isTelegramChatId(string|int $chatId): bool
     {
+        if(!self::getTelegramToken()){
+            return false;
+        }
+
         return $chatId && preg_match('/^(-100\d{10,13}|\d{5,12})$/', (string) $chatId) === 1;
     }
 

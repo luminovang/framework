@@ -131,6 +131,7 @@ final class Builder implements LazyInterface
         'grouping' => [],
         'ordering' => [],
         'filters' => [],
+        'binds' => [],
         'duplicate' => [], // Insert on duplicate
         'match' => [] // Table query match against order rows.
     ];
@@ -447,7 +448,7 @@ final class Builder implements LazyInterface
      * 
      * @see execute()
      * 
-     * @example Executing a raw query:
+     * @example - Executing a raw query:
      * ```php
      * $stmt = Builder::query("SELECT * FROM users WHERE id = :user_id");
      * $result = $stmt->execute(['user_id' => 1]);
@@ -545,12 +546,12 @@ final class Builder implements LazyInterface
      * - `FULL`  - Returns rows with matches in either table, filling in `NULL` for non-matching rows.
      * - `FULL OUTER` - Returns all rows from both tables, with `NULL` in places where there is no match.
      *
-     * @example Basic join usage:
+     * @example - Basic join usage:
      * 
      * ```php
      * Builder::table('product', 'p')->join('users', 'LEFT', 'u');
      * ```
-     * @example Joining without an alias:
+     * @example - Joining without an alias:
      * 
      * ```php
      * Builder::table('users')->join('orders', 'INNER');
@@ -582,9 +583,10 @@ final class Builder implements LazyInterface
      *
      * @param string $condition The column name or condition to join on.
      * @param string $comparison The comparison operator (e.g, `=`, `<>`, `>`, `<`).
-     * @param mixed  $value The value to compare or another table column.
+     * @param mixed  $value The value to compare, placeholder or another table column.
      *                      - String literals must be wrapped in quotes.
      *                      - Unquoted values are treated as column names.
+     *                      - Placeholder, a named colon prefixed placeholder string to be referenced to `bind(...)`.
      *
      * @return self Returns the instance of builder class.
      *
@@ -596,6 +598,7 @@ final class Builder implements LazyInterface
      *     ->on('u.user_id', '=', 'r.role_user_id') // Column comparison
      *     ->on('u.user_group', '=', 1)             // Value comparison
      *     ->on('u.user_name', '=', '"peter"');     // String literal (quoted)
+     *     ->on('r.role_name', '=', ':role_name')->bind(':role_name', 'foo');     // Colon prefixed placeholder
      *     ->where('u.user_id', '=', 1);
      * ```
      * 
@@ -820,7 +823,7 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Sets the sorting order for the query results.
+     * Applies ascending or descending sorting order specified column for query results.
      *
      * This method applies an `ORDER BY` clause to the query, allowing 
      * results to be sorted in ascending (`ASC`) or descending (`DESC`) order.
@@ -831,6 +834,8 @@ final class Builder implements LazyInterface
      * 
      * 
      * @return self Returns the instance of the class.
+     * @see ascending()
+     * @see descending()
      *
      * @example - Ordering results:
      * 
@@ -845,6 +850,32 @@ final class Builder implements LazyInterface
         $this->options['ordering'][] = "{$column} {$order}";
 
         return $this;
+    }
+
+    /**
+     * Applies a descending order to the specified column in the result set.
+     * 
+     * @param string $column The name of the column to sort by in descending order.
+     * 
+     * @return self Returns the instance of the class.
+     * @see order()
+     */
+    public function descending(string $column): self 
+    {
+        return $this->order($column, 'DESC');
+    }
+
+    /**
+     * Applies an ascending order to the specified column in the result set.
+     * 
+     * @param string $column The name of the column to sort by in ascending order.
+     * 
+     * @return self Returns the instance of the class.
+     * @see order()
+     */
+    public function ascending(string $column): self 
+    {
+        return $this->order($column, 'ASC');
     }
 
     /**
@@ -1377,6 +1408,47 @@ final class Builder implements LazyInterface
     }
 
     /**
+     * Binds a join named placeholder parameter to a value.
+     *
+     * Use this method to manually assign a value to a named placeholder—typically 
+     * used within a join condition where dynamic values are required.
+     *
+     * @param string $placeholder The named placeholder. Must start with a colon `:` (e.g. `:id`).
+     * @param mixed $value The value to bind to the placeholder. Arrays are JSON encoded.
+     * 
+     * @throws InvalidArgumentException If the placeholder does not start with a colon `:`.
+     * 
+     * @return self Return instance of builder class.
+     * 
+     * @example - Bind Placeholder Example:
+     * ```php
+     * $result = Builder::table('users', 'u')
+     *     ->innerJoin('orders', 'o')
+     *         ->on('o.order_user_id', '=', 'u.user_id')
+     *         ->on('o.order_id', '=', ':order_number')
+     *         ->bind(':order_number', 13445)
+     *     ->where('u.user_id', '=', 100)
+     *     ->select();
+     * ```
+     */
+    public function bind(string $placeholder, mixed $value): self 
+    {
+        if (!str_starts_with($placeholder, ':')) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid param placeholder: %s. Placeholder must start with colon prefix ":" (e.g., "%s")',
+                $placeholder,
+                self::trimPlaceholder($placeholder)
+            ));
+        }
+
+        $this->options['binds'][$placeholder] = is_array($value) 
+            ? json_encode($value, JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES) 
+            : $value;
+
+        return $this;
+    }
+
+    /**
      * Groups multiple conditions using the `OR` operator.
      *
      * This method creates a logical condition group where at least one condition must be met.
@@ -1601,7 +1673,7 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Set result return type to an `object`, `array` or prepared statement object.
+     * Set result return type to an `object`, `array` or prepared `statement` object.
      * 
      * This method changes the default result return type from and `object` to either  `array` or `statement` object.
      * 
@@ -2045,7 +2117,7 @@ final class Builder implements LazyInterface
      * 
      * @see query()
      * 
-     * @example Executing a prepared query:
+     * @example - Executing a prepared query:
      * ```php
      * $stmt = Builder::query("SELECT * FROM users WHERE user_id = :id");
      * $result = $stmt->execute(['id' => 1]);
@@ -2120,7 +2192,7 @@ final class Builder implements LazyInterface
      * @return bool Return true if records exists in table, otherwise false.
      * @throws DatabaseException If an error occurs.
      * 
-     * @example Check if users in country Nigeria exists in table:
+     * @example - Check if users in country Nigeria exists in table:
      * 
      * ```php
      * $bool = Builder::table('users')
@@ -2141,7 +2213,7 @@ final class Builder implements LazyInterface
      * @return bool Returns `true` if the table exists, otherwise `false`.
      * @throws DatabaseException If an error occurs or the database driver is unsupported.
      *
-     * @example Check if the `users` table exists:
+     * @example - Check if the `users` table exists:
      * 
      * ```php
      * $exists = Builder::table('users')->exists();
@@ -2923,9 +2995,10 @@ final class Builder implements LazyInterface
         $this->maxLimit = 0;
         $this->options = [
             'grouping' => [],
+            'binds'   => [],
             'ordering' => [],
-            'filters' => [],
-            'match' => []
+            'filters'  => [],
+            'match'    => []
         ];
         $this->whereCondition = [];
         $this->andConditions = [];
@@ -3179,13 +3252,13 @@ final class Builder implements LazyInterface
         }
 
         if(!$isDelete){
-            if($this->options['grouping'] !== []){
-                $sql .= ' GROUP BY ' . rtrim(implode(', ', $this->options['grouping']), ', ');
+            if($this->getOptions('grouping') !== []){
+                $sql .= ' GROUP BY ' . rtrim(implode(', ', $this->getOptions('grouping')), ', ');
             }
 
-            if($this->options['ordering'] !== []){
+            if($this->getOptions('ordering') !== []){
                 $isOrdered = true;
-                $sql .= ' ORDER BY ' . rtrim(implode(', ', $this->options['ordering']), ', ');
+                $sql .= ' ORDER BY ' . rtrim(implode(', ', $this->getOptions('ordering')), ', ');
             }
 
             $this->setHavingConditions($sql);
@@ -3207,7 +3280,9 @@ final class Builder implements LazyInterface
             return $this->setDebugInformation($sql, $return);
         }
 
-        $hasParams = ($isWhereParam || $this->options['match'] !== [] || $this->andConditions !== []);
+        $hasParams = ($isWhereParam 
+            || $this->getOptions('match') !== [] 
+            || $this->andConditions !== []);
 
         if($hasParams){
             $this->db->prepare($sql);
@@ -3216,11 +3291,12 @@ final class Builder implements LazyInterface
                 $this->db->bind($this->whereCondition['placeholder'], $this->whereCondition['value']);
                 $this->bindConditions();
             }elseif(!$this->bindConditions()) {
-                $hasParams = false;
+                $hasParams = $this->getOptions('binds') !== [];
             }
         }
 
         if($hasParams){
+            $this->bindJoinPlaceholders();
             $this->db->execute();
         }else{
             $this->db->query($sql);
@@ -3284,7 +3360,7 @@ final class Builder implements LazyInterface
                 );
             }
 
-            if($this->options['duplicate'] !== []){
+            if($this->getOptions('duplicate') !== []){
                 throw new DatabaseException(
                     'Cannot use "->ignoreDuplicate(true)" with "->onDuplicate(...)" options set. ' .
                     'Both options cannot be enabled at the same time, as they conflict.'
@@ -3566,14 +3642,14 @@ final class Builder implements LazyInterface
      */
     private function buildDuplicateUpdateClause(array &$bindValues = []): string 
     {
-        if ($this->options['duplicate'] === []) {
+        if ($this->getOptions('duplicate') === []) {
             return '';
         }
 
         $isPrepare = !empty($bindValues);
         $updates = [];
 
-        foreach ($this->options['duplicate'] as $col => $option) {
+        foreach ($this->getOptions('duplicate') as $col => $option) {
             $operation = match ($option['operation']) {
                 '+=' => '+', 
                 '-=' => '-',
@@ -3838,7 +3914,7 @@ final class Builder implements LazyInterface
             }
         }
 
-        foreach($this->options['match'] as $idx => $order){
+        foreach($this->getOptions('match') as $idx => $order){
             if($order['value'] instanceof RawExpression){
                 continue;
             }
@@ -3852,6 +3928,34 @@ final class Builder implements LazyInterface
     }
 
     /**
+     * Bind custom placeholder params for join tables.
+     * 
+     * @return void
+     */
+    private function bindJoinPlaceholders(): void 
+    {
+        foreach($this->getOptions('binds') as $key => $value){
+            if($value instanceof RawExpression){
+               throw new DatabaseException(sprintf('Bind value cannot be instance of %s', RawExpression::class));
+            }
+
+            $this->db->bind($key, $value);
+        }
+    }
+
+    /**
+     * Get array of option key values.
+     * 
+     * @param string The option key.
+     * 
+     * @return array Return an array.
+     */
+    private function getOptions(string $key): array 
+    {
+        return $this->options[$key] ?? [];
+    }
+
+    /**
      * Builds a query string representation of single grouped conditions.
      *
      * @param array|self[]   $conditions   An array of conditions to be grouped.
@@ -3862,8 +3966,15 @@ final class Builder implements LazyInterface
      *
      * @return string Return query string representation of grouped conditions with placeholders.
      * 
-     * @example 'SELECT * FROM foo WHERE (bar = 1 AND baz = 2)'.
-     * @example 'SELECT * FROM foo WHERE (boz = 1 OR bra = 2)'.
+     * @example - Example:
+     * ```sql 
+     * 'SELECT * FROM foo WHERE (bar = 1 AND baz = 2)'
+     * ```
+     * 
+     * @example - Example: 
+     * ```sql 
+     * 'SELECT * FROM foo WHERE (boz = 1 OR bra = 2)'
+     * ```
      */
     private static function buildGroupConditions(
         array $conditions, 
@@ -3903,8 +4014,16 @@ final class Builder implements LazyInterface
      *
      * @return string Return a query string representation of grouped conditions with placeholders.
      * 
-     * @example 'SELECT * FROM foo WHERE ((bar = 1 AND baz = 2) AND (boz = 1 AND bra = 5))'.
-     * @example 'SELECT * FROM foo WHERE ((bar = 1 OR baz = 2) OR (boz = 1 OR bra = 5))'.
+     * @example - Example: 
+     * 
+     * ```sql 
+     * 'SELECT * FROM foo WHERE ((bar = 1 AND baz = 2) AND (boz = 1 AND bra = 5))'
+     * ```
+     * @example - Example: 
+     * 
+     * ```sql 
+     * 'SELECT * FROM foo WHERE ((bar = 1 OR baz = 2) OR (boz = 1 OR bra = 5))'
+     * ```
      */
     private static function buildGroupBindConditions(array $condition, int $index): string
     {
@@ -4063,12 +4182,12 @@ final class Builder implements LazyInterface
      */
     private function setMatchAgainst(string &$sql, bool $isOrdered = false): void 
     {
-        if($this->options['match'] === []){
+        if($this->getOptions('match') === []){
             return;
         }
 
         $match = $isOrdered ? ' , ' : ' ORDER BY';
-        foreach($this->options['match'] as $idx => $order){
+        foreach($this->getOptions('match') as $idx => $order){
             $value = ($order['value'] instanceof RawExpression) 
                 ? self::getValue($order['value'], true)
                 : ":order_match_{$idx}";
@@ -4089,12 +4208,12 @@ final class Builder implements LazyInterface
      */
     private function setHavingConditions(string &$sql): void 
     {
-        if($this->options['filters'] === []){
+        if($this->getOptions('filters') === []){
             return;
         }
 
         $having = ' HAVING';
-        foreach($this->options['filters'] as $idx => $condition){
+        foreach($this->getOptions('filters') as $idx => $condition){
             $expression = $condition['expression'];
 
             if($expression instanceof RawExpression){

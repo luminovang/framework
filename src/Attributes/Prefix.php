@@ -24,10 +24,20 @@ final class Prefix
      * @param string $pattern The URI prefix or patterns that the controller should handle (e.g, `/user/account`, `/user/?.*`, `/user/(:root)`).
      * @param Closure|array|null $onError An error handler, which can be a Closure or an array specifying the class and method for handling errors.
      *
-     * @example Usage example:
+     * @example - Usage example:
+     * 
      * ```php
+     * // /app/Controllers/Http/RestController.php
+     * namespace App\Controllers\Http;
+     * 
+     * use Luminova\Base\BaseController;
+     * use Luminova\Attributes\Prefix;
+     * use App\Controllers\Http\Errors\ViewErrors;
+     * 
      * #[Prefix(pattern: '/api/(:root)', onError: [ViewErrors::class, 'onWebError'])]
-     * class RestController extends BaseController {}
+     * class RestController extends BaseController {
+     *      // Class implemenation
+     * }
      * ```
      */
     public function __construct(

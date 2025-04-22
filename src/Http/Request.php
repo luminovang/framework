@@ -165,6 +165,13 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     ];
 
     /**
+     * URL query parameters.
+     * 
+     * @var array<string,mixed>|false $queries
+     */
+    private array|bool $queries = false;
+
+    /**
      * Server object representing HTTP server parameters and configurations.
      * 
      * @var LazyInterface<Server>|Server|null $server
@@ -417,6 +424,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
 
     /**
      * {@inheritdoc}
+     * 
      * @since 3.4.0
      */
     public function getCookie(?string $name = null): CookieJarInterface
@@ -459,7 +467,6 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
 
         return $this->method;
     }
-
 
     /**
      * {@inheritdoc}
@@ -577,12 +584,17 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function getQuery(): string
+    public function getQuery(?string $name = null, mixed $default = null): mixed
     {
-        $queries = $this->getQueries();
-        return ($queries === null) 
-            ? '' 
-            : http_build_query($queries, '', '&', PHP_QUERY_RFC3986);
+        $this->queries = $this->getQueries();
+
+        if(!$this->queries){
+            return $default;
+        }
+
+        return ($name === null) 
+            ? http_build_query($this->queries, '', '&', PHP_QUERY_RFC3986)
+            : $this->queries[$name] ?? $default;
     }
 
     /**
@@ -590,9 +602,14 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function getQueries(): ?array
     {
+        if($this->queries !== false){
+            return $this->queries;
+        }
+
         $queries = $this->server->get('QUERY_STRING');
 
         if(null === $queries || $queries === ''){
+            $this->queries = [];
             return null;
         }
 
@@ -600,12 +617,12 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         $values = [];
 
         foreach ($queries as $value) {
-            [$key, $value] = explode('=', $value);
+            [$key, $value] = explode('=', $value, 2);
             $values[$key] = urldecode($value);
         }
 
         ksort($values);
-        return  $values;
+        return $this->queries = $values;
     }
 
     /**
@@ -886,7 +903,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     {
         $origin = $this->header->get('Origin') ?? $this->server->get('HTTP_ORIGIN');
         $origin = (!$origin && $strict) 
-            ? $this->header->get('Referer') ?? $this->server->get('HTTP_REFERER')
+            ? ($this->header->get('Referer') ?? $this->server->get('HTTP_REFERER'))
             : $origin;
 
         if(!$origin){
@@ -899,9 +916,11 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
             return false;
         }
 
-        return ($origin === APP_HOSTNAME) 
-            ? true 
-            : ($subdomains && Func::mainDomain($origin) === APP_HOSTNAME);
+        if($subdomains){
+            return $origin === APP_WWW_HOSTNAME || Func::mainDomain($origin) === APP_HOSTNAME;
+        }
+
+        return $origin === APP_HOSTNAME;
     }
 
     /**
@@ -918,7 +937,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         }
 
         self::initRequestSecurityConfig();
-        $trusted = ($context === 'hostname') ? self::$config->trustedHostname : self::$config->trustedOrigins;
+        $trusted = ($context === 'hostname') ? self::$config->trustedHostnames : self::$config->trustedOrigins;
 
         if($trusted === []){
             return true;
@@ -1133,7 +1152,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
             $query = http_build_query($body, '', '&');
         }
 
-        $server['REQUEST_URI'] = $path . ($query !== '' ? '?' . $query : '');
+        $server['REQUEST_URI'] = ($query === '') ? $path : "{$path}?{$query}";
         $server['QUERY_STRING'] = $query;
 
         $this->server = LazyObject::newObject(Server::class, fn():array => [$server]);

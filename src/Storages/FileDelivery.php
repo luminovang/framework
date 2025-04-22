@@ -24,27 +24,40 @@ final class FileDelivery
      * Constructor to initialize the file path and ETag option.
      * 
      * @param string $path The base path to file storage (e.g: /writeable/storages/images/).
-     * @param bool $eTag Whether to generate ETag headers (default: true).
+     * @param bool $eTag Whether to generate ETag header and apply validation as needed (default: true).
+     * @param bool $weakEtag Whether to use a weak ETag header or string (default: false).
+     * 
+     * > **Note:** Set `$eTag` to true even if you are passing custom etag header.
      */
     public function __construct(
         private string $path, 
-        private bool $eTag = true
+        private bool $eTag = true,
+        private bool $weakEtag = false
     ){}
 
     /**
      * Static method to initialize the FileDelivery with a base path and ETag option.
      * 
      * @param string $path The base path for file storage, (e.g: /images/).
-     * @param bool $eTag Whether to generate ETag headers.
+     * @param bool $eTag Whether to generate ETag header and apply validation as needed (default: true).
+     * @param bool $weakEtag Whether to use a weak ETag header or string (default: false).
      * 
      * @return static Instance of the FileDelivery class.
-     *  > Note
-     *  > Your files must be stored in the storage directory located in `/writeable/storages/`.
-     *  > Additionally you don't need to specify the `/writeable/storages/` in your `$path` parameter.
+     * 
+     * @example Using storage method:
+     * 
+     * ```php
+     * FileDelivery::storage('images/photos')
+     * ```
+     * 
+     * > **Note:**
+     * > Your files must be stored in the storage directory located in `/writeable/storages/`.
+     * > Additionally you don't need to specify the `/writeable/storages/` in your `$path` parameter.
+     * > Set `$eTag` to true even if you are passing custom etag header.
      */
-    public static function storage(string $path, bool $eTag = true): static
+    public static function storage(string $path, bool $eTag = true, bool $weakEtag = false): static
     {
-        return new self(root('writeable/storages/' . trim($path, TRIM_DS)), $eTag);
+        return new self(root('writeable/storages/' . trim($path, TRIM_DS)), $eTag, $weakEtag);
     }
 
     /**
@@ -79,8 +92,9 @@ final class FileDelivery
         }
 
         $read = false;
+        $handler = fopen($filename, 'rb');
 
-        if ($handler = fopen($filename, 'rb')) {
+        if ($handler !== false) {
             $filesize = self::cacheHeaders($headers, $basename, $filename, $expiry);
             $read = FileManager::read(
                 $handler, 
@@ -89,6 +103,10 @@ final class FileDelivery
                 $length,
                 $delay
             );
+
+            if(is_resource($handler)){
+                fclose($handler);
+            }
         }
  
         return $read ? true : self::expiredHeader(500);
@@ -114,7 +132,9 @@ final class FileDelivery
     public function outputImage(string $basename, int $expiry = 0, array $options = [], array $headers = []): bool
     {
         if(!class_exists(NanoImage::class)){
-            throw new RuntimeException('To use this method you need to install "NanoImage" by running command "composer require peterujah/nano-image"' );
+            throw new RuntimeException(
+                'To use this method you need to install "NanoImage" by running command "composer require peterujah/nano-image"' 
+            );
         }
 
         $filename = $this->assertOutputHead($basename, $expiry, $headers);
@@ -141,6 +161,7 @@ final class FileDelivery
             }
 
             self::cacheHeaders($headers, $basename, null, $expiry);
+
             $result = $img->get($options['quality'] ?? 100);
             $img->free();
 
@@ -155,17 +176,17 @@ final class FileDelivery
     /**
      * Temporally output file based on the URL hash key if valid and not expired.
      *
-     * @param string $url_hash The encrypted URL hash.
+     * @param string $urlHash The encrypted URL hash.
      * @param array $headers Additional headers to set.
      * 
      * @return bool Return true if file output is successful, false otherwise.
      * @throws EncryptionException Throws if decryption failed or an error is encountered.
      */
-    public function temporal(string $url_hash, array $headers = []): bool
+    public function temporal(string $urlHash, array $headers = []): bool
     {
-        $data = Crypter::decrypt($url_hash);
+        $data = Crypter::decrypt($urlHash);
 
-        if ($data !== false && $data !== null) {
+        if ($data) {
             [$basename, $expiry, $then] = explode('|', $data);
             $expiration = (int) $then + (int) $expiry;
 
@@ -204,43 +225,62 @@ final class FileDelivery
     }
 
     /**
-     * Set Output head.
+     * Set Output header.
      *
      * @param string $basename The file name (e.g: image.png).
      * @param int $expiry Expiry time in seconds for cache control (default: 0), indicating no cache.
      * @param array<string,mixed> $headers An associative array for additional headers passed by reference.
      * 
-     * @return string|bool Filename or false.
+     * @return string|bool Return the filename or false if failed.
      */
     private function assertOutputHead(string $basename, int $expiry, array &$headers): string|bool
     {
         $filename = $this->path . DIRECTORY_SEPARATOR . ltrim($basename, TRIM_DS);
   
+        clearstatcache(true, $filename);
+
         if (!file_exists($filename)) {
             return self::expiredHeader(404);
         }
 
+        if ($this->eTag || $expiry > 0) {
+            $filemtime = filemtime($filename);
+            $filesize = (int) filesize($filename);
+        }
+        
         if ($this->eTag) {
-            $eTag = '"' . md5_file($filename) . '"';
-            $headers['ETag'] = $eTag;
+            // $headers['ETag'] = '"' . md5_file($filename) . '"';
+            $headers['ETag'] ??= ($this->weakEtag ? 'W/' : '') . '"' . base_convert($filemtime ?: '0', 10, 36) . '-' . $filesize . '"';
+        }
 
-            if ($expiry > 0) {
-                $filemtime = filemtime($filename);
+        $headers['Content-Length'] ??= $filesize;
+       
+        // If 0 then no caching load fresh
+        if ($expiry > 0) {
+
+            if ($this->eTag) {
                 $ifNoneMatch = trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '');
-                if ($ifNoneMatch === $eTag) {
+
+                if ($ifNoneMatch === $headers['ETag']) {
                     return self::notModifiedHeader($expiry, $filemtime);
                 }
+            }
 
-                if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) && ($modify = $filemtime) !== false && strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) >= $modify) {
-                   return self::notModifiedHeader($expiry, $filemtime);
+            if($filemtime !== false){
+                if (
+                    isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) && 
+                    strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) >= $filemtime // modify
+                ) {
+                    return self::notModifiedHeader($expiry, $filemtime);
                 }
 
                 $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T', $filemtime);
             }
         }
 
-        $headers['Content-Type'] ??= get_mime($filename);
-        if (!isset($headers['Content-Type'])) {
+        $headers['Content-Type'] ??= get_mime($filename) ?: null;
+
+        if (!$headers['Content-Type']) {
             return self::expiredHeader(500);
         }
 
@@ -253,7 +293,7 @@ final class FileDelivery
      * @param int $statusCode The HTTP status code to set.
      * @param array $headers Headers to set.
      * 
-     * @return false
+     * @return false Always return false.
      */
     private static function expiredHeader(int $statusCode, array $headers = []): bool
     {
@@ -271,7 +311,7 @@ final class FileDelivery
      * @param int $expiry Cache expiry.
      * @param array $headers Headers to set.
      * 
-     * @return true
+     * @return true Always return true.
      */
     private static function notModifiedHeader(int $expiry, $filemtime, array $headers = []): bool
     {
@@ -293,7 +333,7 @@ final class FileDelivery
      * @param string|null $filename The full file path.
      * @param int $expiry The expiration time in seconds.
      * 
-     * @return int Filesize.
+     * @return int Return the filesize.
      */
     private static function cacheHeaders(array $headers, string $basename, string|null $filename, int $expiry): int
     {
@@ -307,13 +347,15 @@ final class FileDelivery
         }
 
         if (!isset($headers['Cache-Control'])) {
-            $headers['Cache-Control'] = $expiry > 0 ? 'public, max-age=' . $expiry : 'no-cache, no-store, must-revalidate';
+            $headers['Cache-Control'] = ($expiry > 0) 
+                ? "public, max-age={$expiry}, immutable" 
+                : 'no-cache, no-store, must-revalidate';
         }
 
         $headers['Content-Disposition'] = 'inline; filename="' . $basename . '"';
 
         if($filename !== null){
-            $headers['Content-Length'] = filesize($filename);
+            $headers['Content-Length'] ??= (int) filesize($filename);
         }
 
         self::headers($headers, 200, ($expiry > 0));

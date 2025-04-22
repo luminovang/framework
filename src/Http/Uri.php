@@ -55,7 +55,8 @@ class Uri implements UriInterface, LazyInterface, Stringable
      *   - 'query'    (string)   Optional. The query string.
      *   - 'fragment' (string)   Optional. The fragment identifier.
      *
-     * @example
+     * @example - Example: 
+     * ```php
      * $uri = Uri::fromArray([
      *     'scheme' => 'https',
      *     'user'   => 'user123',
@@ -67,6 +68,7 @@ class Uri implements UriInterface, LazyInterface, Stringable
      * ]);
      *
      * echo $uri; // Outputs: https://user123:pass456@example.com/index.php?id=42#top
+     * ```
      */
     public static function fromArray(array $parts): self
     {

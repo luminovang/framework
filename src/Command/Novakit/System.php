@@ -15,6 +15,7 @@ use \Luminova\Seo\Sitemap;
 use \Luminova\Http\Network;
 use \Luminova\Command\Utils\Text;
 use \Luminova\Security\Crypter;
+use \SplFileObject;
 use \Throwable;
 
 class System extends BaseConsole 
@@ -37,6 +38,7 @@ class System extends BaseConsole
         'php novakit generate:sitemap --help',
         'php novakit env:add --help',
         'php novakit env:setup --help',
+        'php novakit env:cache --help',
         'php novakit env:remove --help'
     ];
 
@@ -55,6 +57,7 @@ class System extends BaseConsole
             'generate:key' => $this->generateKey($noSave),
             'generate:sitemap' => $this->generateSitemap(),
             'env:add' => $this->addEnv($key, $value),
+            'env:cache' => $this->cacheEnv(),
             'env:setup' => $this->setupEnv($this->term->getAnyOption('target', 't')),
             'env:remove' => $this->removeEnv($key),
             default => null
@@ -95,7 +98,72 @@ class System extends BaseConsole
         setenv($key, $value, true);
         $this->term->header();
         $this->term->success('Variable "' . $key . '" added successfully');
+        $this->term->writeln('Optionally run "php novakit env:cache" to create updated cache version of environment veriables.');
 
+        return STATUS_SUCCESS;
+    }
+
+    /**
+     * Generate a cache version of environment variables.
+     * 
+     * @return int Status code.
+     */
+    private function cacheEnv(): int 
+    {
+        $path = root() .  '.env';
+        $envCache = root('writeable/') . '.env-cache.php';
+
+        if (!file_exists($path)) {
+            $this->term->beeps();
+            $this->term->error('Environment variable file not found at the application root.');
+
+            return STATUS_ERROR;
+        }
+
+        $ignoreKeys = [];
+        $ignore = $this->term->getAnyOption('ignore', 'i');
+
+        if($ignore){
+           $ignoreKeys = explode(',', $ignore);
+        }
+
+        try {
+            $entry = [];
+            $file = new SplFileObject($path, 'r');
+
+            while (!$file->eof()) {
+                $line = trim($file->fgets());
+
+                if ($line === '' || str_starts_with($line, '#') || str_starts_with($line, ';')) {
+                    continue;
+                }
+
+                [$key, $value] = array_pad(explode('=', $line, 2), 2, '');
+                $key = trim($key);
+
+                if(!$key || in_array($key, $ignoreKeys)){
+                    continue;
+                }
+
+                if(setenv($key, $value)){
+                    $entry[$key] = env($key);
+                }
+            }
+
+            if($entry !== [] && __cache_env($entry, $envCache)){
+                $this->term->header();
+                $this->term->success('Environment variable cache was successfully created.');
+
+                return STATUS_SUCCESS;
+            }
+        } catch (Throwable $e) {
+            $this->term->beeps();
+            $this->term->error('Failed to create cache for environment variables: ' . $e->getMessage());
+            return STATUS_ERROR;
+        }
+
+        $this->term->beeps();
+        $this->term->error('Failed to create cache for environment variables.');
         return STATUS_SUCCESS;
     }
 
@@ -407,6 +475,7 @@ class System extends BaseConsole
         }
 
         $envFile = root() . '.env';
+        $envCache = root('writeable/') . '.env-cache.php';
         $envContents = get_content($envFile);
         
         if($envContents === false){
@@ -418,7 +487,15 @@ class System extends BaseConsole
         if (str_contains($envContents, "$key=") && str_contains($envContents, "$key =")) {
             $newContents = preg_replace("/\b$key\b.*\n?/", '', $envContents);
             if (write_content($envFile, $newContents) !== false) {
-                unset($_ENV[$key], $_SERVER[$key]);
+                $wasCached = file_exists($envCache);
+                $entries = $wasCached ? include_once $envCache : [];
+
+                unset($_ENV[$key], $_SERVER[$key], $entries[$key]);
+
+                if($wasCached){
+                    __cache_env($entries, $envCache);
+                }
+
                 $this->term->header();
                 $this->term->success('Variable "' . $key . '" was deleted successfully');
 

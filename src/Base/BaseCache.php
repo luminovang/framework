@@ -329,9 +329,7 @@ abstract class BaseCache implements LazyInterface
      * > The callback function should accept two parameters: the cache instance and an array of the retrieved cache item. 
      * > To modify the item and have the changes reflected in `getItems` or `getNext`, pass the item array by reference.
      * 
-     * @example
-     * 
-     * In this example, the callback converts the cache item value to uppercase before it is stored in the iterator.
+     * @example - In this example, the callback converts the cache item value to uppercase before it is stored in the iterator.
      * 
      * ```php
      * function myCallback($instance, array &$result) {

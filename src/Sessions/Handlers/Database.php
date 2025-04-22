@@ -60,7 +60,7 @@ class Database extends BaseSessionHandler
      * 
      * @return bool Return bool value from callback `onCreate`, otherwise always returns true for successful initialization.
      * 
-     * @example Example usage of `onCreate` callback:
+     * @example - Example usage of `onCreate` callback:
      * ```php
      * $handler = new Database('sessions', [
      *    'onCreate' => function (string $path, string $name): bool {
@@ -79,7 +79,7 @@ class Database extends BaseSessionHandler
      *
      * @return bool Return bool value from callback `onClose`, otherwise always returns true for successful cleanup.
      * 
-     * @example Example usage of `onClose` callback:
+     * @example - Example usage of `onClose` callback:
      * ```php
      * $handler = new Database('sessions', [
      *    'onClose' => function (bool $status): bool {
@@ -103,7 +103,7 @@ class Database extends BaseSessionHandler
      * 
      * @return bool Return bool value from `onValidate` callback, otherwise returns true if id is valid and exists else false.
      * 
-     * @example Example usage of `onValidate` callback:
+     * @example - Example usage of `onValidate` callback:
      * ```php
      * $handler = new Database('sessions', [
      *    'onValidate' => function (string $id, bool $exists): bool {

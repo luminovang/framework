@@ -12,6 +12,7 @@ namespace Luminova\Application;
 
 use \Luminova\Errors\ErrorHandler;
 use \Luminova\Debugger\Performance;
+use \Luminova\Http\Header;
 use \Luminova\Logger\Logger;
 
 final class Foundation 
@@ -21,7 +22,7 @@ final class Foundation
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.5.4';
+    public const VERSION = '3.5.5';
 
     /**
      * Framework version name.
@@ -177,8 +178,8 @@ final class Foundation
             ErrorHandler::setBacktrace(debug_backtrace(), true);
         }
         
-        if ($view !== 'cli.php' && ob_get_level() > 0) {
-            ob_end_clean();
+        if ($view !== 'cli.php') {
+            Header::clearOutputBuffers();
         }
 
         if(file_exists($path . $view)){
@@ -490,11 +491,11 @@ final class Foundation
     /**
      * Determines the appropriate error view path based on the application state and error context.
      *
-     * @param ErrorHandler $stack The error handler stack used to manage error types and contexts.
+     * @param ErrorHandler|null $stack The error handler stack used to manage error types and contexts.
      * 
      * @return array{0:bool,1:string,2:string} Returns an array with the view filename and its file path.
      */
-    private static function errRoute(ErrorHandler $stack): array
+    private static function errRoute(?ErrorHandler $stack): array
     {
         $view = null;
         if(defined('IS_UP') && PRODUCTION){

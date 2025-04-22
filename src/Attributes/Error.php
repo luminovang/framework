@@ -24,11 +24,20 @@ final class Error
      *                  This can be a specific path, a regex-style pattern or placeholder.
      * @param Closure|array|null $onError The error handler callback, which can either be a Closure or an array containing the class and method responsible for handling the error.
      * 
-     * @example Example usage for defining an error handler on a route.
+     * @example - Example usage for defining an error handler on a route:
+     * 
      * ```php
+     * // /app/Controllers/Http/MyController.php
+     * namespace \App\Controller\Http;
+     * 
+     * use Luminova\Base\BaseController;
+     * use Luminova\Attributes\Error;
+     * 
      * #[Error('web', pattern: '/', onError: [ViewErrors::class, 'onWebError'])]
      * #[Error('foo', pattern: '/foo/', onError: [ViewErrors::class, 'onWebFooError'])]
-     * class MyController extends BaseController {}
+     * class MyController extends BaseController {
+     *      // Class implemenations
+     * }
      * ```
      */
     public function __construct(

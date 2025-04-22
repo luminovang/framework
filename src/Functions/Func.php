@@ -112,7 +112,7 @@ class Func
  	 *   - `hex` - Returns a hexadecimal representation of random bytes.
  	 *   - `int|integer` - Contains only numeric characters (0-9).
 	 *
-	 * @example Examples:
+	 * @example - Examples:
  	 * - `Func::random(16, 'password')` - Generates a secure password of 16 characters.
  	 * - `Func::random(8, 'alphabet', true)` - Generates an 8-character string in uppercase letters.
  	 * - `Func::random(32, 'hex')` - Generates a 32-character hexadecimal string.
@@ -396,18 +396,33 @@ class Func
 	}
 
 	/**
-     * Determines if a given string is likely to be Base64-encoded.
-     *
-     * @param string $data The string to check for Base64 encoding.
-     *
-     * @return bool Returns true if the string is likely to be Base64-encoded, false otherwise.
-     */
-    public static function isBase64Encoded(string $data): bool
+	 * Determines whether the given string is Base64-encoded (standard, URL-safe, or MIME style).
+	 *
+	 * Supports both standard URL-safe, and MIME-safe Base64 strings (with newlines).
+	 *
+	 * @param string $data The input string to validate.
+	 * @param bool $strict If true, base64_decode() will return false on invalid characters.
+	 *
+	 * @return bool Returns true if the string appears to be valid Base64; false otherwise.
+	 */
+    public static function isBase64Encoded(string $data, bool $strict = true): bool
     {
-        return $data 
-			? (bool) preg_match('/^[a-zA-Z0-9\/+\r\n]+={0,2}$/', $data) && strlen($data) % 4 === 0
-			: false;
-    }
+		$data = trim($data);
+
+		if ($data === '' || strlen($data) % 4 !== 0) {
+			return false;
+		}
+
+		$data = preg_replace('/[\r\n]+/', '', $data);
+
+		if (!preg_match('/^[a-zA-Z0-9\/\+_\-]*={0,2}$/', $data)) {
+			return false;
+		}
+
+		$data = strtr($data, '-_', '+/');
+
+		return base64_encode(base64_decode($data, $strict) ?: '') === $data;
+	}
 
 	/**
      * Determines if the content string is likely a binary based on the presence of non-printable characters.
@@ -418,9 +433,13 @@ class Func
      */
     public static function isBinary(string $data): bool
     {
-        return $data 
-			? (bool) preg_match('/[^\x20-\x7E\t\r\n]/', $data)
-			: false;
+		$data = trim($data);
+
+		if ($data === '') {
+			return false;
+		}
+
+        return (bool) preg_match('/[^\x20-\x7E\t\r\n]/', $data);
     }
 
 	/**

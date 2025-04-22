@@ -50,6 +50,13 @@ class RateLimiter implements LazyInterface
     private array $response = ['type' => 'json', 'message' => null];
 
     /**
+     * Stores timestamps of incoming requests.
+     *
+     * @var array<int> $timestamps
+     */
+    private array $timestamps = [];
+
+    /**
      * Request client IP address. 
      * 
      * @var string|null $ip
@@ -136,9 +143,10 @@ class RateLimiter implements LazyInterface
      *
      * @param CacheItemPoolInterface|CacheInterface|BaseCache|Memcached|PredisClient|Redis|null $cache
      *        Optional cache instance. If null, the default Luminova file-based cache will be used.
-     * @param int $limit Maximum number of allowed requests within the TTL window. Default is 10.
-     * @param DateInterval|int $ttl Time-to-live for request tracking, in seconds or as a DateInterval. Default is 60 seconds.
+     * @param int $limit Maximum number of allowed requests within the TTL window (Default: 10).
+     * @param DateInterval|int $ttl Time-to-live for request tracking, in seconds or as a DateInterval (default: 60).
      * @param string $persistentId Optional unique ID to be included with key.
+     * 
      * @example - Using Luminova's FileCache (default fallback)
      * 
      * ```php
@@ -228,6 +236,26 @@ class RateLimiter implements LazyInterface
     public function getLimit(): int 
     {
         return $this->limit + $this->extended;
+    }
+
+    /**
+     * Retrieve the recorded request timestamps.
+     *
+     * Optionally filters and returns only valid (non-expired) timestamps within the current time window, 
+     * based on the configured TTL (time-to-live).
+     *
+     * @param bool $filterValidOnly If true, only return timestamps that are still valid (not expired).
+     *
+     * @return array Return an array of request timestamps, filtered by validity if requested.
+     */
+    public function getTimestamps(bool $filterValidOnly = false): array 
+    {
+        if(!$filterValidOnly || $this->timestamps === []){
+            return $this->timestamps;
+        }
+
+        $now = time();
+        return array_filter($this->timestamps, fn($timestamp) => $now - $timestamp < $this->ttl);
     }
 
     /**
@@ -342,36 +370,45 @@ class RateLimiter implements LazyInterface
      * @throws RuntimeException If the cache is not connected.
      * 
      * @example - Usage Examples:
-     * ```php
-     * $limiter->check('User-Id:Ip-Address')->isAllowed();
-     * ```
-     * 
-     * Wait until execution is complete:
      * 
      * ```php
-     * $limiter->check('User-Id')->wait();
-     * 
-     * if(
-     *      $limiter->isAllowed() && 
-     *      $limiter->isIpAddress() // Optionally validate ip address too
-     * ){
-     *      // allow
+     * if(!$limiter->check('User-Id:Ip-Address')->isAllowed()){
+     *      $limiter->respond();
      * }
      * ```
      * 
-     * Adjust rate limit:
+     * @example - Using Wait execution: 
+     * 
+     * Respond with message:
+     * 
      * ```php
      * $limiter->check('User-Id')->wait();
      * 
      * if(!$limiter->isAllowed()){
-     *      // reject
-     *      return;
-     * }
-     * 
-     * if(!$limiter->isIpAddress()){
-     *      $limiter->continue(2);
+     *      $limiter->respond();
      * }
      * ```
+     * 
+     * Delay operation using throttle:
+     * 
+     * ```php
+     * $limiter->check('User-Id')->wait();
+     * 
+     * if(!$limiter->isAllowed()){
+     *      $limiter->throttle(5);
+     * }
+     * ```
+     * 
+     * Adjust rate limit:
+     * 
+     * ```php
+     * $limiter->check('User-Id')->wait();
+     * 
+     * if(!$limiter->isAllowed() && !$limiter->isIpAddress()){
+     *       $limiter->continue(2);
+     * }
+     * ```
+     * > This may work only if the key doesn't use client ip address.
      */
     public function check(?string $key = null): self
     {
@@ -385,6 +422,7 @@ class RateLimiter implements LazyInterface
         $this->extended = (int) ($result['extend'] ?? 0);
         $this->ipAddress = $result['ip'] ?? null;
         $this->resetAt = $result['reset'] ?? null;
+        $this->timestamps = $result['timestamps'] ?? [];
         $this->requests = $requests + 1;
 
         if ($requests >= $this->getLimit()) {
@@ -395,8 +433,10 @@ class RateLimiter implements LazyInterface
             return $this;
         }
 
+        $now = time();
         $this->remaining = max(0, $this->getLimit() - $this->requests);
-        $this->resetAt = time() + $this->ttl;
+        $this->resetAt = $now + $this->ttl;
+        $this->timestamps[] = $now;
         $this->set($this->hash, $this->requests);
 
         $this->finished = true;
@@ -406,11 +446,14 @@ class RateLimiter implements LazyInterface
     }
 
     /**
-     * Wait until the rate limiter is marked as finished or max wait time is exceeded.
+     * Waits until the rate limiter finishes processing or the optional max wait timeout is exceeded.
      *
-     * @param float|int $interval Interval in seconds (supports fractions like 0.1 for 100ms).
-     * @param int|null $maxWait Maximum seconds to wait. Null for infinite wait.
-     * 
+     * This is a passive wait that periodically checks if the limitter decision is complete.
+     * It is useful when limitter involves asynchronous or deferred logic.
+     *
+     * @param float|int $interval The interval to sleep between checks (in seconds). Supports sub-second delays (e.g., 0.1 for 100ms).
+     * @param int|null $maxWait The maximum duration to wait (in seconds). Use `null` to wait indefinitely.
+     *
      * @return void
      */
     public function wait(float|int $interval = 1.0, ?int $maxWait = null): void
@@ -459,7 +502,7 @@ class RateLimiter implements LazyInterface
      * @throws InvalidArgumentException If the cache instance is invalid or the key is empty.
      * @throws RuntimeException If the cache is not connected.
      * 
-     * > **Note:** This will persist new limit (e.g, `defaultLimit + $limit`), till ttl expires before default limit is restured.
+     * > **Note:** This will persist new limit (e.g, `defaultLimit + $limit`), till ttl expires before default limit is restored.
      */
     public function continue(int $limit = 1): self
     {
@@ -583,9 +626,7 @@ class RateLimiter implements LazyInterface
             ob_start();
             response(429, $headers)->send();
 
-            if (ob_get_level() > 0) {
-                ob_end_clean();
-            }
+            Header::clearOutputBuffers();
             return STATUS_SUCCESS;
         }
 
@@ -597,7 +638,7 @@ class RateLimiter implements LazyInterface
             );
         }
 
-        Header::setOutputHandler();
+        Header::setOutputHandler(true);
 
         return match ($type) {
             'custom' => response(429, $headers)->render($message),
@@ -610,6 +651,35 @@ class RateLimiter implements LazyInterface
                 'reset' => $headers['X-RateLimit-Reset']
             ]),
         };
+    }
+
+    /**
+     * Introduces an execution delay throttling if the rate limit was exceeded.
+     *
+     * This can be used to enforce backoff or slow down abusive clients after a throttle breach.
+     * If the limit was not exceeded, this method exits immediately.
+     *
+     * @param float|int $interval Delay duration in seconds. Supports sub-second values (e.g., 0.5 for 500ms).
+     *
+     * @return void
+     * 
+     * @example -Enforce delay on limit breach:
+     * 
+     * ```php
+     * $limiter->check('User-Id')->wait();
+     *
+     * if (!$limiter->isAllowed()) {
+     *    $limiter->throttle(5); // Wait 5 seconds
+     * }
+     * ```
+     */
+    public function throttle(float|int $interval = 1.0): void
+    {
+        if(!$this->exceeded){
+            return;
+        }
+
+        usleep((int)($interval * 1_000_000));
     }
 
     /**
@@ -662,7 +732,8 @@ class RateLimiter implements LazyInterface
             'requests' => $requests,
             'ip' => self::$ip,
             'extend' => $this->extended,
-            'reset' => $this->resetAt
+            'reset' => $this->resetAt,
+            'timestamps' => $this->timestamps
         ];
 
         return match (true) {

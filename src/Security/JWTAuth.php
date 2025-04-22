@@ -294,7 +294,7 @@ class JWTAuth implements LazyInterface
      * @return bool Returns `true` if the authentication is valid and the token was successfully validated, otherwise `false`.
      * @throws EncryptionException Throws on development mode if an error is encountered while decoding.
      * 
-     * @example Example without callback:
+     * @example - Example without callback:
      * ```php
      * $isValid = $jwt->validateFromFile('user-id');
      * if ($isValid) {
@@ -304,7 +304,7 @@ class JWTAuth implements LazyInterface
      * }
      * ```
      *
-     * @example Example with callback:
+     * @example - Example with callback:
      * ```php
      * $isValid = $jwt->validateFromFile('user-id', function(bool $valid, \stdClass $payload): bool {
      *     if (!$valid) {

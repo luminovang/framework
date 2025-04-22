@@ -35,7 +35,9 @@ abstract class BaseConfig implements LazyInterface
      * Where the key is the MIME type and the value is the extension.
      * 
      * @var array<string,string> $extensions 
-     * @example Usage example
+     * 
+     * @example - Usage example:
+     * 
      * ```php 
      * protected static array $extensions = [
      *      'image/jpeg' => 'jpg',

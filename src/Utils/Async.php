@@ -54,6 +54,7 @@ class Async
      *     function () { return 'Task 1 completed'; },
      *     function () { return 'Task 2 completed'; }
      * ]);
+     * $async->run();
      * ```
      *
      * @example - With Fiber tasks.
@@ -63,6 +64,7 @@ class Async
      *     new Fiber(fn() => 'Task 1 completed'),
      *     new Fiber(fn() => 'Task 2 completed')
      * ]);
+     * $async->run();
      * ```
      */
     public function __construct(protected array $tasks = []){
@@ -228,15 +230,22 @@ class Async
      *     function () { return 'Task 1 completed'; },
      *     function () { return 'Task 2 completed'; }
      * ]);
+     * 
+     * $async->run();
+     * var_dump($async->getResult())
      *```
      *
-     * @example - With Fiber tasks.
+     * @example - With Fiber tasks and callback.
      * 
      * ```php
      * $async = Async::task([
      *     new Fiber(fn() => 'Task 1 completed'),
      *     new Fiber(fn() => 'Task 2 completed')
      * ]);
+     * 
+     * $async->run(function(mixed $result){
+     *      echo $result;
+     * });
      * ```
      */
     public static function task(array $tasks = []): self 
@@ -245,54 +254,102 @@ class Async
     }
 
     /**
-     * Awaits the completion of a fiber or callable.
+     * Awaits the completion of a fiber or callable task.
      *
-     * @param Fiber|callable $task The task to await (e.g, `Fiber` or `callable`).
-     *          Callback signature: `function(): mixed{ return fooRunAndReturnTaskResult(); }`.
+     * Executes the given `Fiber` or `callable` and waits for it to complete. 
+     * Optionally delays between resume cycles and enforces a maximum wait time.
+     *
+     * @param Fiber|callable $task The task to await. If a callable is provided, it will be wrapped in a `Fiber`.
+     *                              Callback signature: `function(): mixed { return someResult(); }`
+     * @param float|int $delay Optional delay in seconds between resume cycles (default: 0 (no delay)).
+     * @param float $maxWait Optional maximum time to wait in seconds (default: 0 (no max-wait)). 
+     *                  If exceeded, a `RuntimeException` is thrown.
      * 
-     * @return mixed Return the result of the fiber or callable.
-     * @throws RuntimeException If PHP Fiber is not supported.
-     * @throws Exception If any error occurs.
-     * 
-     * @example - Usage Example:
+     * @return mixed Return the result returned by the task after completion.
+     *
+     * @throws RuntimeException If PHP Fibers are not supported or the task does not complete in time.
+     * @throws Exception If the task itself throws an exception.
+     *
+     * @example - Basic usage with a callable:
      * 
      * ```php
+     * $result = Async::await(fn() => doSomething());
+     * echo $result;
+     * ```
+     *
+     * @example - With delay between resume cycles:
+     * 
+     * Sleep to yield CPU (avoids busy loop).
+     * 
+     * ```php
+     * $result = Async::await(fn() => doWork(), delay: 0.01); // 10ms delay
+     * ```
+     *
+     * @example - With max wait time enforcement:
+     * ```php
+     * try {
+     *     $result = Async::await(fn() => slowTask(), maxWait: 2.5); // max 2.5 seconds
+     * } catch (RuntimeException $e) {
+     *     echo "Task timed out!";
+     * }
+     * ```
+     *
+     * @example - Passing a pre-created Fiber:
+     * ```php
+     * $fiber = new Fiber(fn() => fetchData());
+     * $data = Async::await($fiber);
+     * ```
+     * 
+     * @example - Waiting on multiple network requests:
+     * ```php
+     * use \Luminova\Utils\Async;
      * use Luminova\Http\Network;
      * 
      * $tasks = [
-     *      fn() => (new Network)->get('https://example.com'),
-     *      fn() => (new Network)->get('https://another.com'),
+     *     fn() => (new Network)->get('https://example.com'),
+     *     fn() => (new Network)->get('https://another.com'),
      * ];
      * 
      * $results = [];
      * foreach ($tasks as $task) {
-     *      $response = Async::await($task);
-     *      $results[] = $response->getContents();
+     *     $response = Async::await($task);
+     *     $results[] = $response->getContents();
      * }
      * 
      * print_r($results);
      * ```
      */
-    public static function await(Fiber|callable $task): mixed
+    public static function await(Fiber|callable $task, float|int $delay = 0, float $maxWait = 0): mixed
     {
         self::isFiber();
 
         $task = ($task instanceof Fiber) ? $task : new Fiber($task);
+        $start = microtime(true);
 
         if (!$task->isStarted()) {
             $task->start();
         }
+
+        $sleep = ($delay > 0) ? (int)($delay * 1_000_000) : 0;
 
         while (!$task->isTerminated()) {
             if ($task->isSuspended()) {
                 $task->resume();
             }
 
-            Fiber::suspend(); 
-
             if ($task->isTerminated()) {
                 break;
             }
+
+            if ($maxWait > 0 && (microtime(true) - $start) >= $maxWait) {
+                throw new RuntimeException("Fiber did not complete within {$maxWait} seconds.");
+            }
+
+            if ($sleep > 0) {
+                usleep($sleep);
+            }
+
+            Fiber::suspend();
         }
 
         return $task->getReturn();
@@ -490,7 +547,7 @@ class Async
      * @throws RuntimeException If the method is called while another task execution (`run` or `until`) is in progress.
      * @throws Exception If any error occurs.
      * 
-     * @example Usage example:
+     * @example - Usage example:
      * 
      * ```php
      * use Luminova\Http\Network;
@@ -555,7 +612,6 @@ class Async
                 }
 
                 if($finished){
-                    //array_merge_result($this->result, $result);
                     $this->dequeue($id);
 
                     if ($callback !== null) {

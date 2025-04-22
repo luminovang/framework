@@ -30,8 +30,8 @@ abstract class BaseCallable
      * @example - Extending the base callback class:
      * 
      * ```php
-     * // app/Callable/CustomCallback.php
-     * <?php
+     * // /app/Callable/CustomCallback.php
+     * 
      * namespace App\Callable;
      * 
      * use Luminova\Base\BaseCallable;
@@ -52,7 +52,6 @@ abstract class BaseCallable
      * Now to pass your callback to any method:
      * 
      * ```php
-     * <?php
      * use App\Callable\CustomCallback;
      * (new Foo())->feedMeCallback(new CustomCallback());
      * ```

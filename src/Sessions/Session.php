@@ -865,7 +865,7 @@ class Session implements LazyInterface
      * @return bool Return true if session started successfully, false otherwise.
      * @throws RuntimeException Throws if an invalid session ID is provided or an error is encounter.
      * 
-     * @example Starting a session with a specified session ID:
+     * @example - Starting a session with a specified session ID:
      * 
      * ```php
      * namespace App;
@@ -951,7 +951,7 @@ class Session implements LazyInterface
      * @throws LogicException If strict IP validation is disabled and IP address is provided.
      * @throws RuntimeException If an operation is attempted without an active session.
      * 
-     * @example Synchronizing a user login session:
+     * @example - Synchronizing a user login session:
      * ```php
      * namespace App\Controllers\Http;
      * 
@@ -1125,7 +1125,7 @@ class Session implements LazyInterface
      * 
      * @return self Returns the current `Session` instance.
      *
-     * @example Session IP address change event:
+     * @example - Session IP address change event:
      * 
      * ```php
      * namespace App;

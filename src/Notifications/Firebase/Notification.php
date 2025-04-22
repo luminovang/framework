@@ -343,13 +343,14 @@ class Notification implements LazyInterface
 
     /**
      * Send conditional messages, by specifying an expression the target topics.
-     * @example "'TopicA' in topics && ('TopicB' in topics || 'TopicC' in topics)".
      * 
      * @param Message|array<string,mixed> $config The notification payload.
      * @param bool $validateOnly Optional. If set to true, the message will only be validated without sending.
      *
      * @return self Return instance of luminova firebase notification class.
      * @throws ErrorException If the topic is not provided correctly.
+     * 
+     * @example "'TopicA' in topics && ('TopicB' in topics || 'TopicC' in topics)".
      */
     public function condition(Message|array $config, bool $validateOnly = false): self
     {

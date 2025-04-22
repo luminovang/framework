@@ -19,6 +19,25 @@ use \Countable;
 class Header implements LazyInterface, Countable
 {
     /**
+     * Content types for view rendering.
+     * 
+     * @var array VIEW_CONTENT_TYPES
+     */
+    private const VIEW_CONTENT_TYPES = [
+        'html'   => ['text/html', 'application/xhtml+xml'],
+        'text'   => ['text/plain'],
+        'js'     => ['application/javascript', 'application/x-javascript', 'text/javascript'],
+        'css'    => ['text/css'],
+        'json'   => ['application/json', 'application/x-json'],
+        'jsonld' => ['application/ld+json'],
+        'xml'    => ['application/xml', 'text/xml', 'application/x-xml'],
+        'rdf'    => ['application/rdf+xml'],
+        'atom'   => ['application/atom+xml'],
+        'rss'    => ['application/rss+xml'],
+        'form'   => ['application/x-www-form-urlencoded', 'multipart/form-data']
+    ];
+
+    /**
      * Header variables.
      * 
      * @var array<string,mixed> $variables
@@ -96,7 +115,7 @@ class Header implements LazyInterface, Countable
         return array_key_exists($key, self::$variables);
     }
 
-     /**
+    /**
      * Check if request header key exist and has a valid value.
      * 
      * @param string $key Header key to check.
@@ -236,12 +255,14 @@ class Header implements LazyInterface, Countable
     }
 
     /**
-     * Set no caching headers.
-     * 
-     * @param int $status HTTP status code.
-     * 
-     * @return void 
-     * @internal Used in router and template.
+     * Sends HTTP headers to disable caching and optionally set content type and retry behavior.
+     *
+     * @param int $status HTTP status code to send (default: 200).
+     * @param string|bool|null $contentType Optional content type (default: 'text/html').
+     * @param string|int|null $retry Optional value for Retry-After header.
+     *
+     * @return void
+     * @internal Used by router and template rendering to prevent caching.
      */
     public static function headerNoCache(
         int $status = 200, 
@@ -405,23 +426,9 @@ class Header implements LazyInterface, Countable
     public static function getContentTypes(string $type, int|null $index = 0): array|string|null
     {
         $type = ($type === 'txt') ? 'text' : $type;
-        $types = [
-            'html'   => ['text/html', 'application/xhtml+xml'],
-            'text'   => ['text/plain'],
-            'js'     => ['application/javascript', 'application/x-javascript', 'text/javascript'],
-            'css'    => ['text/css'],
-            'json'   => ['application/json', 'application/x-json'],
-            'jsonld' => ['application/ld+json'],
-            'xml'    => ['application/xml', 'text/xml', 'application/x-xml'],
-            'rdf'    => ['application/rdf+xml'],
-            'atom'   => ['application/atom+xml'],
-            'rss'    => ['application/rss+xml'],
-            'form'   => ['application/x-www-form-urlencoded', 'multipart/form-data']
-        ];
-
         return ($index === null) 
-            ? ($types[$type] ?? null)
-            : ($types[$type][$index] ?? 'text/html');
+            ? (self::VIEW_CONTENT_TYPES[$type] ?? null)
+            : (self::VIEW_CONTENT_TYPES[$type][$index] ?? 'application/octet-stream');
     }
 
     /**
@@ -444,35 +451,89 @@ class Header implements LazyInterface, Countable
     }
 
     /**
-     * Sets the appropriate output handler for content encoding.
+     * Initializes the output buffer with the appropriate content encoding handler.
+     *
+     * This method detects supported content encodings (such as `gzip` or `deflate`)
+     * from client headers and applies the corresponding output handler for compression,
+     * if enabled and supported. Falls back to a custom or default handler when no match is found.
      * 
-     * @return bool Returns true if the output buffer handler is set successfully, otherwise false.
-     * @internal
+     * If output buffering is already active, it will not be restarted.
+     * 
+     * @param bool $clearIfSet Weather to clear output buffers if already set (default: false).
+     *
+     * @return bool Returns true if output buffering is successfully started; false otherwise.
+     * @internal This method is intended for internal framework use only.
      */
-    public static function setOutputHandler(): bool
+    public static function setOutputHandler(bool $clearIfSet = false): bool
     {
+        if (ob_get_level() > 0) {
+            if(!$clearIfSet){
+                return false;
+            }
+
+            self::clearOutputBuffers();
+        }
+
         if (!env('enable.encoding', true)) {
             return ob_start();
         }
 
-        $handler = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? $_SERVER['HTTP_CONTENT_ENCODING'] ?? null;
-        
+        $handler = $_SERVER['HTTP_ACCEPT_ENCODING'] 
+            ?? $_SERVER['HTTP_CONTENT_ENCODING'] 
+            ?? null;
+
         if ($handler) {
             if (str_contains($handler, 'gzip')) {
-                return ob_start('ob_gzhandler');
+                if (ini_get('zlib.output_compression') != '1') {
+                    return ob_start('ob_gzhandler');
+                }
+
+                return ob_start();
             }
-            
+
             if (str_contains($handler, 'deflate')) {
                 if (function_exists('ini_set')) {
                     ini_set('zlib.output_compression', 'On');
                     ini_set('zlib.output_handler', 'deflate');
                 }
+
                 return ob_start();
             }
         }
 
-        $handler = env('script.output.handler', null);
-        return ob_start(!$handler ? null : $handler);
+        return ob_start(env('script.output.handler', null) ?: null);
+    }
+
+    /**
+     * Clears output buffers based on the selected action.
+     *
+     * Supported actions:
+     * - 'auto' (default): Clears all buffers if more than one is active; otherwise, clears only the top buffer.
+     * - 'all': Clears all active output buffers.
+     * - 'top': Clears only the top buffer.
+     *
+     * @param string $action Determines how buffers are cleared: 'auto', 'all', or 'top'.
+     * 
+     * @return bool Returns true if at least one buffer was cleared successfully, false otherwise.
+     */
+    public static function clearOutputBuffers(string $action = 'auto'): bool
+    {
+        $level = ob_get_level();
+
+        if ($level === 0) {
+            return false;
+        }
+
+        if (($action === 'auto' || $action === 'all') && $level > 1) {
+            $cleared = false;
+
+            while (ob_get_level() > 0) {
+                $cleared = ob_end_clean() || $cleared;
+            }
+            return $cleared;
+        }
+
+        return ob_end_clean();
     }
 
     /**

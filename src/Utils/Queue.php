@@ -143,7 +143,7 @@ final class Queue implements Countable
      * @param bool $output Whether to display the result of executed jobs if they return a string (default: false).
      * @param int $eReporting Determines how execution messages and errors are handled (default: `Queue::E_OUTPUT`).
      *
-     * @example Job Queue Structure:
+     * @example - Job Queue Structure:
      * **Tasks with identifiers:**
      * Each job requires a `task` key for the job to execute, and an optional `id` as the job's identifier.
      * ```php
@@ -179,7 +179,7 @@ final class Queue implements Countable
      * @param int $eReporting Determines how execution messages and errors are handled (default: `Queue::E_OUTPUT`).
      *
      * @return Queue Return new Queue instance.
-     * @example Usage Example:
+     * @example - Usage Example:
      * ```php
      * Queue::wait([
      *      request('https://example.com/foo'),
@@ -289,7 +289,7 @@ final class Queue implements Countable
      * @param callable $callback The callback function to be invoked on task completion.
      *
      * @return void
-     * @example Example Signature for Callback:
+     * @example - Example Signature for Callback:
      * 
      * ```php
      * $queue->onResponse(function (mixed $result, mixed $previous, Luminova\Utils\Queue $queue) {

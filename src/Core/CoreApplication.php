@@ -143,7 +143,7 @@ abstract class CoreApplication implements LazyInterface
      */
     protected final function terminate(array $info = []): void 
     {
-        $info += ['uri' =>  Router::getUriSegments()];
+        $info += ['uri' => Router::getUriSegments()];
 
         $this->termination = [
             'isTerminated' => $this->onTerminate($info),

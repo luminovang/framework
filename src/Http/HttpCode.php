@@ -116,7 +116,7 @@ final class HttpCode
      * 
      * @return string|null Return the http status code message, otherwise null.
      * 
-     * @example Returning status code message.
+     * @example - Returning status code message.
      * 
      * ```php
      * echo $status->status200;
@@ -150,7 +150,7 @@ final class HttpCode
      * 
      * @return string|null Return the http status code message, otherwise null.
      * 
-     * @example Returning status code message.
+     * @example - Returning status code message.
      * 
      * ```php
      * echo HttpCode::status200();

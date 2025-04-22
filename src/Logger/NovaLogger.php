@@ -24,6 +24,7 @@ use \Luminova\Storages\Archive;
 use \Luminova\Exceptions\FileException;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\AppException;
+use \JsonException;
 use \Throwable;
 use \Fiber;
 
@@ -310,7 +311,7 @@ class NovaLogger extends AbstractLogger
             'app'        => APP_NAME,
             'host'       => APP_HOSTNAME,
             'clientIp'   => IP::get(),
-            'message'    => $this->getPlainMessage($this->level, $message),
+            'message'    => self::formatMessage($this->level, $message, $this->name),
             'context'    => $context,
             'level'      => $this->level,
             'name'       => $this->name,
@@ -326,18 +327,15 @@ class NovaLogger extends AbstractLogger
     /**
      * Sends a log message to a Telegram chat using the Telegram Bot API.
      *
-     * @param string|int|null $chatId The chat ID to send the message to. 
-     *      If null, the chat ID is retrieved from the environment variable 'telegram.bot.chat.id'.
+     * @param string|int $chatId The telegram bot chat ID to send the message to. 
+     * @param string $token The telegram bot token.
      * @param string $message The log message to send.
      * @param array<string,mixed> $context Additional contextual data related to the log message.
      *
      * @return void
      */
-    public function telegram(string|int|null $chatId, string $message, array $context = []): void 
+    public function telegram(string|int $chatId, string $token, string $message, array $context = []): void 
     {
-        $token = env('telegram.bot.token');
-        $chatId ??= env('telegram.bot.chat.id');
-
         if (!$token || !$chatId) {
             self::log(LogLevel::CRITICAL, 'Telegram bot token or chat ID is missing', [
                 'originalMessage' => $message,
@@ -351,8 +349,8 @@ class NovaLogger extends AbstractLogger
             'Telegram',
             "https://api.telegram.org/bot{$token}/sendMessage",
             [
-                'chat_id'    => $chatId,
-                'text'       => sprintf(
+                'chat_id' => $chatId,
+                'text' => sprintf(
                     "<b>Application:</b> %s\n<b>Version:</b> %s\n<b>Host:</b> %s\n<b>Client IP:</b> %s\n<b>Log Name:</b> %s\n<b>Level:</b> %s\n<b>Datetime:</b> %s\n\n<b>Message:</b> %s\n\n<b>URL:</b> %s\n<b>Method:</b> %s\n<b>User-Agent:</b> %s",
                     APP_NAME,
                     APP_VERSION,
@@ -402,13 +400,13 @@ class NovaLogger extends AbstractLogger
     public function message(
         string $level, 
         string $message, 
-        array  $context = [],
-        bool   $htmlFormat = false
+        array $context = [],
+        bool $htmlFormat = false
     ): string
     {
         return $htmlFormat 
             ? $this->getHtmlMessage($level, $message, $context) 
-            : $this->getPlainMessage($level, $message, $context);
+            : self::formatMessage($level, $message, $this->name, $context);
     }
 
     /**
@@ -441,9 +439,10 @@ class NovaLogger extends AbstractLogger
                 }catch(FileException $e){
                     FileManager::write(
                         $filepath, 
-                        $this->getPlainMessage(
+                        self::formatMessage(
                             $level, 
-                            sprintf('Failed to create backup for %s: error: %s', $level, $e->getMessage() . PHP_EOL)
+                            sprintf('Failed to create backup for %s: error: %s', $level, $e->getMessage() . PHP_EOL),
+                            $this->name
                         ), 
                         FILE_APPEND|LOCK_EX
                     );
@@ -496,7 +495,7 @@ class NovaLogger extends AbstractLogger
             $path = self::$path . "{$level}{$this->extension}";
             $message = str_contains($message, '[' . strtoupper($level) . '] [') 
                 ? trim($message, PHP_EOL)
-                : $this->getPlainMessage($level, $message, $context);
+                : self::formatMessage($level, $message, $this->name, $context);
 
             if(FileManager::write($path, $message . PHP_EOL, FILE_APPEND|LOCK_EX)){
                 return ($this->autoBackup && $this->maxSize) 
@@ -537,7 +536,7 @@ class NovaLogger extends AbstractLogger
             return false;
         }
 
-        $updated = json_encode($contents, JSON_PRETTY_PRINT);
+        $updated = json_encode($contents, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         if ($updated === false) {
             return false;
         }
@@ -554,30 +553,74 @@ class NovaLogger extends AbstractLogger
      *
      * @param string $level   The log level (e.g., 'INFO', 'ERROR').
      * @param string $message The main log message.
+     * @param string|null $name Optional log system name.
      * @param array  $context Optional. Additional contextual information for the log entry.
      *                        Default is an empty array.
      *
      * @return string The formatted log message. If context is provided, it will be
      *                appended to the message.
      */
-    protected function getPlainMessage(
+    public static function formatMessage(
         string $level, 
         string $message, 
+        ?string $name = null, 
         array $context = []
     ): string 
     {
         $message = sprintf(
-            '[%s] [%s] [%s]: %s', 
+            $name ? '[%s] [%s] [%s]: %s' : '[%s]%s [%s]: %s', 
             strtoupper($level), 
-            $this->name,
+            $name ?? '',
             Time::now()->format('Y-m-d\TH:i:s.uP'), 
             $message
         );
+        
+        if($context === []){
+            return $message;
+        }
 
-        return ($context === []) 
-            ? $message
-            : sprintf('%s [CONTEXT] %s', $message, print_r($context, true));
-    }
+        $message .= ' [CONTEXT] ';
+
+        if (!PRODUCTION) {
+            $message .= print_r($context, true);
+
+            return $message;
+        }
+
+        $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR;
+
+        try {
+            $message .= json_encode($context, $flags);
+        } catch (JsonException $e) {
+            try {
+                $message .= json_encode(self::sanitizeUtf8($context), $flags);
+            } catch (JsonException $e) {
+                $message .= '[Context JSON Error: ' . $e->getMessage() . '] ' . print_r($context, true);
+            }
+        }
+        
+        return $message;
+    }    
+
+    /**
+     * Try sanitize context if failed.
+     * 
+     * @param mixed $value The context value to sanitize.
+     * 
+     * @return mixed Return sanitived context.
+     */
+    private static function sanitizeUtf8(mixed $value): mixed 
+    {
+        if (is_string($value)) {
+            return mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+        }
+    
+        if (is_array($value)) {
+            return array_map([self::class, 'sanitizeUtf8'], $value);
+        }
+    
+        return $value;
+    }    
 
     /**
      * Generates an HTML-formatted log message.

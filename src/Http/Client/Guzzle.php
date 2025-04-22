@@ -39,7 +39,6 @@ class Guzzle implements \Luminova\Interface\ClientInterface
      * @example - Example Request Client With base URL:
      * 
      * ```php
-     * <?php
      * use Luminova\Http\Client\Guzzle;
      * $client = new Guzzle([
      *      'base_uri' => 'https://example.com/'

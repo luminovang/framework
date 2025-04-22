@@ -20,6 +20,69 @@ use \Luminova\Utils\LazyObject;
 abstract class BaseController
 {
     /**
+     * When rendering HTML contents.
+     *
+     * @var string HTML
+     */
+    public const HTML = 'html';
+
+    /**
+     * When rendering data as JSON.
+     *
+     * @var string JSON
+     */
+    public const JSON = 'json';
+
+    /**
+     * When rendering plain text content.
+     *
+     * @var string TEXT
+     */
+    public const TEXT = 'txt';
+
+    /**
+     * When rendering XML content.
+     *
+     * @var string
+     */
+    public const XML = 'xml';
+
+    /**
+     * When rendering JavaScript (.js) content.
+     *
+     * @var string
+     */
+    public const JS = 'js';
+
+    /**
+     * When rendering Cascading Style Sheets (.css).
+     *
+     * @var string
+     */
+    public const CSS = 'css';
+
+    /**
+     * When rendering RDF (Resource Description Framework) data.
+     *
+     * @var string
+     */
+    public const RDF = 'rdf';
+
+    /**
+     * When rendering Atom feeds.
+     *
+     * @var string
+     */
+    public const ATOM = 'atom';
+
+    /**
+     * When rendering RSS (Really Simple Syndication) feeds.
+     *
+     * @var string
+     */
+    public const RSS = 'rss';
+
+    /**
      * HTTP request object.
      * 
      * @var LazyInterface<Request>|Request|null
@@ -114,21 +177,21 @@ abstract class BaseController
      * - `STATUS_SUCCESS` if the view is handled successfully,  
      * - `STATUS_SILENT` if failed, silently terminate without error page allowing you to manually handle the state.
      * 
-     * @example This examples are equivalent:
+     * @example - This examples are equivalent:
      * 
      * ```php
      * public function fooView(): int
      * {
-     *      return $this->view('view-name', [...], 'html', 200);
+     *      return $this->view('view-name', [...], parent::HTML, 200);
      *      // Same as 
-     *      return $this->app->view('view-name', 'html')->render([...], 200);
+     *      return $this->app->view('view-name', parent::HTML)->render([...], 200);
      * }
      * ```
      */
     protected final function view(
         string $view, 
         array $options = [], 
-        string $type = 'html',
+        string $type = self::HTML,
         int $status = 200
     ): int
     {
@@ -157,21 +220,21 @@ abstract class BaseController
      * 
      * @return string Return the rendered view content.
      * 
-     * @example This examples are equivalent:
+     * @example - This examples are equivalent:
      * 
      * ```php
      * public function fooView()
      * {
-     *      $content = $this->respond('view-name', [...], 'html', 200);
+     *      $content = $this->respond('view-name', [...], parent::HTML, 200);
      *      // Same as 
-     *      $content = $this->app->view('view-name', 'html')->respond([...], 200);
+     *      $content = $this->app->view('view-name', parent::HTML)->respond([...], 200);
      * }
      * ```
      */
     protected final function respond(
         string $view, 
         array $options = [], 
-        string $type = 'html',
+        string $type = self::HTML,
         int $status = 200
     ): string
     {
@@ -204,8 +267,12 @@ abstract class BaseController
      * @param array<string,mixed> $classInfo Information about the class where the middleware check failed.  
      *  
      * @return void 
-     * @example Render View on Middleware Failure
+     * 
+     * @example - Render View on Middleware Failure:
+     * 
      * ```php
+     * namespace App\Controllers\Http;
+     * 
      * class AccountController extends BaseController
      * {
      *      #[Route('/account/(:root)', methods: ['ANY'], middleware: Route::BEFORE_MIDDLEWARE)]

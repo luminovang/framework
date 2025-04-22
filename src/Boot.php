@@ -11,7 +11,9 @@
 namespace Luminova;
 
 use \Luminova\Application\Foundation;
+use \Luminova\Exceptions\RuntimeException;
 use \App\Application;
+use \Throwable;
 
 final class Boot 
 {
@@ -40,7 +42,43 @@ final class Boot
     }
 
     /**
+     * Attempts to open a file using `fopen()` and throws a RuntimeException on failure.
+     *
+     * This method provides a safe wrapper around `fopen()` with enhanced error reporting.
+     * If an exception occurs or the returned value is not a valid resource, a RuntimeException is thrown.
+     *
+     * @param string $filename The path to the file to open.
+     * @param string $mode The mode in which to open the file (e.g., 'r', 'w', 'a').
+     * 
+     * @return resource Return a valid stream resource on success.
+     * @throws RuntimeException If the file cannot be opened or an error occurs.
+     */
+    public static function tryFopen(string $filename, string $mode): mixed
+    {
+        $error = null;
+        $handle = null;
+
+        try {
+            $handle = fopen($filename, $mode);
+        } catch (Throwable $e) {
+            $error = $e;
+        }
+
+        if (!is_resource($handle)) {
+            throw new RuntimeException(sprintf(
+                'Failed to open file "%s" with mode "%s"%s',
+                $filename,
+                $mode,
+                $error ? ': ' . $error->getMessage() : ''
+            ), RuntimeException::ERROR, $error);
+        }
+
+        return $handle;
+    }
+
+    /**
      * Initializes the CLI (Command Line Interface) environment.
+     * 
      * Define CLI-related constants, finishes bootstrapping.
      * 
      * @return void
@@ -63,11 +101,24 @@ final class Boot
 
         // Define CLI environment
         defined('CLI_ENVIRONMENT') || define('CLI_ENVIRONMENT', env('cli.environment.mood', 'testing'));
-        defined('STDOUT') || define('STDOUT', 'php://output');
-        defined('STDIN') || define('STDIN', 'php://stdin');
-        defined('STDERR') || define('STDERR', 'php://stderr');
-
+        self::shouldDefineCommandStreams();
         self::finish();
+    }
+
+    /**
+     * Ensures that standard CLI streams (STDIN, STDOUT, STDERR) are defined.
+     *
+     * This method checks if the standard input/output/error stream constants are defined,
+     * and if not, it defines them using the appropriate mode.
+     *
+     * @return void
+     * @throws RuntimeException If the file cannot be opened or an error occurs.
+     */
+    public static function shouldDefineCommandStreams(): void 
+    {
+        defined('STDIN') || define('STDIN', self::tryFopen('php://stdin', 'r'));
+        defined('STDOUT') || define('STDOUT', self::tryFopen('php://stdout', 'w'));
+        defined('STDERR') || define('STDERR', self::tryFopen('php://stderr', 'w'));
     }
 
     /**

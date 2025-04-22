@@ -12,12 +12,13 @@ namespace Luminova\Command;
 
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Application\Foundation;
+use \Luminova\Boot;
 use \Luminova\Command\Console;
 use \Luminova\Command\Utils\Text;
 use \Luminova\Command\Utils\Color;
 use \Luminova\Security\Validation;
 use \Luminova\Command\Novakit\Commands;
-use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Exceptions\IOException;
 use \Closure;
 
 class Terminal implements LazyInterface
@@ -65,11 +66,11 @@ class Terminal implements LazyInterface
     public static bool $isReadLine = false;
 
     /**
-     * Write in a new line enabled.
+     * Is last write a new line.
      *
      * @var bool $isNewLine
      */
-    protected static bool $isNewLine = false;
+    protected static bool $isNewLine = true;
 
     /**
      * The parsed command information from (explain).
@@ -98,6 +99,17 @@ class Terminal implements LazyInterface
     ];
 
     /**
+     * STD string paths.
+     * 
+     * @var array<string,string> STDPATH
+     */
+    private const STDPATH = [
+        'STDIN' => 'php://stdin',
+        'STDOUT' => 'php://output',
+        'STDERR' => 'php://stderr'
+    ];
+
+    /**
      * Input validations object.
      * 
      * @var Validation|null $validation;
@@ -109,12 +121,10 @@ class Terminal implements LazyInterface
      */
     public function __construct()
     {
-        defined('STDOUT') || define('STDOUT', 'php://output');
-        defined('STDIN')  || define('STDIN', 'php://stdin');
-        defined('STDERR') || define('STDERR', 'php://stderr');
-        
+        self::$explained = [];
         self::$isReadLine = extension_loaded('readline');
-        self::$explained  = [];
+
+        Boot::shouldDefineCommandStreams();
         self::isColorSupported(self::STD_OUT);
     }
 
@@ -263,7 +273,8 @@ class Terminal implements LazyInterface
      *
      * @return void
      * 
-     * @example Progress Callback Signature:
+     * @example - Progress Callback Signature:
+     * 
      * Receiving the current progress percentage.
      * ```php
      * Terminal::watcher(5, function(float|int $step): void {
@@ -385,7 +396,7 @@ class Terminal implements LazyInterface
      * @param bool $multiChoice Weather multiple options are allowed (default: true).
      *
      * @return array<string|int,mixed> Return the client selected array keys and values.
-     * @throws InvalidArgumentException Throw if options is not specified or an empty array.
+     * @throws IOException Throw if options is not specified or an empty array.
      */
     public static function chooser(
         string $text, 
@@ -395,7 +406,7 @@ class Terminal implements LazyInterface
     ): array
     {
         if ($options == []) {
-            throw new InvalidArgumentException('Invalid argument, $options is required for chooser.');
+            throw new IOException('Invalid argument, $options is required for chooser.');
         }
 
         $lastIndex = 0;
@@ -441,7 +452,7 @@ class Terminal implements LazyInterface
         return self::getInputValues($multiChoice ? list_to_array($input) : [$input], $optionValues);
     }
 
-     /**
+    /**
      * Prompts the user to enter a password with hidden input. Supports retry attempts and optional timeout.
      *
      * - On Windows, it uses a VBS script or PowerShell to hide the input.
@@ -539,9 +550,9 @@ class Terminal implements LazyInterface
             return true;
         }
     
-        $read = [self::getStd($stream)];
         $write = null;
         $except = null;
+        $read = [self::getStd($stream)];
         $result = stream_select($read, $write, $except, $timeout);
         
         if ($result === false || $result === 0) {
@@ -695,31 +706,82 @@ class Terminal implements LazyInterface
     }
 
     /**
-     * Get user input from the shell, after requesting for user to type or select an option.
+     * Read a single line of user input from the terminal or piped input.
      *
-     * @param string|null $prompt Optional message to prompt the user after they have typed.
-     * @param string $default Optional default value to return if no value is provided (default: '').
-     * @param bool $useFopen Weather to use `fopen`, this opens `STDIN` stream in read-only binary mode (default: false). 
-     *                      This creates a new file resource.
-     * 
-     * @return string Return user input string.
+     * This method is suitable for user prompts or single-line piped input. For multi-line input,
+     * use {@see readInput()} instead.
+     *
+     * @param string|null $prompt Optional message to display before reading input.
+     * @param string $default Optional default value to return if no input is provided (default: empty-string).
+     * @param bool $newStream Whether to `open` a new STDIN stream in read-only binary mode as a separate handle (default: false).
+     *
+     * @return string Return the input string or the default value if input is empty or reading fails.
      */
-    public static function input(?string $prompt = null, string $default = '', bool $useFopen = false): string
+    public static function input(?string $prompt = null, string $default = '', bool $newStream = false): string
     {
         if (self::$isReadLine && ENVIRONMENT !== 'testing') {
-            return @readline($prompt)?:$default;
+            return @readline($prompt) ?: $default;
         }
 
         if ($prompt !== null) {
             self::print($prompt);
         }
 
-        if ($useFopen) {
-            $handle = fopen(STDIN, 'rb');
+        if ($newStream) {
+            $handle = fopen(self::STDPATH['STDIN'], 'rb');
+
+            if (!$handle) {
+                return $default;
+            }
+
             $input = fgets($handle);
             fclose($handle);
         } else {
             $input = fgets(STDIN);
+        }
+
+        return ($input === false) ? $default : trim($input);
+    }
+
+    /**
+     * Read input from STDIN, supporting single or multi-line input.
+     *
+     * This method is suitable for reading from piped data or long content. For simple user prompts
+     * or single-line input, use {@see input()} directly instead.
+     *
+     * @param string $default Default value to return if reading fails or input is empty (default: empty-string).
+     * @param bool $eof If true, reads the entire input until EOF. If false, reads a single line.
+     * @param bool $newStream Whether to `open` a new STDIN stream in read-only binary mode as a separate handle (default: false).
+     *
+     * @return string Return the input string or the default value if input is empty or reading fails.
+     * 
+     * @example Read From Pipe Input:
+     * 
+     * ```bash
+     * echo "Log Message From Pipe" | php index.php logger
+     * ```
+     * 
+     * ```bash
+     * php index.php list-something | php index.php logger
+     * ```
+     */
+    public static function readInput(string $default = '', bool $eof = true, bool $newStream = false): string
+    {
+        if(!$eof){
+            return self::input(null, $default, $newStream);
+        }
+
+        if ($newStream) {
+            $handle = fopen(self::STDPATH['STDIN'], 'rb');
+
+            if (!$handle) {
+                return $default;
+            }
+
+            $input = stream_get_contents($handle);
+            fclose($handle);
+        }else{
+            $input = stream_get_contents(STDIN);
         }
 
         return ($input === false) ? $default : trim($input);
@@ -891,7 +953,7 @@ class Terminal implements LazyInterface
      * @param bool $escape Whether to escape each replacement after substitution (default: false).
      * 
      * @return string Return the command string with placeholders replaced.
-     * @throws InvalidArgumentException Throws if a placeholder variable is not found in `$env` or is set to `false`.
+     * @throws IOException Throws if a placeholder variable is not found in `$env` or is set to `false`.
      */
     public static function replace(string $command, array $env, bool $escape = false): string
     {
@@ -899,7 +961,7 @@ class Terminal implements LazyInterface
             $key = $matches[1];
 
             if (!array_key_exists($key, $env) || $env[$key] === false) {
-                throw new InvalidArgumentException(sprintf('Missing value for parameter "%s" in command: %s', $key, $command));
+                throw new IOException(sprintf('Missing value for parameter "%s" in command: %s', $key, $command));
             }
 
             return $escape ? self::escape($env[$key]) : $env[$key];
@@ -1028,11 +1090,13 @@ class Terminal implements LazyInterface
             $text = Color::style($text, $foreground, $background);
         }
 
+        self::$isNewLine = false;
         echo $text;
     }
 
     /**
      * Write text to the specified stream resource without applying any colors, defaulting to `STDOUT`.
+     * 
      * If the environment is non-command-based, the text will be output using `echo` instead of `fwrite`.
      * 
      * @param string $text The text to output or write.
@@ -1050,7 +1114,11 @@ class Terminal implements LazyInterface
         $handler = self::getStd($handler);
         fwrite($handler, $text);
 
-        if (!in_array($handler, [STDOUT, STDERR, STDIN], true) && !stream_isatty($handler)) {
+        if (
+            is_resource($handler) &&
+            !in_array($handler, [STDOUT, STDERR, STDIN], true) && 
+            !@stream_isatty($handler)
+        ) {
             @fclose($handler);
         }
     }
@@ -1082,6 +1150,7 @@ class Terminal implements LazyInterface
             if(self::_shell('cls')){
                 return;
             }
+
             self::newLine(self::getHeight(40));
             return;
         }
@@ -1204,7 +1273,7 @@ class Terminal implements LazyInterface
      * 
      * @return string Return the formatted table as a string, ready to be output to the console.
      * 
-     * @example Table example:
+     * @example - Table example:
      * 
      * ```php
      * Terminal::table(
@@ -1308,7 +1377,8 @@ class Terminal implements LazyInterface
      * @return void
      * @internal
      * 
-     * @example Usage Example:
+     * @example - Usage Example:
+     * 
      * ```php
      * class Command extends Luminova\Base\BaseConsole 
      * {
@@ -1349,6 +1419,7 @@ class Terminal implements LazyInterface
      * @param array $arguments The command arguments from $_SERVER['argv'].
      * 
      * @return array<string,mixed> Return parsed command arguments and options.
+     * 
      * @internal Pass raw command arguments from $_SERVER['argv'].
      */
     public static final function parseCommands(array $arguments, bool $controller = false): array
@@ -1764,6 +1835,8 @@ class Terminal implements LazyInterface
                 $termProgram === 'iTerm' &&
                 version_compare(getenv('TERM_PROGRAM_VERSION'), '3.4', '>=')
             );
+        }elseif(getenv('TERM') === 'xterm-256color'){
+            $macResult = true;
         } else {
             $macResult = false;
         }
@@ -1791,11 +1864,11 @@ class Terminal implements LazyInterface
         $termProgram = getenv('TERM_PROGRAM');
         if ($termProgram !== false) {
             return $unixResult = in_array(strtolower($termProgram), ['xterm', 'gnome-terminal', 'konsole', 'terminator']);
-        } 
-        
+        }elseif(($term = getenv('TERM'))){
+            return $unixResult = ($term === 'xterm' || $term === 'linux' || $term === 'xterm-256color');
+        }
         return $unixResult = false;
     }
-
 
     /**
      * Checks whether the stream resource on windows is terminal.
@@ -1826,10 +1899,12 @@ class Terminal implements LazyInterface
         if (!function_exists($function)) {
             return false;
         }
-        
-        return (ENVIRONMENT === 'testing') 
-            ? true 
-            : @$function(self::getStd($resource));
+
+        if(ENVIRONMENT === 'testing'){
+            return true;
+        }
+
+        return @$function(self::getStd($resource));
     }
 
     /**
@@ -1949,7 +2024,7 @@ class Terminal implements LazyInterface
             return false;
         }
 
-        self::write(sprintf(
+        self::writeln(sprintf(
             'PHP Luminova v%s NovaKit Command Line Tool v%s - Server Time: %s UTC%s',
             Foundation::VERSION,
             Foundation::NOVAKIT_VERSION,

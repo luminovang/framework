@@ -116,7 +116,11 @@ class Time extends DateTimeImmutable implements Stringable
      * @return self New DateTimeImmutable object.
      * @throws DateTimeException Throws if any error occurs.
      *
-     * @example `$time = Time::parse('first day of December 2020');`
+     * @example - Example:
+     * 
+     * ```php
+     * $time = Time::parse('first day of December 2020');
+     * ```
      */
     public static function parse(string $datetime, DateTimeZone|string|null $timezone = null): self
     {

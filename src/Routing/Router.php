@@ -449,7 +449,7 @@ final class Router
      * 
      * @return void
      * 
-     * @example Example of grouping routes under a `/blog/` prefix:
+     * @example - Example of grouping routes under a `/blog/` prefix:
      * ```php
      * $router->bind('/blog/', static function(Router $router) {
      *     $router->get('/', 'BlogController::blogs');
@@ -477,7 +477,7 @@ final class Router
      * 
      * @return void
      * 
-     * @example Example of grouping CLI commands under a `blog` group:
+     * @example - Example of grouping CLI commands under a `blog` group:
      * ```php
      * $router->group('blog', static function(Router $router) {
      *     $router->command('list', 'BlogController::blogs');
@@ -568,8 +568,8 @@ final class Router
             }
         }else{
             $exit_code = self::runAsHttp();
-            if (self::$method === 'HEAD' && ob_get_level() > 0) {
-                ob_end_clean();
+            if (self::$method === 'HEAD') {
+                Header::clearOutputBuffers();
             }
         }
 
@@ -769,6 +769,7 @@ final class Router
      *
      * @return string The request method for routing.
      * @internal
+     * @once
      */
     private static function getRequestMethod(): string
     {
@@ -871,7 +872,7 @@ final class Router
     /**
      * Get first segment of current view uri.
      * 
-     * @return string First url segment.
+     * @return string Return the first URI segment.
      */
     private static function getFirst(): string
     {
@@ -880,7 +881,7 @@ final class Router
         }
 
         $segments = Foundation::getSegments();
-        return reset($segments);
+        return reset($segments) ?: '';
     }
 
     /**
@@ -1005,10 +1006,7 @@ final class Router
         }
 
         if(self::$term->isHelp($group)){
-            if(self::$term->header()){
-                self::$term->newLine();
-            }
-
+            self::$term->header();
             self::$term->helper(null, true);
             return STATUS_SUCCESS;
         }
@@ -1680,9 +1678,7 @@ final class Router
         // Check command string to determine if it has help arguments.
         if(!$is_middleware && self::$term->isHelp($arguments['command'])){
             
-            if(self::$term->header()){
-                self::$term->newLine();
-            }
+            self::$term->header();
 
             if($instance->help($arguments[$id]) === STATUS_ERROR){
                 // Fallback to default help information if dev does not implement help.

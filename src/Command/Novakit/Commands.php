@@ -51,6 +51,7 @@ final class Commands
                 'php novakit generate:sitemap --help' => "Displays help for generating the website sitemap.",
                 'php novakit env:add --help' => "Displays help for adding or updating an environment variable.",
                 'php novakit env:setup --help' => "Displays help for configuring environment variable based on context.",
+                'php novakit env:cache --help' => "Displays help for generating cache version of environment variable for production.",
                 'php novakit env:remove --help' => "Displays help for removing a variable from the .env file.",
                 'php novakit create:controller --help' => "Displays help for creating a new controller class.",
                 'php novakit create:view --help' => "Displays help for creating a new template view.",
@@ -176,6 +177,22 @@ final class Commands
             ],
             'examples' => [
                 'php novakit env:add --key="test.key" --value="test key value"',
+            ],
+        ],
+        'env:cache' => [
+            'name' => 'env:cache',
+            'group' => 'System',
+            'description' => "Create or recreate a cache version of environment variables for production.",
+            'usages' => [
+                'php novakit env:cache',
+            ],
+            'options' => [
+                '-i, --ignore'   => 'Specify optional keys to ignore.',
+                '--help' => 'This help.'
+            ],
+            'examples' => [
+                'php novakit env:cache',
+                'php novakit env:cache --ignore="app.name,foo.bar"',
             ],
         ],
         'env:setup' => [

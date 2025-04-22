@@ -126,7 +126,7 @@ interface PromiseInterface
      *
      * @return string The current state of the promise.
      *
-     * @example
+     * @example - Example:
      * 
      * ```php
      * $state = $promise->getState();
@@ -151,9 +151,9 @@ interface PromiseInterface
      *
      * @throws RuntimeException if the promise has already been resolved.
      *
-     * @example
+     * @example - Example:
      * 
-     * ```
+     * ```php
      * $promise->resolve('Success');
      * ```
      */
@@ -166,7 +166,7 @@ interface PromiseInterface
      *
      * @throws RuntimeException if the promise has already been resolved.
      *
-     * @example
+     * @example - Example:
      * 
      * ```php
      * $promise->reject('Failure');
@@ -178,7 +178,7 @@ interface PromiseInterface
      * Cancels running promise.
      * 
      * @param mixed $reason An optional value to pass to the canceled callback handler.
-     * @example
+     * @example - Example:
      * 
      * ```php
      * $promise->cancel();
@@ -195,7 +195,7 @@ interface PromiseInterface
      *
      * @throws RuntimeException if the promise cannot settle after waiting or lacks a `wait` function.
      *
-     * @example
+     * @example - Example:
      * 
      * ```php
      * try {

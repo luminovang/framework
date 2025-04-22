@@ -33,18 +33,46 @@ class File implements LazyInterface
     public const UPLOAD_ERR_MIN_SIZE = 10;
 
     /**
-     * Retain old version and create new version of file if exists.
+     * Upload error no temp file or data.
      * 
+     * @var int UPLOAD_ERR_NO_FILE_DATA
+     */
+    public const UPLOAD_ERR_NO_FILE_DATA = 11;
+
+    /**
+     * Upload error no skip existing file.
+     * 
+     * @var int UPLOAD_ERR_SKIPPED
+     */
+    public const UPLOAD_ERR_SKIPPED = 12;
+
+    /**
+     * Keep the existing file and save the new one with a random prefix.
+     *
      * @var string IF_EXIST_RETAIN
      */
     public const IF_EXIST_RETAIN = 'retain';
 
     /**
-     * Overwrite existing file if exists
-     * 
+     * Rename the existing file with a random prefix and save the new one.
+     *
+     * @var string IF_EXIST_RENAME
+     */
+    public const IF_EXIST_RENAME = 'rename';
+
+    /**
+     * Overwrite the existing file if it already exists.
+     *
      * @var string IF_EXIST_OVERWRITE
      */
     public const IF_EXIST_OVERWRITE = 'overwrite';
+
+    /**
+     * Skip the upload if the file already exists.
+     *
+     * @var string IF_EXIST_SKIP
+     */
+    public const IF_EXIST_SKIP = 'skip';
 
     /**
      * validation message.
@@ -68,6 +96,20 @@ class File implements LazyInterface
     protected ?stdClass $config = null;
 
     /**
+     * Is content binary data.
+     *
+     * @var bool|null $isBin
+     */
+    private ?bool $isBin = null;
+
+    /**
+     * Is content base64 encoded.
+     *
+     * @var bool|null $isBase64
+     */
+    private ?bool $isBase64 = null;
+
+    /**
      * File configuration options keys
      * 
      * @var array<string,string> $configurations
@@ -79,7 +121,9 @@ class File implements LazyInterface
         'allowed_types'     => 'allowedTypes',
         'chunk_length'      => 'chunkLength',
         'if_existed'        => 'ifExisted',
-        'symlink'           => 'symlink'
+        'symlink'           => 'symlink',
+        'base64_strict'     => 'base64Strict',
+        'data'              => 'data'
     ];
 
     /**
@@ -93,7 +137,7 @@ class File implements LazyInterface
      * @param string|null $temp The temporary file path where the uploaded file is stored on the server.
      * @param int $error The error code associated with the file upload (default: `UPLOAD_ERR_NO_FILE`).
      * @param string|null $content The file's content in string format, typically used when the file data is stored directly in memory as an alternative to using the `temp`.
-     * @param bool $is_blob Indicates whether the uploaded file is handled as a binary large object (BLOB), which is commonly used for in-memory file storage (default: `false`).
+     * @param bool $isBlob Indicates whether the uploaded file is handled as a binary large object (BLOB), which is commonly used for in-memory file storage (default: `false`).
      */
     public function __construct(
         protected int $index = 0,
@@ -104,7 +148,7 @@ class File implements LazyInterface
         protected ?string $temp = null,
         protected int $error = UPLOAD_ERR_NO_FILE,
         protected ?string $content = null,
-        protected bool $is_blob = false
+        protected bool $isBlob = false
     ) {
         $this->message = null;
     }
@@ -152,11 +196,11 @@ class File implements LazyInterface
     }
 
     /**
-     * Alias of {@see getType()}.
-     *
      * Gets the MIME type of the file.
      *
      * @return string|null Return the MIME type of the file.
+     * 
+     * Alias of {@see getType()}.
      */
     public function getMime(): ?string
     {
@@ -236,7 +280,7 @@ class File implements LazyInterface
     }
 
     /**
-     * Gets the file content.
+     * Gets the file raw binary string content.
      *
      * @return string|null Return the file content or null.
      */
@@ -256,6 +300,18 @@ class File implements LazyInterface
     }
 
     /**
+     * Gets the upload file status code.
+     *
+     * @return int Return the status code of the file upload.
+     * 
+     * Alias of {@see getError()}.
+     */
+    public function getCode(): int
+    {
+        return $this->error;
+    }
+
+    /**
      * Gets the validation error message.
      *
      * @return string|null Return the validation error message.
@@ -266,9 +322,33 @@ class File implements LazyInterface
     }
 
     /**
-     * Gets file upload configurations.
+     * Gets the file upload configurations.
      *
-     * @return stdClass|null Return upload configurations.
+     * The returned configuration object may contain the following properties:
+     *
+     * - **uploadPath** *(string)*: The target path where uploaded files will be saved.
+     * - **maxSize** *(int)*: Maximum allowed file size in bytes.
+     * - **minSize** *(int)*: Minimum allowed file size in bytes.
+     * - **allowedTypes** *(array|string)*: List of permitted file extensions.
+     * - **chunkLength** *(int)*: Length of each file chunk in bytes (used for chunked uploads).
+     * - **ifExisted** *(string)*: Strategy to apply if the file already exists (e.g., `overwrite`, `retain`, `rename`, `skip`).
+     * - **symlink** *(string)*: Path to create a symbolic link of the uploaded file.
+     * - **base64Strict** *(bool)*: Whether to enforce strict Base64 decoding for Base64-encoded uploads.
+     * - **data** *(mixed)*: Additional custom configuration information.
+     *
+     * @return stdClass|null Returns the upload configuration object if set, or null if not configured.
+     * 
+     * @example - Example:
+     * 
+     * ```php
+     * $config = $file->getConfig();
+     * 
+     * // Upload path
+     * echo $config->uploadPath;
+     * 
+     * // Custom data
+     * var_dump($config->data);
+     * ```
      */
     public function getConfig(): ?stdClass
     {
@@ -285,7 +365,7 @@ class File implements LazyInterface
      */
     public function isBlob(): bool
     {
-        return $this->is_blob;
+        return $this->isBlob;
     }
 
     /**
@@ -295,21 +375,40 @@ class File implements LazyInterface
      */
     public function isBinary(): bool
     {
-        return ($this->content === null) 
-            ? false 
-            : Func::isBinary($this->content);
+        if($this->isBin !== null){
+            return $this->isBinary;
+        }
+
+        return $this->isBin = ($this->content === null) ? false : Func::isBinary($this->content);
     }
 
     /**
      * Determines if the uploaded content string is likely to be Base64-encoded.
-     *
+     * 
      * @return bool Returns true if the content is likely to be Base64-encoded, false otherwise.
+     * 
+     * @example - Setting base64 strict validation:
+     * 
+     * If true, base64_decode() will return false on invalid characters.
+     * 
+     * ```php
+     * $file->setConfig([
+     *      'base64_strict' => true
+     * ]);
+     * ```
      */
     public function isBase64Encoded(): bool
     {
-        return ($this->content === null) 
+        if($this->isBase64 !== null){
+            return $this->isBase64;
+        }
+
+        return $this->isBase64 = ($this->content === null) 
             ? false 
-            : Func::isBase64Encoded($this->content);
+            : Func::isBase64Encoded(
+                $this->content, 
+                ($this->config === null) ? false : ($this->config->base64Strict ?? false)
+            );
     }
 
     /**
@@ -319,7 +418,7 @@ class File implements LazyInterface
      */
     public function isError(): bool
     {
-        return $this->error !== UPLOAD_ERR_OK;
+        return $this->error !== UPLOAD_ERR_OK && $this->error !== UPLOAD_ERR_PARTIAL;
     }
 
     /**
@@ -327,12 +426,11 @@ class File implements LazyInterface
      *
      * @param string $name The desired name of the file, without directory paths.
      * @param bool $replaceExtension (optional) If true, updates the file extension based on 
-     * the provided name (default: true).
+     *              the provided name (default: true).
      * 
      * @return self Return instance of file object.
-     * 
      * @throws ErrorException Throws if the file name contains directory paths or, when 
-     * `replaceExtension` is enabled, lacks a valid file extension.
+     *          `replaceExtension` is enabled, lacks a valid file extension.
      */
     public function setName(string $name, bool $replaceExtension = true): self
     {
@@ -359,7 +457,7 @@ class File implements LazyInterface
      * 
      * @param array<string,mixed> $config An associative array of file configuration key and value.
      * 
-     * @return self Return instance of file object.
+     * @return self Returns the current file instance.
      * 
      * **Supported Configurations:**
      * 
@@ -368,8 +466,18 @@ class File implements LazyInterface
      * - `min_size`:       (int) Minimum allowed file size in bytes.
      * - `allowed_types`:  (string|string[]) A list array of allowed file types or String separated by pipe symbol (e.g, `png|jpg|gif`).
      * - `chunk_length`:   (int) Write length of chunk in bytes (default: 5242880).
-     * - `if_existed`:     (string) How to handle existing files [`File::IF_EXIST_OVERWRITE` or `File::IF_EXIST_RETAIN`] (default: `File::IF_EXIST_OVERWRITE`).
+     * - `if_existed`:     (string) How to handle existing files (e.g, `File::IF_EXIST_RENAME`, `File::IF_EXIST_*`) (default: `File::IF_EXIST_OVERWRITE`).
      * - `symlink`:        (string) Specify a valid path to create a symlink after upload was completed (e.g `/writeable/storages/`, `/public/assets/`).
+     * - `data`:           (mixed) Additional custom configuration information.
+     * - `base64_strict`:  (bool) If true, base64_decode() will return false on invalid characters.
+     * 
+     * @example - Setting configurations:
+     * 
+     * ```php
+     * $file->setConfig([
+     *      'max_size' => 5000,
+     *      'base64_strict' => true
+     * ]);
      */
     public function setConfig(array $config): self
     {
@@ -377,6 +485,11 @@ class File implements LazyInterface
 
         foreach (self::$configurations as $key => $name) {
             if (isset($config[$key])) {
+
+                if($key === 'base64_strict'){
+                    $this->isBase64 = null;
+                }
+
                 $this->config->{$name} = ($key === 'upload_path') 
                     ? rtrim($config[$key], TRIM_DS) . DIRECTORY_SEPARATOR
                     : $config[$key];
@@ -387,7 +500,30 @@ class File implements LazyInterface
     }
 
     /**
-     * Resets the file configuration, clears content, and deletes any temporary file.
+     * Sets the file's error or feedback message and status code.
+     * 
+     * Commonly used by the `Luminova\Storages\Uploader` class to provide
+     * feedback on upload errors or processing issues.
+     *
+     * @param string $message The descriptive error or feedback message.
+     * @param int $code The status code (e.g., `UPLOAD_ERR_*` or `File::UPLOAD_ERR_*`). 
+     *              Defaults to `UPLOAD_ERR_CANT_WRITE`.
+     * 
+     * @return self Returns the current file instance.
+     */
+    public function setMessage(string $message, int $code = UPLOAD_ERR_CANT_WRITE): self 
+    {
+        $this->message = $message;
+        $this->error = $code;
+
+        return $this;
+    }
+
+    /**
+     * Clears all file-related data, resets configuration, and removes the temporary file if it exists.
+     *
+     * This method is typically called after processing or canceling an upload to ensure no 
+     * temporary resources are left behind and the file object is safely reset.
      *
      * @return void
      */
@@ -397,20 +533,50 @@ class File implements LazyInterface
         $this->config = null;
         $this->content = null;
         $this->error = UPLOAD_ERR_NO_FILE;
-        $this->is_blob = false;
+        $this->isBlob = false;
         $this->mime = null;
 
         if ($this->temp && is_file($this->temp)) {
             @unlink($this->temp);
         }
+
         $this->temp = null;
     }
 
     /**
-     * Validates the uploaded file against the defined configuration rules.
+     * Validates the uploaded file using configured rules such as file size, type, and upload status.
      *
-     * @return bool Returns true if the file is valid; false otherwise, with 
-     *              an appropriate error code and message set.
+     * This method performs a full validation using `valid()` and returns the current file instance.
+     * Use `isError()` to determine if validation failed.
+     *
+     * @return self Returns the current File instance.
+     * 
+     * @example - Validate a file:
+     * 
+     * ```php
+     * if ($file->validate()->isError()) {
+     *     echo $file->getMessage();
+     *     echo $file->getCode();
+     * }
+     * ```
+     */
+    public function validate(): self 
+    {
+        $this->valid();
+        return $this;
+    }
+
+    /**
+     * Executes file validation checks against the defined configuration rules.
+     * 
+     * - Ensures upload completed without native PHP errors.
+     * - Checks for non-zero size and temporary file/content availability.
+     * - Validates against maximum/minimum file size constraints.
+     * - Verifies the file extension against allowed types (if defined).
+     *
+     * If a validation rule fails, an appropriate error code and message are set.
+     *
+     * @return bool Returns true if the file passes all validations; otherwise false.
      */
     public function valid(): bool
     {
@@ -426,10 +592,10 @@ class File implements LazyInterface
         }
 
         if ($this->temp === null && $this->content === null) {
-            $this->error = UPLOAD_ERR_NO_TMP_DIR;
-            $this->message = 'File not found, or may not have been uploaded correctly.';
+            $this->error = self::UPLOAD_ERR_NO_FILE_DATA;
+            $this->message = 'No uploaded file data found. File may be missing, corrupted, or not properly initialized.';
             return false;
-        }
+        }        
 
         if (isset($this->config->maxSize) && $this->size > $this->config->maxSize) {
             $this->error = UPLOAD_ERR_INI_SIZE;

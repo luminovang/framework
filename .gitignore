@@ -10,6 +10,7 @@
 /src/Ftp/*
 /src/Ftp
 /src/Cache/RedisCache.php
+/src/Security/Throttler.php
 composer.lock
 command.phar
 phpdoc.xml

@@ -93,8 +93,20 @@ final class Factory
      * @return class-object<\T> An instance of the factory class.
      * @throws RuntimeException If failed to instantiate the factory.
      * 
-     * @example Factory::method('foo', 'bar', false)
-     * @example Factory::method(false)
+     * @example - Invoke method with param and no-hared instance:
+     * 
+     * ```php 
+     * use \Luminova\Application\Factory; 
+     * 
+     * $result = Factory::method('foo', 'bar', false)
+     * ```
+     * 
+     * @example - Invoke method without param and no-hared instance:
+     * 
+     * ```php 
+     * use \Luminova\Application\Factory; 
+     * $result = Factory::method(false)
+     * ```
      * 
      * @ignore 
      */
@@ -110,13 +122,20 @@ final class Factory
      * @param array $arguments Arguments to pass to the factory constructor.
      * @param bool $shared The last parameter to pass to the factory constructor indicate if it should return a shared instance.
      * 
-     * @example Factory::method('foo', 'bar', false)
-     * @example Factory::method(false)
-     * 
      * @return class-object<\T> An instance of the factory class.
      * @throws RuntimeException If failed to instantiate the factory.
      * 
      * @ignore 
+     * @example - Invoke method with param and no-shared instance:
+     * ```php 
+     * $result = factory()->method('foo', 'bar', false)
+     * ```
+     * 
+     * @example - Invoke method without param and no-shared instance:
+     * 
+     * ```php 
+     * $result = factory()->method(false)
+     * ```
      */
     public function __call(string $factory, array $arguments): object
     {

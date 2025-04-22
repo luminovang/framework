@@ -148,6 +148,7 @@ class Storage extends Adapters
     public function url(string $file): ?string
     {
         $filename = $this->getDisk($file);
+        
         try {
             return $this->filesystem->publicUrl($filename);
         } catch (Exception $e) {
@@ -266,13 +267,18 @@ class Storage extends Adapters
      */
     public function upload(File $file): bool
     {
-        if ($file === false || !$file->valid()) {
+        if (!$file || !$file->valid()) {
             return false;
         }
 
         try {
             $filename = basename($file->getName());
-            $this->write($filename, fopen($file->getTemp(), 'r'), true);
+
+            $this->write(
+                $filename, 
+                $file->getTemp() ? fopen($file->getTemp(), 'r') : $file->getContent(), 
+                true
+            );
 
             return true;
         } catch (Exception $e) {
@@ -343,7 +349,7 @@ class Storage extends Adapters
      * @return bool Return true if download was successful, otherwise false.
      * @throws StorageException If an error occurs during the read operation.
      */
-    public function download(string $filename, string $name = null, bool $steam = false, array $headers = []): bool
+    public function download(string $filename, ?string $name = null, bool $steam = false, array $headers = []): bool
     {
         try {
             $name ??= basename($filename);

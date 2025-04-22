@@ -215,14 +215,23 @@ interface HttpRequestInterface
     public function getAuth(): ?string;
     
     /**
-     * Get the request URL query string.
-     *
-     * @return string Return the request URL query parameters as string.
+     * Retrieve a query parameter from the request URL.
+     * 
+     * This method is used to access query parameters sent in the URL (e.g., `/path?param=value`) 
+     * regardless of the request method (GET, POST, etc). Note that if a POST request contains 
+     * query parameters in the URL, they will not be accessible via `$request->getPost('param')` 
+     * — use this method instead.
+     * 
+     * @param string|null $name The specific query parameter name to retrieve. If null, returns the full query string.
+     * @param mixed $default The default value to return if the parameter does not exist. Default is null.
+     * 
+     * @return mixed If $name is provided, returns the corresponding query value or $default if not found.
+     *               If $name is null, returns the full URL query string encoded per RFC 3986.
      */
-    public function getQuery(): string;
+    public function getQuery(?string $name = null, mixed $default = null): mixed;
 
     /**
-     * Get current URL query parameters as an associative array using the parameter name as key.
+     * Get request URL query parameters as an associative array using the parameter name as key.
      * 
      * @return array<string,mixed> Return the request URL query parameters as an array.
      */

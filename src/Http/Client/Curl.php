@@ -85,7 +85,6 @@ class Curl implements ClientInterface
      * @example - Example Request Client With base URL:
      * 
      * ```php
-     * <?php
      * use Luminova\Http\Client\Curl;
      * $client = new Curl([
      *      'base_uri' => 'https://example.com/'

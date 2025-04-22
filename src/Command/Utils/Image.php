@@ -143,7 +143,7 @@ class Image
      *                If lazy printing is enabled, null is returned as the output is streamed
      *                directly to the terminal with delays.
      * 
-     * @example Usage Examples:
+     * @example - Usage Examples:
      * 
      * Basic ASCII Art:
      * ```php

@@ -158,7 +158,7 @@ final class Pipeline implements LazyInterface
      * > The `catch` method can only be invoked once and does not support multiple calls or exception type-hinting.
      * > The `catch` method should be called before invoking the `pipe` method.
      * 
-     * @example Example with error handling:
+     * @example - Example with error handling:
      * ```php
      * $result = Pipeline::chain(random_int(1, 10))
      *      ->catch(function(Throwable $e, mixed $result): mixed {

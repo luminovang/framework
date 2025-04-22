@@ -182,7 +182,7 @@ class Promise implements PromiseInterface
      * 
      * @return PromiseInterface Return a new static promise instance.
      *
-     * @example Usage Example:
+     * @example - Usage Example:
      * ```php
      * $deferred = Promise::deferred();
      * $deferred->then(function (string $result) {
@@ -191,7 +191,7 @@ class Promise implements PromiseInterface
      * $deferred->resolve('Hello World');
      * ```
      * 
-     * @example Another Example:
+     * @example - Another Example:
      * ```php
      * use Luminova\Utils\Async;
      * 
@@ -332,7 +332,7 @@ class Promise implements PromiseInterface
      * @param callable $fn A callable function to execute.
      * @return PromiseInterface Return a promise that resolves with the result of the callable.
      *
-     * @example
+     * @example - Example:
      * ```php
      * $promise = Promise::try(fn() => "Success");
      * $promise->then(function ($value) {
@@ -359,7 +359,7 @@ class Promise implements PromiseInterface
      * @param PromiseInterface[] $promises An array of promises.
      * @return PromiseInterface Return a promise that resolves or rejects with the first settled promise.
      *
-     * @example
+     * @example - Example:
      * ```php
      * $promises = [
      *     Promise::try(fn() => sleep(2) || 42),
@@ -401,7 +401,7 @@ class Promise implements PromiseInterface
      * @param PromiseInterface[] $promises An array of promises.
      * @return PromiseInterface Return a promise that resolves with an array of values.
      *
-     * @example
+     * @example - Example:
      * ```php
      * $promises = [
      *     Promise::try(fn() => 10),
@@ -458,7 +458,7 @@ class Promise implements PromiseInterface
      * @param PromiseInterface[] $promises An array of promises.
      * @return PromiseInterface Return a promise that resolves with an array of results.
      *
-     * @example
+     * @example - Example:
      * ```php
      * $promises = [
      *     Promise::try(fn() => 42),
@@ -517,7 +517,7 @@ class Promise implements PromiseInterface
      * @param PromiseInterface[] $promises An array of promises.
      * @return PromiseInterface Return a promise that resolves with the first fulfilled value.
      *
-     * @example
+     * @example - Example:
      * ```php
      * $promises = [
      *     Promise::try(fn() => throw new Exception('Error')),

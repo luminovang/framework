@@ -576,7 +576,7 @@ final class Text
      * 
      * @return string Returns the padded string, ensuring it meets the specified length.
      * 
-     * @example Usage Example:
+     * @example - Usage Example:
      * ```php
      * echo Text::fit('Hello', 10); 
      * // Output: "Hello     "
@@ -760,7 +760,7 @@ final class Text
      * @return string Returns the processed string with all line breaks replaced by the specified string.
      *                If the input text is empty, an empty string is returned.
      * 
-     * @example Usage Example:
+     * @example - Usage Example:
      * ```php
      * $text = "This is line one\nThis is line two\r\nThis is line three";
      * echo Text::line($text); 

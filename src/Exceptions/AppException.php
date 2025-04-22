@@ -30,6 +30,8 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     public const CORE_ERROR = E_CORE_ERROR;
     /** @var int COMPILE_ERROR */
     public const COMPILE_ERROR = E_COMPILE_ERROR;
+    /** @var int IO_ERROR */
+    public const IO_ERROR = 4080;
 
     /** @var int WARNING */
     public const WARNING = E_WARNING;

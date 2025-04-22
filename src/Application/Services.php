@@ -48,11 +48,16 @@ final class Services
      * @param bool $shared Whether the instance should be shared (cached) or not.
      * @param bool $serialize Whether the instance should be serialized and (cached) or not.
      * 
-     * @example Services::method('foo')
-     * 
      * @return class-object<\T>|null An instance of the service class, or null if not found.
      * @throws RuntimeException If failed to instantiate the service.
      * @ignore 
+     * @example - Invoke method 
+     * 
+     * ```php 
+     * use \Luminova\Application\Service;
+     * 
+     * $result = Services::method('foo')
+     * ```
     */
     public static function __callStatic(string $service, array $arguments): object
     {
@@ -68,11 +73,15 @@ final class Services
      * @param bool $shared Whether the instance should be shared (cached) or not.
      * @param bool $serialize Whether the instance should be serialized and (cached) or not.
      * 
-     * @example Services::method('foo')
-     * 
      * @return class-object<\T>|null An instance of the service class, or null if not found.
      * @throws RuntimeException If failed to instantiate the service.
      * @ignore 
+     * 
+     * @example - Invoke method using global function or object: 
+     * 
+     * ```php 
+     * $result = services->method('foo');
+     * ```
     */
     public function __call(string $service, array $arguments): object
     {
