@@ -1,23 +1,28 @@
+# macOS system file
 .DS_Store
-/test
-/docs
-/tests
-/log
-/dump
-/.git
-/src/Command/Auth
-/src/Command/Auth/*
-/src/Ftp/*
-/src/Ftp
-/src/Cache/RedisCache.php
-/src/Security/Throttler.php
+
+# Common folders to ignore
+/test/
+/tests/
+/docs/
+/log/
+/dump/
+.git/
+.idea/
+.vscode/
+.fleet/
+.phpdoc
+
+# Developemnt files
 composer.lock
 command.phar
 phpdoc.xml
 phpDocumentor.phar
 git.ssh
 cli.help
-.phpdoc
-.fleet
-.idea
-.vscode
+
+# Ignore modules
+/src/Command/Auth/
+/src/Ftp/
+/src/Cache/RedisCache.php
+/src/Security/Throttler.php
