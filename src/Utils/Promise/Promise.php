@@ -178,7 +178,7 @@ class Promise implements PromiseInterface
      * Returns a new instance of the PromiseInterface.
      *
      * @param callable|null $executor Invoked when the promise fulfills.
-     *                                    Receives the resolved value.
+     *                        Receives the resolved value.
      * 
      * @return PromiseInterface Return a new static promise instance.
      *
