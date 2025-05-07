@@ -718,62 +718,6 @@ class Session implements LazyInterface
         return $this->manager->toAs('object', $key);
     }
 
-    /**
-     * Retrieves all session data in the specified format.
-     * 
-     * @param string $type The data format, either `object` or `array` (default: `array`).
-     * 
-     * @return array|object Return the stored session data in the requested format.
-     * 
-     * @deprecated Use {@see getResult()} instead.
-     */
-    public function toExport(string $type = 'array'): array|object
-    {
-        ErrorHandler::depreciate(
-            'Method %s->toExport() is deprecated. Use %s->getResult(...) instead.',
-            [self::class, self::class]
-        );
-        return $this->getResult($type);
-    }
-
-    /** 
-     * Retrieves the user's login session identifier.
-     * 
-     * This method is an alias for `getToken()`. It was deprecated in favor of `getToken()`
-     * to maintain a more consistent naming convention.
-     * 
-     * @return string|null The session login ID or `null` if not logged in.
-     * 
-     * @deprecated Use `getToken()` instead.
-     */
-    public function ssid(): ?string
-    {
-        ErrorHandler::depreciate(
-            'Method %s->ssid() is deprecated. Use %s->getToken() instead.',
-            [self::class, self::class]
-        );
-        return $this->getToken();
-    }
-
-    /** 
-     * Retrieves the user's login session datetime in ISO 8601 format.
-     * 
-     * This method is an alias for `getDatetime()`. It was deprecated in favor of `getDatetime()`
-     * for improved naming consistency.
-     * 
-     * @return string|null The session login datetime in ISO 8601 format, or `null` if not logged in.
-     * 
-     * @deprecated Use `getDatetime()` instead.
-     */
-    public function ssDate(): ?string
-    {
-        ErrorHandler::depreciate(
-            'Method %s->ssDate() is deprecated. Use %s->getDatetime() instead.',
-            [self::class, self::class]
-        );
-        return $this->getDatetime();
-    }
-
     /** 
      * Remove a key from the session storage by passing the key.
      * 

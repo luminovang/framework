@@ -11,6 +11,7 @@
 namespace Luminova\Base;
 
 use \Luminova\Interface\LazyInterface;
+use \Luminova\Core\CoreApplication;
 use \Luminova\Command\Terminal;
 use \Luminova\Utils\LazyObject;
 use \App\Application;
@@ -68,21 +69,64 @@ abstract class BaseConsole
     protected string $description = '';
 
     /**
-     * Application instance.
+     * List of allowed system users.
      * 
-     * @var LazyInterface<Application>|Application|null $app
+     * @var array<int,string> $users
+     * 
+     * @example - Users:
+     * 
+     * Only users listed here can execute this command, leave empty array to allow all users.
+     * 
+     * ```php
+     * ['www-data', 'ubuntu', 'admin']
+     * ```
+     */
+    protected array $users = [];
+
+    /**
+     * Authenticate configuration for password or private/public login.
+     * 
+     * @var array<string,mixed>|null $authentication
+     * 
+     * @example - Auth from database:
+     * ```php
+     * [
+     *      'storage' => 'database',
+     *      'tableName' => 'foo_cli_users'
+     * ]
+     * ```
+     * @example - Auth from filesystem:
+     * ```php
+     * [
+     *      'storage' => 'filesystem',
+     *      'storagePath' => 'writeable/auth/cli_users.php'
+     * ]
+     * ```
+     * @example - Supported Array keys Or Database column names:
+     * 
+     * - **auth:** `(string)` - Authentication type (e.g, `password` or `key`).
+     * - **content:** `(string)` - Password hash or empty for not password login, public key content or public key file.
+     * - **sessions:** `(json-string|array)` - Activate authenticated system users.
+     * - **updated_at:** `datetime` - Last authenticated datetime.
+     */
+    protected ?array $authentication = null;
+
+    /**
+     * Lazy loaded application instance.
+     * 
+     * @var CoreApplication<Application,LazyInterface>|null $app
      */
     protected ?LazyInterface $app = null;
 
     /**
-     * Terminal Commands instance.
+     * Lazy loaded terminal instance.
      * 
-     * @var LazyInterface<Terminal>|Terminal|null $term
+     * @var Terminal<LazyInterface>|null $term
      */
     protected ?LazyInterface $term = null;
 
     /**
-     * {@inheritdoc}
+     * Initailze console command, register lazy objects and onCreate method hook.
      */
     public function __construct()
     {
@@ -130,7 +174,7 @@ abstract class BaseConsole
      *
      * @param array<string,mixed>|null $params Command arguments and parameters.
      * 
-     * @return int Return status code STATUS_SUCCESS on success else STATUS_ERROR.
+     * @return int Return exit code STATUS_SUCCESS on success else STATUS_ERROR.
      */
     abstract public function run(?array $params = null): int;
 

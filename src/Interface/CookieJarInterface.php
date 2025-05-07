@@ -24,7 +24,7 @@ interface CookieJarInterface
      * @param array<string,mixed> $config Optional configurations or settings to apply to the 
      *        new or updated cookie.
      * 
-     * @return CookieJarInterface Returns the created or updated cookie jar instance.
+     * @return CookieJarInterface<\T> Returns the created or updated cookie jar instance.
      * @throws CookieException If invalid source file location is provided.
      * @throws FileException If the `$from` is provided as an array, the cookie jar is not in read-only mode, and writing the cookies to the file fails.
      */
@@ -37,7 +37,7 @@ interface CookieJarInterface
      * @param mixed $value The value of the cookie.
      * @param array $options An array of cookie options.
      * 
-     * @return self Return instance of Cookie Jar.
+     * @return CookieJarInterface<\T> Return instance of Cookie Jar.
      * @throws FileException If writing the cookies to the file fails.
      */
     public function set(mixed $name, mixed $value, array $options = []): CookieJarInterface;
@@ -47,7 +47,7 @@ interface CookieJarInterface
      * 
      * @param mixed $value The value to set.
      * 
-     * @return self Return instance of Cookie Jar.
+     * @return CookieJarInterface<\T> Return instance of Cookie Jar.
      * @throws CookieException Throws if called without cookie name specified.
      * @throws FileException If writing the cookies to the file fails.
      */
@@ -58,7 +58,7 @@ interface CookieJarInterface
      * 
      * @param CookieConfig|array $options An array of cookie options or cookie config class object.
      * 
-     * @return self Return instance of Cookie Jar.
+     * @return CookieJarInterface<\T> Return instance of Cookie Jar.
      * @throws CookieException Throws if called without cookie name specified.
      * @throws FileException If writing the cookies to the file fails.
      */
@@ -70,7 +70,7 @@ interface CookieJarInterface
      *
      * @param string $path The custom path to set.
      * 
-     * @return self Returns the current instance for method chaining.
+     * @return CookieJarInterface<\T> Returns the current instance for method chaining.
      * > **Note:** If set a custom cookie request path, you must also set domain `setCookieDomain`.
      */
     public function setCookiePath(string $path): self;
@@ -81,7 +81,7 @@ interface CookieJarInterface
      *
      * @param string $domain The custom domain to set.
      * 
-     * @return self Returns the current instance for method chaining.
+     * @return CookieJarInterface<\T> Returns the current instance for method chaining.
      * > **Note:** If set a custom cookie request domain, you must also set path `setCookiePath`.
      */
     public function setCookieDomain(string $domain): self;
@@ -91,7 +91,7 @@ interface CookieJarInterface
      * 
      * @param array<string,array<string,mixed>> $cookies The array of cookies to set.
      * 
-     * @return self Return instance of Cookie Jar.
+     * @return CookieJarInterface<\T> Return instance of Cookie Jar.
      * @throws FileException If writing the cookies to the file fails.
      */
     public function setCookies(array $cookies): self;
@@ -121,7 +121,7 @@ interface CookieJarInterface
      * 
      * @param string $name The name of cookie to access.
      * 
-     * @return self Return instance of cookie class.
+     * @return CookieJarInterface<\T> Return instance of cookie class.
      * 
      * @example - Manage Cookie By Name:
      * 
@@ -232,12 +232,12 @@ interface CookieJarInterface
     /**
      * Get the cookie value if name is specified.
      *
-     * @param bool $as_array Weather to return value as an array if its a valid json string (default: false).
+     * @param bool $asArray Weather to return value as an array if its a valid json string (default: false).
      * 
      * @return mixed Return the value of the cookie.
      * @throws CookieException Throws if called without cookie name specified.
      */
-    public function getValue(bool $as_array = false): mixed;
+    public function getValue(bool $asArray = false): mixed;
 
     /**
      * Get the domain associated with the cookie, if name is specified.
@@ -290,12 +290,12 @@ interface CookieJarInterface
     /**
      * Get the cookie expiration time.
      * 
-     * @param bool $return_string Weather to retrieve unix-timestamp or formate cookie datetime string
+     * @param bool $returnString Weather to retrieve unix-timestamp or formate cookie datetime string
      * 
      * @return string|int Return cookie expiration timestamp or formatted string presentation.
      * @throws CookieException Throws if called without cookie name specified.
      */
-    public function getExpiry(bool $return_string = false): string|int;
+    public function getExpiry(bool $returnString = false): string|int;
 
     /**
     * Parse and retrieve cookies from `Set-Cookie` header values.

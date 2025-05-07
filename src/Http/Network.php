@@ -26,7 +26,7 @@ use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\Http\RequestException;
 use \Luminova\Exceptions\BadMethodCallException;
 use \Exception;
-use Throwable;
+use \Throwable;
 
 class Network implements NetworkInterface, LazyInterface
 {
@@ -38,51 +38,9 @@ class Network implements NetworkInterface, LazyInterface
     public const SKIP_HEADER = 5319;
 
     /**
-     * HTTP GET Method
-     * 
-     * @var string GET
-     */
-    public const GET = 'GET';
-
-    /**
-     * HTTP POST Method
-     * 
-     * @var string POST
-     */
-    public const POST = 'POST';
-
-    /**
-     * HTTP PUT Method
-     * 
-     * @var string PUT
-     */
-    public const PUT = 'PUT';
-
-    /**
-     * HTTP PATCH Method
-     * 
-     * @var string PATCH
-     */
-    public const PATCH = 'PATCH';
-
-    /**
-     * HTTP DELETE Method
-     * 
-     * @var string DELETE
-     */
-    public const DELETE = 'DELETE';
-
-    /**
-     * HTTP OPTIONS Method
-     * 
-     * @var string OPTIONS
-     */
-    public const OPTIONS = 'OPTIONS';
-
-    /**
      * The network client interface to use.
      * 
-     * @var \Luminova\Interface\ClientInterface|ClientInterface|null $client
+     * @var \Luminova\Interface\ClientInterface<\T>|ClientInterface<\T>|null $client
      */
     private ?ClientInterface $client = null;
 
@@ -112,9 +70,12 @@ class Network implements NetworkInterface, LazyInterface
             throw $error;
         }
 
+        $url = $arguments[0] ?? '';
+        $options = $arguments[1] ?? [];
+
         return str_ends_with($method, 'Async')
-            ? $this->requestAsync(substr($method, 0, -5), $arguments[0] ?? '', $arguments[1] ?? [])
-            : $this->client->request($method, $arguments[0] ?? '', $arguments[1] ?? []);
+            ? $this->requestAsync(substr($method, 0, -5), $url, $options)
+            : $this->client->request($method, $url, $options);
     }
 
     /**
@@ -122,7 +83,9 @@ class Network implements NetworkInterface, LazyInterface
      */
     public function getClient(): ?ClientInterface
     {
-        return $this->client->getClient();
+        return ($this->client && method_exists($this->client, 'getClient'))
+            ? $this->client->getClient() 
+            : null;
     }
 
     /**
@@ -133,7 +96,7 @@ class Network implements NetworkInterface, LazyInterface
         array $options = []
     ): ResponseInterface
     {
-        return $this->client->request(self::GET, $uri, $options);
+        return $this->client->request('GET', $uri, $options);
     }
 
     /**
@@ -141,7 +104,7 @@ class Network implements NetworkInterface, LazyInterface
      */
     public function fetch(
         UriInterface|string $uri = '', 
-        string $method = self::GET, 
+        string $method = 'GET', 
         array $options = []
     ): PromiseInterface
     {
@@ -160,7 +123,7 @@ class Network implements NetworkInterface, LazyInterface
         array $options = []
     ): ResponseInterface
     {
-        return $this->client->request(self::POST, $uri, $options);
+        return $this->client->request('POST', $uri, $options);
     }
 
     /**
@@ -221,7 +184,7 @@ class Network implements NetworkInterface, LazyInterface
      * @param bool $async
      * @param bool $promise
      * 
-     * @return PromiseInterface|ResponseInterface Return guzzle promise or response object for cURL client.
+     * @return PromiseInterface<\T>|ResponseInterface<\T> Return guzzle promise or response object for cURL client.
     */
     private function doSend(
         RequestInterface $request, 

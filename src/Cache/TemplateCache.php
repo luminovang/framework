@@ -333,14 +333,14 @@ final class TemplateCache
         }
 
         // Clear file stat cache for the specific file if filename exists
-        if ($this->filename) {
-            @clearstatcache(true, $this->filename);
-        }
+        //if ($this->filename) {
+        //    @clearstatcache(true, $this->filename);
+        //}
 
         $now = time();
-        $fileMTime = $this->filename ? @filemtime($this->filename) : $now;
+        $fileMTime = $this->filename ? (@filemtime($this->filename) ?: $now) : $now;
         $expiration = ($this->expiration === 0) ? 31536000 * 5 : $this->expiration;
-        $length = $headers['Content-Length'] ?? string_length($content);
+        $length = (int) ($headers['Content-Length'] ?? string_length($content));
 
         $headers['Content-Type'] = Header::getContentTypes($type);
         $headers['Content-Length'] = $length;
@@ -359,7 +359,7 @@ final class TemplateCache
                 'Modify' => $fileMTime,
                 'Size' => $length,
                 'Func' => '__lmv_template_content_' . $this->key,
-                'ETag' => md5("eTag_{$type}_{$fileMTime}_{$length}" . APP_VERSION),
+                'ETag' => md5("eTag_{$type}_{$fileMTime}_{$length}_{$expiration}" . APP_VERSION),
                 'Headers' => $headers
             ]], true) . ";\n"
             . " return \$lock[\$key]??false;\n"
@@ -384,31 +384,39 @@ final class TemplateCache
     }
 
     /**
-     * Search for cached version in current and passed version.
-     * 
-     * @return bool Return true if cache found, false otherwise.
+     * Searches for an existing cached version of the content.
+     *
+     * The method first checks the cache for the current application version.
+     * If not found, it optionally avoids older versions based on URI matching.
+     * If permitted, it falls back to searching older versioned cache directories.
+     *
+     * @return bool True if a cached file is found, false otherwise.
      */
     private function findCache(): bool
     {
         $filename = $this->key . '.lmv.php';
         $path = $this->getLocation();
 
-        if(file_exists($file = $path . APP_VERSION . DIRECTORY_SEPARATOR . $filename)){
+        // Check for cache in the current app version's cache directory
+        if (file_exists($file = $path . APP_VERSION . DIRECTORY_SEPARATOR . $filename)) {
             self::$foundCacheLocation = $file;
             return true;
         }
 
-        if($this->uri !== null && ($patterns = env('page.cache.latest.content', [])) !== []){
-            foreach($patterns as $pattern){
-                if($this->preferLatestContent($pattern)){
+        // Prevent fallback to older versions if URI matches preferred latest-only paths
+        // This ensures certain pages (e.g., '/', 'users') always render fresh content
+        if ($this->uri !== null && ($patterns = env('page.cache.latest.content', [])) !== []) {
+            foreach ($patterns as $pattern) {
+                if ($this->preferLatestContent($pattern)) {
                     return false;
                 }
             }
         }
 
-        if(($pastVersions = env('page.cache.app.versions', [])) !== []){
-            foreach($pastVersions as $past){
-                if(file_exists($file = $path . $past . DIRECTORY_SEPARATOR . $filename)){
+        // Search in past version directories as a fallback
+        if (($pastVersions = env('page.cache.app.versions', [])) !== []) {
+            foreach ($pastVersions as $past) {
+                if (file_exists($file = $path . $past . DIRECTORY_SEPARATOR . $filename)) {
                     self::$foundCacheLocation = $file;
                     return true;
                 }
@@ -419,7 +427,7 @@ final class TemplateCache
     }
 
     /**
-     * Check if url matches latest contents pattern.
+     * Check if URL matches latest contents pattern.
      * 
      * @param string $pattern The url pattern to match.
      * 
@@ -431,8 +439,8 @@ final class TemplateCache
             return true;
         }
 
-        $pattern = preg_quote($pattern, '/');
-        $pattern = str_replace('\*', '[^\/]+', $pattern);
+        $pattern = str_replace('\*', '[^\/]+', preg_quote($pattern, '/'));
+
         return preg_match('/^' . $pattern . '$/', $this->uri) === 1;
     }
 
@@ -466,8 +474,8 @@ final class TemplateCache
         $immutable = (self::$cache['CacheImmutable'] ?? false) ? ', immutable' : '';
         $headers = self::$cache['Headers'] ?? [];
         $headers['default_headers'] = true;
-        $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T',  self::$cache['Expiry']);
-        $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T',  self::$cache['Modify']);
+        $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T', self::$cache['Expiry']);
+        $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T', self::$cache['Modify']);
         $headers['Cache-Control'] = 'public, max-age=' . self::$cache['MaxAge'] . $immutable;
         $headers['ETag'] =  '"' . self::$cache['ETag'] . '"';
 

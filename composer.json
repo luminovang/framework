@@ -37,7 +37,8 @@
         "ext-exif": "Needed if you run Image class tests",
         "ext-fileinfo": "Needed to improve mime type detection for files",
         "ext-mysqli": "Needed if you use MySQL",
-        "ext-intl": "Needed if you use Local"
+        "ext-intl": "Needed if you use Local",
+        "ext-sodium": "Needed if you want sodium encryption"
     },
     "autoload": {
         "psr-4": {

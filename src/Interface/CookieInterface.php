@@ -30,7 +30,7 @@ interface CookieInterface
      * @param bool $raw Indicates if the cookie is raw.
      * @param CookieConfig|array<string,mixed> $options An array of default cookie options or cookie config class object.
      * 
-     * @return CookieInterface A new Cookie instance.
+     * @return CookieInterface Return a new Cookie instance.
      */
     public static function newFromString(
         string $cookie, 
@@ -58,7 +58,7 @@ interface CookieInterface
      * @param mixed $value The value of the cookie.
      * @param array<string,mixed> $options An array of cookie options.
      * 
-     * @return CookieInterface A new Cookie instance.
+     * @return CookieInterface Return a new Cookie instance.
      */
     public function set(mixed $name, mixed $value, array $options = []): CookieInterface;
 
@@ -67,7 +67,7 @@ interface CookieInterface
      * 
      * @param mixed $value The value to set.
      * 
-     * @return CookieInterface This Cookie instance.
+     * @return CookieInterface Return this Cookie instance.
      */
     public function setValue(mixed $value): self;
 
@@ -76,7 +76,7 @@ interface CookieInterface
      * 
      * @param CookieConfig|array<string,mixed> $options An array of cookie options or cookie config class object.
      * 
-     * @return CookieInterface This Cookie instance.
+     * @return CookieInterface Return this Cookie instance.
      */
     public function setOptions(CookieConfig|array $options): self;
 
@@ -170,11 +170,11 @@ interface CookieInterface
     /**
      * Get the cookie expiration time.
      * 
-     * @param bool $return_string Return cookie expiration timestamp or string presentation.
+     * @param bool $returnString Return cookie expiration timestamp or string presentation.
      * 
-     * @return int|string Return the current expiration time/unix-timestamp of the cookie.
+     * @return string|int Return the current expiration time/unix-timestamp of the cookie.
      */
-    public function getExpiry(bool $return_string = false): int|string;
+    public function getExpiry(bool $returnString = false): string|int;
 
     /**
      * Get the cookie as a header value.

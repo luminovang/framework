@@ -130,7 +130,6 @@ final class Schema implements LazyInterface
         return $this;
     }
 
-
     /**
      * Sets the current page headline for SEO purposes.
      *
@@ -582,16 +581,16 @@ final class Schema implements LazyInterface
             $next = (($index < count($breadcrumbs) - 1) ? $breadcrumbs[$index + 1] : false);
 
             if($next){
-                $item['nextItem'] =  $next['link'] . '/#listItem';
+                $item['nextItem'] = rtrim($next['link'], '/') . '/#listItem';
             }
 
             if($previous){
-                $item['previousItem'] = $previous['link'] . '/#listItem';
+                $item['previousItem'] = rtrim($previous['link'], '/') . '/#listItem';
             }
             
             $item['item'] = [
                 '@type' => 'WebPage',
-                '@id' => $page['link'] . '/#webpage',
+                '@id' => rtrim($page['link'], '/'). '/#webpage',
                 'name' => $page['name'],
                 'description' => $page['description'] ?? self::getConfig('company_description'),
                 'url' => $page['link']

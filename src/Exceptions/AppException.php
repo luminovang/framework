@@ -13,7 +13,7 @@
 namespace Luminova\Exceptions;
 
 use \Luminova\Logger\Logger;
-use \Luminova\Application\Foundation;
+use \Luminova\Luminova;
 use \Luminova\Interface\ExceptionInterface;
 use \Luminova\Errors\ErrorHandler;
 use \Stringable;
@@ -409,23 +409,23 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     private static function safeHandler(Throwable $exception): void
     {
         if (self::$handlingException) {
-            error_log("[Recursive Exception Prevented]: " . $exception->getMessage());
+            error_log('[Recursive Exception Prevented]: ' . $exception->getMessage());
             return;
         }
 
         self::$handlingException = true;
 
         try {
-            if (Foundation::isCommand()) {
+            if (Luminova::isCommand()) {
                 if (env('throw.cli.exceptions', false)) {
                     throw $exception;
                 }
 
-                include_once root('/resources/Views/system_errors/') . 'cli.php';
+                include_once root('/app/Errors/Defaults/') . 'cli.php';
                 exit(STATUS_ERROR);
             }
 
-            if (PRODUCTION && !Foundation::isFatal($exception->getCode())) {
+            if (PRODUCTION && !Luminova::isFatal($exception->getCode())) {
                 if ($exception instanceof self) {
                     $exception->log();
                     return;
@@ -455,7 +455,7 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
         try{
             Logger::dispatch($level, (string) $exception);
         }catch(Throwable $e){
-            error_log("[Exception Logging Failed]: " . $e->getMessage());
+            error_log('[Exception Logging Failed]: ' . $e->getMessage());
         }
     }
 }

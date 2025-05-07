@@ -10,6 +10,7 @@
  */
 namespace Luminova\Template;
 
+use \Luminova\Luminova;
 use \Twig\Loader\FilesystemLoader;
 use \Twig\Environment;
 use \Twig\Error\RuntimeError;
@@ -18,7 +19,6 @@ use \App\Config\Template as TemplateConfig;
 use \App\Config\Templates\Twig\Extensions;
 use \Luminova\Optimization\Minification;
 use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Application\Foundation;
 
 class Twig 
 {
@@ -87,7 +87,7 @@ class Twig
 
         if($options['caching']){
             $suffix = DIRECTORY_SEPARATOR . 'twig';
-            $options['cache'] = $root . Foundation::bothTrim($config->cacheFolder) . $suffix;
+            $options['cache'] = $root . Luminova::bothTrim($config->cacheFolder) . $suffix;
         }else{
             $options['cache'] = false;
         }

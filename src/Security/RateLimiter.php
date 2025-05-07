@@ -448,8 +448,8 @@ class RateLimiter implements LazyInterface
     /**
      * Waits until the rate limiter finishes processing or the optional max wait timeout is exceeded.
      *
-     * This is a passive wait that periodically checks if the limitter decision is complete.
-     * It is useful when limitter involves asynchronous or deferred logic.
+     * This is a passive wait that periodically checks if the limiter decision is complete.
+     * It is useful when limiter involves asynchronous or deferred logic.
      *
      * @param float|int $interval The interval to sleep between checks (in seconds). Supports sub-second delays (e.g., 0.1 for 100ms).
      * @param int|null $maxWait The maximum duration to wait (in seconds). Use `null` to wait indefinitely.
@@ -614,7 +614,7 @@ class RateLimiter implements LazyInterface
     public function respond(array $headers = []): int
     {
         if(\is_command()){
-            return STATUS_SILENT;
+            return STATUS_SILENCE;
         }
 
         $type = $this->response['type'] ?? 'json';

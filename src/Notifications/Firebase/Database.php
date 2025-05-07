@@ -31,8 +31,10 @@ class Database
 	*/
 	public function __construct(string $projectId, string $databaseUri)
 	{
-		$factory = (new Factory())->withProjectId($projectId)->withDatabaseUri($databaseUri);
-		$this->database = $factory->createDatabase();
+		$this->database = (new Factory())
+			->withProjectId($projectId)
+			->withDatabaseUri($databaseUri)
+			->createDatabase();
 	}
 
     public function setTable(string $table): self

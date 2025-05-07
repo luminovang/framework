@@ -10,7 +10,7 @@
  */
 namespace Luminova\Http;
 
-use \Luminova\Application\Foundation;
+use \Luminova\Luminova;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Functions\Func;
 use \App\Config\Apis;
@@ -250,7 +250,7 @@ class Header implements LazyInterface, Countable
                 ? 'keep-alive' 
                 : 'close'
             ),
-            'X-Powered-By' => Foundation::copyright()
+            'X-Powered-By' => Luminova::copyright()
         ];
     }
 
@@ -271,7 +271,7 @@ class Header implements LazyInterface, Countable
     ): void 
     {
         $headers = [
-            'X-Powered-By' => Foundation::copyright(),
+            'X-Powered-By' => Luminova::copyright(),
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
             'Expires' => '0',
             'Content-Type' => $contentType ?? 'text/html'
@@ -321,7 +321,7 @@ class Header implements LazyInterface, Countable
      */
     public static function isValidRestFullHeaders(array &$headers): bool 
     {
-        if (!Foundation::isApiPrefix()) {
+        if (!Luminova::isApiPrefix()) {
             return true;
         }
 
@@ -466,11 +466,11 @@ class Header implements LazyInterface, Countable
      */
     public static function setOutputHandler(bool $clearIfSet = false): bool
     {
-        if (ob_get_level() > 0) {
-            if(!$clearIfSet){
-                return false;
-            }
+        if(!$clearIfSet && ob_get_level() > 0){
+            return false;
+        }
 
+        if($clearIfSet){
             self::clearOutputBuffers();
         }
 

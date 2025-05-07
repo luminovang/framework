@@ -14,7 +14,7 @@ use \Luminova\Storages\FileManager;
 use \Luminova\Template\Smarty;
 use \Luminova\Template\Twig;
 use \Luminova\Http\Header;
-use \Luminova\Application\Foundation; 
+use \Luminova\Luminova; 
 use \Luminova\Interface\ExceptionInterface; 
 use \Luminova\Interface\PromiseInterface; 
 use \Luminova\Exceptions\ViewNotFoundException; 
@@ -483,7 +483,7 @@ trait View
      * 
      * @return int Return one of the following status codes:  
      * - `STATUS_SUCCESS` if the cache exist and handled successfully,  
-     * - `STATUS_SILENT` if failed, silently terminate without error page allowing you to manually handle the state.
+     * - `STATUS_SILENCE` if failed, silently terminate without error page allowing you to manually handle the state.
      * @throws RuntimeException Throws if called without calling `cache` method.
      */
     public final function reuse(): int
@@ -495,7 +495,7 @@ trait View
         $this->forceCache = false;
         $cache = self::__getCache($this->cacheExpiry);
 
-        return $cache->read() ? STATUS_SUCCESS : STATUS_SILENT;
+        return $cache->read() ? STATUS_SUCCESS : STATUS_SILENCE;
     }
 
     /**
@@ -614,8 +614,8 @@ trait View
      * @param int $status The HTTP status code (default: 200 OK).
      * 
      * @return int Return one of the following status codes:  
-     * - `STATUS_SUCCESS` if the view is handled successfully,  
-     * - `STATUS_SILENT` if failed, silently terminate without error page allowing you to manually handle the state.
+     *      - `STATUS_SUCCESS` if the view is handled successfully,  
+     *      - `STATUS_SILENCE` if failed, silently terminate without error page allowing you to manually handle the state.
      * @throws RuntimeException If the view rendering fails.
      * 
      * @example - Display template view with options:
@@ -631,7 +631,7 @@ trait View
     {
         return $this->__renderTemplate($options, $status) 
             ? STATUS_SUCCESS 
-            : STATUS_SILENT;
+            : STATUS_SILENCE;
     }
 
     /**
@@ -779,7 +779,13 @@ trait View
      */
     public static final function getSystemError(string $filename): string 
     {
-        return self::__getSystemPath(self::$viewFolder) . 'system_errors' . DIRECTORY_SEPARATOR . $filename . '.php';
+        return sprintf(
+            '%s%s%s%s%s%s%s%s',
+            self::__getSystemRoot(), 'app',
+            DIRECTORY_SEPARATOR, 'Errors',
+            DIRECTORY_SEPARATOR, 'Defaults',
+            DIRECTORY_SEPARATOR, "{$filename}.php"
+        );        
     }
 
     /**
@@ -1396,12 +1402,12 @@ trait View
      * and throws a RuntimeException if an error is detected. Error detection
      * is disabled in production or if 'debug.catch.inline.errors' is set to false.
      *
-     * @param string $contents The content to check for inline PHP errors.
+     * @param string|false $contents The content to check for inline PHP errors.
      * @throws RuntimeException if an inline PHP error is detected.
      */
-    private static function __inlineErrors(string $contents): void
+    private static function __inlineErrors(string|bool $contents): void
     {
-        if (PRODUCTION || !env('debug.catch.inline.errors', false)) {
+        if (!$contents || PRODUCTION || !env('debug.catch.inline.errors', false)) {
             return;
         }
 
@@ -1506,7 +1512,7 @@ trait View
     {
         $level = 0;
         if(isset($_SERVER['REQUEST_URI'])){
-            $url = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen(Foundation::getBase()));
+            $url = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen(Luminova::getBase()));
 
             if (($pos = strpos($url, '?')) !== false) {
                 $url = substr($url, 0, $pos);
@@ -1530,6 +1536,7 @@ trait View
      * @param bool $copy Weather to include code block copy button.
      *
      * @return Minification Return minified instance.
+     * @throws RuntimeException If array or object content and json error occures.
      */
     private static function __getMinification(
         mixed $contents, 
@@ -1539,6 +1546,7 @@ trait View
     ): Minification
     {
         return self::$weak[new stdClass()] ??= (new Minification())
+            ->isHtml($type === 'html')
             ->codeblocks($ignore)
             ->copyable($copy)
             ->compress($contents, $type);
@@ -1556,7 +1564,7 @@ trait View
         return self::$weak[new stdClass()] ??= (new TemplateCache())
             ->setExpiry($expiry)
             ->setDirectory(self::$cacheFolder)
-            ->setKey(Foundation::getCacheId())
-            ->setUri(Foundation::getUriSegments());
+            ->setKey(Luminova::getCacheId())
+            ->setUri(Luminova::getUriSegments());
     }
 }

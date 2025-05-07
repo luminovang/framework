@@ -76,7 +76,7 @@ final class Prefix
      * 
      * @param string $name The route url prefix name (e.g, `blog`).
      * @param Closure|array{0:class-string<ErrorHandlerInterface>,1:string}|null $onError Optional prefix context error handler.
-     *      - Callable Array - Method name in [ViewErrors::class, 'methodname']; to handle error.
+     *      - Callable Array - Method name in [App\Errors\Controllers\ErrorController::class, 'methodname']; to handle error.
      *      - Closure - Closure(class-string<\T> $arguments [, mixed $... ]): int.
      * 
      * @throws RuntimeException Throws if invalid error handler was provided.
@@ -85,13 +85,19 @@ final class Prefix
     {
         $this->name = $name;
 
-        if($onError !== null && !($onError instanceof Closure) && !(is_array($onError) && count($onError) === 2)){
-            throw new RuntimeException('Invalid error handler: expected a Closure or a callable array in [class, method] format.');
+        if(
+            $onError !== null && 
+            !($onError instanceof Closure) && 
+            !(is_array($onError) && count($onError) === 2)
+        ){
+            throw new RuntimeException(
+                'Invalid error handler: expected a Closure or a callable array in [class, method] format.'
+            );
         }
 
         $this->onError = $onError;
 
-        if( $name !== self::WEB){
+        if($name !== self::WEB){
             self::$prefixes[$name] = $name;
         }
     }

@@ -24,10 +24,10 @@ interface AiInterface
    * @param string|null $project The project ID (optional).
    */
   public function __construct(
-      string $apiKey,
-      string $version = 'v1',
-      ?string $organization = null,
-      ?string $project = null
+    string $apiKey,
+    string $version = 'v1',
+    ?string $organization = null,
+    ?string $project = null
   );
 
   /**

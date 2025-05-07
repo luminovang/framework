@@ -97,7 +97,7 @@ final class ErrorHandler
      * Triggers an error by throwing an ErrorException with the specified message and level.
      *
      * @param string $message The error message to be included in the exception.
-     * @param int $error_level The level of the error (default: `ErrorException::USER_NOTICE`).
+     * @param int $errorLevel The level of the error (default: `ErrorException::USER_NOTICE`).
      * @param string|null $file Optional. The file where the error occurred.
      * @param int|null $line Optional. The line number where the error occurred.
      *
@@ -106,12 +106,12 @@ final class ErrorHandler
      */
     public static function trigger(
         string $message, 
-        int $error_level = ErrorException::USER_NOTICE,
+        int $errorLevel = ErrorException::USER_NOTICE,
         ?string $file = null,
         ?int $line = null
     ): void 
     {
-        $e = new ErrorException($message, $error_level);
+        $e = new ErrorException($message, $errorLevel);
         
         if($file){
             $e->setFile($file);
@@ -163,23 +163,23 @@ final class ErrorHandler
     /** 
      * Outputs a basic error message when no error handler is available.
      * 
-     * @param bool $is_cli Whether the error occurred in a CLI environment.
-     * @param int $retry_after Optional number of seconds after which the client should retry (default: 60).
+     * @param bool $isCli Whether the error occurred in a CLI environment.
+     * @param int $retryAfter Optional number of seconds after which the client should retry (default: 60).
      * 
      * @return void
      */
-    public static function notify(bool $is_cli, int $retry_after = 60): void 
+    public static function notify(bool $isCli, int $retryAfter = 60): void 
     {
         $error = 'An error has prevented the application from running correctly.';
         
-        if ($is_cli) {
+        if ($isCli) {
             echo $error;
             return;
         } 
 
         if (!headers_sent()) {
             header('HTTP/1.1 500 Internal Server Error');
-            header('Retry-After: ' . $retry_after);
+            header('Retry-After: ' . $retryAfter);
         }
 
         echo sprintf(

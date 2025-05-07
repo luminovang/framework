@@ -337,18 +337,11 @@ if(!function_exists('env')){
 })(APP_ROOT . '.env');
 
 /**
- * Application public front controller directory.
+ * Application document root (public front controller) directory.
  * 
- * @var string FRONT_CONTROLLER
+ * @var string DOCUMENT_ROOT (e.g, `/path/to/project/public/`)
  */
-defined('FRONT_CONTROLLER') || define('FRONT_CONTROLLER', APP_ROOT . 'public' . DIRECTORY_SEPARATOR);
-
-/**
- * Application document root directory. 
- * 
- * @var string DOCUMENT_ROOT
- */
-defined('DOCUMENT_ROOT') || define('DOCUMENT_ROOT', realpath(FRONT_CONTROLLER . 'public') . DIRECTORY_SEPARATOR);
+defined('DOCUMENT_ROOT') || define('DOCUMENT_ROOT', realpath(APP_ROOT . 'public') . DIRECTORY_SEPARATOR);
 
 /**
  * Status code indicating success code.
@@ -367,7 +360,15 @@ defined('STATUS_ERROR') || define('STATUS_ERROR', 1);
 /**
  * Finish controller method without error or success status.
  * 
+ * @var int STATUS_SILENCE
+ */
+defined('STATUS_SILENCE') || define('STATUS_SILENCE', 2);
+
+/**
+ * Finish controller method without error or success status.
+ * 
  * @var int STATUS_SILENT
+ * @deprecated use STATUS_SILENCE instead.
  */
 defined('STATUS_SILENT') || define('STATUS_SILENT', 2);
 
@@ -421,32 +422,32 @@ defined('MAINTENANCE') || define('MAINTENANCE', (bool) env('app.maintenance.mood
 defined('URL_SCHEME') || define('URL_SCHEME', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http'));
 
 /**
- * Application environment hostname (e.g, example.com).
+ * Application hostname (e.g, example.com).
  * 
  * @var string APP_HOSTNAME
  */
 defined('APP_HOSTNAME') || define('APP_HOSTNAME', env('app.hostname', 'example.com'));
 
 /**
- * Application environment hostname alias (e.g, www.example.com).
+ * Application hostname alias (e.g, www.example.com).
  * 
- * @var string APP_WWW_HOSTNAME
+ * @var string APP_HOSTNAME_ALIAS
  */
-defined('APP_WWW_HOSTNAME') || define('APP_WWW_HOSTNAME', 'www.' . APP_HOSTNAME);
+defined('APP_HOSTNAME_ALIAS') || define('APP_HOSTNAME_ALIAS', 'www.' . APP_HOSTNAME);
 
 /**
- * Application environment URL (e.g, http://example.com).
+ * Application URL (e.g, http://example.com).
  * 
  * @var string APP_URL
  */
 defined('APP_URL') || define('APP_URL', URL_SCHEME . '://' . APP_HOSTNAME);
 
 /**
- * Application environment URL alternative (e.g, http://www.example.com).
+ * Application URL alias (e.g, http://www.example.com).
  * 
- * @var string APP_WWW_URL
+ * @var string APP_URL_ALIAS
  */
-defined('APP_WWW_URL') || define('APP_WWW_URL', URL_SCHEME . '://' . APP_WWW_HOSTNAME);
+defined('APP_URL_ALIAS') || define('APP_URL_ALIAS', URL_SCHEME . '://' . APP_HOSTNAME_ALIAS);
 
 /**
  * Application debug backtrace boolean mode.
@@ -463,12 +464,12 @@ defined('SHOW_DEBUG_BACKTRACE') || define('SHOW_DEBUG_BACKTRACE', (bool) env('de
 defined('NOVAKIT_ENV') || define('NOVAKIT_ENV', ($_SERVER['NOVAKIT_EXECUTION_ENV'] ?? null));
 
 /**
- * Application project identifier string.
+ * Application project controller script path.
  * 
- * @var bool PROJECT_ID 
- * > This is based on directory your project is located as product id or empty on php server.
+ * @var bool CONTROLLER_SCRIPT_PATH 
+ * > Based on base-directory of your project. returns empty on PHP development server.
  */
-defined('PROJECT_ID') || define('PROJECT_ID', trim(dirname($_SERVER['SCRIPT_NAME']??''), TRIM_DS));
+defined('CONTROLLER_SCRIPT_PATH') || define('CONTROLLER_SCRIPT_PATH', trim(dirname($_SERVER['SCRIPT_NAME']??''), TRIM_DS));
 
 /**
  * Database fetch mode to return result as an associative array.

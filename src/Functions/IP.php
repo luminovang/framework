@@ -181,6 +181,23 @@ final class IP
     }
 
     /**
+     * Retrieves the MAC (Media Access Control) address of the current system's network interface.
+     *
+     * This method executes platform-specific commands to obtain the MAC address:
+     * - On Windows: uses the `getmac` command.
+     * - On Unix-like systems: uses `ifconfig -a` or `ip link`.
+     *
+     * @return string|bool Returns the first matched MAC address as a string, or false if not found.
+     */
+    public static function getMacAddress(): string|bool
+    {
+        $output = shell_exec(is_platform('windows') ? 'getmac' : 'ifconfig -a 2>/dev/null || ip link');
+        preg_match('/([a-f0-9]{2}[:-]){5}[a-f0-9]{2}/i', $output, $matches);
+
+        return $matches[0] ?? false;
+    }
+
+    /**
      * Get IP address information from third party API.
      * Uses the current IP if `$address` is `null`.
      * 

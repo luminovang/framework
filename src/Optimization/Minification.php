@@ -11,6 +11,7 @@
 namespace Luminova\Optimization;
 
 use \Luminova\Http\Header;
+use \Luminova\Exceptions\RuntimeException;
 use \JsonException;
 
 final class Minification 
@@ -60,14 +61,29 @@ final class Minification
      * Class constructor.
      * Initializes default settings for the response headers and cache control.
      * 
-     * @param bool $codeblocks Weather to ignore html code block tag `<code></code>` (default: false). 
+     * @param bool $ignoreCodeblocks Weather to ignore html code block tag `<code></code>` (default: false). 
      * @param bool $copyable Weather to include a copy button to code blocks (default: false).
+     * @param bool $isHtml Weather minification is for HTML contents (default: true).
      */
     public function __construct(
-        private bool $codeblocks = false,
-        private bool $copyable = false
+        private bool $ignoreCodeblocks = false,
+        private bool $copyable = false,
+        private bool $isHtml = true
     ) {}
     
+    /**
+     * Set if minifying content is kind of HTML.
+     *
+     * @param bool $isHtml Weather minification is for HTML contents (default: true).
+     * 
+     * @return self Returns minification class instance.
+     */
+	public function isHtml(bool $isHtml = true): self 
+    {
+		$this->isHtml = $isHtml;
+		return $this;
+	}
+
     /**
      * sets ignore minifying code block.
      *
@@ -77,7 +93,7 @@ final class Minification
      */
 	public function codeblocks(bool $ignore): self 
     {
-		$this->codeblocks = $ignore;
+		$this->ignoreCodeblocks = $ignore;
 		return $this;
 	}
 
@@ -121,7 +137,7 @@ final class Minification
      */
     public function getLength(): int 
     {
-		return $this->headers['Content-Length']??0;
+		return $this->headers['Content-Length'] ?? 0;
     }
 
     /**
@@ -141,25 +157,37 @@ final class Minification
      * @param string $contentType The expected content type for the response.
      * 
      * @return self Returns minification class instance.
+     * @throws RuntimeException If array or object and json error occures.
      */
     public function compress(
         string|array|object $data,
         string $contentType
-    ): self {
-       
+    ): self 
+    {
+        $charset = null;
+
         // Convert data to string if not already
         $content = is_string($data) ? $data : self::toJsonString($data);
 
         // Minify content if required
-        $content = ($this->codeblocks ? self::minify($content) : self::minifyIgnore($content, $this->copyable));
+        $content = (!$this->isHtml || $this->ignoreCodeblocks) 
+            ? self::minify($content) 
+            : self::minifyIgnore($content, $this->copyable);
 
         // Resolve content type if it's a shorthand
         if (!str_contains($contentType, '/')) {
             $contentType = Header::getContentTypes($contentType);
         }
 
+        if (
+            str_contains($contentType, 'charset=') &&
+            preg_match('/charset\s*=\s*["\']?([\w\-]+)["\']?/i', $contentType, $matches)
+        ) {
+            $charset = $matches[1];
+        }
+
         // Set response headers
-        $this->headers['Content-Length'] = string_length($content);
+        $this->headers['Content-Length'] = string_length($content, $charset);
         $this->headers['Content-Type'] = $contentType;
         $this->contents = $content;
 
@@ -172,20 +200,21 @@ final class Minification
      * @param array|object $data The content to convert to json string.
      * 
      * @return string Return json string or empty string.
+     * @throws RuntimeException
      */
     private static function toJsonString(array|object $data): string
     {
-        if(is_object($data)){
-            $data = (array) $data;
-        }
-
         try{
-            $encoded = json_encode($data, JSON_THROW_ON_ERROR);
-            if ($encoded !== false) {
-                return $encoded;
-            }
-        } catch (JsonException) {
-            return '';
+            return json_encode(
+                (array) $data, 
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_LINE_TERMINATORS | JSON_UNESCAPED_UNICODE
+            ) ?: '';
+        } catch (JsonException $e) {
+           throw new RuntimeException(
+                'Json Minification Error: ' . $e->getMessage(), 
+                RuntimeException::JSON_ERROR, 
+                $e
+            );
         }
         
         return '';

@@ -153,11 +153,11 @@ interface ExceptionInterface
      * same message, code, and previous exception, and then handled.
      *
      * @param Throwable $e The original exception object to be thrown or handled.
-     * @param class-string<AppException>|null $exception_class The class name to throw the exception as (e.g, `Luminova\Exceptions\RuntimeException`). 
+     * @param class-string<AppException>|null $exceptionClass The class name to throw the exception as (e.g, `Luminova\Exceptions\RuntimeException`). 
      *          Defaults to the current class if not provided.
      * 
      * @return never
      * @throws Throwable<\T> Throws the exception from the called class.
      */
-    public static function throwAs(Throwable $e, ?string $exception_class = null): void;
+    public static function throwAs(Throwable $e, ?string $exceptionClass = null): void;
 }

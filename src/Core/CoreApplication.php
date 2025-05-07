@@ -11,6 +11,7 @@ declare(strict_types=1);
  */
 namespace Luminova\Core;
 
+use \Luminova\Interface\RouterInterface;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Routing\Router;
 use \Luminova\Template\View;
@@ -34,9 +35,9 @@ abstract class CoreApplication implements LazyInterface
     /**
      * Instance of the Router class.
      *
-     * @var Router|null $router
+     * @var RouterInterface|null $router
      */
-    public ?Router $router = null;
+    public ?RouterInterface $router = null;
 
     /**
      * Application is lifecycle state counter.
@@ -63,7 +64,7 @@ abstract class CoreApplication implements LazyInterface
     public function __construct() 
     {
         if(self::$lifecycle > 0){
-            if((self::$instance instanceof static) && !($this->router instanceof Router)){
+            if((self::$instance instanceof static) && !($this->router instanceof RouterInterface)){
                 $this->router = self::$instance->router;
             }
 
@@ -78,7 +79,7 @@ abstract class CoreApplication implements LazyInterface
         }
         
         $this->onInitialized();
-        $this->router ??= new Router($this);
+        $this->router ??= $this->getRouterInstance() ?? new Router($this);
         $this->router->addNamespace('\\App\\Controllers\\')
             ->addNamespace('\\App\\Modules\\Controllers\\');
 
@@ -143,7 +144,7 @@ abstract class CoreApplication implements LazyInterface
      */
     protected final function terminate(array $info = []): void 
     {
-        $info += ['uri' => Router::getUriSegments()];
+        $info += ['uri' => $this->router->getUriSegments()];
 
         $this->termination = [
             'isTerminated' => $this->onTerminate($info),
@@ -298,6 +299,23 @@ abstract class CoreApplication implements LazyInterface
     protected function onCommandPresent(array $options): void {}
 
     /**
+     * Set the singleton instance to a new application instance.
+     * 
+     * @param CoreApplication $app The application instance to set.
+     * 
+     * @return static Return the new shared application instance.
+     */
+    public static function setInstance(CoreApplication $app): static
+    {
+        if((self::$instance instanceof static) && !($app->router instanceof RouterInterface)){
+            $app->router = self::$instance->router;
+        }
+
+        self::$instance = $app;
+        return self::$instance;
+    }
+
+    /**
      * Retrieve the singleton instance of the application.
      * 
      * @return static Return a shared application instance.
@@ -312,20 +330,16 @@ abstract class CoreApplication implements LazyInterface
     }
 
     /**
-     * Set the singleton instance to a new application instance.
-     * 
-     * @param CoreApplication $app The application instance to set.
-     * 
-     * @return static Return the new shared application instance.
+     * Returns an instance of the application routing system.
+     *
+     * You may override this method in your application class to return a custom implementation
+     * of the routing system by extending or replacing the default router.
+     *
+     * @return RouterInterface<\T>|null Return instance of the routing system, or null to use default.
      */
-    public static function setInstance(CoreApplication $app): static
+    protected function getRouterInstance(): ?RouterInterface
     {
-        if((self::$instance instanceof static) && !($app->router instanceof Router)){
-            $app->router = self::$instance->router;
-        }
-
-        self::$instance = $app;
-        return self::$instance;
+        return null;
     }
 
     /**

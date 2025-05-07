@@ -213,7 +213,7 @@ abstract class BaseCache implements LazyInterface
      * 
      * > **Note:** When set to null, the item will never expire, when set to 0, it automatically expires immediately.
      */
-    public function setExpire(DateTimeInterface|int|null $expiration): self
+    public function setExpire(DateTimeInterface|int|null $expiration = null): self
     {
         $this->expireAfter = null;
 
@@ -233,7 +233,7 @@ abstract class BaseCache implements LazyInterface
      * 
      * @return self Return instance of memory cache class.
      */
-    public function expiresAfter(DateInterval|int|null $after): self
+    public function expiresAfter(DateInterval|int|null $after = null): self
     {
         if($after instanceof DateInterval){
             $this->expireAfter = Timestamp::ttlToSeconds($after);
@@ -356,7 +356,7 @@ abstract class BaseCache implements LazyInterface
      * 
      * > **Note:** This method uses the expiration set using `setExpire`, `expiresAfter` and locking for `setLock` method.
      */
-    public function replace(string $key,  mixed $content): bool 
+    public function replace(string $key, mixed $content): bool 
     {
         $this->assertStorageAndKey($key);
 

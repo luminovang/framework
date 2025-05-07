@@ -212,24 +212,72 @@ final class Crypter
 		return password_verify($password, $hash);
 	}
 
-    /** 
-	 * Verify a password against it stored hash value to determine if if they match.
-	 *
-	 * @param string $password The password string to verify.
-	 * @param string $hash The password stored hash value.
-	 *
-	 * @return bool Return true if password matches with the hash, otherwise false.
-     * @deprecated This method is deprecated and will be removed in a future release. Use `isPassword()` instead.
-	 */
-    public static function verify(string $password, string $hash): bool 
-	{
-        \Luminova\Errors\ErrorHandler::depreciate(
-            'Method %s::verify() is deprecated. Use %s::isPassword(...) instead.',
-            [self::class, self::class]
-        );
+    /**
+     * Check if the given string is a valid private key.
+     *
+     * @param string $privateKey The private key string in PEM format.
+     *
+     * @return bool Returns true if the private key is valid, false otherwise.
+     */
+    public static function isPrivateKey(string $privateKey): bool
+    {
+        return (!$privateKey || openssl_pkey_get_private($privateKey) === false) ? false : true;
+    }
 
-		return self::isPassword($password, $hash);
-	}
+    /**
+     * Check if the given string is a valid public key.
+     *
+     * @param string $publicKey The public key string in PEM format.
+     *
+     * @return bool Returns true if the public key is valid, false otherwise.
+     */
+    public static function isPublicKey(string $publicKey): bool
+    {
+        return (!$publicKey || openssl_pkey_get_public($publicKey) === false) ? false : true;
+    }
+
+    /**
+     * Validate whether a given private and public key pair match.
+     *
+     * This method signs a string with the private key and verifies it using the public key
+     * to ensure the key pair corresponds.
+     *
+     * @param string $privateKey The private key in PEM format.
+     * @param string $publicKey The public key in PEM format.
+     * @param int $algo The OpenSSL algorithm used for signing and verification (default: OPENSSL_ALGO_SHA256).
+     * @param string|null $data Optional custom data to sign (default: `test_message`).
+     *
+     * @return bool Returns true if the key pair matches, false otherwise.
+     */
+    public static function isKeyMatch(
+        string $privateKey, 
+        string $publicKey, 
+        int $algo = OPENSSL_ALGO_SHA256,
+        ?string $data = null
+    ): bool
+    {
+        if(!$privateKey || !$publicKey){
+            return false;
+        }
+
+        $data ??= 'test_message';
+        $signature = '';
+
+        $privateRes = openssl_pkey_get_private($privateKey);
+        $publicRes = openssl_pkey_get_public($publicKey);
+
+        if (!$privateRes || !$publicRes) {
+            return false;
+        }
+
+        $isSign = openssl_sign($data, $signature, $privateRes, $algo);
+
+        if (!$isSign) {
+            return false;
+        }
+
+        return openssl_verify($data, $signature, $publicRes, $algo) === 1;
+    }
 
     /**
      * Generates a random encryption key or key pair based on the specified type and options.
@@ -258,7 +306,7 @@ final class Crypter
      *                     - For 'public' type: An array containing both 'private_key' and 'public_key'.
      *                     - False on failure or if an invalid type is specified.
      */
-    public static function generate_key(string $type = 'random', array $options = []): array|string|bool
+    public static function generateKey(string $type = 'random', array $options = []): array|string|bool
     {
         self::initConfig();
         $handler = self::handler();
@@ -294,7 +342,7 @@ final class Crypter
         }
 
         if ($type === 'public') {
-            $privateKey = $options['private_key'] ?? self::generate_key('private', $options);
+            $privateKey = $options['private_key'] ?? self::generateKey('private', $options);
             
             $private = openssl_pkey_get_private($privateKey);
 

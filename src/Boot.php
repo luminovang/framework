@@ -10,7 +10,7 @@
  */
 namespace Luminova;
 
-use \Luminova\Application\Foundation;
+use \Luminova\Luminova;
 use \Luminova\Exceptions\RuntimeException;
 use \App\Application;
 use \Throwable;
@@ -37,7 +37,7 @@ final class Boot
      */
     public static function init(): void 
     {
-        Foundation::initialize();
+        Luminova::initialize();
         self::finish();
     }
 
@@ -135,7 +135,7 @@ final class Boot
 
         require_once __DIR__ . '/../bootstrap/functions.php';
         require_once __DIR__ . '/Errors/ErrorHandler.php';
-        require_once __DIR__ . '/Application/Foundation.php';
+        require_once __DIR__ . '/Luminova.php';
     }
 
     /**
@@ -152,11 +152,12 @@ final class Boot
     }
 
     /**
-     * Spoofs the HTTP request method based on hidden input or query param `_METHOD_OVERRIDE_` from the client.
+     * Spoofs the HTTP POST request method 
+     * using `_method` or `_METHOD` as a hiding field or query param .
      *
      * This method checks for a custom request method specified in the 
-     * POST or GET data, allowing clients to simulate different HTTP 
-     * methods (e.g., PUT, DELETE) using a hidden form field or query parameter.
+     * POST data, allowing clients to simulate different HTTP methods 
+     * (e.g., PUT, DELETE, PATCH, OPTIONS).
      *
      * @return void
      */
@@ -166,14 +167,18 @@ final class Boot
             return;
         }
 
-        $method = (
-            $_POST['_OVERRIDE_REQUEST_METHOD_'] ?? 
-            $_GET['_override_request_method_'] ??
-            $_GET['_OVERRIDE_REQUEST_METHOD_'] ?? 
-            null
-        );
-        if ($method !== null) {
-            $_SERVER['REQUEST_METHOD'] = strtoupper($method);
+        if(strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'){
+            $override = $_POST['_METHOD'] 
+                ?? $_POST['_method'] 
+                ?? $_GET['_method'] 
+                ?? null;
+
+            if ($override) {
+                $override = strtoupper(trim($override));
+                if(in_array($override, ['PUT', 'DELETE', 'PATCH', 'OPTIONS'], true)){
+                    $_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'] = $override;
+                }
+            }
         }
     }
 }

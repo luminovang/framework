@@ -10,8 +10,8 @@
  */
 namespace Luminova\Http;
 
+use \Luminova\Luminova;
 use \Luminova\Interface\LazyInterface;
-use \Luminova\Application\Foundation;
 use \Countable;
 
 class Server implements LazyInterface, Countable
@@ -29,7 +29,7 @@ class Server implements LazyInterface, Countable
      * @param string|null $name Optional name of the server variable.
      * @param mixed $default Default value for the server key.
      *
-     * @return mixed|array|string|null The value of the specified server variable, or all server variables if $name is null.
+     * @return mixed|array|string|null Return the value of the specified server variable, or all server variables if $name is null.
      */
     public function get(?string $name = null, mixed $default = null): mixed
     {
@@ -56,7 +56,7 @@ class Server implements LazyInterface, Countable
     /**
      * Removes a server variable by key
      * 
-     * @param string $key The key to remove.
+     * @param string $key Return the key to remove.
     */
     public function remove(string $key): void
     {
@@ -70,7 +70,7 @@ class Server implements LazyInterface, Countable
      *
      * @param string $key The key to search for.
      * 
-     * @return mixed The value of the found header or false if not found.
+     * @return mixed Return the value of the found header or false if not found.
      */
     public function search(string $key, mixed $default = false): mixed
     {
@@ -133,13 +133,13 @@ class Server implements LazyInterface, Countable
             'SERVER_NAME' => 'localhost',
             'SERVER_PORT' => 80,
             'HTTP_HOST' => 'localhost',
-            'HTTP_USER_AGENT' => Foundation::copyright(true),
+            'HTTP_USER_AGENT' => Luminova::copyright(true),
             'HTTP_ACCEPT' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'HTTP_ACCEPT_LANGUAGE' => 'en-us,en;q=0.5',
             'HTTP_ACCEPT_CHARSET' => 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
             'REMOTE_ADDR' => '127.0.0.1',
-            'SCRIPT_NAME' => '/' . PROJECT_ID . '/index.php',
-            'SCRIPT_FILENAME' => root('/' . PROJECT_ID . '/') . 'index.php',
+            'SCRIPT_NAME' => '/index.php',
+            'SCRIPT_FILENAME' => '/' . CONTROLLER_SCRIPT_PATH . '/' . 'index.php',
             'SERVER_PROTOCOL' => 'HTTP/1.1',
             'REQUEST_TIME' => time(),
             'REQUEST_TIME_FLOAT' => microtime(true),

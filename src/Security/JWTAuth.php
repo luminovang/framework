@@ -15,7 +15,7 @@ use \Firebase\JWT\Key;
 use \Luminova\Time\Time;
 use \Luminova\Logger\Logger;
 use \Luminova\Interface\LazyInterface;
-use \Luminova\Application\Foundation;
+use \Luminova\Luminova;
 use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\EncryptionException;
 use \Closure;
@@ -113,9 +113,9 @@ class JWTAuth implements LazyInterface
      * Generates a JWT token using the `HS256` algorithm.
      *
      * @param array $payload The payload for the JWT, containing any custom claims to be included in the token.
-     * @param string|int $user_id The identifier for the user. This is typically a unique ID associated with the user.
+     * @param string|int $userId The identifier for the user. This is typically a unique ID associated with the user.
      * @param int $expiry The expiration time in seconds (default: 3600).
-     * @param string|null $token_id JWT ID: a unique identifier for this token (optional).
+     * @param string|null $tokenId JWT ID: a unique identifier for this token (optional).
      * @param string|int|null $role Custom claim: the role of the user (optional).
      *
      * @return string Return the generated JWT token.
@@ -124,32 +124,32 @@ class JWTAuth implements LazyInterface
      * 
      * ```php
      * $payload = ['name' => 'John Doe'];
-     * $user_id = 123;
+     * $userId = 123;
      * $expiry = 7200; // 2 hours
-     * $token = $jwt->encode($payload, $user_id, $expiry, null, 'admin');
+     * $token = $jwt->encode($payload, $userId, $expiry, null, 'admin');
      * echo $token; // Outputs the generated JWT token
      * ```
      */
     public function encode(
         array $payload,
-        string|int $user_id, 
+        string|int $userId, 
         int $expiry = 3600,
-        ?string $token_id = null,
+        ?string $tokenId = null,
         string|int|null $role = null
     ): string
     {
         $iat = Time::now()->getTimestamp();
 
-        if($token_id !== null){
-            $payload['jti'] = $token_id;
+        if($tokenId !== null){
+            $payload['jti'] = $tokenId;
         }
 
         if($role !== null){
             $payload['role'] = $role;
         }
 
-        $payload['uid'] = $user_id;
-        $payload['fmv'] = Foundation::VERSION;
+        $payload['uid'] = $userId;
+        $payload['fmv'] = Luminova::VERSION;
         $payload['app'] = APP_NAME;
         $payload['version'] = APP_VERSION;
         
@@ -157,11 +157,11 @@ class JWTAuth implements LazyInterface
             array_merge($payload, [
                 'iss' => $this->iss ?? APP_URL,
                 'aud' => $this->aud ?? APP_URL . '/api',
-                'sub' => (string) $user_id,
+                'sub' => (string) $userId,
                 'iat' => $iat,
                 'exp' => $iat + $expiry
             ]), 
-            self::key($user_id, 'sha256'), $this->algo ?? 'HS256'
+            self::key($userId, 'sha256'), $this->algo ?? 'HS256'
         );
     }
 
@@ -169,7 +169,7 @@ class JWTAuth implements LazyInterface
      * Decode and validate a JWT token.
      *
      * @param string $token The JWT token to decode.
-     * @param string|int $user_id The user identifier, used to generate the key for decoding.
+     * @param string|int $userId The user identifier, used to generate the key for decoding.
      *
      * @return stdClass|false Returns the decoded JWT payload as an object if valid, false otherwise.
      * @throws EncryptionException Throws on development mode if an error is encountered while decoding.
@@ -178,8 +178,8 @@ class JWTAuth implements LazyInterface
      * 
      * ```php
      * $token = 'eyJhbGciOi...';
-     * $user_id = 123;
-     * $decoded = $jwt->decode($token, $user_id);
+     * $userId = 123;
+     * $decoded = $jwt->decode($token, $userId);
      * if ($decoded !== false) {
      *     // Token is valid, use $decoded->sub to access the user ID or other claims
      * } else {
@@ -187,12 +187,12 @@ class JWTAuth implements LazyInterface
      * }
      * ```
      */
-    public function decode(string $token, string|int $user_id): stdClass|bool
+    public function decode(string $token, string|int $userId): stdClass|bool
     {
         try {
             return JWT::decode(
                 $token, 
-                new Key(self::key($user_id, 'sha256'), $this->algo ?? 'HS256')
+                new Key(self::key($userId, 'sha256'), $this->algo ?? 'HS256')
             );
         } catch (Throwable $e) {
             throw new EncryptionException($e->getMessage(), $e->getCode(), $e);
@@ -203,7 +203,7 @@ class JWTAuth implements LazyInterface
      * Validate token and user ID, with an optional callback for additional validation on the payload.
      * 
      * @param string|null $token The authentication token, typically in the format `scheme token` (e.g., `Bearer my-token`).
-     * @param string|int $user_id The user identifier, which should match the `user_id` claim in the token.
+     * @param string|int $userId The user identifier, which should match the `userId` claim in the token.
      * @param Closure|null $callback An optional callback function that is invoked with the validation result and the decoded payload.
      *                              The callback can be used to perform additional checks, such as user-specific data validation.
      *
@@ -244,7 +244,7 @@ class JWTAuth implements LazyInterface
      */
     public function validate(
         ?string $token, 
-        string|int $user_id,
+        string|int $userId,
         ?Closure $callback = null
     ): bool
     {
@@ -253,7 +253,7 @@ class JWTAuth implements LazyInterface
         $decoded->err = true;
         $this->error = null;
 
-        if($token && $user_id){
+        if($token && $userId){
             // Match any scheme (e.g., Bearer, Token, etc.)
             // The first part is the scheme (Bearer, Token, etc.), the second part is the token
             if (preg_match('/^\s*(\S+)\s+(\S+)/', $token, $matches)) {
@@ -261,14 +261,14 @@ class JWTAuth implements LazyInterface
             }
 
             try{
-                $decoded = $this->decode($token, $user_id);
+                $decoded = $this->decode($token, $userId);
 
                 if($decoded instanceof stdClass){
-                    $valid = (!empty($decoded->uid) && (string) $user_id === $decoded->uid);
+                    $valid = (!empty($decoded->uid) && (string) $userId === $decoded->uid);
                     $decoded->err = $valid ? null : true;
                 }
             }catch(EncryptionException $e){
-                $decoded = $this->error($e, $user_id, $token);
+                $decoded = $this->error($e, $userId, $token);
             }
         }
 
@@ -276,7 +276,7 @@ class JWTAuth implements LazyInterface
             $this->error = $decoded->err = (object)[
                 'code' => 0,
                 'message' => 'Invalid authentication token or client ID.',
-                'uid' => $user_id,
+                'uid' => $userId,
                 'token'   => $token
             ];
         }
@@ -287,7 +287,7 @@ class JWTAuth implements LazyInterface
 	/**
      * Validate the authentication key from a file stored in a specified path.
      * 
-     * @param string|int $user_id The user identifier whose authentication token is stored in a file.
+     * @param string|int $userId The user identifier whose authentication token is stored in a file.
      * @param Closure|null $callback An optional callback function that can be used to perform additional validation on the payload.
      *                              The callback will receive the validation result and the decoded payload.
      *
@@ -322,16 +322,16 @@ class JWTAuth implements LazyInterface
      * }
      * ```
      */
-    public function validateFromFile(string|int $user_id, ?Closure $callback = null): bool
+    public function validateFromFile(string|int $userId, ?Closure $callback = null): bool
     {
         $this->error = null;
         
-        if($user_id){
+        if($userId){
             $this->path ??= root('/writeable/auth/');
-            $file = $this->path . self::filename($user_id);
+            $file = $this->path . self::filename($userId);
 
             if (file_exists($file) && ($token = get_content($file)) !== false) {
-                return $this->validate($token, $user_id, $callback);
+                return $this->validate($token, $userId, $callback);
             }
         }
 
@@ -340,7 +340,7 @@ class JWTAuth implements LazyInterface
             $this->error = $err->err = (object)[
                 'code' => 0,
                 'message' => 'Invalid authentication token or client ID.',
-                'uid' => $user_id,
+                'uid' => $userId,
                 'token'   => null
             ];
 
@@ -353,11 +353,11 @@ class JWTAuth implements LazyInterface
     /**
      * Generate a hashed or plain filename for storing a user's private key on the server.
      *
-     * @param string|int $user_id The user identifier used to generate the filename.
-     * @param bool $md5_hash Whether to hash the filename using the MD5 algorithm (default: `true`).
+     * @param string|int $userId The user identifier used to generate the filename.
+     * @param bool $md5Hash Whether to hash the filename using the MD5 algorithm (default: `true`).
      *
      * @return string Return the generated filename, either hashed or plain, with a `.key` extension.
-     * @throws EncryptionException If the `$user_id` is empty or invalid.
+     * @throws EncryptionException If the `$userId` is empty or invalid.
      *
      * @example - With hashed filename:
      * ```php
@@ -371,23 +371,23 @@ class JWTAuth implements LazyInterface
      * // Example output: 'user-id-private-jwt-key-file.key'
      * ```
      */
-    public static function filename(string|int $user_id, bool $md5_hash = true): string
+    public static function filename(string|int $userId, bool $md5Hash = true): string
     {
-        if (!$user_id) {
+        if (!$userId) {
             throw new EncryptionException(
-                'Unable to create key path, $user_id reference must not be empty',
+                'Unable to create key path, $userId reference must not be empty',
                 EncryptionException::INVALID_ARGUMENTS
             );
         }
 
-        $filename = "{$user_id}-private-jwt-key-file";
-        return ($md5_hash ? md5($filename) : $filename) . ".key";
+        $filename = "{$userId}-private-jwt-key-file";
+        return ($md5Hash ? md5($filename) : $filename) . ".key";
     }
 
     /**
      * Generate a securely hashed encryption key using the user identifier and the specified hashing algorithm.
      *
-     * @param string|int $user_id The user identifier to generate the encryption key.
+     * @param string|int $userId The user identifier to generate the encryption key.
      * @param string $algo The hashing algorithm to use for the encryption key (default: `sha256`).
      * @param string|null $salt Optional key salt prefix (default: `NULL`).
      *
@@ -406,9 +406,9 @@ class JWTAuth implements LazyInterface
      * // Example output: 'f623b2b3d1e9c139aadad62f0c5d4a4327b20e63'
      * ```
      */
-    public function key(string|int $user_id, string $algo = 'sha256'): string
+    public function key(string|int $userId, string $algo = 'sha256'): string
     {
-        if (!$user_id) {
+        if (!$userId) {
             throw new EncryptionException(
                 'Unable to create encryption key: user identifier must not be empty.',
                 EncryptionException::INVALID_ARGUMENTS
@@ -424,27 +424,27 @@ class JWTAuth implements LazyInterface
             );
         }
 
-        return hash_hmac($algo, (string) $user_id, ($this->salt??'') . $key);
+        return hash_hmac($algo, (string) $userId, ($this->salt ?? '') . $key);
     }
 
     /**
      * Generate a JWT token based on user ID, sign it, and store the private key on the server.
      *
      * @param array $payload The additional data to include in the JWT payload.
-     * @param string|int $user_id The unique identifier for the user.
+     * @param string|int $userId The unique identifier for the user.
      * @param int $expiry The expiration time in seconds (default is 30 days or 2592000 seconds).
-     * @param string|null &$file_hash A reference to a variable that will hold the key file hash, used to identify the stored key file.
+     * @param string|null &$fileHash A reference to a variable that will hold the key file hash, used to identify the stored key file.
      *
      * @return bool Returns `true` if the token was successfully signed and stored, otherwise `false`.
      *
      * @example - Signing a JWT token for a user:
      * ```php
      * $payload = ['role' => 'admin', 'maxQuota' => 100];
-     * $user_id = 'user123';
-     * $file_hash = null;
-     * $result = $jwt->sign($payload, $user_id, 3600, $file_hash);
+     * $userId = 'user123';
+     * $fileHash = null;
+     * $result = $jwt->sign($payload, $userId, 3600, $fileHash);
      * if ($result) {
-     *     echo "Token signed and stored. File hash: $file_hash";
+     *     echo "Token signed and stored. File hash: $fileHash";
      * } else {
      *     echo "Failed to sign or store the token.";
      * }
@@ -452,16 +452,16 @@ class JWTAuth implements LazyInterface
      */
 	public function sign(
         array $payload, 
-        string|int $user_id, 
+        string|int $userId, 
         int $expiry = 2592000,
-        ?string &$file_hash = null
+        ?string &$fileHash = null
     ): bool
     {
-        $filename = self::filename($user_id);
+        $filename = self::filename($userId);
         $hash = rtrim($filename, '.key');
         $auth = $this->encode(
             $payload, 
-            $user_id, 
+            $userId, 
             $expiry, 
             $hash
         );
@@ -471,7 +471,7 @@ class JWTAuth implements LazyInterface
         }
         
 		if($this->store($filename, $auth)){
-            $file_hash = $hash;
+            $fileHash = $hash;
             return true;
         }
 
@@ -491,14 +491,14 @@ class JWTAuth implements LazyInterface
      * 
      * ```php
      * $payload = ['role' => 'admin', 'maxQuota' => 100];
-     * $user_id = 'user123';
+     * $userId = 'user123';
      * $expiry = 3600; // 1 hour
      * 
      * // Generate JWT token using encode method
-     * $token = $jwt->encode($payload, $user_id, $expiry);
+     * $token = $jwt->encode($payload, $userId, $expiry);
      * 
      * // Store the token using store method
-     * $filename = JWTAuth::filename($user_id);
+     * $filename = JWTAuth::filename($userId);
      * $isStored = $jwt->store($filename, $token);
      * 
      * if ($isStored) {
@@ -535,14 +535,14 @@ class JWTAuth implements LazyInterface
      * Handles and logs errors during JWT validation.
      *
      * @param Throwable $e The exception or error that occurred during validation.
-     * @param string|int|null $user_id The user ID associated with the token.
+     * @param string|int|null $userId The user ID associated with the token.
      * @param string|null $token The JWT token being validated.
      *
      * @return stdClass Return an object containing error details.
      */
     private function error(
         Throwable $e,
-        string|int|null  $user_id = null, 
+        string|int|null $userId = null, 
         ?string $token = null
     ): stdClass 
     {
@@ -550,7 +550,7 @@ class JWTAuth implements LazyInterface
 
         if(PRODUCTION){
             Logger::dispatch('emergency', 'JWT validate error: ' . $e->getMessage(), [
-                'user_id' => $user_id
+                'userId' => $userId
             ]);
         }
 
@@ -558,7 +558,7 @@ class JWTAuth implements LazyInterface
         $this->error = $err->err = (object)[
             'code' => $e->getCode(),
             'message' => PRODUCTION ? 'Authentication failed, invalid token or client ID.' : $e->getMessage(),
-            'uid' => $user_id,
+            'uid' => $userId,
             'token' => $token
         ];
 

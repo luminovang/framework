@@ -71,7 +71,7 @@ interface AuthenticatorInterface
     /**
      * Set the cache instance for code reuse prevention.
      *
-     * @param CacheItemPoolInterface|CacheInterface|BaseCache $cache The instance of PSR cache or Luminova base-cache.
+     * @param CacheItemPoolInterface<\T>|CacheInterface<\T>|BaseCache<\T> $cache The instance of PSR cache or Luminova base-cache.
      * 
      * @return AuthenticatorInterface Return the authenticator client instance.
      */

@@ -174,11 +174,33 @@ interface HttpRequestInterface
     public function getCookie(?string $name = null): CookieJarInterface;
 
     /**
-     * Get the current request method.
+     * Retrieves actual HTTP method if provided by the client.
      *
-     * @return string Return the request method in lowercased.
+     * @return string Return the HTTP method in uppercase.
      */
     public function getMethod(): string;
+
+    /**
+     * Returns the HTTP method of the request or method overrides.
+     *
+     * If the original request method is POST and a method override is present
+     * (e.g., via `_method` field or `X-HTTP-Method-Override` header), the overridden
+     * method is returned instead. This is useful for supporting RESTful methods
+     * when method is spoofed from POST requests.
+     *
+     * @return string Return the HTTP method (e.g., GET, POST, PUT, PATCH, DELETE).
+     */
+    public function getAnyMethod(): string;
+
+    /**
+     * Retrieves the HTTP method override if provided by the client.
+     *
+     * This method checks for the "X-HTTP-Method-Override" value first in the request headers. 
+     * If found, the override method is returned in uppercase.
+     *
+     * @return string|null Return the overridden HTTP method in uppercase, or null if not set.
+     */
+    public function getMethodOverride(): ?string;
 
     /**
      * Extract the boundary from the Content-Type header.
@@ -242,10 +264,12 @@ interface HttpRequestInterface
      *
      * This method returns the complete URL, including the protocol (e.g., http or https),
      * the domain name, the path, and any query string parameters.
+     * 
+     * @param bool $withPort Weather to return hostname with port (default: false).
      *
      * @return string Return the full URL of the request.
      */
-    public function getUrl(): string;
+    public function getUrl(bool $withPort = false): string;
 
     /**
      * Get the URI (path and query string) of the current request (e.g, `/foo/bar?query=123`).
@@ -371,7 +395,7 @@ interface HttpRequestInterface
     /**
      * Check if the request method is the provided method.
      *
-     * @param string $method The method to check against (e.g, `POST`, `GET`).
+     * @param string $method The method to check against (e.g, `POST`, `Luminova\Http\Method::GET`).
      * 
      * @return bool Returns true if the request method matches the provided method, false otherwise.
      */

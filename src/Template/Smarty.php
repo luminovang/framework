@@ -10,12 +10,12 @@
  */
 namespace Luminova\Template;
 
+use \Luminova\Luminova;
 use \Smarty\Smarty as SmartyTemplate;
 use \App\Config\Template as TemplateConfig;
 use \App\Config\Templates\Smarty\Classes;
 use \App\Config\Templates\Smarty\Modifiers;
 use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Application\Foundation;
 use \Luminova\Optimization\Minification;
 use \Exception;
 use \SmartyException;
@@ -101,9 +101,9 @@ class Smarty
 
         $suffix = DIRECTORY_SEPARATOR . 'smarty';
 
-        $this->smarty->setCompileDir($root . Foundation::bothTrim(self::$config->compileFolder) . $suffix);
-        $this->smarty->setConfigDir($root . Foundation::bothTrim(self::$config->configFolder) . $suffix);
-        $this->smarty->setCacheDir($root . Foundation::bothTrim(self::$config->cacheFolder) . $suffix);
+        $this->smarty->setCompileDir($root . Luminova::bothTrim(self::$config->compileFolder) . $suffix);
+        $this->smarty->setConfigDir($root . Luminova::bothTrim(self::$config->configFolder) . $suffix);
+        $this->smarty->setCacheDir($root . Luminova::bothTrim(self::$config->cacheFolder) . $suffix);
         $this->smarty->addExtension(new Modifiers());
 
         if(PRODUCTION){
@@ -233,7 +233,7 @@ class Smarty
     */
     public function isCached(string $view): bool
     {
-        return $this->smarty->isCached($view, Foundation::getCacheId());
+        return $this->smarty->isCached($view, Luminova::getCacheId());
     }
 
     /**
@@ -301,7 +301,7 @@ class Smarty
     public function display(string $view, bool $return = false): bool|string
     {
         try{
-            $content = $this->smarty->fetch($view, Foundation::getCacheId());
+            $content = $this->smarty->fetch($view, Luminova::getCacheId());
 
             if($this->minify){
                 self::$min ??= new Minification();
@@ -336,7 +336,7 @@ class Smarty
         ];
 
         foreach ($directories as $dir) {
-            $path = self::$root . Foundation::bothTrim($dir) . DIRECTORY_SEPARATOR . 'smarty';
+            $path = self::$root . Luminova::bothTrim($dir) . DIRECTORY_SEPARATOR . 'smarty';
             
             if (!file_exists($path)) {
                 make_dir(self::$root . $dir);

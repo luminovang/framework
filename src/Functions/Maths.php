@@ -77,11 +77,11 @@ final class Maths
      * Converts bytes to the appropriate unit.
      *
      * @param int $bytes The number of bytes to convert.
-     * @param bool $add_name Whether to include the unit name in the result. Default is false.
+     * @param bool $addName Whether to include the unit name in the result. Default is false.
      * 
      * @return string The converted value with optional unit name.
      */
-    public static function toUnit(int $bytes, bool $add_name = false): string
+    public static function toUnit(int $bytes, bool $addName = false): string
     {
         $index = 0;
     
@@ -92,7 +92,7 @@ final class Maths
     
         $formatted = number_format($bytes, 2);
 
-        return ($add_name ? $formatted . ' ' . self::$units[$index] : $formatted);
+        return ($addName ? $formatted . ' ' . self::$units[$index] : $formatted);
     }
 
     /**
@@ -100,24 +100,24 @@ final class Maths
      * appropriate time units (e.g., milliseconds, seconds, minutes, etc.).
      * 
      * @param float|int  $milliseconds The time duration in milliseconds to be converted.
-     * @param bool $add_name     Whether to include the unit name in the output (default: false).
-     * @param bool $full_name    Whether to use the full name of the unit (e.g., 'seconds' instead of 's').
+     * @param bool $addName Whether to include the unit name in the output (default: false).
+     * @param bool $fullName Whether to use the full name of the unit (e.g., 'seconds' instead of 's').
      * 
      * @return string Return the formatted time duration with up to two decimal precision.
      */
-    public static function toTimeUnit(float|int $milliseconds, bool $add_name = false, bool $full_name = false): string
+    public static function toTimeUnit(float|int $milliseconds, bool $addName = false, bool $fullName = false): string
     {
         if ($milliseconds < 1) {
-            return self::timeName($milliseconds / self::$timeUnits['ms'], 'ms', $add_name, $full_name);
+            return self::timeName($milliseconds / self::$timeUnits['ms'], 'ms', $addName, $fullName);
         }
 
         foreach (self::$timeUnits as $unit => $threshold) {
             if ($milliseconds < $threshold * 1_000) {
-                return self::timeName($milliseconds / $threshold, $unit, $add_name, $full_name);
+                return self::timeName($milliseconds / $threshold, $unit, $addName, $fullName);
             }
         }
         
-        return self::timeName($milliseconds / self::$timeUnits['w'], 'w', $add_name, $full_name);
+        return self::timeName($milliseconds / self::$timeUnits['w'], 'w', $addName, $fullName);
     }
 
     /**
@@ -248,10 +248,10 @@ final class Maths
     /**
      * Calculate the distance between two points on the Earth's surface.
      * 
-     * @param float|string $origin_lat The latitude of the origin point.
-     * @param float|string $origin_lng The longitude of the origin point.
-     * @param float|string $dest_lat The latitude of the destination point.
-     * @param float|string $dest_lng The longitude of the destination point.
+     * @param float|string $originLat The latitude of the origin point.
+     * @param float|string $originLng The longitude of the origin point.
+     * @param float|string $destLat The latitude of the destination point.
+     * @param float|string $destLng The longitude of the destination point.
      * @param string $unit The unit of distance to be returned (default is 'km').
      * 
      * @return float|false The distance between the two points, or false on invalid input.
@@ -265,27 +265,27 @@ final class Maths
      * > If you are passing a string, make sure its a float string.
      */
     public static function distance(
-        float|string $origin_lat, 
-        float|string $origin_lng, 
-        float|string $dest_lat, 
-        float|string $dest_lng, 
+        float|string $originLat, 
+        float|string $originLng, 
+        float|string $destLat, 
+        float|string $destLng, 
         string $unit = 'km'
     ): float|bool 
     {
         if (
             !isset(self::$radius[$unit]) || 
-            !is_float($origin_lat) || 
-            !is_float($origin_lng) || 
-            !is_float($dest_lat) || 
-            !is_float($dest_lng)
+            !is_float($originLat) || 
+            !is_float($originLng) || 
+            !is_float($destLat) || 
+            !is_float($destLng)
         ) {
             return false;
         }
 
-        $lat1 = deg2rad((float) $origin_lat);
-        $lng1 = deg2rad((float) $origin_lng);
-        $lat2 = deg2rad((float) $dest_lat);
-        $lng2 = deg2rad((float) $dest_lng);
+        $lat1 = deg2rad((float) $originLat);
+        $lng1 = deg2rad((float) $originLng);
+        $lat2 = deg2rad((float) $destLat);
+        $lng2 = deg2rad((float) $destLng);
 
         $deltaLat = $lat2 - $lat1;
         $deltaLon = $lng2 - $lng1;

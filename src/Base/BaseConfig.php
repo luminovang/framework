@@ -62,8 +62,7 @@ abstract class BaseConfig implements LazyInterface
      * 
      * @return void
      */
-    protected function onCreate(): void 
-    {}
+    protected function onCreate(): void {}
 
     /**
      * Retrieve environment configuration variables with optional type casting.

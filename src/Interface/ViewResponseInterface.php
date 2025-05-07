@@ -209,6 +209,7 @@ interface ViewResponseInterface
      * @param string $basename The file name (e.g., `image.png`).
      * @param array $headers Optional output headers.
      * @param bool $eTag Whether to generate ETag headers (default: true).
+     * @param bool $weakEtag Whether to use a weak ETag header or string (default: false).
      * @param int $expiry Enable cache expiry time in seconds, 0 for no cache (default: 0).
      * @param int $length Optional size of each chunk to be read (default: 2MB).
      * @param int $delay Optional delay in microseconds between chunk length (default: 0).
@@ -221,6 +222,7 @@ interface ViewResponseInterface
         string $basename, 
         array $headers = [],
         bool $eTag = true,
+        bool $weakEtag = false,
         int $expiry = 0,
         int $length = (1 << 21),
         int $delay = 0

@@ -36,7 +36,7 @@ interface ClientInterface extends PsrClientInterface
     /**
      * Retrieve the original HTTP request client object.
      * 
-     * @return \T<\Psr\Http\Client\ClientInterface> Return instance of request client object.
+     * @return \Psr\Http\Client\ClientInterface<\T> Return instance of request client object.
     */
     public function getClient(): PsrClientInterface;
 
@@ -64,7 +64,7 @@ interface ClientInterface extends PsrClientInterface
     /**
      * Sends a request and returns response.
      *
-     * @param \T<RequestInterface> $request Instance of HTTP request object.
+     * @param RequestInterface<\T> $request Instance of HTTP request object.
      *
      * @return ResponseInterface Return instance of HTTP response object.
      * @throws ClientException If an error happens while processing the request.
@@ -76,7 +76,7 @@ interface ClientInterface extends PsrClientInterface
      *
      * Builds the request using the provided HTTP request object and optional configurations.
      *
-     * @param \T<RequestInterface> $request The HTTP request object containing request details.
+     * @param RequestInterface<\T> $request The HTTP request object containing request details.
      * @param array<string,mixed> $options Optional parameters to customize request behavior (e.g., headers, timeout).
      *
      * @return PromiseInterface Return guzzle promise that resolves to the request response or cURL request response object.
@@ -109,7 +109,7 @@ interface ClientInterface extends PsrClientInterface
      *
      * Uses the provided HTTP request object and optional settings to perform the request.
      *
-     * @param \T<RequestInterface> $request The HTTP request object containing request details.
+     * @param RequestInterface<\T> $request The HTTP request object containing request details.
      * @param array<string,mixed> $options Optional parameters to customize the request (e.g., headers, timeout).
      *
      * @return ResponseInterface Return guzzle promise that resolves to the request response or cURL request response object.
@@ -127,7 +127,7 @@ interface ClientInterface extends PsrClientInterface
      * Executes the request using the specified method and URI, with optional configurations to modify its behavior.
      *
      * @param string $method The HTTP method to use (e.g., `GET`, `POST`).
-     * @param \T<UriInterface>|string $uri The target URI or URL for the request (absolute or relative).
+     * @param UriInterface<\T>|string $uri The target URI or URL for the request (absolute or relative).
      * @param array<string,mixed> $options Optional configurations to adjust the request behavior (e.g., headers, data, timeout).
      *
      * @return ResponseInterface Return the psr response interface object or cURL response object depending on client.

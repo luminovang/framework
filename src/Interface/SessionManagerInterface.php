@@ -26,7 +26,7 @@ interface SessionManagerInterface
     /**
      * Set session configuration object.
      *
-     * @param BaseConfig $config Session configuration.
+     * @param BaseConfig<App\Config\Session> $config Session configuration.
      */
     public function setConfig(BaseConfig $config): void;
 

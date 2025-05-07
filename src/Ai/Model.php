@@ -36,9 +36,9 @@ final class Model
     /**
      * Initialize model instance with AI interface.
      * 
-     * @param AiInterface $ai The AI object to use (default: Openai).
+     * @param AiInterface|null $ai The AI object to use (default: Openai).
      */
-    public function __construct(AiInterface $ai = null)
+    public function __construct(?AiInterface $ai = null)
     {
         self::$config ??= new AI();
         $this->ai = $ai ?? new OpenAI(

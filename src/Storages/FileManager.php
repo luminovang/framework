@@ -12,6 +12,7 @@ namespace Luminova\Storages;
 
 use \Luminova\Http\Header;
 use \App\Config\Files;
+use \Luminova\Functions\Func;
 use \Luminova\Logger\Logger;
 use \Luminova\Exceptions\FileException;
 use \Luminova\Exceptions\RuntimeException;
@@ -333,7 +334,7 @@ class FileManager
      * Write or append contents to a file.
      *
      * @param string $filename The path to the file where to write the data.
-     * @param string|resource $content The contents to write to the file, either as a string or a stream resource.
+     * @param resource|string $content The contents to write to the file, either as a string or a stream resource.
      * @param int $flags [optional] The flags determining the behavior of the write operation (default: 0).
      * @param resource|null $context [optional] A valid context resource created with stream_context_create (default: null).
      * 
@@ -353,6 +354,8 @@ class FileManager
         try {
             $include = ($flags & FILE_USE_INCLUDE_PATH) !== 0;
             $mode = (($flags & FILE_APPEND) !== 0) ? 'a' : 'w';
+            $mode .= (Func::isBinary($content) ? 'b' : '');
+
             $file = new SplFileObject($filename, $mode, $include, $context);
 
             if (($flags & (LOCK_EX | LOCK_NB | LOCK_SH | LOCK_UN)) !== 0) {
@@ -402,14 +405,16 @@ class FileManager
         }
 
         error_clear_last();
-
         try {
+            $meta = stream_get_meta_data($resource);
             $mode = (($flags & FILE_APPEND) !== 0) ? 'a' : 'w';
+            $mode .= (str_contains($meta['mode'] ?? '', 'b') || Func::isBinary($resource) ? 'b' : '');
+
             $include = ($flags & FILE_USE_INCLUDE_PATH) !== 0;
             $file = new SplFileObject($filename, $mode, $include, $context);
 
             // Rewind the stream if needed
-            if (ftell($resource) !== 0 && stream_get_meta_data($resource)['seekable']) {
+            if (ftell($resource) !== 0 && $meta['seekable']) {
                 rewind($resource);
             }
 
@@ -494,6 +499,25 @@ class FileManager
     public static function isPathPermitted(string $path): bool
     {
         return !preg_match('#^[a-z][a-z\d+.-]*://#i', $path);
+    }
+
+    /**
+     * Determines if the given string appears to be a directory path rather than a file.
+     *
+     * @param string $path The path string to evaluate.
+     * 
+     * @return bool Returns true if the path likely refers to a directory; false if it looks like a file.
+     * > Note: This does not check the filesystem; it only infers based on the string pattern.
+     */
+    public static function isPath(string $path): bool 
+    {
+        if ($path === '') {
+            return false;
+        }
+        
+        return str_ends_with($path, '/') 
+            || str_ends_with($path, '\\')
+            || pathinfo($path, PATHINFO_EXTENSION) === '';
     }
 
     /**

@@ -37,6 +37,7 @@ class Func
 		"\x00\x00\x01\xB3" => 'mpg',
 		"\x1A\x45\xDF\xA3" => 'mkv'
 	];
+
 	/**
 	 * Format text before display by matching links, email, phone, 
 	 * hashtags and mentions with a link representation and replace multiple new lines.
@@ -241,7 +242,7 @@ class Func
 			/**
 			 * Generates a version 4 UUID.
 			 *
-			 * @return string The generated UUID string.
+			 * @return string Return the generated UUID string.
 			 */
 			default => (function(): string {
 				$data = random_bytes(16);
@@ -425,22 +426,34 @@ class Func
 	}
 
 	/**
-     * Determines if the content string is likely a binary based on the presence of non-printable characters.
+     * Determines if the content is likely a binary based on the presence of non-printable characters.
      * 
-	 * @param string $data The string to check for binary.
+	 * @param string|resource $data The string or resource to check for binary.
 	 * 
      * @return bool Return true if it's a binary, false otherwise.
      */
-    public static function isBinary(string $data): bool
-    {
-		$data = trim($data);
+	public static function isBinary(mixed $data): bool
+	{
+		if(is_resource($data)){
+			$mode = stream_get_meta_data($data)['mode'] ?? null;
 
-		if ($data === '') {
+			if($mode){
+				return str_contains($mode, 'b');
+			}
+
+			$data = stream_get_contents($data);
+		}
+	
+		if (!$data || !is_string($data) || trim($data) === '') {
 			return false;
 		}
 
-        return (bool) preg_match('/[^\x20-\x7E\t\r\n]/', $data);
-    }
+		if (strpos($data, "\x00") !== false) {
+			return true;
+		}
+
+		return preg_match('/[^\x09\x0A\x0D\x20-\x7E]/', substr($data, 0, 512)) === 1;
+	}
 
 	/**
 	 * Validates if the input is a valid phone number.

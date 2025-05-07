@@ -10,7 +10,7 @@
  */
 namespace Luminova\Http\Client;
 
-use \Luminova\Application\Foundation;
+use \Luminova\Luminova;
 use \Luminova\Utils\Promise\Promise;
 use \GuzzleHttp\Client;
 use \Psr\Http\Client\ClientInterface;
@@ -48,11 +48,11 @@ class Guzzle implements \Luminova\Interface\ClientInterface
     public function __construct(private array $config = [])
     {
         if(($this->config['headers']['X-Powered-By'] ?? true) !== false){
-            $this->config['headers']['X-Powered-By'] = $this->config['headers']['X-Powered-By'] ?? Foundation::copyright();
+            $this->config['headers']['X-Powered-By'] = $this->config['headers']['X-Powered-By'] ?? Luminova::copyright();
         }
         
         if(($this->config['headers']['User-Agent'] ?? true) !== false){
-            $this->config['headers']['User-Agent'] = $this->config['headers']['User-Agent'] ?? Foundation::copyright(true);
+            $this->config['headers']['User-Agent'] = $this->config['headers']['User-Agent'] ?? Luminova::copyright(true);
         }
 
         $this->client = new Client($this->config);

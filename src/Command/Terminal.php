@@ -10,14 +10,15 @@
  */
 namespace Luminova\Command;
 
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Application\Foundation;
 use \Luminova\Boot;
-use \Luminova\Command\Console;
+use \Luminova\Luminova;
+use \Luminova\Command\Novakit;
+use \Luminova\Functions\Ip;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Command\Utils\Text;
 use \Luminova\Command\Utils\Color;
 use \Luminova\Security\Validation;
-use \Luminova\Command\Novakit\Commands;
+use \Luminova\Command\Consoles\Commands;
 use \Luminova\Exceptions\IOException;
 use \Closure;
 
@@ -59,6 +60,19 @@ class Terminal implements LazyInterface
     protected static ?int $windowWidth = null;
 
     /**
+     * About system information.
+     *
+     * @var array $session
+     */
+    private static array $session = [
+        'metadata' => null,
+        'ppid' => null,
+        'model' => null,
+        'name' => null,
+        'id' => null,
+    ];
+
+    /**
      * Is the readline library on the system.
      *
      * @var bool $isReadLine
@@ -73,11 +87,11 @@ class Terminal implements LazyInterface
     protected static bool $isNewLine = true;
 
     /**
-     * The parsed command information from (explain).
+     * The parsed command information from (perse).
      *
-     * @var array $explained
+     * @var array $commands
      */
-    protected static array $explained = [];
+    protected static array $commands = [];
 
     /**
      * Flags to determine if color and ansi are supported 
@@ -117,15 +131,41 @@ class Terminal implements LazyInterface
     protected static ?Validation $validation = null;
 
     /**
-     * Initialize command line instance before running any commands.
+     * Command is initialized.
+     * 
+     * @var bool $isInitialized;
+     */
+    protected static bool $isInitialized = false;
+
+    /**
+     * Initialize command line instance before running any commands
+     * or call `Terminal::init()` method.
+     * 
+     * @see init()
      */
     public function __construct()
     {
-        self::$explained = [];
+        self::init();
+    }
+
+    /**
+     * Initialize command line instance before running any commands.
+     * 
+     * @return void
+     * @since 3.5.6
+     */
+    public static function init(): void
+    {
+        self::$commands = [];
+
+        if(self::$isInitialized){
+            return;
+        }
         self::$isReadLine = extension_loaded('readline');
 
         Boot::shouldDefineCommandStreams();
         self::isColorSupported(self::STD_OUT);
+        self::$isInitialized = true;
     }
 
     /**
@@ -459,6 +499,7 @@ class Terminal implements LazyInterface
      * - On Linux/Unix, it uses a bash command to hide the input.
      *
      * @param string $message Optional message to display when prompting for the password (default: 'Enter Password').
+     * @param int $allowEmptyPassword Weather to permit empty password (default: false).
      * @param int $retry The number of allowed retry attempts, set to `0` for unlimited retries (default: 3).
      * @param int $timeout Optional time window for password input in seconds, set to 0 for no timeout (default: 0).
      * 
@@ -466,6 +507,7 @@ class Terminal implements LazyInterface
      */
     public static function password(
         string $message = 'Enter Password', 
+        bool $allowEmptyPassword = false,
         int $retry = 3, 
         int $timeout = 0
     ): string
@@ -479,7 +521,7 @@ class Terminal implements LazyInterface
                 ? self::getWindowsHiddenPassword($message, $timeout)
                 : self::getLinuxHiddenPassword($message, $timeout, $isVisibilityPromptShown);
     
-            if ($password !== '') {
+            if ($password !== '' || $allowEmptyPassword) {
                 self::newLine();
                 return $password;
             }
@@ -599,8 +641,12 @@ class Terminal implements LazyInterface
         int &$result_code = STATUS_ERROR
     ): string|bool
     {
-        $devNull = is_platform('windows') ? '2>NUL' : '2>/dev/null';
-        return exec("{$command} {$devNull}", $output, $result_code);
+        $devNull = is_platform('windows') ? ' 2>NUL' : ' 2>/dev/null';
+        if(str_contains($command, $devNull)){
+            $devNull = '';
+        }
+
+        return exec("{$command}{$devNull}", $output, $result_code);
     }
 
     /**
@@ -609,12 +655,23 @@ class Terminal implements LazyInterface
      * 
      * @param string $command The command to execute.
      * 
-     * @return string|false|null Return the output of the command, or null on error.
+     * @return string|null Return the output of the command, or null on error.
      */
-    public static function _shell(string $command): string|bool|null
+    public static function _shell(string $command): ?string
     {
-        $devNull = is_platform('windows') ? '2>NUL' : '2>/dev/null';
-        return shell_exec("{$command} {$devNull}");
+        $devNull = is_platform('windows') ? ' 2>NUL' : ' 2>/dev/null';
+
+        if(str_contains($command, $devNull)){
+            $devNull = '';
+        }
+
+        $response = shell_exec("{$command}{$devNull}");
+
+        if(!$response){
+            return null;
+        }
+
+        return $response;
     }
 
     /**
@@ -1140,7 +1197,7 @@ class Terminal implements LazyInterface
      * @param string $mode The clearing mode: 'default', 'partial', or 'full'.
      *                     - 'default' (default): Clears the entire screen.
      *                     - 'partial': Clears from the cursor position downward.
-     *                     - 'full': Clears the entire screen and scrollback buffer.
+     *                     - 'full': Clears the entire screen and scroll-back buffer.
      *
      * @return void
      */
@@ -1194,34 +1251,16 @@ class Terminal implements LazyInterface
     }
 
     /**
-     * Apply color and text formatting to the given text if color is supported.
-     *
-     * @param string $text The text to apply color to.
-     * @param string $foreground The foreground color name.
-     * @param string|null $background Optional background color name.
-     * @param int|null $format Optionally apply text formatting style.
-     *
-     * @return string Return colored text if color is supported, otherwise return default text.
-     * @deprecated This method is deprecated and will be removed in a future release. 
-     *              Use `Luminova\Command\Utils\Color::apply(...)` or `Luminova\Command\Utils\Color::style(...)` instead.
+     * Perse commands.
+     * 
+     * @param array<string,mixed> $options Command arguments, options, and flags extracted from the executed command.
+     * 
+     * @return void 
+     * @deprecated This method has been deprecated use `perse` instead. 
      */
-    public static function color(
-        string $text, 
-        string $foreground, 
-        ?string $background = null, 
-        ?int $format = null
-    ): string
+    public static final function explain(array $options): void
     {
-        \Luminova\Errors\ErrorHandler::depreciate(
-            'Method %s::color() is deprecated. Use %s::apply(...) or %s::style(...) instead.',
-            [self::class, Color::class, Color::class]
-        );
-
-        if (!self::isColorSupported()) {
-            return $text;
-        }
-
-        return Color::apply($text, $format, $foreground, $background);
+        self::perse($options);
     }
 
     /**
@@ -1270,6 +1309,7 @@ class Terminal implements LazyInterface
      * @param string|null $headerColor An optional text color for the table header columns (default: null).
      * @param string|null $borderColor An optional color for the table borders (default: null).
      * @param bool $border Indicate whether to display borders between each table raw (default: true).
+     * @param bool $retainNewlines Indicate whether to retain newline or not (default: false).
      * 
      * @return string Return the formatted table as a string, ready to be output to the console.
      * 
@@ -1291,7 +1331,8 @@ class Terminal implements LazyInterface
         ?string $foreground = null,
         ?string $headerColor = null, 
         ?string $borderColor = null,
-        bool $border = true
+        bool $border = true,
+        bool $retainNewlines = false
     ): string
     {
         $chars = [
@@ -1317,7 +1358,14 @@ class Terminal implements LazyInterface
         );
     
         $heights = array_map(
-            fn($row) => max(array_map(fn($header) => Text::height($row[$header]), $headers)),
+            fn($row) => max(array_map(fn($header) => Text::height(
+                $retainNewlines 
+                ? Text::wrap(
+                    $row[$header], 
+                    $widths[array_search($header, $headers)]
+                 ) 
+                : $row[$header]
+            ), $headers)),
             $rows
         );
     
@@ -1329,14 +1377,21 @@ class Terminal implements LazyInterface
         foreach ($rows as $index => $row) {
             $height = $heights[$index];
             $lines = array_map(
-                fn($header) => Text::lines(Text::wrap($row[$header], $widths[array_search($header, $headers)])),
+                fn($header) => Text::lines(Text::wrap(
+                    $row[$header], 
+                    $widths[array_search($header, $headers)]
+                )),
                 $headers
             );
     
             for ($lIdx = 0; $lIdx < $height; $lIdx++) {
                 $tData = Color::style($chars['vertical'], $borderColor);
                 foreach ($headers as $i => $header) {
-                    $tData .= ' ' . Color::style(str_pad($lines[$i][$lIdx] ?? '', $widths[$i]), $foreground);
+                    $tData .= ' ' . Color::style(str_pad(
+                        $retainNewlines ? ($lines[$i][$lIdx] ?? '') : implode(' ', $lines[$i] ?? ''),
+                        $widths[$i]), 
+                        $foreground
+                    );
                     $tData .= ' ' . Color::style($chars['vertical'], $borderColor);
                 }
                 $table .= $tData . PHP_EOL;
@@ -1367,12 +1422,11 @@ class Terminal implements LazyInterface
     }
 
     /**
-     * Extract and expose command arguments and options.
+     * Parses and processes command-line arguments and options, making them accessible in console controllers.
      * 
-     * This method processes the executed command within the controller class, making it accessible using methods like 
-     * `getOption` and `getAnyOption`. It acts as a setter to store and expose command information for use within extended child classes.
+     * This method is used to extract and register command arguments, options, and flags passed to the CLI. Once parsed, you can retrieve values using helper methods like `getOption`, `getArgument`, and `getAnyOption`. It serves as an internal setter to store and expose parsed command data within extended controller classes.
      * 
-     * @param array<string,mixed> $options Command arguments, options, and flags extracted from the executed command.
+     * @param array<string,mixed> $options Command arguments, options, and flags extracted from CLI execution.
      * 
      * @return void
      * @internal
@@ -1384,7 +1438,7 @@ class Terminal implements LazyInterface
      * {
      *      public function run(?array $options = []): int
      *      {
-     *          $this->term->explain($options);
+     *          $this->term->perse($options);
      *          
      *          // Access the command and options
      *          $command = $this->term->getCommand();
@@ -1394,9 +1448,9 @@ class Terminal implements LazyInterface
      * }
      * ```
      */
-    public static final function explain(array $options): void
+    public static final function perse(array $options): void
     {
-        self::$explained = $options;
+        self::$commands = $options;
     }
 
     /**
@@ -1526,7 +1580,7 @@ class Terminal implements LazyInterface
      */
     public static function getArgument(int $index): mixed
     {
-        return self::$explained['arguments'][$index - 1] ?? null;
+        return self::$commands['arguments'][$index - 1] ?? null;
     }
 
     /**
@@ -1536,7 +1590,7 @@ class Terminal implements LazyInterface
      */
     public static function getArguments(): array
     {
-        return self::$explained['arguments'] ?? [];
+        return self::$commands['arguments'] ?? [];
     }
 
     /**
@@ -1546,7 +1600,7 @@ class Terminal implements LazyInterface
      */
     public static function getCommand(): ?string
     {
-        return self::$explained['command'] ?? null;
+        return self::$commands['command'] ?? null;
     }
 
     /**
@@ -1556,7 +1610,7 @@ class Terminal implements LazyInterface
      */
     public static function getCaller(): ?string
     {
-        return self::$explained['caller'] ?? null;
+        return self::$commands['caller'] ?? null;
     }
 
     /**
@@ -1621,7 +1675,7 @@ class Terminal implements LazyInterface
      */
     public static function getOptions(): array
     {
-        return self::$explained['options']??[];
+        return self::$commands['options']??[];
     }
 
     /**
@@ -1633,7 +1687,7 @@ class Terminal implements LazyInterface
     */
     public static function getQuery(string $name): mixed
     {
-        return self::$explained[$name] ?? null;
+        return self::$commands[$name] ?? null;
     }
 
     /**
@@ -1643,7 +1697,7 @@ class Terminal implements LazyInterface
      */
     public static function getQueries(): array
     {
-        return self::$explained;
+        return self::$commands;
     }
 
     /**
@@ -1700,19 +1754,15 @@ class Terminal implements LazyInterface
             return self::$isSupported['colors'][$std];
         }
 
-        self::$isSupported['colors'][$std] = false;
-
         if (!self::isColorDisabled()) {
-            if (is_platform('mac')) {
-                self::$isSupported['colors'][$std] = self::isMacTerminal();
-            }elseif (is_platform('windows')) {
-                self::$isSupported['colors'][$std] = self::isWindowsTerminal($std);
-            }else{
-                self::$isSupported['colors'][$std] = self::isStreamSupports('stream_isatty', $std);
+            if (is_platform('windows')) {
+                return self::$isSupported['colors'][$std] = getenv('WT_SESSION') || self::isWindowsTerminal($std);
             }
+
+            return self::$isSupported['colors'][$std] = (int) trim(@self::_exec('tput colors')) > 0;
         }
 
-        return self::$isSupported['colors'][$std];
+        return self::$isSupported['colors'][$std] = false;
     }
 
     /**
@@ -1916,7 +1966,7 @@ class Terminal implements LazyInterface
      */
     public static final function hasCommand(string $command): bool
     {
-        return Console::has($command);
+        return Novakit::has($command, 'system');
     }
 
     /**
@@ -1932,10 +1982,11 @@ class Terminal implements LazyInterface
     {
         static $terminal = null;
 
-        if(Console::has($command)){
+        if(Novakit::hasCommand($command, 'system')){
             $terminal ??= new static();
-            $terminal->explain($options);
-            return Console::execute($terminal, $options) === STATUS_SUCCESS;
+            $terminal->perse($options);
+
+            return Novakit::execute($terminal, $options, 'system') === STATUS_SUCCESS;
         }
 
         return false;
@@ -1973,44 +2024,208 @@ class Terminal implements LazyInterface
      */
     public static final function helper(array|null $helps, bool $all = false): void
     {
-        $helps = ($helps === null) 
-            ? Commands::getCommands() 
-            : ($all ? $helps : [$helps]);
+        $helps = ($helps === null) ? Commands::getCommands() : ($all ? $helps : [$helps]);
 
-        foreach($helps as $name => $help){
+        foreach($helps as $name => $properties){
+            if(!$properties){
+                continue;
+            }
+
             if($all){
                 self::newLine();
                 self::writeln("------[{$name} Help Information]------");
             }
 
-            foreach($help as $key => $value){
-                if($key === 'description'){
-                    self::writeln('Description:');
-                    self::writeln($value);
-                    self::newLine();
-                }
-
-                if($key === 'usages'){
-                    if(is_array($value)){
-                        self::printHelp($value, $key);
-                    }else{
-                        self::writeln('Usages:');
-                        self::writeln($value);
-                        self::newLine();
-                    }
+            foreach($properties as $key => $value){
+                if($key === 'users' || $key === 'authentication'){
+                    continue;
                 }
 
                 if(is_array($value)){
-                    if($key === 'options'){
+                    if(in_array($key, ['usages', 'examples', 'options'], true)){
                         self::printHelp($value, $key);
+                    }
+                }elseif($key === 'usages' || $key === 'description'){
+                    if($key === 'usages'){
+                        self::writeln(ucfirst($key) . ':');
                     }
 
-                    if($key === 'examples'){
-                        self::printHelp($value, $key);
-                    }
+                    self::writeln($value);
+                    self::newLine();
                 }
             }
         }
+    }
+
+    /**
+     * Retrieves key system and environment information in a structured array format.
+     *
+     * This method collects details about the PHP runtime, operating system,
+     * terminal environment, and framework versions to provide a summary
+     * suitable for diagnostics or display in CLI tools.
+     *
+     * @return array<int,array{Name:string,Value:string}> Return an associative array of system information.
+     */
+    public static function systemInfo(): array 
+    {
+        if(self::$session['metadata'] !== null){
+            return self::$session['metadata'];
+        }
+
+        return self::$session['metadata'] = [
+            ['Name' => 'PHP Version', 'Value' => PHP_VERSION],
+            ['Name' => 'App Version', 'Value' => APP_VERSION],
+            ['Name' => 'Framework Version', 'Value' => Luminova::VERSION],
+            ['Name' => 'Novakit Version', 'Value' => Luminova::NOVAKIT_VERSION],
+            ['Name' => 'OS Name', 'Value' => php_uname('s')],
+            ['Name' => 'OS Version', 'Value' => php_uname('v')],
+            ['Name' => 'OS Model', 'Value' => self::getSystemModel()],
+            ['Name' => 'Machine Type', 'Value' => php_uname('m')],
+            ['Name' => 'Host Name', 'Value' => php_uname('n')],
+            ['Name' => 'MAC Address', 'Value' => IP::getMacAddress()],
+            ['Name' => 'Process Id','Value' =>  self::getPid()],
+            ['Name' => 'Current User (PHP)', 'Value' => get_current_user()],
+            ['Name' => 'Whoami', 'Value' => self::whoami() ?: 'Unavailable'],
+            ['Name' => 'Terminal Name','Value' =>  self::getTerminalName()],
+            ['Name' => 'Terminal Width', 'Value' => self::getHeight()],
+            ['Name' => 'Terminal Height', 'Value' => self::getWidth()],
+            ['Name' => 'Color Supported', 'Value' => self::isColorSupported() ? 'Yes' : 'No'],
+            ['Name' => 'ANSI Supported', 'Value' => self::isAnsiSupported() ? 'Likely Yes' : 'Unknown/No'],
+            ['Name' => 'Shell', 'Value' => getenv('SHELL') ?: getenv('ComSpec') ?: 'Unknown'],
+            ['Name' => 'TERM Variable', 'Value' => getenv('TERM') ?: 'Unknown']
+        ];
+    }
+
+    /**
+     * Generates a consistent and unique system identifier for CLI authentication.
+     *
+     * This method constructs a persistable identifier by hashing a combination of
+     * machine-specific and user-specific data, including the MAC address and key 
+     * environment/system values. The result is a unique hash that varies across
+     * machines, users, or terminal sessions.
+     *
+     * @param string $prefix Optional prefix to prepend (default: '').
+     * @param string $algo Hashing algorithm to use (default: 'sha256').
+     * @param bool $binary Whether to return raw binary output (default: false).
+     *
+     * @return string Return a hashed system identifier based on the specified algorithm.
+     */
+    public static function getSystemId(string $prefix = '', string $algo = 'sha256',  bool $binary = false): string
+    {
+        if(self::$session['id'] !== null){
+            return self::$session['id'];
+        }
+
+        $info = [
+            php_uname('n'),
+            php_uname('v'),
+            php_uname('m'),
+            Luminova::VERSION,
+            Luminova::NOVAKIT_VERSION,
+            IP::getMacAddress(),
+            self::getSystemModel(),
+            self::getPid(),
+            get_current_user() ?: self::whoami(),
+            getenv('SHELL') ?: getenv('ComSpec') ?: 'Unknown',
+            getenv('TERM') ?: 'Unknown'
+        ];
+
+        return self::$session['id'] = $prefix . hash($algo, implode('|', $info), $binary);
+    }
+
+    /**
+     * Retrieves the parent process ID (PPID) of the current CLI session.
+     *
+     * On Unix-like systems, this uses the `ps` command to obtain the PPID.
+     * On Windows, it uses `wmic` to extract the parent process ID of the
+     * current process. This can help distinguish different terminal sessions
+     * or shells launched by the same user.
+     *
+     * @return string The parent process ID, or '0' if unavailable.
+     */
+    public static function getPid(): string 
+    {
+        if(self::$session['ppid'] !== null){
+            return self::$session['ppid'];
+        }
+
+        $ppid = trim(self::_exec((PHP_OS_FAMILY === 'Windows') 
+            ? 'wmic process where (ProcessId=' . getmypid() . ') get ParentProcessId /value' 
+            : 'ps -o ppid= -p ' . getmypid()
+        ) ?? '0');
+
+        if (PHP_OS_FAMILY === 'Windows' && $ppid && preg_match('/ParentProcessId=(\d+)/', $ppid, $match)) {
+            $ppid = $match[1];
+        }
+
+        return self::$session['ppid'] = $ppid;
+    }
+
+    /**
+     * Outputs a formatted table displaying system and environment information.
+     *
+     * This method is designed for CLI usage. It prints detailed information
+     * such as PHP version, OS details, terminal size, and more.
+     *
+     * @return void
+     */
+    public static function about(): void 
+    {
+        self::writeln(self::table(
+            ['Name', 'Value'], 
+            self::systemInfo()
+        ));
+    }
+
+    /**
+     * Retrieve the system's model name (e.g., MacBook Pro, Dell XPS).
+     *
+     * @return string Return model name or `Unknown` if not found.
+     */
+    public static function getSystemModel(): string
+    {
+        if (PHP_OS_FAMILY === 'Darwin') {
+            $model = self::_exec("sysctl -n hw.model");
+        }elseif (PHP_OS_FAMILY === 'Windows') {
+            $output = self::_exec('wmic computersystem get model /value');
+            if (preg_match('/Model=(.*)/i', $output, $matches)) {
+                $model = $matches[1];
+            }
+        }elseif (PHP_OS_FAMILY === 'Linux') {
+            $model = @file_get_contents('/sys/devices/virtual/dmi/id/product_name');
+
+            if (!$model) {
+                $model = self::_exec('dmidecode -s system-product-name');
+            }
+        }
+
+        if(!$model){
+            return self::$session['model'] = 'Unknown';
+        }
+
+        return self::$session['model'] = trim($model) ?: 'Unknown';
+    }
+
+    /**
+     * Retrieves the name of the terminal in use.
+     *
+     * For Windows, it tries to detect PowerShell or Command Prompt.
+     * On Unix-based systems, it returns the TTY device name.
+     *
+     * @return string Terminal name or 'N/A' if undetectable.
+     */
+    public static function getTerminalName(): string 
+    {
+        if (is_platform('windows')) {
+            if (getenv('PSModulePath') !== false) {
+                return self::$session['name'] = 'PowerShell';
+            }
+
+            $comspec = getenv('ComSpec');
+            return self::$session['name'] = ($comspec ? basename($comspec) : 'N/A');
+        }
+
+        return self::$session['name'] = trim(self::_exec('tty') ?? 'N/A');
     }
 
     /**
@@ -2026,12 +2241,32 @@ class Terminal implements LazyInterface
 
         self::writeln(sprintf(
             'PHP Luminova v%s NovaKit Command Line Tool v%s - Server Time: %s UTC%s',
-            Foundation::VERSION,
-            Foundation::NOVAKIT_VERSION,
+            Luminova::VERSION,
+            Luminova::NOVAKIT_VERSION,
             date('Y-m-d H:i:s'),
             date('P')
         ), 'green');
         return true;
+    }
+
+    /**
+     * Get the current system user executing the script.
+     *
+     * Tries to retrieve the user via the `whoami` shell command first, which provides 
+     * the actual system user executing the script. If that fails, it falls back to 
+     * PHP's `get_current_user()` to retrieve the user under which the PHP process is running.
+     *
+     * @return string Return the username of the current system user, trimmed of whitespace.
+     */
+    public static function whoami(): string
+    {
+        $user = self::_shell(is_platform('windows') ? 'echo %USERNAME%' : 'whoami');
+    
+        if (!$user) {
+            $user = get_current_user();
+        }
+
+        return trim($user);
     }
 
     /**
@@ -2063,8 +2298,9 @@ class Terminal implements LazyInterface
             }else{
                 self::writeln(Text::padding('', 8 - $minus, Text::RIGHT) . $values);
             }
+
+            self::newLine();
         }
-        self::newLine();
     }
 
     /**
@@ -2337,24 +2573,27 @@ class Terminal implements LazyInterface
 
             if ($size) {
                 $dimensions = explode("\n", trim($size));
-                if($dimensions !== []){
-                    self::$windowHeight = (int) $dimensions[0];
-                    self::$windowWidth = (int) $dimensions[1];
-                }
+                $height = (int) $dimensions[0] ?? 0;
+                $width = (int) $dimensions[1] ?? 0;
+            }else{
+                $size = self::_exec('mode con');
+                preg_match('/Columns:\s+(\d+)/i', $size, $colMatch);
+                preg_match('/Lines:\s+(\d+)/i', $size, $rowMatch);
+
+                $height = (int) $colMatch[1] ?? 0;
+                $width = (int) $rowMatch[1] ?? 0;
             }
         } else {
             // Fallback for Unix-like systems
             $size = self::_exec('stty size');
             if ($size && preg_match('/(\d+)\s+(\d+)/', $size, $matches)) {
-                self::$windowHeight = (int) $matches[1];
-                self::$windowWidth  = (int) $matches[2];
+
+                $height = (int) $matches[1] ?? 0;
+                $width = (int) $matches[1] ?? 0;
             }
         }
 
-        // As a fallback, if still not set, default to standard size
-        if (self::$windowHeight === null || self::$windowWidth === null) {
-            self::$windowHeight = (int) self::_exec('tput lines');
-            self::$windowWidth  = (int) self::_exec('tput cols');
-        }
+        self::$windowHeight = ($height === 0) ? (int) self::_exec('tput lines') : $height;
+        self::$windowWidth  = ($width === 0) ? (int) self::_exec('tput cols') : $width;
     }
 }

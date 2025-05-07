@@ -10,7 +10,7 @@
  */
 namespace Luminova\Storages;
 
-use \Luminova\Application\Foundation;
+use \Luminova\Luminova;
 use \Luminova\Security\Crypter;
 use \Luminova\Http\Header;
 use \Luminova\Storages\FileManager;
@@ -91,24 +91,25 @@ final class FileDelivery
             return false;
         }
 
-        $read = false;
         $handler = fopen($filename, 'rb');
 
-        if ($handler !== false) {
-            $filesize = self::cacheHeaders($headers, $basename, $filename, $expiry);
-            $read = FileManager::read(
-                $handler, 
-                $filesize, 
-                $headers['Content-Type'],
-                $length,
-                $delay
-            );
-
-            if(is_resource($handler)){
-                fclose($handler);
-            }
+        if ($handler === false) {
+            return false;
         }
- 
+
+        $filesize = self::cacheHeaders($headers, $basename, $filename, $expiry);
+        $read = FileManager::read(
+            $handler, 
+            $filesize, 
+            $headers['Content-Type'],
+            $length,
+            $delay
+        );
+
+        if(is_resource($handler)){
+            fclose($handler);
+        }
+        
         return $read ? true : self::expiredHeader(500);
     }
 
@@ -376,7 +377,7 @@ final class FileDelivery
             return;
         }
         
-        $headers['X-Powered-By'] = Foundation::copyright();
+        $headers['X-Powered-By'] = Luminova::copyright();
 
         Header::sendStatus($status);
         Header::send($headers, false, false);

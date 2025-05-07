@@ -46,17 +46,27 @@ interface ValidationInterface
     public function getErrorMessage(string|int $fieldIndex = 0): string;
 
     /**
-     * Set validation rules from an array with optional error messages.
+     * Set validation fields and rules.
      * 
-     * @param array<int,string> $rules The array of validation rules (e.g, ['email' => 'string|email', 'name' => 'required']).
-     * @param array<string,array<string,string>> $messages Optional error messages for validation rules (e.g, ['email' => ['string' => '...', 'email' => '...'], 'name' => ['required' => '...']]).
+     * @param array<int,string> $rules The array of validation rules 
+     *                  (e.g, ['email' => 'string|email', 'name' => 'required']).
      * 
      * @return self Return instance of the Validation class.
      */
-    public function setRules(array $rules, array $messages = []): self;
+    public function setRules(array $rules): self;
 
     /**
-     * Add a single rule with an optional rule error messages using the rule name as an array key for the message.
+     * Set validation error messages based on fields and rules.
+     * 
+     * @param array<string,array<string,string>> $messages An error messages for validation rules 
+     *              (e.g, ['email' => ['string' => '...', 'email' => '...'], 'name' => ['required' => '...']]).
+     * 
+     * @return self Return instance of the Validation class.
+     */
+    public function setMessages(array $messages): self;
+
+    /**
+     * Add a field and rules with an optional error messages using the rule name as an array key for the message.
      * 
      * @param string $field The form input field name (e.g, `name`, `email`).
      * @param string $rules The input field validation rules (e.g, `required|string|email`).
@@ -64,7 +74,7 @@ interface ValidationInterface
      * 
      * @return self Return instance of the Validation class.
      */
-    public function addRule(string $field, string $rules, array $messages = []): self;
+    public function addField(string $field, string $rules, array $messages = []): self;
 
     /**
      * Get the error message at the specified field and error indexes.

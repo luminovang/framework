@@ -14,7 +14,7 @@ use \Luminova\Interface\LazyInterface;
 use \Luminova\Functions\Func;
 use \Luminova\Functions\Maths;
 use \Luminova\Exceptions\ErrorException;
-use \stdClass;
+use \Luminova\Http\FileConfig;
 
 class File implements LazyInterface
 {
@@ -91,9 +91,9 @@ class File implements LazyInterface
     /**
      * File upload configurations.
      *
-     * @var stdClass|null $config
+     * @var FileConfig|null $config
      */
-    protected ?stdClass $config = null;
+    protected ?FileConfig $config = null;
 
     /**
      * Is content binary data.
@@ -108,23 +108,6 @@ class File implements LazyInterface
      * @var bool|null $isBase64
      */
     private ?bool $isBase64 = null;
-
-    /**
-     * File configuration options keys
-     * 
-     * @var array<string,string> $configurations
-     */
-    private static array $configurations = [
-        'upload_path'       => 'uploadPath',
-        'max_size'          => 'maxSize',
-        'min_size'          => 'minSize',
-        'allowed_types'     => 'allowedTypes',
-        'chunk_length'      => 'chunkLength',
-        'if_existed'        => 'ifExisted',
-        'symlink'           => 'symlink',
-        'base64_strict'     => 'base64Strict',
-        'data'              => 'data'
-    ];
 
     /**
      * Constructs a File object for handling uploaded file data.
@@ -232,24 +215,6 @@ class File implements LazyInterface
     }
 
     /**
-     * Retrieves the MIME type directly from the temporary file path.
-     * 
-     * Useful for cases where the file is uploaded as a large object (BLOB).
-     * Typically, the MIME type may default to 'application/octet-stream'.
-     *
-     * @return string|null Returns the MIME type of the file, or null if no temporary file exists.
-     * @deprecated Method getMimeFromTemp() is deprecated. Use getMimeFromFile() instead.
-     */
-    public function getMimeFromTemp(): ?string
-    {
-        \Luminova\Errors\ErrorHandler::depreciate(
-            'Method getMimeFromTemp() is deprecated. Use getMimeFromFile() instead.'
-        );
-
-        return $this->getMimeFromFile();
-    }
-
-    /**
      * Gets the MIME type of the file.
      *
      * @return string|null Return the MIME type of the file.
@@ -324,19 +289,9 @@ class File implements LazyInterface
     /**
      * Gets the file upload configurations.
      *
-     * The returned configuration object may contain the following properties:
+     * > **Note:** The property value maybe be null if not configured.
      *
-     * - **uploadPath** *(string)*: The target path where uploaded files will be saved.
-     * - **maxSize** *(int)*: Maximum allowed file size in bytes.
-     * - **minSize** *(int)*: Minimum allowed file size in bytes.
-     * - **allowedTypes** *(array|string)*: List of permitted file extensions.
-     * - **chunkLength** *(int)*: Length of each file chunk in bytes (used for chunked uploads).
-     * - **ifExisted** *(string)*: Strategy to apply if the file already exists (e.g., `overwrite`, `retain`, `rename`, `skip`).
-     * - **symlink** *(string)*: Path to create a symbolic link of the uploaded file.
-     * - **base64Strict** *(bool)*: Whether to enforce strict Base64 decoding for Base64-encoded uploads.
-     * - **data** *(mixed)*: Additional custom configuration information.
-     *
-     * @return stdClass|null Returns the upload configuration object if set, or null if not configured.
+     * @return FileConfig Returns instabce of upload configuration.
      * 
      * @example - Example:
      * 
@@ -350,9 +305,13 @@ class File implements LazyInterface
      * var_dump($config->data);
      * ```
      */
-    public function getConfig(): ?stdClass
+    public function getConfig(): FileConfig
     {
-        return $this->config;
+        if($this->config instanceof FileConfig){
+            return $this->config;
+        }
+
+        return $this->config = new FileConfig();
     }
 
     /**
@@ -407,7 +366,7 @@ class File implements LazyInterface
             ? false 
             : Func::isBase64Encoded(
                 $this->content, 
-                ($this->config === null) ? false : ($this->config->base64Strict ?? false)
+                (!$this->config instanceof FileConfig) ? false : ($this->config->base64Strict ?? false)
             );
     }
 
@@ -481,19 +440,19 @@ class File implements LazyInterface
      */
     public function setConfig(array $config): self
     {
-        $this->config ??= new stdClass();
+        $this->config ??= new FileConfig();
 
-        foreach (self::$configurations as $key => $name) {
-            if (isset($config[$key])) {
-
-                if($key === 'base64_strict'){
-                    $this->isBase64 = null;
-                }
-
-                $this->config->{$name} = ($key === 'upload_path') 
-                    ? rtrim($config[$key], TRIM_DS) . DIRECTORY_SEPARATOR
-                    : $config[$key];
+        foreach ($config as $key => $value) {
+     
+            if($key === 'base64_strict' || $key === 'base64Strict'){
+                $this->isBase64 = null;
             }
+
+            $value = ($key === 'upload_path' || $key === 'uploadPath')
+                ? rtrim($value, TRIM_DS) . DIRECTORY_SEPARATOR
+                : $value;
+
+            $this->config->setValue($key, $value);
         }
 
         return $this;
@@ -595,9 +554,25 @@ class File implements LazyInterface
             $this->error = self::UPLOAD_ERR_NO_FILE_DATA;
             $this->message = 'No uploaded file data found. File may be missing, corrupted, or not properly initialized.';
             return false;
-        }        
+        }      
+        
+        if($this->config instanceof FileConfig && !$this->isPassedCustomValidation()){
+           return false;
+        }
 
-        if (isset($this->config->maxSize) && $this->size > $this->config->maxSize) {
+        $this->error = UPLOAD_ERR_OK;
+        $this->message = 'File upload is valid.';
+        return true;
+    }
+
+    /**
+     * Custom validations based on file config.
+     * 
+     * @return bool Return true if passed, otherwise false.
+     */
+    private function isPassedCustomValidation(): bool 
+    {
+        if ($this->config->maxSize !== null && $this->size > $this->config->maxSize) {
             $this->error = UPLOAD_ERR_INI_SIZE;
             $this->message = sprintf(
                 'File size: "%s" exceeds maximum limit. Maximum allowed size: %s',
@@ -607,7 +582,7 @@ class File implements LazyInterface
             return false;
         }
 
-        if (isset($this->config->minSize) && $this->size < $this->config->minSize) {
+        if ($this->config->minSize !== null && $this->size < $this->config->minSize) {
             $this->error = self::UPLOAD_ERR_MIN_SIZE;
             $this->message = sprintf(
                 'File size: "%s" is too small. Minimum allowed size: %s.', 
@@ -617,9 +592,9 @@ class File implements LazyInterface
             return false;
         }
 
-        if (isset($this->config->allowedTypes) && $this->config->allowedTypes) {
+        if ($this->config->allowedTypes !== null && $this->config->allowedTypes) {
             $isArray = is_array($this->config->allowedTypes);
-          
+        
             $allowed = $isArray 
                 ? $this->config->allowedTypes 
                 : explode('|', strtolower($this->config->allowedTypes));
@@ -635,8 +610,6 @@ class File implements LazyInterface
             }
         }
 
-        $this->error = UPLOAD_ERR_OK;
-        $this->message = 'File upload is valid.';
         return true;
     }
 }

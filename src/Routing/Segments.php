@@ -19,9 +19,7 @@ class Segments implements Countable
      * 
      * @param array<int,string> A list array of URL segments.
      */
-    public function __construct(private array $segments = [])
-    {
-    }
+    public function __construct(private array $segments = []) {}
 
     /**
      * Retrieve the number of segments.

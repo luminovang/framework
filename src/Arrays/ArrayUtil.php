@@ -13,7 +13,7 @@ namespace Luminova\Arrays;
 use \Countable;
 use \Stringable;
 use \ArrayIterator;
-use \Luminova\Arrays\Lists;
+use \Luminova\Arrays\Listify;
 use \Luminova\interface\LazyInterface;
 use \Luminova\Exceptions\JsonException;
 use \Luminova\Exceptions\RuntimeException;
@@ -72,7 +72,7 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
      */
     public function fromStringList(string $list): self
     {
-        $this->array = Lists::toArray($list);
+        $this->array = Listify::toArray($list);
 
         return $this;
     } 
@@ -615,7 +615,7 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
             return '';
         }
 
-        return Lists::toList($this->array);
+        return Listify::toList($this->array);
     }
 
     /**

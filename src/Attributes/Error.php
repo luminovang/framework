@@ -10,39 +10,60 @@
  */
 namespace Luminova\Attributes;
 use \Attribute;
-use \Closure;
+use \Luminova\Exceptions\RouterException;
 
 #[Attribute(Attribute::IS_REPEATABLE | Attribute::TARGET_CLASS)]
 final class Error
 {
     /**
-     * Defines an attribute for handling global route errors.
+     * Defines a repeatable attribute for handling global HTTP route errors.
      *
-     * @param string $context The route context used to categorize the URI,  (defaults: `web`) for generic prefix handling.
-     *                  The context is typically the first segment of the URI (e.g., `api`, `blog`).
-     * @param string $pattern The route pattern to match for current error handling (e.g. `/`, `/.*`, `/blog/([0-9-.]+)` or `/blog/(:placeholder)`).
-     *                  This can be a specific path, a regex-style pattern or placeholder.
-     * @param Closure|array|null $onError The error handler callback, which can either be a Closure or an array containing the class and method responsible for handling the error.
+     * This attribute assigns an error handler to a specific URI pattern within a given context,
+     * allowing fine-grained control over how routing errors are managed. Multiple error handlers 
+     * can be defined for different URI prefix-contexts and patterns within the same controller.
+     *
+     * @param string $context The routing context used to categorize the URI (default: `web`). 
+     *                        Typically, this is the first segment of the URI (e.g., `api`, `blog`).
+     * @param string $pattern The route pattern to match for error handling (e.g., `/`, `/.*`, `/blog/([0-9-.]+)`, `/blog/(:placeholder)`).
+     *                        Can be a specific path, a regex-style pattern, or a placeholder.
+     * @param string|array|null $onError A callable error handler, either as a string or a [class, method] array. 
+     *                                   This handler will be invoked when the specified pattern matches.
      * 
-     * @example - Example usage for defining an error handler on a route:
+     * @throws RouterException If the provided error handler is not callable.
+     * 
+     * @example Example usage:
      * 
      * ```php
      * // /app/Controllers/Http/MyController.php
-     * namespace \App\Controller\Http;
+     * namespace App\Controllers\Http;
      * 
      * use Luminova\Base\BaseController;
      * use Luminova\Attributes\Error;
+     * use App\Errors\Controllers\ErrorController;
      * 
-     * #[Error('web', pattern: '/', onError: [ViewErrors::class, 'onWebError'])]
-     * #[Error('foo', pattern: '/foo/', onError: [ViewErrors::class, 'onWebFooError'])]
+     * #[Error('web', pattern: '/', onError: [ErrorController::class, 'onWebError'])]
+     * #[Error('foo', pattern: '/foo/', onError: [ErrorController::class, 'onWebFooError'])]
      * class MyController extends BaseController {
-     *      // Class implemenations
+     *      // Class implementation
      * }
      * ```
      */
     public function __construct(
         public string $context = 'web',
         public string $pattern = '/',
-        public Closure|array|null $onError = null,
-    ) {}
+        public string|array|null $onError = null,
+    )
+    {
+        if ($this->onError === null) {
+            return;
+        }
+
+        if(is_callable($this->onError) || (is_array($this->onError) && count($this->onError) === 2)){
+            return;
+        }
+        
+        throw new RouterException(
+            'The provided error handler must be a valid callable, a [class, method] array, or null.'
+        );
+    }
 }

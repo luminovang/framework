@@ -10,7 +10,7 @@
  */
 namespace Luminova\Http\Client;
 
-use \Luminova\Application\Foundation;
+use \Luminova\Luminova;
 use \Luminova\Http\Message\Response;
 use \Luminova\Http\Uri;
 use \Luminova\Cookies\CookieFileJar;
@@ -94,11 +94,11 @@ class Curl implements ClientInterface
     public function __construct(private array $config = [])
     {
         if(($this->config['headers']['X-Powered-By'] ?? true) !== false){
-            $this->config['headers']['X-Powered-By'] = $this->config['headers']['X-Powered-By'] ?? Foundation::copyright();
+            $this->config['headers']['X-Powered-By'] = $this->config['headers']['X-Powered-By'] ?? Luminova::copyright();
         }
         
         if(($this->config['headers']['User-Agent'] ?? true) !== false){
-            $this->config['headers']['User-Agent'] = $this->config['headers']['User-Agent'] ?? Foundation::copyright(true);
+            $this->config['headers']['User-Agent'] = $this->config['headers']['User-Agent'] ?? Luminova::copyright(true);
         }
     }
 
@@ -206,7 +206,7 @@ class Curl implements ClientInterface
                 CURLOPT_CONNECTTIMEOUT_MS => (int) ($this->mutable['connect_timeout'] ?? 0),
                 CURLOPT_FOLLOWLOCATION => (bool) ($this->mutable['allow_redirects'] ?? true),
                 CURLOPT_FILETIME => (bool) ($this->mutable['file_time'] ?? false),
-                CURLOPT_USERAGENT => $headers['User-Agent'] ?? Foundation::copyright(true),
+                CURLOPT_USERAGENT => $headers['User-Agent'] ?? Luminova::copyright(true),
                 CURLOPT_HTTP_VERSION => $this->mutable['version'] ?? CURL_HTTP_VERSION_NONE,
             ],
             $this->options

@@ -68,7 +68,6 @@ return static function (RectorConfig $rectorConfig): void {
         SimplifyRegexPatternRector::class
     ]);
 
-
     $rectorConfig->rule(TypedPropertyFromStrictConstructorRector::class);
     $rectorConfig->rule(SimplifyUselessVariableRector::class);
     $rectorConfig->rule(RemoveAlwaysElseRector::class);

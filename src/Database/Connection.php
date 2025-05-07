@@ -147,16 +147,16 @@ class Connection implements LazyInterface, Countable
     /**
      * Retrieves a free connection from the pool. Optionally fetches the first available valid connection.
      * 
-     * If `$any_free` is set to `true`, the method returns the first free connection that is connected and valid, removing it from the pool. 
+     * If `$anyFree` is set to `true`, the method returns the first free connection that is connected and valid, removing it from the pool. 
      * Otherwise, it fetches the first connection in the pool and returns it if valid, or `null` if no valid connection exists.
      *
-     * @param bool $any_free If `true`, returns the first valid connection from the pool (default: `false`).
+     * @param bool $anyFree If `true`, returns the first valid connection from the pool (default: `false`).
      *
      * @return DatabaseInterface|null Return the first valid connection from the pool or `null` if none are available.
      */
-    public function getPool(bool $any_free = false): ?DatabaseInterface
+    public function getPool(bool $anyFree = false): ?DatabaseInterface
     {
-        if($any_free){
+        if($anyFree){
             foreach (self::$pools as $idx => $connection) {
                 if($connection instanceof DatabaseInterface ){
                     if($connection->isConnected()){
@@ -510,7 +510,7 @@ class Connection implements LazyInterface, Countable
      * 
      * @param array<string,mixed> $config Database configuration.
      * 
-     * @return \T<CoreDatabase> Return based database instance with loaded configuration
+     * @return CoreDatabase<\T> Return based database instance with loaded configuration
      */
     private static function newConfig(array $config): CoreDatabase
     {

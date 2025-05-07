@@ -10,7 +10,7 @@
  */
 namespace Luminova\Http;
 
-use \Luminova\Application\Foundation;
+use \Luminova\Luminova;
 use \Luminova\Http\Header;
 use \Luminova\Http\Server;
 use \Luminova\Http\File;
@@ -48,122 +48,6 @@ use \JsonException;
  */
 final class Request implements HttpRequestInterface, LazyInterface, Stringable
 {
-    /** 
-     * HTTP GET method: Used to retrieve data from the server without modifying it.
-     * 
-     * @var string GET
-     */
-    public const GET = 'GET';
-
-    /** 
-     * HTTP POST method: Used to submit data to the server for processing (e.g., form submission, creating resources).
-     * 
-     * @var string POST
-     */
-    public const POST = 'POST';
-
-    /** 
-     * HTTP PUT method: Used to fully update or replace an existing resource.
-     * 
-     * @var string PUT
-     */
-    public const PUT = 'PUT';
-
-    /** 
-     * HTTP DELETE method: Used to remove a resource from the server.
-     * 
-     * @var string DELETE
-     */
-    public const DELETE = 'DELETE';
-
-    /** 
-     * HTTP OPTIONS method: Used to describe communication options for the target resource.
-     * 
-     * @var string OPTIONS
-     */
-    public const OPTIONS = 'OPTIONS';
-
-    /** 
-     * HTTP PATCH method: Used for partial updates to an existing resource.
-     * 
-     * @var string PATCH
-     */
-    public const PATCH = 'PATCH';
-
-    /** 
-     * HTTP HEAD method: Similar to GET, but only returns response headers (no body).
-     * 
-     * @var string HEAD
-     */
-    public const HEAD = 'HEAD';
-
-    /** 
-     * HTTP CONNECT method: Used for establishing a tunnel to a server (e.g., HTTPS via a proxy).
-     * 
-     * @var string CONNECT
-     */
-    public const CONNECT = 'CONNECT';
-
-    /** 
-     * HTTP TRACE method: Used for diagnostic purposes, returning the request received by the server.
-     * 
-     * @var string TRACE
-     */
-    public const TRACE = 'TRACE';
-
-    /** 
-     * WebDAV PROPFIND method: Retrieves properties of a resource (used in WebDAV).
-     * 
-     * @var string PROPFIND
-     */
-    public const PROPFIND = 'PROPFIND';
-
-    /** 
-     * WebDAV MKCOL method: Creates a new collection (folder) at the specified location.
-     * 
-     * @var string MKCOL
-     */
-    public const MKCOL = 'MKCOL';
-
-    /** 
-     * WebDAV COPY method: Copies a resource from one location to another.
-     * 
-     * @var string COPY
-     */
-    public const COPY = 'COPY';
-
-    /** 
-     * WebDAV MOVE method: Moves a resource from one location to another.
-     * 
-     * @var string MOVE
-     */
-    public const MOVE = 'MOVE';
-
-    /** 
-     * WebDAV LOCK method: Locks a resource to prevent modification by others.
-     * 
-     * @var string LOCK
-     */
-    public const LOCK = 'LOCK';
-
-    /** 
-     * WebDAV UNLOCK method: Unlocks a previously locked resource.
-     * 
-     * @var string UNLOCK
-     */
-    public const UNLOCK = 'UNLOCK';
-
-    /** 
-     * List of all supported HTTP methods.
-     * 
-     * @var array<string> $methods
-     */
-    public static array $methods = [
-        self::GET, self::POST, self::PUT, self::DELETE, self::OPTIONS,
-        self::PATCH, self::HEAD, self::CONNECT, self::TRACE, self::PROPFIND,
-        self::MKCOL, self::COPY, self::MOVE, self::LOCK, self::UNLOCK
-    ];
-
     /**
      * URL query parameters.
      * 
@@ -174,23 +58,23 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * Server object representing HTTP server parameters and configurations.
      * 
-     * @var LazyInterface<Server>|Server|null $server
+     * @var Server<LazyInterface|null $server
      */
-    public Server|LazyInterface|null $server = null;
+    public ?LazyInterface $server = null;
 
     /**
      * Header object providing HTTP request headers information.
      * 
-     * @var LazyInterface<Header>|Header|null $header
+     * @var Header<LazyInterface|null $header
      */
-    public Header|LazyInterface|null $header = null;
+    public ?LazyInterface $header = null;
 
     /**
      * UserAgent object containing client browser details.
      * 
-     * @var LazyInterface<UserAgent>|UserAgent|null $agent
+     * @var UserAgent<LazyInterface>|null $agent
      */
-    public ?UserAgent $agent = null;
+    public ?LazyInterface $agent = null;
 
     /**
      * Request security configuration.
@@ -209,7 +93,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * Initializes a new Request object, representing an HTTP request.
      * 
-     * @param string|null $method The HTTP method used for the request (e.g., 'GET', 'POST').
+     * @param string|null $method The HTTP method used for the request (e.g., `Method::GET`, `Method::POST`).
      * @param string|null $uri The request URI, typically the path and query string.
      * @param array<string,mixed> $body The request body, provided as an associative array 
      *                                  (e.g., `['field' => 'value']`). This may include form data, JSON, etc.
@@ -249,7 +133,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
             throw new InvalidArgumentException('The method: "getAny()" requires a valid field name.');
         }
         
-        $httpMethod = ($httpMethod === 'ANY') ? $this->getMethod() : $httpMethod;
+        $httpMethod = ($httpMethod === 'ANY') ? $this->getAnyMethod() : $httpMethod;
         $body = $this->body[$httpMethod] ?? [];
 
         return ($field === null) 
@@ -336,7 +220,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     public function setField(string $field, mixed $value, ?string $method = null): self
     {
         if($field){
-            $method = ($method === null) ? $this->getMethod() : strtoupper($method);
+            $method = ($method === null) ? $this->getAnyMethod() : strtoupper($method);
             $this->body[$method][$field] = $value;
         }
 
@@ -349,7 +233,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     public function removeField(string $field, ?string $method = null): self
     {
         if($field){
-            $method = ($method === null) ? $this->getMethod() : strtoupper($method);
+            $method = ($method === null) ? $this->getAnyMethod() : strtoupper($method);
             unset($this->body[$method][$field]);
         }
 
@@ -362,8 +246,8 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     public function getGet(string|null $field, mixed $default = null): mixed
     {
         return ($field === null)
-            ? ($this->body[self::GET] ?? []) 
-            : ($this->body[self::GET][$field] ?? $default);
+            ? ($this->body['GET'] ?? []) 
+            : ($this->body['GET'][$field] ?? $default);
     }
 
     /**
@@ -372,8 +256,8 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     public function getPost(string|null $field, mixed $default = null): mixed
     {
         return ($field === null)
-            ? ($this->body[self::POST] ?? []) 
-            : ($this->body[self::POST][$field] ?? $default);
+            ? ($this->body['POST'] ?? []) 
+            : ($this->body['POST'][$field] ?? $default);
     }
 
     /**
@@ -387,13 +271,13 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
 
         if($object){
             return (object) array_merge(
-                $this->body[$this->getMethod()] ?? $this->body,
+                $this->body[$this->getAnyMethod()] ?? $this->body,
                 $this->files ?: $_FILES
             );
         }
         
         return array_merge(
-            $this->body[$this->getMethod()] ?? $this->body,
+            $this->body[$this->getAnyMethod()] ?? $this->body,
             $this->files ?: $_FILES
         );
     }
@@ -403,7 +287,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function getArray(string $field, array $default = [], ?string $method = null): array
     {
-        $method = ($method === null) ? $this->getMethod() : strtoupper($method);
+        $method = ($method === null) ? $this->getAnyMethod() : strtoupper($method);
 
         if ($field && isset($this->body[$method][$field])) {
             $result = $this->getBody()[$field];
@@ -466,6 +350,31 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         $this->method ??= strtoupper($this->server->get('REQUEST_METHOD', ''));
 
         return $this->method;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getMethodOverride(): ?string
+    {
+        $override = $this->header->get('X-HTTP-Method-Override') 
+            ?? $this->server->get('X-HTTP-Method-Override') ;
+
+        return $override ? strtoupper(trim($override)) : null;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getAnyMethod(): string
+    {
+        $method = $this->getMethod();
+
+        if($method === 'POST'){
+            return $this->getMethodOverride() ?? $method;
+        }
+
+        return $method;
     }
 
     /**
@@ -586,7 +495,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function getQuery(?string $name = null, mixed $default = null): mixed
     {
-        $this->queries = $this->getQueries();
+        $this->queries = $this->getQueries() ?? [];
 
         if(!$this->queries){
             return $default;
@@ -636,9 +545,13 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function getUrl(): string
+    public function getUrl(bool $withPort = false): string
     {
-        return $this->getScheme() . '://' . $this->getHost() . $this->server->get('REQUEST_URI', '');
+        $host = $this->getHostname(false, $withPort);
+        $uri = $this->getUri();
+        $uri = $host ? $uri :  ltrim($uri, '/');
+
+        return $this->getScheme() . '://' . $host . $uri;
     }
 
     /**
@@ -646,8 +559,13 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function getPaths(): string
     {
-        $url = $this->server->get('REQUEST_URI', '');
-        return ($url === '') ? '' : parse_url($url, PHP_URL_PATH);
+        $url = $this->getUri();;
+
+        if($url === ''){
+            return '';
+        }
+
+        return parse_url($this->getUrl(), PHP_URL_PATH);
     }
 
     /**
@@ -795,7 +713,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
             return false;
         }
         
-        $method = $method ? strtoupper($method) : $this->getMethod();
+        $method = $method ? strtoupper($method) : $this->getAnyMethod();
 
         return ($this->body === [] || ($this->body[$method]??null) === null) 
             ? false 
@@ -807,7 +725,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function isGet(): bool
     {
-        return $this->getMethod() === self::GET;
+        return $this->getMethod() === 'GET';
     }
 
     /**
@@ -815,15 +733,15 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function isPost(): bool
     {
-        return $this->getMethod() === self::POST;
+        return $this->getAnyMethod() === 'POST';
     }
 
     /**
      * {@inheritdoc}
      */
-    public function isMethod(string $method = self::GET): bool
+    public function isMethod(string $method = 'GET'): bool
     {
-        return $this->getMethod() === strtoupper($method);
+        return $this->getAnyMethod() === strtoupper($method);
     }
 
     /**
@@ -893,7 +811,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function isApi(): bool
     {
-        return Foundation::isApiPrefix();
+        return Luminova::isApiPrefix();
     }
 
     /**
@@ -917,7 +835,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         }
 
         if($subdomains){
-            return $origin === APP_WWW_HOSTNAME || Func::mainDomain($origin) === APP_HOSTNAME;
+            return $origin === APP_HOSTNAME_ALIAS || Func::mainDomain($origin) === APP_HOSTNAME;
         }
 
         return $origin === APP_HOSTNAME;
@@ -1101,7 +1019,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
             throw new InvalidArgumentException(sprintf('Malformed URI "%s".', $this->uri));
         }
 
-        $method = strtoupper($this->method ?? self::GET);
+        $method = strtoupper($this->method ?? 'GET');
         $server = array_replace(Server::getDefault(), $server ?? []);
 
         $server['PATH_INFO'] = '';
@@ -1133,7 +1051,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         $path = $parts['path'] ?? '/';
         $type = $server['CONTENT_TYPE'] ?? null;
         $body = match ($method) {
-            self::POST, self::PUT, self::DELETE, self::PATCH => [],
+            'POST', 'PUT', 'DELETE', 'PATCH' => [],
             default => $this->body[$method] ?? [],
         };
 
@@ -1166,7 +1084,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     protected function parseRequestBody(): void
     {
-        $method = $this->getMethod();
+        $method = $this->getAnyMethod();
     
         if($this->body !== []){
             if(!isset($this->body[$method])){
@@ -1177,7 +1095,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         }
 
         $this->body = [];
-        $this->body[$method] = ($method === self::POST) ? $_POST : $_GET;
+        $this->body[$method] = ($method === 'POST') ? $_POST : $_GET;
 
         if($this->body[$method] === []){
             $input = file_get_contents('php://input');
@@ -1273,7 +1191,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     {
         return in_array(
             $method ?? $this->getMethod(), 
-            [self::POST, self::PUT, self::DELETE, self::PATCH], 
+            ['POST', 'PUT', 'DELETE', 'PATCH'], 
             true
         );
     }
@@ -1282,7 +1200,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      * Extracts the base field name and key from a given field string.
      *
      * @param string $field The field name, which may include array-style brackets (e.g., "foo[bar]").
-     * @return array An associative array with:
+     * @return array Return an associative array with:
      *               - 'field' => The base field name.
      *               - 'key'   => The key inside brackets, or null if absent.
      */
@@ -1377,7 +1295,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         }
 
         // Error handling for missing content or temp
-        $error = ($error === UPLOAD_ERR_OK && ($content === null && $temp === null) || $size === 0)
+        $error = ($error === UPLOAD_ERR_OK && ($size === 0 || ($content === null && $temp === null)) )
             ? UPLOAD_ERR_NO_FILE
             : $error;
 

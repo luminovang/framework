@@ -90,7 +90,7 @@ final class Factory
      * @param array $arguments Arguments to pass to the factory constructor.
      * @param bool $shared The last parameter to pass to the factory constructor indicate if it should return a shared instance.
      * 
-     * @return class-object<\T> An instance of the factory class.
+     * @return object<\T> An instance of the factory class.
      * @throws RuntimeException If failed to instantiate the factory.
      * 
      * @example - Invoke method with param and no-hared instance:
@@ -122,7 +122,7 @@ final class Factory
      * @param array $arguments Arguments to pass to the factory constructor.
      * @param bool $shared The last parameter to pass to the factory constructor indicate if it should return a shared instance.
      * 
-     * @return class-object<\T> An instance of the factory class.
+     * @return object<\T> An instance of the factory class.
      * @throws RuntimeException If failed to instantiate the factory.
      * 
      * @ignore 
@@ -225,7 +225,7 @@ final class Factory
      * @param string $factory The factory class name.
      * @param array $arguments Argument to pass to the factory constructor.
      * 
-     * @return class-object<\T> An instance of the factory class, or null if not found.
+     * @return object<\T> An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
      */
     private static function call(string $factory, array $arguments): object
@@ -257,7 +257,7 @@ final class Factory
      * @param bool $shared Whether the instance should be shared or not.
      * @param mixed $arguments [, mixed $... ] Parameters to pass to the factory constructor.
      *  
-     * @return class-object<\T> An instance of the factory class, or null if not found.
+     * @return object<\T> An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
      */
     private static function create(string $class, ?string $alias = null, bool $shared = true, mixed ...$arguments): object

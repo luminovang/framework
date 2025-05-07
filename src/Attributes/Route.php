@@ -9,6 +9,8 @@
  * @link https://luminova.ng
  */
 namespace Luminova\Attributes;
+
+use \Luminova\Exceptions\RouterException;
 use \Attribute;
 
 #[Attribute(Attribute::IS_REPEATABLE | Attribute::TARGET_METHOD)]
@@ -47,20 +49,26 @@ final class Route
     public const GUARD_MIDDLEWARE = 'guard'; 
 
     /**
-     * HTTP and CLI Route annotation constructor.
+     * Defines a repeatable attribute for registering HTTP and CLI routes.
      *
-     * @param string $pattern The route pattern for HTTP (e.g. `/`, `/blog/([0-9-.]+)`) 
-     * or CLI command pattern (e.g. `blogs`, `blogs/limit/(:int)`).
-     * @param array $methods The HTTP methods this route should responds to. (default: ['GET']).
-     *                       Optionally use `[ANY]` for any HTTP methods.
-     * @param bool $error Indicates if this is an error handler route for HTTP methods.
-     * @param string|null $group The command group name for CLI route (default: NULL).
-     * @param string|null $middleware Middleware type (default: NULL).
-     *          -   HTTP middleware route - `Route::BEFORE_MIDDLEWARE` or `Route::AFTER_MIDDLEWARE`.
-     *          -   CLI middleware route `Route::GLOBAL_MIDDLEWARE` for global authentication or `Route::GUARD_MIDDLEWARE` for command group authentication.
+     * This attribute maps controller methods to specific URI patterns and HTTP methods (for web) 
+     * or command patterns (for CLI),
+     * with optional middleware and error handling support.
+     *
+     * @param string $pattern The route pattern for HTTP (e.g., `/`, `/blog/([0-9-.]+)`) 
+     *                        or CLI command pattern (e.g., `blogs`, `blogs/limit/(:int)`).
+     * @param array $methods The HTTP methods this route responds to (default: `['GET']`). 
+     *                        Use `['ANY']` to match all HTTP methods for enhanced performance.
+     * @param bool $error Indicates if this route-method is an error handler for HTTP routes.
+     * @param string|null $group The CLI command group this route belongs to (default: `null`).
+     *                          Applicable only to CLI command controllers.
+     * @param string|null $middleware Optional middleware authentication assignment:
+     *              - HTTP: Use `Route::BEFORE_MIDDLEWARE` or `Route::AFTER_MIDDLEWARE`.
+     *              - CLI:  Use `Route::GLOBAL_MIDDLEWARE` for global handling or `Route::GUARD_MIDDLEWARE` for command group handling.
+     *
+     * @throws RouterException If the provided middleware handler is not a valid supported in context.
      * 
-     * @example - For HTTP Routing.
-     * 
+     * @example HTTP Routing:
      * ```php
      * // /app/Controllers/Http/MyController.php
      * 
@@ -71,20 +79,19 @@ final class Route
      * 
      * class MyController extends BaseController
      * {
-     *      #[Route('/(:root)', methods: ['ANY'], middleware: Route::BEFORE_MIDDLEWARE)]
-     *      public function middleware():int {
-     *             // Middleware implemenation
-     *      }
-     * 
-     *      #[Route('/', methods: ['GET'])]
-     *      public function index():int {
-     *          // Method implemenation
-     *      }
+     *     #[Route('/(:root)', methods: ['ANY'], middleware: Route::BEFORE_MIDDLEWARE)]
+     *     public function middleware(): int {
+     *         // Middleware implementation
+     *     }
+     *
+     *     #[Route('/', methods: ['GET'])]
+     *     public function index(): int {
+     *         // Method implementation
+     *     }
      * }
      * ```
-     * 
-     * @example - For CLI Routing.
-     * 
+     *
+     * @example CLI Routing:
      * ```php
      * // /app/Controllers/Cli/MyCommand.php
      * 
@@ -95,15 +102,17 @@ final class Route
      * 
      * class MyCommand extends BaseCommand
      * {
-     *      #[Route(group: 'command', middleware: Route::GLOBAL_MIDDLEWARE)]
-     *      public function middleware():int {
-     *           // CLI middleware implemenation
-     *      }
-     * 
-     *      #[Route('argument', group: 'command')]
-     *      public function doFoo():int {
-     *          // CLI method implemenation
-     *      }
+     *     #[Route(group: 'command', middleware: Route::GLOBAL_MIDDLEWARE)]
+     *     public function middleware(): int 
+     *     {
+     *         // CLI middleware implementation
+     *     }
+     *
+     *     #[Route('argument', group: 'command')]
+     *     public function doFoo(): int 
+     *     {
+     *         // CLI method implementation
+     *     }
      * }
      * ```
      */
@@ -113,5 +122,34 @@ final class Route
         public bool $error = false,
         public ?string $group = null,
         public ?string $middleware = null
-    ) {}
+    ) 
+    {
+        if($this->middleware !== null){
+            if(
+                $this->group !== null && 
+                $this->middleware !== self::GLOBAL_MIDDLEWARE && 
+                $this->middleware !== self::GUARD_MIDDLEWARE
+            ){
+                throw new RouterException(sprintf(
+                    'Invalid CLI middleware "%s". Expected "%s" or "%s" when a group is defined.',
+                    $this->middleware,
+                    self::GLOBAL_MIDDLEWARE,
+                    self::GUARD_MIDDLEWARE
+                ));
+            }
+
+            if(
+                $this->group === null && 
+                $this->middleware !== self::BEFORE_MIDDLEWARE && 
+                $this->middleware !== self::AFTER_MIDDLEWARE
+            ){
+                throw new RouterException(sprintf(
+                    'Invalid HTTP middleware "%s". Expected "%s" or "%s" when no group is defined.',
+                    $this->middleware,
+                    self::BEFORE_MIDDLEWARE,
+                    self::AFTER_MIDDLEWARE
+                ));
+            }
+        }
+    }
 }

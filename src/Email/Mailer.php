@@ -12,7 +12,7 @@ namespace Luminova\Email;
 
 use \Luminova\Interface\MailerInterface;
 use \Luminova\Interface\LazyInterface;
-use \Luminova\Application\Foundation;
+use \Luminova\Luminova;
 use \Luminova\Base\BaseMailer;
 use \App\Config\Mailer as MailerConfig;
 use \Luminova\Exceptions\MailerException;
@@ -528,7 +528,7 @@ class Mailer implements LazyInterface
     {
         $this->client->SMTPDebug = self::isDebuggable() ? 3 : 0;
         $this->client->CharSet = self::getCharset(env('smtp.charset'));
-        $this->client->XMailer = Foundation::copyright();
+        $this->client->XMailer = Luminova::copyright();
 
         if ((bool) env('smtp.use.credentials')) {
             $this->client->isSMTP();

@@ -13,6 +13,8 @@ namespace Luminova\Storages;
 use \Luminova\Http\File;
 use \Luminova\Storages\FileManager;
 use \Luminova\Exceptions\StorageException;
+use \SplFileObject;
+use \Throwable;
 
 final class Uploader
 {
@@ -41,6 +43,11 @@ final class Uploader
             return false;
         }
 
+        // If file is less than 5mb use move instead
+        if($file->getTemp() !== null && $file->getSize() <= 5_242_880){
+            return self::move($file, $path, $destination);
+        }
+
         $config = $file->getConfig();
         $chunk = (isset($config->chunkLength) ? (int) $config->chunkLength : 5_242_880);
         $uploaded = false;
@@ -51,7 +58,8 @@ final class Uploader
         }elseif($file->getContent() !== null){
             $uploaded = self::write(
                 $destination, 
-                $file->isBase64Encoded() ? base64_decode($file->getContent()) : $file->getContent()
+                $file->isBase64Encoded() ? base64_decode($file->getContent()) : $file->getContent(),
+                $file->isBinary() ? 'wb' : 'w'
             );
         }
 
@@ -98,7 +106,7 @@ final class Uploader
             return false;
         }
 
-        if (move_uploaded_file($file->getTemp(),  $destination)) {
+        if (move_uploaded_file($file->getTemp(), $destination)) {
             $file->free();
 
             if($symlink !== null){
@@ -145,51 +153,68 @@ final class Uploader
     ): bool|int
     {
         $destination = self::beforeUpload($file, $path, $symlink);
-
-        if($destination === null){
+    
+        if ($destination === null) {
             return false;
         }
-
-        $config = $file->getConfig();
-        $length = isset($config->chunkLength) ? (int)$config->chunkLength : 5_242_880;
-        $temp = $destination . '.part';
     
-        $out = fopen($temp, ($chunkIndex === 0) ? 'wb' : 'ab');
-        if ($out === false) {
-            $file->setMessage("Failed to open file for writing: {$temp}");
+        // If file is less than 5mb use move instead
+        if ($totalChunks <= 1 && $file->getTemp() !== null && $file->getSize() <= 5_242_880) {
+            return self::move($file, $path, $destination);
+        }
+    
+        $config = $file->getConfig();
+        $length = (int) $config->chunkLength ?? 5_242_880;
+        $temp = $destination . '.part';
+        
+        try {
+            $out = new SplFileObject($temp, ($chunkIndex === 0) ? 'wb' : 'ab');
+        } catch (Throwable $e) {
+            $file->setMessage("Failed to open file for writing: {$temp}. Error: " . $e->getMessage());
             $destination = null;
             return false;
         }
     
         $error = true;
         $uploadDelay = ($uploadDelay === 0 && $length > 10_000_000) ? 10000 : $uploadDelay;
-
+    
         if ($file->getTemp() !== null) {
-            $in = fopen($file->getTemp(), 'rb');
-
-            if ($in !== false) {
+            try{
+                $in = new SplFileObject($file->getTemp(), 'rb');
+            } catch (Throwable $e) {
+                $file->setMessage("Failed to open temp file for reading: {$temp}. Error: " . $e->getMessage());
+                $destination = null;
+                return false;
+            }
+    
+            if ($in->valid()) {
                 $error = false;
-
-                while ($buffer = fread($in, $length)) {
-                    fwrite($out, $buffer);
-
+    
+                while (!$in->eof()) {
+                    $buffer = $in->fread($length);
+                    if($buffer === false){
+                        continue;
+                    }
+    
+                    $out->fwrite($buffer);
+    
                     if ($uploadDelay > 0) {
                         usleep($uploadDelay);
                     }
                 }
-
-                fclose($in);
             }
-        } elseif($file->getContent() !== null) {
+
+            $in = null;
+        } elseif ($file->getContent() !== null) {
             $content = $file->isBase64Encoded() 
-                ? base64_decode($file->getContent(), true) 
+                ? base64_decode($file->getContent(), $config->base64Strict) 
                 : $file->getContent();
     
             if ($content !== false && is_string($content)) {
                 $error = false;
-
+    
                 for ($offset = 0, $size = strlen($content); $offset < $size; $offset += $length) {
-                    fwrite($out, substr($content, $offset, $length));
+                    $out->fwrite(substr($content, $offset, $length));
     
                     if ($uploadDelay > 0) {
                         usleep($uploadDelay);
@@ -197,11 +222,11 @@ final class Uploader
                 }
             }
         }
-
+    
         $file->free();
-        fclose($out);
-        
-        if($error){
+        $out = null; 
+    
+        if ($error) {
             $file->setMessage("Failed to write chunk to temp file: {$temp}");
             $destination = null;
             return false;
@@ -212,7 +237,7 @@ final class Uploader
                 if ($symlink !== null) {
                     FileManager::symbolic($destination, $symlink);
                 }
-
+    
                 $file->setMessage("File successfully uploaded to: {$destination}", UPLOAD_ERR_OK);
                 return true;
             }
@@ -228,34 +253,47 @@ final class Uploader
     }
 
     /**
-     * Writes provided content to a specified file path.
+     * Writes content to a file at the specified path.
      *
-     * @param string $filename The path and filename to write the content (e.g, `path/to/text.txt`).
-     * @param resource|string $contents The string content or resource to be written.
+     * @param string $filename The full file path where the content should be written (e.g, `path/to/text.txt`).
+     * @param resource|string $contents  The content to write, either a string or a stream resource.
+     * @param string $mode  The file write mode (e.g., 'w' for text, 'wb' for binary).
      * 
      * @return bool Return true if the file is written successfully, false otherwise.
      */
-    public static function write(string $filename, mixed $contents): bool 
+    public static function write(string $filename, mixed $contents, string $mode = 'w'): bool
     {
-        if(!make_dir(dirname($filename))){
+        if (!make_dir(dirname($filename))) {
             return false;
         }
 
         $isResource = is_resource($contents);
-        if(is_string($contents) || $isResource){
-            $file = fopen($filename, 'w');
 
-            if ($file === false) {
+        if (!is_string($contents) && !$isResource) {
+            return false;
+        }
+
+        if ($isResource) {
+            $meta = stream_get_meta_data($contents);
+            
+            // skip pipes/sockets
+            if (!isset($meta['uri']) || str_starts_with($meta['wrapper_type'] ?? '', 'php')) {
                 return false;
             }
 
-            $result = fwrite($file, $isResource ? stream_get_contents($contents) : $contents);
-            fclose($file);
-
-            return $result !== false;
+            $contents = stream_get_contents($contents);
+            if ($contents === false) {
+                return false;
+            }
         }
 
-        return false;
+        try {
+            $file = new SplFileObject($filename, $mode);
+            $bytes = $file->fwrite($contents);
+            return $bytes !== false;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -275,33 +313,29 @@ final class Uploader
         int $delay = 0
     ): bool
     {
-        $in = fopen($temp, 'rb');
-        
-        if ($in === false) {
+        try {
+            $in = new SplFileObject($temp, 'rb');
+            $out = new SplFileObject($destination, 'wb');
+        } catch (Throwable $e) {
             return false;
         }
-
-        $out = fopen($destination, 'wb');
-
-        if ($out === false) {
-            fclose($in);
-            return false;
-        }
-
+    
         $delay = ($delay === 0 && $chunk > 10_000_000) ? 10000 : $delay;
-        while ($buffer = fread($in, $chunk)) {
-            fwrite($out, $buffer);
-
-            if($delay > 0){
+    
+        while (!$in->eof()) {
+            $buffer = $in->fread($chunk);
+    
+            if ($buffer === false || $out->fwrite($buffer) === false) {
+                return false;
+            }
+    
+            if ($delay > 0) {
                 usleep($delay);
             }
         }
-
-        fclose($in);
-        fclose($out);
-
+    
         return true;
-    }
+    }    
 
     /**
      * Prepares a file for uploading by validating configuration and setting up destination paths.
@@ -320,18 +354,23 @@ final class Uploader
     ): ?string
     {
         $config = $file->getConfig();
+        $path ??= $config->uploadPath;
 
-        if(!$path && !isset($config->uploadPath)){
+        if(!$path){
             throw new StorageException(
                 'Upload path must be specified in: $file->setConfig(["upload_path" => "path/to/upload/"]) method of file object or pass in second parameter.'
             );
+        }
+
+        if (!FileManager::isPath($path)) {
+            throw new StorageException("Expected a directory path, but got: {$path}");
         }
 
         if (!$file->valid()) {
             throw new StorageException(sprintf('Upload validation failed: %s', $file->getMessage()));
         }
 
-        $path = rtrim($path ?? $config->uploadPath, TRIM_DS) . DIRECTORY_SEPARATOR;
+        $path = rtrim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
 
         if(!make_dir($path)){
             throw new StorageException(sprintf(
@@ -339,18 +378,21 @@ final class Uploader
                 $path
             ));
         }
+        
+        if (!is_writable($path)) {
+            $file->setMessage("Directory is not writable: " . $path);
+            return null;
+        }
 
         $filename = basename($file->getName());
         $destination = $path . $filename;
       
         if(file_exists($destination)){
-            $rule = ($config->ifExisted ?? File::IF_EXIST_OVERWRITE);
-
-            if($rule === File::IF_EXIST_OVERWRITE){
+            if($config->ifExisted === File::IF_EXIST_OVERWRITE){
                 unlink($destination);
-            }elseif($rule === File::IF_EXIST_RENAME){
+            }elseif($config->ifExisted === File::IF_EXIST_RENAME){
                 rename($destination, $path . uniqid('old', true) . '_' . $filename);
-            }elseif($rule === File::IF_EXIST_RETAIN){
+            }elseif($config->ifExisted === File::IF_EXIST_RETAIN){
                 $filename = uniqid('copy', true) . '_' . $filename;
                 $destination = $path . $filename;
             }else{
@@ -362,7 +404,7 @@ final class Uploader
             }
         }
 
-        $symlink = isset($config->symlink)
+        $symlink = $config->symlink
             ? rtrim($config->symlink, TRIM_DS) . DIRECTORY_SEPARATOR . $filename 
             : null;
 

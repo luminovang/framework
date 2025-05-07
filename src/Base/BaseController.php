@@ -11,13 +11,15 @@ declare(strict_types=1);
  */
 namespace Luminova\Base;
 
-use \App\Application;
-use \Luminova\Http\Request;
+use \Luminova\Interface\RoutableInterface;
 use \Luminova\Interface\LazyInterface;
+use \Luminova\Core\CoreApplication;
+use \Luminova\Http\Request;
 use \Luminova\Security\Validation;
 use \Luminova\Utils\LazyObject;
+use \App\Application;
 
-abstract class BaseController
+abstract class BaseController implements RoutableInterface
 {
     /**
      * When rendering HTML contents.
@@ -83,23 +85,23 @@ abstract class BaseController
     public const RSS = 'rss';
 
     /**
-     * HTTP request object.
+     * Lazy loaded HTTP request object.
      * 
-     * @var LazyInterface<Request>|Request|null
+     * @var Request<LazyInterface>|null
      */
     protected ?LazyInterface $request = null;
  
     /**
-     * Input validation object.
+     * Lazy loaded input validation object.
      * 
-     * @var LazyInterface<Validation>|Validation|null
+     * @var Validation<LazyInterface>|null
      */
     protected ?LazyInterface $validate = null;
  
     /**
-     * Application instance.
+     * Lazy loaded application instance.
      * 
-     * @var LazyInterface<Application>|Application|null $app
+     * @var CoreApplication<Application,LazyInterface>|null $app
      */
     protected ?LazyInterface $app = null;
 
@@ -175,7 +177,7 @@ abstract class BaseController
      * 
      * @return int Return one of the following status codes:  
      * - `STATUS_SUCCESS` if the view is handled successfully,  
-     * - `STATUS_SILENT` if failed, silently terminate without error page allowing you to manually handle the state.
+     * - `STATUS_SILENCE` if failed, silently terminate without error page allowing you to manually handle the state.
      * 
      * @example - This examples are equivalent:
      * 

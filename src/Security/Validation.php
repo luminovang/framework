@@ -216,21 +216,25 @@ final class Validation implements ValidationInterface, LazyInterface
     /**
      * {@inheritdoc}
      */
-    public function setRules(array $rules, array $messages = []): self
+    public function setRules(array $rules): self
     {
         $this->rules = $rules;
-
-        if($messages !== []){
-            $this->messages = $messages;
-        }
-
         return $this;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function addRule(string $field, string $rules, array $messages = []): self
+    public function setMessages(array $messages): self
+    {
+        $this->messages = $messages;
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function addField(string $field, string $rules, array $messages = []): self
     {
         $this->rules[$field] = $rules;
 

@@ -43,6 +43,7 @@ final class RawExpression implements Stringable, JsonSerializable
             throw new InvalidArgumentException('The expression must be a string.');
         }
     }
+    
     /**
      * Dynamically handle static method calls for SQL date and time functions.
      *

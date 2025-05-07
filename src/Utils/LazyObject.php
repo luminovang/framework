@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework foundation.
+ * Luminova Framework Lazy Object.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -23,7 +23,7 @@ class LazyObject implements LazyInterface, Stringable
     /**
      * The lazily instantiated object instance.
      * 
-     * @var \class-object<\T>|null $lazyInstance
+     * @var class-object<\T>|null $lazyInstance
      */
     private ?object $lazyInstance = null;
 

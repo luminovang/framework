@@ -10,14 +10,16 @@
  */
 namespace Luminova\Base;
 
+use \Luminova\Interface\RoutableInterface;
 use \Luminova\Interface\LazyInterface;
+use \Luminova\Core\CoreApplication;
 use \Luminova\Command\Terminal;
 use \Luminova\Utils\LazyObject;
 use \Luminova\Functions\Func;
 use \App\Application;
 use \App\Config\Files;
 
-abstract class BaseCommand extends Terminal 
+abstract class BaseCommand extends Terminal implements RoutableInterface
 {
     /**
      * Command group name for the current controller class.
@@ -70,9 +72,51 @@ abstract class BaseCommand extends Terminal
     protected string $description = '';
 
     /**
-     * Application instance.
+     * List of allowed system users.
      * 
-     * @var LazyInterface<Application>|Application|null $app
+     * @var array<int,string> $users
+     * 
+     * @example - Users:
+     * 
+     * Only users listed here can execute this command, leave empty array to allow all users.
+     * 
+     * ```php
+     * ['www-data', 'ubuntu', 'admin']
+     * ```
+     */
+    protected array $users = [];
+
+    /**
+     * Authenticate configuration for password or private/public login.
+     * 
+     * @var array<string,mixed>|null $authentication
+     * 
+     * @example - Auth from database:
+     * ```php
+     * [
+     *      'storage' => 'database',
+     *      'tableName' => 'foo_cli_users'
+     * ]
+     * ```
+     * @example - Auth from filesystem:
+     * ```php
+     * [
+     *      'storage' => 'filesystem',
+     *      'storagePath' => 'writeable/auth/cli_users.php'
+     * ]
+     * ```
+     * @example - Supported Array keys Or Database column names:
+     * 
+     * - **auth:** `(string)` - Authentication type (e.g, `password` or `key`).
+     * - **content:** `(string)` - Password hash or empty for not password login, public key content or public key file.
+     * - **updated_at:** `datetime` - Last authenticated datetime.
+     */
+    protected ?array $authentication = null;
+
+    /**
+     * Lazy loaded application instance.
+     * 
+     * @var CoreApplication<Application,LazyInterface>|null $app
      */
     protected ?LazyInterface $app = null;
 
@@ -116,7 +160,8 @@ abstract class BaseCommand extends Terminal
      *      - options: Available command options.
      *      - examples: Command usage examples.
      * 
-     * @return int Return STATUS_SUCCESS when custom help is implemented, STATUS_ERROR when using default implementation.
+     * @return int Return exit code STATUS_SUCCESS when custom help is implemented, 
+     *          STATUS_ERROR when using default implementation.
      */
     abstract public function help(array $helps): int;
 
@@ -125,7 +170,9 @@ abstract class BaseCommand extends Terminal
      *
      * @return string Return the full command-line string.
      * 
-     * @example - Given a command with `php index.php foo user=1 --no-nocache`
+     * @example - Example: 
+     * 
+     * Given a command with `php index.php foo user=1 --no-nocache`
      * 
      *```bash 
      * index.php index.php foo user=1 --no-nocache
@@ -141,7 +188,7 @@ abstract class BaseCommand extends Terminal
      * This method is an alias of the parent `getAnyOption` method.
      * 
      * @param string $key The primary key for the option.
-     * @param string $alias The alias for the option.
+     * @param string|null $alias The alias for the option.
      * @param mixed $default The default value to return if the option is not found.
      * 
      * @return mixed Return the value of the option, or the default if not found.
@@ -150,13 +197,18 @@ abstract class BaseCommand extends Terminal
      * ```php
      * $verbose = $this->option('verbose', 'v', false); // Returns true if either option is set.
      * ```
-     * @example - Given a command with options `--address=192.160.0.1` or `-a=192.160.0.1`
+     * @example - Example: 
+     * 
+     * Given a command with options `--address=192.160.0.1` or `-a=192.160.0.1`.
+     * 
      * ```php
      * $address = $this->option('address', 'a', null); // Returns 192.160.0.1 if either option is set.
      */
-    protected function option(string $key, string $alias, mixed $default = false): mixed 
+    protected function option(string $key, ?string $alias = null, mixed $default = false): mixed 
     {
-        return parent::getAnyOption($key, $alias, $default);
+        return ($alias === null) 
+            ? parent::getOption($key, $default)
+            : parent::getAnyOption($key, $alias, $default);
     }
 
     /**
@@ -170,7 +222,10 @@ abstract class BaseCommand extends Terminal
      * 
      * @return mixed Return the argument value, or the full argument if no '=' is found, or null if not found.
      * 
-     * @example - Given a command with arguments 'php index.php foo file=example.txt mode=write'.
+     * @example - Example:
+     * 
+     * Given a command with arguments 'php index.php foo file=example.txt mode=write'.
+     * 
      * ```php
      * $file = $this->argument('file'); // Returns 'example.txt'
      * $file = $this->argument(1); // Returns 'example.txt'
@@ -180,21 +235,24 @@ abstract class BaseCommand extends Terminal
      */
     protected function argument(string|int $index): mixed 
     {
+        $argument = null;
+
         if (is_string($index)) {
             foreach (parent::getArguments() as $arg) {
                 if (str_starts_with($arg, $index)) {
-                    return str_contains($arg, '=') ? explode('=', $arg, 2)[1] : $arg;
+                    $argument = $arg;
+                    break;
                 }
             }
+        }else{
+            $argument = parent::getArgument($index);
+        }
 
+        if($argument === null) {
             return null;
         }
 
-        $argument = parent::getArgument($index);
-
-        return ($argument === null) 
-            ? null 
-            : (str_contains($argument, '=') ? explode('=', $argument, 2)[1] : $argument);
+        return (str_contains($argument, '=') ? explode('=', $argument, 2)[1] : $argument);
     }
 
     /**
@@ -237,11 +295,7 @@ abstract class BaseCommand extends Terminal
 
             if($name === null){
                 $mime = get_mime($data);
-                $name = uniqid(date('YmdHis') . '_')  . '.' . (
-                    ($mime === false) 
-                        ? 'bin' 
-                        : Files::getExtension($mime)
-                    );
+                $name = uniqid(date('YmdHis') . '_')  . '.' . (($mime === false) ? 'bin' : Files::getExtension($mime));
             }else{
                 $name = basename($name);
             }

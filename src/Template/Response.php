@@ -135,11 +135,12 @@ class Response implements ViewResponseInterface
     {
         if($validate){
             Header::validate($this->headers, $this->status);
-            return;
+        }else{
+            Header::sendStatus($this->status);
+            Header::send($this->headers);
         }
 
-        Header::sendStatus($this->status);
-        Header::send($this->headers);
+        Header::clearOutputBuffers();
     }
 
     /**
@@ -223,10 +224,6 @@ class Response implements ViewResponseInterface
      */
     public function render(string $content, array $headers = []): int
     {
-        if($content === ''){
-            return STATUS_SILENT;
-        }
-
         $length = 0;
         $headers = ($headers === []) 
             ? $this->headers : 
@@ -236,7 +233,7 @@ class Response implements ViewResponseInterface
             $headers['Content-Type'] = 'application/json';
         }
        
-        if($this->minify && str_contains($headers['Content-Type'], 'text/html')){
+        if($content !== '' && $this->minify && str_contains($headers['Content-Type'], 'text/html')){
             self::$weak[self::$reference] ??= new Minification();
             $content = self::$weak[self::$reference]->codeblocks($this->minifyCodeblocks)
                 ->copyable($this->codeblockButton)
@@ -246,23 +243,32 @@ class Response implements ViewResponseInterface
             $length = self::$weak[self::$reference]->getLength();
         }
 
-        if($this->compress){
+        if($content !== '' && $this->compress){
             [$encoding, $content, $length] = Encoder::encode($content);
+
             if($encoding !== false){
                 $headers['Content-Encoding'] = $encoding;
             }
         }
 
-        if($content === ''){
-            return STATUS_SILENT;
+        if($length === 0){
+            if($content === ''){
+                $this->status = 204;
+            }else{
+                $length = $this->calculateContentLength($content, $headers['Content-Type']);
+            }
         }
 
         $headers['default_headers'] = true;
-        if($length > 0){
-            $headers['Content-Length'] = $length;
-        }
+        $headers['Content-Length'] = $length;
 
         Header::validate($headers, $this->status);
+        Header::clearOutputBuffers();
+
+        if($content === '' || $this->status === 204){
+            return STATUS_SILENCE;
+        }
+
         echo $content;
 
         return STATUS_SUCCESS;
@@ -274,19 +280,15 @@ class Response implements ViewResponseInterface
     public function json(array|object $content): int 
     {
         try {
-            $content = json_encode(
-                is_object($content) ? (array) $content : $content, 
-                JSON_THROW_ON_ERROR
+            return $this->render(
+                json_encode(is_object($content) ? (array) $content : $content, JSON_THROW_ON_ERROR), 
+                ['Content-Type' => 'application/json']
             );
-
-            return $this->render($content, [
-                'Content-Type' => 'application/json'
-            ]);
         }catch(Exception|\JsonException $e){
             throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
 
-        return STATUS_SILENT;
+        return STATUS_SILENCE;
     }
 
     /**
@@ -330,7 +332,13 @@ class Response implements ViewResponseInterface
         int $delay = 0
     ): bool 
     {
-        return FileManager::download($fileOrContent, $name, $headers, $chunk_size, $delay);
+        return FileManager::download(
+            $fileOrContent, 
+            $name, 
+            $headers,
+            $chunk_size, 
+            $delay
+        );
     }
 
     /**
@@ -341,12 +349,13 @@ class Response implements ViewResponseInterface
         string $basename, 
         array $headers = [],
         bool $eTag = true,
+        bool $weakEtag = false,
         int $expiry = 0,
         int $length = (1 << 21),
         int $delay = 0
         ): bool 
     {
-        return (new FileDelivery($path, $eTag))
+        return (new FileDelivery($path, $eTag, $weakEtag))
             ->output($basename, $expiry, $headers, $length, $delay);
     }
 
@@ -379,5 +388,26 @@ class Response implements ViewResponseInterface
 
         $this->header('Location', $uri)->send();
         exit(0);
+    }
+
+    /**
+     * Get content length based on header charset or application charset.
+     * 
+     * @param string $content The content to calculate.
+     * @param string $contentType Header content type.
+     * 
+     * @return int Return calculated content length.
+     */
+    protected function calculateContentLength(string $content, string $contentType): int 
+    {
+        $charset = null;
+        if (
+            str_contains($contentType, 'charset=') &&
+            preg_match('/charset\s*=\s*["\']?([\w\-]+)["\']?/i', $contentType, $matches)
+        ) {
+            $charset = $matches[1];
+        }
+
+        return string_length($content, $charset);
     }
 }
