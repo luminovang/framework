@@ -328,7 +328,7 @@ class Response implements ViewResponseInterface
         string $fileOrContent, 
         ?string $name = null, 
         array $headers = [],
-        int $chunk_size = 8192,
+        int $chunkSize = 8192,
         int $delay = 0
     ): bool 
     {
@@ -336,7 +336,7 @@ class Response implements ViewResponseInterface
             $fileOrContent, 
             $name, 
             $headers,
-            $chunk_size, 
+            $chunkSize, 
             $delay
         );
     }

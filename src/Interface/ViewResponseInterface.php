@@ -53,8 +53,9 @@ interface ViewResponseInterface
     /**
      * Set an individual HTTP header.
      *
-     * @param string $key Header name.
-     * @param mixed $value Header value.
+     * @param string $key The header name.
+     * @param mixed $value The header value for name.
+     * 
      * @return self Return instance of the Response class.
      */
     public function header(string $key, mixed $value): self;
@@ -63,6 +64,7 @@ interface ViewResponseInterface
      * Set multiple HTTP headers at once.
      *
      * @param array<string,mixed> $headers An associative array of headers.
+     * 
      * @return self Return instance of the Response class.
      */
     public function headers(array $headers): self;
@@ -198,14 +200,14 @@ interface ViewResponseInterface
         string $fileOrContent, 
         ?string $name = null, 
         array $headers = [],
-        int $chunk_size = 8192,
+        int $chunkSize = 8192,
         int $delay = 0
     ): bool;
 
     /**
      * Stream output any file or large files to the client.
      *
-     * @param string $path File directory location (e.g., `/writable/storage/images/`).
+     * @param string $path File directory location (e.g., `/writeable/storage/images/`).
      * @param string $basename The file name (e.g., `image.png`).
      * @param array $headers Optional output headers.
      * @param bool $eTag Whether to generate ETag headers (default: true).

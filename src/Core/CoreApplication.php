@@ -18,6 +18,10 @@ use \Luminova\Template\View;
 
 abstract class CoreApplication implements LazyInterface
 {
+    public const IDLE = 0;
+    public const CREATED = 1;
+    public const COMPLETED = 2;
+
     /**
      * Utilize the View trait for handling template rendering and responses.
      *
@@ -44,7 +48,7 @@ abstract class CoreApplication implements LazyInterface
      *
      * @var int $lifecycle
      */
-    private static int $lifecycle = 0;
+    private static int $lifecycle = self::IDLE;
 
     /**
      * Is application terminated.
@@ -63,7 +67,7 @@ abstract class CoreApplication implements LazyInterface
      */
     public function __construct() 
     {
-        if(self::$lifecycle > 0){
+        if(self::$lifecycle > self::IDLE){
             if((self::$instance instanceof static) && !($this->router instanceof RouterInterface)){
                 $this->router = self::$instance->router;
             }
@@ -84,7 +88,7 @@ abstract class CoreApplication implements LazyInterface
             ->addNamespace('\\App\\Modules\\Controllers\\');
 
         $this->onCreate();
-        self::$lifecycle = 1;
+        self::$lifecycle = self::CREATED;
     }
 
     /**
@@ -92,11 +96,11 @@ abstract class CoreApplication implements LazyInterface
      */
     public function __destruct()
     {
-        if(self::$lifecycle > 1){
+        if(self::$lifecycle > self::CREATED){
             return;
         }
 
-        self::$lifecycle = 2;
+        self::$lifecycle = self::COMPLETED;
         $this->onDestroy();
     }
 

@@ -116,7 +116,7 @@ abstract class BaseCommand extends Terminal implements RoutableInterface
     /**
      * Lazy loaded application instance.
      * 
-     * @var CoreApplication<Application,LazyInterface>|null $app
+     * @var Application<CoreApplication,LazyInterface>|null $app
      */
     protected ?LazyInterface $app = null;
 

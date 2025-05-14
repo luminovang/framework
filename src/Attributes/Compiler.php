@@ -10,6 +10,7 @@
  */
 namespace Luminova\Attributes;
 
+use \Luminova\Luminova;
 use \Luminova\Attributes\Tokenizer;
 use \Luminova\Attributes\Route;
 use \Luminova\Attributes\Error;
@@ -101,7 +102,7 @@ final class Compiler
             return;
         }
 
-        Router::setClassInfo('filename', $fileName);
+        Luminova::addClassInfo('filename', $fileName);
 
         /**
          * Handle context attributes and register error handlers.
@@ -199,7 +200,7 @@ final class Compiler
             return;
         }
 
-        Router::setClassInfo('filename', $fileName);
+        Luminova::addClassInfo('filename', $fileName);
 
         foreach ($instance->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
             $callback = $fileName . '::' . $method->getName();

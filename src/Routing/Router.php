@@ -42,16 +42,6 @@ use \Closure;
 use \Exception;
 use \Throwable;
 
-/**
- * Router shorthand methods for capture, to handle http methods by it name.
- *
- * @method void get(string $pattern, Closure|string $callback) Route to handle http `GET` requests.
- * @method void post(string $pattern, Closure|string $callback) Route to handle http `POST` requests.
- * @method void patch(string $pattern, Closure|string $callback) Route to handle http `PATCH` requests.
- * @method void delete(string $pattern, Closure|string $callback) Route to handle http `DELETE` requests.
- * @method void put(string $pattern, Closure|string $callback) Route to handle http `PUT` requests.
- * @method void options(string $pattern, Closure|string $callback) Route to handle http `OPTIONS` requests.
- */
 final class Router implements RouterInterface
 {
     /**
@@ -149,13 +139,6 @@ final class Router implements RouterInterface
     private static array $commands = [];
 
     /**
-     * Controller class information.
-     * 
-     * @var array<string,string> $classInfo
-     */
-    private static array $classInfo = [];
-
-    /**
      * Application instance.
      * 
      * @var CoreApplication|null $application 
@@ -189,24 +172,6 @@ final class Router implements RouterInterface
         self::reset(true);
         Luminova::profiling('start');
         $app = null;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function __call(string $method, array $arguments): void
-    {
-        $method = strtoupper($method);
-
-        if ($method !== 'CLI' && isset(self::$httpMethods[$method])) {
-            $this->capture($method, ...$arguments);
-            return;
-        }
-
-        RouterException::throwWith('no_method', RouterException::INVALID_REQUEST_METHOD, [
-            self::class,
-            $method,
-        ]);
     }
 
     /**
@@ -253,6 +218,62 @@ final class Router implements RouterInterface
         
         RouterException::throwWith('no_route', RouterException::RUNTIME_ERROR);
         return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function get(string $pattern, Closure|string $callback): void
+    {
+        $this->addHttpRoute('routes', 'GET', $pattern, $callback);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function post(string $pattern, Closure|string $callback): void
+    {
+        $this->addHttpRoute('routes', 'POST', $pattern, $callback);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function patch(string $pattern, Closure|string $callback): void
+    {
+        $this->addHttpRoute('routes', 'PATCH', $pattern, $callback);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function delete(string $pattern, Closure|string $callback): void
+    {
+        $this->addHttpRoute('routes', 'DELETE', $pattern, $callback);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function put(string $pattern, Closure|string $callback): void
+    {
+        $this->addHttpRoute('routes', 'PUT', $pattern, $callback);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function options(string $pattern, Closure|string $callback): void
+    {
+        $this->addHttpRoute('routes', 'OPTIONS', $pattern, $callback);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function any(string $pattern, Closure|string $callback): void
+    {
+        $this->addHttpRoute('routes', self::ANY_METHODS, $pattern, $callback);
     }
 
     /**
@@ -332,14 +353,6 @@ final class Router implements RouterInterface
     /**
      * {@inheritdoc}
      */
-    public function any(string $pattern, Closure|string $callback): void
-    {
-        $this->capture(self::ANY_METHODS, $pattern, $callback);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
     public function bind(string $prefix, Closure $callback): void
     {
         $current = $this->baseGroup;
@@ -409,7 +422,7 @@ final class Router implements RouterInterface
             $exitCode = self::runAsHttp();
         }
 
-        self::$application->__on('onFinish', self::$classInfo);
+        self::$application->__on('onFinish', Luminova::getClassInfo());
         Luminova::profiling('stop', $context);
         exit($exitCode);
     }
@@ -496,23 +509,14 @@ final class Router implements RouterInterface
     }
 
     /**
-     * {@inheritdoc}
-     */
-    public static function getClassInfo(): array
-    {
-        return self::$classInfo;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public static function setClassInfo(string $key, mixed $value): void
-    {
-        self::$classInfo[$key] = $value;
-    }
-
-    /**
-     * {@inheritdoc}
+     * Normalizes predefined patterns in the given input string.
+     *
+     * @param string $input The input string containing placeholders for patterns to be normalized.
+     * @param bool $cli Optional. If true, formats the output for CLI usage by prepending a '/' and trimming leading slashes.
+     * 
+     * @return string The normalized string with placeholders replaced by regular expressions.
+     * @ignore
+     * @see https://luminova.ng/docs/3.3.0/router/placeholders
      */
     public static function normalizePatterns(string $input, bool $cli = false): string
     {
@@ -551,7 +555,6 @@ final class Router implements RouterInterface
         if (file_exists($_ROUTE_CONTEXT_PATH)) {
             require_once $_ROUTE_CONTEXT_PATH;
             $app->__on('onContextInstalled', $context);
-
             $app = $router = null;
             return;
         }
@@ -598,7 +601,7 @@ final class Router implements RouterInterface
     }
 
     /**
-     * Initalize routing system to handle incomming requests.
+     * Initialize routing system to handle incoming requests.
      * 
      * Register the request method, considering method overrides and set proper output handler.
      * 
@@ -987,10 +990,11 @@ final class Router implements RouterInterface
                 // Remove the matched file extension to render the request normally
                 self::$uri = substr(self::$uri, 0, -strlen($matches[0]));
             }elseif($expired === false && self::$weak[self::$application]->read() === true){
-
-                self::$classInfo['staticCache'] = true;
-                self::$classInfo['cache'] = true;
-
+                Luminova::setClassInfo([
+                    'staticCache' => true, 
+                    'cache' => true
+                ]);
+                
                 // Render performance profiling content.
                 Luminova::profiling('stop');
 
@@ -1219,8 +1223,10 @@ final class Router implements RouterInterface
                 ? ($arguments['params'] ?? []) 
                 : $arguments;
             
-            self::$classInfo['namespace'] = '\\Closure';
-            self::$classInfo['method'] = 'function';
+            Luminova::setClassInfo([
+                'namespace' => '\\Closure', 
+                'method' => 'function'
+            ]);
 
             return $callback(...self::injection(
                 $callback, 
@@ -1287,9 +1293,11 @@ final class Router implements RouterInterface
             return STATUS_ERROR;
         }
 
-        self::$classInfo['namespace'] = $namespace;
-        self::$classInfo['method'] = $method;
-        self::$classInfo['uri'] = self::$uri;
+        Luminova::setClassInfo([
+            'namespace' => $namespace, 
+            'method' => $method,
+            'uri' => self::$uri
+        ]);
 
         try {
             $class = new ReflectionClass($namespace);
@@ -1308,7 +1316,7 @@ final class Router implements RouterInterface
                 throw new RouterException(sprintf(
                     'Invalid controller method "%s" return type, routable methods must return any of the status int: %s.',
                     "{$namespace}->{$method}(...)",
-                    'STATUS_SUCCESS, STATUS_ERROR or STATSU_SILENCE'
+                    'STATUS_SUCCESS, STATUS_ERROR or STATUS_SILENCE'
                 ),
                 RouterException::INVALID_CONTROLLER);
             }
@@ -1351,7 +1359,7 @@ final class Router implements RouterInterface
                     if($result !== STATUS_SUCCESS){
                         $failed = $class->getMethod('onMiddlewareFailure');
                         $failed->setAccessible(true);
-                        $failed->invokeArgs($instance, [self::$uri, self::$classInfo]);
+                        $failed->invokeArgs($instance, [self::$uri, Luminova::getClassInfo()]);
                     }
 
                     return $result;
@@ -1675,7 +1683,7 @@ final class Router implements RouterInterface
      * 
      * @return array<string,mixed> $views Return array of command routes parameters as URI.
      */
-    public static function getArguments(): array
+    private static function getArguments(): array
     {
         $views = [
             'view' => '',
@@ -1728,14 +1736,14 @@ final class Router implements RouterInterface
             return;
         }
 
-        self::$classInfo = [
+        Luminova::setClassInfo([
             'filename'    => null,
-            'uri'    => null,
+            'uri'         => null,
             'namespace'   => null,
             'method'      => null,
             'attrFiles'   => 1,
             'cache'       => false,
             'staticCache' => false
-        ];
+        ]);
     }
 }

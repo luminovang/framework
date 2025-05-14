@@ -114,7 +114,7 @@ abstract class BaseConsole
     /**
      * Lazy loaded application instance.
      * 
-     * @var CoreApplication<Application,LazyInterface>|null $app
+     * @var Application<CoreApplication,LazyInterface>|null $app
      */
     protected ?LazyInterface $app = null;
 
@@ -126,7 +126,7 @@ abstract class BaseConsole
     protected ?LazyInterface $term = null;
 
     /**
-     * Initailze console command, register lazy objects and onCreate method hook.
+     * Initialize console command, register lazy objects and onCreate method hook.
      */
     public function __construct()
     {

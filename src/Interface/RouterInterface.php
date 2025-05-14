@@ -18,16 +18,6 @@ use \Luminova\Exceptions\RouterException;
 use \Luminova\Interface\ErrorHandlerInterface;
 use \Closure;
 
-/**
- * Router shorthand methods for capture, to handle http methods by it name.
- *
- * @method void get(string $pattern, Closure|string $callback) Route to handle http `GET` requests.
- * @method void post(string $pattern, Closure|string $callback) Route to handle http `POST` requests.
- * @method void patch(string $pattern, Closure|string $callback) Route to handle http `PATCH` requests.
- * @method void delete(string $pattern, Closure|string $callback) Route to handle http `DELETE` requests.
- * @method void put(string $pattern, Closure|string $callback) Route to handle http `PUT` requests.
- * @method void options(string $pattern, Closure|string $callback) Route to handle http `OPTIONS` requests.
- */
 interface RouterInterface 
 {
     /**
@@ -38,20 +28,64 @@ interface RouterInterface
     public function __construct(CoreApplication $app);
 
     /**
-     * A shorthand for route capture https methods to handle "METHOD" request method.
+     * Route to handle HTTP GET requests.
      *
-     * @param string $method The called method name as HTTP method.
-     * @param array<int,mixed> $arguments The method arguments.
-     * 
-     * Expected arguments:
-     * 
-     *  - string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
-     *  - Closure|string $callback Handle callback for router.
+     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
      * 
      * @return void
-     * @throws RouterException Throw if method does not exist.
      */
-    public function __call(string $method, array $arguments): void;
+    public function get(string $pattern, Closure|string $callback): void;
+
+    /**
+     * Route to handle HTTP POST requests.
+     *
+     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
+     * 
+     * @return void
+     */
+    public function post(string $pattern, Closure|string $callback): void;
+
+    /**
+     * Route to handle HTTP PATCH requests.
+     *
+     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
+     * 
+     * @return void
+     */
+    public function patch(string $pattern, Closure|string $callback): void;
+
+    /**
+     * Route to handle HTTP DELETE requests.
+     *
+     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
+     * 
+     * @return void
+     */
+    public function delete(string $pattern, Closure|string $callback): void;
+
+    /**
+     * Route to handle HTTP PUT requests.
+     *
+     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
+     * 
+     * @return void
+     */
+    public function put(string $pattern, Closure|string $callback): void;
+
+    /**
+     * Route to handle HTTP OPTIONS requests.
+     *
+     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
+     * 
+     * @return void
+     */
+    public function options(string $pattern, Closure|string $callback): void;
 
     /**
      * Initialize application routing with supported context URI prefixing `web`, `cli`, `api`, `console` etc...
@@ -268,54 +302,16 @@ interface RouterInterface
     public static function getNamespaces(): array;
 
     /**
-     * Get the current segment relative URI.
+     * Get the current segment URI.
      * 
      * @return string Return relative paths.
      */
     public static function getUriSegments(): string;
 
     /**
-     * Get segment class instance.
+     * Get request URI segments object.
      * 
-     * @return Segments Segments instance.
+     * @return Segments Return instance of segments with URI info.
      */
     public function getSegment(): Segments;
-
-    /**
-     * Get the routed controller class information.
-     *
-     * @return array<string,string> Return array of controller information.
-     * @internal
-     */
-    public static function getClassInfo(): array;
-
-    /**
-     * Sets information about the routed controller class.
-     *
-     * @param string $key The key under which to store the information.
-     * @param mixed $value The value to store.
-     *
-     * @return void
-     * @internal
-     */
-    public static function setClassInfo(string $key, mixed $value): void;
-
-    /**
-     * Get the current command controller views.
-     * 
-     * @return array<string,mixed> $views Return array of command routes parameters as URI.
-     */
-    public static function getArguments(): array;
-
-    /**
-     * Normalizes predefined patterns in the given input string.
-     *
-     * @param string $input The input string containing placeholders for patterns to be normalized.
-     * @param bool $cli Optional. If true, formats the output for CLI usage by prepending a '/' and trimming leading slashes.
-     * 
-     * @return string The normalized string with placeholders replaced by regular expressions.
-     * @ignore
-     * @see https://luminova.ng/docs/3.3.0/router/placeholders
-     */
-    public static function normalizePatterns(string $input, bool $cli = false): string;
 }

@@ -87,21 +87,21 @@ abstract class BaseController implements RoutableInterface
     /**
      * Lazy loaded HTTP request object.
      * 
-     * @var Request<LazyInterface>|null
+     * @var Request<LazyInterface>|null $request
      */
     protected ?LazyInterface $request = null;
  
     /**
      * Lazy loaded input validation object.
      * 
-     * @var Validation<LazyInterface>|null
+     * @var Validation<LazyInterface>|null $validate
      */
     protected ?LazyInterface $validate = null;
  
     /**
      * Lazy loaded application instance.
      * 
-     * @var CoreApplication<Application,LazyInterface>|null $app
+     * @var Application<CoreApplication,LazyInterface>|null $app
      */
     protected ?LazyInterface $app = null;
 
