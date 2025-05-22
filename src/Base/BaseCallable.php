@@ -18,14 +18,14 @@ abstract class BaseCallable
     /**
      * Resisted callback.
      *  
-     * @var Closure|callable|null $callback
-    */
+     * @var callable|null $callback
+     */
     protected mixed $callback = null;
 
     /**
      * Constructor to initialize the callback.
      *
-     * @param Closure|callable|null $callback The closure or callable to be executed (default: null).
+     * @param callable|null $callback The closure or callable to be executed (default: null).
      * 
      * @example - Extending the base callback class:
      * 
@@ -56,7 +56,7 @@ abstract class BaseCallable
      * (new Foo())->feedMeCallback(new CustomCallback());
      * ```
      */
-    public function __construct(Closure|callable|null $callback = null)
+    public function __construct(?callable $callback = null)
     {
         $this->callback = $callback;
     }
@@ -90,12 +90,12 @@ abstract class BaseCallable
     /**
      * Set the callback function.
      *
-     * @param Closure|callable $callback The closure or callable to be executed.
+     * @param callable $callback The closure or callable to be executed.
      * @return void
      * 
      * > The set method does not support chaining of multiple callbacks.
      */
-    public function set(Closure|callable $callback): void
+    public function set(callable $callback): void
     {
         $this->callback = $callback;
     }
@@ -103,9 +103,9 @@ abstract class BaseCallable
     /**
      * Get the stored callback function.
      *
-     * @return Closure|callable|null The closure or callable function.
+     * @return ?callable|null The closure or callable function.
      */
-    public function get(): Closure|callable|null
+    public function get(): ?callable
     {
         return $this->callback;
     }

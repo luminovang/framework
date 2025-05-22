@@ -979,7 +979,9 @@ final class Router implements RouterInterface
         // Supported extension types to match.
         $types = env('page.caching.statics', false);
         if ($types && $types !== '' && preg_match('/\.(' . $types . ')$/i', self::$uri, $matches)) {
-            self::$weak[self::$application] = new TemplateCache(0, root(rtrim((new Template())->cacheFolder, TRIM_DS) . '/default/'));
+            self::$weak[self::$application] = new TemplateCache(
+                0, root(rtrim((new Template())->cacheFolder, TRIM_DS) . '/default/')
+            );
 
             // If expiration return mismatched int code 404 ignore and do not try to replace to actual url.
             $expired = self::$weak[self::$application]->setKey(Luminova::getCacheId())
@@ -1013,7 +1015,7 @@ final class Router implements RouterInterface
      * @param array $routes Collection of route patterns and their handling functions.
      * @param string $uri The view request URI path.
      *
-     * @return int Return status code
+     * @return int Return status code.
      * @throws RouterException if method is not callable or doesn't exist.
      */
     private static function handleWebsite(array $routes, string $uri): int
@@ -1096,7 +1098,7 @@ final class Router implements RouterInterface
     /**
      * Dependency injection and parameter casting.
      *
-     * @param Closure|callable-string $caller Class method or callback closure.
+     * @param ReflectionMethod|callable $caller Class method or callback closure.
      * @param string[] $arguments Method arguments to pass to callback method.
      * @param bool $injection Force use of dependency injection.
      *
@@ -1104,7 +1106,7 @@ final class Router implements RouterInterface
      * @internal 
      */
     private static function injection(
-        Closure|ReflectionMethod|string $caller, 
+        ReflectionMethod|callable $caller, 
         array $arguments = [], 
         bool $injection = false
     ): array

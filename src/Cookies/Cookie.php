@@ -10,68 +10,89 @@
  */
 namespace Luminova\Cookies;
 
-use \Luminova\Cookies\CookieTrait;
+use \Luminova\Cookies\BaseCookie;
 use \App\Config\Cookie as CookieConfig;
 use \Luminova\Time\Time;
-use \Luminova\Interface\LazyInterface;
 use \Luminova\Interface\CookieInterface;
 use \Luminova\Exceptions\CookieException;
 use \Stringable;
 
-class Cookie implements CookieInterface, LazyInterface, Stringable
+class Cookie extends BaseCookie implements CookieInterface, Stringable
 {
     /**
-     * @var string $prefix Cookie prefix
+     * Cookie prefix.
+     * 
+     * @var string $prefix
      */
     protected string $prefix = '';
 
     /**
-     * @var string $name Cookie name.
+     * Cookie name.
+     * 
+     * @var string $name 
      */
     protected string $name = '';
 
     /**
-     * @var mixed $value Cookie value.
+     * Cookie value.
+     * 
+     * @var mixed $value 
      */
     protected mixed $value = '';
 
     /**
-     * @var int $expires Cookie expiration time.
+     * Cookie expiration time.
+     * 
+     * @var int $expires
      */
     protected int $expires = 0;
 
     /**
-     * @var string $path Cookie path.
+     * Cookie path.
+     * 
+     * @var string $path
      */
     protected string $path = '/';
 
     /**
-     * @var string $domain Cookie domain
+     * Cookie domain.
+     * 
+     * @var string $domain
      */
     protected string $domain = '';
 
     /**
-     * @var bool $secure Cookie is secure.
+     * Cookie is secure.
+     * 
+     * @var bool $secure
      */
     protected bool $secure = false;
 
     /**
-     * @var bool $httpOnly Cookie http only.
+     * Cookie http only.
+     * 
+     * @var bool $httpOnly
      */
     protected bool $httpOnly = true;
 
     /**
-     * @var string $sameSite Cookie same site attribute.
+     * Cookie same site attribute.
+     * 
+     * @var string $sameSite
      */
     protected string $sameSite = 'Lax';
 
     /**
-     * @var bool $raw Is cookie raw enabled
+     * Is cookie raw enabled.
+     * 
+     * @var bool $raw
      */
     protected bool $raw = false;
 
     /**
-     * @var array<string, mixed> $options Cookie options.
+     * Cookie options.
+     * 
+     * @var array<string,mixed> $options
      */
     protected array $options = [];
 
@@ -81,11 +102,6 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
      * @var ?CookieConfig $config
      */
     private static ?CookieConfig $config = null;
-
-    /**
-     * Cookie helper trait class.
-     */
-    use CookieTrait;
 
     /**
      * Initialize and create new cookie object.
@@ -284,9 +300,9 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
     /** 
      * {@inheritdoc}
      */
-    public function getExpiry(bool $return_string = false): int|string
+    public function getExpiry(bool $returnString = false): int|string
     {
-        return $return_string 
+        return $returnString 
             ? gmdate(self::EXPIRES_FORMAT, $this->expires) 
             : $this->expires;
     }
@@ -480,6 +496,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
      *
      * If `$raw` is true, names should not contain invalid characters as `setrawcookie()` will reject it.
      *
+     * @return void
      * @throws CookieException If Invalid Cookie Name or empty string is passed.
      */
     private function validateName(): void
@@ -496,6 +513,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
     /**
      * Validates the special prefixes if some attribute requirements are met.
      *
+     * @return void
      * @throws CookieException If invalid attribute prefix are passed.
      */
     private function validatePrefix(): void
@@ -512,8 +530,9 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
     /**
      * Validates the `SameSite` to be within the allowed types.
      *
+     * @return void
      * @throws CookieException If invalid same-site was passed.
-     *
+     * 
      * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite
      */
     private function validateSameSite(): void
@@ -540,7 +559,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
      * 
      * @param string $key option key.
      * 
-     * @return mixed $option
+     * @return mixed Return the option value after passing.
      */
     private function passOption(string $key): mixed 
     {
@@ -583,7 +602,7 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
      * @param ?int $expiry cookie expiration
      * @param array $options cookie options
      * 
-     * @return void
+     * @return bool Return true if cookie was saved.
      */
     private function saveContent(string $value = '', ?int $expiry = null, array $options = []): bool
     {
@@ -605,8 +624,8 @@ class Cookie implements CookieInterface, LazyInterface, Stringable
     /**
      * Save cookie to global variables
      *
-     * @param string $name cookie name.
-     * @param string $value contents.
+     * @param string $name The cookie name.
+     * @param string $value The contents.
      * 
      * @return void
      */

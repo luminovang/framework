@@ -65,10 +65,23 @@ class Storage extends Adapters
     private string $filename = '';
 
     /**
-     * Constructs a new `Storage` instance with the specified adapter.
-     * 
-     * @param string $adapter The storage adapter to use.
-     * Supported Storage Adapters: [local, ftp, memory, aws-s3, aws-async-s3, azure-blob, google-cloud, sftp-v3, web-dev or zip-archive]
+     * Constructs a new `Storage` instance using the specified storage adapter.
+     *
+     * This initializes the storage system with the given adapter and its configuration.
+     *
+     * Supported Adapters:
+     * - `local`
+     * - `ftp`
+     * - `memory`
+     * - `aws-s3`
+     * - `aws-async-s3`
+     * - `azure-blob`
+     * - `google-cloud`
+     * - `sftp-v3`
+     * - `web-dev`
+     * - `zip-archive`
+     *
+     * @param string $adapter The name of the storage adapter to use.
      */
     public function __construct(string $adapter)
     {
@@ -85,25 +98,43 @@ class Storage extends Adapters
     }
 
     /**
-     * Creates a new `Storage` instance for the specified adapter context.
-     * 
-     * @param string $adapter The storage adapter context.
-     * Supported Storage Adapters: [local, ftp, memory, aws-s3, aws-async-s3, azure-blob, google-cloud, sftp-v3, web-dev or zip-archive]
-     * 
-     * @return static The New `Storage` instance.
+     * Creates a new `Storage` instance for the given adapter context.
+     *
+     * Provides a convenient way to instantiate the `Storage` class with a specific storage backend.
+     * Defaults to the local adapter if none is provided.
+     *
+     * Supported Adapters:
+     * - `local`
+     * - `ftp`
+     * - `memory`
+     * - `aws-s3`
+     * - `aws-async-s3`
+     * - `azure-blob`
+     * - `google-cloud`
+     * - `sftp-v3`
+     * - `web-dev`
+     * - `zip-archive`
+     *
+     * @param string $adapter The storage adapter context. Defaults to `local`.
+     *
+     * @return static Return a new instance of the `Storage` class.
      */
-    public static function context(string $adapter = 'local'): self
+    public static function context(string $adapter = parent::LOCAL): self
     {
         return new self($adapter);
     }
 
     /**
-     * Creates a new storage disk / directory.
-     * 
-     * @param string $location The disk path or name.
-     * 
-     * @return self Return class instance.
-     * @throws StorageException If an error occurs during the creation.
+     * Sets the working directory and creates it if it doesn't exist.
+     *
+     * This method changes the current working directory to the specified `$location`.
+     * If the directory does not exist, it will be automatically created.
+     *
+     * @param string $location The target disk path or directory name. Must not be blank or a relative symbol (`.`, `./`).
+     *
+     * @return self Returns the instance of storage class.
+     *
+     * @throws StorageException If the path is invalid or the directory creation fails.
      */
     public function disk(string $location): self 
     {
@@ -111,19 +142,19 @@ class Storage extends Adapters
             throw new StorageException('Disk method doesn\'t support blank string or patterns "' . $location . '".');
         }
 
-        $this->chdir($location)->mkdir(null);
+        $this->chdir($location)->mkdir();
 
         return $this;
     }
 
     /**
-     * Change to another storage directory.
-     * 
-     * @param string $directory The new current directory
-     * 
-     * @return self Return class instance.
-     * 
-     * > Shortcut to return to the main storage directory are `blank string`, `.` or `./`.
+     * Changes the current working storage directory.
+     *
+     * If the provided `$directory` is an empty string, `.` or `./`, it resets back to the main storage root.
+     *
+     * @param string $directory The new relative directory path. Use an empty string, `.` or `./` to return to root.
+     *
+     * @return self Returns the instance of storage class.
      */
     public function chdir(string $directory = './'): self 
     {
@@ -189,7 +220,7 @@ class Storage extends Adapters
      */
     public function symbolic(string $target, string $link): bool
     {
-        if($this->adapter !== 'local'){
+        if($this->adapter !== parent::LOCAL){
             return false;
         }
 
@@ -210,7 +241,7 @@ class Storage extends Adapters
      */
     public function toLink(): string|bool
     {
-        if($this->filename === '' || $this->adapter !== 'local'){
+        if($this->filename === '' || $this->adapter !== parent::LOCAL){
             return false;
         }
 
@@ -603,17 +634,23 @@ class Storage extends Adapters
     }
 
     /**
-     * Creates a new directory in the current working `disk` or `chdir`.
-     * 
-     * @param string $path The path of the directory to create.
-     * 
-     * @throws StorageException If an error occurs during the creation.
+     * Create a directory in the current working path.
+     *
+     * If no path is provided, the method will use the value set via `chdir()`.
+     *
+     * @param string|null $path Optional directory path to create. If null, the previously set working path is used.
+     *
+     * @throws StorageException If the directory creation fails.
      */
-    public function mkdir(string|null $path): void 
+    public function mkdir(?string $path = null): void 
     {
-        $path ??= '';
         try {
-            $path = $this->getDisk($path);
+            $path = $this->getDisk($path ?? '');
+
+            if($this->filesystem->directoryExists($path)){
+                return;
+            }
+
             $this->filesystem->createDirectory($path, self::$configs['default']);
         } catch (Exception $e) {
             StorageException::throwException($e->getMessage(), $e->getCode(), $e);
@@ -656,7 +693,6 @@ class Storage extends Adapters
         }
     }
 
-
     /**
      * Retrieves the configurations for the specified context.
      * 
@@ -664,7 +700,7 @@ class Storage extends Adapters
      * 
      * @return array<int,mixed> The configurations for the context.
      */
-    private static function getConfigs(string $context = 'local'): array 
+    private static function getConfigs(string $context = parent::LOCAL): array 
     {
         if(self::$configs === [] && ($config = configs('Storage')) !== null){
             self::$configs = $config;

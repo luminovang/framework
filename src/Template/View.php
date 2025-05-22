@@ -39,9 +39,9 @@ trait View
     /**
      * Supported view types.
      *
-     * @var string[] SUPPORTED_TYPES
+     * @var string[] $SUPPORTED_TYPES
      */
-    private const SUPPORTED_TYPES = [
+    private static array $SUPPORTED_TYPES = [
         'html', 'json', 'text', 
         'txt', 'xml', 'js', 'bin',
         'css', 'rdf', 'atom', 'rss'
@@ -584,12 +584,12 @@ trait View
         $viewName = trim($viewName, '/');
         $viewType = strtolower($viewType);
     
-        if(!in_array($viewType, self::SUPPORTED_TYPES, true)){
+        if(!in_array($viewType, self::$SUPPORTED_TYPES, true)){
             throw new RuntimeException(sprintf(
                 'Invalid argument, unsupported view type: "%s" for view: "%s", supported types (%s). To render other formats use helper function `response()->render()`', 
                 $viewType, 
                 $viewName,
-                implode(', ', self::SUPPORTED_TYPES)
+                implode(', ', self::$SUPPORTED_TYPES)
             ), RuntimeException::INVALID_ARGUMENTS);
         }
 

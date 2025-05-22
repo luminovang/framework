@@ -596,7 +596,7 @@ abstract class BaseModel implements LazyInterface
             $prefix .= implode(',', $fields);
         }
 
-        if ($key !== null && $key !== '' && $key !== []) {
+        if ($key && $key !== []) {
             // Convert $key to an array if it's not already one
             $key = (array) $key;
             sort($key);

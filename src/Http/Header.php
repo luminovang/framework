@@ -38,6 +38,20 @@ class Header implements LazyInterface, Countable
     ];
 
     /**
+     * Proxy headers.
+     * 
+     * @var array $proxyHeaders
+     */
+    private static array $proxyHeaders = [
+        'X-Forwarded-For'       => 'HTTP_X_FORWARDED_FOR',
+        'X-Forwarded-For-Ip'    => 'HTTP_FORWARDED_FOR_IP',
+        'X-Real-Ip'             => 'HTTP_X_REAL_IP',
+        'Via'                   => 'HTTP_VIA',
+        'Forwarded'             => 'HTTP_FORWARDED',
+        'Proxy-Connection'      => 'HTTP_PROXY_CONNECTION'
+    ];
+
+    /**
      * Header variables.
      * 
      * @var array<string,mixed> $variables
@@ -313,6 +327,24 @@ class Header implements LazyInterface, Countable
     }
 
     /**
+     * Determine of a request if from proxy. 
+     * 
+     * This method check command headers if present then request is considered likely a proxy.
+     * 
+     * @return bool Return true if found matched header, false otherwise.
+     */
+    public function isProxy(): bool
+    {
+        foreach (self::$proxyHeaders as $head => $server) {
+            if ($this->exist($head, $server)){
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
      * Parse and validate REST API headers.
      * 
      * @param array<string,mixed> &$headers Headers passed by reference.
@@ -412,7 +444,7 @@ class Header implements LazyInterface, Countable
     {
         $charset ??= env('app.charset', 'utf-8');
 
-        return self::getContentTypes($extension, 0) . ($charset === '' ?: '; charset=' . $charset);
+        return self::getContentTypes($extension, 0) . (($charset === '') ? '' : '; charset=' . $charset);
     }
 
     /**
@@ -484,7 +516,7 @@ class Header implements LazyInterface, Countable
 
         if ($handler) {
             if (str_contains($handler, 'gzip')) {
-                if (ini_get('zlib.output_compression') != '1') {
+                if (ini_get('zlib.output_compression') !== '1') {
                     return ob_start('ob_gzhandler');
                 }
 

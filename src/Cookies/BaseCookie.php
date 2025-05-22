@@ -10,16 +10,19 @@
  */
 namespace Luminova\Cookies;
 
+use \Luminova\Interface\LazyInterface;
 use \App\Config\Cookie as CookieConfig;
 use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
 
-trait CookieTrait
+abstract class BaseCookie implements LazyInterface
 {
     /**
      * Cookies will be sent in all contexts, i.e., in responses to both
      * third-party and cross-origin requests. If `SameSite=None` is set,
      * the cookie `Secure` attribute must also be set (or the cookie will be blocked).
+     * 
+     * @var string NONE
      */
     public const NONE = 'none';
 
@@ -27,12 +30,16 @@ trait CookieTrait
      * Cookies are not sent on normal cross-site sub-requests (for example to
      * load images or frames into a third-party site), but are sent when a
      * user is navigating to the origin site (i.e., when following a link).
+     * 
+     * @var string LAX
      */
     public const LAX = 'lax';
 
     /**
      * Cookies will only be sent in a third-party context and not be sent
      * along with requests initiated by third-party websites.
+     * 
+     * @var string STRICT
      */
     public const STRICT = 'strict';
 
@@ -41,6 +48,8 @@ trait CookieTrait
      *
      * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Date
      * @see https://tools.ietf.org/html/rfc7231#section-7.1.1.2
+     * 
+     * @var string EXPIRES_FORMAT
      */
     public const EXPIRES_FORMAT = 'D, d-M-Y H:i:s T';
 
@@ -50,13 +59,15 @@ trait CookieTrait
      *
      * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#attributes
      * @see https://tools.ietf.org/html/rfc2616#section-2.2
+     * 
+     * @var string RESERVED_CHAR_LIST
      */
     public const RESERVED_CHAR_LIST = "=,; \t\r\n\v\f()<>@:\\\"/[]?{}";
 
     /**
      * Cookie default options.
      * 
-     * @var array DEFAULT_OPTIONS
+     * @var array<string,mixed> DEFAULT_OPTIONS
      */
     public const DEFAULT_OPTIONS = [
         'prefix' => '',
@@ -68,6 +79,14 @@ trait CookieTrait
         'samesite' => 'Lax',
         'raw'      => false,
     ];
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function getName(): ?string
+    {
+        return '';
+    }
 
     /** 
      * {@inheritdoc}
@@ -94,7 +113,7 @@ trait CookieTrait
      * @param string $prefix The prefix to prepend to the cookie name.
      * @param array $option Additional options for the cookie (e.g., path, domain, expiration).
      * 
-     * @return string The formatted cookie string.
+     * @return string Return the formatted cookie string.
      */
     protected function parseToString(mixed $value, string $prefix,  array $option): string
     {
@@ -155,7 +174,7 @@ trait CookieTrait
      * @param CookieConfig|array $options Cookie configuration options.
      * @param array|null $default Default values for options if not provided.
      * 
-     * @return array The normalized options array.
+     * @return array<string,mixed> Return the normalized options array.
      */
     protected static function parseOptions(CookieConfig|array $options, ?array $default = null): array
     {
@@ -184,7 +203,7 @@ trait CookieTrait
      * @param bool $raw Whether to handle the cookie name and value as raw data.
      * @param array $options Additional options for the cookie.
      * 
-     * @return array An array containing the cookie name, value, and parsed options.
+     * @return array<int,mixed> Return an array containing the cookie name, value, and parsed options.
      */
     protected static function parseFromString(
         string $cookie, 
@@ -221,7 +240,7 @@ trait CookieTrait
      * @param string $prefix The prefix to prepend.
      * @param bool $raw Whether to treat the name as raw data (skip encoding).
      * 
-     * @return string The prefixed and encoded cookie name.
+     * @return string Return the prefixed and encoded cookie name.
      */
     protected static function parsePrefixName(string $name, string $prefix, bool $raw = false): string
     {
@@ -243,7 +262,7 @@ trait CookieTrait
      * @param string $key The key to retrieve.
      * @param array $option The options array.
      * 
-     * @return mixed The value of the key, or null if not set.
+     * @return mixed Return the value of the key, or null if not set.
      */
     protected static function _getter(string $key, array $option): mixed
     {

@@ -289,7 +289,7 @@ class Process
     /**
      * Creates a Process instance with a callback.
      *
-     * @param callable|Closure $callable The callable to be executed.
+     * @param callable $callable The callable to be executed.
      * 
      * @return self Return new static process instance.
      */

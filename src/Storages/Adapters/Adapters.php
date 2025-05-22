@@ -47,10 +47,72 @@ use \League\Flysystem\ZipArchive\FilesystemZipArchiveProvider as ZipClient;
 
 class Adapters
 {
+    /**
+     * Local filesystem storage.
+     * Used for saving files on the local server.
+     */
+    public const LOCAL = 'local';
+
+    /**
+     * FTP-based storage.
+     * Used for file transfers via standard FTP protocol.
+     */
+    public const FTP = 'ftp';
+
+    /**
+     * In-memory storage.
+     * Temporary storage ideal for fast read/write operations, non-persistent.
+     */
+    public const MEMORY = 'memory';
+
+    /**
+     * Amazon S3 storage (synchronous).
+     * Uses AWS S3 SDK to store and retrieve files in S3 buckets.
+     */
+    public const AWS_S3 = 'aws-s3';
+
+    /**
+     * Amazon S3 storage (asynchronous).
+     * For background uploads to S3, allowing non-blocking storage operations.
+     */
+    public const AWS_ASYNC_S3 = 'aws-async-s3';
+
+    /**
+     * Azure Blob Storage.
+     * Microsoft's cloud-based object storage solution for unstructured data.
+     */
+    public const AZURE_BLOB = 'azure-blob';
+
+    /**
+     * Google Cloud Storage.
+     * Google’s scalable object storage service for various content types.
+     */
+    public const GOOGLE_CLOUD = 'google-cloud';
+
+    /**
+     * SFTP v3-based storage.
+     * Secure file transfer using the SFTP (SSH File Transfer Protocol) version 3.
+     */
+    public const SFTP_V3 = 'sftp-v3';
+
+    /**
+     * WebDAV-based storage.
+     * File management using the Web Distributed Authoring and Versioning protocol.
+     */
+    public const WEB_DEV = 'web-dev';
+
+    /**
+     * ZIP archive storage.
+     * Stores files inside a compressed ZIP archive for packaging or export.
+     */
+    public const ZIP_ARCHIVE = 'zip-archive';
+
     /** 
-     * @var mixed|null $client Client instance 
-    */
-    private static mixed $client = null;
+     * Storage client instance.
+     * 
+     * @var object<\T>|null $client
+     */
+    private static ?object $client = null;
 
     /**
      * Available storage adapters.
@@ -58,25 +120,25 @@ class Adapters
      * @var array $libraries
      */
     protected static array $libraries = [
-        'local' => [LocalAdapter::class],
-        'ftp' => [FtpAdapter::class, FtpConnectionOptions::class],
-        'memory' => [MemoryAdapter::class, ReadOnlyAdapter::class],
-        'aws-s3' => [AwsS3V3Adapter::class, S3Client::class],
-        'aws-async-s3' => [AsyncAwsS3Adapter::class, S3AsyncClient::class],
-        'azure-blob' => [AzureBlobAdapter::class, BlobRestProxy::class],
-        'google-cloud' => [GoogleCloudAdapter::class, GoggleClient::class],
+        self::LOCAL => [LocalAdapter::class],
+        self::FTP => [FtpAdapter::class, FtpConnectionOptions::class],
+        self::MEMORY => [MemoryAdapter::class, ReadOnlyAdapter::class],
+        self::AWS_S3 => [AwsS3V3Adapter::class, S3Client::class],
+        self::AWS_ASYNC_S3 => [AsyncAwsS3Adapter::class, S3AsyncClient::class],
+        self::AZURE_BLOB => [AzureBlobAdapter::class, BlobRestProxy::class],
+        self::GOOGLE_CLOUD => [GoogleCloudAdapter::class, GoggleClient::class],
         //'sftp-v2' => [SftpV2Adapter::class, SftpV2Client::class],
-        'sftp-v3' => [SftpV3Adapter::class, SftpV3Client::class],
-        'web-dev' => [WebDAVAdapter::class, WebDevClient::class],
-        'zip-archive' => [ZipAdapter::class, ZipClient::class]
+        self::SFTP_V3 => [SftpV3Adapter::class, SftpV3Client::class],
+        self::WEB_DEV => [WebDAVAdapter::class, WebDevClient::class],
+        self::ZIP_ARCHIVE => [ZipAdapter::class, ZipClient::class]
     ];
     
     /**
      * Get the storage client instance.
      * 
-     * @return mixed The client instance.
+     * @return object<\T> The client instance.
      */
-    public function getClient(): mixed
+    public function getClient(): ?object
     {
         return self::$client;
     }
@@ -94,7 +156,7 @@ class Adapters
         $basePath = $config['base'] ?? '';
 
         switch ($adapter) {
-            case 'local':
+            case self::LOCAL:
                 $visibility = isset($config['visibility']) ? UnixVisibility::fromArray($config['visibility']): null;
                 $disallow = $config['disallow_links'] ? LocalAdapter::DISALLOW_LINKS : LocalAdapter::SKIP_LINKS;
                 return new LocalAdapter(
@@ -103,12 +165,12 @@ class Adapters
                     $config['lock_flags'] ?? LOCK_EX, 
                     $disallow
                 );
-            case 'ftp':
+            case self::FTP:
                 return new FtpAdapter(FtpConnectionOptions::fromArray($config));
-            case 'memory':
+            case self::MEMORY:
                 $adapter = new MemoryAdapter();
                 return $config['readonly'] ? new ReadOnlyAdapter($adapter) : $adapter;
-            case 'aws-s3':
+            case self::AWS_S3:
                 self::$client = new S3Client($config['configuration']);
                 return new AwsS3V3Adapter(
                     self::$client, 
@@ -116,7 +178,7 @@ class Adapters
                     $basePath, 
                     new AwsVisibility($config['visibility'] ?? 'public')
                 );
-            case 'aws-async-s3':
+            case self::AWS_ASYNC_S3:
                 self::$client = new S3AsyncClient($config['configuration']);
                 return new AsyncAwsS3Adapter(
                     self::$client, 
@@ -124,7 +186,7 @@ class Adapters
                     $basePath, 
                     new AwsVisibility($config['visibility'] ?? 'public')
                 );
-            case 'azure-blob':
+            case self::AZURE_BLOB:
                 self::$client = BlobRestProxy::createBlobService($config['dns'] ?? '');
                 return new AzureBlobAdapter(self::$client, $config['container'] ?? '', $basePath);
             case 'google-cloud':
@@ -136,20 +198,20 @@ class Adapters
 
                 self::$client = new GoggleClient($config['configuration']);
                 return new GoogleCloudAdapter(self::$client->bucket($config['bucket']), $basePath);
-            case 'web-dev':
+            case self::WEB_DEV:
                 self::$client = new Client([
                     'baseUri' => $config['baseurl'],
                     'userName' => $config['username'],
                     'password' => $config['password']
                 ]);
                 return new WebDAVAdapter(self::$client);
-            case 'sftp-v3':
+            case self::SFTP_V3:
                 $visibility = isset($config['visibility']) ? UnixVisibility::fromArray($config['visibility']): null;
                 return new SftpV3Adapter(self::newSftpProvider(3, $config), $config['root'], $visibility); 
             /*case 'sftp-v2':
                 $visibility = isset($config['visibility']) ? UnixVisibility::fromArray($config['visibility']): null;
                 return new SftpV2Adapter(self::newSftpProvider(2, $config), $config['root'], $visibility); */
-            case 'zip-archive':
+            case self::ZIP_ARCHIVE:
                 self::$client = new ZipClient($config['path']);
                 return new ZipAdapter(self::$client);
             default:

@@ -777,22 +777,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function isProxy(): bool 
     {
-        $headers = [
-            'X-Forwarded-For' => 'HTTP_X_FORWARDED_FOR',
-            'X-Forwarded-For-Ip' => 'HTTP_FORWARDED_FOR_IP',
-            'X-Real-Ip' => 'HTTP_X_REAL_IP',
-            'Via' => 'HTTP_VIA',
-            'Forwarded' => 'HTTP_FORWARDED',
-            'Proxy-Connection' => 'HTTP_PROXY_CONNECTION'
-        ];
-
-        foreach ($headers as $head => $server) {
-            if ($this->header->exist($head, $server)) {
-                return true;
-            }
-        }
-        
-        return false;
+        return $this->header->isProxy();
     }
 
     /**

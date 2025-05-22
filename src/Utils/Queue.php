@@ -83,7 +83,7 @@ final class Queue implements Countable
     /**
      * Response callback handler.
      * 
-     * @var Closure|callable|null $callback
+     * @var callable|null $callback
      */
     private mixed $callback = null;
 
@@ -139,7 +139,7 @@ final class Queue implements Countable
     /**
      * Initializes asynchronous queue with optional jobs, output settings, and error reporting mode.
      *
-     * @param array<int,Closure|callable|string> $jobs An array of jobs to execute. Each job can be a closure, callable, or string.
+     * @param array<int,callable|string> $jobs An array of jobs to execute. Each job can be a closure, callable, or string.
      * @param bool $output Whether to display the result of executed jobs if they return a string (default: false).
      * @param int $eReporting Determines how execution messages and errors are handled (default: `Queue::E_OUTPUT`).
      *
@@ -174,7 +174,7 @@ final class Queue implements Countable
     /**
      * Singleton method to run asynchronous queued tasks.
      *
-     * @param array<int,Closure|callable|string> $jobs An array of jobs to execute. Each job can be a closure, callable, or string.
+     * @param array<int,callable|string> $jobs An array of jobs to execute. Each job can be a closure, callable, or string.
      * @param bool $output Whether to display the result of executed jobs if they return a string (default: false).
      * @param int $eReporting Determines how execution messages and errors are handled (default: `Queue::E_OUTPUT`).
      *
@@ -198,12 +198,12 @@ final class Queue implements Countable
     /**
      * Push a new job queue, either closure, any callable or string to be executed.
      *
-     * @param Closure|callable|string $item The item to enqueue.
+     * @param callable|string $item The item to enqueue.
      * @param string|int|null $id Optional job identifier (default: null).
      *
      * @return void
      */
-    public function push(Closure|callable|string $item, string|int|null $id = null): void
+    public function push(callable|string $item, string|int|null $id = null): void
     {
         $this->jobs[] = ($id === null)
             ? $item
@@ -216,7 +216,7 @@ final class Queue implements Countable
      * If Fibers are not available, it attempts process forking (if supported) 
      * or executes jobs directly in a blocking manner.
      *
-     * @param Closure|callable|null $callback Optional callback function executed after the queue finishes processing.
+     * @param callable|null $callback Optional callback function executed after the queue finishes processing.
      * @param int $timeout Maximum time to wait for execution in seconds (default: 0 for no timeout).
      * 
      * @return void
@@ -568,7 +568,7 @@ final class Queue implements Countable
     /**
      * Return a new Queue instance.
      * 
-     * @param array<int,Closure|callable|string> $job Jobs to initialize the new Queue instance.
+     * @param array<int,callable|string> $job Jobs to initialize the new Queue instance.
      * @param int $index The job index.
      * 
      * @return Queue Return new Queue instance.
@@ -581,7 +581,7 @@ final class Queue implements Countable
      /**
      * Return a new Queue instance.
      * 
-     * @param array<int,Closure|callable|string> $job Jobs to initialize the new Queue instance.
+     * @param array<int,callable|string> $job Jobs to initialize the new Queue instance.
      * 
      * @return self Return new Queue instance.
      */

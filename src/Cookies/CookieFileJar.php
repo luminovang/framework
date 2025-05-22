@@ -10,9 +10,8 @@
  */
 namespace Luminova\Cookies;
 
+use \Luminova\Cookies\BaseCookie;
 use \Luminova\Interface\CookieJarInterface;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Cookies\CookieTrait;
 use \App\Config\Cookie as CookieConfig;
 use \Luminova\Time\Time;
 use \Luminova\Exceptions\CookieException;
@@ -21,12 +20,12 @@ use \JsonException;
 use \Stringable;
 use \Countable;
 
-class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Countable
+class CookieFileJar extends BaseCookie implements CookieJarInterface, Stringable, Countable
 {
     /**
      * Cookies. 
      * 
-     * @var array $cookies
+     * @var array<string,mixed> $cookies
      */
     private array $cookies = [];
 
@@ -46,13 +45,6 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
     ];
 
     /**
-     * Cookie value. 
-     * 
-     * @var mixed $value
-     */
-    private mixed $value = null;
-
-    /**
      * Cookie size. 
      * 
      * @var mixed $value
@@ -65,18 +57,6 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
      * @var string|null $filePath
      */
     private ?string $filePath = null;
-
-    /**
-     * Cookie class instance.
-     * 
-     * @var self $instance
-     */
-    private static ?self $instance = null;
-
-    /**
-     * Cookie helper trait class.
-     */
-    use CookieTrait;
 
     /**
      * Constructor to initialize cookies from a file path or an array.
@@ -340,12 +320,12 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
     /** 
      * {@inheritdoc}
      */
-    public function getValue(bool $as_array = false): mixed
+    public function getValue(bool $asArray = false): mixed
     {
         $this->assertName(__FUNCTION__);
         $value = $this->cookies[$this->config['name']]['value'] ?? null;
 
-        if(!$value || !$as_array){
+        if(!$value || !$asArray){
             return $value;
         }
 
@@ -423,10 +403,10 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
     /** 
      * {@inheritdoc}
      */
-    public function getExpiry(bool $return_string = false): int|string
+    public function getExpiry(bool $returnString = false): int|string
     {
         $expiry = strtotime($this->getOption('expires') ?? '0');
-        return $return_string
+        return $returnString
             ? gmdate(self::EXPIRES_FORMAT, $expiry) 
             : $expiry;
     }
@@ -779,9 +759,8 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
      * 
      * @param string|array $from Either a file path to load cookies from, or an array of cookie data.
      *
-     * @throws CookieException If an invalid file path is provided.
-     *
      * @return void
+     * @throws CookieException If an invalid file path is provided
      */
     private function initCookies(string|array $from): void 
     {
@@ -830,7 +809,10 @@ class CookieFileJar implements CookieJarInterface, LazyInterface, Stringable, Co
             return [$info['host'] ?? '', '/'];
         }
         
-        return [$info['host'] ?? '', substr($path, 0, strrpos($path, '/') ?: 1)];
+        return [
+            $info['host'] ?? '', 
+            substr($path, 0, strrpos($path, '/') ?: 1)
+        ];
     }
 
     /**

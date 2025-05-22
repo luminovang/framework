@@ -23,21 +23,21 @@ abstract class BaseCache implements LazyInterface
     /**
      * Cache expiry time 7 days.
      * 
-     * @var int TTL_7DAYS constant
+     * @var int TTL_7DAYS
      */
     public const TTL_7DAYS = 7 * 24 * 60 * 60;
 
     /**
      * Cache expiry time 24 hours.
      * 
-     * @var int TTL_24HR constant
+     * @var int TTL_24HR
     */
     public const TTL_24HR = 24 * 60 * 60;
 
     /**
      * Cache expiry time 30 minutes.
      * 
-     * @var int TTL_30MIN constant
+     * @var int TTL_30MIN
     */
     public const TTL_30MIN = 30 * 60;
 

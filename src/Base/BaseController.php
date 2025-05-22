@@ -13,6 +13,8 @@ namespace Luminova\Base;
 
 use \Luminova\Interface\RoutableInterface;
 use \Luminova\Interface\LazyInterface;
+use \Luminova\Interface\ValidationInterface;
+use \Luminova\Interface\HttpRequestInterface;
 use \Luminova\Core\CoreApplication;
 use \Luminova\Http\Request;
 use \Luminova\Security\Validation;
@@ -87,14 +89,14 @@ abstract class BaseController implements RoutableInterface
     /**
      * Lazy loaded HTTP request object.
      * 
-     * @var Request<LazyInterface>|null $request
+     * @var Request<HttpRequestInterface,LazyInterface>|null $request
      */
     protected ?LazyInterface $request = null;
  
     /**
      * Lazy loaded input validation object.
      * 
-     * @var Validation<LazyInterface>|null $validate
+     * @var Validation<ValidationInterface,LazyInterface>|null $validate
      */
     protected ?LazyInterface $validate = null;
  
