@@ -149,7 +149,7 @@ final class Router implements RouterInterface
      * Weak object reference map.
      * 
      * @var WeakMap|null $weak
-    */
+     */
     private static ?WeakMap $weak = null;
 
     /**
