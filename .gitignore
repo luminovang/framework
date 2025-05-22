@@ -13,7 +13,7 @@
 .fleet/
 .phpdoc
 
-# Developemnt files
+# Development files
 UPDATE.md
 composer.lock
 command.phar
