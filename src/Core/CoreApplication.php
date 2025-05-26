@@ -15,6 +15,8 @@ use \Luminova\Interface\RouterInterface;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Routing\Router;
 use \Luminova\Template\View;
+use \Luminova\Routing\DI;
+use \Closure;
 
 abstract class CoreApplication implements LazyInterface
 {
@@ -118,18 +120,22 @@ abstract class CoreApplication implements LazyInterface
      * @example - Terminates application:
      * 
      * ```php
+     * namespace App;
+     * 
      * class Application extends CoreApplication
      * {
      *      protected function onPreCreate(): void 
      *      {
-     *          if($instance->ofSomethingIsTrue()){
-     *              $this->terminate();
+     *          if($this->instance->ofSomethingIsTrue()){
+     *              $this->terminate([...]);
      *          }
+     * 
+     *          \Luminova\Routing\DI::bind(MyInterface::class, MyConcreteClass::class);
      *      }
      * 
      *      protected function onTerminate(array $info): bool 
      *      {
-     *          if(isset($info['foo']) && $info['foo']['bar'] === true){
+     *          if($info['foo']['bar'] === true){
      *              // Allow termination
      *              return true;
      *          }
@@ -154,6 +160,44 @@ abstract class CoreApplication implements LazyInterface
             'isTerminated' => $this->onTerminate($info),
             'info' => $info
         ];
+    }
+
+    /**
+     * Bind a class or interface for dependency injection (DI) in controller methods.
+     * 
+     * This lets you map an interface or class name to a concrete implementation or a closure.
+     * When a controller method type-hints a dependency, this binding ensures the right object is injected.
+     *
+     * @param class-string $abstract The interface or class name to bind.
+     * @param Closure|class-string $resolver The concrete class or closure returning the instance.
+     * 
+     * @return self Return instance of application class.
+     * 
+     * @example Simple and advanced bindings:
+     * ```php
+     * use Luminova\Core\CoreApplication;
+     * 
+     * class Application extends CoreApplication
+     * {
+     *     protected function onPreCreate(): void 
+     *     {
+     *         // Bind interface to implementation
+     *         $this->bind(MyInterface::class, MyConcreteClass::class);
+     * 
+     *         // Bind with custom logic (e.g., logger setup)
+     *         $this->bind(\Psr\Log\LoggerInterface::class, function () {
+     *             return new \MyApp\Log\FileLogger('/writable/logs/app.log');
+     *         });
+     *     }
+     * }
+     * ```
+     * 
+     * @note Prefer class names for simple bindings. Use closures when instantiation requires logic.
+     */
+    protected final function bind(string $abstract, Closure|string $resolver): self 
+    {
+        DI::bind($abstract, $resolver);
+        return $this;
     }
 
     /**

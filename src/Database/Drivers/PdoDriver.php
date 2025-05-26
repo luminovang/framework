@@ -635,9 +635,11 @@ final class PdoDriver implements DatabaseInterface
             );
         }
 
-        $method = ($type === 'all') ? 'fetchAll' : 'fetch';
+        if($type === 'all'){
+            return $this->stmt->fetchAll($fetchMode);
+        }
 
-        return $this->stmt->{$method}($fetchMode);
+        return $this->stmt->fetch($fetchMode);
     }
 
     /**

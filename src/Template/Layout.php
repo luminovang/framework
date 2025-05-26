@@ -50,6 +50,11 @@ final class Layout
     private static ?self $instance = null;
 
     /**
+     * Initialize instance of Layout class.
+     */
+    public function __construct() {}
+
+    /**
      * Get the singleton instance of Layout.
      * 
      * @return static Return the instance of Layout class.
@@ -66,15 +71,16 @@ final class Layout
     /**
      * Import a layout file file or section into another layout file.
      *
-     *  @param string $layout File name without extension (e.g, `.php`).
+     * @param string $layout File name without extension (e.g, `.php`).
      * @param string $module The HMVC custom module name (e.g, `Blog`, `User`).
      * 
      * @return static Return the instance of Layout class.
      * 
      * @example - Example:
+     * 
      * ```php 
      * layout(...)->import('foo');
-     * //or 
+     * // or 
      * layout(...)->import('foo/bar');
      * ```
      */
@@ -92,11 +98,11 @@ final class Layout
      * @return self Return the instance of Layout class.
      * @throws RuntimeException Throws when layout file is not found.
      * 
-     *  @example - Example:
+     * @example - Example:
      * 
      * ```php 
      * layout('main')->import('foo');
-     * //or 
+     * // or 
      * layout('main')->import('foo/bar');
      * ```
      */
@@ -134,6 +140,7 @@ final class Layout
      * Begin a new layout section.
      *
      * @param string $name Section name to begin.
+     * 
      * @return void
      */
     protected function begin(string $name): void

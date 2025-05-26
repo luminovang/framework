@@ -22,7 +22,7 @@ final class Luminova
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.5.8';
+    public const VERSION = '3.5.9';
 
     /**
      * Framework version name.
@@ -53,7 +53,7 @@ final class Luminova
     private static ?string $base = null;
 
     /**
-     * Request url segments.
+     * Request URL segments.
      * 
      * @var ?string $segments
      */

@@ -116,6 +116,13 @@ final class Builder implements LazyInterface
     private string $selectLimit = '';
 
     /**
+     * Supports row-level locking.
+     * 
+     * @var string $lock
+     */
+    private string $lock = '';
+
+    /**
      * Table query max limit for update and delete methods.
      * 
      * @var int $maxLimit 
@@ -1316,7 +1323,7 @@ final class Builder implements LazyInterface
      * It ensures that only records with a null or non-null value in the specified column are retrieved.
      *
      * @param string $column The column name to check for non-null values.
-     * @param bool $isNull Weather the the calumn should be null or not (default: true).
+     * @param bool $isNull Weather the the column should be null or not (default: true).
      * @param string $clause The column clause condition (e.g, `AND` or `OR`).
      * 
      * @return self Return instance of builder class.
@@ -2729,6 +2736,76 @@ final class Builder implements LazyInterface
     }
 
     /**
+     * Apply a row-level lock to the query for concurrency control.
+     *
+     * Call this method before executing `find()` or similar fetch operations.
+     * Must be used within a transaction.
+     * 
+     * **Lock Modes:**
+     * 
+     * - `'update'`: Exclusive lock. Allows reads, blocks writes by others.
+     * - `'shared'`: Shared lock. Allows others to read, but not write.
+     * 
+     * 
+     * @param string $mode The lock mode: 'update' or 'shared' (default: `update`).
+     * 
+     * @return self
+     * @throws InvalidArgumentException If invalid lock type is given.
+     * 
+     * > **Note:** Must be used inside a transaction.
+     *
+     * @example Lock rows for update (exclusive lock):
+     * ```php
+     * $tbl = Builder::Table('users');
+     * 
+     * $tbl->transaction();
+     * 
+     * $rows = $tbl->where('user_id', '=', 123)
+     *     ->lockFor('update') // Prevents others from reading or writing
+     *     ->find();
+     * 
+     * $tbl->commit();
+     * ```
+     *
+     * @example Lock rows for shared read (shared lock):
+     * ```php
+     * $tbl = Builder::Table('users');
+     * 
+     * $tbl->transaction();
+     * 
+     * $rows = $tbl->where('user_id', '=', 123)
+     *     ->lockFor('shared') // Allows others to read, but not write
+     *     ->find();
+     * 
+     * $tbl->commit();
+     * ```
+     */
+    public function lockFor(string $mode = 'update'): self 
+    {
+        $mode = strtolower($mode);
+
+        if(!in_array($mode, ['update', 'shared'], true)){
+            throw new InvalidArgumentException("Invalid lock type: $mode");
+        }
+        
+        $forUpdate = ($mode === 'update');
+
+        $this->lock = match ($this->db->getDriver()) {
+            'mysql', 'mysqli' => $forUpdate ? 'FOR UPDATE' : 'LOCK IN SHARE MODE',
+            'pgsql'           => $forUpdate ? 'FOR UPDATE' : 'FOR SHARE',
+            'sqlite'          => '', // SQLite locks the whole DB automatically
+            'sqlsrv', 'mssql', 'dblib' => $forUpdate 
+                ? 'WITH (UPDLOCK, ROWLOCK)' 
+                : 'WITH (HOLDLOCK, ROWLOCK)',
+            'cubrid'          => $forUpdate ? 'WITH LOCK' : '',
+            'oci', 'oracle'   => $forUpdate ? 'FOR UPDATE' : '',
+            default           => '',
+        };
+
+        return $this;
+    }
+
+    /**
      * Handles database-level locking using advisory locks for PostgreSQL and MySQL.
      * 
      * - **PostgreSQL**: Uses `pg_advisory_lock()` and `pg_advisory_unlock()`, requiring an **integer** lock name.
@@ -3286,6 +3363,11 @@ final class Builder implements LazyInterface
         }
         
         $query .= " FROM {$this->tableName} {$this->tableAlias}";
+
+        if($this->lock && in_array($this->db->getDriver(), ['sqlsrv', 'mssql', 'dblib'])){
+            $query .= ' ' . $this->lock;
+        }
+     
         $query .= $this->getJoinConditions();
 
         try {
@@ -3323,10 +3405,10 @@ final class Builder implements LazyInterface
      *
      * @param string $sql The base SQL query string to execute.
      * @param string $return The type of return value expected ('total', 'stmt', 'select', 'find', 'delete', 'fetch').
-     * @param string $result The fetch result type ('next' or 'all') for 'fetch' operations.
+     * @param string $result The fetch result type ('next', 'all' or 'stream') for 'fetch' operations.
      * @param int $mode The fetch mode (e.g., FETCH_OBJ) for result retrieval.
      *
-     * @return mixed Retutn the execution result, which varies based on the $return parameter:
+     * @return mixed Return the execution result, which varies based on the $return parameter:
      *               - 'stmt': boolean indicating if the statement was prepared successfully
      *               - 'select': array of fetched results.
      *               - 'find': single fetched result.
@@ -3379,6 +3461,10 @@ final class Builder implements LazyInterface
             $sql .= ($limit > 0) ? " LIMIT {$limit}" : '';
         }elseif($this->selectLimit !== ''){
             $sql .= $this->selectLimit;
+        }
+
+        if($this->lock && !in_array($this->db->getDriver(), ['sqlsrv', 'mssql', 'dblib'])){
+            $sql .= ' ' . $this->lock;
         }
 
         if($mode === self::MODE_COPY){

@@ -513,12 +513,15 @@ interface DatabaseInterface
     public function getStatement(): PDOStatement|mysqli_stmt|null;
 
     /**
-     * Fetch results using a specific fetch mode.
+     * Fetch data from the result set using a specified fetch mode.
      *
-     * @param string $fetch The fetch type ('all' for all rows, 'next' for a single row).
-     * @param int $mode The fetch mode (FETCH_* constant).
+     * @param string $fetch Fetch type:  
+     *   - `'all'` to retrieve all rows at once,  
+     *   - `'next'` to fetch a single row,  
+     *   - `'stream'` to fetch rows one at a time (use in loops).
+     * @param int $mode The fetch mode (e.g., `FETCH_ASSOC`, `FETCH_OBJ`, `FETCH_*`).
      *
-     * @return mixed Returns the fetched data based on the fetch type and mode.
+     * @return mixed Return the fetched result(s) based on the specified type and mode.
      * @throws DatabaseException Throws an exception if an error occurs.
      */
     public function fetch(string $fetch = 'all', int $mode = FETCH_OBJ): mixed;

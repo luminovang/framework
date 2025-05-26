@@ -17,12 +17,12 @@ use \App\Config\Template;
 use \Luminova\Http\Header;
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Color;
+use \Luminova\Routing\DI;
 use \Luminova\Routing\Prefix;
 use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Core\CoreApplication;
 use \Luminova\Attributes\Compiler;
-use \Luminova\Application\Factory;
 use \Luminova\Cache\TemplateCache;
 use \Luminova\Exceptions\RouterException;
 use \Luminova\Exceptions\AppException;
@@ -1489,7 +1489,7 @@ final class Router implements RouterInterface
      * @param array $arguments Pass arguments to reflection method.
      * @param string $className Invoking class name.
      * @param ReflectionMethod $caller Controller class method.
-     * @param bool $is_middleware Indicate weather caller is cli middleware (default: false).
+     * @param bool $isMiddleware Indicate weather caller is cli middleware (default: false).
      *
      * @return int Return result from command controller method.
      */
@@ -1498,7 +1498,7 @@ final class Router implements RouterInterface
         array $arguments, 
         string $className, 
         ReflectionMethod $caller,
-        bool $is_middleware = false
+        bool $isMiddleware = false
     ): int
     {
         $id = '_about_' . $instance->name;
@@ -1515,7 +1515,7 @@ final class Router implements RouterInterface
         ];
 
         // Check command string to determine if it has help arguments.
-        if(!$is_middleware && self::$term->isHelp($arguments['command'])){
+        if(!$isMiddleware && self::$term->isHelp($arguments['command'])){
             
             self::$term->header();
 
@@ -1600,16 +1600,16 @@ final class Router implements RouterInterface
     {
         $instance = match ($class) {
             Application::class, CoreApplication::class => self::$application,
-            RouterInterface::class, self::class => self::$application->router,
+            RouterInterface::class, Router::class => self::$application->router,
             Terminal::class => self::cmd(true),
-            Factory::class => factory(),
+            Segments::class => new Segments(self::$isCommand ? [self::CLI_URI] : Luminova::getSegments()),
             Closure::class => fn(mixed ...$arguments): mixed => null,
-            default => class_exists($class) ? new $class() : null
+            default => class_exists($class) ? new $class() : DI::newInstance($class)
         };
 
         if($instance === null && !$nullable){
             throw new RouterException(
-                sprintf('Class: %s not fount.', $class),
+                sprintf('Class: %s does not exist.', $class),
                 RouterException::CLASS_NOT_FOUND
             );
         }
@@ -1622,11 +1622,11 @@ final class Router implements RouterInterface
      *
      * @param ReflectionNamedType[]|ReflectionIntersectionType[] $unions The union types.
      * 
-     * @return array Return the union types.
+     * @return array<string,mixed> Return the union types.
      */
     private static function getUnionTypes(array $unions): array
     {
-        $types = ['string', 'int', 'float', 'double', 'bool', 'array', 'mixed'];
+        $types = ['string', 'int', 'float', 'double', 'bool', 'array', 'object', 'mixed'];
 
         foreach ($unions as $type) {
             if (!$type->isBuiltin()) {
@@ -1660,12 +1660,14 @@ final class Router implements RouterInterface
      */
     private static function typeCasting(string $type, bool $nullable, mixed $value): mixed 
     {
-        if($nullable && !$value){
+        $lower = is_string($value) ? strtolower($value) : $value;
+
+        if($nullable && ($lower === '' || $lower === 'null')){
             return null;
         }
 
         return match ($type) {
-            'bool' => (($lower = strtolower($value)) && ($lower === '1' || 'true' === $lower)) ? true : false,
+            'bool' => ($lower === '1' || 'true' === $lower) ? true : (bool) $value,
             'int' => (int) $value,
             'float' => (float) $value,
             'double' => (double) $value,

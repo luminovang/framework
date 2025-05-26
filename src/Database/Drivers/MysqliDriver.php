@@ -643,19 +643,19 @@ final class MysqliDriver implements DatabaseInterface
             return false;
         }
 
-        $method = ($type === 'next') 
+        $method = ($type === 'next' || $type === 'stream') 
             ? (($mode === FETCH_OBJ) ? 'fetch_object' : 'fetch_assoc') 
             : 'fetch_all';
 
         $fetchMode = ($method === 'fetch_all') 
             ? (self::$fetchModes['mysqli'][$mode] ?? MYSQLI_ASSOC)
             : null;
-
+  
         $response = ($fetchMode === null) 
             ? $this->stmt->{$method}() 
             : $this->stmt->{$method}($fetchMode);
 
-        if(empty($response) || $response === false){
+        if($response === false || empty($response)){
             return false;
         }
 

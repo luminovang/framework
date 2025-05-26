@@ -284,7 +284,8 @@ class Connection implements LazyInterface, Countable
      * If `$retry` is set to `null`, the method will attempt to connect using backup databases (if available).
      * Otherwise, it will attempt to reconnect based on the specified retry count.
      * 
-     * @param int|null $retry The number of retry attempts (default: 1). Pass `null` to attempt fallback to backup servers.
+     * @param int|null $retry The number of retry attempts (default: 1). 
+     *              Pass `null` to attempt fallback to backup servers.
      * 
      * @return DatabaseInterface|null Returns a database connection if successful, or `null` if all attempts fail.
      * 
@@ -307,76 +308,11 @@ class Connection implements LazyInterface, Countable
             $this->purge(true);
         }
 
-        $connection = null;
-
-        // Retry from backup databases
         if ($retry === null) {
-            $servers = Database::getBackups();
-
-            foreach ($servers as $config) {
-                try {
-                    $connection = self::newInstance(self::newConfig($config));
-
-                    if ($connection instanceof DatabaseInterface && $connection->isConnected()) {
-                        if($this->pool){
-                            $this->release($connection, $this->generatePoolId($config));
-                        }
-    
-                        if(PRODUCTION){
-                            Logger::dispatch('info', sprintf(
-                                'Successfully connected to backup database: (%s@%s).',  
-                                $config['database'],
-                                $config['host']
-                            ));
-                        }
-    
-                        return $connection;
-                    }
-
-                    self::$logEntry .= Logger::entry('critical', sprintf(
-                        'Backup database connection attempt failed (%s@%s).',  
-                        $config['database'],
-                        $config['host']
-                    ));
-                } catch (DatabaseException|Exception $e) {
-                    self::$logEntry .= Logger::entry('critical', sprintf(
-                        'Failed to connect to backup database (%s@%s) with error: %s',
-                        $config['database'],
-                        $config['host'],
-                        $e->getMessage()
-                    ));
-                }
-            }
-
-            return $connection;
+            return $this->retryFromBackups();
         }
 
-        // Retry base on connection attempts
-        for ($attempt = 1; $attempt <= max(1, $retry); $attempt++) {
-            try {
-                $connection = self::newInstance();
-
-                if ($connection instanceof DatabaseInterface && $connection->isConnected()) {
-                    if($this->pool){
-                        $this->release($connection, $this->generatePoolId());
-                    }
-    
-                    return $connection;
-                }
-
-                self::$logEntry .= Logger::entry(
-                    'critical', 
-                    'Database connection attempt (' . $attempt . ') failed.'
-                );
-            } catch (DatabaseException|Exception $e) {
-                self::$logEntry .= Logger::entry(
-                    'critical', 
-                    'Attempt (' . $attempt . ') failed with error: ' . $e->getMessage()
-                );
-            }
-        }
-
-        return $connection;
+        return $this->retryFromAttempts($retry);
     }
 
     /**
@@ -477,6 +413,87 @@ class Connection implements LazyInterface, Countable
             'password' => env("{$var}.password"),
             'database' => env("{$var}.name")
         ];
+    }
+
+    /**
+     * Retry base on connection attempts.
+     * 
+     * @param int $retry The number of retry attempts.
+     * 
+     * @return DatabaseInterface|null Return database connection object.
+     */
+    private function retryFromAttempts(int $retry): ?DatabaseInterface
+    {
+        for ($attempt = 1; $attempt <= max(1, $retry); $attempt++) {
+            try {
+                $connection = self::newInstance();
+
+                if ($connection instanceof DatabaseInterface && $connection->isConnected()) {
+                    if($this->pool){
+                        $this->release($connection, $this->generatePoolId());
+                    }
+    
+                    return $connection;
+                }
+
+                self::$logEntry .= Logger::entry(
+                    'critical', 
+                    'Database connection attempt (' . $attempt . ') failed.'
+                );
+            } catch (DatabaseException|Exception $e) {
+                self::$logEntry .= Logger::entry(
+                    'critical', 
+                    'Attempt (' . $attempt . ') failed with error: ' . $e->getMessage()
+                );
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Retry from backup databases.
+     * 
+     * @return DatabaseInterface|null Return database connection object.
+     */
+    private function retryFromBackups(): ?DatabaseInterface
+    {
+        foreach (Database::getBackups() as $config) {
+            try {
+                $connection = self::newInstance(self::newConfig($config));
+
+                if ($connection instanceof DatabaseInterface && $connection->isConnected()) {
+                    if($this->pool){
+                        $this->release($connection, $this->generatePoolId($config));
+                    }
+
+                    if(PRODUCTION){
+                        Logger::dispatch('info', sprintf(
+                            'Successfully connected to backup database: (%s@%s).',  
+                            $config['database'],
+                            $config['host']
+                        ));
+                    }
+
+                    return $connection;
+                }
+
+                self::$logEntry .= Logger::entry('critical', sprintf(
+                    'Backup database connection attempt failed (%s@%s).',  
+                    $config['database'],
+                    $config['host']
+                ));
+            } catch (DatabaseException|Exception $e) {
+                self::$logEntry .= Logger::entry('critical', sprintf(
+                    'Failed to connect to backup database (%s@%s) with error: %s',
+                    $config['database'],
+                    $config['host'],
+                    $e->getMessage()
+                ));
+            }
+        }
+
+        return null;
     }
 
     /**
