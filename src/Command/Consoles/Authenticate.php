@@ -19,12 +19,12 @@ class Authenticate extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'Authentication';
+    protected string $group = 'auth';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'auth';
+    protected string $name = 'Authentication';
 
     /**
      * {@inheritdoc}

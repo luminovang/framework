@@ -23,8 +23,8 @@ final class Commands
      */
     private static array $commands = [
         'help' => [
-            'name' => 'help',
-            'group' => 'Help',
+            'name' => 'Help',
+            'group' => 'help',
             'description' => 'his command displays help options for the Novakit CLI tool.',
             'usages' => [
                 'php novakit <command> --help',
@@ -71,8 +71,8 @@ final class Commands
         ],
 
         'list' => [
-            'name' => 'list',
-            'group' => 'Lists',
+            'name' => 'Lists',
+            'group' => 'list',
             'description' => "Lists all available novakit commands and their descriptions.",
             'usages' => [
                 'php novakit list',
@@ -84,8 +84,8 @@ final class Commands
         ],
 
        'auth' => [
-            'name' => 'auth',
-            'group' => 'Authentication',
+            'name' => 'Authentication',
+            'group' => 'auth',
             'description' => 'CLI helper for user authentication. Authenticate using a username and either a key or password.',
             'usages' => [
                 'php novakit auth login --user',
@@ -102,8 +102,8 @@ final class Commands
         ],
 
         'log' => [
-            'name' => 'log',
-            'group' => 'Logs',
+            'name' => 'Logs',
+            'group' => 'log',
             'description' => 'Manage and interact with application log files.',
             'usages' => [
                 'php novakit log',
@@ -123,8 +123,8 @@ final class Commands
         ],
 
         'server' => [
-            'name' => 'server',
-            'group' => 'Server',
+            'name' => 'Server',
+            'group' => 'server',
             'description' => 'Starts the Luminova PHP development server.',
             'usages' => [
                 'php novakit server',
@@ -144,8 +144,8 @@ final class Commands
         ],
 
         'build:project' => [
-            'name' => 'build:project',
-            'group' => 'Builder',
+            'name' => 'Builder',
+            'group' => 'build:project',
             'description' => "Archive required application files for production based on 'app.version' or copy them to build directory without zipping.",
             'usages' => [
                 'php novakit build:project',
@@ -161,8 +161,8 @@ final class Commands
         ],
 
         'generate:key' => [
-            'name' => 'generate:key',
-            'group' => 'System',
+            'name' => 'System',
+            'group' => 'generate:key',
             'description' => "Generates an application encryption key and stores it in environment variables.",
             'usages' => [
                 'php novakit generate:key'
@@ -178,8 +178,8 @@ final class Commands
         ],
 
         'generate:sitemap' => [
-            'name' => 'generate:sitemap',
-            'group' => 'System',
+            'name' => 'System',
+            'group' => 'generate:sitemap',
             'description' => "Generates the application website sitemap.",
             'usages' => [
                 'php novakit generate:sitemap',
@@ -191,8 +191,8 @@ final class Commands
         ],
 
         'env:add' => [
-            'name' => 'env:add',
-            'group' => 'System',
+            'name' => 'System',
+            'group' => 'env:add',
             'description' => "Adds or updates an environment variable with a new key and value.",
             'usages' => [
                 'php novakit env:add',
@@ -208,8 +208,8 @@ final class Commands
         ],
 
         'env:cache' => [
-            'name' => 'env:cache',
-            'group' => 'System',
+            'name' => 'System',
+            'group' => 'env:cache',
             'description' => "Create or recreate a cache version of environment variables for production.",
             'usages' => [
                 'php novakit env:cache',
@@ -225,8 +225,8 @@ final class Commands
         ],
 
         'env:setup' => [
-            'name' => 'env:setup',
-            'group' => 'System',
+            'name' => 'System',
+            'group' => 'env:setup',
             'description' => "Adds or updates environment variables for a specific context.\nThis command simplifies configuring all required variables for supported contexts.",
             'usages' => [
                 'php novakit env:setup -t=<TARGET>',
@@ -244,8 +244,8 @@ final class Commands
         ],
 
         'env:remove' => [
-            'name' => 'env:remove',
-            'group' => 'System',
+            'name' => 'System',
+            'group' => 'env:remove',
             'description' => "Removes an environment variable key from the '.env' file.",
             'usages' => [
                 'php novakit env:remove --key="test.key"',
@@ -260,8 +260,8 @@ final class Commands
         ],
 
         'context' => [
-            'name' => 'context',
-            'group' => 'Context',
+            'name' => 'Context',
+            'group' => 'context',
             'description' => "Install application route context or create routes from defined route annotation attributes.",
             'usages' => [
                 'php novakit context <context-name>',
@@ -281,8 +281,8 @@ final class Commands
         ],
 
        'create:controller' => [
-            'name' => 'create:controller',
-            'group' => 'Generators',
+            'name' => 'Generators',
+            'group' => 'create:controller',
             'description' => 'Generate and install a new controller class. Optionally implement an interface, create a template view, or target a specific module.',
             'usages' => [
                 'php novakit create:controller <ClassName>'
@@ -316,8 +316,8 @@ final class Commands
         ],
 
        'create:view' => [
-            'name' => 'create:view',
-            'group' => 'Generators',
+            'name' => 'Generators',
+            'group' => 'create:view',
             'description' => 'Generate a new template view file (".php" or ".tpl") based on the template engine configuration in "/app/Config/Template.php".',
             'usages' => [
                 'php novakit create:view <viewName>',
@@ -340,8 +340,8 @@ final class Commands
         ],
 
         'create:class' => [
-            'name' => 'create:class',
-            'group' => 'Generators',
+            'name' => 'Generators',
+            'group' => 'create:class',
             'description' => 'Generate a new class file and save it to the `/app/Utils/` directory.',
             'usages' => [
                 'php novakit create:class <ClassName>',
@@ -364,8 +364,8 @@ final class Commands
         ],
 
         'create:model' => [
-            'name' => 'create:model',
-            'group' => 'Generators',
+            'name' => 'Generators',
+            'group' => 'create:model',
             'description' => 'Generate a new database model class that extends `Luminova\Base\BaseModel`. The file is saved in `/app/Models/` for MVC or `/app/Modules/<?Module>/Models/` for HMVC.',
             'usages' => [
                 'php novakit create:model <ModelClassName>'
@@ -388,8 +388,8 @@ final class Commands
         ],
 
         'db:drop' => [
-            'name' => 'db:drop',
-            'group' => 'Database',
+            'name' => 'Database',
+            'group' => 'db:drop',
             'description' => "Drops the database migration table.",
             'usages' => [
                 'php novakit db:drop',
@@ -408,8 +408,8 @@ final class Commands
         ],
 
         'db:clear' => [
-            'name' => 'db:clear',
-            'group' => 'Database',
+            'name' => 'Database',
+            'group' => 'db:clear',
             'description' => "Clears lock files for seeders or migrations.",
             'usages' => [
                 'php novakit db:clear --lock=seeder',
@@ -429,8 +429,8 @@ final class Commands
         ],
 
         'db:alter' => [
-            'name' => 'db:alter',
-            'group' => 'Database',
+            'name' => 'Database',
+            'group' => 'db:alter',
             'description' => "Alter database migration tables and columns.",
             'usages' => [
                 'php novakit db:alter',
@@ -453,8 +453,8 @@ final class Commands
         ],
 
         'db:truncate' => [
-            'name' => 'db:truncate',
-            'group' => 'Database',
+            'name' => 'Database',
+            'group' => 'db:truncate',
             'description' => "Truncates a database table to clear all records.",
             'usages' => [
                 'php novakit db:truncate --table=<table-name>',
@@ -471,8 +471,8 @@ final class Commands
         ],
 
         'db:seed' => [
-            'name' => 'db:seed',
-            'group' => 'Database',
+            'name' => 'Database',
+            'group' => 'db:seed',
             'description' => "Executes database seeders.",
             'usages' => [
                 'php novakit db:seed' => 'Executes all database seeders classes.',
@@ -497,8 +497,8 @@ final class Commands
         ],
 
         'db:migrate' => [
-            'name' => 'db:migrate',
-            'group' => 'Database',
+            'name' => 'Database',
+            'group' => 'db:migrate',
             'description' => 'Executes database table migrations.',
             'usages' => [
                 'php novakit db:migrate' => 'Executes all database migration classes.',
@@ -523,8 +523,8 @@ final class Commands
         ],
 
         'cron:create' => [
-            'name' => 'cron:create',
-            'group' => 'Cron',
+            'name' => 'Cron',
+            'group' => 'cron:create',
             'description' => "Creates cron tasks and locks them in the cron lock file.",
             'usages' => [
                 'php novakit cron:create'
@@ -540,8 +540,8 @@ final class Commands
         ],
 
         'cron:run' => [
-            'name' => 'cron:run',
-            'group' => 'Cron',
+            'name' => 'Cron',
+            'group' => 'cron:run',
             'description' => "Runs cron jobs that were locked in the cron lock file.",
             'usages' => [
                 'php novakit cron:run'
@@ -559,8 +559,8 @@ final class Commands
         ],
 
         'cache' => [
-            'name' => 'cache',
-            'group' => 'Cache',
+            'name' => 'Cache',
+            'group' => 'cache',
             'description' => "Manages system caches: clears, deletes by key, or lists cache items.",
             'usages' => [
                 'php novakit cache:clear',
@@ -580,8 +580,8 @@ final class Commands
         ],
 
         'clear:caches' => [
-            'name' => 'clear:caches',
-            'group' => 'Clear',
+            'name' => 'Clear',
+            'group' => 'clear:caches',
             'description' => 'Clears cached pages, database cache files, and route files from the writeable caches directory. If no directory is specified, all cached files will be cleared.',
             'usages' => [
                 'php novakit clear:caches',
@@ -596,8 +596,8 @@ final class Commands
         ],
 
         'clear:routes' => [
-            'name' => 'clear:routes',
-            'group' => 'Clear',
+            'name' => 'Clear',
+            'group' => 'clear:routes',
             'description' => 'Clear all cached route attributes files from the writeable routes directory.',
             'usages' => [
                 'php novakit clear:routes',
@@ -611,8 +611,8 @@ final class Commands
         ],
 
         'clear:storage' => [
-            'name' => 'clear:storage',
-            'group' => 'Clear',
+            'name' => 'Clear',
+            'group' => 'clear:storage',
             'description' => 'Clear all files in the writeable private storages directory.',
             'usages' => [
                 'php novakit clear:storage',
@@ -626,8 +626,8 @@ final class Commands
         ],
 
         'clear:temp' => [
-            'name' => 'clear:temp',
-            'group' => 'Clear',
+            'name' => 'Clear',
+            'group' => 'clear:temp',
             'description' => 'Clear all temporary files from the writeable temp directory.',
             'usages' => [
                 'php novakit clear:temp',
@@ -641,8 +641,8 @@ final class Commands
         ],
         
         'clear:writable' => [
-            'name' => 'clear:writable',
-            'group' => 'Clear',
+            'name' => 'Clear',
+            'group' => 'clear:writable',
             'description' => 'Clear files and directories from the writeable directory.',
             'usages' => [
                 'php novakit clear:writable',
@@ -673,38 +673,38 @@ final class Commands
     /**
      * Get command information.
      * 
-     * @param string $key The command name.
+     * @param string $key The command group.
      * 
      * @return array<string,mixed> Return a specific command information.
      */
-    public static function get(string $key): array 
+    public static function get(string $group): array 
     {
-        return self::getCommands()[$key] ?? [];
+        return self::getCommands()[$group] ?? [];
     }
 
     /**
      * Check if command exists.
      * 
-     * @param string $key The command name to check.
+     * @param string $group The command group to check.
      * 
      * @return bool Return true if the command exists, false otherwise.
      */
-    public static function has(string $key): bool
+    public static function has(string $group): bool
     {
-        return self::get($key) !== [];
+        return self::get($group) !== [];
     }
 
     /**
      * Search the closest command match.
      *
-     * This is responsible for providing suggestions for command names 
+     * This is responsible for providing suggestions for command groups 
      * based on a given input string. It utilizes the Levenshtein distance algorithm 
      * to find the closest match from a list of available commands, helping users 
      * identify the intended command when a typo or similar mistake is made.
      * 
      * @param string $input The user input to find a close match for.
      * 
-     * @return string|null Return the closest matching command name, or null if no close match is found.
+     * @return string|null Return the closest matching command group, or null if no close match is found.
      */
     public static function search(string $input): ?string
     {
@@ -713,20 +713,20 @@ final class Commands
         $shortestDistance = -1;
 
         foreach (self::getCommands() as $command) {
-            $name = strtolower($command['name']);
+            $group = strtolower($command['group']);
 
-            if (str_starts_with($name, $input)) {
-                return $command['name'];
+            if (str_starts_with($group, $input)) {
+                return $command['group'];
             }
 
-            $distance = levenshtein($input, $name);
+            $distance = levenshtein($input, $group);
 
             if ($distance === 0) {
-                return $command['name'];
+                return $command['group'];
             }
 
             if ($distance < $shortestDistance || $shortestDistance < 0) {
-                $suggestion = $command['name'];
+                $suggestion = $command['group'];
                 $shortestDistance = $distance;
             }
         }
@@ -735,7 +735,7 @@ final class Commands
     }
 
     /**
-     * Suggest a similar command name.
+     * Suggest a similar commands.
      * 
      * @param string $input The user input to suggest a close match for.
      * 

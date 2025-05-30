@@ -18,12 +18,12 @@ class Builder extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'Builder';
+    protected string $group = 'builder';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'builder';
+    protected string $name = 'Builder';
 
     /**
      * {@inheritdoc}

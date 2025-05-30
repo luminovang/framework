@@ -22,7 +22,7 @@ final class Luminova
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.5.9';
+    public const VERSION = '3.6.0';
 
     /**
      * Framework version name.
@@ -43,7 +43,7 @@ final class Luminova
      * 
      * @var string NOVAKIT_VERSION
      */
-    public const NOVAKIT_VERSION = '2.9.8';
+    public const NOVAKIT_VERSION = '2.9.9';
 
     /**
      * Server base path for router.

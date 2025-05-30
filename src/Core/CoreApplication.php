@@ -411,8 +411,12 @@ abstract class CoreApplication implements LazyInterface
     public function __get(string $key): mixed
     {
         $value = self::attrGetter($key);
+        $value = ($value === self::$KEY_NOT_FOUND) 
+            ? (property_exists($this, $key) ? $this->{$key} : self::$KEY_NOT_FOUND) 
+            : $value;
+
         return ($value === self::$KEY_NOT_FOUND) 
-            ? ($this->{$key} ?? static::${$key} ?? null)
+            ? (property_exists(static::class, $key) ? static::${$key} : null)
             : $value;
     }
 

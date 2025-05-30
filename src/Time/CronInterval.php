@@ -92,7 +92,7 @@ class CronInterval
      * @return string|null The PHP interval string on success, null on error.
      * @throws RuntimeException If the cron expression is invalid.
      *
-     * 
+     * ```text
      * *    *    *    *    *
      * * -    -    -    -    -
      * |    |    |    |    |
@@ -101,6 +101,7 @@ class CronInterval
      * |    |    +--------------- day of month (1 - 31)
      * |    +-------------------- hour (0 - 23)
      * +------------------------- minute (0 - 59)
+     * ```
      */
     public static function convert(string $expression, DateTimeZone|string|null $timezone = null): array|string
     {

@@ -141,7 +141,9 @@ abstract class BaseController implements RoutableInterface
      */
     public function __get(string $key): mixed
     {
-        return $this->{$key} ?? null;
+        return property_exists($this, $key)
+            ? $this->{$key}
+            : null;
     }
     
     /**

@@ -20,12 +20,12 @@ class Server extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'Server';
+    protected string $group = 'server';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'server';
+    protected string $name = 'Server';
 
     /**
      * {@inheritdoc}

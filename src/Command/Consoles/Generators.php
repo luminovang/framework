@@ -20,12 +20,12 @@ class Generators extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'Generators';
+    protected string $group = 'create';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'create:*';
+    protected string $name = 'Generators';
 
     /**
      * {@inheritdoc}

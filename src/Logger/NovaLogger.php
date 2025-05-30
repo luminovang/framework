@@ -17,7 +17,7 @@ use \Luminova\Time\Time;
 use \Luminova\Functions\Func;
 use \Luminova\Functions\IP;
 use \Luminova\Email\Mailer;
-use \Luminova\Http\Network;
+use \Luminova\Http\Client\Curl;
 use \Luminova\Http\Request;
 use \Luminova\Storages\FileManager;
 use \Luminova\Storages\Archive;
@@ -66,6 +66,13 @@ class NovaLogger extends AbstractLogger
     private string $level = LogLevel::ALERT;
 
     /**
+     * Include context information in telegram logging.
+     * 
+     * @var bool|null $sendContext
+     */
+    private static ?bool $sendContext = null;
+
+    /**
      * Initialize NovaLogger class.
      * 
      * @param string $name The Logging system identifier name (default: `default`).
@@ -79,6 +86,7 @@ class NovaLogger extends AbstractLogger
         self::$path ??= root('/writeable/logs/');
         $this->maxSize = (int) env('logger.max.size', Logger::$maxSize);
         $this->autoBackup = env('logger.create.backup', Logger::$autoBackup);
+        self::$sendContext ??= env('logger.telegram.send.context', Logger::$telegramSendContext);
     }
 
     /**
@@ -351,7 +359,7 @@ class NovaLogger extends AbstractLogger
             [
                 'chat_id' => $chatId,
                 'text' => sprintf(
-                    "<b>Application:</b> %s\n<b>Version:</b> %s\n<b>Host:</b> %s\n<b>Client IP:</b> %s\n<b>Log Name:</b> %s\n<b>Level:</b> %s\n<b>Datetime:</b> %s\n\n<b>Message:</b> %s\n\n<b>URL:</b> %s\n<b>Method:</b> %s\n<b>User-Agent:</b> %s",
+                    "<b>Application:</b> %s\n<b>Version:</b> %s\n<b>Host:</b> %s\n<b>Client IP:</b> %s\n<b>Log Name:</b> %s\n<b>Level:</b> %s\n<b>Datetime:</b> %s\n\n```Message: %s```\n\n<b>URL:</b> %s\n<b>Method:</b> %s\n<b>User-Agent:</b> %s\n%s <pre>%s</pre>",
                     APP_NAME,
                     APP_VERSION,
                     APP_HOSTNAME,
@@ -362,7 +370,9 @@ class NovaLogger extends AbstractLogger
                     $message,
                     self::$request->getUrl(),
                     self::$request->getMethod(),
-                    self::$request->getUserAgent()->toString()
+                    self::$request->getUserAgent()->toString(),
+                    self::$sendContext ? '<b>Context:</b>': '',
+                    self::$sendContext ? self::toJsonContext($context, true, false) : ''
                 ),
                 'parse_mode' => 'HTML'
             ],
@@ -587,27 +597,54 @@ class NovaLogger extends AbstractLogger
             return $message;
         }
 
-        $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR;
-
-        try {
-            $message .= json_encode($context, $flags);
-        } catch (JsonException $e) {
-            try {
-                $message .= json_encode(self::sanitizeUtf8($context), $flags);
-            } catch (JsonException $e) {
-                $message .= '[Context JSON Error: ' . $e->getMessage() . '] ' . print_r($context, true);
-            }
-        }
+        $message .= self::toJsonContext($context, false);
         
         return $message;
     }    
+
+    /**
+     * Converts a context array to a JSON string.
+     *
+     * This method encodes an array to a JSON string using safe encoding flags.
+     * If encoding fails due to invalid UTF-8 characters, it attempts to sanitize
+     * the data and re-encode. If that also fails and `$returnError` is true,
+     * it returns a readable error message with the original array content.
+     *
+     * @param array $context The context data to encode.
+     * @param bool $pretty Whether to pretty-print the JSON output.
+     * @param bool $returnError Whether to return a descriptive error on failure.
+     *
+     * @return string Return the encoded JSON string or an error message.
+     */
+    private static function toJsonContext(array $context, bool $pretty = false, bool $returnError = true): string
+    {
+        $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR;
+
+        if ($pretty) {
+            $flags |= JSON_PRETTY_PRINT;
+        }
+
+        try {
+            return json_encode($context, $flags) ?: '';
+        } catch (JsonException $e) {
+            try {
+                return json_encode(self::sanitizeUtf8($context), $flags) ?: '';
+            } catch (JsonException $e) {
+                if ($returnError) {
+                    return '[Context JSON Error: ' . $e->getMessage() . '] ' . print_r($context, true);
+                }
+            }
+        }
+
+        return '';
+    }
 
     /**
      * Try sanitize context if failed.
      * 
      * @param mixed $value The context value to sanitize.
      * 
-     * @return mixed Return sanitived context.
+     * @return mixed Return sanitized context.
      */
     private static function sanitizeUtf8(mixed $value): mixed 
     {
@@ -727,7 +764,7 @@ class NovaLogger extends AbstractLogger
         $fiber = new Fiber(function () use ($from, $url, $body, $message, $context) {
             $error = null;
             try {
-                $response = (new Network())->post($url, ['body' => $body]);
+                $response = (new Curl())->request('POST', $url, ['body' => $body]);
                 if ($response->getStatusCode() !== 200) {
                     $this->write($this->level, 
                         sprintf(

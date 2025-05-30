@@ -12,7 +12,6 @@ namespace Luminova\Ai\Models;
 
 use \Luminova\Interface\AiInterface;
 use \Luminova\Interface\LazyInterface;
-use \Luminova\Http\Network;
 use \Luminova\Http\Client\Curl;
 use \Luminova\Storages\FileManager;
 use \Luminova\Exceptions\AppException;
@@ -23,9 +22,9 @@ use \CurlFile;
 class OpenAI implements AiInterface, LazyInterface
 {
     /**
-     * @var Network|null $network
+     * @var Curl|null $network
      */
-    private static ?Network $network = null;
+    private static ?Curl $network = null;
 
     /**
      * @var string $version
@@ -86,9 +85,9 @@ class OpenAI implements AiInterface, LazyInterface
         }
 
         self::$version = $version;
-        self::$network ??= new Network(new Curl([
+        self::$network ??= new Curl([
             'headers' => $headers
-        ]));
+        ]);
     }
 
     /**
@@ -98,7 +97,7 @@ class OpenAI implements AiInterface, LazyInterface
     {
         $url = self::getUrl('models', (($name === null) ? '' : '/' . $name));
         try {
-            $content = self::$network->get($url)->getContents();
+            $content = self::$network->request('GET', $url)->getContents();
             $content = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
 
             if(isset($content['error'])){
@@ -132,7 +131,7 @@ class OpenAI implements AiInterface, LazyInterface
                 $options = $this->getParams($prompt, $options);
             }
 
-            $content = self::$network->post($url, [
+            $content = self::$network->request('POST', $url, [
                 'body' => $options
             ])->getContents();
             $content = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
@@ -165,7 +164,7 @@ class OpenAI implements AiInterface, LazyInterface
     {
         $url = self::getUrl('chatCompletions');
         try {
-            $content = self::$network->post($url, [
+            $content = self::$network->request('POST', $url, [
                 'body' => $this->getParams($prompt, $options, true)
             ])->getContents();
             $content = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
@@ -194,7 +193,7 @@ class OpenAI implements AiInterface, LazyInterface
     {
         $url = self::getUrl('embeddings');
         try {
-            $content = self::$network->post($url, [
+            $content = self::$network->request('POST', $url, [
                 'body' => [
                     'model' => $options['model'] ?? 'text-embedding-ada-002',
                     'dimensions' => $options['dimensions'] ?? '',
@@ -224,7 +223,7 @@ class OpenAI implements AiInterface, LazyInterface
     {
         $url = self::getUrl('fineTune');
         try {
-            $content = self::$network->post($url, [
+            $content = self::$network->request('POST', $url, [
                 'body' => [
                     'model' => $options['model'] ?? 'gpt-3.5-turbo',
                     'training_file' => $trainingFile,
@@ -252,7 +251,7 @@ class OpenAI implements AiInterface, LazyInterface
     {
         $url = self::getUrl('images');
         try {
-            $content = self::$network->post($url, [
+            $content = self::$network->request('POST', $url, [
                'body' => [
                     'model' => $options['model'] ?? 'dall-e-3',
                     'size' => $options['size'] ?? '1024x1024',
@@ -308,7 +307,7 @@ class OpenAI implements AiInterface, LazyInterface
 
         $url = self::getUrl('imageEdit');
         try {
-            $content = self::$network->post($url, [
+            $content = self::$network->request('POST', $url, [
                 'body' => [
                     'model' => $options['model'] ?? 'dall-e-2',
                     'image' => new CurlFile($options['image']),
@@ -340,7 +339,7 @@ class OpenAI implements AiInterface, LazyInterface
     {
         $url = self::getUrl('speech');
         try {
-            $content = self::$network->post($url, [
+            $content = self::$network->request('POST', $url, [
                 'body' => [
                     'model' => $options['model'] ?? 'tts-1',
                     'voice' => $options['voice'] ?? 'alloy',
@@ -409,7 +408,7 @@ class OpenAI implements AiInterface, LazyInterface
 
         $url = self::getUrl('transcriptions');
         try {
-            $content = self::$network->post($url, [
+            $content = self::$network->request('POST', $url, [
                 'headers' => [
                     'Content-Type' => 'multipart/form-data'
                 ],

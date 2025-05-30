@@ -20,12 +20,12 @@ class Lists extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'Lists';
+    protected string $group = 'list';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'list';
+    protected string $name = 'Lists';
 
     /**
      * {@inheritdoc}

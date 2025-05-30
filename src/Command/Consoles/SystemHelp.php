@@ -18,12 +18,12 @@ class SystemHelp extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'Help';
+    protected string $group = 'help';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'help';
+    protected string $name = 'Helps';
 
     /**
      * {@inheritdoc}

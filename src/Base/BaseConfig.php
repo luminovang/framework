@@ -57,6 +57,39 @@ abstract class BaseConfig implements LazyInterface
     }
 
     /**
+     * Non-static property getter.
+     *
+     * @param string $key The property key.
+     * 
+     * @return mixed|null Return the property value, or null if not found.
+     * 
+     * @ignore 
+     */
+    public function __get(string $key): mixed
+    {
+        return property_exists($this, $key)
+            ? $this->{$key}
+            : static::__getStatic($key);
+    }
+
+    /**
+     * Static property getter.
+     *
+     * @param string $key The property key.
+     * 
+     * @return mixed|null Return the property value, or null if not found.
+     * 
+     * @ignore 
+     * @internal
+     */
+    public static function __getStatic(string $key, mixed $default = null): mixed
+    {
+        return property_exists(static::class, $key)
+            ? static::${$key}
+            : $default;
+    }
+
+    /**
      * onCreate method that gets triggered on object creation, 
      * designed to be overridden in subclasses for custom initialization.
      * 

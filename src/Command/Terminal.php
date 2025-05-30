@@ -1491,12 +1491,18 @@ class Terminal implements LazyInterface
         if ($caller === 'novakit' || $caller === 'php' || preg_match('/^.*\.php$/', $caller)) {
             array_shift($arguments); //Remove the front controller file
             $result['caller'] = implode(' ', $arguments);
+            $command = $arguments[0] ?? '';
+
+            // php index.php group command
+            // php novakit group --foo
 
             if($controller){
-                $result['group'] = $arguments[0] ?? '';
+                $result['group'] = $command; 
                 $result['command'] = $arguments[1] ?? '';
             }else{
-                $result['command'] = $arguments[0] ?? '';
+                $pos = strpos($command, ':');
+                $result['group'] = ($pos === false) ? $command : substr($command, 0, $pos); 
+                $result['command'] = $command;
             }
         }else{
             $hasSpace = array_reduce($arguments, fn($carry, $item) => $carry || str_contains($item, ' '), false);
@@ -1594,13 +1600,23 @@ class Terminal implements LazyInterface
     }
 
     /**
-     * Get command name.
+     * Get command group name.
      * 
-     * @return string|null Return the command name.
+     * @return string|null Return the command group.
      */
     public static function getCommand(): ?string
     {
         return self::$commands['command'] ?? null;
+    }
+
+    /**
+     * Get command group name.
+     * 
+     * @return string|null Return the command name.
+     */
+    public static function getGroup(): ?string
+    {
+        return self::$commands['group'] ?? null;
     }
 
     /**
@@ -2566,6 +2582,9 @@ class Terminal implements LazyInterface
         if (self::$windowHeight !== null && self::$windowWidth !== null) {
             return;
         }
+
+        $height = 0;
+        $width = 0;
 
         if (is_platform('windows')) {
             // Use PowerShell to get console size on Windows

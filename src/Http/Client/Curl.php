@@ -19,18 +19,20 @@ use \Luminova\Interface\CookieJarInterface;
 use \Psr\Http\Message\UriInterface;
 use \Psr\Http\Message\RequestInterface;
 use \Luminova\Utils\Async;
-use \Luminova\Storages\Stream;
 use \Luminova\Http\Network;
+use \Luminova\Storages\Stream;
 use \Luminova\Interface\PromiseInterface;
 use \Luminova\Interface\ClientInterface;
 use \Luminova\Functions\Normalizer;
+use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\Http\RequestException;
 use \Luminova\Exceptions\Http\ConnectException;
 use \Luminova\Exceptions\Http\ClientException;
 use \Luminova\Exceptions\Http\ServerException;
-use \Luminova\Exceptions\AppException;
-use \CURLFile;
 use \CurlHandle;
+use \CurlMultiHandle;
+use \Generator;
+use \CURLFile;
 use \Exception;
 use \JsonException;
 use \Throwable;
@@ -62,6 +64,7 @@ class Curl implements ClientInterface
      * Indicate if reading headers is completed.
      * 
      * @var bool $isHeaderDone
+     * @required
      */
     private bool $isHeaderDone = false;
 
@@ -80,15 +83,69 @@ class Curl implements ClientInterface
     private int $contentLength = 0;
 
     /**
+     * The curl multi handle.
+     *
+     * @var CurlMultiHandle|null
+     */
+    private ?CurlMultiHandle $mh = null;
+
+    /**
+     * Responses collected after execution.
+     *
+     * @var ResponseInterface[] $response
+     */
+    private array $response = [];
+
+    /**
+     * Mode indicating CURL object is for parallels request.
+     * 
+     * @var bool $isMulti
+     */
+    private bool $isMulti = false;
+
+    /**
+     * Current job ID.
+     * 
+     * @var array<int,mixed> $parallels
+     */
+    private array $parallels = [];
+
+    /**
+     * Queued parallels requests.
+     * 
+     * @var int|bool $jobId
+     */
+    private int|bool $jobId = false;
+
+    /**
+     * Supported HTTP request methods.
+     * 
+     * @var array METHODS
+     */
+    private const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'HEAD', 'OPTIONS', 'DELETE'];
+
+    /**
      * {@inheritdoc}
      * 
      * @example - Example Request Client With base URL:
      * 
      * ```php
      * use Luminova\Http\Client\Curl;
+     * 
      * $client = new Curl([
      *      'base_uri' => 'https://example.com/'
      * ]);
+     * ```
+     * 
+     * @example - Example Using CURL multi request:
+     * 
+     * ```php
+     * use Luminova\Http\Client\Curl;
+     * 
+     * $multi = Curl::multi([
+     *      'base_uri' => 'https://example.com/'
+     * ]);
+     * $multi->run();
      * ```
      */
     public function __construct(private array $config = [])
@@ -100,6 +157,94 @@ class Curl implements ClientInterface
         if(($this->config['headers']['User-Agent'] ?? true) !== false){
             $this->config['headers']['User-Agent'] = $this->config['headers']['User-Agent'] ?? Luminova::copyright(true);
         }
+    }
+
+    /**
+     * Create a new multi Curl instance for parallel request execution.
+     *
+     * Call `add()` to queue requests, then `run()` or `iterator()` to execute.
+     *
+     * @param array<string, mixed> $config Optional configuration settings.
+     * 
+     * @return self Return a new instance of CURL class that resolves to CURL multi handler.
+     *
+     * @example - Example:
+     * 
+     * ```php
+     * use Luminova\Http\Client\Curl;
+     * $multi = Curl::multi();
+     * 
+     * $multi->add('GET', 'https://example.com');
+     * $multi->add('GET', 'https://example.org');
+     * $multi->add('GET', 'https://example.net');
+     * 
+     * $multi->run();
+     * $results = $multi->getResponses();
+     *
+     * // OR stream responses as they complete:
+     * foreach ($multi->iterator() as $response) {
+     *     // handle $response
+     * }
+     * ```
+     */
+    public static function multi(array $config = []): self
+    {
+        $instance = new self($config);
+        $instance->isMulti = true;
+        $instance->mh = curl_multi_init();
+
+        return $instance;
+    }
+
+    /**
+     * Queue a new request for multi executions.
+     *
+     * This must be used after calling Curl::multi().
+     *
+     * @param string $method  HTTP method (e.g. 'GET', 'POST').
+     * @param UriInterface|string $uri Optional target URI.
+     * @param array<string,mixed> $options Optional request options (headers, body, etc).
+     * 
+     * @return self Return instance of CURL class.
+     * @throws RequestException Throws if called without initializing multi CURL.
+     *
+     * @example - Example:
+     * ```php
+     * use Luminova\Http\Client\Curl;
+     * 
+     * $multi = Curl::multi();
+     * 
+     * $multi->add('GET', 'https://example.com', ['headers' => ['X-Test' => 'yes']]);
+     * $multi->add('POST', 'https://api.example.org', ['body' => 'data']);
+     * ```
+     */
+    public function add(string $method, UriInterface|string $uri = '', array $options = []): self 
+    {
+        if(!$this->isMulti){
+            self::handleException(sprintf(
+                '%s can only be used in multi mode. Call Curl::multi() before adding requests.',
+                __METHOD__
+            ), AppException::LOGIC_ERROR);
+        }
+
+        $this->parallels[] = [
+            'method' => strtoupper($method),
+            'uri' => $uri,
+            'options' => $options,
+            'metadata' => []
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Returns all responses collected from completed multi requests.
+     *
+     * @return ResponseInterface[]|Response[] Return an array of response objects.
+     */
+    public function getResponses(): array
+    {
+        return $this->response;
     }
 
     /**
@@ -127,10 +272,98 @@ class Curl implements ClientInterface
     /**
      * {@inheritdoc}
      */
+    public function getConfigs(): array
+    {
+        return $this->config;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function setOption(int $option, mixed $value): self
     {
         $this->options[$option] = $value;
         return $this;
+    }
+
+    /**
+     * Run all queued multi requests concurrently and collect responses.
+     *
+     * This method will execute the requests, and responses can be retrieved using `getResponses`.
+     *
+     * @return void
+     * @throws RequestException Throws if called without initializing multi CURL.
+     */
+    public function run(): void
+    {
+        $this->setMultiHandlers(__METHOD__);
+        $running = null;
+
+        do {
+            $status = curl_multi_exec($this->mh, $running);
+        } while ($status === CURLM_CALL_MULTI_PERFORM);
+
+        while ($running && $status === CURLM_OK && $this->parallels !== []) {
+            if (curl_multi_select($this->mh) === -1) {
+                usleep(100); 
+            }
+
+            do {
+                $status = curl_multi_exec($this->mh, $running);
+            } while ($status === CURLM_CALL_MULTI_PERFORM);
+
+            while ($current = curl_multi_info_read($this->mh)) {
+
+                $result = $this->getMultiResponse($current['handle']);
+
+                if ($result instanceof ResponseInterface) {
+                    $this->response[$this->jobId] = $result;
+                }
+            }
+        }
+
+        curl_multi_close($this->mh);
+        $this->parallels = [];
+    }
+
+    /**
+     * Iterate over each response as it arrives.
+     *
+     * This method yields each response as soon as it's ready.
+     *
+     * @return Generator<int,ResponseInterface|Response,void,void> Yields a Response object for each completed request.
+     * @throws RequestException Throws if called without initializing parallel CURL.
+     */
+    public function iterator(): Generator
+    {
+        $this->setMultiHandlers(__METHOD__);
+        $running = null;
+
+        do {
+            $status = curl_multi_exec($this->mh, $running);
+        } while ($status === CURLM_CALL_MULTI_PERFORM);
+
+        while ($running && $status === CURLM_OK && $this->parallels !== []) {
+            if (curl_multi_select($this->mh) === -1) {
+                usleep(100); 
+            }
+
+            do {
+                $status = curl_multi_exec($this->mh, $running);
+            } while ($status === CURLM_CALL_MULTI_PERFORM);
+
+            while ($current = curl_multi_info_read($this->mh)) {
+
+                $result = $this->getMultiResponse($current['handle']);
+
+                if ($result instanceof ResponseInterface) {
+                    yield $this->jobId => $result;
+                }
+            }
+        }
+
+        curl_multi_close($this->mh);
+        $this->parallels = [];
     }
 
     /**
@@ -174,12 +407,65 @@ class Curl implements ClientInterface
      */
     public function request(string $method, UriInterface|string $uri = '', array $options = []): ResponseInterface
     {
+        if ($this->isMulti) {
+            throw new ClientException(
+                'Multi request requires using add() to queue and run() or iterator() to execute.',
+                ClientException::LOGIC_ERROR
+            );
+        }        
+
         $method = strtoupper($method);
-        if (!in_array($method, ['GET', 'POST', 'PUT', 'PATCH', 'HEAD', 'OPTIONS', 'DELETE'], true)) {
-            throw new ClientException('Invalid request method. Supported methods: GET, POST, HEAD, PATCH, PUT, OPTIONS, DELETE.');
+        [$curl, $stream, $cookies, $isStream, $printHeaders] = $this->buildRequestOptions($method, $uri, $options);
+
+        $onBeforeRequest = $this->mutable['onBeforeRequest'] ?? null;
+       
+        if($onBeforeRequest && is_callable($onBeforeRequest)){
+            $onBeforeRequest($this->options[CURLOPT_URL], $this->options[CURLOPT_HTTPHEADER] ?? [], null);
+        }
+
+        [$response, $info] = $this->doRequest($curl);
+        
+        if(($this->headers['Content-Length'][0] ?? 0) === 0){
+            $this->headers['Content-Length'] = [$this->contentLength ?: strlen($response)];
+        }
+
+        if($isStream && $stream instanceof Stream){
+            $stream->rewind();
+        }elseif($printHeaders){
+            $response = self::toHeaderString($this->headers) . "\r\n" . $response;
+        }
+
+        return new Response(
+            statusCode: (int) ($info['http_code'] ?? 0),
+            headers: $this->headers,
+            contents: $response,
+            info: $info,
+            stream: $stream,
+            cookie: $this->parseResponseCookies($cookies, $this->headers['Set-Cookie'] ?? null)
+        );
+    }
+
+    /**
+     * Build CURL request options.
+     * 
+     * @param string $method The HTTP request method.
+     * @param UriInterface|string Optional URL to use.
+     * @param array<string,mixed> Optional request options.
+     * 
+     * @return array Return an array of request information and CURL object. 
+     * @throws ClientException Throw of error occurs.
+    */
+    private function buildRequestOptions(string $method, UriInterface|string $uri, array $options): array
+    {
+        if (!in_array($method, self::METHODS, true)) {
+            throw new ClientException(sprintf(
+                'Invalid request method. Supported methods: [%s]', 
+                implode(', ', self::METHODS)
+            ));
         }
 
         $curl = curl_init();
+
         if ($curl === false) {
             throw new ClientException('Failed to initialize cURL client connection.');
         }
@@ -195,7 +481,7 @@ class Curl implements ClientInterface
         $ssl = $this->mutable['ssl'] ?? null;
         $proxy = $this->mutable['proxy'] ?? null;
         $cookies = $this->mutable['cookies'] ?? null;
-        $onBeforeRequest = $this->mutable['onBeforeRequest'] ?? null;
+        $onProgress = $this->mutable['onProgress'] ?? null;
    
         $this->options = array_replace(
             [
@@ -211,7 +497,7 @@ class Curl implements ClientInterface
             ],
             $this->options
         );
-
+    
         $this->options[CURLOPT_HEADER] = false;
         $this->options[CURLOPT_RETURNTRANSFER] = true;
         $this->options[CURLOPT_URL] = $this->parseUrl(
@@ -281,11 +567,16 @@ class Curl implements ClientInterface
             $this->options[CURLOPT_HTTPGET] = true;
         }        
 
-        if($cookies !== null && is_string($cookies)){
-            $cookies = new CookieFileJar($cookies);
-        }
+        if($cookies !== null){
+            $cookies = is_string($cookies) ? new CookieFileJar($cookies) : $cookies;
 
-        if ($cookies instanceof CookieJarInterface) {
+            if (!$cookies instanceof CookieJarInterface) {
+                self::handleException(sprintf(
+                    'Cookie class does not implement %s interface', 
+                    CookieJarInterface::class
+                ), AppException::NOT_SUPPORTED);
+            }
+
             $cookieString = $cookies->getCookieStringByDomain($this->options[CURLOPT_URL] ?? '');
         
             if ($cookieString) {
@@ -333,32 +624,167 @@ class Curl implements ClientInterface
             );
         }
 
+        if ($onProgress) {
+            $this->options[CURLOPT_NOPROGRESS] = false;
+            $this->options[CURLOPT_PROGRESSFUNCTION] = static function (
+                mixed $resource,
+                float $downloadSize,
+                float $downloaded,
+                float $uploadSize,
+                float $uploaded
+            ) use ($onProgress) {
+                $onProgress($resource, $downloadSize, $downloaded, $uploadSize, $uploaded);
+            };
+        }
+
         if (!curl_setopt_array($curl, $this->options)) {
-            $failedOptions = [];
-        
-            foreach ($this->options as $opt => $value) {
-                if (!curl_setopt($curl, $opt, $value)) {
-                    $failedOptions[] = self::toOptionName($opt);
-                }
-            }
-        
-            $errorDetails = ($failedOptions !== [])
-                ? " Failed options: " . implode(', ', $failedOptions) 
-                : '';
+            $failed = $this->getFailedOptions($curl);
             curl_close($curl);
-            throw new RequestException("Failed to set cURL request options." . $errorDetails);
+
+            throw new RequestException("Failed to set cURL request options.{$failed}");
         }
 
-        if($onBeforeRequest && is_callable($onBeforeRequest)){
-            $onBeforeRequest($this->options[CURLOPT_URL], $this->options[CURLOPT_HTTPHEADER] ?? []);
+        return [
+            $curl,
+            $stream,
+            $cookies,
+            $isStream,
+            $printHeaders
+        ];
+    }
+
+    /**
+     * Attach per-request metadata needed during response collection.
+     *
+     * @param int $idx The request index.
+     * @param array $values The processed request properties.
+     * 
+     * @return void
+     */
+    private function setMultiMetadata(int $idx, array $values): void
+    {
+        $this->parallels[$idx]['metadata'] = [
+            'curl'         => $values[0],
+            'stream'       => $values[1],
+            'cookies'      => $values[2],
+            'isStream'     => $values[3],
+            'printHeaders' => $values[4],
+            'headers'      => [],
+            'onBeforeRequest' => $this->mutable['onBeforeRequest'] ?? null,
+            'url' => $this->options[CURLOPT_URL],
+            'httpHeaders' => $this->options[CURLOPT_HTTPHEADER] ?? [],
+            'isHeaderDone' => false,
+            'contentLength' => 0
+        ];
+    }
+
+    /**
+     * Prepare and bind all handlers to the curl multi handle.
+     * 
+     * @param string $fn The calling class method.
+     * 
+     * @return void
+     */
+    private function setMultiHandlers(string $fn): void
+    {
+        if (!$this->isMulti) {
+            self::handleException(sprintf(
+                '%s can only be used in multi mode. Call Curl::multi() before running requests.',
+                $fn
+            ), AppException::LOGIC_ERROR);
+        }        
+
+        $this->response = [];
+
+        foreach ($this->parallels as $idx => $request) {
+            [$ch, $stream, $cookies, $isStream, $printHeaders] = 
+                $this->buildRequestOptions(
+                    $request['method'],
+                    $request['uri'],
+                    $request['options']
+                );
+
+            if (curl_multi_add_handle($this->mh, $ch) !== CURLM_OK) {
+                throw new ClientException("Unable to add cURL handle for request at index {$idx}.");
+            }
+
+            $this->setMultiMetadata($idx, [
+                $ch, $stream, $cookies, $isStream, $printHeaders,
+            ]);
+        }
+    }
+
+    /**
+     * Collect completed requests and either yield or store them.
+     *
+     * @param CurlHandle $ch Current CURL request to process.
+     * 
+     * @return ResponseInterface|null Return response object.
+     */
+    private function getMultiResponse(CurlHandle $ch): ?ResponseInterface
+    {
+        $jobId = $this->findParallelIndex($ch);
+        $request = $this->parallels[$jobId]['metadata'] ?? null;
+
+        if ($jobId === null || $request === null) {
+            curl_multi_remove_handle($this->mh, $ch);
+            curl_close($ch);
+            return null;
         }
 
+        $this->jobId = $jobId;
+        $headers = $request['headers'];
+        $onBeforeRequest = $request['onBeforeRequest'];
+
+        if ($onBeforeRequest && is_callable($onBeforeRequest)) {
+            $onBeforeRequest($request['url'], $request['httpHeaders'] ?? [], $this->jobId);
+        }
+        
+        [$body, $info] = $this->doMultiRequest($ch, $this->parallels[$this->jobId]['method']);
+      
+        if (($headers['Content-Length'][0] ?? 0) === 0) {
+            $headers['Content-Length'] = [
+                $request['contentLength'] ?: strlen($body)
+            ];
+        }
+
+        if ($request['isStream'] && $request['stream'] instanceof Stream) {
+            $request['stream']->rewind();
+        } elseif ($request['printHeaders']) {
+            $body = self::toHeaderString($headers) . "\r\n" . $body;
+        }
+
+        unset($this->parallels[$this->jobId]);
+
+        return new Response(
+            statusCode: (int) ($info['http_code'] ?? 0),
+            headers: $headers,
+            contents: $body,
+            info: $info,
+            stream: $request['stream'],
+            cookie: $this->parseResponseCookies(
+                $request['cookies'],
+                $headers['Set-Cookie'] ?? null
+            )
+        );
+    }
+
+    /**
+     * Execute CURL request and return response and info.
+     * 
+     * @param CurlHandle $curl The CURL object that resolved to options.
+     * 
+     * @return array{0: string|null, 1: array} Return response and info.
+     * @throws AppException Throw app exception.
+     */
+    private function doRequest(CurlHandle $curl): array
+    {
         $response = curl_exec($curl);
-        $contents = '';
-
-        if ($response === false) {
-            $errorCode = curl_errno($curl);
+        $errorCode = curl_errno($curl);
+    
+        if ($response === false || $errorCode) {
             $error = curl_error($curl);
+
             curl_close($curl);
             self::handleException($error, $errorCode);
         }
@@ -366,40 +792,55 @@ class Curl implements ClientInterface
         $info = (array) curl_getinfo($curl);
         curl_close($curl);
         
-        if(($this->headers['Content-Length'][0] ?? 0) === 0){
-            $this->headers['Content-Length'] = [$this->contentLength ?: strlen($response)];
+        return [$response, $info];
+    }
+
+    /**
+     * Read content and info from a completed curl handle.
+     *
+     * @param CurlHandle $curl
+     * 
+     * @return array{0: string|null, 1: array} Return response and info.
+     */
+    private function doMultiRequest(CurlHandle $curl, string $method): array
+    {
+        $response = curl_multi_getcontent($curl);
+        $errorCode = curl_errno($curl);
+
+        if (($method !== 'HEAD' && !$response) || $errorCode) {
+            $error = curl_error($curl);
+            curl_multi_remove_handle($this->mh, $curl);
+            curl_close($curl);
+            self::handleException($error, $errorCode);
         }
 
-        if($isStream && $stream instanceof Stream){
-            $stream->rewind();
-        }else{
-            $contents = $printHeaders 
-                ? self::toHeaderString($this->headers) . "\r\n" . $response 
-                : $response;
-        }
+        $info = (array) curl_getinfo($curl);
+        curl_multi_remove_handle($this->mh, $curl);
+        curl_close($curl);
 
-        if ($cookies instanceof CookieJarInterface && isset($this->headers['Set-Cookie'])) {
-            $headerCookies = $cookies->getFromHeader($this->headers['Set-Cookie']);
-            $cookies->setCookies($headerCookies);
+        return [$response, $info];
+    }
+
+    /**
+     * Identifies which cURL options failed to be set and returns them as a formatted string.
+     *
+     * @param CurlHandle $curl The cURL handle to test option setting against.
+     * 
+     * @return string Return formatted error message listing failed options, or empty string if none failed.
+     */
+    private function getFailedOptions(CurlHandle $curl): string
+    {
+        $failed = [];
         
-            $cookies = CookieFileJar::newCookie(
-                $headerCookies,
-                [
-                    ...$cookies->getConfig(),
-                    'readOnly' => true
-                ]
-            );
+        foreach ($this->options as $opt => $value) {
+            if (!curl_setopt($curl, $opt, $value)) {
+                $failed[] = self::toOptionName($opt);
+            }
         }
-
-        $response = null;
-        return new Response(
-            statusCode: (int) ($info['http_code'] ?? 0),
-            headers: $this->headers,
-            contents: $contents,
-            info: $info,
-            stream: $stream,
-            cookie: $cookies
-        );
+        
+        return ($failed !== [])
+            ? ' Failed options: [' . implode(', ', $failed) . ']'
+            : '';
     }
 
     /**
@@ -426,12 +867,14 @@ class Curl implements ClientInterface
         $length = strlen($header);
 
         if (trim($header) === '') {
-            $this->isHeaderDone = true;
+            $this->setMetadata('isHeaderDone', true);
+
             return ($printHeaders && $stream instanceof Stream) ? $stream->write($header) : $length;
         }
 
         if (($head = self::normalizeHeader($header)) !== null) {
-            $this->headers[$head[0]] = $head[1];
+
+            $this->setHeader($head[0], $head[1]);
 
             if ($response instanceof ResponseInterface) {
                 try{
@@ -453,14 +896,97 @@ class Curl implements ClientInterface
     }
 
     /**
+     * Find the index of a parallel request by its associated cURL handle.
+     *
+     * @param CurlHandle $ch The cURL handle to search for.
+     * 
+     * @return int|null Return the index of the multi request if found, otherwise null.
+     */
+    private function findParallelIndex(CurlHandle $ch): ?int
+    {
+        foreach ($this->parallels as $idx => $meta) {
+            if ($meta['metadata']['curl'] === $ch) {
+                return $idx;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Set a request header for the current job.
+     *
+     * If running in multi mode, the header is set in the metadata for the current job.
+     * Otherwise, it's added to the standard headers array.
+     *
+     * @param string $key Header name.
+     * @param mixed $value Header value.
+     * 
+     * @return void
+     */
+    private function setHeader(string $key, mixed $value): void 
+    {
+        if ($this->isMulti) {
+            $job = $this->parallels[$this->jobId] ?? [];
+            $headers = $job['metadata']['headers'] ?? [];
+            $headers[$key] = $value;
+
+            $this->parallels[$this->jobId]['metadata']['headers'] = $headers;
+            return;
+        }
+
+        $this->headers[$key] = $value;
+    }
+
+    /**
+     * Store a metadata value for the current job or instance.
+     *
+     * If running in parallel mode, the value is set in the job's metadata.
+     * Otherwise, it's stored directly in the instance property.
+     *
+     * @param string $key Metadata key.
+     * @param mixed $value Metadata value.
+     * 
+     * @return void
+     */
+    private function setMetadata(string $key, mixed $value): void 
+    {
+        if ($this->isMulti) {
+            $this->parallels[$this->jobId]['metadata'][$key] = $value;
+            return;
+        }
+
+        $this->{$key} = $value;
+    }
+
+    /**
+     * Retrieve a metadata value for the current job or instance.
+     *
+     * If running in parallel mode, the value is fetched from the job's metadata.
+     * Otherwise, it's retrieved from the instance property.
+     *
+     * @param string $key Metadata key to retrieve.
+     * @param mixed $default Default value to return if the key does not exist.
+     * 
+     * @return mixed The metadata value or default if not found.
+     */
+    private function getMetadata(string $key, mixed $default = null): mixed 
+    {
+        if ($this->isMulti) {
+            return $this->parallels[$this->jobId]['metadata'][$key] ?? $default;
+        }
+
+        return $this->{$key} ?? $default;
+    }
+
+    /**
      * Handles writing data to the stream during a cURL request.
      *
      * @param string $data The incoming data chunk to be written.
      * @param Stream $stream The stream object to write the data to.
      * @param bool $printHeaders Whether headers should be included in the output.
-     * @param array &$headers Reference to the headers array, which may be updated.
      *
-     * @return int The number of bytes written to the stream, or the length of the data if not written.
+     * @return int Return the number of bytes written to the stream, or the length of the data if not written.
      */
     private function onWriteFunction(
         string $data,
@@ -468,12 +994,16 @@ class Curl implements ClientInterface
         bool $printHeaders
     ): int
     {
-        if($this->isHeaderDone || $printHeaders){
+        $isDone = $this->getMetadata('isHeaderDone', false);
+
+        if($isDone || $printHeaders){
             $bytes = $stream->write($data); 
 
-            if($this->isHeaderDone){
-                $this->contentLength += $bytes;
-                $this->contentLength['Content-Length'] = [$this->contentLength];
+            if($isDone){
+                $length = $this->getMetadata('contentLength', 0) + $bytes;
+
+                $this->setMetadata('contentLength', $length);
+                $this->setHeader('Content-Length', [$length]);
             }
 
             return $bytes;
@@ -496,8 +1026,10 @@ class Curl implements ClientInterface
      *                                 'ssl_cert_file' (string): Path to the SSL certificate file
      *                                 'ssl_cert_password' (string): Password for the SSL certificate
      *                                 'cert_timeout' (int): Certificate cache timeout
+     * @param string|bool|null $verify SSL verification or cert path.
      *
-     * @throws ConnectException
+     * @return void
+     * @throws ConnectException Throw if path is not valid.
      */
     private function setSsl(array|null $ssl, string|bool|null $verify): void
     {
@@ -565,8 +1097,8 @@ class Curl implements ClientInterface
      * Sets the proxy for the cURL request based on the provided proxy configuration.
      *
      * @param array|string $proxy The proxy configuration, which can be a string or an associative array.
-     * @param array &$this->options The cURL options array, passed by reference
      *
+     * @return void
      * @throws RequestException If the provided proxy format is invalid.
      */
     private function setProxy(array|string $proxy): void
@@ -603,7 +1135,7 @@ class Curl implements ClientInterface
             return;
         }
 
-        throw new RequestException("Invalid proxy format. Expected string or array.");
+        throw new RequestException('Invalid proxy format. Expected string or array.');
     }
 
     /**
@@ -615,6 +1147,7 @@ class Curl implements ClientInterface
      *
      * @param string|null $base The base URL. Can be null if not needed.
      * @param UriInterface|string $uri The URI to append to the base URL. Default is an empty string.
+     * @param int|bool $idn If IDN support.
      *
      * @return string Return the complete URL formed by combining the base URL and URI.
      */
@@ -663,7 +1196,6 @@ class Curl implements ClientInterface
      * @param mixed $sink A resource or a string representing the file path to be used for the stream.
      * 
      * @return Stream Return the created Stream object.
-     * 
      * @throws RequestException If the stream cannot be opened, or if it is not both readable and writable.
      */
     private static function createStreamResponse(CurlHandle &$curl, mixed $sink): Stream
@@ -687,39 +1219,6 @@ class Curl implements ClientInterface
         }
 
         return $stream;
-    }
-
-    /**
-     * Handle different cURL error codes and throw appropriate exceptions.
-     *
-     * @param string $error The error message from the cURL request.
-     * @param int $code The cURL error code.
-     *
-     * @throws ConnectException If there's a connection-related error.
-     * @throws RequestException If there's an issue with the request format, timeout, or protocol.
-     * @throws ClientException If the client received an unexpected response.
-     * @throws ServerException If the server responds with unexpected behavior.
-     */
-    private static function handleException(string $error, int $code): void
-    {
-        $exception = match ($code) {
-            CURLE_COULDNT_CONNECT => ['Connection failed', ConnectException::class],
-            CURLE_URL_MALFORMAT => ['Invalid URL format', ConnectException::class],
-            CURLE_OPERATION_TIMEOUTED => ['Connection timed out', ConnectException::class],
-            CURLE_SSL_CONNECT_ERROR => ['SSL connection issue', ConnectException::class],
-            CURLE_GOT_NOTHING => ['No response received', ClientException::class],
-            CURLE_WEIRD_SERVER_REPLY => ['Unexpected server response', ServerException::class],
-            CURLE_TOO_MANY_REDIRECTS => ['Too many redirects', ServerException::class],
-            CURLE_UNSUPPORTED_PROTOCOL => ['Unsupported protocol', ServerException::class],
-            CURLE_PARTIAL_FILE => ['Partial file received', ClientException::class],
-            CURLE_ABORTED_BY_CALLBACK => ['Operation aborted by callback', ClientException::class],
-            CURLE_SEND_ERROR => ['Failed to send data', ConnectException::class],
-            CURLE_RECV_ERROR => ['Failed to receive data', ClientException::class],
-            CURLE_HTTP_NOT_FOUND => ['Resource not found', RequestException::class],
-            default => ['Request error', RequestException::class],
-        };
-
-        throw new $exception[1](sprintf('%s: %s (code: %d)', $exception[0], $error, $code));
     }
 
     /**
@@ -779,6 +1278,7 @@ class Curl implements ClientInterface
         if ($data === []) {
             return null;
         }
+
         try{
             return json_encode($data, JSON_THROW_ON_ERROR);
         }catch(JsonException|Exception $e){
@@ -830,30 +1330,6 @@ class Curl implements ClientInterface
     }
 
     /**
-     * Convert an array of headers to cURL format.
-     *
-     * @param array $headers The request headers.
-     *
-     * @return array<int,string> Return request headers as array.
-     */
-    private static function toRequestHeaders(array $headers): array
-    {
-        $line = [];
-        foreach ($headers as $key => $value) {
-            $key = (string) $key;
-            if(($key === 'X-Powered-By' && $value === false) || Network::SKIP_HEADER === $value){
-                continue;
-            }
-            Normalizer::assertHeader($key);
-            $value = Normalizer::normalizeHeaderValue($value);
-
-            $line[] = "{$key}: {$value[0]}";
-        }
-
-        return $line;
-    }
-    
-    /**
      * Convert response headers array into string representation.
      * 
      * @param array $headers The headers to convert to string.
@@ -880,5 +1356,98 @@ class Curl implements ClientInterface
         }
 
         return $line;
+    }
+
+    /**
+     * Convert an array of headers to cURL format.
+     *
+     * @param array $headers The request headers.
+     *
+     * @return array<int,string> Return request headers as array.
+     */
+    private static function toRequestHeaders(array $headers): array
+    {
+        $line = [];
+        foreach ($headers as $key => $value) {
+            $key = (string) $key;
+            if(($key === 'X-Powered-By' && $value === false) || Network::SKIP_HEADER === $value){
+                continue;
+            }
+
+            Normalizer::assertHeader($key);
+            $value = Normalizer::normalizeHeaderValue($value);
+
+            $line[] = "{$key}: {$value[0]}";
+        }
+
+        return $line;
+    }
+
+    /**
+     * Parses 'Set-Cookie' headers from the response and updates the cookie jar.
+     *
+     * If cookies are enabled and Set-Cookie headers exist in the response:
+     * 1. Extracts cookies from the headers using the cookie jar's parser
+     * 2. Updates the jar with the new cookies
+     * 3. Returns a new read-only CookieFileJar containing the parsed cookies
+     *
+     * Returns null if:
+     * - No cookie jar was provided
+     * - No Set-Cookie headers were present in the response
+     *
+     * @param CookieJarInterface|null $cookies The cookie jar to update (or null if cookies disabled).
+     * 
+     * @return CookieJarInterface|null New read-only cookie jar with parsed cookies, or null if not applicable.
+     */
+    private function parseResponseCookies(?CookieJarInterface $cookies, ?array $setCookie = null): ?CookieJarInterface
+    {
+        if (!($cookies instanceof CookieJarInterface) || !$setCookie) {
+            return null;
+        }
+        
+        $headerCookies = $cookies->getFromHeader($setCookie);
+        $cookies->setCookies($headerCookies);
+
+        return CookieFileJar::newCookie(
+            $headerCookies,
+            [
+                ...$cookies->getConfig(),
+                'readOnly' => true
+            ]
+        );
+    }
+
+    /**
+     * Handle different cURL error codes and throw appropriate exceptions.
+     *
+     * @param string $error The error message from the cURL request.
+     * @param int $code The cURL error code.
+     *
+     * @return void
+     * @throws ConnectException If there's a connection-related error.
+     * @throws RequestException If there's an issue with the request format, timeout, or protocol.
+     * @throws ClientException If the client received an unexpected response.
+     * @throws ServerException If the server responds with unexpected behavior.
+     */
+    private static function handleException(string $error, int $code): void
+    {
+        $exception = match ($code) {
+            CURLE_COULDNT_CONNECT => ['Connection failed', ConnectException::class],
+            CURLE_URL_MALFORMAT => ['Invalid URL format', ConnectException::class],
+            CURLE_OPERATION_TIMEOUTED => ['Connection timed out', ConnectException::class],
+            CURLE_SSL_CONNECT_ERROR => ['SSL connection issue', ConnectException::class],
+            CURLE_GOT_NOTHING => ['No response received', ClientException::class],
+            CURLE_WEIRD_SERVER_REPLY => ['Unexpected server response', ServerException::class],
+            CURLE_TOO_MANY_REDIRECTS => ['Too many redirects', ServerException::class],
+            CURLE_UNSUPPORTED_PROTOCOL => ['Unsupported protocol', ServerException::class],
+            CURLE_PARTIAL_FILE => ['Partial file received', ClientException::class],
+            CURLE_ABORTED_BY_CALLBACK => ['Operation aborted by callback', ClientException::class],
+            CURLE_SEND_ERROR => ['Failed to send data', ConnectException::class],
+            CURLE_RECV_ERROR => ['Failed to receive data', ClientException::class],
+            CURLE_HTTP_NOT_FOUND => ['Resource not found', RequestException::class],
+            default => ['Request error', RequestException::class],
+        };
+
+        throw new $exception[1](sprintf('%s: %s (code: %d)', $exception[0], $error, $code));
     }
 }

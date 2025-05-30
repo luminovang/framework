@@ -12,7 +12,7 @@ namespace Luminova\Functions;
 
 use \App\Config\IPConfig;
 use \Luminova\Time\Time;
-use \Luminova\Http\Network;
+use \Luminova\Http\Client\Curl;
 use \Luminova\Utils\Async;
 use \Luminova\Functions\Tor;
 use \Luminova\Exceptions\AppException;
@@ -228,7 +228,7 @@ final class IP
         }
 
         try {
-            $response = Async::await(fn() => (new Network())->get($url, $settings));
+            $response = Async::await(fn() => (new Curl())->request('GET', $url, $settings));
 
             if($response->getContents() === null){
                 return self::error('No ip info available', $response->getStatusCode());

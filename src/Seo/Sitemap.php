@@ -16,7 +16,6 @@ use \Luminova\Utils\LazyObject;
 use \Luminova\Core\CoreApplication;
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Color;
-use \Luminova\Http\Network;
 use \Luminova\Http\Client\Curl;
 use \Luminova\Utils\Async;
 use \Luminova\Command\Utils\Text;
@@ -564,7 +563,7 @@ final class Sitemap
             /**
              * @var \Luminova\Interface\ResponseInterface $response
              */
-            $response = Async::await(fn() => (new Network(new Curl([
+            $response = Async::await(fn() => (new Curl([
                 'file_time' => true,
                 'onBeforeRequest' => fn(string $url, array $headers) => self::$term->watcher(
                     max(1, self::$config->scanSpeed), 
@@ -572,7 +571,7 @@ final class Sitemap
                     null,
                     false
                 )
-            ])))->get($url));
+            ]))->request('GET', $url));
             
             self::_print('flush', null, 'writeln', $scanning);
 

@@ -12,7 +12,7 @@ namespace Luminova\Command\Consoles;
 
 use \Luminova\Base\BaseConsole;
 use \Luminova\Seo\Sitemap;
-use \Luminova\Http\Network;
+use \Luminova\Http\Client\Curl;
 use \Luminova\Command\Utils\Text;
 use \Luminova\Security\Crypter;
 use \SplFileObject;
@@ -23,12 +23,12 @@ class System extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'System';
+    protected string $group = 'generator';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'generator';
+    protected string $name = 'System';
 
     /**
      * {@inheritdoc}
@@ -407,7 +407,7 @@ class System extends BaseConsole
 
         if (!$chatId) {
             try {
-                $response = (new Network())->get("https://api.telegram.org/bot{$token}/getUpdates");
+                $response = (new Curl())->request('GET', "https://api.telegram.org/bot{$token}/getUpdates");
 
                 if ($response->getStatusCode() === 200) {
                     $data = json_decode($response->getBody()->getContents(), true);

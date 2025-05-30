@@ -32,6 +32,25 @@ use \JsonException;
 final class Builder implements LazyInterface
 {  
     /**
+     * Debug mode to inspect query parameters generated from the builder itself.
+     * 
+     * This uses Luminova's internal debugging logic, capturing the SQL structure and parameters 
+     * before passing them to the driver.
+     * 
+     * @var int DEBUG_FROM_BUILDER
+     */
+    public const DEBUG_FROM_BUILDER = 0;
+
+    /**
+     * Debug mode to inspect query parameters from the underlying driver (e.g., PDO or MySQLi).
+     * 
+     * This captures the actual statement and bound parameters passed to the database engine.
+     * 
+     * @var int DEBUG_FROM_DRIVER
+     */
+    public const DEBUG_FROM_DRIVER = 1;
+
+    /**
      * Return result as an array.
      * 
      * @var string RETURN_ARRAY
@@ -1847,17 +1866,25 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Enable query string debugging, the read and update methods will return false.
+     * Enables query string debugging mode.
+     *
+     * In production environments, the debug information is logged using the `debug` level.
+     *
+     * @param int $mode The debug mode to use (`Builder::DEBUG_FROM_BUILDER` or `Builder::DEBUG_FROM_DRIVER`).
+     *
+     * @return self Returns the builder instance for chaining.
      * 
-     * If this method is invoked in a production environment, 
-     * the query string will be logged using the `debug` level, 
-     * 
-     * @return self Return instance of builder class.
+     * > - When set to `DEBUG_FROM_BUILDER`, the builder will collect query strings and parameters internally.
+     * > - When set to `DEBUG_FROM_DRIVER`, the underlying database driver (e.g., PDO or MySQLi) is responsible for debugging.
      */
-    public function debug(): self 
+    public function debug(int $mode = self::DEBUG_FROM_BUILDER): self 
     {
-        $this->debugInformation = [];
-        $this->isDebuggable = true;
+        if($mode === self::DEBUG_FROM_BUILDER){
+            $this->debugInformation = [];
+            $this->isDebuggable = true;
+        }
+
+        $this->db?->setDebug(true);
         return $this;
     }
 
@@ -2573,6 +2600,7 @@ final class Builder implements LazyInterface
             }
             
             $this->bindConditions();
+            $this->bindJoinPlaceholders();
             $response = $this->db->execute() ? $this->db->rowCount() : 0;
             $this->reset();
 

@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework Novkit console command handler.
+ * Luminova Framework Novakit console command handler.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -205,15 +205,15 @@ final class Novakit
      * It first checks predefined system commands, then searches registered console commands
      * based on the provided mode (`system` or `global`).
      *
-     * @param string $command The command string (e.g., `create:controller`, `db:migrate`, `foo`).
+     * @param string $group The command group string (e.g., `create:controller`, `db:migrate`, `foo`).
      * @param string $mode The lookup mode: `system` for internal commands, or `global` for custom/console commands.
      *
      * @return class-string<BaseConsole>|null Returns the fully qualified class name if found, or `null` if not.
      */
-    public static function find(string $command, string $mode = 'global'): ?string 
+    public static function find(string $group, string $mode = 'global'): ?string 
     {
-        $pos = strpos($command, ':');
-        $novakit = ($pos === false) ? $command : substr($command, 0, $pos); 
+        $pos = strpos($group, ':');
+        $novakit = ($pos === false) ? $group : substr($group, 0, $pos); 
         $controller = match($novakit){
             '-h', '--help' => SystemHelp::class,
             'auth', => Authenticate::class,
@@ -245,7 +245,7 @@ final class Novakit
         }
 
         return self::$consoles[$novakit] 
-            ?? self::$consoles[$command] 
+            ?? self::$consoles[$group] 
             ?? null;
     }
 
@@ -255,7 +255,7 @@ final class Novakit
      * This method maps a command name to its controller class and optionally stores
      * command metadata such as group, description, usage examples, options, and more.
      * 
-     * @param string $name The command name (e.g., 'foo').
+     * @param string $group The command group name (e.g., 'foo').
      * @param class-string<BaseConsole> $class The fully qualified class name that handles the command.
      * @param array $properties (optional) Additional metadata for the command based on protected properties.
      * 
@@ -283,20 +283,20 @@ final class Novakit
      * ]);
      * ```
      */
-    public static function command(string $name, string $class, array $properties = []): bool 
+    public static function command(string $group, string $class, array $properties = []): bool 
     {
         self::$isSystem = false;
 
-        if (self::hasCommand($name, 'staging') || !class_exists($class)) {
+        if (self::hasCommand($group, 'staging') || !class_exists($class)) {
             return false;
         }
 
-        self::$consoles[$name] = $class;
+        self::$consoles[$group] = $class;
 
         if ($properties !== []) {
-            $properties['name'] = $name;
+            $properties['group'] = $group;
             $properties['class'] = $class;
-            self::$properties[$name] = $properties;
+            self::$properties[$group] = $properties;
         }
 
         return true;
@@ -305,14 +305,14 @@ final class Novakit
     /**
      * Get a specific property from a registered command's metadata.
      *
-     * @param string $command The command name.
-     * @param string $name The property name to retrieve (e.g., 'group', 'description').
+     * @param string $group The command group name.
+     * @param string $property The property name to retrieve (e.g., 'group', 'description').
      *
      * @return mixed Returns the value of the specified property if it exists, or `null` otherwise.
      */
-    public static function get(string $command, string $name): mixed
+    public static function get(string $group, string $property): mixed
     {
-        return self::getCommand($command)[$name] ?? null;
+        return self::getCommand($group)[$property] ?? null;
     }
 
     /**
@@ -321,51 +321,51 @@ final class Novakit
      * The returned array may include the following keys:
      * `name`, `group`, `description`, `usages`, `options`, `examples`, etc.
      *
-     * @param string $command The command name.
+     * @param string $command The command group name.
      * @param string $mode The command mode to check within (supported: `system` or `global`).
      *
      * @return array<string,mixed> Returns an associative array of command metadata.
      */
-    public static function getCommand(string $command, string $mode = 'global'): array
+    public static function getCommand(string $group, string $mode = 'global'): array
     {
         self::$isSystem = true;
-        $commands = Commands::get($command);
+        $commands = Commands::get($group);
 
         return ($commands === [] && $mode !== 'system') 
-            ? self::build($command) 
+            ? self::build($group) 
             : $commands;
     }
 
     /**
      * Check if a command exists globally (i.e., user-defined console command).
      *
-     * @param string $command The name of the command to check.
+     * @param string $group The command group to check.
      *
      * @return bool Returns true if the command exists globally, otherwise, false.
      */
-    public static function has(string $command): bool
+    public static function has(string $group): bool
     {
-        return self::hasCommand($command, 'global');
+        return self::hasCommand($group, 'global');
     }
 
     /**
      * Check if a command exists in NovaKit or among custom console commands,
      * based on the given execution mode.
      *
-     * @param string $command The name of the command to check.
+     * @param string $command The command group to check.
      * @param string $mode The command mode to check within. Can be one of:
      *                     `system`, `admin`, `global`, or `staging`.
      *
      * @return bool Returns true if the command exists in the specified mode, otherwise false.
      * @internal
      */
-    public static function hasCommand(string $command, string $mode = 'system'): bool
+    public static function hasCommand(string $group, string $mode = 'system'): bool
     {
         if(!$mode){
             return false;
         }
         
-        if(($mode !== 'admin' && Commands::has($command)) || Terminal::isHelp($command)){
+        if(($mode !== 'admin' && Commands::has($group)) || Terminal::isHelp($group)){
             return true;
         }
 
@@ -381,7 +381,7 @@ final class Novakit
             return false;
         }
 
-        return isset(self::$consoles[$command]);
+        return isset(self::$consoles[$group]);
     }
 
     /**
@@ -390,16 +390,16 @@ final class Novakit
      * This method loads and caches information such as group, description,
      * usage examples, and options from the specified command controller.
      * 
-     * @param string $command The command name to build metadata for.
+     * @param string $group The command group to build metadata for.
      * 
      * @return array<string,mixed> Returns an associative array of command metadata.
      */
-    private static function build(string $command): array
+    private static function build(string $group): array
     {
         self::$isSystem = false;
 
-        if(isset(self::$properties[$command])){
-            return self::$properties[$command];
+        if(isset(self::$properties[$group])){
+            return self::$properties[$group];
         }
 
         self::autoload();
@@ -408,7 +408,7 @@ final class Novakit
             return [];
         }
 
-        $className = self::$consoles[$command] ?? null;
+        $className = self::$consoles[$group] ?? null;
 
         if($className === null || !class_exists($className)){
             return [];
@@ -420,11 +420,12 @@ final class Novakit
 
         try{
             $instance = self::getProperty();
+            $pos = strpos($group, ':');
 
-            return self::$properties[$command] = [
-                'name' => $command,
+            return self::$properties[$group] = [
+                'name' => $instance->get('name', ''),
                 'class' => $className,
-                'group' => $instance->get('group', ''),
+                'group' => ($pos === false) ? $group : substr($group, 0, $pos),
                 'description' => $instance->get('description', ''),
                 'usages' => $instance->get('usages', []),
                 'options' => $instance->get('options', []),

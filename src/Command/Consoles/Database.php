@@ -26,12 +26,12 @@ class Database extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'Database';
+    protected string $group = 'db';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'db';
+    protected string $name = 'Database';
 
     /**
      * {@inheritdoc}

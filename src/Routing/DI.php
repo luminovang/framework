@@ -10,6 +10,7 @@
  */
 namespace Luminova\Routing;
 
+use \Closure;
 use \Luminova\Seo\Schema;
 use \Luminova\Email\Mailer;
 use \Luminova\Http\Network;
@@ -18,22 +19,23 @@ use \Luminova\Cookies\Cookie;
 use \Luminova\Cache\FileCache;
 use \Luminova\Arrays\ArrayUtil;
 use \Luminova\Cache\RedisCache;
+use \Luminova\Http\Client\Curl;
+use \Luminova\Security\JWTAuth;
 use \Luminova\Sessions\Session;
 use \Luminova\Cache\MemoryCache;
+use \Luminova\Template\Response;
 use \Luminova\Application\Factory;
+use \Luminova\Languages\Translator;
 use \Luminova\Cookies\CookieFileJar;
+use \Luminova\Interface\ClientInterface;
 use \Luminova\Interface\CookieInterface;
 use \Luminova\Interface\NetworkInterface;
+use \Luminova\Security\Encryption\Sodium;
+use \Luminova\Security\Encryption\OpenSSL;
 use \Luminova\Interface\CookieJarInterface;
 use \Luminova\Interface\HttpRequestInterface;
-use \Luminova\Security\Encryption\OpenSSL;
-use \Luminova\Security\Encryption\Sodium;
-use \Luminova\Security\JWTAuth;
-use \Luminova\Languages\Translator;
-use \Luminova\Notifications\Firebase\Notification;
-use \Luminova\Template\Response;
 use \Luminova\Interface\ViewResponseInterface;
-use \Closure;
+use \Luminova\Notifications\Firebase\Notification;
 
 class DI
 {
@@ -136,6 +138,7 @@ class DI
         return match ($class) {
             Request::class, HttpRequestInterface::class      => Request::class,
             Network::class, NetworkInterface::class          => Network::class,
+            Curl::class, ClientInterface::class              => Curl::class,
             Response::class, ViewResponseInterface::class    => Response::class,
             Session::class       => Session::class,
             Factory::class       => Factory::class,

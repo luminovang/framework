@@ -20,12 +20,12 @@ class Logs extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'Logs';
+    protected string $group = 'log';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'log';
+    protected string $name = 'Logs';
 
     /**
      * {@inheritdoc}

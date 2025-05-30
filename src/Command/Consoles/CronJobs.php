@@ -12,7 +12,7 @@ namespace Luminova\Command\Consoles;
 
 use \Luminova\Base\BaseConsole;
 use \Luminova\Base\BaseCommand;
-use \Luminova\Http\Network;
+use \Luminova\Http\Client\Curl;
 use \Luminova\Time\Time;
 use \Luminova\Logger\Logger;
 use \Luminova\Command\Utils\Text;
@@ -27,12 +27,12 @@ class CronJobs extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'Cron';
+    protected string $group = 'cron';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'cronjob';
+    protected string $name = 'CronJobs';
 
     /**
      * {@inheritdoc}
@@ -45,9 +45,9 @@ class CronJobs extends BaseConsole
     /**
      * Network instance.
      * 
-     * @var Network|null $network
+     * @var Curl|null $network
      */
-    private static ?Network $network = null;
+    private static ?Curl $network = null;
 
     /**
      * Application cron instance.
@@ -227,11 +227,11 @@ class CronJobs extends BaseConsole
         }
 
         if($task['pingOn' . $event] && isset($instance['pingOn' . $event])){
-            self::$network ??= new Network();
+            self::$network ??= new Curl();
             $output .= ($event === 'Failure') ? "Failure ping " : "Completed ping ";
             
-            self::$network->fetch($instance['pingOn' . $event], [
-                'query' => $task
+            self::$network->requestAsync('POST', $instance['pingOn' . $event], [
+                'body' => $task
             ])->then(function(ResponseInterface $res) use(&$output){
                 $output .= "succeeded: ";
                 $output .=  $res->getStatusCode() . "\n";
@@ -257,12 +257,16 @@ class CronJobs extends BaseConsole
     {
         [$namespace, $method] = explode('::', $task['controller']);
         $reflector = new ReflectionClass($namespace);
+        $isConsole = $reflector->isSubclassOf(BaseConsole::class);
 
-        if ($reflector->isSubclassOf(BaseCommand::class)) {
+        if ($reflector->isSubclassOf(BaseCommand::class) || $isConsole) {
             if ($reflector->hasMethod($method)) {
                 $caller = $reflector->getMethod($method);
                 if($caller->isPublic() && !$caller->isAbstract() && !$caller->isStatic()){
-                    $response = $caller->invoke($reflector->newInstance());
+                    $response = ($isConsole && $method === 'run')
+                        ? $caller->invoke($reflector->newInstance(), $this->term->getQueries())
+                        : $caller->invoke($reflector->newInstance());
+
                     $output .= "Job was executed with response: " . var_export($response, true) . "\n";
                     return true;
                 }
@@ -275,7 +279,7 @@ class CronJobs extends BaseConsole
             return false;
         }
 
-        $output .= "Class {$namespace} is not a subclass of " . BaseCommand::class . ".\n";
+        $output .= "Class {$namespace} is not a subclass of " . BaseCommand::class . " or " .  BaseConsole::class . ".\n";
         return false;
     }
 

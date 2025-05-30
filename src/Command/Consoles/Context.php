@@ -19,12 +19,12 @@ class Context extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'Context';
+    protected string $group = 'context';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'context';
+    protected string $name = 'Context';
 
     /**
      * {@inheritdoc}

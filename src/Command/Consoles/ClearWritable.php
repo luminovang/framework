@@ -18,12 +18,12 @@ class ClearWritable extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $group = 'Clear';
+    protected string $group = 'clear';
 
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'clear';
+    protected string $name = 'Clear';
 
     /**
      * {@inheritdoc}
