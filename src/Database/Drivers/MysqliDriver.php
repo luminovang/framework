@@ -207,7 +207,7 @@ final class MysqliDriver implements DatabaseInterface
             return null;
         }
 
-        return $this->config->{$property} ?? null;
+        return $this->config->getValue($property);
     }
 
     /**
@@ -898,20 +898,19 @@ final class MysqliDriver implements DatabaseInterface
         }
 
         mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-        $socket = null;
-        if (is_command() || NOVAKIT_ENV !== null || $this->config->socket) {
-            $socket = (($this->config->socket_path === '' || $this->config->socket_path === null) 
-                ? ini_get('mysqli.default_socket') 
-                : $this->config->socket_path);
+        $socketPath = null;
+        if (is_command() || NOVAKIT_ENV !== null || $this->config->getValue('socket')) {
+            $socketPath = $this->config->getValue('socket_path');
+            $socketPath = empty($socketPath) ? ini_get('mysqli.default_socket') : $socketPath;
         }
         
         $this->connection = new mysqli(
-            $this->config->host,
-            $this->config->username,
-            $this->config->password,
-            $this->config->database,
-            $this->config->port,
-            $socket
+            $this->config->getValue('host'),
+            $this->config->getValue('username'),
+            $this->config->getValue('password'),
+            $this->config->getValue('database'),
+            $this->config->getValue('port'),
+            $socketPath
         );
 
         if ($this->connection->connect_error) {
@@ -922,12 +921,13 @@ final class MysqliDriver implements DatabaseInterface
         }
 
         $this->connection->options(
-            MYSQLI_OPT_INT_AND_FLOAT_NATIVE, 
-            (int) $this->config->emulate_preparse
+            MYSQLI_OPT_INT_AND_FLOAT_NATIVE, (int) $this->config->getValue('emulate_preparse')
         );
 
-        if($this->config->charset !== ''){
-            $this->connection->set_charset($this->config->charset);
+        $charset = $this->config->getValue('charset');
+
+        if($charset){
+            $this->connection->set_charset($charset);
         }
     }
 }

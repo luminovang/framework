@@ -11,11 +11,12 @@ declare(strict_types=1);
  */
 namespace Luminova\Core;
 
-use \Luminova\Interface\RouterInterface;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Routing\Router;
-use \Luminova\Template\View;
+use \Luminova\Luminova;
 use \Luminova\Routing\DI;
+use \Luminova\Template\View;
+use \Luminova\Routing\Router;
+use \Luminova\Interface\LazyInterface;
+use \Luminova\Interface\RouterInterface;
 use \Closure;
 
 abstract class CoreApplication implements LazyInterface
@@ -411,16 +412,18 @@ abstract class CoreApplication implements LazyInterface
     public function __get(string $key): mixed
     {
         $value = self::attrGetter($key);
-        $value = ($value === self::$KEY_NOT_FOUND) 
-            ? (property_exists($this, $key) ? $this->{$key} : self::$KEY_NOT_FOUND) 
-            : $value;
 
-        return ($value === self::$KEY_NOT_FOUND) 
-            ? (property_exists(static::class, $key) ? static::${$key} : null)
-            : $value;
+        if($value !== self::$KEY_NOT_FOUND) {
+            return $value;
+        }
+
+        //return $this->{$key} ?: (property_exists(static::class, $key) ? static::${$key} : null);
+        return Luminova::isPropertyExists($this, $key, true) 
+            ? static::${$key} 
+            : ($this->{$key} ?? null);
     }
 
-     /**
+    /**
      * Terminates the application if it is marked as terminated.
      *
      * This function checks if the application instance is marked as terminated. If it is, it triggers the 'onTerminated' 

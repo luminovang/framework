@@ -28,9 +28,9 @@ interface DatabaseInterface
     public function __construct(CoreDatabase $config);
 
     /**
-     * Get the name of the database connection driver.
+     * Get the driver version name of the database connection driver.
      * 
-     * @return string|null Returns the driver name if the connection is open, otherwise null.
+     * @return string|null Returns the driver version name if the connection is open, otherwise null.
      */
     public function getDriver(): ?string;
 

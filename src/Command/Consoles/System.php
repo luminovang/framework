@@ -325,7 +325,7 @@ class System extends BaseConsole
                 0,
                 'Specify your PDO database engine:'
             );
-            setenv('database.pdo.engine', $map[$pdoEngine] ?? 'mysql', true);
+            setenv('database.pdo.version', $map[$pdoEngine] ?? 'mysql', true);
         }
 
         $mysqlSocket = $this->term->prompt(

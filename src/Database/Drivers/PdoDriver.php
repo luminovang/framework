@@ -120,7 +120,6 @@ final class PdoDriver implements DatabaseInterface
     public function __construct(CoreDatabase $config) 
     {
         $this->config = $config;
-
         try{
             $this->newConnection();
             $this->connected = true;
@@ -150,7 +149,7 @@ final class PdoDriver implements DatabaseInterface
     public function getDriver(): ?string 
     {
         return $this->isConnected() 
-            ? $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME) ?? $this->config->pdo_engine
+            ? $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME) ?? $this->config->getValue('pdo_version')
             : null;
     }
 
@@ -170,9 +169,12 @@ final class PdoDriver implements DatabaseInterface
             return null;
         }
 
-        return $this->config->{$property} ?? null;
+        return $this->config->getValue($property);
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function getQueryTime(): float|int 
     {
         return $this->queryTime;
@@ -770,32 +772,32 @@ final class PdoDriver implements DatabaseInterface
             return;
         }
 
-        $driver = strtolower($this->config->pdo_engine);
-        $dns = $this->dnsConnection($driver);
+        $version = strtolower($this->config->getValue('pdo_version'));
+        $dns = $this->dnsConnection($version);
 
-        if ($dns === '' || ($driver === 'sqlite' && $this->config->sqlite_path === '')) {
+        if ($dns === null) {
             throw new DatabaseException(
-                sprintf('Unsupported PDO driver, no driver found for: "%s"', $driver),
+                sprintf('Unsupported PDO driver, no driver found for: "%s"', $version),
                 DatabaseException::DATABASE_DRIVER_NOT_AVAILABLE
             );
         }
 
         $username = $password = null;
 
-        if ($driver !== 'sqlite' && $driver !== 'pgsql') {
-            $username = $this->config->username;
-            $password = $this->config->password;
+        if ($version !== 'sqlite' && $version !== 'pgsql') {
+            $username = $this->config->getValue('username');
+            $password = $this->config->getValue('password');
         }
 
         $options = [
-            PDO::ATTR_EMULATE_PREPARES => $this->config->emulate_preparse,
-            PDO::ATTR_PERSISTENT => $this->config->persistent,
+            PDO::ATTR_EMULATE_PREPARES => $this->config->getValue('emulate_preparse'),
+            PDO::ATTR_PERSISTENT => $this->config->getValue('persistent'),
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ
         ];
 
-        if($driver === 'mysql' && $this->config->charset !== ''){
-            $options[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES {$this->config->charset}";
+        if($version === 'mysql' && ($charset = $this->config->getValue('charset'))){
+            $options[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES {$charset}";
         }
 
         $this->connection = new PDO($dns, $username, $password, $options);
@@ -804,21 +806,34 @@ final class PdoDriver implements DatabaseInterface
     /**
      * Get driver dns connection.
      *
-     * @param string $context Connection driver context name.
+     * @param string $version Connection driver version name.
      * 
-     * @return string
+     * @return string|null
      */
-    private function dnsConnection(string $context): string
+    private function dnsConnection(string $version): ?string
     {
-        return match($context){
-            'cubrid' => "cubrid:dbname={$this->config->database};host={$this->config->host};port={$this->config->port}",
-            'dblib' => "dblib:host={$this->config->host};dbname={$this->config->database};port={$this->config->port}",
-            'oci' => "oci:dbname={$this->config->database}",
-            'pgsql' => "pgsql:host={$this->config->host} port={$this->config->port} dbname={$this->config->database} user={$this->config->username} password={$this->config->password}",
-            'sqlite' => "sqlite:{$this->config->sqlite_path}",
-            'sqlsrv' => "sqlsrv:Server={$this->config->host};Database={$this->config->database}",
-            'mysql' => $this->mysqlDns(),
-            default => ''
+        $sqlitePath = $this->config->getValue('sqlite_path');
+
+        if($version === 'sqlite'){
+            if(!$sqlitePath){
+                return null;
+            }
+
+            return "sqlite:{$sqlitePath}";
+        }
+
+        $database = $this->config->getValue('database');
+        $host = $this->config->getValue('host');
+        $port = $this->config->getValue('port');
+
+        return match($version){
+            'cubrid' => "cubrid:dbname={$database};host={$host};port={$port}",
+            'dblib' => "dblib:host={$host};dbname={$database};port={$port}",
+            'oci' => "oci:dbname={$database}",
+            'pgsql' => "pgsql:host={$host} port={$port} dbname={$database} user={$this->config->getValue('username')} password={$this->config->getValue('password')}",
+            'sqlsrv' => "sqlsrv:Server={$host};Database={$database}",
+            'mysql' => $this->mysqlDns($database, $host, $port),
+            default => null
         };
     }
 
@@ -829,17 +844,15 @@ final class PdoDriver implements DatabaseInterface
      * 
      * @return string Return database connection dns string.
      */
-    private function mysqlDns(): string
+    private function mysqlDns(string $database, string $host, int $port): string
     {
-        if (is_command() || NOVAKIT_ENV !== null || $this->config->socket) {
-            $socket = (($this->config->socket_path === '' || $this->config->socket_path === null) ? 
-                ini_get('pdo_mysql.default_socket') : 
-                $this->config->socket_path
-            );
+        if (is_command() || NOVAKIT_ENV !== null || $this->config->getValue('socket')) {
+            $socketPath = $this->config->getValue('socket_path');
+            $socketPath = empty($socketPath) ? ini_get('pdo_mysql.default_socket') : $socketPath;
 
-            return "mysql:unix_socket={$socket};dbname={$this->config->database}";
+            return "mysql:unix_socket={$socketPath};dbname={$database}";
         }
 
-        return "mysql:host={$this->config->host};port={$this->config->port};dbname={$this->config->database}";
+        return "mysql:host={$host};port={$port};dbname={$database}";
     }
 }

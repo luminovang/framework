@@ -10,13 +10,14 @@
  */
 namespace Luminova\Utils;
 
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\LogicException;
 use \Closure;
-use \ReflectionClass;
-use \Stringable;
 use \Throwable;
+use \Stringable;
+use \ReflectionClass;
+use \Luminova\Interface\LazyInterface;
+use \Luminova\Exceptions\AppException;
+use \Luminova\Exceptions\LogicException;
+use \Luminova\Exceptions\RuntimeException;
 
 class LazyObject implements LazyInterface, Stringable
 {
@@ -149,8 +150,12 @@ class LazyObject implements LazyInterface, Stringable
                 ...($arguments && is_callable($arguments)) ? $arguments() : []
             ));
         } catch (Throwable $e) {
+            if($e instanceof AppException){
+                throw $e;
+            }
+
             throw new RuntimeException(
-                sprintf('Failed to initialize the lazy ghost object. Error: %s', $e->getMessage()),
+                sprintf('Failed to initialize object. %s', $e->getMessage()),
                 $e->getCode(),
                 $e
             );
@@ -215,8 +220,12 @@ class LazyObject implements LazyInterface, Stringable
 
             return new ($this->initializer)(...$arguments);
         } catch (Throwable $e) {
+            if($e instanceof AppException){
+                throw $e;
+            }
+
             throw new RuntimeException(
-                sprintf('Failed to initialize the lazy object. Error: %s', $e->getMessage()),
+                sprintf('Failed to initialize object. %s', $e->getMessage()),
                 $e->getCode(),
                 $e
             );
@@ -460,8 +469,12 @@ class LazyObject implements LazyInterface, Stringable
         try {
             $this->lazyInstance = ($this->lazyInitializer)(...($this->lazyArguments ? ($this->lazyArguments)() : []));
         } catch (Throwable $e) {
+            if($e instanceof AppException){
+                throw $e;
+            }
+            
             throw new RuntimeException(
-                sprintf('Failed to initialize the lazy object. Error: %s', $e->getMessage()),
+                sprintf('Failed to initialize object. %s', $e->getMessage()),
                 $e->getCode(),
                 $e
             );

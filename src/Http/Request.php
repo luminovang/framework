@@ -842,7 +842,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         self::initRequestSecurityConfig();
         $trusted = ($context === 'hostname') ? self::$config->trustedHostnames : self::$config->trustedOrigins;
 
-        if($trusted === []){
+        if(!$trusted){
             return true;
         }
 

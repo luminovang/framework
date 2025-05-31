@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework
+ * Luminova Framework Database connection configuration.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -15,130 +15,90 @@ use \Luminova\Interface\LazyInterface;
 abstract class CoreDatabase implements LazyInterface
 {
     /**
-     * The port to connect to the database.
+     * Database connection properties.
      * 
-     * @var int|null $port 
+     * @var array<string,mixed> $immutables
+     * @internal
      */
-    private ?int $port = 3306;
+    private array $immutables = [
+        'port'              => 3306,
+        'host'              => 'localhost',
+        'connection'        => 'pdo',
+        'pdo_version'       => 'mysql',
+        'charset'           => 'utf8mb4',
+        'sqlite_path'       => null,
+        'production'        => false,
+        'username'          => 'root',
+        'password'          => '',
+        'database'          => '',
+        'socket'            => false,
+        'socket_path'       => '',
+        'persistent'        => true,
+        'emulate_preparse'  => true
+    ];
 
     /**
-     * The hostname or IP address of the database server.
+     * Whether to fallback to an available backup server if the selected shard is unreachable.
      * 
-     * @var string $host [localhost, 127.0.0.1].
+     * When enabled, the system will attempt to use a backup configuration from `$databaseServers`
+     * if the main shard server fails or is offline.
+     * 
+     * This is useful in distributed environments where high availability is required.
+     *
+     * @var bool $shardFallbackOnError
      */
-    private string $host = 'localhost'; 
+    public static bool $shardFallbackOnError = false;
 
     /**
-     * Database connection driver type.
-     * 
-     * @var string $connection [pdo, mysqli].
+     * Enable or disable connection-level database sharding.
+     *
+     * When set to true, the application will attempt to route database connections 
+     * based on shard configurations defined by the shard location identifier `getShardServerKey`. 
+     * This allows for distributing database load across multiple shard servers 
+     * for better scalability and isolation (e.g., multi-tenant or geo-based setups).
+     *
+     * If false, all connections will be made to the default primary database configuration.
+     *
+     * @var bool $connectionSharding
      */
-    private string $connection = 'pdo'; 
+    public static bool $connectionSharding = false;
 
     /**
-     * The PDO database driver.
+     * List of database connection servers.
      * 
-     * @var string|null $pdo_engine 
+     * This serves two purposes:
+     * - Provides alternative connections for **sharded environments** when a shard is unavailable.
+     * - Acts as a **failover mechanism** for non-sharded environments when the main database fails.
+     * 
+     * Each server should follow the same structure as the primary configuration.
+     *
+     * @var array<string|int,array<string, mixed>> $databaseServers
+     *
+     * @example
+     * Database::$databaseServers = [
+     *     'NG' => [
+     *         'host' => 'ng.db.server',
+     *         'port' => 3306,
+     *         'database' => 'my_db_ng',
+     *         'connection' => 'pdo', 
+     *         'pdo_version' => 'mysql',
+     *         'username' => 'user_ng',
+     *         'password' => 'secret',
+     *         'charset' => 'utf8mb4',
+     *         'version' => 'mysql',
+     *         'persistent' => true,
+     *         'emulate_preparse' => true,
+     *         'socket' => false,
+     *         'socket_path' => '',
+     *         'sqlite_path' => '', // Only used if version is sqlite
+     *     ],
+     *     'US' => [
+     *         'host' => 'us.db.server',
+     *         ...
+     *     ]
+     * ];
      */
-    private ?string $pdo_engine = 'mysql';
-
-    /**
-     * The character set used for the database connection.
-     * 
-     * @var string $charset 
-     */
-    private string $charset = 'utf8mb4';
-
-    /**
-     * The path to the SQLite database file if applicable.
-     * 
-     * @var string|null $sqlite_path 
-     */
-    private ?string $sqlite_path = null;
-
-    /**
-     * Indicates if this configuration is for a production environment.
-     * 
-     * @var bool $production 
-     */
-    private bool $production = false;
-
-    /**
-     * The username for the database connection.
-     * 
-     * @var string $username 
-     */
-    private string $username = 'root';
-
-    /**
-     * The password for the database connection.
-     * 
-     * @var string $password 
-     */
-    private string $password = '';
-
-    /**
-     * The name of the database to connect to.
-     * 
-     * @var string $database 
-     */
-    private string $database = '';
-
-    /**
-     * Database force socket connection.
-     * 
-     * @var bool $socket 
-     */
-    private bool $socket = false;
-
-    /**
-     * Database connection socket path.
-     * 
-     * @var string $socket 
-     */
-    private string $socket_path = '';
-
-    /**
-     * persistent database connection.
-     * 
-     * @var bool $persistent 
-     */
-    private bool $persistent = true;
-    
-    /**
-     * emulate pre-parse statement.
-     * 
-     * @var bool $emulate_preparse 
-     */
-    private bool $emulate_preparse = false;
-
-    /**
-     * Optional servers to connect to when main server fails
-     * An associative array with each database configuration keys and values.
-     * 
-     * @example 
-     * protected static array $databaseBackups = [
-     *      [
-     *          'port' => 0,
-     *          'host' => '',
-     *          'pdo_engine' => 'mysql',
-     *          'connection' => 'pdo',
-     *          'charset' => 'utf8',
-     *          'persistent' => true,
-     *          'emulate_preparse' => false,
-     *          'sqlite_path' => null,
-     *          'username' => 'root',
-     *          'password' => '',
-     *          'database' => 'db_name',
-     *          'socket' => false,
-     *          'socket_path' => ''
-     *      ],
-     *      ...
-     * ]
-     * 
-     * @var array<int,mixed> $databaseBackups
-     */
-    protected static array $databaseBackups = [];
+    protected static array $databaseServers = [];
 
     /**
      * Initialize database configuration with backup connection details.
@@ -148,32 +108,32 @@ abstract class CoreDatabase implements LazyInterface
     public function __construct(array $config = [])
     {
         if($config !== []){
-            $this->configure($config);
+            $this->immutables = array_replace($this->immutables, $config);
         }
     }
 
     /**
-     * Since we don't want dev's to think they can change the database properties.
-     * We made then private and create a magic getter method to publicly access them.
-     * 
-     * @param string $property Property name.
-     * 
-     * @return mixed Return property value if exists, otherwise return null.
+     * Retrieve all database connection servers.
+     *
+     * @return array<string|int,mixed> Return database connection servers.
+     * @internal 
      */
-    public function __get(string $property): mixed 
+    public static final function getServers(): array
     {
-        return $this->{$property} ?? null;
+        return static::$databaseServers;
     }
 
     /**
-     * Get the value of the protected property $databaseBackups
-     *
-     * @return array<int,mixed> Return database backups.
-     * @internal 
+     * Get database configuration property value.
+     * 
+     * @param string $key The property configuration key.
+     * @param mixed $default The default value.
+     * 
+     * @return mixed Return database connection property value.
      */
-    public static final function getBackups(): array
+    public final function getValue(string $key, mixed $default = null): mixed 
     {
-        return static::$databaseBackups;
+        return $this->immutables[$key] ?? $default;
     }
 
     /**
@@ -183,7 +143,7 @@ abstract class CoreDatabase implements LazyInterface
      * 
      * @return bool Return true if the query is DDL, false otherwise.
      */
-    public static function isDDLQuery(string $query): bool 
+    public static final function isDDLQuery(string $query): bool 
     {
         return preg_match(
             '/^\s*(CREATE|ALTER|DROP|TRUNCATE|RENAME|COMMENT|GRANT|REVOKE|ANALYZE|DISCARD|CLUSTER|VACUUM)\b/i', 
@@ -192,27 +152,37 @@ abstract class CoreDatabase implements LazyInterface
     }
 
     /**
-     * Set database configuration properties
+     * Get the target shard location identifier.
      * 
-     * @param array<string,mixed> $config Database configuration.
-     * 
-     * @return void 
+     * This method determines the shard key used to route the database connection.
+     * It supports static values (e.g., a region code like 'NG') or can be overridden
+     * to return the appropriate shard dynamically based on runtime conditions.
+     *
+     * Typical use cases include:
+     * - Geo-based sharding
+     * - Load-balanced regional databases
+     * - Multi-tenant database separation
+     *
+     * @return string The shard identifier key (e.g., 'NG', 'EU').
+     *
+     * @example Static shard mapping:
+     * ```php
+     * public static function getShardServerKey(): string 
+     * {
+     *     return 'NG';
+     * }
+     * ```
+     *
+     * @example Dynamic shard resolution:
+     * ```php
+     * public static function getShardServerKey(): string 
+     * {
+     *     return resolveUserRegion();
+     * }
+     * ```
      */
-    private function configure(array $config): void 
+    public static function getShardServerKey(): string
     {
-        $this->port = $config['port'] ?? 3306;
-        $this->host = $config['host'] ?? 'localhost';
-        $this->connection = $config['connection'] ?? 'pdo';
-        $this->pdo_engine = $config['pdo_engine'] ?? 'mysql';
-        $this->charset = $config['charset'] ?? 'utf8mb4';
-        $this->sqlite_path = $config['sqlite_path'] ?? null;
-        $this->production = $config['production'] ?? false;
-        $this->username = $config['username'] ?? 'root';
-        $this->password = $config['password'] ?? '';
-        $this->database = $config['database'] ?? '';
-        $this->persistent = $config['persistent'] ?? true;
-        $this->socket = $config['socket'] ?? false;
-        $this->socket_path = $config['socket_path'] ?? '';
-        $this->emulate_preparse = $config['emulate_preparse'] ?? false;
+        return '';
     }
 }

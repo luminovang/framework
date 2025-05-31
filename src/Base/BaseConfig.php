@@ -10,6 +10,7 @@
  */
 namespace Luminova\Base;
 
+use \Luminova\Luminova;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Interface\HttpRequestInterface;
 use \Psr\Log\AbstractLogger;
@@ -69,7 +70,7 @@ abstract class BaseConfig implements LazyInterface
     {
         return property_exists($this, $key)
             ? $this->{$key}
-            : static::__getStatic($key);
+            : null;
     }
 
     /**
@@ -84,7 +85,7 @@ abstract class BaseConfig implements LazyInterface
      */
     public static function __getStatic(string $key, mixed $default = null): mixed
     {
-        return property_exists(static::class, $key)
+        return Luminova::isPropertyExists(static::class, $key)
             ? static::${$key}
             : $default;
     }
