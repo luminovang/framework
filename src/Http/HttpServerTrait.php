@@ -106,14 +106,14 @@ trait HttpServerTrait
     protected string $ip = '';
 
     /**
-     * Weather clients must connect first before accessing server.
+     * Whether clients must connect first before accessing server.
      * 
      * @var bool $requireConnection
      */
     protected static bool $requireConnection = false;
 
      /**
-     * Weather clients must connect first before accessing server.
+     * Whether clients must connect first before accessing server.
      * 
      * @var bool $acceptWebSocket
      */
@@ -400,7 +400,7 @@ trait HttpServerTrait
      * Retrieves the details of an HTTP request from a string or an array format.
      *
      * @param string $request The raw HTTP request as a string.
-     * @param bool $headers Weather to retrieve the headers (default: false).
+     * @param bool $headers Whether to retrieve the headers (default: false).
      * 
      * @return array An array containing the HTTP method, request URI, and HTTP version.
      *               Defaults to ['GET', '/', 'HTTP/1.1', [headers]] if values are not found.

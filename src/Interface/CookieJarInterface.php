@@ -184,7 +184,7 @@ interface CookieJarInterface
      *
      * @param string|null $url The request URL to extract domain and path.
      *                         If null, defaults to set domain (`setCookieDomain`) and path (`setCookiePath`).
-     * @param bool $metadata Weather to include metadata (e.g., `Expires`, `Max-Age` etc...).
+     * @param bool $metadata Whether to include metadata (e.g., `Expires`, `Max-Age` etc...).
      *              This can be used for testing purposes or to emulate a browser's behavior.
      * 
      * @return string|null Return a semicolon-separated cookie string, or null if no cookies match.
@@ -232,7 +232,7 @@ interface CookieJarInterface
     /**
      * Get the cookie value if name is specified.
      *
-     * @param bool $asArray Weather to return value as an array if its a valid json string (default: false).
+     * @param bool $asArray Whether to return value as an array if its a valid json string (default: false).
      * 
      * @return mixed Return the value of the cookie.
      * @throws CookieException Throws if called without cookie name specified.
@@ -290,7 +290,7 @@ interface CookieJarInterface
     /**
      * Get the cookie expiration time.
      * 
-     * @param bool $returnString Weather to retrieve unix-timestamp or formate cookie datetime string
+     * @param bool $returnString Whether to retrieve unix-timestamp or formate cookie datetime string
      * 
      * @return string|int Return cookie expiration timestamp or formatted string presentation.
      * @throws CookieException Throws if called without cookie name specified.
@@ -453,7 +453,7 @@ interface CookieJarInterface
     public function isRaw(): bool;
 
     /** 
-     * Check weather the cookie include subdomains support.
+     * Check Whether the cookie include subdomains support.
      * 
      * @return bool Return true if subdomain is included, false otherwise.
      * @throws CookieException Throws if called without cookie name specified.
@@ -486,7 +486,7 @@ interface CookieJarInterface
     public function isReadOnly(): bool;
 
     /** 
-     * Check weather cookie configuration is set to emulate browser behavior during requests, 
+     * Check Whether cookie configuration is set to emulate browser behavior during requests, 
      * by setting cookies in the request header object `Cookie` instead of `CURLOPT_COOKIE`.
      * 
      * @return bool Return true if should emulate browser, false otherwise.
@@ -494,14 +494,14 @@ interface CookieJarInterface
     public function isEmulateBrowser(): bool;
 
     /** 
-     * Check weather cookie configuration is marked as a new session.
+     * Check Whether cookie configuration is marked as a new session.
      * 
      * @return bool Return true if marked as a new session, false otherwise.
      */
     public function isNewSession(): bool;
 
     /** 
-     * Check weather cookie configuration is set to be read and write as netscape cookie format.
+     * Check Whether cookie configuration is set to be read and write as netscape cookie format.
      * 
      * @return bool Return true if the cookie should be in netscape cookie format, false otherwise.
      */
@@ -511,7 +511,7 @@ interface CookieJarInterface
      * Get the cookie as a string header value.
      * 
      * @return string Return the header string representation of the Cookie object.
-     * @param bool $metadata Weather to include metadata (e.g., `Expires`, `Max-Age` etc...).
+     * @param bool $metadata Whether to include metadata (e.g., `Expires`, `Max-Age` etc...).
      *              This can be used for testing purposes or to emulate a browser's behavior.
      * 
      * @throws CookieException Throws if called without cookie name specified.

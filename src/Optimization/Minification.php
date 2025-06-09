@@ -61,9 +61,9 @@ final class Minification
      * Class constructor.
      * Initializes default settings for the response headers and cache control.
      * 
-     * @param bool $ignoreCodeblocks Weather to ignore html code block tag `<code></code>` (default: false). 
-     * @param bool $copyable Weather to include a copy button to code blocks (default: false).
-     * @param bool $isHtml Weather minification is for HTML contents (default: true).
+     * @param bool $ignoreCodeblocks Whether to ignore html code block tag `<code></code>` (default: false). 
+     * @param bool $copyable Whether to include a copy button to code blocks (default: false).
+     * @param bool $isHtml Whether minification is for HTML contents (default: true).
      */
     public function __construct(
         private bool $ignoreCodeblocks = false,
@@ -74,7 +74,7 @@ final class Minification
     /**
      * Set if minifying content is kind of HTML.
      *
-     * @param bool $isHtml Weather minification is for HTML contents (default: true).
+     * @param bool $isHtml Whether minification is for HTML contents (default: true).
      * 
      * @return self Returns minification class instance.
      */
@@ -87,7 +87,7 @@ final class Minification
     /**
      * sets ignore minifying code block.
      *
-     * @param bool $ignore Weather to ignore minifying code blocks.
+     * @param bool $ignore Whether to ignore minifying code blocks.
      * 
      * @return self Returns minification class instance.
      */
@@ -100,7 +100,7 @@ final class Minification
     /**
      * sets allow copy code block.
      *
-     * @param bool $allow Weather to include code copy button.
+     * @param bool $allow Whether to include code copy button.
      * 
      *  @return self Returns minification class instance.
      */
@@ -157,7 +157,7 @@ final class Minification
      * @param string $contentType The expected content type for the response.
      * 
      * @return self Returns minification class instance.
-     * @throws RuntimeException If array or object and json error occures.
+     * @throws RuntimeException If array or object and json error occurs.
      */
     public function compress(
         string|array|object $data,

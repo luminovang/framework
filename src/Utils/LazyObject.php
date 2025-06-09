@@ -43,7 +43,7 @@ class LazyObject implements LazyInterface, Stringable
     private mixed $lazyArguments = null;
 
     /**
-     * Indicate weather lazy-ghost is supported.
+     * Indicate Whether lazy-ghost is supported.
      * 
      * @var bool|null $isLazySupported
      */
@@ -395,7 +395,7 @@ class LazyObject implements LazyInterface, Stringable
     /**
      * Unserialize the lazy-loaded instance.
      *
-     * This method is called when unserializing the lazy-loaded object. It ensures that the instance is initialized
+     * This method is called when deserializing the lazy-loaded object. It ensures that the instance is initialized
      * and implements the __unserialize() method before applying the unserialization data.
      * 
      * @param array $data The data to unserialize.

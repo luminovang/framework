@@ -317,7 +317,7 @@ final class Validation implements ValidationInterface, LazyInterface
      *
      * @param mixed $value The value to be validated.
      * @param mixed $param The condition to check for the integer value. Accepts 'positive', 'negative', or any other string to validate the integer without additional conditions.
-     * @param bool $isDecimal Weather is decimal mode.
+     * @param bool $isDecimal Whether is decimal mode.
      *
      * @return bool Return true if the value is a valid integer and meets the condition (if provided); `false` otherwise.
      */

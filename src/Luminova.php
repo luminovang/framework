@@ -24,7 +24,7 @@ final class Luminova
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.6.1';
+    public const VERSION = '3.6.2';
 
     /**
      * Framework version name.
@@ -89,7 +89,7 @@ final class Luminova
     /**
      * Get the framework copyright information.
      *
-     * @param bool $userAgent Weather to return user-agent information instead (default: false).
+     * @param bool $userAgent Whether to return user-agent information instead (default: false).
      * 
      * @return string Return framework copyright message or user agent string.
      * @internal

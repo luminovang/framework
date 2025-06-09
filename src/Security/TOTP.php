@@ -23,7 +23,7 @@ use \Endroid\QrCode\{
 final class TOTP
 {
     /**
-     * Indicate weather QrCode is installed.
+     * Indicate Whether QrCode is installed.
      * 
      * @var bool|null $isQrCodeInstalled
      */

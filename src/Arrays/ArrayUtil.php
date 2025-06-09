@@ -10,13 +10,13 @@
  */
 namespace Luminova\Arrays;
 
-use \Countable;
-use \Stringable;
-use \ArrayIterator;
 use \Luminova\Arrays\Listify;
 use \Luminova\interface\LazyInterface;
 use \Luminova\Exceptions\JsonException;
 use \Luminova\Exceptions\RuntimeException;
+use \Countable;
+use \Stringable;
+use \ArrayIterator;
 
 class ArrayUtil implements LazyInterface, Countable, Stringable
 {
@@ -32,7 +32,7 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
      * Create or Update the current array from a json string.
      * 
      * @param string $json The json string to update from.
-     * @param bool|null $assoc Weather to convert to an associative array (default: true).
+     * @param bool|null $assoc Whether to convert to an associative array (default: true).
      * @param int $depth Set the maximum recursion depth, must be greater than zero (default: 512).
      * @param int $flags The json decoding flags using bitwise OR (|) operators to combine multiple flags.
      * 
@@ -365,7 +365,7 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
      * Searches for a value or key in the current array and returns the corresponding key or index.
      *
      * @param mixed $search The value or key to search for.
-     * @param bool $strict Weather to also check the types of the search in the searching array haystack (default: true).
+     * @param bool $strict Whether to also check the types of the search in the searching array haystack (default: true).
      * @param bool $forKey Whether to search for a key (defaults: false).
      * 
      * @return string|int|false Returns the key or index if found, otherwise returns false.
@@ -414,7 +414,7 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
      * Recursively merges multiple arrays. Values from later arrays will overwrite values from earlier arrays, including merging nested arrays.
      * 
      * @param ArrayUtil|array<string|int,mixed> $array The array to merge with the current array.
-     * @param bool $distinct Weather to ensure unique values in nested arrays (default: false).
+     * @param bool $distinct Whether to ensure unique values in nested arrays (default: false).
      * 
      * @return self Return the updated instance with the merged array.
      */
@@ -540,13 +540,13 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
     /**
      * Update the current array with elements in reverse order.
      * 
-     * @param bool $preserve_keys Weather to preserve the original keys of the current array or reset resulting to sequential numeric keys. (default: false).
+     * @param bool $preserveKeys Whether to preserve the original keys of the current array or reset resulting to sequential numeric keys. (default: false).
      * 
      * @return self Return the updated instance with the reversed array.
      */
-    public function reverse(bool $preserve_keys = false): self
+    public function reverse(bool $preserveKeys = false): self
     {
-        $this->array = array_reverse($this->array, $preserve_keys);
+        $this->array = array_reverse($this->array, $preserveKeys);
         return $this;
     }
 
@@ -554,13 +554,13 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
      * Return new array instance by splitting the array into chunks.
      * 
      * @param int $size The split chunk size.
-     * @param bool $preserve_keys Weather to preserve the array keys or reindex the chunk numerically (default: false).
+     * @param bool $preserveKeys Whether to preserve the array keys or reindex the chunk numerically (default: false).
      * 
      * @return ArrayUtil Return a new instance of ArrayUtil containing the chunked array.
      */
-    public function chunk(int $size, bool $preserve_keys = false): ArrayUtil
+    public function chunk(int $size, bool $preserveKeys = false): ArrayUtil
     {
-        return new ArrayUtil(array_chunk($this->array, $size, $preserve_keys));
+        return new ArrayUtil(array_chunk($this->array, $size, $preserveKeys));
     }
 
     /**
@@ -571,13 +571,13 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
      *                  - If length is given and is positive, then the sequence will have that many elements in it. 
      *                  - If length is given and is negative then the sequence will stop that many elements from the end of the array. 
      *                  - If it is omitted, then the sequence will have everything from offset up until the end of the array.
-     * @param bool $preserve_keys Weather to preserve the array keys or to reorder and reset the array numeric keys (default: false).
+     * @param bool $preserveKeys Whether to preserve the array keys or to reorder and reset the array numeric keys (default: false).
      * 
      * @return ArrayUtil Return a new instance of ArrayUtil containing the slice of array.
      */
-    public function slice(int $offset, ?int $length = null, bool $preserve_keys = false): ArrayUtil
+    public function slice(int $offset, ?int $length = null, bool $preserveKeys = false): ArrayUtil
     {
-        return new ArrayUtil(array_slice($this->array, $offset, $length, $preserve_keys));
+        return new ArrayUtil(array_slice($this->array, $offset, $length, $preserveKeys));
     }
 
     /**
@@ -593,7 +593,7 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
     /**
      * Convert the current array to to json string representation.
      * 
-     * @param bool $throw Weather throw json exception if error occurs (default: true).
+     * @param bool $throw Whether throw json exception if error occurs (default: true).
      * 
      * @return string Return json string of the current array, if throw is false return null on error.
      * @throws JsonException Throws if unable to convert to json string.
@@ -623,7 +623,7 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
      * 
      * @param int $flags The json encoding flags using bitwise OR (|) operators to combine multiple flags.
      * @param int $depth Set the maximum depth, must be greater than zero (default: 512).
-     * @param bool $throw Weather throw json exception if error occurs (default: true).
+     * @param bool $throw Whether throw json exception if error occurs (default: true).
      * 
      * @return string|null Return json string of the current array, if throw is false return null on error.
      * @throws JsonException Throws if unable to convert to json string.
@@ -644,10 +644,10 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
     /**
      * Convert the current array to json object representation.
      * 
-     * @param bool|null $assoc Weather to convert to an associative array (default: true).
+     * @param bool|null $assoc Whether to convert to an associative array (default: true).
      * @param int $flags The json encoding flags using bitwise OR (|) operators to combine multiple flags.
      * @param int $depth Set the maximum depth, must be greater than zero (default: 512).
-     * @param bool $throw Weather throw json exception if error occurs (default: true).
+     * @param bool $throw Whether throw json exception if error occurs (default: true).
      * 
      * @return object|null Return json object of the current array, if throw is false return null on error.
      * @throws JsonException Throws if unable to convert to json string or convert to object.

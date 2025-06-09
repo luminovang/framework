@@ -49,7 +49,7 @@ final class Uploader
         }
 
         $config = $file->getConfig();
-        $chunk = (isset($config->chunkLength) ? (int) $config->chunkLength : 5_242_880);
+        $chunk = ($config->chunkLength > 0) ? (int) $config->chunkLength : 5_242_880;
         $uploaded = false;
 
         if($file->getTemp() !== null){
@@ -164,7 +164,7 @@ final class Uploader
         }
     
         $config = $file->getConfig();
-        $length = (int) $config->chunkLength ?? 5_242_880;
+        $chunk = ($config->chunkLength > 0) ? (int) $config->chunkLength : 5_242_880;
         $temp = $destination . '.part';
         
         try {
@@ -176,7 +176,7 @@ final class Uploader
         }
     
         $error = true;
-        $uploadDelay = ($uploadDelay === 0 && $length > 10_000_000) ? 10000 : $uploadDelay;
+        $uploadDelay = ($uploadDelay === 0 && $chunk > 10_000_000) ? 10000 : $uploadDelay;
     
         if ($file->getTemp() !== null) {
             try{
@@ -191,7 +191,7 @@ final class Uploader
                 $error = false;
     
                 while (!$in->eof()) {
-                    $buffer = $in->fread($length);
+                    $buffer = $in->fread($chunk);
                     if($buffer === false){
                         continue;
                     }
@@ -213,8 +213,8 @@ final class Uploader
             if ($content !== false && is_string($content)) {
                 $error = false;
     
-                for ($offset = 0, $size = strlen($content); $offset < $size; $offset += $length) {
-                    $out->fwrite(substr($content, $offset, $length));
+                for ($offset = 0, $size = strlen($content); $offset < $size; $offset += $chunk) {
+                    $out->fwrite(substr($content, $offset, $chunk));
     
                     if ($uploadDelay > 0) {
                         usleep($uploadDelay);

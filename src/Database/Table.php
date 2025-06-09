@@ -182,7 +182,7 @@ final class Table
     public ?string $comment = null;
 
     /**
-     * Specify weather to use create if not exists or just create table.
+     * Specify Whether to use create if not exists or just create table.
      * 
      * @var bool $ifNotExists
      */
@@ -212,7 +212,7 @@ final class Table
      *
      * @param string $tableName The name of the table.
      * @param string $database The database type (default: `MYSQL`).
-     * @param bool $ifNotExists Weather to add `if not exists` (default: false).
+     * @param bool $ifNotExists Whether to add `if not exists` (default: false).
      * @param string|null $collation Optional table collation type (default: null).
      * @param string|null $comment Optional table comment (default: null).
      * 
@@ -446,7 +446,7 @@ final class Table
      * 
      * This method sets the column to allow `NUL`L values in the database.
      * 
-     * @param bool $nullable Weather to allow null values in the column or not (default: `TRUE`)
+     * @param bool $nullable Whether to allow null values in the column or not (default: `TRUE`)
      *
      * @return self Returns the table class instance.
      * > If this method isn't called, then `NULL` or `NOT NULL` attributes will not be added.

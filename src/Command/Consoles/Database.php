@@ -544,8 +544,8 @@ class Database extends BaseConsole
      * Executes migrations.
      *
      * @param string $namespace The migrations class namespace.
-     * @param bool $drop Weather to migrations drop table.
-     * @param bool $invokes Weather to invoke migrations classes.
+     * @param bool $drop Whether to migrations drop table.
+     * @param bool $invokes Whether to invoke migrations classes.
      * @param array|null $migrants Pass migrations invokers by reference.
      * 
      * @return bool Returns true if migrations otherwise false.
@@ -631,8 +631,8 @@ class Database extends BaseConsole
      * Rolls back a migration to a specified version or the last one executed.
      *
      * @param mixed $class The class name of the migration to rollback.
-     * @param bool $noBackup Weather no backup flag is passed.
-     * @param bool $noInvokes Weather to ignore invoking invokers.
+     * @param bool $noBackup Whether no backup flag is passed.
+     * @param bool $noInvokes Whether to ignore invoking invokers.
      * @param int|string|null $input Pass input version number to invoke invokers.
      *
      * @return int Returns STATUS_SUCCESS on successful rollback, STATUS_ERROR on failure.
@@ -745,8 +745,8 @@ class Database extends BaseConsole
      * Rolls back a seeder table to a specified version or the last one executed.
      *
      * @param mixed $class The class name of the seeder to rollback.
-     * @param bool $noBackup Weather no backup flag is passed.
-     * @param bool $invokes Weather to invokes other invocable seeders (default: false).
+     * @param bool $noBackup Whether no backup flag is passed.
+     * @param bool $invokes Whether to invokes other invocable seeders (default: false).
      *
      * @return int Returns STATUS_SUCCESS on successful rollback, STATUS_ERROR on failure.
      */

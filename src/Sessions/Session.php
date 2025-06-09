@@ -1223,7 +1223,7 @@ class Session implements LazyInterface
      * @param string $key The metadata key.
      * @param mixed $value The metadata value.
      * @param string|null $storage Optional storage name.
-     * @param bool $online Weather to update when online only (default: true).
+     * @param bool $online Whether to update when online only (default: true).
      * 
      * @return void
      */

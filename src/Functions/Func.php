@@ -361,7 +361,7 @@ class Func
 	 *
 	 * @param string $url The URL to validate.
 	 * @param bool $allow_idn Set to true to allow internationalized domains (default: false).
-	 * @param bool $http_only Weather to support urls with `http` and `https` scheme (default: false).
+	 * @param bool $http_only Whether to support urls with `http` and `https` scheme (default: false).
 	 *
 	 * @return bool Returns true if valid URL, false otherwise.
 	 */

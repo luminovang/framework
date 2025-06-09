@@ -811,7 +811,7 @@ final class Message
     /**
      * Determine if building payload for internal notification class.
      * 
-     * @param bool $builder Weather notification payload is handled internally by notification class.
+     * @param bool $builder Whether notification payload is handled internally by notification class.
      * 
      * @return self Return instance of notification class.
      * @internal Handled internally for notification class.

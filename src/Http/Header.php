@@ -395,8 +395,8 @@ class Header implements LazyInterface, Countable
      * Sends HTTP headers to the client.
      *
      * @param array<string,mixed> $headers An associative array of headers to send.
-     * @param bool $ifNotSent Weather to send headers if headers is not already sent (default: true).
-     * @param bool $charset Weather to append default charset from env to `Content-Type` 
+     * @param bool $ifNotSent Whether to send headers if headers is not already sent (default: true).
+     * @param bool $charset Whether to append default charset from env to `Content-Type` 
      *              if it doesn't contain it (default: false).
      * 
      * @return void
@@ -491,7 +491,7 @@ class Header implements LazyInterface, Countable
      * 
      * If output buffering is already active, it will not be restarted.
      * 
-     * @param bool $clearIfSet Weather to clear output buffers if already set (default: false).
+     * @param bool $clearIfSet Whether to clear output buffers if already set (default: false).
      *
      * @return bool Returns true if output buffering is successfully started; false otherwise.
      * @internal This method is intended for internal framework use only.

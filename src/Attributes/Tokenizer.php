@@ -34,7 +34,7 @@ final class Tokenizer
     public array $routes = [];
 
     /**
-     * Weather routing attributes cache is enabled.
+     * Whether routing attributes cache is enabled.
      * 
      * @var bool $isCacheable
      */
@@ -84,7 +84,7 @@ final class Tokenizer
     /**
      * Set if attributes should be cached for later use or not.
      * 
-     * @param bool $cache Weather cache is supported or not.
+     * @param bool $cache Whether cache is supported or not.
      *
      * @return self Return instance of tokenizer.
      */

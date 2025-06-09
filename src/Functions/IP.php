@@ -382,7 +382,7 @@ final class IP
      * Convert an IPv4 address to its IPv6-mapped representation.
      *
      * @param string|null $ipv4 The IPv4 address to convert.
-     * @param bool $binary Weather to return the binary representation (default: false).
+     * @param bool $binary Whether to return the binary representation (default: false).
      *
      * @return string|false Return the IPv6-mapped address, or false if the input is not a valid IPv4 address.
      */

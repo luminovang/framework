@@ -111,7 +111,7 @@ final class Router implements RouterInterface
     private static ?Terminal $term = null;
 
     /**
-     * Weather router is running in cli mode.
+     * Whether router is running in cli mode.
      * 
      * @var bool $isCommand
      */
@@ -566,6 +566,36 @@ final class Router implements RouterInterface
             500
         );
     }
+
+    /**
+     * Normalize a callback into a [class, method] array format.
+     *
+     * Supports different notations:
+     * - ['ClassName', 'method'] (standard array callable)
+     * - 'ClassName::method' (static callable string)
+     * - 'ClassName@method' (Annotation callable string-style)
+     * - 'ClassName' (fallback to __invoke)
+     *
+     * @param array|string $callback The callback to normalize.
+     * 
+     * @return array{string:?namespace,string:?method} Returns a [class, method] pair if invalid.
+     */
+    private static function getClassHandler(array|string $callback): array
+    {
+        if (is_array($callback)) {
+            return $callback + [null, null];
+        }
+
+        $annotation = str_contains($callback, '::') ? '::' : (str_contains($callback, '@') ? '@' : null);
+
+        if ($annotation === null) {
+            return $callback ? [$callback, '__invoke'] : [null, null];
+        }
+
+        [$class, $method] = explode($annotation, $callback, 2);
+
+        return [self::getClassNamespace($class), $method];
+    }
     
     /**
      * If the controller already contains a namespace, use it directly.
@@ -575,9 +605,9 @@ final class Router implements RouterInterface
      * 
      * @return class-string<RoutableInterface> Return full qualify class namespace.
      */
-    private static function getControllerClass(string $className): string
+    private static function getClassNamespace(string $className): string
     {
-        if (class_exists($className)) {
+        if (str_contains($className, '\\') || class_exists($className)) {
             return $className;
         }
 
@@ -808,7 +838,7 @@ final class Router implements RouterInterface
     /**
      * Get terminal instance.
      * 
-     * @param bool $return Weather to return the terminal instance.
+     * @param bool $return Whether to return the terminal instance.
      * 
      * @return Terminal|true Return instance of terminal class or true if initialized.
      */
@@ -1196,8 +1226,8 @@ final class Router implements RouterInterface
      * @param Closure|array{0:class-string<RoutableInterface>,1:string}|string $callback Class public callback method eg: UserController:update.
      * @param array $arguments Method arguments to pass to callback method.
      * @param bool $injection Force use dependency injection (default: false).
-     * @param bool $isCliMiddleware Indicate weather caller is CLI middleware (default: false).
-     * @param bool $isHttpMiddleware Indicate weather caller is HTTP middleware (default: false).
+     * @param bool $isCliMiddleware Indicate Whether caller is CLI middleware (default: false).
+     * @param bool $isHttpMiddleware Indicate Whether caller is HTTP middleware (default: false).
      *
      * @return int Return status if controller method was executed successfully, error or silent otherwise.
      * @throws RouterException if method is not callable or doesn't exist.
@@ -1237,18 +1267,7 @@ final class Router implements RouterInterface
             ));
         }
 
-        $namespace = '';
-        $method = '';
-
-        if (is_array($callback)) {
-            [$namespace, $method] = $callback + [null, null];
-        }elseif (str_contains($callback, '::')) {
-            [$className, $method] = explode('::', $callback, 2);
-            $namespace = self::getControllerClass($className);
-        }elseif($callback){
-            $namespace = $callback;
-            $method = '__invoke';
-        }
+        [$namespace, $method] = self::getClassHandler($callback);
 
         if(!$namespace || !$method){
             return STATUS_ERROR;
@@ -1271,8 +1290,8 @@ final class Router implements RouterInterface
      * @param string $method Controller class routable method name.
      * @param array $arguments Optional arguments to pass to the method.
      * @param bool $injection Force use dependency injection. Default is false.
-     * @param bool $isCliMiddleware Indicate weather caller is cli middleware (default: false).
-     * @param bool $isHttpMiddleware Indicate weather caller is HTTP middleware (default: false).
+     * @param bool $isCliMiddleware Indicate Whether caller is cli middleware (default: false).
+     * @param bool $isHttpMiddleware Indicate Whether caller is HTTP middleware (default: false).
      *
      * @return int Return status code.
      * @throws RouterException if method is not callable or doesn't exist.
@@ -1489,7 +1508,7 @@ final class Router implements RouterInterface
      * @param array $arguments Pass arguments to reflection method.
      * @param string $className Invoking class name.
      * @param ReflectionMethod $caller Controller class method.
-     * @param bool $isMiddleware Indicate weather caller is cli middleware (default: false).
+     * @param bool $isMiddleware Indicate Whether caller is cli middleware (default: false).
      *
      * @return int Return result from command controller method.
      */

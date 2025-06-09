@@ -281,8 +281,8 @@ abstract class CoreApplication implements LazyInterface
      * - `namespace` (string|null) Optional controller class namespace.
      * - `method`    (string|null) Optional controller class method name.
      * - `attrFiles` (int) Number of controller files scanned for matched attributes.
-     * - `cache`     (bool) Weather cached version rendered or new content.
-     * - `staticCache` (bool) Weather is a static cached version (e.g, page.html) or regular cache (e.g, `page`).
+     * - `cache`     (bool) Whether cached version rendered or new content.
+     * - `staticCache` (bool) Whether is a static cached version (e.g, page.html) or regular cache (e.g, `page`).
      * 
      * @return void 
      */

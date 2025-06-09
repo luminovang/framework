@@ -359,7 +359,7 @@ class NovaLogger extends AbstractLogger
             [
                 'chat_id' => $chatId,
                 'text' => sprintf(
-                    "<b>Application:</b> %s\n<b>Version:</b> %s\n<b>Host:</b> %s\n<b>Client IP:</b> %s\n<b>Log Name:</b> %s\n<b>Level:</b> %s\n<b>Datetime:</b> %s\n\n```Message: %s```\n\n<b>URL:</b> %s\n<b>Method:</b> %s\n<b>User-Agent:</b> %s\n%s <pre>%s</pre>",
+                    "<b>Application:</b> %s\n<b>Version:</b> %s\n<b>Host:</b> %s\n<b>Client IP:</b> %s\n<b>Log Name:</b> %s\n<b>Level:</b> %s\n<b>Datetime:</b> %s\n<b>URL:</b> %s\n<b>Method:</b> %s\n<b>User-Agent:</b> %s\n\n<pre><code>Message: %s</code></pre>\n\n<pre>%s</pre>",
                     APP_NAME,
                     APP_VERSION,
                     APP_HOSTNAME,
@@ -367,12 +367,11 @@ class NovaLogger extends AbstractLogger
                     $this->name,
                     $this->level,
                     Time::now()->format('Y-m-d\TH:i:s.uP'),
-                    $message,
                     self::$request->getUrl(),
                     self::$request->getMethod(),
                     self::$request->getUserAgent()->toString(),
-                    self::$sendContext ? '<b>Context:</b>': '',
-                    self::$sendContext ? self::toJsonContext($context, true, false) : ''
+                    $message,
+                    (self::$sendContext && $context !==[]) ? self::toJsonContext($context, true, false) : ''
                 ),
                 'parse_mode' => 'HTML'
             ],
@@ -405,7 +404,7 @@ class NovaLogger extends AbstractLogger
      * @param array<string,mixed> $context Optional contextual data for the log entry.
      * @param bool $htmlFormat Whether to format the message and context as HTML (default: false).
      *
-     * @return string The formatted log message in plain text or HTML.
+     * @return string Return the formatted log message in plain text or HTML.
      */
     public function message(
         string $level, 
@@ -521,7 +520,7 @@ class NovaLogger extends AbstractLogger
      * Logs performance metrics data to a JSON file.
      *
      * @param string $data The performance metrics data to log.
-     * @param string $key  The unique identifier for the metrics data.
+     * @param string $key The unique identifier for the metrics data.
      *
      * @return bool Returns true if the metrics data was successfully logged, false otherwise.
      */
@@ -561,13 +560,13 @@ class NovaLogger extends AbstractLogger
      * logger name, current timestamp, the main message, and optionally, any additional
      * context data.
      *
-     * @param string $level   The log level (e.g., 'INFO', 'ERROR').
+     * @param string $level The log level (e.g., 'INFO', 'ERROR').
      * @param string $message The main log message.
      * @param string|null $name Optional log system name.
-     * @param array  $context Optional. Additional contextual information for the log entry.
+     * @param array $context Optional. Additional contextual information for the log entry.
      *                        Default is an empty array.
      *
-     * @return string The formatted log message. If context is provided, it will be
+     * @return string Return the formatted log message. If context is provided, it will be
      *                appended to the message.
      */
     public static function formatMessage(
@@ -666,11 +665,11 @@ class NovaLogger extends AbstractLogger
      * the main message, and any additional context data. The context is formatted as a table
      * if present.
      *
-     * @param string $level   The log level (e.g., 'INFO', 'ERROR').
+     * @param string $level The log level (e.g., 'INFO', 'ERROR').
      * @param string $message The main log message.
-     * @param array  $context Optional. Additional contextual information for the log entry.
-     *                        Default is an empty array.
-     * @param string $name    Optional. The name of the logger. Default is 'default'.
+     * @param array $context Optional. Additional contextual information for the log entry.
+     *                    Default is an empty array.
+     * @param string $name Optional. The name of the logger. Default is 'default'.
      *                        Note: This parameter is not used in the current implementation.
      *
      * @return string An HTML-formatted string representing the log message and context.
@@ -745,11 +744,11 @@ class NovaLogger extends AbstractLogger
      * This method sends a POST request to a specified URL with the given body. It handles
      * the request asynchronously and manages potential errors, logging them appropriately.
      *
-     * @param string $from    The identifier of the source sending the request (e.g., 'Remote Server', 'Telegram').
-     * @param string $url     The URL to which the HTTP request will be sent.
-     * @param array<string,mixed>  $body    The body of the HTTP request to be sent.
+     * @param string $from The identifier of the source sending the request (e.g., 'Remote Server', 'Telegram').
+     * @param string $url The URL to which the HTTP request will be sent.
+     * @param array<string,mixed> $body The body of the HTTP request to be sent.
      * @param string $message The original log message that triggered this request.
-     * @param array<string,mixed>  $context Additional context information for logging purposes (optional).
+     * @param array<string,mixed> $context Additional context information for logging purposes (optional).
      *
      * @return void
      */
@@ -794,10 +793,10 @@ class NovaLogger extends AbstractLogger
     /**
      * Logs an exception error message with original log information.
      *
-     * @param string $from     The source or context where the error originated.
-     * @param string $error    The error message or description.
-     * @param string $message  The original message that was being logged when the error occurred (optional).
-     * @param array  $context  Additional contextual data related to the original log attempt (optional).
+     * @param string $from The source or context where the error originated.
+     * @param string $error The error message or description.
+     * @param string $message The original message that was being logged when the error occurred (optional).
+     * @param array  $context Additional contextual data related to the original log attempt (optional).
      *
      * @return void
      */

@@ -449,7 +449,7 @@ class Image
      * Output error message if it should and return the error message.
      * 
      * @param string $message The error message.
-     * @return bool $output Weather to output the error message.
+     * @return bool $output Whether to output the error message.
      * 
      * @return string Returns the error message.
      */

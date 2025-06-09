@@ -228,7 +228,7 @@ class FileManager
      * Convert permission string to Unix integer permission.
      * 
      * @param string $permission The permission string (e.g., 'rw-r--r--').
-     * @param bool $decimal Weather to return permission as decimal or formatted octal string.
+     * @param bool $decimal Whether to return permission as decimal or formatted octal string.
      * 
      * @return string|int|null Return the Unix integer permission, or null if the conversion failed.
      */
@@ -1053,7 +1053,7 @@ class FileManager
      * 
      * @param resource $handler The file handler.
      * @param int $filesize The total size of the file.
-     * @param string|null $mime The MIME type of the file (degault: null).
+     * @param string|null $mime The MIME type of the file (default: null).
      * @param int $length The size of each chunk to be read (default: 2MB).
      * @param int $delay The delay in microseconds between chunk reads (default: 0).
      * 

@@ -118,7 +118,7 @@ final class Csrf
      * Validates a submitted CSRF token.
      *
      * @param string $token The token submitted by the user.
-     * @param bool $reuse Weather to retain or delete the token after successful verification (default: true).
+     * @param bool $reuse Whether to retain or delete the token after successful verification (default: true).
      * 
      * @return bool Return true if the submitted token is valid, false otherwise.
      */

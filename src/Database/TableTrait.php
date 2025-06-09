@@ -150,7 +150,7 @@ trait TableTrait
      *
      * @param string $key The key to add.
      * @param mixed $value The value to add.
-     * @param bool $append Weather to append value as new array element.
+     * @param bool $append Whether to append value as new array element.
      * 
      * @return self Return table class instance.
      */
@@ -313,7 +313,7 @@ trait TableTrait
      * Check if column exists in the previous schema and modify if not add new column or dropped.
      * 
      * @param array<string,array> $previous Optional prevues column definitions to match difference to be dropped.
-     * @param bool $dropDiffColumns Indicate weather to drop columns that doesn't exists in alter columns (default: false).
+     * @param bool $dropDiffColumns Indicate Whether to drop columns that doesn't exists in alter columns (default: false).
      * 
      * @return string Return SQL queries for altering the table.
      * @throws DatabaseException Throws if previous table name does not match with current table name.

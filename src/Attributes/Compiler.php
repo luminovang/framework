@@ -16,7 +16,6 @@ use \Luminova\Attributes\Route;
 use \Luminova\Attributes\Error;
 use \Luminova\Attributes\Prefix;
 use \Luminova\Routing\Router;
-use \Luminova\Base\BaseCommand;
 use \Luminova\Interface\RoutableInterface;
 use \Luminova\Exceptions\RouterException;
 use \ReflectionClass;
@@ -195,8 +194,7 @@ final class Compiler
             throw new RouterException($e->getMessage(), $e->getCode(), $e);
         }
 
-        if (!($instance->isInstantiable() && !$instance->isAbstract() && (
-            $instance->isSubclassOf(BaseCommand::class)))) {
+        if(!$this->isValidClass($instance)){
             return;
         }
 

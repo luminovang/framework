@@ -433,7 +433,7 @@ final class Logger
             return false;
         }
 
-        return $chatId && preg_match('/^(-100\d{10,13}|\d{5,12})$/', (string) $chatId) === 1;
+        return $chatId && preg_match('/^\d{5,12}$|^-100\d{10,13}$|^-\d{5,12}$/', (string) $chatId) === 1;
     }
 
     /**

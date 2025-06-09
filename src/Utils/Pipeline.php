@@ -46,7 +46,7 @@ final class Pipeline implements LazyInterface
     private mixed $onError = null;
 
     /**
-     * Indicate weather to stop pipeline execution.
+     * Indicate Whether to stop pipeline execution.
      *
      * @var bool $stop
      */
@@ -274,7 +274,7 @@ final class Pipeline implements LazyInterface
      * Execute the callback handler.
      *
      * @param callable $callable The handler to be executed.
-     * @param bool $error Weather is an error handler.
+     * @param bool $error Whether is an error handler.
      * @param mixed ...$args Additional arguments to be passed to the handler.
      * 
      * @return void

@@ -174,7 +174,7 @@ trait View
     private bool $minifyCodeblocks = false;
 
     /**
-     * Weather its HMVC or MVC module.
+     * Whether its HMVC or MVC module.
      * 
      * @var bool $useHmvcModule 
      */
@@ -193,6 +193,13 @@ trait View
      * @var array<string,mixed> $headers
      */
     private array $headers = [];
+
+    /**
+     * Holds asset relative depth position.
+     * 
+     * @var int $assetDepth 
+     */
+    private static int $assetDepth = 0;
 
     /**
      * Weak object reference.
@@ -222,6 +229,7 @@ trait View
 
         self::$weak[self::$reference] = [];
         self::$root ??= root();
+        self::$assetDepth = 0;
         self::$minifyContent = (bool) env('page.minification', false);
         self::$useHmvcModule = env('feature.app.hmvc', false);
         self::$cacheFolder = self::__getSystemPath(self::__trimRight(self::$config->cacheFolder) . 'default');
@@ -283,10 +291,32 @@ trait View
         return $this;
     }
 
-    /** 
-     * Set the module directory name that contains the controller class. This is essential for identifying each HMVC module.
+    /**
+     * Manually set how many parent directories (`../`) should prefix asset or view paths.
      *
-     * @param string $module The name of the module folder (e.g., `Blog`).
+     * By default, Luminova auto-detects how many `../` to prepend based on the URI segments.
+     * This method overrides that behavior by explicitly setting the number of parent directory levels
+     * (e.g., `1` adds `../`, `2` adds `../../`, and so on).
+     *
+     * Useful when custom routing or nested views affect the correct relative path for assets.
+     *
+     * @param int $depth Number of `../` segments to prepend.
+     *
+     * @return self Returns the current view instance.
+     */
+    public final function setAssetDepth(int $depth): self
+    {
+        self::$assetDepth = $depth;
+
+        return $this;
+    }
+
+    /** 
+     * Set the HMVC module name for current controller class.
+     * 
+     * The module name is typically the directory name (e.g, `app/Modules/<CustomModuleName>`), that contains the controller class. This is essential for identifying each HMVC module.
+     *
+     * @param string $module The module name or directory name (e.g., `Blog`).
      *                    Use a blank string for global controller without a specific module name prefix.
      *
      * @return self Returns the instance of the `View` class or `CoreApplication`, depending on the context.
@@ -353,7 +383,7 @@ trait View
      * Set if view base context should be cached.
      * Useful in api context to manually handle caching.
      *
-     * @param bool $allow Weather to allow caching of views.
+     * @param bool $allow Whether to allow caching of views.
      *
      * @return self Return instance of View or CoreApplication depending on where its called,
      * 
@@ -756,11 +786,11 @@ trait View
     }
 
     /**
-     * Create a relative url to view or file ensuring the url starts from public root directory.
+     * Create a relative URL to view or file ensuring the url starts from public root directory.
      * 
      * @param string $filename Optional view, path or file to prepend to root URL.
      * 
-     * @return string Return full url to view or file.
+     * @return string Return full URL to view or file.
      */
     public static final function link(string $filename = ''): string 
     {
@@ -838,7 +868,7 @@ trait View
      *
      * @param array $options additional parameters to pass in the template file.
      * @param int $status HTTP status code (default: 200 OK).
-     * @param bool $return Weather to return content instead.
+     * @param bool $return Whether to return content instead.
      *
      * @return string|bool  Return true on success, false on failure.
      * @throws ViewNotFoundException Throw if view file is not found.
@@ -1510,8 +1540,8 @@ trait View
      */
     private static function __toRelativeLevel(): string 
     {
-        $level = 0;
-        if(isset($_SERVER['REQUEST_URI'])){
+        $level = self::$assetDepth;
+        if($level === 0 && isset($_SERVER['REQUEST_URI'])){
             $url = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen(Luminova::getBase()));
 
             if (($pos = strpos($url, '?')) !== false) {
@@ -1532,11 +1562,11 @@ trait View
      *
      * @param mixed $contents view contents output buffer.
      * @param string $type The content type.
-     * @param bool $ignore Weather to ignore code blocks minification.
-     * @param bool $copy Weather to include code block copy button.
+     * @param bool $ignore Whether to ignore code blocks minification.
+     * @param bool $copy Whether to include code block copy button.
      *
      * @return Minification Return minified instance.
-     * @throws RuntimeException If array or object content and json error occures.
+     * @throws RuntimeException If array or object content and json error occurs.
      */
     private static function __getMinification(
         mixed $contents, 

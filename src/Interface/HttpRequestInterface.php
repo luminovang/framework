@@ -265,7 +265,7 @@ interface HttpRequestInterface
      * This method returns the complete URL, including the protocol (e.g., http or https),
      * the domain name, the path, and any query string parameters.
      * 
-     * @param bool $withPort Weather to return hostname with port (default: false).
+     * @param bool $withPort Whether to return hostname with port (default: false).
      *
      * @return string Return the full URL of the request.
      */
@@ -298,7 +298,7 @@ interface HttpRequestInterface
     /**
      * Get current hostname without port, if allowed host is set it will check if host is in allowed list or patterns.
      * 
-     * @param bool $exception Weather to throw an exception if invalid host or not allowed host (default: false).
+     * @param bool $exception Whether to throw an exception if invalid host or not allowed host (default: false).
      * 
      * @return string Return the request hostname.
      * @throws SecurityException Throw if host is invalid or not allowed.
@@ -309,8 +309,8 @@ interface HttpRequestInterface
      * Get current hostname with port if port is available. 
      * If allowed host is set it will check if host is in allowed list or patterns.
      * 
-     * @param bool $exception Weather to throw an exception if invalid host or not allowed host (default: false).
-     * @param bool $port Weather to return hostname with port (default: true).
+     * @param bool $exception Whether to throw an exception if invalid host or not allowed host (default: false).
+     * @param bool $port Whether to return hostname with port (default: true).
      * 
      * @return string Return request hostname and port.
      * @throws SecurityException If host is invalid or not allowed.

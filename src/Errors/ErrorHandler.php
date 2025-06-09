@@ -63,7 +63,7 @@ final class ErrorHandler
      * This method sets the backtrace to shared memory `$backtrace`.
      * 
      * @param array $backtrace The array of backtrace information.
-     * @param bool $push Weather to push the backtrace onto the existing one (default: true).
+     * @param bool $push Whether to push the backtrace onto the existing one (default: true).
      * 
      * @return void
      */
@@ -283,9 +283,9 @@ final class ErrorHandler
     public static function filterMessage(string $message): string
     {
         $message = str_replace(APP_ROOT, '', $message);
-        preg_match('/^(.*) Thrown in /', $message, $matches);
-        
-        return $matches[1] ?? trim($message, ' thrown in ');
+        preg_match('/^(.*?)(?:\s+thrown(?:\s+in)?)/i', $message, $matches);
+   
+        return trim($matches[1] ?? $message);
     }
 
     /**

@@ -17,7 +17,7 @@ interface MailerInterface
     /**
      * Constructor.
      *
-     * @param bool $exceptions Weather to throw exceptions if error (default: false).
+     * @param bool $exceptions Whether to throw exceptions if error (default: false).
      */
     public function __construct(bool $exceptions = false);
 

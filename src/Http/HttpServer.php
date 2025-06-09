@@ -33,14 +33,14 @@ class HttpServer
     private int $activeProcesses = 0; 
 
     /**
-     * Weather the server is running.
+     * Whether the server is running.
      * 
      * @var bool $running
      */
     private bool $running = false;
 
     /**
-     * Weather the server is booting.
+     * Whether the server is booting.
      * 
      * @var bool $booting
      */
@@ -825,7 +825,7 @@ class HttpServer
     /**
      * Cleans up any remaining child processes after handling the request.
      * 
-     * @param bool $simultaneous Weather it's for simultaneous connection.
+     * @param bool $simultaneous Whether it's for simultaneous connection.
      *
      * @return void
      */

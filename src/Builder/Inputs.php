@@ -305,7 +305,7 @@ class Inputs extends Document
      *
      * @param string $name The name of the input.
      * @param string $value The value of the checkbox.
-     * @param bool $checked Weather input is checked (default: false).
+     * @param bool $checked Whether input is checked (default: false).
      * @param array<string,string> $attributes Additional HTML attributes (e.g, `classNames`, `id's`, `data-attributes`).
      * 
      * @return string Return the generated checkbox input HTML.
@@ -329,7 +329,7 @@ class Inputs extends Document
      *
      * @param string $name The name of the input.
      * @param string $value The value of the radio input.
-     * @param bool $checked Weather input is checked (default: false).
+     * @param bool $checked Whether input is checked (default: false).
      * @param array<string,string> $attributes Additional HTML attributes (e.g, `classNames`, `id's`, `data-attributes`).
      * 
      * @return string Return the generated checkbox input HTML.
@@ -422,7 +422,7 @@ class Inputs extends Document
      * @param array<int,string|int|float>|string $selected The selected value(s). Can be a string for single select or an array for multiple select.
      * @param array<int,string|int|float>|string $disabled The disabled value(s). Can be a string for single select or an array for multiple select.
      * @param array<string,string> $attributes Additional HTML attributes for the `<select>` element.
-     * @param bool $indexedKey Weather to retain the option array index key as option value or use the text as the value (default: true).
+     * @param bool $indexedKey Whether to retain the option array index key as option value or use the text as the value (default: true).
      *
      * @return string The generated HTML string for the <select> dropdown.
      */
@@ -444,7 +444,7 @@ class Inputs extends Document
             foreach ($options as $key => $val) {
                 if (is_array($val)) {
                     $select .= self::optgroup($val, $indexedKey, $selected, $disabled, [
-                        'lable' => $key
+                        'label' => $key
                     ]) . PHP_EOL;
                 } else {
                     $key = (!$indexedKey && !is_string($key)) ? $val : $key;

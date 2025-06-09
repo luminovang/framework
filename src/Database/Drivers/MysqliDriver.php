@@ -55,7 +55,7 @@ final class MysqliDriver implements DatabaseInterface
     private ?CoreDatabase $config = null;  
 
     /**
-     * Weather queries is bind params or values.
+     * Whether queries is bind params or values.
      * 
      * @var bool $isParams
      */
@@ -807,7 +807,7 @@ final class MysqliDriver implements DatabaseInterface
     }
 
     /**
-     * Determine weather the executed query returned prepared statement object.
+     * Determine Whether the executed query returned prepared statement object.
      * 
      * @return bool Return true if is a prepared statement.
      */
@@ -825,7 +825,7 @@ final class MysqliDriver implements DatabaseInterface
     {
         if (!$this->isConnected()) {
             throw new DatabaseException(
-                'Database Connection Error: No active connection found. Connect before executing queries.',
+                'No active database connection found. Connect before executing queries.',
                 DatabaseException::CONNECTION_DENIED
             );
         } 
@@ -845,7 +845,7 @@ final class MysqliDriver implements DatabaseInterface
         if (!$this->isStatement() || $noResult) {
             throw new DatabaseException(
                 sprintf(
-                    'Database Statement Error: No valid SQL statement%s set found. Ensure a query is prepared or available.',
+                    'No valid SQL statement%s set found. Ensure a query is prepared or available.',
                     $assertResult ? ' or result' : ''
                 ),
                 DatabaseException::NO_STATEMENT_TO_EXECUTE

@@ -722,7 +722,7 @@ class RateLimiter implements LazyInterface
      *
      * @param string $key Cache key set request info.
      * @param int $requests Number of requests to store.
-     * @param bool $withLimit Weather to attach custom limit to this key.
+     * @param bool $withLimit Whether to attach custom limit to this key.
      * 
      * @return bool Return true on successful cache save, false on failure.
      */

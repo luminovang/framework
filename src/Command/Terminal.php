@@ -205,7 +205,7 @@ class Terminal implements LazyInterface
      * optionally clear the screen and the user input during the freeze.
      *
      * @param int $seconds The number of seconds to freeze execution (default: 10).
-     * @param bool $clear Weather to clear the console screen and input while freezing (default: false).
+     * @param bool $clear Whether to clear the console screen and input while freezing (default: false).
      *
      * @return void
      */
@@ -369,7 +369,7 @@ class Terminal implements LazyInterface
      * @param string|false|null $validations Optional validation rules to ensure only the listed options are allowed.
      *                      If null the options values will be used for validation `required|in_array(...values)`.
      *                      To disable validation pass `false` as the value.
-     * @param bool $silent Weather to print validation failure message if wrong option was selected (default: false).
+     * @param bool $silent Whether to print validation failure message if wrong option was selected (default: false).
      *
      * @return string Return the client input value.
      * 
@@ -433,7 +433,7 @@ class Terminal implements LazyInterface
      * @param string $text  The chooser description message to prompt.
      * @param array  $options The list of options to prompt (e.g, ['male' => 'Male', 'female' => 'Female] or ['male', 'female']).
      * @param bool $required Require user to choose any option else the first array will be return as default (default: false).
-     * @param bool $multiChoice Weather multiple options are allowed (default: true).
+     * @param bool $multiChoice Whether multiple options are allowed (default: true).
      *
      * @return array<string|int,mixed> Return the client selected array keys and values.
      * @throws IOException Throw if options is not specified or an empty array.
@@ -499,7 +499,7 @@ class Terminal implements LazyInterface
      * - On Linux/Unix, it uses a bash command to hide the input.
      *
      * @param string $message Optional message to display when prompting for the password (default: 'Enter Password').
-     * @param int $allowEmptyPassword Weather to permit empty password (default: false).
+     * @param int $allowEmptyPassword Whether to permit empty password (default: false).
      * @param int $retry The number of allowed retry attempts, set to `0` for unlimited retries (default: 3).
      * @param int $timeout Optional time window for password input in seconds, set to 0 for no timeout (default: 0).
      * 

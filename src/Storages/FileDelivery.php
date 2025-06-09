@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework Private File Delivery Class.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -270,7 +270,7 @@ final class FileDelivery
             if($filemtime !== false){
                 if (
                     isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) && 
-                    strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) >= $filemtime // modify
+                    strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) >= $filemtime
                 ) {
                     return self::notModifiedHeader($expiry, $filemtime);
                 }
@@ -314,7 +314,7 @@ final class FileDelivery
      * 
      * @return true Always return true.
      */
-    private static function notModifiedHeader(int $expiry, $filemtime, array $headers = []): bool
+    private static function notModifiedHeader(int $expiry, int $filemtime, array $headers = []): bool
     {
         if($expiry > 0){
             $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T', time() + $expiry);
@@ -360,7 +360,6 @@ final class FileDelivery
         }
 
         self::headers($headers, 200, ($expiry > 0));
-
         return $headers['Content-Length'] ?? 0;
     }
 

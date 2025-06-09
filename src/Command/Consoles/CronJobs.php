@@ -209,7 +209,7 @@ class CronJobs extends BaseConsole
      * 
      * @param array $task Cron task array information.
      * @param array $instance Cron task array information from class.
-     * @param bool $isComplete Weather task is completed or not.
+     * @param bool $isComplete Whether task is completed or not.
      * @param string &$output Log line passed by reference.
      * 
      * @return void
