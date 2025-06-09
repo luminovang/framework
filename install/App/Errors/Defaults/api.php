@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework APIs Error response.
+ * Luminova Application APIs Error response.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter

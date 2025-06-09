@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework
+ * Luminova Application CLI error response.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
