@@ -11,59 +11,81 @@
 
 ![Local Image](https://github.com/luminovang/luminova/raw/main/docs/logo.svg)
 
-**The Framework You Didn't Know You Needed to Illuminate Your Project**
+# PHP Luminova
 
-PHP Luminova is a web development framework for PHP 8 and above. It's simple yet powerful, supporting both MVC and HMVC architectures. Luminova comes packed with useful modules for application security and optimization. Whether you prefer routing using PHP attributes or traditional code-based routing, we've got you covered.
+**The framework you didn’t know you needed**
+
+Luminova is a lightweight yet capable web framework built for PHP 8+. It supports **MVC** and **HMVC** architecture, offers a modular core, and emphasizes simplicity, performance, and flexibility. Whether you prefer attribute-based routing or traditional callbacks, you’re covered.
+
+---
 
 ## Installation
 
-Install Luminova via Composer.
+> I don't think this is what you intended to install, but if you're feeling adventurous.
 
-I don't think this is what you intended to install, but if you're feeling adventurous:
+Install this framework directly via Composer:
 
 ```bash
 composer install luminovang/framework
 ```
 
-To install the Luminova framework for [development](https://github.com/luminovang/luminova), use the following command:
+**Start building with Luminova:**
+
+To install the Luminova framework full scaffolding for [application development](https://github.com/luminovang/luminova). Use the following command:
 
 ```bash
 composer create-project luminovang/luminova my-project
 ```
 
-## Looking For...
+---
 
-- Performance? Check.
-- Database Migration? Check.
-- Database Seeding? Check.
-- Cron Job Execution? Check.
-- Command Line Tools (NovaKit)? Check.
-- PHP Template Inheritance? Check.
-- Twig Templating? Check.
-- Smarty Templating? Check.
-- ORM with Simple Database Caching? Check.
-- Multiple Database Connection Backup? Check.
-- Page Minification? Check.
-- Sitemap Generator? Check.
-- SEO Schema Generator? Check.
-- Custom Service Manager? Check.
-- Diverse Cloud Storage Options? Check.
-- Symbolic Locale Access? Check.
-- CDN Module? Check.
-- Beginners Helper Functions? Check.
-- Push Notifications? Check.
-- API Implementations? Check.
-- CLI Tool Implementation? Check.
-- And Many More? You bet.
+## Feature Checklist
 
-## Should I Try This?
+You need features. Luminova has them — without bloat:
 
-- If you want a simple framework that gives you everything you need for small to large applications.
-- If you want a framework that is easy to start with and easy to read and understand the code.
-- If you want a framework that allows you to utilize all PHP 8 features when you need them.
-- If you want a framework that requires minimal to no configuration.
-- If you don't mind receiving new feature updates every week.
+* MVC/HMVC architecture
+* PHP 8 attributes or traditional route declarations
+* Middlewares and Input validation
+* Request handling and File uploader
+* ORM with smart caching
+* Multiple DB support + sharding + fallback
+* Database migrations & seeders
+* Custom service manager
+* CLI commands via **Novakit**
+* CRON-ready execution
+* CDN module & Private File delivery
+* Multiple cloud storage support
+* SEO tools: Sitemap & Schema generators
+* Smart view content minification + auto codeblock copy button 
+* Asset management
+* Template engines: (PHP, Twig, Smarty)
+* Symbolic locale management
+* Built-in API helpers
+* Push notifications
+* Clean CLI tools
+* Promise resolver
+* Async Helper
+* Encryption + Decryption module
+* Backend Session module + User login helpers
+* Utility Classes and Helper functions that actually helps
 
-Then you're welcome here!
+…and more...
 
-To get started with building your application using PHP Luminova, visit our [official documentation](https://luminova.ng/docs) or check out the [GitHub documentation](https://github.com/luminovang/documentation/).
+---
+
+## Why Luminova?
+
+* No over-engineering. Just practical design.
+* Minimal configuration. Maximum flexibility.
+* Clean syntax. Easy to read, easier to maintain.
+* Full support for modern PHP 8+ features.
+* Active development and frequent updates.
+
+---
+
+## Get Started
+
+If you're tired of bloated frameworks and ready for something straightforward?
+
+* [Official Documentation](https://luminova.ng/docs)
+* [GitHub Docs Repo](https://github.com/luminovang/documentation/)
