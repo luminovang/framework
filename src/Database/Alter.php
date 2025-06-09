@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework
+ * Luminova Framework Table Scheme builder helper.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
