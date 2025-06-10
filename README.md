@@ -1,5 +1,3 @@
-# PHP Luminova Framework
-
 [![Author](https://img.shields.io/badge/author-@peterchig-blue.svg)](https://instagram.com/peterchig)
 ![PHP 8.0+](https://img.shields.io/badge/php-min%208.0.0-red.svg)
 [![Source Code](https://img.shields.io/badge/source-luminovang/framework-blue.svg)](https://github.com/luminovang/framework)
@@ -10,6 +8,8 @@
 
 
 ![Local Image](https://github.com/luminovang/luminova/raw/main/docs/logo.svg)
+
+# PHP Luminova Framework
 
 **The framework you didn’t know you needed**
 
