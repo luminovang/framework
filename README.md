@@ -66,8 +66,7 @@ You need features. Luminova has them — without bloat:
 * Encryption + Decryption module
 * Backend Session module + User login helpers
 * Utility Classes and Helper functions that actually helps
-
-…and more...
+* and more...
 
 ---
 
