@@ -171,7 +171,7 @@ class JWTAuth implements LazyInterface
      * @param string $token The JWT token to decode.
      * @param string|int $userId The user identifier, used to generate the key for decoding.
      *
-     * @return stdClass|false Returns the decoded JWT payload as an object if valid, false otherwise.
+     * @return stdClass Returns the decoded JWT payload as an object if valid.
      * @throws EncryptionException Throws on development mode if an error is encountered while decoding.
      *
      * @example - Decoding JWT token.
@@ -187,7 +187,7 @@ class JWTAuth implements LazyInterface
      * }
      * ```
      */
-    public function decode(string $token, string|int $userId): stdClass|bool
+    public function decode(string $token, string|int $userId): stdClass
     {
         try {
             return JWT::decode(

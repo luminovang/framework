@@ -96,7 +96,7 @@ interface RouterInterface
      * @param Prefix|array<string,mixed> ...$contexts [, Prefix $... ] URI prefixes for non-attribute routing 
      *                  containing prefix object or array of prefix.
      * 
-     * @return self Returns the router instance.
+     * @return static<RouterInterface> Returns the router instance.
      * @throws RouterException Throws if not context arguments was passed and route attribute is disabled.
      */
     public function context(Prefix|array ...$contexts): self;
@@ -249,7 +249,7 @@ interface RouterInterface
      *
      * @param string $namespace The namespace to register (e.g., `\App\Controllers\`, `\App\Modules\FooModule\Controllers\`).
      *
-     * @return self Returns the instance of the router class.
+     * @return static<RouterInterface> Returns the instance of the router class.
      * @throws RouterException If the namespace is empty or contains invalid characters.
      * 
      * **Note:** The base controllers for MVC and HMVC applications are predefined in the `Luminova\Core\CoreApplication` class.

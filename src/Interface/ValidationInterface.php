@@ -51,7 +51,7 @@ interface ValidationInterface
      * @param array<int,string> $rules The array of validation rules 
      *                  (e.g, ['email' => 'string|email', 'name' => 'required']).
      * 
-     * @return self Return instance of the Validation class.
+     * @return static<ValidationInterface> Return instance of the Validation class.
      */
     public function setRules(array $rules): self;
 
@@ -61,7 +61,7 @@ interface ValidationInterface
      * @param array<string,array<string,string>> $messages An error messages for validation rules 
      *              (e.g, ['email' => ['string' => '...', 'email' => '...'], 'name' => ['required' => '...']]).
      * 
-     * @return self Return instance of the Validation class.
+     * @return static<ValidationInterface> Return instance of the Validation class.
      */
     public function setMessages(array $messages): self;
 
@@ -72,7 +72,7 @@ interface ValidationInterface
      * @param string $rules The input field validation rules (e.g, `required|string|email`).
      * @param array<string,string> $messages Optional validation error message for the each rule (e.g, ['required' => '...', 'string' => '...', 'email' => '...']).
      * 
-     * @return self Return instance of the Validation class.
+     * @return static<ValidationInterface> Return instance of the Validation class.
      */
     public function addField(string $field, string $rules, array $messages = []): self;
 
@@ -106,4 +106,21 @@ interface ValidationInterface
      * @return string Return the field name causing the validation error.
      */
     public function getErrorField(string|int $fieldIndex = 0): string;
+
+    /**
+     * Validate a username according to standard requirements.
+     * 
+     * @param string $username The username to validate.
+     * @param bool $allowUppercase Whether to allow username to contain uppercase (default: `false`).
+     * @param array $reservedUsernames Optional list if reserved usernames (e.g, `['root', 'admin', 'system']`).
+     * 
+     * @return array Validation result containing:
+     *               - (bool) Whether the username is valid
+     *               - (string|null) Error message if invalid
+     */
+    public static function validateUsername(
+        string $username, 
+        bool $allowUppercase = true, 
+        array $reservedUsernames = []
+    ): array;
 }

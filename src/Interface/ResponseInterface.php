@@ -118,7 +118,7 @@ interface ResponseInterface extends \Psr\Http\Message\ResponseInterface
      * This method opens a temporary stream, writes the response contents if available, 
      * and rewinds the stream before returning it.
      *
-     * @return StreamInterface<\T> Return the response body as a stream object.
+     * @return \T<StreamInterface> Return the response body as a stream object.
      * @throws RuntimeException Throws if the temporary stream cannot be opened.
      * 
      * @link https://luminova.ng/docs/0.0.0/http/stream
@@ -147,7 +147,7 @@ interface ResponseInterface extends \Psr\Http\Message\ResponseInterface
      * @param string $name Case-insensitive header field name.
      * @param string|string[] $value Header value(s).
      * 
-     * @return MessageInterface<\T> Return new instance of response message object.
+     * @return \T<MessageInterface> Return new instance of response message object.
      * @throws InvalidArgumentException for invalid header names or values.
      */
     public function withHeader(string $name, $value): MessageInterface;
@@ -157,7 +157,7 @@ interface ResponseInterface extends \Psr\Http\Message\ResponseInterface
      * 
      * @param string $name Case-insensitive header field name to remove.
      * 
-     * @return MessageInterface<\T> Return new instance of response message object.
+     * @return \T<MessageInterface> Return new instance of response message object.
      */
     public function withoutHeader(string $name): MessageInterface;
 
@@ -167,7 +167,7 @@ interface ResponseInterface extends \Psr\Http\Message\ResponseInterface
      * @param int $code The 3-digit integer result code to set (e.g, `1xx` to `5xx`).
      * @param string $reasonPhrase The reason phrase to use.
      * 
-     * @return MessageInterface<\T> Return new instance of response message object.
+     * @return \T<ResponseInterface> Return new instance of response object.
      * @throws InvalidArgumentException For invalid status code arguments.
      */
     public function withStatus(int $code, string $reasonPhrase = ''): ResponseInterface;
@@ -177,7 +177,7 @@ interface ResponseInterface extends \Psr\Http\Message\ResponseInterface
      *
      * @param string $version HTTP protocol version (e.g.,`1.1`, `1.0`).
      * 
-     * @return MessageInterface<\T> Return new instance of response message object.
+     * @return \T<MessageInterface> Return new instance of response message object.
      */
     public function withProtocolVersion(string $version): MessageInterface;
 
@@ -191,7 +191,7 @@ interface ResponseInterface extends \Psr\Http\Message\ResponseInterface
      * @param string $name Case-insensitive header field name to add.
      * @param string|string[] $value The header value(s).
      * 
-     * @return MessageInterface<\T> Return new instance of response message object.
+     * @return \T<MessageInterface> Return new instance of response message object.
      * @throws InvalidArgumentException for invalid header names or values.
      */
     public function withAddedHeader(string $name, $value): MessageInterface;
@@ -201,7 +201,7 @@ interface ResponseInterface extends \Psr\Http\Message\ResponseInterface
      *
      * @param StreamInterface $body The instance of stream object with response body.
      * 
-     * @return MessageInterface<\T> Return new instance of response message object.
+     * @return \T<MessageInterface> Return new instance of response message object.
      * @throws InvalidArgumentException When the body is not valid.
      */
     public function withBody(StreamInterface $body): MessageInterface;

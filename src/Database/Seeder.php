@@ -15,6 +15,8 @@ use \Luminova\Database\Builder;
 abstract class Seeder
 {
     /**
+     * Invokable seeders.
+     * 
      * @var array<int,class-string<Seeder>> $invokes
      */
     private static array $invokes = [];

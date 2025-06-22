@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework, Rule-based input validation.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -40,6 +40,22 @@ final class Validation implements ValidationInterface, LazyInterface
     public array $messages = [];
 
     /**
+     * Check for common invalid patterns.
+     * 
+     * @var array $invalidUsernamePatterns
+     */
+    private static array $invalidUsernamePatterns = [
+        '/^[0-9]+$/' => 'Username cannot be all numbers',
+        '/^\./' => 'Username cannot start with a dot',
+        '/\.$/' => 'Username cannot end with a dot',
+        '/^[-]/' => 'Username cannot start with a hyphen',
+        '/[-]$/' => 'Username cannot end with a hyphen',
+        '/--/' => 'Username cannot contain consecutive hyphens',
+        '/__/' => 'Username cannot contain consecutive underscores',
+        '/\.\./' => 'Username cannot contain consecutive dots'
+    ];
+
+    /**
      * {@inheritdoc}
      */
     public function validate(array $input, ?array $rules = null): bool
@@ -67,79 +83,8 @@ final class Validation implements ValidationInterface, LazyInterface
                     continue;
                 }
 
-                switch ($ruleName) {
-                    case 'none':
-                    case 'nullable':
-                        return true;
-                    case 'required':
-                        if ($this->isEmpty($fieldValue)) {
-                            $this->addError($field, $ruleName, $fieldValue);
-                        }
-                    break;
-                    case 'callback':
-                        if ($ruleParam !== '' && is_callable($ruleParam) && !$ruleParam($fieldValue, $field)) {
-                            $this->addError($field, $ruleName, $fieldValue);
-                        }
-                    break;
-                    case 'match':
-                        if ($ruleParam !== '' && !preg_match('/' . $ruleParam . '/', $fieldValue)) {
-                            $this->addError($field, $ruleName, $fieldValue);
-                        }
-                    break;
-                    case 'equals':
-                        if ($fieldValue !== $input[$ruleParam]) {
-                            $this->addError($field, $ruleName, $fieldValue);
-                        }
-                    break;
-                    case 'is_value':
-                        if ($fieldValue !== $ruleParam) {
-                            $this->addError($field, $ruleName, $fieldValue);
-                        }
-                    break;
-                    case 'not_equal':
-                        if ($fieldValue === $input[$ruleParam]) {
-                            $this->addError($field, $ruleName, $fieldValue);
-                        }
-                    break;
-                    case 'in_array':
-                        if ($ruleParam !== '') {
-                            $matches = list_to_array($ruleParam);
-                            $inArray = ($matches === false) ? false : in_array($fieldValue, $matches);
-                            if (!$inArray) {
-                                $this->addError($field, $ruleName, $fieldValue);
-                            }
-                        }
-                    break;
-                    case 'keys_exist':
-                    case 'keys_exists':
-                        if ($ruleParam !== '') {
-                            $matches = list_to_array($ruleParam);
-                            $exist = false;
-
-                            if($matches !== false) {
-                                if (is_array($fieldValue)) {
-                                    $intersection = array_intersect($matches, $fieldValue);
-                                    $exist = count($intersection) === count($fieldValue);
-                                } else {
-                                    $exist = list_in_array($fieldValue, $matches);
-                                }
-                            }
-
-                            if (!$exist) {
-                                $this->addError($field, $ruleName, $fieldValue);
-                            }
-                        }
-                    break;
-                    case 'fallback':
-                        if ($this->isEmpty($fieldValue)) {
-                            $input[$field] = (strtolower($ruleParam) === 'null') ? null : $ruleParam;
-                        }
-                    break;
-                    default:
-                        if (!self::validation($ruleName, $fieldValue, $ruleParam)) {
-                            $this->addError($field, $ruleName, $fieldValue);
-                        }
-                    break;
+                if($this->doValidation($ruleName, $field, $fieldValue, $ruleParam, $input)){
+                    return true;
                 }
             }
         }
@@ -254,35 +199,184 @@ final class Validation implements ValidationInterface, LazyInterface
     }
 
     /**
+     * {@inheritdoc}
+     */
+    public static function validateUsername(
+        string $username, 
+        bool $allowUppercase = true, 
+        array $reservedUsernames = []
+    ): array
+    {
+        $length = strlen($username);
+        if ($length > 64 || $length < 3) {
+            return [false, ($length > 64) 
+                ? 'Username must be 64 characters or less.'
+                : 'Username must be at least 3 characters or more.'
+            ];
+        }
+
+        if (!preg_match('/^[a-zA-Z0-9_.-]+$/', $username)) {
+            return [false, 'Username can only contain letters (a-z, A-Z), numbers (0-9), and the characters (_ - .)'];
+        }
+
+        if(str_contains($username, ' ')){
+            return [false, 'Username can not contain whitespace.'];
+        }
+
+        if (!$allowUppercase && preg_match('/[A-Z]/', $username)) {
+            return [false, 'Username cannot contain any uppercase letters'];
+        }
+
+        if ($allowUppercase && ctype_upper($username)) {
+            return [false, 'Username cannot be all uppercase letters.'];
+        }
+
+        if ($reservedUsernames !== [] && in_array(strtolower($username), $reservedUsernames, true)) {
+            return [false, 'That username is reserved for system use. Please choose another.'];
+        }
+
+        foreach (self::$invalidUsernamePatterns as $pattern => $error) {
+            if (preg_match($pattern, $username)) {
+                return [false, $error];
+            }
+        }
+
+        return [true, null];
+    }
+
+    /**
+     * Do input validation and set error if any error was found.
+     * 
+     * @param string $ruleName The validation rule name.
+     * @param string $field The input field name.
+     * @param mixed $fieldValue The input value.
+     * @param mixed $ruleParam The input validation rule params (e.g, `true,[]`).
+     * @param array<string,mixed> $input The request for body.
+     * 
+     * @return bool Return true if rule allow nullable or empty value, otherwise false.
+     */
+    private function doValidation(
+        string $ruleName, 
+        string $field,
+        mixed $fieldValue,
+        string $ruleParam,
+        array $input
+    ): bool 
+    {
+        $hasError = false;
+        $isEmptyValue = ($fieldValue === '' || $fieldValue === null);
+        
+        switch ($ruleName) {
+            case 'none':
+            case 'nullable':
+                return true;
+            case 'required':
+                $hasError = ($isEmptyValue || $this->isEmpty($fieldValue));
+            break;
+            case 'callback':
+                $hasError = ($ruleParam && is_callable($ruleParam) && !$ruleParam($fieldValue, $field));
+            break;
+            case 'match':
+                $hasError = $ruleParam && ($isEmptyValue || !preg_match('/' . $ruleParam . '/', $fieldValue));
+            break;
+            case 'equals':
+                $hasError = ($fieldValue !== $input[$ruleParam]);
+            break;
+            case 'is_value':
+                $hasError = ($fieldValue !== $ruleParam);
+            break;
+            case 'not_equal':
+                $hasError = ($fieldValue === $input[$ruleParam]);
+            break;
+            case 'in_array':
+                if ($ruleParam !== '') {
+                    $hasError = $isEmptyValue;
+
+                    if(!$isEmptyValue){
+                        $matches = list_to_array($ruleParam);
+                        $hasError = !(($matches === false) ? false : in_array($fieldValue, $matches));
+                    }
+                }
+            break;
+            case 'username':
+                $hasError = $isEmptyValue;
+
+                if(!$isEmptyValue){
+                    [$valid, $error] = self::validateUsername($fieldValue, ...self::toArguments($ruleParam));
+
+                    if (!$valid) {
+                        $hasError = true;
+                        $this->messages[$field][$ruleName] = $this->messages[$field][$ruleName] ?? $error;
+                    }
+                }
+            break;
+            case 'keys_exist':
+            case 'keys_exists':
+                if ($ruleParam !== '') {
+                    $hasError = $isEmptyValue;
+
+                    if(!$isEmptyValue){
+                        $matches = list_to_array($ruleParam);
+
+                        if($matches !== false) {
+                            if (is_array($fieldValue)) {
+                                $intersection = array_intersect($matches, $fieldValue);
+                                $hasError = count($intersection) !== count($fieldValue);
+                            } else {
+                                $hasError = !list_in_array($fieldValue, $matches);
+                            }
+                        }
+                    }
+                }
+            break;
+            case 'fallback':
+                if ($this->isEmpty($fieldValue)) {
+                    $input[$field] = (strtolower($ruleParam) === 'null') ? null : $ruleParam;
+                }
+            break;
+            default:
+                $hasError = !self::validation($ruleName, $fieldValue, $ruleParam);
+            break;
+        }
+
+        if ($hasError) {
+            $this->addError($field, $ruleName, $fieldValue);
+        }
+
+        return false;
+    }
+
+    /**
      * Validate fields.
      * 
-     * @param string $ruleName The name of the rule to validate.
-     * @param string $value The value to validate.
-     * @param string $param additional validation parameters.
+     * @param string $ruleName The input validation rule name to execute.
+     * @param string $value The input value to validate.
+     * @param string $expected The expected validation rule argument.
      * 
      * @return boolean Return true if the rule passed else false.
      */
-    private static function validation(string $ruleName, mixed $value, mixed $param): bool
+    private static function validation(string $ruleName, mixed $value, ?string $expected = null): bool
     {
         try {
             return match ($ruleName) {
-                'max_length', 'max' => mb_strlen((string) $value) <= (int) $param,
-                'min_length', 'min' => mb_strlen((string) $value) >= (int) $param,
-                'exact_length', 'length' => mb_strlen((string) $value) === (int) $param,
+                'max_length', 'max' => mb_strlen((string) $value) <= (int) $expected,
+                'min_length', 'min' => mb_strlen((string) $value) >= (int) $expected,
+                'exact_length', 'length' => mb_strlen((string) $value) === (int) $expected,
                 'string' => is_string($value),
-                'integer' => self::validateInteger($value, $param),
-                'float' => self::validateFloat($value, $param),
+                'numeric' => is_numeric($value),
+                'integer' => self::validateInteger($value, $expected),
+                'float' => self::validateFloat($value, $expected),
                 'email' => filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
                 'alphanumeric' => is_string($value) && ctype_alnum($value),
                 'alphabet' => is_string($value) && ctype_alpha($value),
                 'url' => filter_var($value, FILTER_VALIDATE_URL) !== false,
-                'decimal' => self::validateFloat($value, $param, true),
+                'decimal' => self::validateFloat($value, $expected, true),
                 'binary' => ctype_print($value) && !preg_match('/[^\x20-\x7E\t\r\n]/', $value),
                 'hexadecimal' => ctype_xdigit($value),
                 'array' => is_array($value) || is_array(json_decode($value, true, 512, JSON_THROW_ON_ERROR)),
                 'json' => is_string($value) && json_validate($value),
-                'path', 'scheme' => self::validatePath($ruleName, $value, $param),
-                default => self::validateOthers($ruleName, $value, $param)
+                'path', 'scheme' => self::validatePath($ruleName, $value, $expected),
+                default => self::validateOthers($ruleName, $value, $expected)
             };
         } catch (Throwable) {
             return false;
@@ -293,11 +387,11 @@ final class Validation implements ValidationInterface, LazyInterface
      * Validates if the given value is an integer and optionally checks if it meets specific conditions.
      *
      * @param mixed $value The value to be validated.
-     * @param mixed $param The condition to check for the integer value. Accepts 'positive', 'negative', or any other string to validate the integer without additional conditions.
+     * @param string $param The condition to check for the integer value. Accepts 'positive', 'negative', or any other string to validate the integer without additional conditions.
      *
      * @return bool Return true if the value is a valid integer and meets the condition (if provided); `false` otherwise.
      */
-    private static function validateInteger(mixed $value, mixed $param = 'none'): bool
+    private static function validateInteger(mixed $value, string $param = 'none'): bool
     {
         if (str_contains((string) $value, '.') || !is_numeric($value)) {
             return false;
@@ -348,11 +442,12 @@ final class Validation implements ValidationInterface, LazyInterface
      * Validates if the given value is a valid file path based on the specified condition.
      *
      * @param mixed $value The value to be validated. Should be a string representing a file path.
-     * @param mixed $param The condition to check for the file path. Accepts 'true' to check if the path is readable or any other string to validate the path format.
+     * @param string $param The condition to check for the file path. 
+     *                 Accepts 'true' to check if the path is readable or any other string to validate the path format.
      *
      * @return bool Returns true if the value passed false otherwise.
      */
-    private static function validatePath(string $rule, mixed $value, mixed $param = ''): bool
+    private static function validatePath(string $rule, mixed $value, string $param = ''): bool
     {
         if(!is_string($value)){
             return false;
@@ -396,13 +491,70 @@ final class Validation implements ValidationInterface, LazyInterface
      * 
      * @param mixed $value The value to check.
      * 
-     * @return Return true if the value is not empty, false otherwise.
+     * @return bool Return true if the value is not empty, false otherwise.
      */
     private function isEmpty(mixed $value): bool 
     {
         return ($value === null || $value === '' || $value === []) 
             ? true 
             : is_empty($value);
+    }
+
+    /**
+     * Convert rule param to bool.
+     * 
+     * @param string $value The input rule param.
+     * 
+     * @return bool true or false.
+     */
+    private static function toBool(string $value): bool
+    {
+        return match(strtolower($value)){
+            'true', '1' => true,
+            default => false
+        };
+    }
+
+    /**
+     * Convert a string of arguments into a structured array.
+     *
+     * Example input: 'true, [user, root, system]'
+     * Result: [true, ['user', 'root', 'system']]
+     *
+     * The string should be in the format:
+     * - A boolean value (true/false/1/0) 
+     * - Optionally followed by a comma and a list in square brackets
+     *
+     * @param string $value The argument string to convert.
+     * @return array An array with:
+     *               - (bool) The boolean value
+     *               - (array) The list of items, empty if none provided
+     */
+    private static function toArguments(string $value): array
+    {
+        if(!$value){
+            return [true, []];
+        }
+
+        if (str_contains($value, ',')) {
+            [$bool, $options] = explode(',', $value, 2);
+
+            $bool = self::toBool($bool);
+            $options = trim($options);
+            $items = [];
+
+            if (str_starts_with($options, '[') && str_ends_with($options, ']')) {
+                $options = trim($options, '[]');
+                $items = array_filter(
+                    array_map('trim', explode(',', $options)),
+                    fn($v) => $v !== ''
+                );
+            }
+
+            return [$bool, $items];
+        }
+
+        return [self::toBool($value), []];
     }
 
     /**
@@ -422,10 +574,7 @@ final class Validation implements ValidationInterface, LazyInterface
             $param = $matches[2] ?? '';
         }
         
-        return [
-            $name,
-            ($param === '') ? '' : trim($param)
-        ];
+        return [trim($name), trim($param)];
     }
 
     /**

@@ -205,7 +205,7 @@ abstract class BaseModel implements LazyInterface
         $this->assertAllowedColumns($this->updatable, $data, 'update');
         $tbl = $this->builder->table($this->table);
 
-        if($max){
+        if($max > 0){
             $tbl->max($max);
         }
 
@@ -214,12 +214,7 @@ abstract class BaseModel implements LazyInterface
                 ->update($data) > 0;
         }
 
-        if(is_array($key)){
-            return $tbl->in($this->primaryKey, $key)
-                ->update($data) > 0;
-        }
-        
-        return $tbl->where($this->primaryKey, '=', $key)
+        return $tbl->where($this->primaryKey, is_array($key) ? 'IN' : '=', $key)
             ->update($data) > 0;
     }
 
@@ -233,17 +228,16 @@ abstract class BaseModel implements LazyInterface
      */
     public function find(mixed $key, array $fields = ['*']): mixed 
     {
-        $tbl = $this->builder->table($this->table);
-
-        if(is_array($key)){
-            $tbl->in($this->primaryKey, $key);
-        }else{
-            $tbl->where($this->primaryKey, '=', $key);
-        }
-
-        $cache_key = self::cacheKey($key, $fields, 'find');
-        return $tbl->cache($cache_key, $this->table . '_find', $this->expiry, static::$cacheFolder)
-            ->find($fields);
+        return $this->builder->table($this->table)
+            ->find($fields)
+            ->where($this->primaryKey, is_array($key) ? 'IN' : '=', $key)
+            ->cache(
+                self::cacheKey($key, $fields, 'find'), 
+                $this->table . '_find', 
+                $this->expiry, 
+                static::$cacheFolder
+            )
+            ->get();
     }
 
     /**
@@ -263,23 +257,19 @@ abstract class BaseModel implements LazyInterface
         int $offset = 0
     ): mixed 
     {
-        $tbl = $this->builder->table($this->table);
+        $tbl = $this->builder->table($this->table)->select($fields);
+
         if($key !== null){
-            if(is_array($key)){
-                $tbl->in($this->primaryKey, $key);
-            }else{
-                $tbl->where($this->primaryKey, '=', $key);
-            }
+            $tbl->where($this->primaryKey, is_array($key) ? 'IN' : '=', $key);
         }
         
-        $tbl->limit($limit, $offset);
-        $tbl->cache(
-            self::cacheKey($key, $fields, 'select'), 
-            $this->table . '_select', 
-            $this->expiry, 
-            static::$cacheFolder
-        );
-        return $tbl->select($fields);
+        return $tbl->limit($limit, $offset)
+            ->cache(
+                self::cacheKey($key, $fields, 'select'), 
+                $this->table . '_select', 
+                $this->expiry, 
+                static::$cacheFolder
+            )->get();
     }
 
     /**
@@ -313,23 +303,21 @@ abstract class BaseModel implements LazyInterface
             return false;
         }
 
-        if(is_array($key)){
-            return $tbl->in($this->primaryKey, $key)->delete() > 0;
-        }
-
-        return $tbl->where($this->primaryKey, '=', $key)->delete() > 0;
+        return $tbl->where($this->primaryKey, is_array($key) ? 'IN' : '=', $key)
+            ->delete() > 0;
     }
 
     /**
      * Get total number of records in the database.
      * 
-     * @return int|bool  Return the number of records.
+     * @return int Return the number of records.
      */
-    public function total(): int|bool 
+    public function total(): int 
     {
-        return $this->builder->table($this->table)
+        return (int) $this->builder->table($this->table)
+            ->total()
             ->cache('total', $this->table . '_total', $this->expiry, static::$cacheFolder)
-            ->total();
+            ->get();
     }
 
     /**
@@ -349,24 +337,19 @@ abstract class BaseModel implements LazyInterface
      * 
      * @param array<int,mixed>|string|float|int $key The key?s to find total number of matched.
      * 
-     * @return int|bool Return the number of records.
+     * @return int Return the number of records.
      */
-    public function count(mixed $key): int|bool 
+    public function count(mixed $key): int 
     {
-        $tbl = $this->builder->table($this->table);
-
-        if(is_array($key)){
-            $tbl->in($this->primaryKey, $key);
-        }else{
-            $tbl->where($this->primaryKey, '=', $key);
-        }
-
-        return $tbl->cache(
-            self::cacheKey($key, [], 'count'), 
-            $this->table . '_total', 
-            $this->expiry, 
-            static::$cacheFolder
-        )->total();
+        return (int) $this->builder->table($this->table)
+            ->total()
+            ->where($this->primaryKey, is_array($key) ? 'IN' : '=', $key)
+            ->cache(
+                self::cacheKey($key, [], 'count'), 
+                $this->table . '_total', 
+                $this->expiry, 
+                static::$cacheFolder
+            )->get();
     }
 
     /**
@@ -396,8 +379,7 @@ abstract class BaseModel implements LazyInterface
 
         $columns = rtrim($columns, ' OR');
         
-        return $this->builder->table($this->table)
-            ->query("SELECT {$fields} FROM {$this->table} {$columns} LIMIT {$offset}, {$limit}")
+        return $this->builder->query("SELECT {$fields} FROM {$this->table} {$columns} LIMIT {$offset}, {$limit}")
             ->cache($cache_key, $this->table . '_search', $this->expiry, static::$cacheFolder)
             ->execute([
                 'keyword' => "%{$query}%"
@@ -441,8 +423,7 @@ abstract class BaseModel implements LazyInterface
         $fields = ($fields === ['*'])  ? '*' : implode(", ", $fields);
         $sql = "SELECT {$fields} FROM {$this->table} {$queries} LIMIT {$offset}, {$limit}";
 
-        $result = $this->builder->table($this->table)
-            ->query($sql)
+        $result = $this->builder->query($sql)
             ->cache($cache_key, $this->table . '_doSearch', $this->expiry, static::$cacheFolder)
             ->execute();
 
@@ -473,7 +454,7 @@ abstract class BaseModel implements LazyInterface
      * 
      * @param string $returns The result returned as (e.g, `array` or `object`).
      * 
-     * @return self Return instance of model class.
+     * @return static Return instance of model class.
      */
     public function setReturn(string $returns): self
     {

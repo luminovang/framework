@@ -24,14 +24,14 @@ final class Luminova
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.6.2';
+    public const VERSION = '3.6.3';
 
     /**
      * Framework version name.
      * 
      * @var string VERSION_NAME
      */
-    public const VERSION_NAME = 'Xtra';
+    public const VERSION_NAME = 'Osiris';
 
     /**
      * Minimum required php version.

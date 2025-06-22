@@ -18,7 +18,7 @@ use \Luminova\Command\Utils\Color;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
 use \Closure;
-use \Exception;
+use \Throwable;
 
 final class Schema
 {
@@ -143,7 +143,7 @@ final class Schema
             } else {
                 self::report("Unable to create table or table already exists.\nRun migration command with `--drop` flag to drop table before running migration.", $tableName);
             }
-        } catch (DatabaseException|Exception $e) {
+        } catch (Throwable $e) {
             self::report($e->getMessage(), $tableName);
         }
     }
@@ -205,7 +205,7 @@ final class Schema
                 $db->rollback();
                 self::report("Unable to alter table '%s'.", $tableName);
             }
-        } catch (DatabaseException|Exception $e) {
+        } catch (Throwable $e) {
             $db->rollback();
             self::report($e->getMessage(), $tableName);
         }
@@ -259,7 +259,7 @@ final class Schema
                 $db->rollback();
                 self::report("Unable to rename table '%s'.", $from);
             }
-        }catch (DatabaseException|Exception $e) {
+        }catch (Throwable $e) {
             self::report($e->getMessage(), $from);
         }
 
@@ -325,7 +325,7 @@ final class Schema
             } else {
                 self::report("Unable to create table or table already exists.\nRun migration command with `--drop` flag to drop table before running migration.", $tableName);
             }
-        } catch (DatabaseException|Exception $e) {
+        } catch (Throwable $e) {
             self::report($e->getMessage(), $tableName);
         }
     }

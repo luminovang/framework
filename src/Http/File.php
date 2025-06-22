@@ -526,7 +526,9 @@ class File implements LazyInterface
     }
 
     /**
-     * Executes file validation checks against the defined configuration rules.
+     * Validates the uploaded file with detailed error reporting.
+     * 
+     * This method executes file validation checks against the defined configuration rules.
      * 
      * - Ensures upload completed without native PHP errors.
      * - Checks for non-zero size and temporary file/content availability.
@@ -535,34 +537,97 @@ class File implements LazyInterface
      *
      * If a validation rule fails, an appropriate error code and message are set.
      *
-     * @return bool Returns true if the file passes all validations; otherwise false.
+     * @return bool Returns true if file is valid, false otherwise
      */
     public function valid(): bool
     {
+         if ($this->temp === null && $this->content === null) {
+            $this->error = self::UPLOAD_ERR_NO_FILE_DATA;
+            $this->message = sprintf(
+                'No file data received for "%s". Possible causes: ' .
+                'upload was interrupted, temporary file was deleted, ' .
+                'or file exceeded server limits.',
+                $this->name ?? 'unknown'
+            );
+            return false;
+        }
+
         if ($this->error !== UPLOAD_ERR_OK) {
-            $this->message = 'File upload error occurred.';
+            $this->message = $this->getErrorDetails($this->error);
             return false;
         }
 
         if ($this->size === 0) {
             $this->error = self::UPLOAD_ERR_NO_SIZE;
-            $this->message = 'File is empty or corrupted.';
+            $this->message = sprintf(
+                'Uploaded file "%s" is empty (0 bytes). The file may be corrupted or incomplete.',
+                $this->name ?? 'unknown'
+            );
             return false;
         }
 
-        if ($this->temp === null && $this->content === null) {
-            $this->error = self::UPLOAD_ERR_NO_FILE_DATA;
-            $this->message = 'No uploaded file data found. File may be missing, corrupted, or not properly initialized.';
+        if ($this->config instanceof FileConfig && !$this->isPassedCustomValidation()) {
             return false;
-        }      
-        
-        if($this->config instanceof FileConfig && !$this->isPassedCustomValidation()){
-           return false;
         }
 
         $this->error = UPLOAD_ERR_OK;
-        $this->message = 'File upload is valid.';
+        $this->message = sprintf(
+            'File "%s" (%s, %d bytes) passed all validation checks.',
+            $this->name ?? 'unknown',
+            $this->mime ?? 'unknown type',
+            $this->size
+        );
         return true;
+    }
+
+    /**
+     * Gets detailed error information for file upload errors with debugging support
+     * 
+     * @param int $code The UPLOAD_ERR_* error code.
+     * 
+     * @return string Detailed error message with troubleshooting information
+     */
+    private function getErrorDetails(int $code): string
+    {
+        $troubleshoot = '';
+        $maxUpload = $maxPost = null;
+
+        if ($code === UPLOAD_ERR_INI_SIZE || $code === UPLOAD_ERR_FORM_SIZE) {
+            $maxUpload = Maths::toBytes(ini_get('upload_max_filesize'));
+            $maxPost = Maths::toBytes(ini_get('post_max_size'));
+        }
+        
+        $message = match($code) {
+            UPLOAD_ERR_INI_SIZE => sprintf(
+                'File exceeds server size limit (%s). ',
+                Maths::toUnit($maxUpload, true)
+            ),
+            UPLOAD_ERR_FORM_SIZE => sprintf(
+                'File exceeds form size limit (%s). ',
+                Maths::toUnit(min($maxUpload, $maxPost), true)
+            ),
+            UPLOAD_ERR_PARTIAL    => 'File was only partially uploaded. ',
+            UPLOAD_ERR_NO_FILE => 'No file was selected or uploaded. ',
+            UPLOAD_ERR_NO_TMP_DIR => 'Server is missing temporary upload folder. ',
+            UPLOAD_ERR_CANT_WRITE => 'Server failed to save uploaded file to disk. ',
+            UPLOAD_ERR_EXTENSION => 'File upload blocked by server extension configuration. ',
+            default => sprintf('Unknown upload error (code: %d). ', $code)
+        };
+        
+        $troubleshoot = match($code) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => sprintf(
+                "Current limits: MaxUpload=%s, MaxPost=%s",
+                Maths::toUnit($maxUpload, true),
+                Maths::toUnit($maxPost, true)
+            ),
+            UPLOAD_ERR_PARTIAL => 'This may indicate network problems during upload.',
+            UPLOAD_ERR_NO_TMP_DIR => 'Contact server administrator to create upload_tmp_dir.',
+            UPLOAD_ERR_CANT_WRITE => 'Check server disk space and permissions.',
+            UPLOAD_ERR_EXTENSION => 'Check PHP configuration for disabled file types.',
+            default => 'Please check server error logs for more details.'
+        };
+        
+        return $message . $troubleshoot;
     }
 
     /**

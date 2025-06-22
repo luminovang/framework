@@ -86,7 +86,7 @@ final class Layout
      */
     protected static function import(string $layout, string $module = ''): self 
     {
-        return (new self())->layout($layout, $module);;
+        return (new self())->layout($layout, $module);
     }
 
     /**
@@ -208,7 +208,7 @@ final class Layout
     public function extend(?string $section = null): string
     {
         if ($section === null) {
-            return $this->get();;
+            return $this->get();
         }
 
         $this->include();

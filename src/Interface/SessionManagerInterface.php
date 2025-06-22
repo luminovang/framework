@@ -35,7 +35,7 @@ interface SessionManagerInterface
      *
      * @param string $storage The session storage key.
      * 
-     * @return self Return instance of session manager class.
+     * @return static<SessionManagerInterface> Return instance of session manager class.
      */
     public function setStorage(string $storage): self;
 
@@ -44,7 +44,7 @@ interface SessionManagerInterface
      *
      * @param string $table The session storage table index.
      * 
-     * @return self Return instance of session manager class.
+     * @return static<SessionManagerInterface> Return instance of session manager class.
      */
     public function setTable(string $table): self;
 
@@ -149,7 +149,7 @@ interface SessionManagerInterface
      * @param mixed $data The data to store.
      * @param string|null $storage Optional storage name.
      * 
-     * @return self Return instance of session manager class.
+     * @return static<SessionManagerInterface> Return instance of session manager class.
      */
     public function setItem(string $index, mixed $data, ?string $storage = null): self;
 
@@ -159,7 +159,7 @@ interface SessionManagerInterface
      * @param array<string,mixed> $data The date to store where the key is the identifier.
      * @param string|null $storage Optional storage name.
      * 
-     * @return self Return instance of session manager class.
+     * @return static<SessionManagerInterface> Return instance of session manager class.
      */
     public function setItems(array $data, ?string $storage = null): self;
 
@@ -170,7 +170,7 @@ interface SessionManagerInterface
      * @param string|null $index The key index to remove.
      * @param string|null $storage Optionally specify the storage name to clear or remove an item.
      * 
-     * @return self Return instance of session manager class.
+     * @return static<SessionManagerInterface> Return instance of session manager class.
      */
     public function deleteItem(?string $index = null, ?string $storage = null): self;
 

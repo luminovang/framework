@@ -160,9 +160,10 @@ class Database extends BaseSessionHandler
 
         if ($this->options['cacheable']) {
             $records = $this->table()
+                ->select([$this->prefixed('id')])
                 ->where($this->prefixed('timestamp'), '<', $expiration)
-                ->returns('array')
-                ->select([$this->prefixed('id')]);
+                ->returns(Builder::RETURN_ARRAY)
+                ->get();
                 
             if (!$records) {
                 return false;
@@ -198,7 +199,7 @@ class Database extends BaseSessionHandler
         $data = $this->table($id)->where($this->prefixed('id'), '=', $id)->find([
             $this->prefixed('data'), 
             $this->prefixed('ip')
-        ]);
+        ])->get();
 
         if (!$data) {
             $this->fileHash = md5('');
@@ -284,7 +285,8 @@ class Database extends BaseSessionHandler
      */
     private function table(?string $key = null): Builder
     {
-        $builder = Builder::table($this->table)->returns('object');
+        $builder = Builder::table($this->table)
+            ->returns(Builder::RETURN_OBJECT);
 
         if ($key && $this->options['cacheable']) {
             $builder->cache($key);

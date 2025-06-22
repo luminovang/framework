@@ -15,7 +15,7 @@ use \Luminova\Database\Table;
 use \Luminova\Exceptions\DatabaseException;
 
 /**
- * Table colum creation methods.
+ * Table column creation methods.
  *                 
  * @method Table      number(string $name, ?int $precision = null, ?int $scale = null)  Creates a `DECIMAL` column with precision and scale length (default: 10,0).
  * @method Table      integer(string $name, ?int $length = null)                        Creates an `INT` column with optional length.

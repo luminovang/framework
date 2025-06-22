@@ -147,7 +147,6 @@ final class Manager implements LazyInterface
         }
 
         $this->writeTableStructure($handle, $this->table);
-        //$this->writeTriggers($handle);
 
         fclose($handle);
         return true;
@@ -172,12 +171,14 @@ final class Manager implements LazyInterface
             throw new DatabaseException("Failed to open file for writing backup: $filepath");
         }
 
-        $structure = $this->db->query("SHOW CREATE DATABASE {$database}")->fetch('next', FETCH_ASSOC)['Create Database'];
+        $structure = $this->db->query("SHOW CREATE DATABASE {$database}")
+            ->fetch(RETURN_ALL, FETCH_ASSOC)['Create Database'];
 
         fwrite($handle, "-- Database structure\n\n");
         fwrite($handle, "$structure;\n\n");
 
-        $tables = $this->db->query("SHOW FULL TABLES WHERE Table_Type = 'BASE TABLE'")->fetch('all', FETCH_COLUMN);
+        $tables = $this->db->query("SHOW FULL TABLES WHERE Table_Type = 'BASE TABLE'")
+            ->fetch(RETURN_ALL, FETCH_COLUMN);
 
         foreach ($tables as $table) {
             $this->writeTableStructure($handle, $table);
@@ -199,7 +200,8 @@ final class Manager implements LazyInterface
     private function writeTriggers($handle): void
     {
         if ($handle && $this->db instanceof DatabaseInterface) {
-            $triggers = $this->db->query("SHOW TRIGGERS")->fetch('all', FETCH_ASSOC);
+            $triggers = $this->db->query("SHOW TRIGGERS")
+                ->fetch(RETURN_ALL, FETCH_ASSOC);
 
             if (!empty($triggers)) {
                 fwrite($handle, "-- Triggers\n\n");
@@ -224,12 +226,14 @@ final class Manager implements LazyInterface
     private function writeTableStructure($handle, string $table): void
     {
         if ($handle && $this->db instanceof DatabaseInterface) {
-            $tableStructure = $this->db->query("SHOW CREATE TABLE {$table}")->fetch('next', FETCH_ASSOC)['Create Table'];
+            $tableStructure = $this->db->query("SHOW CREATE TABLE {$table}")
+                ->fetch(RETURN_NEXT, FETCH_ASSOC)['Create Table'];
 
             fwrite($handle, "-- Table structure for {$table}\n\n");
             fwrite($handle, "$tableStructure;\n\n");
 
-            $rows = $this->db->query("SELECT * FROM {$table}")->fetch('all', FETCH_ASSOC);
+            $rows = $this->db->query("SELECT * FROM {$table}")
+                    ->fetch(RETURN_ALL, FETCH_ASSOC);
 
             if ($rows) {
                 fwrite($handle, "-- Data for {$table}\n\n");

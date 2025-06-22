@@ -172,7 +172,7 @@ abstract class CoreApplication implements LazyInterface
      * @param class-string $abstract The interface or class name to bind.
      * @param Closure|class-string $resolver The concrete class or closure returning the instance.
      * 
-     * @return self Return instance of application class.
+     * @return static Return instance of application class.
      * 
      * @example Simple and advanced bindings:
      * ```php

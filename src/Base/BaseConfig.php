@@ -146,7 +146,7 @@ abstract class BaseConfig implements LazyInterface
      * @param string $directive  The CSP directive name (e.g., 'default-src').
      * @param array|string $values The values for the directive (can be a string or an array of values).
      * 
-     * @return self Returns the instance of configuration class.
+     * @return static Returns the instance of configuration class.
      */
     protected function addCsp(string $directive, array|string $values): self
     {
@@ -163,7 +163,7 @@ abstract class BaseConfig implements LazyInterface
      *
      * @param string $directive The CSP directive to remove.
      * 
-     * @return self Returns the instance of configuration class.
+     * @return static Returns the instance of configuration class.
      */
     public function removeCsp(string $directive): self
     {
@@ -174,7 +174,7 @@ abstract class BaseConfig implements LazyInterface
     /**
      * Clear all directives from the Content-Security-Policy (CSP).
      *
-     * @return self Returns the instance of configuration class.
+     * @return static Returns the instance of configuration class.
      */
     public function clearCsp(): self
     {

@@ -85,7 +85,7 @@ abstract class CoreCronTasks
      *
      * @param class-string<BaseCommand> $controller The controller class and method.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected function service(string $controller): self
     {
@@ -101,7 +101,7 @@ abstract class CoreCronTasks
      *
      * @param callable $onComplete The callback function to execute on completion.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected function onComplete(callable $onComplete): self
     {
@@ -115,7 +115,7 @@ abstract class CoreCronTasks
      *
      * @param callable $onError The callback function to execute on failure.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected function onFailure(callable $onError): self
     {
@@ -129,7 +129,7 @@ abstract class CoreCronTasks
      *
      * @param string $url The URL to ping on completion.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected function pingOnComplete(string $url): self
     {
@@ -143,7 +143,7 @@ abstract class CoreCronTasks
      *
      * @param string $url The URL to ping on failure.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected function pingOnFailure(string $url): self
     {
@@ -160,7 +160,7 @@ abstract class CoreCronTasks
      * **Supported Log levels:**
      * [emergency, alert, critical, error, warning, notice, info, debug, exception, php_error]
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      * @throws InvalidArgumentException If invalid or unsupported log level is provided.
      */
     protected function log(string $level): self
@@ -176,7 +176,7 @@ abstract class CoreCronTasks
      *
      * @param string $filepath The output filepath (e.g, `/path/to/writable/cron/err.txt`).
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      * @throws InvalidArgumentException If invalid or unsupported file path is provided.
      * 
      * > **Note:** Latest execution outputs overrides the previous outputs.
@@ -201,7 +201,7 @@ abstract class CoreCronTasks
      *
      * @param string $description The description of the cron job.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected function description(string $description): self
     {
@@ -255,7 +255,7 @@ abstract class CoreCronTasks
      *
      * @param int $seconds Interval in seconds.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected final function seconds(int $seconds = 5): self
     {
@@ -267,7 +267,7 @@ abstract class CoreCronTasks
      *
      * @param int $minutes Interval in minutes.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected final function minutes(int $minutes = 1): self
     {
@@ -279,7 +279,7 @@ abstract class CoreCronTasks
      *
      * @param int $hours Interval in hours.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected final function hours(int $hours = 1): self
     {
@@ -291,7 +291,7 @@ abstract class CoreCronTasks
      *
      * @param int $days Interval in days.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected final function days(int $days = 1): self
     {
@@ -303,7 +303,7 @@ abstract class CoreCronTasks
      *
      * @param int $weeks Interval in weeks.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected final function weeks(int $weeks = 1): self
     {
@@ -315,7 +315,7 @@ abstract class CoreCronTasks
      *
      * @param int $months Interval in months.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected final function months(int $months = 1): self
     {
@@ -327,7 +327,7 @@ abstract class CoreCronTasks
      *
      * @param int $years Interval in years.
      * 
-     * @return self Return cron class instance.
+     * @return static Return cron class instance.
      */
     protected final function years(int $years = 1): self
     {
@@ -340,7 +340,7 @@ abstract class CoreCronTasks
      * @param string $expression The cron expression.
      *
      * 
-     * @return self Return cron class instance. 
+     * @return static Return cron class instance. 
      * @throws RuntimeException If invalid expression is provided.
      */
     protected function cronTime(string $expression): self

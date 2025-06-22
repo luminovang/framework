@@ -55,7 +55,7 @@ interface ClientInterface extends PsrClientInterface
      * @param int $option The curl option identifier (e.g, `CURLOPT_USERAGENT`).
      * @param mixed $value The curl client option value.
      * 
-     * @return self Return instance of cURL client class.
+     * @return static Return instance of cURL client class.
      * 
      * > The options will be ignored if used with `Guzzle` client.
      */
@@ -66,7 +66,7 @@ interface ClientInterface extends PsrClientInterface
      *
      * @param RequestInterface<\T> $request Instance of HTTP request object.
      *
-     * @return ResponseInterface Return instance of HTTP response object.
+     * @return ResponseInterface|\Luminova\Interface\ResponseInterface Return instance of HTTP response object.
      * @throws ClientException If an error happens while processing the request.
      */
     public function sendRequest(RequestInterface $request): ResponseInterface;
@@ -112,7 +112,7 @@ interface ClientInterface extends PsrClientInterface
      * @param RequestInterface<\T> $request The HTTP request object containing request details.
      * @param array<string,mixed> $options Optional parameters to customize the request (e.g., headers, timeout).
      *
-     * @return ResponseInterface Return guzzle promise that resolves to the request response or cURL request response object.
+     * @return ResponseInterface|\Luminova\Interface\ResponseInterface Return guzzle promise that resolves to the request response or cURL request response object.
      *
      * @throws RequestException If the request format is invalid or fails.
      * @throws ConnectException If a connection to the server cannot be established.
@@ -130,7 +130,7 @@ interface ClientInterface extends PsrClientInterface
      * @param UriInterface<\T>|string $uri The target URI or URL for the request (absolute or relative).
      * @param array<string,mixed> $options Optional configurations to adjust the request behavior (e.g., headers, data, timeout).
      *
-     * @return ResponseInterface Return the psr response interface object or cURL response object depending on client.
+     * @return ResponseInterface|\Luminova\Interface\ResponseInterface Return the psr response interface object or cURL response object depending on client.
      *
      * @throws ConnectException If a connection to the server cannot be established.
      * @throws RequestException For request formatting, timeout, or protocol issues.

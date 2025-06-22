@@ -31,7 +31,8 @@ interface ExceptionInterface
      * Sets the exception code.
      *
      * @param string|int $code The string or integer representation of the exception code.
-     * @return self Returns the current instance for method chaining.
+     * 
+     * @return static<ExceptionInterface> Returns the in stance of exception class.
      */
     public function setCode(string|int $code): self;
 
@@ -39,7 +40,8 @@ interface ExceptionInterface
      * Sets the file where the error occurred.
      * 
      * @param string $file The file where the error occurred.
-     * @return self Returns the current instance for method chaining.
+     * 
+     * @return static<ExceptionInterface> Returns the in stance of exception class.
      */
     public function setFile(string $file): self;
 
@@ -47,7 +49,8 @@ interface ExceptionInterface
      * Sets the line number where the error occurred.
      * 
      * @param int $line The line number of the error.
-     * @return self Returns the current instance for method chaining.
+     * 
+     * @return static<ExceptionInterface> Returns the in stance of exception class.
      */
     public function setLine(int $line): self;
 

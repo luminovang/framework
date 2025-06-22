@@ -84,8 +84,9 @@ class Authenticate extends BaseConsole
         }
 
         $result = Builder::table('novakit_users')
+            ->find(['auth', 'content', 'online'])
             ->where('user', '=', $username)
-            ->find(['auth', 'content', 'online']);
+            ->get();
 
         if(!$result){
             return null;

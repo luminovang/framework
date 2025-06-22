@@ -23,16 +23,16 @@ use \Throwable;
 /**
  * Static logger class methods.
  *
- * @method static void emergency(string $message, array $context = [])  Logs a system emergency (highest severity).
- * @method static void alert(string $message, array $context = [])      Logs an alert that requires immediate action.
- * @method static void critical(string $message, array $context = [])   Logs a critical condition that requires prompt attention.
- * @method static void error(string $message, array $context = [])      Logs an error that prevents execution but does not require immediate shutdown.
- * @method static void warning(string $message, array $context = [])    Logs a warning about a potential issue.
- * @method static void notice(string $message, array $context = [])     Logs a normal but significant event.
- * @method static void info(string $message, array $context = [])       Logs general informational messages.
- * @method static void debug(string $message, array $context = [])      Logs debugging information for developers.
- * @method static void phpError(string $message, array $context = [])   Logs a PHP runtime error.
- * @method static void php(string $message, array $context = [])        Alias for `phpError`, logs PHP-related issues.
+ * @method static void emergency(string $message, array $context = []) Logs a system emergency (highest severity).
+ * @method static void alert(string $message, array $context = []) Logs an alert that requires immediate action.
+ * @method static void warning(string $message, array $context = []) Logs a warning about a potential issue.
+ * @method static void notice(string $message, array $context = []) Logs a normal but significant event.
+ * @method static void info(string $message, array $context = []) Logs general informational messages.
+ * @method static void debug(string $message, array $context = []) Logs debugging information for developers.
+ * @method static void phpError(string $message, array $context = []) Logs a PHP runtime error.
+ * @method static void php(string $message, array $context = []) Alias for `phpError`, logs PHP-related issues.
+ * @method static void critical(string $message, array $context = []) Logs a critical condition that requires prompt attention.
+ * @method static void error(string $message, array $context = []) Logs an error that prevents execution but does not require immediate shutdown.
  */
 final class Logger
 {
@@ -218,7 +218,7 @@ final class Logger
         }
 
         $level = $isFile ? $to : LogLevel::ALERT;
-        $to = self::getLogDestination($to ?? '');
+        $to = self::getLogDestination($to ?? LogLevel::ERROR);
         
         if ($to && LogLevel::has($to)) {
             self::log($to, $message, $context);

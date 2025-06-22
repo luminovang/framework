@@ -166,7 +166,7 @@ abstract class BaseCache implements LazyInterface
      * 
      * @param string $storage The cache storage name.
      * 
-     * @return self Return instance of memory cache class.
+     * @return static Return instance of memory cache class.
      * @throws CacheException Throws if cannot load cache or unable to process items.
      * @throws InvalidArgumentException Throws if empty cache storage name is provided.
      */
@@ -177,7 +177,7 @@ abstract class BaseCache implements LazyInterface
      * 
      * @param string $subfolder The cache storage root directory.
      * 
-     * @return self Return instance of file cache class.
+     * @return static Return instance of file cache class.
      * @throws InvalidArgumentException Throws if invalid sub directory is provided.
      */
     public function setFolder(string $subfolder): self
@@ -209,7 +209,7 @@ abstract class BaseCache implements LazyInterface
      *
      * @param DateTimeInterface|int|null $expiration The expiration time of the cache item.
      * 
-     * @return self Return instance of memory cache class.
+     * @return static Return instance of memory cache class.
      * 
      * > **Note:** When set to null, the item will never expire, when set to 0, it automatically expires immediately.
      */
@@ -231,7 +231,7 @@ abstract class BaseCache implements LazyInterface
      *
      * @param DateInterval|int|null $after The expiration time in seconds or as a DateInterval.
      * 
-     * @return self Return instance of memory cache class.
+     * @return static Return instance of memory cache class.
      */
     public function expiresAfter(DateInterval|int|null $after = null): self
     {
@@ -249,7 +249,7 @@ abstract class BaseCache implements LazyInterface
      * 
      * @param bool $lock lock flag to be used.
      * 
-     * @return self Return instance of memory cache class.
+     * @return static Return instance of memory cache class.
      */
     public function setLock(bool $lock): self 
     {
@@ -264,7 +264,7 @@ abstract class BaseCache implements LazyInterface
      * @param bool $allow The deletion flag.
      * @param bool $includeLocked Optional specify whether to also delete locked caches (default: true).
      * 
-     * @return self Return instance of file cache class.
+     * @return static Return instance of file cache class.
      */
     public function enableDeleteExpired(bool $allow, bool $includeLocked = false): self 
     {

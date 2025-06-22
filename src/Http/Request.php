@@ -559,7 +559,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function getPaths(): string
     {
-        $url = $this->getUri();;
+        $url = $this->getUri();
 
         if($url === ''){
             return '';

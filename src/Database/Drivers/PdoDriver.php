@@ -10,14 +10,15 @@
  */
 namespace Luminova\Database\Drivers;
 
-use \Luminova\Core\CoreDatabase;
-use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Interface\DatabaseInterface;
-use \Luminova\Interface\ConnInterface;
 use \PDO;
-use \PDOStatement;
+use \stdClass;
 use \Throwable;
 use \PDOException;
+use \PDOStatement;
+use \Luminova\Core\CoreDatabase;
+use \Luminova\Interface\ConnInterface;
+use \Luminova\Interface\DatabaseInterface;
+use \Luminova\Exceptions\DatabaseException;
 
 final class PdoDriver implements DatabaseInterface 
 {
@@ -36,6 +37,13 @@ final class PdoDriver implements DatabaseInterface
     private ?PDOStatement $stmt = null;
 
     /**
+     * Database configuration.
+     * 
+     * @var CoreDatabase|null $config 
+     */
+    private ?CoreDatabase $config = null;
+
+    /**
      * Debug mode flag.
      * 
      * @var bool $onDebug
@@ -47,21 +55,7 @@ final class PdoDriver implements DatabaseInterface
      * 
      * @var bool $connected 
      */
-    private bool $connected = false;
-
-    /**
-     * Database configuration.
-     * 
-     * @var CoreDatabase|null $config 
-     */
-    private ?CoreDatabase $config = null; 
-
-    /**
-     * Using bind and param parsing.
-     * 
-     * @var bool $parseParams
-     */
-    private bool $parseParams = false;
+    private bool $connected = false; 
 
     /**
      * Query executed successfully.
@@ -99,6 +93,13 @@ final class PdoDriver implements DatabaseInterface
     private static float|int $startTime = 0;
 
     /**
+     * Result mode.
+     * 
+     * @var bool $isResult
+     */
+    private bool $isResult = false;
+
+    /**
      * Result fetch modes.
      * 
      * @var array<int,string> $fetchModes
@@ -108,10 +109,10 @@ final class PdoDriver implements DatabaseInterface
         FETCH_BOTH      => PDO::FETCH_BOTH,
         FETCH_OBJ       => PDO::FETCH_OBJ, 
         FETCH_COLUMN    => PDO::FETCH_COLUMN,
-        FETCH_COLUMN_ASSOC => PDO::FETCH_KEY_PAIR,
+        FETCH_KEY_PAIR  => PDO::FETCH_KEY_PAIR,
         FETCH_NUM       => PDO::FETCH_NUM,
-        FETCH_ALL       => PDO::FETCH_ASSOC,
-        FETCH_NUM_OBJ   => PDO::FETCH_OBJ
+        FETCH_NUM_OBJ   => PDO::FETCH_OBJ,
+        FETCH_CLASS     => PDO::FETCH_CLASS
     ];
 
     /**
@@ -120,18 +121,26 @@ final class PdoDriver implements DatabaseInterface
     public function __construct(CoreDatabase $config) 
     {
         $this->config = $config;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function connect(): bool 
+    {
         try{
             $this->newConnection();
             $this->connected = true;
         }catch(Throwable $e){
-            if($e instanceof DatabaseException){
-                throw $e;
+            if(!$e instanceof DatabaseException){
+                throw new DatabaseException('Connection failed: ' . $e->getMessage(), $e->getCode(), $e);
             }
 
-            throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
+            throw $e;
         }
 
         self::$showProfiling = ($this->isConnected() && !PRODUCTION && env('debug.show.performance.profiling', false));
+        return $this->connected;
     }
 
     /**
@@ -149,7 +158,7 @@ final class PdoDriver implements DatabaseInterface
     public function getDriver(): ?string 
     {
         return $this->isConnected() 
-            ? $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME) ?? $this->config->getValue('pdo_version')
+            ? ($this->connection->getAttribute(PDO::ATTR_DRIVER_NAME) ?? $this->config->getValue('pdo_version'))
             : null;
     }
 
@@ -270,11 +279,7 @@ final class PdoDriver implements DatabaseInterface
             return ['status' => 'idle'];
         }
 
-        preg_match_all(
-            '/(\S[^:]+): (\S+)/', 
-            $info, 
-            $matches
-        );
+        preg_match_all('/(\S[^:]+): (\S+)/', $info, $matches);
         return array_combine($matches[1], $matches[2]) ?: [];
     }
 
@@ -295,8 +300,11 @@ final class PdoDriver implements DatabaseInterface
     {
         $this->assertConnection();
         $this->profiling(true);
+
+        $this->isResult = false;
         $this->executed = false;
         $this->stmt = $this->connection->prepare($query);
+
         $this->profiling(false);
 
         return $this;
@@ -309,8 +317,10 @@ final class PdoDriver implements DatabaseInterface
     {
         $this->assertConnection();
         $this->profiling(true);
+
+        $this->isResult = false;
         $this->executed = false;
-        $this->stmt = $this->connection->query($query);
+        $this->stmt = $this->connection->query($query) ?: null;
 
         if($this->stmt instanceof PDOStatement){
             $this->executed = true;
@@ -327,7 +337,10 @@ final class PdoDriver implements DatabaseInterface
     {
         $this->assertConnection();
         $this->profiling(true);
+
+        $this->isResult = false;
         $this->executed = false;
+
         $executed = $this->connection->exec($query);
         $this->profiling(false);
 
@@ -352,7 +365,7 @@ final class PdoDriver implements DatabaseInterface
         $this->profiling(true);
 
         if ($flags === 4) {
-            $readonly = $this->connection->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+            $readonly = $this->connection->exec('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
             
             if ($readonly === false) {
                 $this->profiling(false, true);
@@ -445,24 +458,42 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public static function getType(mixed $value): string|int 
+    public static function getType(mixed $value): int
     {
         return match (true) {
-            is_int($value) => 1,
-            is_bool($value) => 5,
-            is_null($value) => 0,
-            default => 2,
+            is_null($value), ($value === 'null'), ($value === 'NULL') => PDO::PARAM_NULL,
+            is_bool($value)  => PDO::PARAM_BOOL,
+            is_int($value)  => PDO::PARAM_INT,
+            is_resource($value) => PDO::PARAM_LOB,
+            default  => PDO::PARAM_STR
         };
     }
 
     /**
      * {@inheritdoc}
      */
+    public static function fromTypes(int $type): int  
+    {
+        return match ($type) {
+            PARAM_INT   => PDO::PARAM_INT,
+            PARAM_BOOL  => PDO::PARAM_BOOL,
+            PARAM_NULL  => PDO::PARAM_NULL,
+            PARAM_LOB   => PDO::PARAM_LOB,
+            PARAM_STR,
+            PARAM_FLOAT => PDO::PARAM_STR,
+            default     => $type
+        };
+    }
+    
+    /**
+     * {@inheritdoc}
+     */
     public function bind(string $param, mixed $value, ?int $type = null): self 
     {
         $this->assertStatement();
-        $this->stmt->bindValue($param, $value, $type ?? self::getType($value));
-        $this->parseParams = true;
+        $type = ($type === null) ? self::getType($value) : self::fromTypes($type);
+
+        $this->stmt->bindValue($param, $value, $type);
 
         return $this;
     }
@@ -481,8 +512,9 @@ final class PdoDriver implements DatabaseInterface
     public function param(string $param, mixed &$value, ?int $type = null): self 
     {
         $this->assertStatement();
-        $this->stmt->bindParam($param, $value, $type ?? self::getType($value));
-        $this->parseParams = true;
+        $type = ($type === null) ? self::getType($value) : self::fromTypes($type);
+
+        $this->stmt->bindParam($param, $value, $type);
         
         return $this;
     }
@@ -499,10 +531,13 @@ final class PdoDriver implements DatabaseInterface
         $this->assertStatement();
 
         try {
-           $this->executed = $this->stmt->execute($this->parseParams ? null : $params);
-           $this->parseParams = false;
+           $this->executed = $this->stmt->execute($params);
         } catch (Throwable $e) {
-            throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
+            if(!$e instanceof DatabaseException){
+                throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
+            }
+
+            throw $e;
         }
 
         return $this->executed;
@@ -513,22 +548,24 @@ final class PdoDriver implements DatabaseInterface
      */
     public function rowCount(): int 
     {
+        $this->isResult = true;
         return $this->isStatement() ? $this->stmt->rowCount() : 0;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getResult(int $mode = RETURN_ALL, string $type = 'object'): mixed 
+    public function getResult(int $returnMode = RETURN_ALL, int $fetchMode = FETCH_OBJ): mixed 
     {
-        return match ($mode) {
-            RETURN_NEXT => $this->fetchNext($type),
+        return match ($returnMode) {
+            RETURN_NEXT => $this->fetchNext($fetchMode),
+            RETURN_ALL => $this->fetchAll($fetchMode),
+            RETURN_STREAM => $this->fetch(RETURN_STREAM, $fetchMode),
             RETURN_2D_NUM => $this->getInt(),
             RETURN_INT => $this->getCount(),
             RETURN_ID => $this->getLastInsertId(),
             RETURN_COUNT => $this->rowCount(),
             RETURN_COLUMN => $this->getColumns(),
-            RETURN_ALL => $this->fetchAll($type),
             RETURN_STMT, RETURN_RESULT => $this->getStatement(),
             default => false
         };
@@ -537,49 +574,33 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function fetchNext(string $type = 'object'): array|object|bool 
+    public function fetchNext(int $mode = FETCH_OBJ): array|object|bool 
     {
-        $result = $this->fetch('next', ($type === 'array') ? FETCH_ASSOC : FETCH_OBJ);
-
-        if(!$result){
-            return false;
-        }
-
-        return ($type === 'array') 
-            ? (array) $result 
-            : (object) $result;
+        return $this->fetch(RETURN_NEXT, $mode) ?: false;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getNext(string $type = 'object'): array|object|bool 
+    public function getNext(int $mode = FETCH_OBJ): array|object|bool 
     {
-        return $this->fetchNext($type);
+        return $this->fetchNext($mode);
     }
 
     /**
      * {@inheritdoc}
      */
-    public function fetchAll(string $type = 'object'): array|object|bool 
+    public function fetchAll(int $mode = FETCH_OBJ): array|object|bool 
     {
-        $result = $this->fetch('all', ($type === 'array') ? FETCH_ASSOC : FETCH_OBJ);
-
-        if(!$result){
-            return false;
-        }
-
-        return ($type === 'array') 
-            ? (array) $result 
-            : (object) $result;
+        return $this->fetch(RETURN_ALL, $mode) ?: false;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getAll(string $type = 'object'): array|object|bool 
+    public function getAll(int $mode = FETCH_OBJ): array|object|bool 
     {
-        return $this->fetchAll($type);
+        return $this->fetchAll($mode);
     }
 
     /**
@@ -587,7 +608,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function getColumns(int $mode = FETCH_COLUMN): array 
     {
-        return $this->fetch('all', $mode)?:[];
+        return $this->fetch(RETURN_ALL, $mode) ?: [];
     }
 
     /**
@@ -595,7 +616,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function getInt(): array
     {
-        return $this->fetch('all', FETCH_NUM)?:[];
+        return $this->fetch(RETURN_ALL, FETCH_NUM) ?: [];
     }
 
     /**
@@ -605,13 +626,15 @@ final class PdoDriver implements DatabaseInterface
     {
         $integers = $this->getInt();
 
-        if(!$integers || $integers === []){
+        if (!$integers || $integers === []) {
             return 0;
         }
 
-        return isset($integers[0][0]) 
-            ? (int) $integers[0][0] 
-            : (int) ($integers ?? 0);
+        $integers = $integers[0] ?? 0;
+
+        return ($integers && is_array($integers)) 
+            ? (int) ($integers[0] ?? 0) 
+            : (int) $integers;
     }
 
     /**
@@ -625,7 +648,7 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */ 
-    public function fetch(string $type = 'all', int $mode = FETCH_OBJ): mixed  
+    public function fetch(int $type = RETURN_ALL, int $mode = FETCH_OBJ): mixed  
     {
         $this->assertStatement();
         $fetchMode = self::$fetchModes[$mode] ?? PDO::FETCH_OBJ;
@@ -636,12 +659,25 @@ final class PdoDriver implements DatabaseInterface
                 DatabaseException::NOT_SUPPORTED
             );
         }
+        
+        $this->isResult = true;
 
-        if($type === 'all'){
-            return $this->stmt->fetchAll($fetchMode);
+        if(($mode === FETCH_CLASS || $mode === FETCH_OBJ) && $type === RETURN_NEXT){
+            $result = $this->fetchObject(stdClass::class);
+        }elseif($type === RETURN_ALL){
+            $result = $this->stmt->fetchAll($fetchMode);
+        }else{
+            $result = $this->stmt->fetch($fetchMode);
         }
 
-        return $this->stmt->fetch($fetchMode);
+        if(!$result){
+            return $result;
+        }
+
+        return match($mode){
+            FETCH_OBJ, FETCH_NUM_OBJ => CoreDatabase::toResultObject($result),
+            default => (array) $result
+        };
     }
 
     /**
@@ -655,21 +691,23 @@ final class PdoDriver implements DatabaseInterface
     /**
      * {@inheritdoc}
      */ 
-    public function fetchObject(string|null $class = 'stdClass', mixed ...$arguments): object|bool 
+    public function fetchObject(?string $class = null, mixed ...$arguments): ?object 
     {
-        return $this->isStatement() 
-            ? $this->stmt->fetchObject($class, $arguments) 
-            : false;
+        if(!$this->isStatement()){
+            return null;
+        }
+
+        return $this->stmt->fetchObject($class, $arguments) ?: null;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getLastInsertId(?string $name = null): string|int|null|bool
+    public function getLastInsertId(?string $name = null): mixed
     {
         return $this->isConnected() 
-            ? $this->connection->lastInsertId($name)
-            : false;
+            ? ($this->connection->lastInsertId($name) ?: null)
+            : null;
     }
 
     /**
@@ -683,6 +721,7 @@ final class PdoDriver implements DatabaseInterface
 
         $this->stmt->closeCursor();
         $this->stmt = null;
+        $this->isResult = false;
     }
 
     /**
@@ -719,13 +758,19 @@ final class PdoDriver implements DatabaseInterface
     }
 
     /**
-     * Determine Whether the executed query returned prepared statement object.
-     * 
-     * @return bool Return true if is a prepared statement.
+     * {@inheritdoc}
      */
-    private function isStatement(): bool 
+    public function isStatement(): bool 
     {
         return ($this->stmt instanceof PDOStatement);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isResult(): bool 
+    {
+        return ($this->stmt instanceof PDOStatement) && $this->isResult;
     }
 
     /**
@@ -737,7 +782,7 @@ final class PdoDriver implements DatabaseInterface
     {
         if (!$this->isConnected()) {
             throw new DatabaseException(
-                ' No active database connection found. Connect before executing queries.',
+                'No active database connection found. Connect before executing queries.',
                 DatabaseException::CONNECTION_DENIED
             );
         } 
@@ -772,32 +817,40 @@ final class PdoDriver implements DatabaseInterface
             return;
         }
 
+        $username = $password = null;
         $version = strtolower($this->config->getValue('pdo_version'));
-        $dns = $this->dnsConnection($version);
+        $charset = $this->config->getValue('charset');
+        $dns = $this->dnsConnection($version, $charset);
 
         if ($dns === null) {
             throw new DatabaseException(
-                sprintf('Unsupported PDO driver, no driver found for: "%s"', $version),
+                sprintf('Unsupported PDO driver: "%s"', $version),
                 DatabaseException::DATABASE_DRIVER_NOT_AVAILABLE
             );
         }
 
-        $username = $password = null;
-
-        if ($version !== 'sqlite' && $version !== 'pgsql') {
+        if ($version !== 'sqlite') {
             $username = $this->config->getValue('username');
             $password = $this->config->getValue('password');
         }
 
         $options = [
-            PDO::ATTR_EMULATE_PREPARES => $this->config->getValue('emulate_preparse'),
-            PDO::ATTR_PERSISTENT => $this->config->getValue('persistent'),
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ,
+            PDO::ATTR_PERSISTENT => (bool) $this->config->getValue('persistent'),
+            PDO::ATTR_EMULATE_PREPARES => (bool) $this->config->getValue('emulate_prepares'),
         ];
 
-        if($version === 'mysql' && ($charset = $this->config->getValue('charset'))){
-            $options[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES {$charset}";
+        if ($version === 'mysql') {
+            $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = (bool) PRODUCTION;
+
+            if ($charset) {
+                $options[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES '{$charset}'";
+            }
+
+            if ($timeout = $this->config->getValue('timeout')) {
+                $options[PDO::ATTR_TIMEOUT] = (int) $timeout;
+            }
         }
 
         $this->connection = new PDO($dns, $username, $password, $options);
@@ -807,14 +860,14 @@ final class PdoDriver implements DatabaseInterface
      * Get driver dns connection.
      *
      * @param string $version Connection driver version name.
+     * @param string|null $charset
      * 
      * @return string|null
      */
-    private function dnsConnection(string $version): ?string
+    private function dnsConnection(string $version, ?string $charset = null): ?string
     {
-        $sqlitePath = $this->config->getValue('sqlite_path');
-
         if($version === 'sqlite'){
+            $sqlitePath = $this->config->getValue('sqlite_path');
             if(!$sqlitePath){
                 return null;
             }
@@ -825,14 +878,19 @@ final class PdoDriver implements DatabaseInterface
         $database = $this->config->getValue('database');
         $host = $this->config->getValue('host');
         $port = $this->config->getValue('port');
+        $options = ($charset && $version === 'pgsql') ? ";options='--client_encoding={$charset}'" : '';
 
         return match($version){
-            'cubrid' => "cubrid:dbname={$database};host={$host};port={$port}",
-            'dblib' => "dblib:host={$host};dbname={$database};port={$port}",
-            'oci' => "oci:dbname={$database}",
-            'pgsql' => "pgsql:host={$host} port={$port} dbname={$database} user={$this->config->getValue('username')} password={$this->config->getValue('password')}",
+            'mysql' => $this->withMysqlDns($database, $host, $port, $charset),
+            'cubrid' => "cubrid:host={$host};port={$port};dbname={$database}",
+            'dblib' => "dblib:host={$host}:{$port};dbname={$database}",
+            'pgsql' => "pgsql:host={$host};port={$port};dbname={$database}{$options}",
             'sqlsrv' => "sqlsrv:Server={$host};Database={$database}",
-            'mysql' => $this->mysqlDns($database, $host, $port),
+            'oci' => "oci:dbname=" . (
+                (str_contains($database, '/') || str_contains($database, ':')) 
+                    ? "//{$database}" 
+                    : $database
+            ),
             default => null
         };
     }
@@ -844,15 +902,16 @@ final class PdoDriver implements DatabaseInterface
      * 
      * @return string Return database connection dns string.
      */
-    private function mysqlDns(string $database, string $host, int $port): string
+    private function withMysqlDns(string $database, string $host, int $port, ?string $charset = null): string
     {
-        if (is_command() || NOVAKIT_ENV !== null || $this->config->getValue('socket')) {
-            $socketPath = $this->config->getValue('socket_path');
-            $socketPath = empty($socketPath) ? ini_get('pdo_mysql.default_socket') : $socketPath;
+        $options = $charset ? ";charset={$charset}" : '';
 
-            return "mysql:unix_socket={$socketPath};dbname={$database}";
+        if (NOVAKIT_ENV !== null || $this->config->getValue('socket') || is_command()) {
+            $socketPath = $this->config->getValue('socket_path') ?: ini_get('pdo_mysql.default_socket');
+
+            return "mysql:unix_socket={$socketPath};dbname={$database}{$options}";
         }
 
-        return "mysql:host={$host};port={$port};dbname={$database}";
+        return "mysql:host={$host};port={$port};dbname={$database}{$options}";
     }
 }

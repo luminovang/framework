@@ -11,6 +11,8 @@
 namespace Luminova\Core;
 
 use \Luminova\Interface\LazyInterface;
+use \Luminova\Exceptions\JsonException;
+use stdClass;
 
 abstract class CoreDatabase implements LazyInterface
 {
@@ -34,7 +36,8 @@ abstract class CoreDatabase implements LazyInterface
         'socket'            => false,
         'socket_path'       => '',
         'persistent'        => true,
-        'emulate_preparse'  => true
+        'timeout'           => 0,
+        'emulate_prepares'  => true
     ];
 
     /**
@@ -87,7 +90,7 @@ abstract class CoreDatabase implements LazyInterface
      *         'charset' => 'utf8mb4',
      *         'version' => 'mysql',
      *         'persistent' => true,
-     *         'emulate_preparse' => true,
+     *         'emulate_prepares' => true,
      *         'socket' => false,
      *         'socket_path' => '',
      *         'sqlite_path' => '', // Only used if version is sqlite
@@ -149,6 +152,48 @@ abstract class CoreDatabase implements LazyInterface
             '/^\s*(CREATE|ALTER|DROP|TRUNCATE|RENAME|COMMENT|GRANT|REVOKE|ANALYZE|DISCARD|CLUSTER|VACUUM)\b/i', 
             $query
         ) === 1;
+    }
+
+    /**
+     * Checks if the given SQL query starts with a specific SQL command type.
+     *
+     * @param string $query The raw SQL query string.
+     * @param string $type  The SQL command type to check for (default is 'SELECT').
+     * 
+     * @return bool Returns true if the query starts with the specified type, false otherwise.
+     */
+    public static function isSqlQuery(string $query, string $type = 'SELECT'): bool 
+    {
+        return str_starts_with(ltrim(strtoupper($query)), $type);
+    }
+
+     /**
+     * Converts a mixed value to an object with optimal JSON handling
+     * 
+     * @param mixed $response Input data to convert (array, string, object, etc.).
+     *
+     * @return object Always returns an object representation
+     */
+    public static function toResultObject(mixed $response): object
+    {
+        if (!$response || empty((array) $response)) {
+            return new stdClass() ;
+        }
+
+        try {
+            if (is_array($response) || is_object($response)) {
+                return (object) json_decode(
+                    json_encode($response, JSON_THROW_ON_ERROR), 
+                    false, 
+                    512, 
+                    JSON_THROW_ON_ERROR
+                );
+            }
+        } catch (JsonException) {
+            return (object) $response;
+        }
+
+        return (object) $response;
     }
 
     /**

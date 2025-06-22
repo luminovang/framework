@@ -43,7 +43,7 @@ final class RawExpression implements Stringable, JsonSerializable
             throw new InvalidArgumentException('The expression must be a string.');
         }
     }
-    
+
     /**
      * Dynamically handle static method calls for SQL date and time functions.
      *
@@ -198,6 +198,31 @@ final class RawExpression implements Stringable, JsonSerializable
     public static function decrement(string $column, int $amount = 1): self
     {
         return new self("$column - $amount");
+    }
+
+    /**
+     * Creates a raw SQL expression for the `VALUES()` function.
+     *
+     * This is typically used in `ON DUPLICATE KEY UPDATE` clauses to reference the value that
+     * would have been inserted into a column.
+     *
+     * > **Note:** `VALUES()` is valid in MySQL versions below 8.0.20. In newer versions,
+     * consider using `AS new ... UPDATE col = new.col` if you're targeting MySQL 8+ strictly.
+     *
+     * @param string $column The column name to reference from the attempted insert.
+     *
+     * @return self Returns a new RawExpression instance wrapping the `VALUES(column)` expression.
+     *
+     * @example - Example:
+     * ```php
+     * Builder::table('users')
+     *     ->insert([...])
+     *     ->onDuplicate(['email' => RawExpression::values('email')]);
+     * ```
+     */
+    public static function values(string $column): self
+    {
+        return new self("VALUES($column)");
     }
 
     /**

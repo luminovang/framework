@@ -15,6 +15,7 @@ use \Luminova\Http\Message\Response;
 use \Luminova\Http\Uri;
 use \Luminova\Cookies\CookieFileJar;
 use \Psr\Http\Message\ResponseInterface;
+use \Luminova\Interface\ResponseInterface as MsgResponseInterface;
 use \Luminova\Interface\CookieJarInterface;
 use \Psr\Http\Message\UriInterface;
 use \Psr\Http\Message\RequestInterface;
@@ -92,7 +93,7 @@ class Curl implements ClientInterface
     /**
      * Responses collected after execution.
      *
-     * @var ResponseInterface[] $response
+     * @var ResponseInterface[]|MsgResponseInterface[] $response
      */
     private array $response = [];
 
@@ -240,7 +241,7 @@ class Curl implements ClientInterface
     /**
      * Returns all responses collected from completed multi requests.
      *
-     * @return ResponseInterface[]|Response[] Return an array of response objects.
+     * @return ResponseInterface[]|MsgResponseInterface[] Return an array of response objects.
      */
     public function getResponses(): array
     {
@@ -331,7 +332,7 @@ class Curl implements ClientInterface
      *
      * This method yields each response as soon as it's ready.
      *
-     * @return Generator<int,ResponseInterface|Response,void,void> Yields a Response object for each completed request.
+     * @return Generator<int,ResponseInterface|MsgResponseInterface,void,void> Yields a Response object for each completed request.
      * @throws RequestException Throws if called without initializing parallel CURL.
      */
     public function iterator(): Generator
@@ -558,13 +559,13 @@ class Curl implements ClientInterface
             $this->options[CURLOPT_CUSTOMREQUEST] = $method;
         }
 
-        if (isset($this->mutable['query'])) {
+        if (!empty($this->mutable['query'])) {
             $url = $this->options[CURLOPT_URL];
             $url .= (str_contains($url, '?') ? '&' : '?');
             $url .= http_build_query($this->mutable['query'], '', '&', PHP_QUERY_RFC3986);
         
             $this->options[CURLOPT_URL] = $url;
-            $this->options[CURLOPT_HTTPGET] = true;
+            $this->options[CURLOPT_HTTPGET] = ($method === 'GET');
         }        
 
         if($cookies !== null){
@@ -719,7 +720,7 @@ class Curl implements ClientInterface
      *
      * @param CurlHandle $ch Current CURL request to process.
      * 
-     * @return ResponseInterface|null Return response object.
+     * @return Luminova\Interface\ResponseInterface|ResponseInterface|null Return response object.
      */
     private function getMultiResponse(CurlHandle $ch): ?ResponseInterface
     {

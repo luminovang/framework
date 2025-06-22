@@ -23,22 +23,22 @@ use \Generator;
 /**
  * Anonymous methods to retrieve values from HTTP request fields. 
  * 
- * @method mixed getPut(string|null $field, mixed $default = null)       Get a field value from HTTP PUT request or entire fields if `$field` param is null.
- * @method mixed getOptions(string|null $field, mixed $default = null)   Get a field value from HTTP OPTIONS request  or entire fields if `$field` param is null.
- * @method mixed getPatch(string|null $field, mixed $default = null)     Get a field value from HTTP PATCH request or entire fields if `$field` param is null.
- * @method mixed getHead(string|null $field, mixed $default = null)      Get a field value from HTTP HEAD request or entire fields if `$field` param is null.
- * @method mixed getConnect(string|null $field, mixed $default = null)   Get a field value from HTTP CONNECT request or entire fields if `$field` param is null.
- * @method mixed getTrace(string|null $field, mixed $default = null)     Get a field value from HTTP TRACE request or entire fields if `$field` param is null.
+ * @method mixed getPut(string|null $field, mixed $default = null) Get a field value from HTTP PUT request or entire fields if `$field` param is null.
+ * @method mixed getOptions(string|null $field, mixed $default = null) Get a field value from HTTP OPTIONS request  or entire fields if `$field` param is null.
+ * @method mixed getPatch(string|null $field, mixed $default = null) Get a field value from HTTP PATCH request or entire fields if `$field` param is null.
+ * @method mixed getHead(string|null $field, mixed $default = null) Get a field value from HTTP HEAD request or entire fields if `$field` param is null.
+ * @method mixed getConnect(string|null $field, mixed $default = null) Get a field value from HTTP CONNECT request or entire fields if `$field` param is null.
+ * @method mixed getTrace(string|null $field, mixed $default = null) Get a field value from HTTP TRACE request or entire fields if `$field` param is null.
  * @method mixed getPropfind(string|null $field, mixed $default = null)  Get a field value from HTTP PROPFIND request or entire fields if `$field` param is null.
- * @method mixed getMkcol(string|null $field, mixed $default = null)     Get a field value from HTTP MKCOL request or entire fields if `$field` param is null.
- * @method mixed getCopy(string|null $field, mixed $default = null)      Get a field value from HTTP COPY request or entire fields if `$field` param is null.
- * @method mixed getMove(string|null $field, mixed $default = null)      Get a field value from HTTP MOVE request or entire fields if `$field` param is null.
- * @method mixed getLock(string|null $field, mixed $default = null)      Get a field value from HTTP LOCK request or entire fields if `$field` param is null.
- * @method mixed getUnlock(string|null $field, mixed $default = null)    Get a field value from HTTP UNLOCK request or entire fields if `$field` param is null.
+ * @method mixed getMkcol(string|null $field, mixed $default = null) Get a field value from HTTP MKCOL request or entire fields if `$field` param is null.
+ * @method mixed getCopy(string|null $field, mixed $default = null) Get a field value from HTTP COPY request or entire fields if `$field` param is null.
+ * @method mixed getMove(string|null $field, mixed $default = null) Get a field value from HTTP MOVE request or entire fields if `$field` param is null.
+ * @method mixed getLock(string|null $field, mixed $default = null) Get a field value from HTTP LOCK request or entire fields if `$field` param is null.
+ * @method mixed getUnlock(string|null $field, mixed $default = null) Get a field value from HTTP UNLOCK request or entire fields if `$field` param is null.
  * 
- * @property LazyInterface<Server>|Server|null $server  The server instance representing HTTP server parameters and configurations.
- * @property LazyInterface<Header>|Header|null $header  The header instance providing HTTP request headers information.
- * @property LazyInterface<UserAgent>|UserAgent|null $agent The user-agent instance containing client browser details.
+ * @property Server<LazyInterface>|null $server The server instance representing HTTP server parameters and configurations.
+ * @property Header<LazyInterface>|null $header The header instance providing HTTP request headers information.
+ * @property UserAgent<LazyInterface>|null $agent The user-agent instance containing client browser details.
  */
 interface HttpRequestInterface
 {
@@ -87,7 +87,7 @@ interface HttpRequestInterface
      * @param mixed $value The value to assign to the field.
      * @param string|null $method Optional HTTP method, if null the current request method will be used (e.g, `GET`, `POST`).
      * 
-     * @return self Returns the instance request class.
+     * @return static<HttpRequestInterface> Returns the instance request class.
      */
     public function setField(string $field, mixed $value, ?string $method = null): self;
 
@@ -97,7 +97,7 @@ interface HttpRequestInterface
      * @param string $field The name of the field to remove.
      * @param string|null $method Optional HTTP method, if null the current request method will be used (e.g, `GET`, `POST`).
      * 
-     * @return self Returns the instance request class.
+     * @return static<HttpRequestInterface> Returns the instance request class.
      */
     public function removeField(string $field, ?string $method = null): self;
 
@@ -168,7 +168,7 @@ interface HttpRequestInterface
      * 
      * @param string|null $name An optional cookie name to pre-initialize.
      *
-     * @return CookieJarInterface Return the cookie jar instance populated with parsed cookies.
+     * @return \T<CookieJarInterface> Return the cookie jar instance populated with parsed cookies.
      * @link https://luminova.ng/docs/0.0.0/cookies/cookie-file-jar
      */
     public function getCookie(?string $name = null): CookieJarInterface;
@@ -363,7 +363,7 @@ interface HttpRequestInterface
      * 
      * @param string|null $useragent The User Agent string, if not provided, it defaults to (`HTTP_USER_AGENT`).
      * 
-     * @return \Luminova\Http\UserAgent Return instance user-agent class containing browser information.
+     * @return \T<UserAgent> Return instance user-agent class containing browser information.
      * @link https://luminova.ng/docs/0.0.0/http/user-agent
      */
     public function getUserAgent(?string $useragent = null): UserAgent;

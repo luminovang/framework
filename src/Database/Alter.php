@@ -10,6 +10,8 @@
  */
 namespace Luminova\Database;
 
+use Luminova\Exceptions\DatabaseException;
+
 class Alter 
 {
     public static function getIncrement(
@@ -482,5 +484,92 @@ class Alter
             default:
                 return "ALTER TABLE {$table} ENGINE={$engine};\n";
         }
+    }
+
+    public static function getAdministrator(string $driver, string $action, string $placeholder): string 
+    {
+        $query = match ($driver) {
+            'pgsql' => match ($action) {
+                'lock'     => "SELECT pg_advisory_lock({$placeholder})",
+                'unlock'   => "SELECT pg_advisory_unlock({$placeholder})",
+                'isLocked' => "SELECT pg_try_advisory_lock({$placeholder})",
+                default    => null
+            },
+            'mysql', 'mysqli', 'cubrid' => match ($action) {
+                'lock'     => 'SELECT GET_LOCK(:lockName, :waitTimeout) AS isLockDone',
+                'unlock'   => 'SELECT RELEASE_LOCK(:lockName) AS isLockDone',
+                'isLocked' => 'SELECT IS_FREE_LOCK(:lockName) AS isLockDone',
+                default    => null
+            },
+            'sqlite' => match ($action) {
+                'lock'     => 'INSERT INTO locks (name, acquired_at) VALUES (:lockName, strftime("%s", "now")) ON CONFLICT(name) DO NOTHING',
+                'unlock'   => 'DELETE FROM locks WHERE name = :lockName',
+                'isLocked' => 'SELECT COUNT(*) AS lockCount FROM locks WHERE name = :lockName',
+                default    => null,
+            },
+            'sqlsrv', 'mssql', 'dblib' => match ($action) {
+                'lock'     => "EXEC sp_getapplock @Resource = :lockName, @LockMode = 'Exclusive', @LockOwner = 'Session', @Timeout = :waitTimeout",
+                'unlock'   => "EXEC sp_releaseapplock @Resource = :lockName, @LockOwner = 'Session'",
+                'isLocked' => "SELECT COUNT(*) FROM sys.dm_tran_locks WHERE request_mode = 'X' AND resource_description = :lockName",
+                default    => null,
+            },
+            'oci', 'oracle' => match ($action) {
+                'lock'     => "DECLARE v_result NUMBER; BEGIN DBMS_LOCK.REQUEST(:lockName, 6, :waitTimeout, TRUE, v_result); END;",
+                'unlock'   => "DECLARE v_result NUMBER; BEGIN DBMS_LOCK.RELEASE(:lockName); END;",
+                'isLocked' => "SELECT COUNT(*) FROM V\$LOCK WHERE ID1 = DBMS_LOCK.ALLOCATE_UNIQUE(:lockName) AND REQUEST = 6",
+                default    => null,
+            },
+            default => throw new DatabaseException(
+                "Database driver '{$driver}' does not support locks.",
+                DatabaseException::INVALID_ARGUMENTS
+            )
+        };
+
+        if($query === null){
+            throw new DatabaseException(
+                "Invalid {$driver} lock operation: {$action}",
+                DatabaseException::INVALID_ARGUMENTS
+            );
+        }
+
+        return $query;
+    }
+
+    /**
+     * Build sql query string to drop table.
+     * 
+     * @param bool $isTempTable Whether to drop temporary table (default false).
+     * 
+     * @return string Return SQL query string based on database type.
+     */
+    public static function getDropTable(string $driver, string $table, bool $isTempTable = false): string
+    {
+        $prefix = $isTempTable ? 'temp_' : '';
+        $identifier = $isTempTable ? "#temp_{$table}" : $table;
+
+        return match ($driver) {
+            'mysql', 'mysqli' => "DROP " . ($isTempTable ? "TEMPORARY " : "") . "TABLE IF EXISTS {$prefix}{$table}",
+            'dblib' => "DROP TABLE IF EXISTS {$identifier}",
+            'sqlsrv' => "IF OBJECT_ID('{$prefix}{$table}', 'U') IS NOT NULL DROP TABLE {$prefix}{$table}",
+            'oracle', 'oci' => "BEGIN EXECUTE IMMEDIATE 'DROP TABLE {$prefix}{$table}'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;",
+            default => "DROP TABLE IF EXISTS {$prefix}{$table}"
+        };
+    }
+
+    public static function getTableExists(string $driver): string 
+    {
+        return match ($driver) {
+            'mysql', 'mysqli' => 'information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tableName',
+            'pgsql'     => "pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename = :tableName",
+            'sqlite'    => "sqlite_master WHERE type = 'table' AND name = :tableName",
+            'sqlsrv', 'mssql' => 'sys.tables WHERE name = :tableName',
+            'cubrid'          => 'db_class WHERE class_name = :tableName',
+            'dblib'           => "sysobjects WHERE xtype = 'U' AND name = :tableName",
+            'oci', 'oracle'   => 'user_tables WHERE table_name = UPPER(:tableName)',
+            default => throw new DatabaseException(
+                "Unsupported database driver: {$driver}", 
+                DatabaseException::INVALID_ARGUMENTS
+            ),
+        };
     }
 }

@@ -19,13 +19,19 @@ use \mysqli_stmt;
 interface DatabaseInterface  
 {
     /**
-     * Initialize database driver constructor.
+     * Initialize database driver constructor for configurations.
      *
      * @param CoreDatabase $config The database connection configuration.
-     * 
-     * @throws DatabaseException If the database connection fails.
      */
     public function __construct(CoreDatabase $config);
+
+    /**
+     * Establish a database connection.
+     * 
+     * @return bool Return true if database connection was established, otherwise false.
+     * @throws DatabaseException If the database connection error.
+     */
+    public function connect(): bool;
 
     /**
      * Get the driver version name of the database connection driver.
@@ -54,7 +60,7 @@ interface DatabaseInterface
      * - **persistent** *(bool)*: Whether to use persistent connections (default: `true`).
      * - **socket** *(bool)*: Whether to use a Unix socket instead of TCP/IP (default: `false`).
      * - **socket_path** *(string)*: The Unix socket path if `socket` is enabled (default: `''`).
-     * - **emulate_preparse** *(bool)*: Enables query emulation before execution (default: `false`).
+     * - **emulate_prepares** *(bool)*: Enables query emulation before execution (default: `false`).
      * 
      * @param string $property The name of the configuration property.
      * 
@@ -70,7 +76,7 @@ interface DatabaseInterface
     public function isConnected(): bool;
 
     /**
-     * Get the raw database connection instance (e.g., PDO or mysqli).
+     * Get the raw database connection instance (e.g., PDO or MySQLi).
      * 
      * @return ConnInterface|null Returns the connection instance if connected, otherwise null.
      */
@@ -81,7 +87,7 @@ interface DatabaseInterface
      *
      * @param bool $debug Enable or disable debug mode.
      * 
-     * @return self Returns the instance of database driver interface.
+     * @return DatabaseInterface Returns the instance of database driver interface.
      */
     public function setDebug(bool $debug): self;
 
@@ -107,18 +113,17 @@ interface DatabaseInterface
     public function dumpDebug(): bool;
 
     /**
-     * Record the database query execution time.
-     * This method stores the execution time in a shared memory using `__DB_QUERY_EXECUTION_TIME__`, 
-     * to retrieve later when needed.
+     * Start recording the database query execution time for queries.
+     * 
+     * This method records the duration of a query in shared memory under the key `__DB_QUERY_EXECUTION_TIME__`. The stored value can later be retrieved from anywhere in your application.
      * 
      * Note: To call this method you must first enable `debug.show.performance.profiling` in environment variables file.
      *
-     * @param bool $start Indicates whether to start or stop recording (default: true).
-     * @param bool $finishedTransaction Indicates whether is stopping recording for a transaction commit or rollback (default: false).
-     *              This is used internally to stop recording after transaction has been committed or rolled back.
+     * @param bool $start Set to `true` to start profiling, or `false` to stop (default: true).
+     * @param bool $finishedTransaction Set to `true` when stopping profiling after a commit or rollback transaction (default: false).
      * 
      * @return void
-     * @internal
+     * @internal This is used internally to stop recording after transaction has been committed or rolled back.
      * 
      * @example - To get the query execution in any application scope. 
      * 
@@ -157,7 +162,7 @@ interface DatabaseInterface
      *
      * @param string $query The SQL query string to prepare.
      * 
-     * @return self Returns the instance of database driver interface.
+     * @return DatabaseInterface Returns the instance of database driver interface.
      * @throws DatabaseException If no database connection is established.
      * 
      * @see execute()
@@ -172,6 +177,10 @@ interface DatabaseInterface
      * $db = (new Connection())->database();
      * 
      * $stmt = $db->prepare("SELECT * FROM users WHERE id = :id");
+     * $stmt->bind(':foo', 'bar');
+     * $stmt->execute();
+     * 
+     * $result = $stmt->fetch();
      * ```
      */
     public function prepare(string $query): self;
@@ -185,7 +194,7 @@ interface DatabaseInterface
      *
      * @param string $query The SQL query string to execute.
      * 
-     * @return self Returns the instance of database driver interface.
+     * @return DatabaseInterface Returns the instance of database driver interface.
      * @throws DatabaseException If no database connection is established.
      *
      * @example - Query Examples:
@@ -208,7 +217,7 @@ interface DatabaseInterface
     /**
      * Executes an SQL statement without placeholders and returns the number of affected rows.
      *
-     * This method is useful for operations like INSERT, UPDATE, DELETE, where 
+     * This method is useful for operations like `ALTER`, `CREATE`, `DELETE`, where 
      * you need to know how many rows were modified.
      *
      * @param string $query The SQL query string to execute.
@@ -276,13 +285,17 @@ interface DatabaseInterface
     public function inTransaction(): bool;
 
     /**
-     * Get the appropriate parameter type based on the value.
+     * Determines the appropriate database parameter type for a given value.
      *
-     * @param mixed $value The parameter value.
+     * This is used to bind parameters correctly when preparing SQL statements,
+     * returning either a PDO type constant (string) or a MySQLi type constant (int),
+     * depending on the driver context.
      *
-     * @return string|int|null Returns the parameter type as a string, int, or null.
+     * @param mixed $value The value to evaluate.
+     *
+     * @return string|int Return the parameter type, a string for PDO or an integer for MySQLi.
      */
-    public static function getType(mixed $value): string|int|null;
+    public static function getType(mixed $value): string|int;
 
     /**
      * Binds a value to a named parameter for use in a prepared statement.
@@ -293,13 +306,15 @@ interface DatabaseInterface
      *
      * @param string $param The placeholder named parameter (e.g., ':columnName').
      * @param mixed $value The value to bind.
-     * @param int|null $type (Optional) The data type for the value. If not 
-     *                      provided, it is inferred automatically.
+     * @param int|null $type (Optional) The data type for the value (default: null).
+     *                          - `PARAM_*`, `PARAM_*` - For MySQLi and PDO driver.
+     *                          - `PDO::PARAM_*` - For PDO driver only supports custom type.
+     *                          - `NULL` - Resolve internally.
      *
-     * @return self Returns the instance of database driver interface.
+     * @return DatabaseInterface Returns the instance of database driver interface.
      * @throws DatabaseException If called without a prepared statement.
      *
-     * @example - For both PDO and MySQLi:
+     * @example - Supported in both PDO and MySQLi:
      * 
      * ```php
      * use Luminova\Database\Connection;
@@ -319,10 +334,12 @@ interface DatabaseInterface
      *
      * @param string $param The placeholder named parameter (e.g., ':columnName').
      * @param mixed $value The value to bind.
-     * @param int|null $type (Optional) The data type for the value. If not 
-     *                      provided, it is inferred automatically.
+     * @param int|null $type (Optional) The data type for the value (default: null).
+     *                          - `PARAM_*`, `PARAM_*` - For MySQLi and PDO driver.
+     *                          - `PDO::PARAM_*` - For PDO driver only supports custom type.
+     *                          - `NULL` - Resolve internally.
      *
-     * @return self Returns the instance of database driver interface.
+     * @return DatabaseInterface Returns the instance of database driver interface.
      * @throws DatabaseException If called without a prepared statement.
      * 
      * @alias bind()
@@ -352,10 +369,12 @@ interface DatabaseInterface
      *
      * @param string $param The placeholder named parameter (e.g., ':columnName').
      * @param mixed &$value The variable to bind by reference.
-     * @param int|null $type (Optional) The data type for the value. If not 
-     *                      provided, it is inferred automatically.
+     * @param int|null $type (Optional) The data type for the value (default: null).
+     *                          - `PARAM_*`, `PARAM_*` - For MySQLi and PDO driver.
+     *                          - `PDO::PARAM_*` - For PDO driver only supports custom type.
+     *                          - `NULL` - Resolve internally.
      *
-     * @return self Returns the instance of database driver interface.
+     * @return DatabaseInterface Returns the instance of database driver interface.
      * @throws DatabaseException If called without a prepared statement.
      *
      * @example - For both PDO and MySQLi:
@@ -369,7 +388,7 @@ interface DatabaseInterface
      * 
      * $status = 'active';
      * $stmt->param(':status', $status)
-     *      ->param(':id', $userId);
+     *      ->bind(':id', 100);
      * 
      * // Changing the variable before execution affects the query
      * $status = 'inactive';
@@ -384,7 +403,7 @@ interface DatabaseInterface
      * If parameters are provided, they will be bound to the statement during execution.
      * This method works for both PDO and MySQLi drivers.
      *
-     * @param array|null $params (Optional) An associative or indexed array of values 
+     * @param array<string,mixed>|null $params (Optional) An associative or indexed array of values 
      *                           to bind to placeholders before execution.
      * 
      * @return bool Returns `true` on success or `false` on failure.
@@ -409,6 +428,23 @@ interface DatabaseInterface
      * Check if the last query execution was successful.
      * 
      * @return bool Returns true on success, false on failure.
+     * 
+     * @example - Checking Execution status:
+     * 
+     * ```php
+     * use Luminova\Database\Connection;
+     * 
+     * $db = (new Connection())->database();
+     * 
+     * $stmt = $db->prepare("SELECT * users WHERE id = :id");
+     * $stmt->bind('id', 100);
+     * $stmt->execute();
+     * 
+     * $result = null;
+     * if($stmt->ok()){
+     *      $result = $stmt->fetchAll();
+     * }
+     * ```
      */
     public function ok(): bool;
 
@@ -417,63 +453,71 @@ interface DatabaseInterface
      *
      * This method allows flexible result retrieval using a single interface, depending on the mode and return type provided.
      *
-     * @param int $mode The mode of the result to return (e.g., RETURN_* constants).
+     * @param int $returnMode The mode of the result to return (e.g., `RETURN_*`).
      *                  Available Modes:
-     *                  - RETURN_NEXT: Fetch the next row (same as `$db->getNext($return)`).
+     *                  - RETURN_NEXT: Fetch the next row (same as `$db->fetchNext(...)`).
      *                  - RETURN_2D_NUM: Fetch a 2D numeric array (same as `$db->getInt()`).
      *                  - RETURN_INT: Fetch a single integer value (same as `$db->getCount()`).
      *                  - RETURN_ID: Fetch the last insert ID (same as `$db->getLastInsertId()`).
      *                  - RETURN_COUNT: Fetch the count of affected rows (same as `$db->rowCount()`).
      *                  - RETURN_COLUMN: Fetch specific columns (same as `$db->getColumns()`).
-     *                  - RETURN_ALL: Fetch all rows (same as `$db->getAll($return)`).
+     *                  - RETURN_ALL: Fetch all rows (same as `$db->fetchAll(...)`).
      *                  - RETURN_STMT: Return the statement object itself (same as `$db->getStatement()`).
-     *                  - RETURN_RESULT: Return the query result in mysqli or statement in PDO.
+     *                  - RETURN_RESULT: Return the query result in MySQLi or statement in PDO.
      * 
-     * @param string $return The return type when applicable (e.g., `array` or `object`).
+     * @param int $fetchMode The result fetch mode (e.g, `FETCH_*`).
      *                       Used only with `RETURN_NEXT` and `RETURN_ALL` modes.
      *
      * @return mixed|false Return the result based on the specified mode and return type.
      * @throws DatabaseException Throw if an error occurs.
+     * 
+     * @see https://luminova.ng/docs/0.0.0/variables/helper - See documentation for database return modes.
      */
-    public function getResult(int $mode = RETURN_ALL, string $return = 'object'): mixed;
+    public function getResult(int $returnMode = RETURN_ALL, int $fetchMode = FETCH_OBJ): mixed;
 
     /**
      * Fetch the next row from the result set as an object or array.
      *
-     * @param string $return The return result type (e.g, `object` or `array`).
+     * @param int $mode The result fetch mode (e.g, `FETCH_*` default: `FETCH_OBJ`).
      *
      * @return array|object|false Returns the next row as an object or array, or false if no more rows are available.
+     * 
+     * @see getNext() - Alias
      */
-    public function fetchNext(string $return = 'object'): array|object|bool;
+    public function fetchNext(int $mode = FETCH_OBJ): array|object|bool;
 
     /**
      * Fetch the next row from the result set as an object or array.
      * 
-     * @param string $return The return result type (e.g, `object` or `array`).
-     * 
-     * @return array|object|false Returns the next row as an object or array, or false if no more rows are available.
      * Alias of `fetchNext()`.
+     * 
+     * @param int $mode The result fetch mode (e.g, `FETCH_*` default: `FETCH_OBJ`).
+     * 
+     * @return array|object|false Returns the next row as an object or array, or false if no more rows are available.
      */
-    public function getNext(string $return = 'object'): array|object|bool;
+    public function getNext(int $mode = FETCH_OBJ): array|object|bool;
 
     /**
      * Fetch all rows from the result set as an array of objects or arrays.
      *
-     * @param string $return The return result type (e.g, `object` or `array`).
+     * @param int $mode The result fetch mode (e.g, `FETCH_*` default: `FETCH_OBJ`).
      *
-     * @return array Returns an array of result objects or arrays, or an empty array if no rows are found.
+     * @return array Returns an array of result objects or arrays, an empty array if no rows are found or false.
+     * 
+     * @see getAll() - Alias
      */
-    public function fetchAll(string $return = 'object'): array|object|bool;
+    public function fetchAll(int $mode = FETCH_OBJ): array|object|bool;
 
     /**
      * Fetch all rows from the result set as an array of objects or arrays.
+     * 
+     * Alias of `fetchAll()`.
      *
-     * @param string $return The return result type (e.g, `object` or `array`).
+     * @param int $mode The result fetch mode (e.g, `FETCH_*` default: `FETCH_OBJ`).
      *
-     * @return array Returns an array of result objects or arrays, or an empty array if no rows are found.
-     * Alias of `fetchAll()`.  
+     * @return array Returns an array of result objects or arrays, an empty array if no rows are found or false.  
      */
-    public function getAll(string $return = 'object'): array|object|bool;
+    public function getAll(int $mode = FETCH_OBJ): array|object|bool;
 
     /**
      * Get the number of rows affected by the last executed statement.
@@ -499,9 +543,9 @@ interface DatabaseInterface
     /**
      * Retrieve a specific column or multiple columns from the result set.
      *
-     * @param int $mode The fetch mode (FETCH_COLUMN for a single column, FETCH_COLUMN_ASSOC for multiple).
+     * @param int $mode The fetch mode (default: `FETCH_COLUMN`).
      *
-     * @return array Returns an array of column values.
+     * @return array Return and associative array or indexed array of columns depending on mode.
      */
     public function getColumns(int $mode = FETCH_COLUMN): array;
 
@@ -515,55 +559,64 @@ interface DatabaseInterface
     /**
      * Fetch data from the result set using a specified fetch mode.
      *
-     * @param string $fetch Fetch type:  
-     *   - `'all'` to retrieve all rows at once,  
-     *   - `'next'` to fetch a single row,  
-     *   - `'stream'` to fetch rows one at a time (use in loops).
+     * @param int $returnMode The mode of the result to return (e.g., `RETURN_*`).
+     *   - `RETURN_ALL` to retrieve all rows at once,  
+     *   - `RETURN_NEXT` to fetch a single row,  
+     *   - `RETURN_STREAM` to fetch rows one at a time (use in loops).
      * @param int $mode The fetch mode (e.g., `FETCH_ASSOC`, `FETCH_OBJ`, `FETCH_*`).
      *
      * @return mixed Return the fetched result(s) based on the specified type and mode.
      * @throws DatabaseException Throws an exception if an error occurs.
      */
-    public function fetch(string $fetch = 'all', int $mode = FETCH_OBJ): mixed;
+    public function fetch(int $returnMode = RETURN_ALL, int $fetchMode = FETCH_OBJ): mixed;
 
     /**
      * Fetch the result set as an object of the specified class or stdClass.
      * 
-     * @param class-string|null $class The full qualify class name to instantiate (default: stdClass).
+     * @param \T<string>|null $class The full qualify class name to instantiate (default: `stdClass::class`).
      * @param mixed ...$arguments Additional arguments to initialize the class constructor with.
      * 
-     * @return object|false Returns the fetched object, or false if no more rows are available or an error occurs.
+     * @return \T<object>|null Returns the fetched object, or null if an error occurs.
+     * @throws DatabaseException If error occurs.
+     * 
+     * @see https://luminova.ng/docs/0.0.0/database/drivers
      */
-    public function fetchObject(string|null $class = 'stdClass', mixed ...$arguments): object|bool;
+    public function fetchObject(?string $class = null, mixed ...$arguments): ?object;
 
     /**
      * Get the ID of the last inserted row or sequence value.
      * 
      * @param string|null $name Optional name of the sequence object from which the ID should be returned (MySQL/PostgreSQL only).
      * 
-     * @return int|string|false|null Returns the last inserted ID, or null/false on failure.
+     * @return mixed Returns the last inserted ID, or null/false on failure.
      */
-    public function getLastInsertId(?string $name = null): string|int|bool|null;
+    public function getLastInsertId(?string $name = null): mixed;
 
     /**
-     * Retrieves the total query execution time.
-     *
-     * This method returns the accumulated time spent on executing queries
-     * in either float or integer format, depending on the internal state
-     * of the query time.
+     * Returns the total accumulated execution time for all queries executed so far.
      *
      * @return float|int Return the total query execution time in seconds.
      */
     public function getQueryTime(): float|int;
 
     /**
-     * Retrieves the last query execution time.
-     *
-     * This method returns the time spent on the last query execution
-     * in either float or integer format, depending on the internal state
-     * of the query time.
+     * Returns the execution time of the most recently executed query.
      *
      * @return float|int Return the last query execution time in seconds.
      */
     public function getLastQueryTime(): float|int;
+
+    /**
+     * Determine Whether the executed query prepared statement is ready.
+     * 
+     * @return bool Return true if is a prepared statement, false otherwise.
+     */
+    public function isStatement(): bool;
+
+    /**
+     * Determine Whether the executed query result is ready.
+     * 
+     * @return bool Return true if query result, false otherwise.
+     */
+    public function isResult(): bool;
 }

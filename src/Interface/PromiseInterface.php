@@ -31,9 +31,9 @@ interface PromiseInterface
      * @param callable|null $onReject  Invoked when the promise is rejected.
      *                                    Receives the rejection reason.
      *
-     * @return PromiseInterface<\T> Return a new promise resolved with the handler's return value.
+     * @return static<PromiseInterface> Return a new promise resolved with the handler's return value.
      * 
-     * @example
+     * @example - Example:
      * ```
      * $promise->then(
      *     function ($value) {
@@ -56,7 +56,7 @@ interface PromiseInterface
      * @param callable $onAlways Invoked when the promise is either fulfilled or rejected.
      *                            Receives the fulfillment or rejection value.
      *
-     * @return PromiseInterface<\T> Return a new promise resolved with the handler's return value.
+     * @return static<PromiseInterface> Return a new promise resolved with the handler's return value.
      *
      * @example - Example Usage:
      * 
@@ -74,7 +74,7 @@ interface PromiseInterface
      * @param callable $onCatch Invoked when the promise is rejected.
      *                             Receives the rejection reason.
      *
-     * @return PromiseInterface<\T> Return a new promise resolved with either the rejection handler's value 
+     * @return static<PromiseInterface> Return a new promise resolved with either the rejection handler's value 
      *                          or the original value if the promise was fulfilled.
      *
      * @example - Example Usage:
@@ -92,7 +92,7 @@ interface PromiseInterface
      *
      * @param callable $onCanceled Invoked when the promise is `cancel` method is trigged.
      *
-     * @return self Return a instance of the promise.
+     * @return static<PromiseInterface> Return a instance of the promise.
      *
      * @example - Example Usage:
      * 
@@ -109,7 +109,7 @@ interface PromiseInterface
      *
      * @param callable $onError Invoked when the an error is encountered.
      *
-     * @return self Return a instance of the promise.
+     * @return static<PromiseInterface> Return a instance of the promise.
      *
      * @example - Example Usage:
      * 

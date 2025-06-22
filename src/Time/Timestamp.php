@@ -13,7 +13,7 @@ namespace Luminova\Time;
 use \Luminova\Time\Time;
 use \DateTimeInterface;
 use \DateInterval;
-use \Luminova\Exceptions\DateTimeException;;
+use \Luminova\Exceptions\DateTimeException;
 
 class Timestamp
 {

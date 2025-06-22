@@ -55,7 +55,7 @@ interface AuthenticatorInterface
      *
      * @param string $secret The shared secret key for TOTP generation.
      * 
-     * @return AuthenticatorInterface Return the authenticator client instance.
+     * @return static Return the authenticator client instance.
      */
     public function setSecret(string $secret): self;
 
@@ -64,7 +64,7 @@ interface AuthenticatorInterface
      *
      * @param DateTimeZone|string|null $timezone The new timezone.
      * 
-     * @return AuthenticatorInterface Return the authenticator client instance.
+     * @return static Return the authenticator client instance.
      */
     public function setTimezone(DateTimeZone|string|null $timezone): self;
 
@@ -73,7 +73,7 @@ interface AuthenticatorInterface
      *
      * @param CacheItemPoolInterface<\T>|CacheInterface<\T>|BaseCache<\T> $cache The instance of PSR cache or Luminova base-cache.
      * 
-     * @return AuthenticatorInterface Return the authenticator client instance.
+     * @return static Return the authenticator client instance.
      */
     public function setCache(CacheItemPoolInterface|CacheInterface|BaseCache $cache): self;
 

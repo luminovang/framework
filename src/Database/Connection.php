@@ -10,16 +10,17 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Database\Drivers\MysqliDriver;
+use \Countable;
+use \Throwable;
+use \Exception;
+use \App\Config\Database;
+use \Luminova\Logger\Logger;
+use \Luminova\Core\CoreDatabase;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Database\Drivers\PdoDriver;
 use \Luminova\Interface\DatabaseInterface;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Core\CoreDatabase;
-use \Luminova\Logger\Logger;
 use \Luminova\Exceptions\DatabaseException;
-use \App\Config\Database;
-use \Countable;
-use \Exception;
+use \Luminova\Database\Drivers\MysqliDriver;
 
 class Connection implements LazyInterface, Countable
 {
@@ -308,8 +309,14 @@ class Connection implements LazyInterface, Countable
         }
         
         $connection->setDebug(!PRODUCTION);
+        
+        if($connection->connect()){
+            return $connection;
+        }
 
-        return $connection;
+        $connection = null;
+
+        return null;
     }
 
     /**
@@ -537,9 +544,10 @@ class Connection implements LazyInterface, Countable
             'connection' => strtolower(env('database.connection', 'pdo')),
             'charset' => env('database.charset', ''),
             'persistent' => (bool) env('database.persistent.connection', true),
-            'emulate_preparse' => (bool) env('database.emulate.preparse', false),
+            'emulate_prepares' => (bool) env('database.emulate.prepares', false),
             'sqlite_path' => $sqlite,
             'socket' => (bool) env('database.mysql.socket', false),
+            'timeout' => (int) env('database.timeout', 0),
             'socket_path' => $socketPath,
             'production' => PRODUCTION,
             'username' => env("{$var}.username"),
@@ -574,7 +582,7 @@ class Connection implements LazyInterface, Countable
                     'critical', 
                     'Database connection attempt (' . $attempt . ') failed.'
                 );
-            } catch (DatabaseException|Exception $e) {
+            } catch (Throwable $e) {
                 if($this->shouldThrow($e->getCode())){
                     throw $e;
                 }
@@ -623,7 +631,7 @@ class Connection implements LazyInterface, Countable
                 $config['database'],
                 $config['host']
             ));
-        } catch (DatabaseException|Exception $e) {
+        } catch (Throwable $e) {
             if($this->shouldThrow($e->getCode())){
                 throw $e;
             }

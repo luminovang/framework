@@ -30,7 +30,7 @@ interface CookieInterface
      * @param bool $raw Indicates if the cookie is raw.
      * @param CookieConfig|array<string,mixed> $options An array of default cookie options or cookie config class object.
      * 
-     * @return CookieInterface Return a new Cookie instance.
+     * @return static Return a new Cookie instance.
      */
     public static function newFromString(
         string $cookie, 
@@ -44,7 +44,7 @@ interface CookieInterface
      * @param array<string,mixed>|object $cookie An associative array or json object of cookies.
      * @param CookieConfig|array<string,mixed> $options An array of default cookie options or cookie config class object.
      * 
-     * @return CookieInterface Return a new Cookie instance.
+     * @return static Return a new Cookie instance.
      */
     public static function newFromArray(
         array|object $cookies, 
@@ -58,7 +58,7 @@ interface CookieInterface
      * @param mixed $value The value of the cookie.
      * @param array<string,mixed> $options An array of cookie options.
      * 
-     * @return CookieInterface Return a new Cookie instance.
+     * @return static Return a new Cookie instance.
      */
     public function set(mixed $name, mixed $value, array $options = []): CookieInterface;
 
@@ -67,7 +67,7 @@ interface CookieInterface
      * 
      * @param mixed $value The value to set.
      * 
-     * @return CookieInterface Return this Cookie instance.
+     * @return static Return this Cookie instance.
      */
     public function setValue(mixed $value): self;
 
@@ -76,7 +76,7 @@ interface CookieInterface
      * 
      * @param CookieConfig|array<string,mixed> $options An array of cookie options or cookie config class object.
      * 
-     * @return CookieInterface Return this Cookie instance.
+     * @return static Return this Cookie instance.
      */
     public function setOptions(CookieConfig|array $options): self;
 

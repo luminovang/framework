@@ -17,7 +17,7 @@ interface ViewResponseInterface
      *
      * @param int $status The HTTP status code to be set.
      * 
-     * @return self Return instance of the Response class.
+     * @return static<ViewResponseInterface> Return instance of the Response class.
      */
     public function setStatus(int $status): self;
 
@@ -26,7 +26,7 @@ interface ViewResponseInterface
      *
      * @param bool $compress Whether to compress content (default: true).
      * 
-     * @return self Return instance of the Response class.
+     * @return static<ViewResponseInterface> Return instance of the Response class.
      */
     public function compress(bool $compress = true): self;
 
@@ -36,7 +36,7 @@ interface ViewResponseInterface
      *
      * @param bool $minify Whether to minify the HTML content (default: true).
      * 
-     * @return self Return instance of the Response class.
+     * @return static<ViewResponseInterface> Return instance of the Response class.
      */
     public function minify(bool $minify = true): self;
 
@@ -46,7 +46,7 @@ interface ViewResponseInterface
      * @param bool $minify Whether to exclude HTML code blocks from minification (default: false).
      * @param bool $button Whether to include a copy button in code blocks (default: false).
      * 
-     * @return self Return instance of the Response class.
+     * @return static<ViewResponseInterface> Return instance of the Response class.
      */
     public function codeblock(bool $minify = true, bool $button = false): self;
 
@@ -56,7 +56,7 @@ interface ViewResponseInterface
      * @param string $key The header name.
      * @param mixed $value The header value for name.
      * 
-     * @return self Return instance of the Response class.
+     * @return static<ViewResponseInterface> Return instance of the Response class.
      */
     public function header(string $key, mixed $value): self;
 
@@ -65,7 +65,7 @@ interface ViewResponseInterface
      *
      * @param array<string,mixed> $headers An associative array of headers.
      * 
-     * @return self Return instance of the Response class.
+     * @return static<ViewResponseInterface> Return instance of the Response class.
      */
     public function headers(array $headers): self;
 
