@@ -4722,7 +4722,7 @@ final class Builder implements LazyInterface
     /**
      * Combines the current builder's query with another using a `UNION` or `UNION ALL` clause.
      *
-     * @param Builder|Closure $union Query builder to union with.
+     * @param Builder|Closure $union Query builder to union with. 
      * @param bool $all Whether to use `UNION ALL` instead of plain `UNION`.
      * 
      * @return self Returns instance of builder.
