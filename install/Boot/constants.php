@@ -640,7 +640,6 @@ defined('PARAM_BOOL') || define('PARAM_BOOL', 5);
  */
 defined('PARAM_FLOAT') || define('PARAM_FLOAT', 192);
 
-
 /**
  * Set error reporting.
  */
