@@ -452,7 +452,7 @@ final class PdoDriver implements DatabaseInterface
      */
     public function inTransaction(): bool 
     {
-        return $this->isConnected() ? $this->connection->inTransaction() : false;
+        return $this->isConnected() && $this->connection->inTransaction();
     }
 
     /**

@@ -776,7 +776,11 @@ class Time extends DateTimeImmutable implements Stringable
      *
      * > If a string is provided, it must be a valid datetime string or time string.
      */
-    public static function ago(string|int|Time|DateTimeImmutable $datetime, bool $full = false, DateTimeZone|string|null $timezone = null): string|bool
+    public static function ago(
+        string|int|Time|DateTimeImmutable $datetime, 
+        bool $full = false, 
+        DateTimeZone|string|null $timezone = null
+    ): string|bool
     {
         if (is_string($datetime)) {
             $datetime = new static($datetime, $timezone);
@@ -887,7 +891,11 @@ class Time extends DateTimeImmutable implements Stringable
 	 * @return bool True if the specified minutes have passed, false otherwise.
      * @throws DateTimeException If invalid datetime was passed.
 	 */
-	public static function passed(string|int|Time|DateTimeImmutable $datetime, int $minutes, DateTimeZone|string|null $timezone = 'UTC'): bool 
+	public static function passed(
+        Time|DateTimeImmutable|string|int $datetime,
+        int $minutes, 
+        DateTimeZone|string|null $timezone = 'UTC'
+    ): bool 
 	{
         if (is_numeric($datetime)) {
             if ($datetime < $minutes) {

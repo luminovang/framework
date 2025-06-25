@@ -169,9 +169,9 @@ final class Builder implements LazyInterface
     /**
      * Table query and query columns.
      * 
-     * @var array<int,mixed> $andConditions 
+     * @var array<int,mixed> $conditions 
      */
-    private array $andConditions = [];
+    private array $conditions = [];
 
     /**
      * Table query update set values.
@@ -207,18 +207,25 @@ final class Builder implements LazyInterface
     private bool $hasCache = false;
 
     /**
-     * Transaction status flag.
-     * 
-     * @var bool $inTransaction 
-     */
-    private bool $inTransaction = false;
-
-    /**
      * Distinct selection flag.
      * 
      * @var bool $isDistinct 
      */
     private bool $isDistinct = false;
+
+    /**
+     * Use REPLACE insertion.
+     * 
+     * @var bool $isReplace 
+     */
+    private bool $isReplace = false;
+
+    /**
+     * Use internal transaction.
+     * 
+     * @var bool $isSafeMode 
+     */
+    private bool $isSafeMode = false;
 
     /**
      * Flag to prevent executing result.
@@ -244,9 +251,9 @@ final class Builder implements LazyInterface
     /**
      * Caching status flag.
      * 
-     * @var bool $caching 
+     * @var bool $isCacheable 
      */
-    private bool $caching = true;
+    private bool $isCacheable = true;
 
     /**
      * Close connection after execution.
@@ -272,9 +279,9 @@ final class Builder implements LazyInterface
     /**
      * Strict check.
      * 
-     * @var bool $strictChecks
+     * @var bool $isStrictMode
      */
-    private bool $strictChecks = true;
+    private bool $isStrictMode = true;
 
     /**
      * The debug query information.
@@ -354,7 +361,7 @@ final class Builder implements LazyInterface
         $table = ($table === null) ? null : trim($table);
         
         if($table !== null || $alias !== null){
-            $this->assertTableName($table, $alias);
+            self::assertTableName($table, $alias);
         }
 
         $this->resetState(true);
@@ -387,16 +394,6 @@ final class Builder implements LazyInterface
     public static function isLocked(string|int $identifier): bool 
     {
         return self::administration($identifier, 'isLocked');
-    }
-
-    /**
-     * Prevent outside cloning and reset query properties before cloning.
-     * 
-     * @ignore
-     */
-    private function __clone() 
-    {
-        $this->reset();
     }
 
     /**
@@ -500,13 +497,7 @@ final class Builder implements LazyInterface
      */
     public static function table(string $table, ?string $alias = null): Builder
     {
-        if(!$table){
-            throw new InvalidArgumentException(
-                'Invalid table argument, $table argument expected non-empty string.'
-            );
-        }
-
-        return self::initializer($table, $alias);
+        return self::initializer($table, $alias, true);
     }
 
     /**
@@ -533,11 +524,7 @@ final class Builder implements LazyInterface
      */
     public static function query(string $query): self 
     {
-        if (!$query) {
-            throw new InvalidArgumentException(
-                'Invalid: The parameter $query requires a valid and non-empty SQL query string.'
-            );
-        }
+        self::assertQuery($query, __METHOD__);
 
         $extend = self::initializer();
         $extend->rawQuery = $query;
@@ -557,16 +544,10 @@ final class Builder implements LazyInterface
      */
     public static function exec(string $query): int 
     {
-        if ($query === '') {
-            throw new InvalidArgumentException(
-                'Invalid: The parameter $query requires a valid and non-empty SQL query string.'
-            );
-        }
+        self::assertQuery($query, __METHOD__);
 
         try {
-            return self::getInstance()
-                ->database()
-                ->exec($query);
+            return self::initializer()->db->exec($query);
         } catch (Throwable $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
         }
@@ -589,11 +570,23 @@ final class Builder implements LazyInterface
      * @example - Using RawExpression in an INSERT Query:
      * 
      * ```php
-     * Builder::table('logs')->insert([
-     *      'message' => 'User login',
-     *      'created_at' => Builder::raw('NOW()'),
-     *      'updated_at' => Luminova\Database\RawExpression::now()
-     * ]);
+     * Builder::table('logs')
+     *      ->insert([
+     *          'message' => 'User login',
+     *          'created_at' => Builder::raw('NOW()'),
+     *          'updated_at' => Luminova\Database\RawExpression::now()
+     *      ]);
+     * ```
+     * 
+     * @example - Using REPLACE instead of INSERT:
+     * 
+     * ```php
+     * Builder::table('logs')
+     *      ->replace(true)
+     *      ->insert([
+     *          'message' => 'User login',
+     *          'created_at' => Builder::raw('NOW()')
+     *      ]);
      * ```
      */
     public static function raw(?string $expression = null): RawExpression 
@@ -637,7 +630,7 @@ final class Builder implements LazyInterface
     public function join(string $table, string $type = 'INNER', ?string $alias = null): self
     {
         $table = trim($table);
-        $this->assertTableName($table, $alias);
+        self::assertTableName($table, $alias);
         $this->tableJoin[$table . ($alias ?? '')] = [
             'type' => strtoupper($type),
             'table' => $table,
@@ -934,7 +927,7 @@ final class Builder implements LazyInterface
      * When strict mode is enabled, certain operations (e.g., `delete`, `update`) may require a `WHERE` clause 
      * or logic operator to prevent accidental modifications of all records. This helps enforce safer query execution.
      *
-     * @param bool $strict Whether to enable strict mode (default: `true`).
+     * @param bool $enable Whether to enable strict mode (default: `true`).
      *
      * @return self Returns the instance of the builder class.
      *
@@ -952,9 +945,9 @@ final class Builder implements LazyInterface
      * ```
      * The query will execute even if no `WHERE` condition is present.
      */
-    public function strict(bool $strict = true): self
+    public function strict(bool $enable = true): self
     {
-       $this->strictChecks = $strict;
+       $this->isStrictMode = $enable;
 
        return $this;
     }
@@ -1235,7 +1228,7 @@ final class Builder implements LazyInterface
             throw new InvalidArgumentException('Invalid argument $value; expected a non-empty array when using INARRAY.');
         }
 
-        $this->andConditions[] = [
+        $this->conditions[] = [
             'type' => $clause,
             'function' => $function,
             'column' => $column,
@@ -1546,7 +1539,7 @@ final class Builder implements LazyInterface
             ));
         }
 
-        $this->andConditions[] = [
+        $this->conditions[] = [
             'type' => $clause,
             'function' => 'CONJOIN',
             'operator' => $operator,
@@ -1620,7 +1613,7 @@ final class Builder implements LazyInterface
             ));
         }
 
-        $this->andConditions[] = [
+        $this->conditions[] = [
             'type' => $clause,
             'function' => 'NESTED',
             'bind' => $nestedOperator,
@@ -1961,7 +1954,7 @@ final class Builder implements LazyInterface
         }
 
         $isList = is_array($list);
-        $this->andConditions[] = [
+        $this->conditions[] = [
             'type' => $clause, 
             'function' => 'INSET',
             'list' => $isList ? implode(',', $list) : $list, 
@@ -2011,10 +2004,42 @@ final class Builder implements LazyInterface
      * @param bool $distinct Whether to apply distinct selection (default: true).
      * 
      * @return self Return instance of builder class.
+     * 
+     * @see select()
+     * @see find()
      */
     public function distinct(bool $distinct = true): self 
     {
         $this->isDistinct = $distinct;
+        return $this;
+    }
+
+    /**
+     * Enable or disable replace feature when inserting or copying records in the current database table.
+     * 
+     * **Applicable To:**
+     * 
+     * `insert()` - Before calling insert() method.
+     * `copy()`  - Before to() method.
+     * 
+     * If enabled, `insert` method will replaces existing records, 
+     * by first **deleting** existing rows with the same primary key or unique key before inserting new ones. 
+     * 
+     * @param bool $useReplace Set to true to use `REPLACE` instead of `INSERT` (default: true).
+     * 
+     * @return self Return instance of builder class.
+     * 
+     * @see insert()
+     * @see copy()
+     * 
+     * > **Note:** Enabling this may lead to unintended data loss, especially if foreign key constraints exist.
+     * > **Warning:** Since `replace` removes and re-inserts data, it can reset auto-increment values 
+     * and trigger delete/insert events instead of update events.
+     */
+    public function replace(bool $useReplace = true): self
+    {
+        $this->isReplace = $useReplace;
+
         return $this;
     }
 
@@ -2225,7 +2250,7 @@ final class Builder implements LazyInterface
      */
     public function cacheable(bool $enable): self
     {
-        $this->caching = $enable;
+        $this->isCacheable = $enable;
         return $this;
     }
 
@@ -2242,6 +2267,43 @@ final class Builder implements LazyInterface
     public function closeAfter(bool $close = true): self 
     {
         $this->closeConnection = $close;
+        return $this;
+    }
+
+    /**
+     * Enables or disables safe mode for write and altering current table.
+     *
+     * When enabled, the next query operation will automatically be wrapped in an internal transaction 
+     * if no explicit transaction is already active.
+     * 
+     * @param bool $enable Whether to enable or disable safe mode.
+     * 
+     * @return self Returns the current builder instance.
+     * 
+     * Supported:
+     * 
+     * @see insert()
+     * @see update()
+     * @see delete()
+     * @see drop()
+     * @see truncate()
+     * @see copy()
+     * @see temp()
+     * @see execute()
+     * 
+     * @example - Using safe mode:
+     * 
+     * Automatically commits or rolls back.
+     * 
+     * ```php
+     *     $tbl = Builder::table('users')
+     *      ->safeMode()
+     *      ->insert([...]);
+     * ```
+     */
+    public function safeMode(bool $enable = true): self 
+    {
+        $this->isSafeMode = $enable;
         return $this;
     }
 
@@ -2390,7 +2452,7 @@ final class Builder implements LazyInterface
         ?string $persistentId = null
     ): self 
     {
-        if (!$this->caching) {
+        if (!$this->isCacheable) {
             return $this;
         }
 
@@ -2429,10 +2491,80 @@ final class Builder implements LazyInterface
      * @return int Returns the number of affected rows, 0 if no rows were inserted.
      * @throws DatabaseException If an error occurs during the insert operation or if the provided values are not associative arrays.
      * @throws JsonException If an error occurs while encoding array values to JSON format.
+     * 
+     * @example - Insert example:
+     * 
+     * ```php
+     * Builder::table('logs')
+     *      //->replace(true) Optional replace 
+     *      //->onDuplicate('column', '=', Builder::raw('VALUES(columns)'))
+     *      //->ignoreDuplicate()true
+     *      ->insert([
+     *          [
+     *              'message' => 'User login',
+     *              'created_at' => Builder::raw('NOW()')
+     *          ]
+     *          // More rows
+     *      ]);
+     * ```
+     * 
+     * @example - Insert using transaction:
+     * ```php
+     * $tbl = Builder::table('users')
+     *      //->replace(true) Optional replace 
+     *      ->transaction();
+     * 
+     * $inserted = $tbl->insert([
+     *     ['name' => 'Peter', 'age' => 33],
+     *     ['name' => 'John Deo', 'age' => 40]
+     *     // More rows
+     * ]);
+     * 
+     * if($inserted){
+     *      $tbl->commit();
+     * }else{
+     *      $tbl->rollback();
+     * }
+     * ```
      */
     public function insert(array $values, bool $usePrepare = true, bool $escapeValues = true): int
     {
-        return $this->doInsertOrReplace($values, 'INSERT', $usePrepare, $escapeValues);
+        if ($values === []) {
+            return 0;
+        }
+
+        if (!isset($values[0])) {
+            $values = [$values];
+        }
+        
+        $inserted = 0;
+        $type = $this->isReplace ? 'REPLACE' : 'INSERT';
+
+        if (!is_associative($values[0])) {
+            throw new DatabaseException(
+                sprintf('Invalid %s values, values must be an associative array.', $type), 
+                DatabaseException::VALUE_FORBIDDEN
+            );
+        }
+
+        $this->assertInsertOptions();
+        $length = count($values);
+        $useTransaction = false;
+
+        if ($this->inSafeMode()) {
+            $useTransaction = $this->transaction();
+        }
+
+        try {
+            $inserted = $usePrepare
+                ? $this->executeInsertPrepared($values, $type, $length, $escapeValues) 
+                : $this->executeInsertQuery($values, $type, $length);
+        } catch (Throwable $e) {
+            $this->resolveException($e);
+            return 0;
+        }
+
+        return $this->finishInsert($useTransaction, $inserted);
     }
 
     /**
@@ -2458,7 +2590,7 @@ final class Builder implements LazyInterface
      * use \Luminova\Database\RawExpression;
      * 
      * Builder::table('users')
-     *     ->onDuplicate('points', '=', Builder::raw()->values('points')) // Builder::raw('VALUES(points)')
+     *     ->onDuplicate('points', '=', Builder::raw('VALUES(points)'))
      *     ->onDuplicate('points', '+=', 10) // Increment points by 10 on duplicate key
      *     ->onDuplicate('email', '=', 'new@example.com') // Update email on duplicate key
      *     ->insert([
@@ -2513,32 +2645,6 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Replaces records in the specified database table.
-     * 
-     * This method replaces existing records, it will first **deletes** existing rows with the same primary key 
-     * or unique key before inserting new ones. 
-     * 
-     * This may lead to unintended data loss, especially if foreign key constraints exist.
-     * 
-     * @param array<int,array<string,mixed>> $values An array of associative arrays,
-     *      where each associative array represents a record to be replaced in the table.
-     * @param bool $usePrepare If `true`, executes the operation using prepared statements with bound values.
-     *      If `false`, executes a raw SQL query instead (default: `true`).
-     * @param bool $escapeValues Whether to escape insert values if `$usePrepare` is true (default: true).
-     * 
-     * @return int Returns the number of affected rows (each `REPLACE` may count as **two**: one delete + one insert).
-     * @throws DatabaseException If an error occurs during the operation or if the provided values are invalid.
-     * @throws JsonException If an error occurs while encoding array values to JSON format.
-     * 
-     * > **Warning:** Since `replace` removes and re-inserts data, it can reset auto-increment values 
-     * and trigger delete/insert events instead of update events.
-     */
-    public function replace(array $values, bool $usePrepare = true, bool $escapeValues = true): int
-    {
-        return $this->doInsertOrReplace($values, 'REPLACE', $usePrepare, $escapeValues);
-    }
-
-    /**
      * Executes a prepared `copy()` query and inserts its result into the specified target table.
      *
      * This method finalizes a `copy()` operation by executing the selection and inserting
@@ -2546,8 +2652,6 @@ final class Builder implements LazyInterface
      *
      * @param string $table Target table to insert copied data into.
      * @param array<int,string> $columns Target table columns to insert data into.
-     * @param bool $useReplace Use `REPLACE INTO` instead of `INSERT` (default: false).
-     * @param bool $useTransaction Whether to wrap the operation in a transaction (default: false).
      *
      * @return int Return the number of affected rows, or 0 if no rows were inserted or if debugging is enabled.
      *
@@ -2559,18 +2663,12 @@ final class Builder implements LazyInterface
      *
      * > warning Ensure that source and destination columns match in count and structure.
      */
-    public function to(
-        string $table, 
-        array $columns = ['*'], 
-        bool $useReplace = false, 
-        bool $useTransaction = false
-    ): int
+    public function to(string $table, array $columns = ['*']): int
     {
         $table = trim($table);
-        $type = $useReplace ? 'REPLACE' : 'INSERT';
 
-        $this->assertTableName($table, null);
-        $this->assertInsertOptions($type, true);
+        self::assertTableName($table, null);
+        $this->assertInsertOptions();
 
         $isCopy = $this->handler['isCopy'] ?? false;
         $fromColumns = $this->handler['columns'] ?? [];
@@ -2600,8 +2698,8 @@ final class Builder implements LazyInterface
 
         $metadata = $this->getOptions('current');
         $ignore = $this->isIgnoreDuplicate ? 'IGNORE ' : '';
-
-        $this->rawQuery = "{$type} {$ignore}INTO {$table}";
+        $this->rawQuery = $this->isReplace ? 'REPLACE' : 'INSERT';
+        $this->rawQuery .= " {$ignore}INTO {$table}";
 
         if($fromColumns !== ['*']){
             $this->rawQuery .= ' (' . trim(implode(',', $columns), ',') . ')';
@@ -2621,46 +2719,27 @@ final class Builder implements LazyInterface
             return 0;
         }
 
-        if($useTransaction && !$this->transaction()){
-            throw new DatabaseException(
-                'Failed to start transaction.', 
-                DatabaseException::DATABASE_TRANSACTION_FAILED
-            );
+        $cacheable = $this->isCacheable;
+        $inserted = 0;
+        $useTransaction = false;
+
+        if ($this->inSafeMode()) {
+            $useTransaction = $this->transaction();
         }
 
-        $caching = $this->caching;
-        $result = 0;
-
         try {
-            $result = ($placeholders === [])
+            $inserted = ($placeholders === [])
                 ? ($this->db->query($this->rawQuery)->ok() ? $this->db->rowCount() : 0)
                 : $this->cacheable(false)
                     ->execute($placeholders, RETURN_COUNT, FETCH_NUM, false);
 
-            if ($useTransaction && $this->inTransaction()) {
-                if($result > 0){ 
-                    $result = $this->commit() ? $result : 0;
-                 }else{
-                    $this->rollback();
-                 }
-            }
-
-            $this->caching = $caching;
+            $this->isCacheable = $cacheable;
         } catch (Throwable $e) {
-            $this->caching = $caching;
-            $result = 0;
-
-            if ($useTransaction && $this->inTransaction()) {
-                $this->rollback();
-            }
-
-            throw $e;
+            $this->isCacheable = $cacheable;
+            $this->resolveException($e, true);
         }
-     
-        self::$lastInsertId = ($result > 0) ? $this->db?->getLastInsertId() : null;
-        $this->reset();
 
-        return (int) $result;
+        return $this->finishInsert($useTransaction, $inserted);
     }
 
     /**
@@ -2849,18 +2928,10 @@ final class Builder implements LazyInterface
             );
         }
 
-        $isCacheable = ($returnMode !== RETURN_STMT && (self::$cache instanceof BaseCache));
+        $response = $this->getFromCache($returnMode);
 
-        if($isCacheable  && $this->isCacheReady && $this->hasCache){
-            $response = self::$cache->getItem($this->cacheKey);
-
-            if($response !== null){
-                $this->cacheKey = '';
-                $this->isCacheReady = false;
-                $this->reset();
-
-                return $response;
-            }
+        if($response !== null){
+            return $response;
         }
 
         try {
@@ -2872,15 +2943,13 @@ final class Builder implements LazyInterface
                 $escapePlaceholders
             );
 
-            if($this->isCacheReady && $isCacheable){
-                self::$cache->set($this->cacheKey, $response);
-                self::$cache = null;
-                $this->isCacheReady = false;
+            if($returnMode !== RETURN_STMT){
+                $this->cacheResultIfValid($response);
             }
 
             return $response;
         } catch (Throwable $e) {
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            $this->resolveException($e);
         }
 
         return null;
@@ -2920,14 +2989,20 @@ final class Builder implements LazyInterface
     public function get(int $fetchMode = FETCH_OBJ, ?int $returnMode = null): mixed
     {
         $this->assertHandler(__METHOD__);
+        
+        $returnMode = $this->handler['returns'] 
+            ?? $returnMode 
+            ?? RETURN_ALL;
+
+        $result = $this->getFromCache($returnMode);
+
+        if($result !== null){
+            return $result;
+        }
 
         if($assert = ($this->handler['assert'] ?? null) !== null){
             $this->assertStrictConditions($assert, true);
         }
-
-        $returnMode = $this->handler['returns'] 
-            ?? $returnMode 
-            ?? RETURN_ALL;
 
         if(!$this->isCollectMetadata && $this->unions !== []){
             [$sql, $placeholders] = $this->compileTableUnions();
@@ -2937,9 +3012,9 @@ final class Builder implements LazyInterface
 
             $query = self::query($sql)
                 ->closeAfter($this->closeConnection)
-                ->cacheable($this->caching);
+                ->cacheable($this->isCacheable);
 
-            if($this->caching && ($cache = $this->options['current']['cache'])){
+            if($this->isCacheable && ($cache = $this->options['current']['cache'])){
                 $query->cache(...$cache);
             }
 
@@ -3138,7 +3213,16 @@ final class Builder implements LazyInterface
      */
     public function has(): bool 
     {
-        return $this->buildExecutableStatement(' COUNT(*)') > 0;
+        $result = $this->getFromCache(RETURN_NEXT);
+
+        if($result !== null){
+            return (bool) $result;
+        }
+
+        return $this->buildExecutableStatement(
+            ' COUNT(*)', 'total',
+            ['*'], RETURN_NEXT
+        ) > 0;
     }
 
     /**
@@ -3362,6 +3446,7 @@ final class Builder implements LazyInterface
      * ```php
      * $result = Builder::table('users')
      *     ->copy(['id', 'email', 'created_at'])
+     *     //->replace(true) // Optionally use REPLACE instead of INSERT
      *     ->where('id', '=', 100)
      *     ->onDuplicate('email', '=', RawExpression::values('email'))
      *     ->to('backup_users', ['id', 'email', 'created_at']);
@@ -3443,6 +3528,13 @@ final class Builder implements LazyInterface
             $this->echoDebug($sql, 'SQL QUERY');
         }
 
+        $response = 0;
+        $useTransaction = false;
+
+        if ($this->inSafeMode()) {
+            $useTransaction = $this->transaction();
+        }
+
         try {
             $this->db->prepare($sql);
             $this->bindStrictColumns($columns);
@@ -3455,14 +3547,22 @@ final class Builder implements LazyInterface
             }
 
             $response = $this->db->execute() ? $this->db->rowCount() : 0;
-            $this->reset();
-
-            return $response;
         } catch (Throwable $e) {
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            $this->resolveException($e);
+            return 0;
         }
 
-        return 0;
+        if($useTransaction && $this->db->inTransaction()){
+            if($response > 0){
+                return $this->commit() ? $response : 0;
+            }
+
+            $this->rollback();
+            return 0;
+        }
+        
+        $this->reset();
+        return $response;
     }
 
     /**
@@ -3498,7 +3598,7 @@ final class Builder implements LazyInterface
         try {
             return (int) $this->getStatementExecutionResult($sql, 'delete');
         } catch (Throwable $e) {
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            $this->resolveException($e);
         }
 
         return 0;
@@ -3551,11 +3651,10 @@ final class Builder implements LazyInterface
     public function transaction(int $flags = 0, ?string $name = null): bool 
     {
         if($this->db->beginTransaction($flags, $name)){
-            return $this->inTransaction = true;
+            return true;
         }
 
-        DatabaseException::throwException(
-            sprintf(
+        DatabaseException::throwException(sprintf(
                 'Transaction failed to start%s (flags: %d)', 
                 $name ? " for \"$name\"" : '', 
                 $flags
@@ -3563,7 +3662,7 @@ final class Builder implements LazyInterface
             DatabaseException::DATABASE_TRANSACTION_FAILED
         );
 
-        return $this->inTransaction = false;
+        return false;
     }
 
     /**
@@ -3577,7 +3676,7 @@ final class Builder implements LazyInterface
      */
     public function inTransaction(): bool 
     {
-        return $this->inTransaction;
+        return ($this->db instanceof DatabaseInterface) && $this->db->inTransaction();
     }
 
     /**
@@ -3596,12 +3695,14 @@ final class Builder implements LazyInterface
      */
     public function commit(int $flags = 0, ?string $name = null): bool 
     {
-        if($this->inTransaction && $this->db->commit($flags, $name)){
-            $this->inTransaction = false;
-            return true;
+        $commit = false;
+
+        if($this->inTransaction()){
+            $commit = $this->db->commit($flags, $name);
         }
 
-        return false;
+        $this->reset();
+        return $commit;
     }
 
     /**
@@ -3621,12 +3722,78 @@ final class Builder implements LazyInterface
      */
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
-        if($this->inTransaction && $this->db->rollback($flags, $name)){
-            $this->inTransaction = false;
+        $rollback = false;
+
+        if($this->inTransaction()){
+            $rollback = $this->db->rollback($flags, $name);
+        }
+
+        $this->reset();
+        return $rollback;
+    }
+
+
+    /**
+     * Releases an active database transaction if one is in progress.
+     * 
+     * This method performs a rollback only if a transaction is currently open.
+     * It is safe to call regardless of whether a transaction exists.
+     * 
+     * Useful for cleaning up unused or failed transactions in `finally` blocks,
+     * or in cases where safe mode or conditional transactional logic is used.
+     * 
+     * @param int $flags Optional flags to pass to the rollback operation (driver-specific).
+     * @param string|null $name Optional savepoint name if partial rollback is supported.
+     * 
+     * @return bool Returns true if no transaction was active or rollback succeeded, false on rollback failure.
+     * @see rollback()
+     * 
+     * @internal - Used internally to release transaction, returning false instead exception if error.
+     */
+    public function release(int $flags = 0, ?string $name = null): bool 
+    {
+        if (!$this->inTransaction()) {
             return true;
         }
 
-        return false;
+        try {
+            return $this->db->rollback($flags, $name);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Rename the current table to a new name.
+     *
+     * @param string $to The new table name.
+     * 
+     * @return bool Return true if the rename operation was successful, false otherwise.
+     * @throws DatabaseException If the database driver is unsupported.
+     * 
+     * @example - Rename table name.
+     * 
+     * ```php
+     * $renamed = Builder::table('users')
+     *      ->rename('new_users');
+     * ```
+     */
+    public function rename(string $to): bool 
+    {
+        self::assertTableName($to);
+
+        $sql = match ($this->db->getDriver()) {
+            'mysql', 'mysqli' => "RENAME TABLE {$this->tableName} TO {$to}",
+            'pgsql', 'sqlite', 'oci', 'oracle' => "ALTER TABLE {$this->tableName} RENAME TO {$to}",
+            'sqlsrv', 'mssql', 'dblib' => "EXEC sp_rename '{$this->tableName}', '{$to}'",
+            'cubrid' => "RENAME TABLE {$this->tableName} AS {$to}",
+            default  => throw new DatabaseException(
+                "Unsupported driver: {$this->db->getDriver()}",
+                DatabaseException::RUNTIME_ERROR
+            ),
+        };
+
+        return (bool) $this->db->exec($sql);
     }
 
     /**
@@ -3643,7 +3810,7 @@ final class Builder implements LazyInterface
      * 
      * @param string $mode The lock mode: 'update' or 'shared' (default: `update`).
      * 
-     * @return self
+     * @return self Returns the current Builder instance.
      * @throws InvalidArgumentException If invalid lock type is given.
      * 
      * > **Note:** Must be used inside a transaction.
@@ -3734,10 +3901,8 @@ final class Builder implements LazyInterface
     /**
      * Truncate database table records.
      * 
-     * This method will attempt to clear all table records. 
-     * If transaction is enable and operation is failed it rolls back to default.
+     * This method will attempt to clear all table records and reset auto-increment. 
      * 
-     * @param bool $transaction Whether to use transaction (default true).
      * @param int|null $restIncrement Index to reset auto-increment if applicable (default `null`).
      * 
      * @return bool Return true truncation was completed, otherwise false.
@@ -3748,83 +3913,76 @@ final class Builder implements LazyInterface
      * ```php
      * Builder::table('users')->truncate();
      * ```
+     * 
+     * @example - Clear all records in table using transaction:
+     * 
+     * ```php
+     * $stmt = Builder::table('users')
+     *  ->transaction();
+     * 
+     * if($stmt->truncate()){
+     *      $stmt->commit();
+     * }else{
+     *      $stmt->rollback();
+     * }
+     * ```
      */
-    public function truncate(bool $transaction = true, ?int $restIncrement = null): bool 
+    public function truncate(?int $resetIncrement = null): bool 
     {
+        $deleted = false;
+        $useTransaction = false;
+
+        if ($this->inSafeMode()) {
+            $useTransaction = $this->transaction();
+        }
+
         try {
-            $driverName = $this->db->getDriver();
-            $transaction = ($transaction && $driverName !== 'sqlite');
+            $driver = $this->db->getDriver();
 
-            if ($transaction && !$this->db->beginTransaction()) {
-                DatabaseException::throwException(
-                    'Failed: Unable to start transaction', 
-                    DatabaseException::DATABASE_TRANSACTION_FAILED
-                );
-                return false;
-            }
+            if (in_array($driver, ['mysql', 'mysqli', 'pgsql'], true)) {
+                $deleted = (bool) $this->db->exec("TRUNCATE TABLE {$this->tableName}");
 
-            if ($driverName === 'mysql' || $driverName === 'mysqli' || $driverName === 'pgsql') {
-                $completed = $this->db->exec("TRUNCATE TABLE {$this->tableName}");
-            } elseif ($driverName === 'sqlite') {
-                $deleteSuccess = $this->db->exec("DELETE FROM {$this->tableName}");
-                $resetSuccess = true;
-
-                $result = $this->db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'")
-                    ->fetchNext(FETCH_ASSOC);
-
-                if ($result) {
-                    $resetSuccess = $this->db->exec("DELETE FROM sqlite_sequence WHERE name = '{$this->tableName}'");
-                }
-
-                $completed = $deleteSuccess && $resetSuccess;
-
-                if ($completed && !$this->db->exec("VACUUM")) {
-                    $completed = false;
+                if ($deleted && $resetIncrement !== null && $driver !== 'pgsql') {
+                    $this->db->exec("ALTER TABLE {$this->tableName} AUTO_INCREMENT = {$resetIncrement}");
                 }
             } else {
-                $deleteSuccess = $this->db->exec("DELETE FROM {$this->tableName}");
-                $resetSuccess = ($restIncrement !== null)
-                    ? $this->db->exec("ALTER TABLE {$this->tableName} AUTO_INCREMENT = {$restIncrement}")
-                    : true;
+                $deleted = (bool) $this->db->exec("DELETE FROM {$this->tableName}");
 
-                $completed = $deleteSuccess && $resetSuccess;
-            }
+                if ($driver === 'sqlite') {
+                    if ($deleted && $resetIncrement !== null) {
+                        $result = $this->db->query("
+                            SELECT name FROM sqlite_master 
+                            WHERE type = 'table' AND name = 'sqlite_sequence'
+                        ")->fetchNext(FETCH_ASSOC);
 
-            if ($transaction && $this->db->inTransaction()) {
-                if ($completed && $this->db->commit()) {
-                    $this->reset();
-                    return true;
+                        if (
+                            $result && 
+                            $this->db->exec("DELETE FROM sqlite_sequence WHERE name = '{$this->tableName}'")
+                        ) {
+                            $this->db->exec("VACUUM");
+                        }
+                    }
                 }
-
-                $this->db->rollback();
-                $completed = false;
             }
-
-            $this->reset();
-            return (bool) $completed;
-
         } catch (Throwable $e) {
-            if ($transaction && $this->db->inTransaction()) {
-                $this->db->rollback();
-            }
-
-            $this->reset();
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            $this->resolveException($e);
             return false;
         }
 
-        if ($transaction && $this->db->inTransaction()) {
-            $this->db->rollback();
+        if($useTransaction && $this->db->inTransaction()){
+            if($result){
+                return $this->commit();
+            }
+
+            $this->rollback();
+            return false;
         }
 
-        $this->reset();
-        return false;
+        return $deleted;
     }
 
     /**
      * Creates a temporary table and copies all records from the main table to the temporary table.
-     *
-     * @param bool $transaction Whether to use a transaction (default is true).
      *
      * @return bool Returns true if the operation was successful; false otherwise.
      * @throws DatabaseException Throws an exception if a database error occurs during the operation.
@@ -3837,149 +3995,126 @@ final class Builder implements LazyInterface
      * }
      * ```
      * 
+     * @example - Example Using Transaction:
+     * 
+     * ```php
+     * $stmt = (Builder::table('users')
+     *      ->transaction();
+     * 
+     * if ($stmt->temp()) {
+     *      if ($stmt->commit()) {
+     *          $data = Builder::table('temp_users')->select();
+     *      }
+     * }else{
+     *      $stmt->rollback();
+     * }
+     * ```
+     * 
      * > **Note:**
      * > - Temporary tables are automatically deleted when the current session ends.
      * > - To query the temporary table, use the `temp_` prefix before the main table name.
      */
-    public function temp(bool $transaction = true): bool 
+    public function temp(): bool 
     {
-        if($this->tableName === ''){
-            throw new DatabaseException(
-                'You must specify a table name before creating temporal table.', 
-                DatabaseException::VALUE_FORBIDDEN
-            );
+        self::assertTableName($this->tableName);
+
+        $result = false;
+        $useTransaction = false;
+
+        if ($this->inSafeMode()) {
+            $useTransaction = $this->transaction();
         }
 
         try {
-            if($transaction && !$this->db->beginTransaction()){
-                DatabaseException::throwException(
-                    'Failed: Unable to start transaction', 
-                    DatabaseException::DATABASE_TRANSACTION_FAILED
-                );
-                return false;
-            }
-
             $create = "CREATE TEMPORARY TABLE IF NOT EXISTS temp_{$this->tableName} ";
             $create .= "AS (SELECT * FROM {$this->tableName} WHERE 1 = 0)";
-
-            if (
+            $result = (
                 $this->db->exec($create) > 0 && 
                 $this->db->exec("INSERT INTO temp_{$this->tableName} SELECT * FROM {$this->tableName}") > 0
-            ) {
-                $result = false;
-                if($transaction && $this->db->inTransaction()){
-                    if($this->db->commit()){
-                        $result = true;
-                    }else{
-                        $this->db->rollBack();
-                    }
-                }
-
-                $this->reset();
-                return $result;
-            }
-
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-
-            $this->reset();
-            return false;
+            );
         } catch (Throwable $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-
-            $this->reset();
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            $this->resolveException($e);
             return false;
         }
 
-        if ($this->db->inTransaction()) {
-            $this->db->rollBack();
+        if($useTransaction && $this->db->inTransaction()){
+            if($result){
+                return $this->commit();
+            }
+
+            $this->rollback();
+            return false;
         }
 
         $this->reset();
-        return false;
+        return $result;
     }
 
     /**
      * Drop database table table or temporal if it exists.
      * 
-     * @param bool $transaction Whether to use a transaction (default: false).
      * @param bool $isTemporalTable Whether the table is a temporary table (default false).
      * 
      * @return bool Return true if table was successfully dropped, false otherwise.
      * @throws DatabaseException Throws if error occurs.
      * 
-     * @example - Dripping a database table:
+     * @example - Drop table example:
      * 
-     * ```
-     * Builder::table('users')->drop();
+     * ```php
+     * Builder::table('users')
+     *      ->drop();
      * ```
      * 
      * @example - Drop table using transaction: 
      * 
-     * ```
-     * Builder::table('users')->drop(true);
+     * ```php
+     * Builder::table('users')
+     *      ->drop(true);
      * ```
      * 
-     * @example - Drop temporal table: 
+     * @example - Drop table example using transaction:
      * 
-     * ```
-     * Builder::table('users')->drop(false, true);
+     * ```php
+     * $stmt = (Builder::table('users')
+     *      ->transaction();
+     * 
+     * if ($stmt->drop()) {
+     *      $stmt->commit()
+     * }else{
+     *      $stmt->rollback();
+     * }
      * ```
      */
-    public function drop(bool $transaction = false, bool $isTemporalTable = false): bool 
+    public function drop(bool $isTemporalTable = false): bool 
     {
-        if ($this->tableName === '') {
-            throw new DatabaseException(
-                'You must specify a table name before dropping a temporary table.', 
-                DatabaseException::VALUE_FORBIDDEN
-            );
+        self::assertTableName($this->tableName);
+
+        $sql = Alter::getDropTable($this->db->getDriver(), $this->tableName, $isTemporalTable);
+        $result = false;
+        $useTransaction = false;
+
+        if ($this->inSafeMode()) {
+            $useTransaction = $this->transaction();
         }
 
         try {
-            if ($transaction && !$this->db->beginTransaction()) {
-                DatabaseException::throwException(
-                    'Failed: Unable to start transaction for drop table.', 
-                    DatabaseException::DATABASE_TRANSACTION_FAILED
-                );
-                return false;
-            }
-
-            $drop = Alter::getDropTable($this->db->getDriver(), $this->tableName, $isTemporalTable);
-
-            if ($this->db->exec($drop) > 1) {
-                $result = false;
-                if ($transaction && $this->db->inTransaction()) {
-                    if ($this->db->commit()) {
-                        $result = true;
-                    } else {
-                        $this->db->rollBack();
-                    }
-                }
-
-                $this->reset();
-                return $result;
-            }
-
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-
-            $this->reset();
+            $result = (bool) $this->db->exec($sql);
         } catch (Throwable $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-
-            $this->reset();
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+            $this->resolveException($e);
             return false;
         }
 
-        return false;
+        if($useTransaction && $this->db->inTransaction()){
+            if($result){
+                return $this->commit();
+            }
+
+            $this->rollback();
+            return false;
+        }
+
+        $this->reset();
+        return $result;
     }
     
     /**
@@ -4038,8 +4173,11 @@ final class Builder implements LazyInterface
      */
     public function free(): bool 
     {
-        if($this->inTransaction || !($this->db instanceof DatabaseInterface)){
-            return !$this->inTransaction;
+        if(
+            ($inTransaction = $this->inTransaction()) || 
+            !($this->db instanceof DatabaseInterface)
+        ){
+            return !$inTransaction;
         }
 
         if($this->closeConnection){
@@ -4065,6 +4203,7 @@ final class Builder implements LazyInterface
         $this->freeStmt();
 
         if($this->db instanceof DatabaseInterface){
+            $this->release();
             $this->db->free();
 
             if($this->db->isConnected()){
@@ -4099,7 +4238,7 @@ final class Builder implements LazyInterface
     {
         $this->resetState();
 
-        if(!$this->inTransaction || $this->returns !== self::RETURN_STATEMENT){
+        if(!$this->inTransaction() || $this->returns !== self::RETURN_STATEMENT){
             $this->free();
         }
         
@@ -4115,6 +4254,10 @@ final class Builder implements LazyInterface
     public function freeStmt(): bool 
     {
         if(self::$stmt instanceof DatabaseInterface){
+            if(self::$stmt->inTransaction()){
+                self::$stmt->rollback();
+            }
+            
             self::$stmt->free();
 
             if(self::$stmt->isConnected()){
@@ -4123,6 +4266,8 @@ final class Builder implements LazyInterface
         }
 
         self::$stmt = null;
+        $this->handler = [];
+        $this->returns = null;
 
         return true;
     }
@@ -4151,33 +4296,34 @@ final class Builder implements LazyInterface
      *
      * @param string|null $table The name of the table to initialize the builder with.
      * @param string|null $alias The alias for the table.
+     * @param bool $assertTable Assert table name and alias.
      *
      * @return self Return a new instance of the Builder class.
      *
      * @throws Exception If an error occurs during initialization.
      */
-    private static function initializer(?string $table = null, ?string $alias = null): Builder
+    private static function initializer(
+        ?string $table = null, 
+        ?string $alias = null,
+        bool $assertTable = false
+    ): Builder
     {
-        if(!self::$instance instanceof self){
+        if (!self::$instance instanceof self) {
             $instance = new self($table, $alias);
             $instance->db = self::database();
-
             return $instance;
         }
 
-        $caching = self::$instance->caching;
-        $returns = self::$instance->returns;
-        $strict = self::$instance->strictChecks;
-        $close = self::$instance->closeConnection;
+        if ($assertTable) {
+            self::assertTableName($table, $alias);
+        }
+
         $clone = clone self::$instance;
 
         $clone->tableName = $table ?? '';
         $clone->tableAlias = $alias ?? '';
-        $clone->caching = $caching;
-        $clone->returns = $returns;
-        $clone->strictChecks = $strict;
-        $clone->closeConnection = $close;
         $clone->db = self::database();
+
         return $clone;
     }
 
@@ -4193,22 +4339,169 @@ final class Builder implements LazyInterface
         $this->tableJoin = [];
         $this->joinConditions = [];
         $this->maxLimit = [];
-        $this->andConditions = [];
+        $this->conditions = [];
         $this->querySetValues = [];
         $this->hasCache = false;
+        $this->rawQuery = '';
+        $this->debugMode = 0;
         $this->isDistinct = false;
         $this->isCollectMetadata = false;
-        $this->debugMode = 0;
-        $this->strictChecks = true;
+        $this->isStrictMode = true;
+        $this->isSafeMode = false;
         $this->isIgnoreDuplicate = false;
-        $this->rawQuery = '';
-        //$this->objectId = null;
+        $this->isReplace = false;
         $this->resetOptions();
 
+        if(!$new && (self::$stmt === null || $this->returns !== self::RETURN_STATEMENT)){
+            $this->handler = [];
+        }
+
         if($new){
-            $this->inTransaction = false;
             $this->returns = null;
         }
+    }
+
+    /**
+     * Determines whether safe mode should be applied to the current operation.
+     *
+     * @return bool Return true if safe mode should apply, false otherwise.
+     */
+    private function inSafeMode(): bool
+    {
+        return $this->isSafeMode 
+            && !$this->isCollectMetadata
+            && $this->debugMode === self::DEBUG_NONE 
+            && !$this->inTransaction();
+    }
+
+    /**
+     * Determines if a given response is safe and meaningful to cache.
+     *
+     * @param mixed $response The result returned from a query or fetch operation.
+     * 
+     * @return void
+     */
+    private function cacheResultIfValid(mixed $response): void
+    {
+        if (
+            !$response || 
+            $response === [] ||
+            $response === (object)[] ||
+            !$this->isCacheable() || 
+            ($response instanceof DatabaseInterface) || 
+            ($response instanceof \PDOStatement) || 
+            ($response instanceof \mysqli_result)
+        ) {
+            return;
+        }
+
+        if ($this->inSafeMode() || (is_object($response) && count(get_object_vars($response)) === 0)) {
+            return;
+        }
+
+        self::$cache->set($this->cacheKey, $response);
+        self::$cache = null;
+        $this->isCacheReady = false;
+    }
+
+    /**
+     * Determines whether the current query context allows result caching.
+     *
+     * @return bool Return true if caching is allowed, false otherwise.
+     */
+    private function isCacheable(): bool
+    {
+        return (
+            $this->isCacheReady &&
+            !$this->isCollectMetadata &&
+            $this->debugMode === self::DEBUG_NONE &&
+            $this->returns !== self::RETURN_STATEMENT &&
+            self::$cache instanceof BaseCache
+        );
+    }
+
+    /**
+     * Attempts to retrieve a cached result based on the current query state.
+     *
+     * @param int|null $mode The expected return mode (e.g. RETURN_STMT).
+     * 
+     * @return mixed|null Return the cached result if available, otherwise null.
+     */
+    private function getFromCache(?int $mode): mixed
+    {
+        if (!$this->hasCache || $mode === RETURN_STMT || !$this->isCacheable($mode)) {
+            return null;
+        }
+
+        $response = self::$cache->getItem($this->cacheKey);
+
+        if ($response === null) {
+            return null;
+        }
+
+        $this->cacheKey = '';
+        $this->isCacheReady = false;
+        $this->release();
+        $this->reset();
+
+        return $response;
+    }
+
+    /**
+     * Handles a throwable by rolling back any active transaction and 
+     * optionally re-throwing it immediately.
+     *
+     * Useful in safe mode or transactional contexts to centralize exception handling.
+     *
+     * @param Throwable $e The exception or error to handle.
+     * @param bool $throwInstant If true, rethrows the original exception after rollback.
+     *
+     * @throws Throwable If $throwNow is true.
+     */
+    private function resolveException(Throwable $e, bool $throwInstant = false): void  
+    {
+        if ($this->inTransaction()) {
+            $this->rollback();
+        }
+
+        if($throwInstant){
+            throw $e;
+        }
+
+        $this->reset();
+        DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
+    }
+
+    /**
+     * Finalizes an insert operation by committing or rolling back the transaction
+     * and optionally capturing the last insert ID.
+     *
+     * If a transaction was used and is still active:
+     * - Commits if rows were inserted.
+     * - Rolls back otherwise.
+     *
+     * @param bool $useTransaction Whether an internal transaction was used.
+     * @param mixed $result The insert result (number of rows inserted).
+     * 
+     * @return int Return number of inserted rows if successful, 0 on failure.
+     */
+    private function finishInsert(bool $useTransaction, mixed $result): int 
+    {
+        if($useTransaction && $this->db->inTransaction()){
+            if($result > 0){
+               return $this->commit() ? $result : 0;
+            }
+
+            $this->rollback();
+            return 0;
+        }
+        
+        if(!$this->db->inTransaction()){
+            self::$lastInsertId = ($result > 0) ? $this->db?->getLastInsertId() : null;
+        }
+
+        $this->reset();
+        return (int) $result;
     }
 
     /**
@@ -4221,7 +4514,7 @@ final class Builder implements LazyInterface
      */
     private function assertStrictConditions(string $fn, bool $required = false): void
     {
-        if (($required || $this->strictChecks) && $this->andConditions === []) {
+        if (($required || $this->isStrictMode) && $this->conditions === []) {
             throw new DatabaseException(
                 sprintf('Execution of %s is not allowed in strict mode without a "WHERE" condition.', $fn), 
                 DatabaseException::VALUE_FORBIDDEN
@@ -4249,43 +4542,57 @@ final class Builder implements LazyInterface
     }
 
     /**
+     * Assert SQL query.
+     * 
+     * @param string $query The query string to check.
+     * @param string $fn The method that is called.
+     * 
+     * @return void
+     */
+    private static function assertQuery(string $query, string $fn): void 
+    {
+        if (!$query || trim($query) === '') {
+            throw new InvalidArgumentException(
+                sprintf('Invalid: %s($query) requires a non-empty SQL query string.', $fn)
+            );
+        }
+    }
+
+    /**
      * Validates insert mode options for conflicting behaviors.
      *
      * This method checks for logical conflicts when insert mode is set to
      * `IGNORE`, `REPLACE`, or when `ON DUPLICATE` conditions are defined.
      *
      * > Applies to insert operations such as `insert()`, `copy()->to()` or `replace()`.
-     *
-     * @param string $type The insert mode type: typically `'INSERT'` or `'REPLACE'`.
-     * @param bool $isCopy Whether the insert is part of a `copy()->to(...)` operation.
-     *
+     * 
      * @throws DatabaseException If conflicting insert options are detected.
      */
-    private function assertInsertOptions(string $type, bool $isCopy = false): void 
+    private function assertInsertOptions(): void 
     {
+        if(!$this->isReplace && !$this->isIgnoreDuplicate){
+            return;
+        }
+
+        if ($this->isIgnoreDuplicate && $this->isReplace) {
+            throw new DatabaseException(
+                'Cannot use "->replace(true)" with "->ignoreDuplicate(true)". REPLACE mode conflicts with duplicate ignore behavior.', 
+                DatabaseException::LOGIC_ERROR
+            );
+        }
+
         $onDuplicate = $this->getOptions('duplicate');
 
-        if ($this->isIgnoreDuplicate) {
-            if ($type === 'REPLACE') {
-                $message = $isCopy
-                    ? 'Cannot enable REPLACE mode when ignoreDuplicate(true) is active. These options conflict.'
-                    : 'Cannot use "->replace(...)" with "->ignoreDuplicate(true)". REPLACE mode conflicts with duplicate ignore behavior.';
-
-                throw new DatabaseException($message, DatabaseException::LOGIC_ERROR);
-            }
-
-            if($onDuplicate !== []){
+         if($this->isIgnoreDuplicate && $onDuplicate !== []){
                 throw new DatabaseException(
                     'Cannot use "->ignoreDuplicate(true)" with "->onDuplicate(...)" options. These behaviors are mutually exclusive.',
                     DatabaseException::LOGIC_ERROR
                 );
             }
-        }
 
-        if ($type === 'REPLACE' && $onDuplicate !== []) {
+        if ($this->isReplace && $onDuplicate !== []) {
             throw new DatabaseException(
-                'Cannot use "REPLACE INTO" with "ON DUPLICATE KEY UPDATE". ' .
-                'REPLACE already overwrites existing rows and conflicts with duplicate key logic.',
+                'Cannot use "->replace(true)" with "->onDuplicate(...)". REPLACE already overwrites existing rows and conflicts with duplicate key logic.', 
                 DatabaseException::LOGIC_ERROR
             );
         }
@@ -4302,7 +4609,7 @@ final class Builder implements LazyInterface
      *
      * @throws InvalidArgumentException If the table name or alias is invalid.
      */
-    private function assertTableName(?string $table, ?string $alias = null): void
+    private static function assertTableName(?string $table, ?string $alias = null): void
     {
         if ($table !== null) {
             if (trim($table, '`') === '') {
@@ -4357,29 +4664,6 @@ final class Builder implements LazyInterface
         int $fetchMode = FETCH_OBJ
     ): mixed
     {
-        $isExit = (
-            $this->isCollectMetadata ||
-            $this->returns === self::RETURN_STATEMENT || 
-            $this->debugMode !== self::DEBUG_NONE ||
-            $returnMode === RETURN_STMT
-        );
-
-        if(
-            !$isExit &&
-            $this->isCacheReady && 
-            $this->hasCache &&
-            (self::$cache instanceof BaseCache)
-        ){
-            $response = self::$cache->getItem($this->cacheKey);
-
-            if($response !== null){
-                $this->cacheKey = '';
-                $this->isCacheReady = false;
-                $this->reset();
-                return $response;
-            }
-        }
-
         $sql = $this->isDistinct ? "SELECT DISTINCT{$query}" : "SELECT{$query}";
 
         if($query === '' || in_array($method, ['select', 'find', 'stmt'], true)){
@@ -4402,14 +4686,8 @@ final class Builder implements LazyInterface
         try {
             $response = $this->getStatementExecutionResult($sql, $method, $returnMode, $fetchMode);
 
-            if(
-                !$isExit &&
-                $this->isCacheReady && 
-                (self::$cache instanceof BaseCache)
-            ){
-                self::$cache->set($this->cacheKey, $response);
-                self::$cache = null;
-                $this->isCacheReady = false;
+            if($returnMode !== RETURN_STMT){
+                $this->cacheResultIfValid($response);
             }
 
             return $response;
@@ -4454,7 +4732,7 @@ final class Builder implements LazyInterface
         $isDelete = $method === 'delete';
         $isNext = $method === 'find' || $result === 'next';
         
-        if($this->andConditions !== []){
+        if($this->conditions !== []){
             $this->buildConditions($sql);
         }
 
@@ -4491,7 +4769,12 @@ final class Builder implements LazyInterface
             $this->options['current']['sql'] = $sql;
         }
 
-        $hasParams = ($this->getOptions('match') !== [] || $this->andConditions !== []);
+        $hasParams = ($this->getOptions('match') !== [] || $this->conditions !== []);
+        $useTransaction = false;
+
+        if ($method === 'delete' && $this->inSafeMode()) {
+            $useTransaction = $this->transaction();
+        }
 
         if($hasParams){
             if(!$this->isCollectMetadata){
@@ -4529,12 +4812,24 @@ final class Builder implements LazyInterface
 
             $response = match ($method) {
                 'stmt' => $this->db,
-                'select' => $this->db->fetch(RETURN_ALL, $this->getFetchMode($mode)),
-                'find' => $this->db->fetch(RETURN_NEXT, $this->getFetchMode($mode)),
                 'total' => $this->db->getCount(),
                 'delete' => $this->db->rowCount(),
+                'select', 'find' => $this->db->fetch(($method === 'select')
+                    ? RETURN_ALL 
+                    : RETURN_NEXT,
+                    $this->getFetchMode($mode)
+                ),
                 default => ($this->db->fetchNext() ?: (object) ['totalCalc' => 0])->totalCalc
             };
+        }
+
+        if($useTransaction && $this->db->inTransaction()){
+            if($response > 0){
+                return $this->commit() ? $response : 0;
+            }
+
+            $this->rollback();
+            return 0;
         }
         
         $this->reset();
@@ -4560,16 +4855,18 @@ final class Builder implements LazyInterface
         [$offset, $limit] = $this->maxLimit + [0, 0];
 
         $isColumns = $columns !== [];
-        $isConditions = $this->andConditions !== [];
+        $isConditions = $this->conditions !== [];
 
         $isCompound = $isColumns || $isConditions || $limit > 0;
+        $length = count($this->unions);
 
         if($isCompound){
             $columns = $isColumns ? implode(', ', $columns) : '*';
             $sqlParts[] = $this->isDistinct ? "SELECT DISTINCT {$columns} FROM (" : "SELECT {$columns} FROM (";
         }
 
-        foreach ($this->unions as $index => $union) {
+        for ($index = 0; $index < $length; $index++) {
+            $union = $this->unions[$index];
             $sql = '(' . trim($union['sql']) . ')';
 
             if ($index === 0) {
@@ -4601,58 +4898,7 @@ final class Builder implements LazyInterface
             $sqlParts[] = "LIMIT {$limit}";
         }
 
-        return [
-            implode(' ', $sqlParts),
-            $params
-        ];
-    }
-
-    /**
-     * Handle insert or replace statement.
-     * 
-     * @param array<int,array<string,mixed>> $values The values to insert or replace.
-     * @param string $type The insert type to execute (expected: `INSERT` or `REPLACE`).
-     * @param bool $prepare Whether to use the prepared statement or query execution.
-     * @param bool $escapeValues Whether to validate and escape values (default: true).
-     * 
-     * @return int Return the number of affected rows.
-     * @throws DatabaseException If an error occurs during the operation or if the provided values are invalid.
-     * @throws JsonException If an error occurs while encoding array values to JSON format.
-     */
-    private function doInsertOrReplace(
-        array $values, 
-        string $type, 
-        bool $prepare = true, 
-        bool $escapeValues = true
-    ): int
-    {
-        if ($values === []) {
-            return 0;
-        }
-
-        if (!isset($values[0])) {
-            $values = [$values];
-        }
-        
-        if (!is_associative($values[0])) {
-            DatabaseException::throwException(
-                sprintf('Invalid %s values, values must be an associative array.', strtolower($type)), 
-                DatabaseException::VALUE_FORBIDDEN
-            );
-            return 0;
-        }
-
-        $this->assertInsertOptions($type);
-
-        try {
-            return $prepare
-                ? $this->executeInsertPrepared($values, $type, $escapeValues) 
-                : $this->executeInsertQuery($values, $type);
-        } catch (Throwable $e) {
-            DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
-        }
-
-        return 0;
+        return [implode(' ', $sqlParts), $params];
     }
 
     /**
@@ -4687,6 +4933,12 @@ final class Builder implements LazyInterface
             }
         }
 
+        $useTransaction = false;
+
+        if ($this->inSafeMode()) {
+            $useTransaction = $this->transaction();
+        }
+
         if($placeholder === []){
             $this->db->query($sql);
         }else{
@@ -4703,19 +4955,37 @@ final class Builder implements LazyInterface
 
             $this->db->execute($placeholder);
         }
-        
-        $response = false;
 
-        if($this->db->ok()){
-            if($returnMode === RETURN_STMT || $this->returns === self::RETURN_STATEMENT){
-                $this->returns = self::RETURN_STATEMENT;
-                return $this->db;
-            }
-
-            $response = $this->db->getResult($returnMode, $this->getFetchMode($fetchMode));
+        if(!$this->db->ok()){
+            $this->reset();
+            return false;
         }
 
+        $response = true;
+
+        if($returnMode === RETURN_STMT || $this->returns === self::RETURN_STATEMENT){
+            $this->returns = self::RETURN_STATEMENT;
+            return $this->db;
+        }
+
+        $mode = $this->getFetchMode($fetchMode);
+
+        if($useTransaction && $this->db->inTransaction()){
+            if($response){
+                if($this->db->commit()){
+                    return $this->db->getResult($returnMode, $mode);
+                }
+
+                return false;
+            }
+
+            $this->rollback();
+            return false;
+        }
+
+        $response = $response ? $this->db->getResult($returnMode, $mode) : false;
         $this->reset();
+        
         return $response;
     }
 
@@ -4745,16 +5015,16 @@ final class Builder implements LazyInterface
         $union->get();
         $child = $union->getOptions('current');
 
-        $parentCount = count($parent['columns']);
-        $childCount = count($child['columns']);
+        $parentColumnCount = count($parent['columns']);
+        $childColumnCount = count($child['columns']);
         $type = $all ? 'UNION ALL' : 'UNION';
 
-        if ($parentCount !== $childCount) {
+        if ($parentColumnCount !== $childColumnCount) {
             throw new DatabaseException(sprintf(
                 '%s queries must have the same number of columns (%d vs %d)',
                 $type,
-                $parentCount,
-                $childCount
+                $parentColumnCount,
+                $childColumnCount
             ), DatabaseException::COMPILE_ERROR);
         }
         if ($this->unions === []) {
@@ -4856,7 +5126,7 @@ final class Builder implements LazyInterface
      *
      * @param string|int $identifier Lock identifier (integer required for PostgreSQL).
      * @param string $action Action to perform: 'lock', 'unlock', or 'isLocked'.
-     * @param int $timeout Lock timeout in seconds (only applicable for MySQL).
+     * @param int $timeout Lock timeout in seconds (only applicable for MySQL). 
      * 
      * @return bool Return true if the operation was successful, false otherwise.
      * @throws DatabaseException If an invalid action is provided or an invalid PostgreSQL lock name is used.
@@ -4952,13 +5222,15 @@ final class Builder implements LazyInterface
      */
     private function setBindValue(string $placeholder, mixed $value, ?array &$params = null): self 
     {
+        $placeholder = ltrim($placeholder, ':');
+
         if($this->isCollectMetadata){
-            $this->options['current']['params'][ltrim($placeholder, ':')] = $value;
+            $this->options['current']['params'][$placeholder] = $value;
         }else{
-            if($params !== null){
-                $params[ltrim($placeholder, ':')] = $value;
+            if($params === null){
+                $this->db->bind(":$placeholder", $value);
             }else{
-                $this->db->bind($placeholder, $value);
+                $params[$placeholder] = $value;
             }
         }
 
@@ -5016,45 +5288,6 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Execute insert query.
-     * 
-     * @param array<int,array<string,mixed>> $values array of values to insert.
-     * @param string $type The type of insert (expected: `INSERT` or `REPLACE`)
-     * 
-     * @return int Return number affected row.
-     * @throws DatabaseException If an error occurs.
-     * @throws JsonException If an error occurs while encoding values.
-     */
-    private function executeInsertQuery(array $values, string $type): int 
-    {
-        $inserts = '';
-        foreach ($values as $row) {
-            $inserts .= "(" . self::getNormalizedValues($row) . "), ";
-        }
-
-        $columns = implode(', ', array_keys($values[0]));
-        $inserts = rtrim($inserts, ', ');
-        $ignore = $this->isIgnoreDuplicate ? 'IGNORE ' : '';
-
-        $sql = "{$type} {$ignore}INTO {$this->tableName} ({$columns}) VALUES {$inserts}";
-        $sql .= $this->buildDuplicateUpdateClause();
-
-        if($this->debugMode !== self::DEBUG_NONE){
-            ($this->debugMode === self::DEBUG_BUILDER)
-                ? $this->setDebugInformation($sql, strtolower($type))
-                : $this->echoDebug($sql, 'SQL QUERY');
-
-            return 0;
-        }
-
-        $this->db->query($sql);
-        $response = $this->db->ok() ? $this->db->rowCount() : 0;
-        $this->reset();
-
-        return $response;
-    }
-
-    /**
      * Builds the `ON DUPLICATE KEY UPDATE` SQL clause from stored `onDuplicate()` values.
      *
      * @param array &$bindValues Reference to the binding values for prepared statements.
@@ -5076,18 +5309,16 @@ final class Builder implements LazyInterface
             $operation = match ($option['operation']) {
                 '+=' => '+', 
                 '-=' => '-',
-                default => '='
+                '=', '=='  => '=',
+                default => $option['operation']
             };
 
             if ($value instanceof RawExpression) {
                 $value = $value->getExpression();
             } else {
-                $upperValue = is_string($value) ? trim(strtoupper($value)) : '';
+                $value = self::escape($value, true);
 
-                $isColumn = $upperValue && str_starts_with($upperValue, 'VALUES(');
-                $value = $isColumn ? $value : self::escape($value, true);
-
-                if (!$isColumn && $isPrepare) {
+                if ($isPrepare) {
                     $placeholder = "duplicate_{$col}_{$id}";
                     $bindValues[$placeholder] = $value;
                     $value = ":{$placeholder}";
@@ -5103,84 +5334,99 @@ final class Builder implements LazyInterface
     }
 
     /**
+     * Execute insert query.
+     * 
+     * @param array<int,array<string,mixed>> $values array of values to insert.
+     * @param string $type The type of insert (expected: `INSERT` or `REPLACE`)
+     * 
+     * @return int Return number affected row.
+     * @throws DatabaseException If an error occurs.
+     * @throws JsonException If an error occurs while encoding values.
+     */
+    private function executeInsertQuery(array $values, string $type, int $length): int 
+    {
+        $inserts = '';
+        $isDebug = $this->debugMode !== self::DEBUG_NONE;
+
+        for ($i = 0; $i < $length; $i++) {
+            $inserts .= "(" . self::escapeValues($values[$i]) . "), ";
+        }
+
+        $columns = implode(', ', array_keys($values[0]));
+        $inserts = rtrim($inserts, ', ');
+        $ignore = $this->isIgnoreDuplicate ? 'IGNORE ' : '';
+
+        $sql = "{$type} {$ignore}INTO {$this->tableName} ({$columns}) VALUES {$inserts}";
+        $sql .= $this->buildDuplicateUpdateClause();
+
+        if($isDebug){
+            ($this->debugMode === self::DEBUG_BUILDER)
+                ? $this->setDebugInformation($sql, 'insert')
+                : $this->echoDebug($sql, 'SQL QUERY');
+
+            return 0;
+        }
+
+        $this->db->query($sql);
+        return $this->db->ok() ? $this->db->rowCount() : 0;
+    }
+
+    /**
      * Execute insert query using prepared statement.
      * 
      * @param array<int,array<string,mixed>> $values array of values to insert.
      * @param string $type The insert type (expected: `INSERT` or `INSERT`).
+     * @param int $length Length of values.
      * @param bool $escapeValues Whether to escape values (default: true).
      * 
      * @return int Return number affected row.
      * @throws DatabaseException If an error occurs.
      * @throws JsonException If an error occurs while encoding values.
      */
-    private function executeInsertPrepared(array $values, string $type, bool $escapeValues = true): int
+    private function executeInsertPrepared(
+        array $values, 
+        string $type, 
+        int $length,
+        bool $escapeValues = true
+    ): int
     {
-        $count = 0;
+        $inserted = 0;
         $ignore = $this->isIgnoreDuplicate ? 'IGNORE ' : '';
         $isDebug = $this->debugMode !== self::DEBUG_NONE;
         self::$lastInsertId = null;
 
         $replacements = [];
-        [$placeholders, $inserts] = self::mapInsertParams($values[0]);
+        [$placeholders, $inserts] = self::mapInsertColumns($values[0]);
 
         $sql = "{$type} {$ignore}INTO {$this->tableName} ({$inserts}) VALUES ($placeholders)";
         $sql .= $this->buildDuplicateUpdateClause($replacements);
        
         if($isDebug){
             if($this->debugMode === self::DEBUG_BUILDER){
-                $this->setDebugInformation($sql, strtolower($type), $values);
+                $this->setDebugInformation($sql, 'insert', $values);
                 return 0;
             }
 
             $this->echoDebug($sql, 'SQL QUERY');
         }
-
-        $useTransaction = false;
-        if (!$isDebug && count($values) > 1) {
-            // fallback to regular insert if transaction failed.
-            $useTransaction = $this->db->beginTransaction();
-        }
-
+ 
         $this->db->prepare($sql);
 
-        try {
-            foreach ($values as $columns) {
-                $placeholders = null;
-
-                if($escapeValues || $isDebug){
-                    $this->bindStrictColumns($columns, $replacements, false);
-                }else{
-                    $placeholders = array_merge($columns, $replacements);
-                }
-
-                if($isDebug){
-                    continue;
-                }
-
-                if($this->db->execute($placeholders)){
-                    $count++;
-                }
-            }
-        } catch (Throwable $e) {
-            if($useTransaction && $this->db->inTransaction()){
-                $this->db->rollback();
+        for ($i = 0; $i < $length; $i++) {
+            if($escapeValues || $isDebug){
+                $this->bindStrictColumns($values[$i], $replacements, false);
             }
 
-            throw $e; 
-        }
+            if($isDebug){
+                continue;
+            }
 
-        if($useTransaction && $this->db->inTransaction()){
-            if($count > 0){
-                $count = $this->db->commit() ? $count : 0;
-            }else{
-                $this->db->rollback();
+            if($this->db->execute($escapeValues ? null : array_merge($values[$i], $replacements))){
+                $inserted++;
             }
         }
 
-        self::$lastInsertId = ($count > 0) ? $this->db?->getLastInsertId() : null;
-        $this->reset();
-
-        return $count;
+        return $inserted;
     }
 
     /**
@@ -5231,7 +5477,7 @@ final class Builder implements LazyInterface
      */
     private function buildConditions(string &$query, bool $addWhere = true): bool
     {
-        if ($this->andConditions === []) {
+        if ($this->conditions === []) {
             return false;
         }
 
@@ -5241,8 +5487,11 @@ final class Builder implements LazyInterface
 
         $firstCondition = true;
         $bindIndex = 0;
+        $length = count($this->conditions);
 
-        foreach ($this->andConditions as $index => $condition) {
+        for ($index = 0; $index < $length; $index++) {
+            $condition = $this->conditions[$index];
+
             if (!$addWhere || ($addWhere && !$firstCondition)) {
                 $query .= (($condition['type'] ?? '') === 'OR') ? ' OR ' :  ' AND ';
             }
@@ -5281,8 +5530,16 @@ final class Builder implements LazyInterface
     private function bindConditions(?array &$params = null): bool 
     {
         $totalBinds = 0;
+        $matches = $this->getOptions('match');
 
-        foreach ($this->andConditions as $index => $bindings) {
+        if($this->conditions === [] && $matches === []){
+            return false;
+        }
+
+        $length = count($this->conditions);
+
+        for ($index = 0; $index < $length; $index++) {
+            $bindings = $this->conditions[$index];
             $value = $this->getValue($bindings['value']);
 
             if($bindings['function'] !== 'INARRAY' && ($value instanceof RawExpression)){
@@ -5318,18 +5575,24 @@ final class Builder implements LazyInterface
                 break;
             }
         }
+        
+        if($matches === []){
+            return $totalBinds > 0;
+        }
 
-        foreach($this->getOptions('match') as $idx => $order){
+        $len = count($matches);
+
+        for ($idx = 0; $idx < $len; $idx++) {
+            $order = $matches[$idx];
             $value = $this->getValue($order['value']);
 
-            if($value instanceof RawExpression){
+            if ($value instanceof RawExpression) {
                 continue;
             }
 
             $totalBinds++;
-            $this->setBindValue(":match_order_{$idx}", $this->getValue($value), $params);
+            $this->setBindValue(":match_order_{$idx}", $value, $params);
         }
-
 
         return $totalBinds > 0;
     }
@@ -5364,7 +5627,7 @@ final class Builder implements LazyInterface
             'REGULAR' => "{$logical}{$column} {$comparison} {$placeholder}",
             'INARRAY' => "{$logical}{$column} {$comparison}(" . (
                 $isRaw
-                    ? self::getNormalizedValues($value ?? [])
+                    ? self::escapeValues($value ?? [])
                     : $this->bindInConditions($value ?? [], $column)
             ) . ')',
             'AGAINST' => "{$logical}MATCH($column) AGAINST ({$placeholder} {$comparison})",
@@ -5389,7 +5652,9 @@ final class Builder implements LazyInterface
     ): string 
     {
         // Sanitize the search term to prevent SQL injection if is not column name
-        $search = $condition['isSearchColumn'] ? $condition['search'] : self::escape($condition['search'], true);
+        $search = $condition['isSearchColumn'] 
+            ? $condition['search'] 
+            : self::escape($condition['search'], true);
         
         // Sanitize the list or assume it's a column
         $values = $condition['isList'] 
@@ -5469,7 +5734,10 @@ final class Builder implements LazyInterface
     ): string
     {
         $group = '';
-        foreach ($conditions as $idx => $condition) {
+        $length = count($conditions);
+
+        for ($idx = 0; $idx < $length; $idx++) {
+            $condition = $conditions[$idx];
             $column = key($condition);
             $value = $this->getValue($condition[$column]['value']);
             $comparison = strtoupper($condition[$column]['comparison'] ?? $condition[$column]['operator'] ?? '=');
@@ -5549,8 +5817,11 @@ final class Builder implements LazyInterface
     ): string 
     {
         $placeholders = '';
+        $length = count($values);
 
-        foreach ($values as $idx => $value) {
+        for ($idx = 0; $idx < $length; $idx++) {
+            $value = $values[$idx];
+
             if($value instanceof RawExpression){
                 $placeholders .= "{$value->getExpression()}, ";
             }else{
@@ -5584,7 +5855,10 @@ final class Builder implements LazyInterface
         ?array &$params = null
     ): void 
     {
-        foreach ($bindings as $idx => $bind) {
+        $length = count($bindings);
+
+        for ($idx = 0; $idx < $length; $idx++) {
+            $bind = $bindings[$idx];
             $column = key($bind);
             $value = $this->getValue($bind[$column]['value']);
 
@@ -5595,12 +5869,12 @@ final class Builder implements LazyInterface
             $comparison = strtoupper($bind[$column]['comparison'] ?? $bind[$column]['operator'] ?? '');
 
             if(str_ends_with($comparison, 'IN')){
-                $bindings = 0;
-                $this->bindInConditions($value, $column, true, $bindings, $params);
+                $totalBinds = 0;
+                $this->bindInConditions($value, $column, true, $totalBinds, $params);
             }else{
                 $this->setBindValue(
                     $this->trimPlaceholder("{$column}_{$index}_" . ($idx + $bindIndex)), 
-                    is_array($value) ? self::getNormalizedValues($value, true) : $value,
+                    is_array($value) ? self::escapeValues($value, true) : $value,
                     $params
                 );
                 $bindIndex++;
@@ -5625,10 +5899,12 @@ final class Builder implements LazyInterface
     private function setDebugInformation(string $query, string $method, array $values = []): bool
     {
         $params = [];
-        if($method === 'insert' || $method === 'replace'){
-            foreach($values as $idx => $bindings){
-                foreach($bindings as $column => $value){
-                    $params[$idx][$column] = self::escape($value);
+        if($method === 'insert'){
+            $length = count($values);
+
+            for ($i = 0; $i < $length; $i++) {
+                foreach($values[$i] as $column => $value){
+                    $params[$i][$column] = self::escape($value);
                 }
             }
         }else{
@@ -5638,7 +5914,10 @@ final class Builder implements LazyInterface
                 }
             }
 
-            foreach ($this->andConditions as $index => $bindings) {
+            $length = count($this->conditions);
+
+            for ($index = 0; $index < $length; $index++) {
+                $bindings = $this->conditions[$index];
                 $value = $this->getValue($bindings['value']);
 
                 switch ($bindings['function']) {
@@ -5654,9 +5933,13 @@ final class Builder implements LazyInterface
                         $this->bindDebugGroupConditions($bindings['Y'], $index, $params, $bindIndex);
                     break;
                     case 'INARRAY':
-                        foreach ($value as $idx => $value) {
+                        $len = count($value);
+                        for ($idx = 0; $idx < $len; $idx++) {
                             $placeholder = $this->trimPlaceholder("{$bindings['column']}_in_{$idx}");
-                            $params[$placeholder] = is_array($value) ? self::getNormalizedValues($value, true) : $value;
+
+                            $params[$placeholder] = is_array($value[$idx]) 
+                                ? self::escapeValues($value[$idx], true) 
+                                : $value[$idx];
                         }
                     break;
                     default: 
@@ -5694,13 +5977,17 @@ final class Builder implements LazyInterface
      */
     private function setMatchAgainst(string &$sql, bool $isOrdered = false): void 
     {
-        if($this->getOptions('match') === []){
+        $matches = $this->getOptions('match');
+
+        if($matches === []){
             return;
         }
 
         $match = $isOrdered ? ' , ' : ' ORDER BY';
+        $length = count($matches);
 
-        foreach($this->getOptions('match') as $idx => $order){
+        for ($idx = 0; $idx < $length; $idx++) {
+            $order = $matches[$idx];
             $value = $this->getValue($order['value']);
             $value = ($value instanceof RawExpression) 
                 ? self::escape(value: $value, addSlashes: true)
@@ -5722,13 +6009,17 @@ final class Builder implements LazyInterface
      */
     private function setHavingConditions(string &$sql): void 
     {
-        if($this->getOptions('filters') === []){
+        $filters = $this->getOptions('filters');
+
+        if($filters === []){
             return;
         }
 
         $having = ' HAVING';
+        $length = count($filters);
 
-        foreach($this->getOptions('filters') as $idx => $condition){
+        for ($idx = 0; $idx < $length; $idx++) {
+            $condition = $filters[$idx];
             $expression = $condition['expression'];
 
             if($expression instanceof RawExpression){
@@ -5762,7 +6053,10 @@ final class Builder implements LazyInterface
         int &$bindIndex = 0
     ): void 
     {
-        foreach ($bindings as $idx => $bind) {
+        $length = count($bindings);
+
+        for ($idx = 0; $idx < $length; $idx++) {
+            $bind = $bindings[$idx];
             $column = key($bind);
             $placeholder = $this->trimPlaceholder("{$column}_{$index}_" . ($idx + $bindIndex));
    
@@ -5771,7 +6065,7 @@ final class Builder implements LazyInterface
         }
     }
 
-   /**
+    /**
      * New cache instance.
      * 
      * @param string|null $storage Optional storage name for the cache.
@@ -5826,19 +6120,22 @@ final class Builder implements LazyInterface
     }
     
     /**
-     * Build insert params.
+     * Map insert columns and values.
      * 
      * @var array<string,mixed> $values Array of columns and values.
      * 
      * @return array<int,string> Array of insert params and placeholders.
      */
-    private static function mapInsertParams(array $values): array 
+    private static function mapInsertColumns(array $values): array 
     {
         $placeholders = '';
         $inserts = '';
+
         foreach($values as $col => $value){
-            $placeholders .= ($value instanceof RawExpression) ? $value->getExpression() . ', ' : ":$col, ";
             $inserts .= "$col, ";
+            $placeholders .= ($value instanceof RawExpression) 
+                ? $value->getExpression() . ', ' 
+                : ":$col, ";
         }
 
         return [rtrim($placeholders, ', '), rtrim($inserts, ', ')];
@@ -5848,13 +6145,14 @@ final class Builder implements LazyInterface
      * Convert array keys to placeholders key = :key for update table.
      * 
      * @param array $columns The columns.
-     * @param bool $implode should implode or just return the array.
+     * @param bool $asString Should implode or just return the array.
      * 
      * @return array|string Return array or string.
      */
-    private function buildPlaceholder(array $columns, bool $implode = false): array|string
+    private function buildPlaceholder(array $columns, bool $asString = false): array|string
     {
         $updateColumns = [];
+
         foreach ($columns as $column => $val) {
             $value = $this->getValue($val);
 
@@ -5865,42 +6163,30 @@ final class Builder implements LazyInterface
             }
         }
 
-        return $implode ? implode(', ', $updateColumns) : $updateColumns;
+        return $asString ? implode(', ', $updateColumns) : $updateColumns;
     }
 
     /**
      * Prepare quoted values from an array of columns.
      *
-     * @param array $columns The array of columns to be quoted.
+     * @param array<int,mixed> $columns The array of columns to be quoted.
      * @param bool $enQuote Whether to wrap the result in quotes (except for JSON).
-     * @param string $return The return type, can be 'array' or 'string'.
      * 
-     * @return array|string An array of quoted values or a string of quoted values.
+     * @return string An string of quoted and comma separated values.
      * @throws JsonException If an error occurs while encoding values.
      */
-    private static function getNormalizedValues(
-        array $columns, 
-        bool $enQuote = true, 
-        string $return = 'string'
-    ): array|string
+    private static function escapeValues(array $columns, bool $enQuote = true): string
     {
-        $quoted = [];
-        $string = '';
+        if($columns === []){
+            return '';
+        }
+
+        $result = '';
 
         foreach ($columns as $item) {
-            $value = self::escape($item, $enQuote);
-
-            if($return === 'string'){
-                $string .= "{$value}, ";
-            }else{
-                $quoted[] = $value;
-            }
+            $result .= self::escape($item, $enQuote) . ', ';
         }
 
-        if($return === 'string'){
-            return rtrim($string, ', ');
-        }
-
-        return $quoted;
+        return  rtrim($result, ', ');
     }
 }

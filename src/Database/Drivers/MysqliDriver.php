@@ -434,14 +434,11 @@ final class MysqliDriver implements DatabaseInterface
     public function commit(int $flags = 0, ?string $name = null): bool 
     {
         $this->assertConnection();
-        if($this->connection->commit($flags, $name)){
-            $this->profiling(false, true);
-            $this->inTransaction = false;
-            return true;
-        }
+        $commit = $this->connection->commit($flags, $name);
+        $this->inTransaction = false;
 
         $this->profiling(false, true);
-        return false;
+        return $commit;
     }
 
     /**
@@ -450,14 +447,12 @@ final class MysqliDriver implements DatabaseInterface
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
         $this->assertConnection();
-        if($this->connection->rollback($flags, $name)){
-            $this->profiling(false, true);
-            $this->inTransaction = false;
-            return true;
-        }
+        $rollback = $this->connection->rollback($flags, $name);
 
+        $this->inTransaction = false;
         $this->profiling(false, true);
-        return false;
+
+        return $rollback;
     }
 
     /**
@@ -465,7 +460,7 @@ final class MysqliDriver implements DatabaseInterface
      */
     public function inTransaction(): bool 
     {
-        return $this->inTransaction;
+        return $this->isConnected() && $this->inTransaction;
     }
 
     /**
