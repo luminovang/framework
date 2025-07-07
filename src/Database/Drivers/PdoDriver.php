@@ -461,10 +461,11 @@ final class PdoDriver implements DatabaseInterface
     public static function getType(mixed $value): int
     {
         return match (true) {
-            is_null($value), ($value === 'null'), ($value === 'NULL') => PDO::PARAM_NULL,
+            is_null($value) => PDO::PARAM_NULL,
             is_bool($value)  => PDO::PARAM_BOOL,
             is_int($value)  => PDO::PARAM_INT,
-            is_resource($value) => PDO::PARAM_LOB,
+            is_resource($value), 
+            (is_string($value) && (bool) preg_match('~[^\x09\x0A\x0D\x20-\x7E]~', $value)) => PDO::PARAM_LOB,
             default  => PDO::PARAM_STR
         };
     }

@@ -90,6 +90,106 @@ final class Builder implements LazyInterface
     public const RETURN_STATEMENT = 'stmt';
 
     /**
+     * Full-text match using Natural Language Mode.
+     * 
+     * MySQL interprets the search string as a natural human language phrase.
+     * This is the default mode for most full-text searches.
+     *
+     * SQL: MATCH (...) AGAINST (... IN NATURAL LANGUAGE MODE)
+     * 
+     * @var int MATCH_NATURAL
+     */
+    public const MATCH_NATURAL = 1;
+
+    /**
+     * Full-text match using Boolean Mode.
+     * 
+     * Allows logical operators (e.g. +, -, *, >) in the search string 
+     * to refine the matching process.
+     *
+     * SQL: MATCH (...) AGAINST (... IN BOOLEAN MODE)
+     * 
+     * @var int MATCH_BOOLEAN
+     */
+    public const MATCH_BOOLEAN = 2;
+
+    /**
+     * Natural Language Mode with Query Expansion.
+     * 
+     * MySQL performs the search in natural language mode, 
+     * and then automatically expands the query based on top matching results.
+     *
+     * SQL: MATCH (...) AGAINST (... IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION)
+     * 
+     * @var int MATCH_NATURAL_EXPANDED
+     */
+    public const MATCH_NATURAL_EXPANDED = 3;
+
+    /**
+     * Query Expansion without specifying base mode.
+     * 
+     * Equivalent to using WITH QUERY EXPANSION only. Typically expands
+     * the search using results from a prior MATCH clause.
+     *
+     * SQL: MATCH (...) AGAINST (... WITH QUERY EXPANSION)
+     * 
+     * @var int MATCH_EXPANSION
+     */
+    public const MATCH_EXPANSION = 4;
+
+    /**
+     * Default mode for clause method.
+     * 
+     * Standard comparison (e.g., `WHERE column = value`).
+     * 
+     * @var string REGULAR
+     */
+    public const REGULAR = 'REGULAR';
+
+    /**
+     * Combine mode for clause method.
+     * 
+     * Combined expressions (e.g., `WHERE (a = 1 OR b = 2)`).
+     * 
+     * @var string REGULAR
+     */
+    public const CONJOIN = 'CONJOIN';
+
+    /**
+     * Nested combine mode for clause method.
+     * 
+     * Deeply grouped conditions (e.g., `WHERE ((a = 1 AND b = 2) OR (c = 3))`).
+     * 
+     * @var string REGULAR
+     */
+    public const NESTED = 'NESTED';
+
+    /**
+     * Search full-text mode for clause method.
+     * 
+     * Full-text match using `MATCH (...) AGAINST (...)`.
+     * 
+     * @var string REGULAR
+     */
+    public const AGAINST = 'AGAINST';
+
+    /**
+     * Find in-array mode for clause method.
+     * 
+     * Filters using `IN (...)` with array values.
+     * 
+     * @var string REGULAR
+     */
+    public const INARRAY = 'INARRAY';
+
+    /**
+     * Find inset clause.
+     * 
+     * @var string INSET
+     */
+    private const INSET = 'INSET';
+
+    /**
      * Database connection instance.
      *
      * @var Connection<LazyInterface>|null $conn
@@ -193,10 +293,10 @@ final class Builder implements LazyInterface
      * @var array<string,mixed> $matchModes
      */
     private static array $matchModes = [
-        'NATURAL_LANGUAGE' => 'IN NATURAL LANGUAGE MODE',
-        'BOOLEAN' => 'IN BOOLEAN MODE',
-        'NATURAL_LANGUAGE_WITH_QUERY_EXPANSION' => 'IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION',
-        'WITH_QUERY_EXPANSION' => 'WITH QUERY EXPANSION'
+        self::MATCH_NATURAL => 'IN NATURAL LANGUAGE MODE',
+        self::MATCH_BOOLEAN => 'IN BOOLEAN MODE',
+        self::MATCH_NATURAL_EXPANDED => 'IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION',
+        self::MATCH_EXPANSION => 'WITH QUERY EXPANSION',
     ];
 
     /**
@@ -317,6 +417,13 @@ final class Builder implements LazyInterface
      * @var string $tableAlias 
      */
     private string $tableAlias = '';
+
+    /**
+     * Combine union alias.
+     * 
+     * @var string $unionCombineAlias 
+     */
+    private string $unionCombineAlias = '';
 
     /**
      * Join table.
@@ -600,12 +707,17 @@ final class Builder implements LazyInterface
      * This method defines how another table should be joined to the current query.
      *
      * @param string $table The name of the table to join.
-     * @param string $type The type of join to perform (default: `"INNER"`).
      * @param string|null $alias Optional alias for the joined table (default: `null`).
+     * @param string|null $type The type of join to perform (e.g, `INNER`, `LEFT`, `FULL`).
      * 
      * @return self Returns the instance of builder class.
-     * 
      * @throws InvalidArgumentException If either `$table` or `$type` is an empty string.
+     * 
+     * @see innerJoin()
+     * @see leftJoin()
+     * @see fullJoin()
+     * @see rightJoin()
+     * @see crossJoin()
      *
      * **Join Types**
      *
@@ -619,20 +731,21 @@ final class Builder implements LazyInterface
      * @example - Basic join usage:
      * 
      * ```php
-     * Builder::table('product', 'p')->join('users', 'LEFT', 'u');
+     * Builder::table('product', 'p')->join('users', 'u', 'LEFT');
      * ```
      * @example - Joining without an alias:
      * 
      * ```php
-     * Builder::table('users')->join('orders', 'INNER');
+     * Builder::table('users')->join('orders', null, 'INNER');
      * ```
      */
-    public function join(string $table, string $type = 'INNER', ?string $alias = null): self
+    public function join(string $table, ?string $alias = null, ?string $type = null): self
     {
         $table = trim($table);
         self::assertTableName($table, $alias);
+
         $this->tableJoin[$table . ($alias ?? '')] = [
-            'type' => strtoupper($type),
+            'type' => strtoupper($type ?? ''),
             'table' => $table,
             'alias' => $alias ? "AS {$alias}" : ''
         ];
@@ -692,12 +805,52 @@ final class Builder implements LazyInterface
      */
     public function on(string $condition, string $comparison, mixed $value, string $clause = 'AND'): self
     {
+        [, $clause, ] = $this->assertOperators(__METHOD__, null, $clause);
         $value = $this->getValue($value);
-        $value = ($value instanceof RawExpression) ? $value->getExpression() : $value;
+        $value = ($value instanceof RawExpression) 
+            ? $value->getExpression() 
+            : (($value === null) ? 'NULL' : $value);
 
         $this->joinConditions[array_key_last($this->tableJoin)][] = [
             'clause' => $clause,
             'sql' => "{$condition} {$comparison} {$value}"
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Adds a full SQL clause to the current join table condition.
+     *
+     * This method allows injecting a complete SQL `ON` clause expression as-is, useful for 
+     * complex logic or syntax that can't be represented using standard `on()` parameters.
+     *
+     * @param RawExpression|string $sql An SQL string or an instance of raw SQL expression object to use directly in the join.
+     * @param string $clause Optional logical clause (`AND` or `OR`) to combine with previous conditions.
+     *
+     * @return self Returns the instance of builder class.
+     *
+     * @example - Using `onClause()` with custom SQL logic:
+     * 
+     * ```php
+     * Builder::table('users', 'u')
+     *     ->leftJoin('logs', 'l')
+     *         ->onClause('(u.id = 100 OR u.id = 200)')
+     *         ->onClause(Builder::raw('DATE(l.created_at) = CURDATE()'));
+     * ```
+     *
+     * @see on()
+     * @see onCompound()
+     * @see join()
+     * @see bind()
+     */
+    public function onClause(RawExpression|string $sql, string $clause = 'AND'): self
+    {
+        [,$clause,] = $this->assertOperators(__METHOD__, null, $clause);
+
+        $this->joinConditions[array_key_last($this->tableJoin)][] = [
+            'clause' => $clause,
+            'sql' => ($sql instanceof RawExpression) ? $sql->getExpression() : $sql
         ];
 
         return $this;
@@ -740,6 +893,8 @@ final class Builder implements LazyInterface
             );
         }
 
+        [$operator, $clause, ] = $this->assertOperators(__METHOD__, $operator, $clause);
+
         $parts = [];
 
         foreach($columns as $column){
@@ -775,7 +930,7 @@ final class Builder implements LazyInterface
      */
     public function innerJoin(string $table, ?string $alias = null): self
     {
-        return $this->join($table, 'INNER', $alias);
+        return $this->join($table, $alias, 'INNER');
     }
 
     /**
@@ -792,7 +947,7 @@ final class Builder implements LazyInterface
      */
     public function leftJoin(string $table, ?string $alias = null): self
     {
-        return $this->join($table, 'LEFT', $alias);
+        return $this->join($table, $alias, 'LEFT');
     }
 
     /**
@@ -809,7 +964,7 @@ final class Builder implements LazyInterface
      */
     public function rightJoin(string $table, ?string $alias = null): self
     {
-        return $this->join($table, 'RIGHT', $alias);
+        return $this->join($table, $alias, 'RIGHT');
     }
 
     /**
@@ -826,7 +981,7 @@ final class Builder implements LazyInterface
      */
     public function crossJoin(string $table, ?string $alias = null): self
     {
-        return $this->join($table, 'CROSS', $alias);
+        return $this->join($table, $alias, 'CROSS');
     }
 
     /**
@@ -843,7 +998,7 @@ final class Builder implements LazyInterface
      */
     public function fullJoin(string $table, ?string $alias = null): self
     {
-        return $this->join($table, 'FULL', $alias);
+        return $this->join($table, $alias, 'FULL');
     }
 
     /**
@@ -860,7 +1015,7 @@ final class Builder implements LazyInterface
      */
     public function fullOuterJoin(string $table, ?string $alias = null): self
     {
-        return $this->join($table, 'FULL OUTER', $alias);
+        return $this->join($table, $alias, 'FULL OUTER');
     }
 
     /**
@@ -953,6 +1108,27 @@ final class Builder implements LazyInterface
     }
 
     /**
+     * Sets the alias for the combined UNION subquery.
+     *
+     * This alias is used to wrap the UNION result in an outer SELECT statement like:
+     * SELECT [alias].column FROM ( ... UNION ... ) AS [alias]
+     *
+     * Useful when applying filters, sorting, or pagination to the result of a UNION query.
+     *
+     * @param string $alias The alias to assign to the UNION result set.
+     * 
+     * @return self Returns the instance of the builder class.
+     * @throws InvalidArgumentException If the invalid alias was provided.
+     */
+    public function unionAlias(string $alias): self 
+    {
+        $this->assertTableName(null, $alias);
+
+        $this->unionCombineAlias = $alias;
+        return $this;
+    }
+
+    /**
      * Applies ascending or descending sorting order specified column for query results.
      *
      * This method applies an `ORDER BY` clause to the query, allowing 
@@ -964,6 +1140,8 @@ final class Builder implements LazyInterface
      * 
      * 
      * @return self Returns the instance of the class.
+     * @throws InvalidArgumentException If the column name is empty or the order is invalid.
+     * 
      * @see ascending() - Newest items first.
      * @see descending() - Oldest items first.
      *
@@ -977,6 +1155,9 @@ final class Builder implements LazyInterface
      */
     public function order(string $column, string $order = 'ASC'): self 
     {
+        $order = strtoupper($order);
+        $this->assertOrder($order, $column);
+
         $this->options['ordering'][] = "{$column} {$order}";
 
         return $this;
@@ -990,6 +1171,8 @@ final class Builder implements LazyInterface
      * @param string $column The name of the column to sort by in descending order.
      * 
      * @return self Returns the instance of the class.
+     * @throws InvalidArgumentException If the column name is empty or the order is invalid.
+     * 
      * @see order()
      * @see ascending())
      */
@@ -1006,43 +1189,14 @@ final class Builder implements LazyInterface
      * @param string $column The name of the column to sort by in ascending order.
      * 
      * @return self Returns the instance of the class.
+     * @throws InvalidArgumentException If the column name is empty or the order is invalid.
+     * 
      * @see order()
      * @see descending()
      */
     public function ascending(string $column): self 
     {
         return $this->order($column, 'ASC');
-    }
-
-    /**
-     * Set the result ordering for method match against.
-     * 
-     * @param array $columns The column names to index match order.
-     * @param string|int|float $value The value to match against in order.
-     * @param string $mode The comparison match mode operator.
-     *      Optionally you can choose any of these modes or pass your own mode.
-     *          - NATURAL_LANGUAGE
-     *          - BOOLEAN
-     *          - NATURAL_LANGUAGE_WITH_QUERY_EXPANSION
-     *          - WITH_QUERY_EXPANSION
-     * @param string $order The order algorithm to use (either "ASC" or "DESC").
-     * 
-     * @return self Returns the instance of the class.
-     */
-    public function orderAgainst(
-        array $columns, 
-        string|int|float $value, 
-        string $mode = 'NATURAL_LANGUAGE', 
-        string $order = 'ASC'
-    ): self 
-    {
-        $this->options['match'][] = [
-            'mode' => self::$matchModes[$mode] ?? $mode,
-            'column' => implode(", ", $columns),
-            'value' => $value,
-            'order' => $order,
-        ];
-        return $this;
     }
 
     /**
@@ -1101,10 +1255,11 @@ final class Builder implements LazyInterface
      * 
      * ```php
      * Builder::table('orders')
+     *      ->select(['category'])
      *      ->group('category')
      *      ->having(RawExpression::sum('amount'), '>=', 1000)
      *      ->having(RawExpression::count('order_id'), '>', 10, 'OR')
-     *      ->select(['category']);
+     *      ->get();
      * ```
      * Generates: `HAVING SUM(amount) >= 1000 OR COUNT(order_id) > 10`
      */
@@ -1115,6 +1270,7 @@ final class Builder implements LazyInterface
         string $operator = 'AND'
     ): self
     {
+        [$operator,,] = $this->assertOperators(__METHOD__, $operator);
         $this->options['filters'][] = [
             'expression' => $expression,
             'comparison' => $comparison,
@@ -1152,91 +1308,39 @@ final class Builder implements LazyInterface
      * 
      * ```php
      * Builder::table('users')
-     *      ->where('status', '=', 'active');
+     *      ->select()
+     *      ->where('status', '=', 'active')
+     *      ->get();
      * ```
      * Generates: `WHERE status = 'active'`
      * 
      * ```php
      * Builder::table('users')
-     *      ->where('status', '', ['active', 'disabled']);
+     *      ->select()
+     *      ->where('status', '', ['active', 'disabled'])
+     *      ->get();
      * ```
      * Generates: `WHERE status IN ('active', 'disabled')`
      * 
      * ```php
      * Builder::table('users')
-     *      ->where('status', 'NOT', ['active', 'disabled']);
+     *      ->select()
+     *      ->where('status', 'NOT', ['active', 'disabled'])
+     *      ->get();
      * ```
      * Generates: `WHERE status NOT IN ('active', 'disabled')`
      * 
      *  ```php
      * Builder::table('users')
-     *      ->where('status', 'NOT EXISTS', Builder::raw('(SELECT 1 FROM views WHERE id = 1)'));
+     *      ->select()
+     *      ->where('status', 'NOT EXISTS', Builder::raw('(SELECT 1 FROM views WHERE id = 1)'))
+     *      ->get();
      * ```
      * Generates: `WHERE status NOT EXISTS (SELECT 1 FROM views WHERE id = 1)`
      */
     public function where(string $column, string $comparison, mixed $value): self
     {
-         if(is_array($value)){
-            return $this->inArray($column, $comparison, $value, 'AND');
-        }
-
-        return $this->clause('AND', $column, $comparison, $value);
-    }
-
-    /**
-     * Add an advanced conditional clause to the query builder.
-     * 
-     * Supports a variety of query functions for building complex WHERE clauses.
-     * 
-     * Supported Functions:
-     * - **REGULAR**: Default comparison as provided (e.g., `WHERE column = value`).
-     * - **CONJOIN**: Combine multiple conditions (e.g., `WHERE (a = 1 OR b = 1)`).
-     * - **NESTED**: Grouped conditions for deeply nested logic (e.g., `WHERE ((a = 1 OR b = 1) AND (c = 2))`).
-     * - **AGAINST**: Full-text search using `MATCH ... AGAINST`.
-     * - **INARRAY**: Use `IN (...)` for filtering against a list of values.
-     * 
-     * @param string $clause The logical connector (`AND`, `OR`, only).
-     * @param string $column The column name to compare.
-     * @param string $comparison The comparison operator (`=`, `<>`, `>=`, `LIKE`, etc.).
-     * @param mixed|Closure $value The value to compare against.
-     * @param string $function The clause function type (default: `REGULAR`).
-     * 
-     * @return self Returns instance for builder class.
-     * @throws InvalidArgumentException If `INARRAY` is used with an empty array.
-     * 
-     * @internal Used internally by the builder to support complex WHERE logic.
-     * 
-     * @example Example usage:
-     * 
-     * ```php
-     * Builder::table('users')
-     *     ->where('id', '=', 100)
-     *     ->clause('OR', 'id', '=', 101)
-     *     ->clause('AND', 'name', '=', 'Peter', 'REGULAR')
-     *     ->clause('AND', 'roles', '=', ['admin', 'editor'], 'INARRAY');
-     * ```
-     */
-    public function clause(
-        string $clause, 
-        string $column, 
-        string $comparison, 
-        mixed $value, 
-        string $function = 'REGULAR'
-    ): self
-    {
-        if ($function === 'INARRAY' && $value === []) {
-            throw new InvalidArgumentException('Invalid argument $value; expected a non-empty array when using INARRAY.');
-        }
-
-        $this->conditions[] = [
-            'type' => $clause,
-            'function' => $function,
-            'column' => $column,
-            'value' => $value,
-            'comparison' => $comparison
-        ];
-
-        return $this;
+        return $this->condition('AND', $column, $comparison, $value);
     }
 
     /**
@@ -1265,19 +1369,16 @@ final class Builder implements LazyInterface
      * 
      * ```php
      * Builder::table('users')
+     *      ->select()
      *      ->where('status', '=', 'active')
      *      ->and('department', 'REGEXP', 'HR|Finance|Marketing')
-     *      ->select();
+     *      ->get();
      * ```
      * Generates: `WHERE status = 'active' AND department REGEXP 'HR|Finance|Marketing'`
      */
     public function and(string $column, string $comparison, mixed $value): self
     {
-        if(is_array($value)){
-            return $this->inArray($column, $comparison, $value, 'AND');
-        }
-
-        return $this->clause('AND', $column, $comparison, $value);
+        return $this->condition('AND', $column, $comparison, $value);
     }
 
     /**
@@ -1296,18 +1397,198 @@ final class Builder implements LazyInterface
      * 
      * ```php
      * Builder::table('users')
+     *      ->select()
      *      ->or('status', '=', 'active')
-     *      ->or('role', '!=', 'admin');
+     *      ->or('role', '!=', 'admin')
+     *      ->get();
      * ```
      * Generates: `WHERE status = 'active' OR role != 'admin'`
      */
     public function or(string $column, string $comparison, mixed $value): self
     {
+        return $this->condition('OR', $column, $comparison, $value);
+    }
+
+    /**
+     * Adds a conditional clause to the query builder using scalar or array values.
+     *
+     * Supports both regular WHERE conditions and array-based `IN`/`NOT IN` clauses.
+     *
+     * @param string $clause Logical connector: typically `'AND'` or `'OR'`.
+     * @param string $column The column name to apply the condition to.
+     * @param string $comparison Comparison operator (`=`, `<>`, `>`, `LIKE`, `IN`, `NOT`, etc.).
+     * @param mixed $value  The value to compare against. Accepts:
+     *                           - Scalar types for standard comparisons
+     *                           - Array for `IN`/`NOT IN` queries
+     *                           - Closure for nested conditions
+     *
+     * @return self Returns the current builder instance.
+     * @throws InvalidArgumentException If an error occurs.
+     *
+     * > **Note:**
+     * > - When `$value` is an array, it is transformed into an `IN` or `NOT IN` clause depending on `$comparison`.
+     * >    - `'IN'` → `WHERE column IN (...)`
+     * >    - `'NOT'` → `WHERE column NOT IN (...)`
+     *
+     * @example - Example usage:
+     * ```php
+     * $builder = Builder::table('users')
+     *     ->select()
+     *     ->condition('AND', 'id', '=', 100)
+     *     ->condition('OR', 'id', '=', 101)
+     *     ->condition('AND', 'name', '=', 'Peter')
+     *     ->condition('AND', 'roles', 'IN', ['admin', 'editor']);
+     * ```
+     *
+     * @see where()
+     * @see and()
+     * @see or()
+     * @see in()
+     * @see notIn()
+     * @see against()
+     * @see clause()
+     */
+    public function condition(string $clause, string $column, string $comparison, mixed $value): self
+    {
         if(is_array($value)){
-            return $this->inArray($column, $comparison, $value, 'OR');
+            return $this->inArray($column, $comparison, $value, $clause);
         }
 
-        return $this->clause('OR', $column, $comparison, $value);
+        return $this->clause($clause, $column, $comparison, $value);
+    }
+
+    /**
+     * Adds a complex conditional clause to the query builder.
+     *
+     * Enables adding `WHERE` logic using various clause modes, 
+     * and is ideal for manually constructing complex expressions.
+     *
+     * **Supported Modes:**
+     * 
+     * - `Builder::REGULAR`  — Standard comparison (e.g., `WHERE column = value`)
+     * - `Builder::CONJOIN`  — Combined expressions (e.g., `WHERE (a = 1 OR b = 2)`)
+     * - `Builder::NESTED`   — Deeply grouped conditions (e.g., `WHERE ((a = 1 AND b = 2) OR (c = 3))`)
+     * - `Builder::AGAINST`  — Full-text match using `MATCH (...) AGAINST (...)`
+     * - `Builder::INARRAY`  — Filters using `IN (...)` with array values
+     *
+     * @param string $clause Logical connector: typically `AND` or `OR`.
+     * @param string $column The column to apply the condition on.
+     * @param string $comparison Comparison operator (e.g., `=`, `<>`, `>=`, `LIKE`, etc.).
+     * @param mixed|Closure $value The condition value to compare. Can be scalar or array (for `Builder::INARRAY`).
+     * @param string|null $mode The clause mode. One of the supported modes (default: Builder::REGULAR`).
+     *
+     * @return self Returns instance for builder class.
+     * @throws InvalidArgumentException If an unsupported mode is given or if `INARRAY` is used with an empty array.
+     *
+     * @internal Used internally by the builder to compose query conditions.
+     *           Can also be called directly to manually define clauses without relying on
+     *           higher-level methods like `where()`, `or()`, or `against()`.
+     *           Useful when you want full control and to skip additional processing.
+     *
+     * @example - Example usage:
+     * 
+     * ```php
+     * $builder = Builder::table('users')
+     *     ->select()
+     *     ->clause('AND', 'id', '=', 100)
+     *     ->clause('OR', 'id', '=', 101)
+     *     ->clause('AND', 'name', '=', 'Peter')
+     *     ->clause('AND', 'roles', 'IN', ['admin', 'editor'], 'INARRAY');
+     * ```
+     * 
+     * @see where()
+     * @see and()
+     * @see or()
+     * @see in()
+     * @see notIn()
+     * @see condition()
+     * @see against()
+     */
+    public function clause(
+        string $clause,
+        string $column,
+        string $comparison,
+        mixed $value,
+        ?string $mode = null
+    ): self 
+    {
+        [,$clause,] = $this->assertOperators(__METHOD__, null, $clause);
+        
+        $mode = strtoupper($mode ?? self::REGULAR);
+        $modes = [self::REGULAR, self::CONJOIN, self::NESTED, self::AGAINST, self::INARRAY];
+        
+        if (!in_array($mode, $modes, true)) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid clause mode "%s". Supported modes: %s.',
+                $mode,
+                implode(', ', $modes)
+            ));
+        }
+
+        if ($mode === self::INARRAY && ($value === [] || !is_array($value))) {
+            throw new InvalidArgumentException(
+                'The INARRAY mode requires a non-empty array of values.'
+            );
+        }
+
+        $this->conditions[] = [
+            'type' => $clause,
+            'mode' => $mode,
+            'column' => $column,
+            'value' => $value,
+            'comparison' => $comparison
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Defines columns to be used for a full-text search match.
+     *
+     * This method registers a set of columns for a subsequent `AGAINST` clause in a full-text query.
+     * Multiple calls to this method will stack multiple `MATCH (...) AGAINST (...)` clauses.
+     *
+     * @param array<int,string> $columns An array of column names to include in the full-text match.
+     *                       All column names must be valid SQL column identifiers.
+     *
+     * @return self Returns instance for builder class.
+     * @throws InvalidArgumentException If the columns array is empty or contains invalid entries.
+     *
+     * @example - Add match columns for full-text search:
+     * 
+     * ```php
+     * Builder::table('blogs')
+     *      ->select()
+     *      ->match(['title', 'description'])
+     *         ->against('fast laptop', Builder::MATCH_BOOLEAN)
+     *      ->match(['title', 'description'])
+     *         ->against('low laptop', Builder::MATCH_NATURAL)
+     *      ->get();
+     * ```
+     * 
+     * @example - Match against title/description and order by relevance score:
+     * ```php
+     * Builder::table('blogs')
+     *      ->select()
+     *      ->match(['title', 'description'])
+     *         ->orderAgainst('wireless keyboard', Builder::MATCH_BOOLEAN, 'DESC')
+     *      ->get();
+     * ```
+     *
+     * @see against()
+     * @see orderAgainst()
+     */
+    public function match(array $columns): self
+    {
+        if ($columns === [] || !isset($columns[0])) {
+            throw new InvalidArgumentException('The match() method requires at least one column.');
+        }
+        
+        $this->options['matches'][] = [
+            'columns' => implode(", ", $columns)
+        ];
+        
+        return $this;
     }
 
     /**
@@ -1356,28 +1637,74 @@ final class Builder implements LazyInterface
     }
 
     /**
-     * Set query match columns and mode.
-     * 
-     * @param array $columns The column names to match against.
-     * @param string $mode The comparison match mode operator.
-     *      Optionally you can choose any of these modes or pass your own mode.
-     *          - NATURAL_LANGUAGE
-     *          - BOOLEAN
-     *          - NATURAL_LANGUAGE_WITH_QUERY_EXPANSION
-     *          - WITH_QUERY_EXPANSION
-     * 
-     * @param mixed|Closure $value The value to match against.
-     * 
-     * @return self Return instance of builder class.
+     * Set the ordering of full-text search results using `MATCH ... AGAINST`.
+     *
+     * This method allows ranking and sorting results based on a full-text search score.
+     * Useful when prioritizing rows that better match the search term.
+     *
+     * @param string|int|float $value The value to search against.
+     * @param string|int $mode The match mode, can be a predefined constant or raw string.
+     *     Constants:
+     *       - Builder::MATCH_NATURAL
+     *       - Builder::MATCH_BOOLEAN
+     *       - Builder::MATCH_NATURAL_EXPANDED
+     *       - Builder::MATCH_EXPANSION
+     * @param string $order The sort direction, either "ASC" or "DESC". Defaults to "ASC".
+     *
+     * @return self Returns the instance of the class.
+     * @throws DatabaseException If no match columns have been defined via match().
+     * @throws InvalidArgumentException If the sort order is invalid.
+     *
+     * @see match()
+     * @see against()
      */
-    public function against(array $columns, string $mode, mixed $value): self
+    public function orderAgainst(
+        string|int|float $value, 
+        string|int $mode = self::MATCH_NATURAL, 
+        string $order = 'ASC'
+    ): self 
+    {
+        $order = strtoupper($order);
+        $this->assertOrder($order);
+
+        $this->options['match'][] = [
+            'mode' => self::$matchModes[$mode] ?? $mode,
+            'column' => $this->getMatchColumns(__METHOD__),
+            'value' => $value,
+            'order' => $order,
+        ];
+        return $this;
+    }
+
+    /**
+     * Adds a full-text search clause using `MATCH (...) AGAINST (...)`.
+     *
+     * This method appends a full-text `AGAINST` clause to the query using the match columns 
+     * defined via `match()`. It's typically used for searching textual content.
+     *
+     * @param mixed|Closure $value The value to match against. Can be a string, number, or a Closure
+     *                             to defer value evaluation.
+     * @param string|int $mode The match mode, can be a predefined constant or raw string.
+     *     Constants:
+     *       - Builder::MATCH_NATURAL
+     *       - Builder::MATCH_BOOLEAN
+     *       - Builder::MATCH_NATURAL_EXPANDED
+     *       - Builder::MATCH_EXPANSION
+     *
+     * @return self Return instance of builder class.
+     * @throws DatabaseException If match columns are missing or invalid.
+     *
+     * @see match()
+     * @see orderAgainst()
+     */
+    public function against(mixed $value, string|int $mode = self::MATCH_NATURAL): self
     {
         return $this->clause(
             'AND', 
-            implode(", ", $columns),
+            $this->getMatchColumns(__METHOD__),
             self::$matchModes[$mode] ?? $mode, 
             $value,
-            'AGAINST',
+            self::AGAINST,
         );
     }
 
@@ -1508,7 +1835,7 @@ final class Builder implements LazyInterface
      * @param string $clause Logical clause to chain with (e.g., `AND`, `OR`).
      * 
      * @return self Return instance of builder class.
-     * @throws InvalidArgumentException Throws if invalid group operator is specified.
+     * @throws InvalidArgumentException Throws if invalid group operator or chain clause is specified.
      *
      * @example - Group conditions:
      * 
@@ -1531,17 +1858,11 @@ final class Builder implements LazyInterface
      */
     public function conjoin(array $conditions, string $operator = 'AND', string $clause = 'AND'): self
     {
-        $operator = strtoupper($operator);
-        if(!in_array($operator, ['AND', 'OR'])){
-            throw new InvalidArgumentException(sprintf(
-                "Invalid logical operator '%s'. Allowed values are 'AND' or 'OR'.", 
-                $operator
-            ));
-        }
+        [$operator, $clause, ] = $this->assertOperators(__METHOD__, $operator, $clause);
 
         $this->conditions[] = [
             'type' => $clause,
-            'function' => 'CONJOIN',
+            'mode' => self::CONJOIN,
             'operator' => $operator,
             'conditions' => $conditions
         ];
@@ -1605,17 +1926,16 @@ final class Builder implements LazyInterface
         string $clause = 'AND'
     ): self
     {
-        $nestedOperator = strtoupper($nestedOperator);
-        if(!in_array($nestedOperator, ['AND', 'OR'])){
-            throw new InvalidArgumentException(sprintf(
-                "Invalid nested logical operator '%s'. Allowed values are 'AND' or 'OR'.", 
-                $nestedOperator
-            ));
-        }
+        [$operator, $clause, $nestedOperator] = $this->assertOperators(
+            __METHOD__,
+            $operator, 
+            $clause, 
+            $nestedOperator
+        );
 
         $this->conditions[] = [
             'type' => $clause,
-            'function' => 'NESTED',
+            'mode' => self::NESTED,
             'bind' => $nestedOperator,
             'operator' => $operator,
             'X' => $conditions1,
@@ -1674,9 +1994,8 @@ final class Builder implements LazyInterface
      * @param string $placeholder The named placeholder. Must start with a colon `:` (e.g. `:id`).
      * @param mixed $value The value to bind to the placeholder. Arrays are JSON encoded.
      * 
-     * @throws InvalidArgumentException If the placeholder does not start with a colon `:`.
-     * 
      * @return self Return instance of builder class.
+     * @throws InvalidArgumentException If the placeholder does not start with a colon `:`.
      * 
      * @example - Bind Placeholder Example:
      * 
@@ -1810,6 +2129,7 @@ final class Builder implements LazyInterface
      * @see nested()
      *
      * @example - Generating a query with nested `AND` conditions:
+     * 
      * ```php
      * Builder::table('fooTable')
      * ->andNested([
@@ -1844,7 +2164,7 @@ final class Builder implements LazyInterface
      */
     public function in(string $column, Closure|array $list, string $clause = 'AND'): self
     {
-        return $this->clause($clause, $column, 'IN', $list, 'INARRAY');
+        return $this->clause($clause, $column, 'IN', $list, self::INARRAY);
     }
 
     /**
@@ -1871,10 +2191,20 @@ final class Builder implements LazyInterface
      * ```
      * Will generate a clause like: `NOT IN(...)
      */
-    public function inArray(string $column, string $expression, Closure|array $values, string $clause = 'AND'): self
+    public function inArray(
+        string $column, 
+        string $expression, 
+        Closure|array $values, 
+        string $clause = 'AND'
+    ): self
     {
-        $expression = preg_replace('/\bIN\b/i', '', $expression);
-        return $this->clause($clause, $column, "{$expression} IN", $values, 'INARRAY');
+        $find = match($expression){
+            '=', '==' => '',
+            '!=', '<>' => 'NOT',
+            default => preg_replace('/\bIN\b/i', '', $expression)
+        };
+
+        return $this->clause($clause, $column, "{$find} IN", $values, self::INARRAY);
     }
 
     /**
@@ -1889,7 +2219,8 @@ final class Builder implements LazyInterface
      * @return self Return instance of builder class.
      * @throws InvalidArgumentException If the provided list is empty.
      * 
-     * @example - Example
+     * @example - Example:
+     * 
      * ```php
      * Builder::table('users')
      *      ->where('country', '=', 'NG')
@@ -1898,7 +2229,7 @@ final class Builder implements LazyInterface
      */
     public function notIn(string $column, Closure|array $list, string $clause = 'AND'): self
     {
-        return $this->clause($clause, $column, 'NOT IN', $list, 'INARRAY');
+        return $this->clause($clause, $column, 'NOT IN', $list, self::INARRAY);
     }
 
     /**
@@ -1956,7 +2287,7 @@ final class Builder implements LazyInterface
         $isList = is_array($list);
         $this->conditions[] = [
             'type' => $clause, 
-            'function' => 'INSET',
+            'mode' => self::INSET,
             'list' => $isList ? implode(',', $list) : $list, 
             'isList' => $isList,
             'search' => $search, 
@@ -2509,6 +2840,7 @@ final class Builder implements LazyInterface
      * ```
      * 
      * @example - Insert using transaction:
+     * 
      * ```php
      * $tbl = Builder::table('users')
      *      //->replace(true) Optional replace 
@@ -2625,6 +2957,7 @@ final class Builder implements LazyInterface
      * @return self Return instance of builder class.
      * 
      * @example - To ignore duplicates during insertion:
+     * 
      * ```php
      * Builder::table('users')
      *     ->ignoreDuplicate()
@@ -2654,7 +2987,6 @@ final class Builder implements LazyInterface
      * @param array<int,string> $columns Target table columns to insert data into.
      *
      * @return int Return the number of affected rows, or 0 if no rows were inserted or if debugging is enabled.
-     *
      * @throws InvalidArgumentException If the target table name is empty.
      * @throws DatabaseException If copy mode isn't active, or if column mismatch occurs.
      * @throws JsonException If copy operation involves JSON-encodable values and encoding fails.
@@ -2837,6 +3169,7 @@ final class Builder implements LazyInterface
      *     ->columns(['id', 'email']) // Explicitly set UNION columns
      *     ->get();
      * ```
+     * 
      * @example - Using with different column selections:
      * 
      * ```php
@@ -2846,11 +3179,13 @@ final class Builder implements LazyInterface
      *      ->select(['contractor_id' AS id, 'contractor_name AS name']);
      * 
      * $result = $employees->union($contractors)
-     *     ->columns(['id', 'name']) / Maps and aligns columns
-     *     ->where('status', '=', 'active')
+     *     ->unionAlias('combined')
+     *     ->columns(['combined.id', 'combined.name']) / Maps and aligns columns
+     *     ->where('combined.status', '=', 'active')
      *     ->limit(5)
      *     ->get();
      * ```
+     * 
      * @example - Less recommended: 
      * 
      * ```php
@@ -2898,6 +3233,7 @@ final class Builder implements LazyInterface
      * @see query()
      * 
      * @example - Executing a prepared query:
+     * 
      * ```php
      * $stmt = Builder::query("SELECT * FROM users WHERE user_id = :id");
      * $result = $stmt->execute(['id' => 1]);
@@ -3026,7 +3362,7 @@ final class Builder implements LazyInterface
         }
 
         return $this->buildExecutableStatement(
-            $this->handler['sql'], 
+            $this->handler['sql'] ?? '', 
             $this->handler['method'], 
             $this->handler['columns'] ?? ['*'], 
             $returnMode, 
@@ -3211,7 +3547,7 @@ final class Builder implements LazyInterface
      *      ->has();
      * ```
      */
-    public function has(): bool 
+    public function has(): bool
     {
         $result = $this->getFromCache(RETURN_NEXT);
 
@@ -3221,7 +3557,7 @@ final class Builder implements LazyInterface
 
         return $this->buildExecutableStatement(
             ' COUNT(*)', 'total',
-            ['*'], RETURN_NEXT
+            ['*'], RETURN_NEXT // will be ignored
         ) > 0;
     }
 
@@ -3240,7 +3576,7 @@ final class Builder implements LazyInterface
      * ```
      * > **Note:** This method does not require a `WHERE` clause or logical operators.
      */
-    public function exists(): bool 
+    public function exists(): bool
     {
         $query = Alter::getTableExists($this->db->getDriver());
         $stmt = $this->db->prepare("SELECT COUNT(*) FROM {$query}")
@@ -3356,7 +3692,8 @@ final class Builder implements LazyInterface
     /**
      * Add query to select multiple records from table.
      * 
-     * When `get` method is called, it returns `object|null|array|int|float|bool`, the selected rows, otherwise false if execution failed.
+     * When `get` method is called, it returns `object|null|array|int|float|bool`, 
+     * the selected rows, otherwise false if execution failed.
      * 
      * **Applicable To:**
      * 
@@ -3391,7 +3728,8 @@ final class Builder implements LazyInterface
     /**
      * Add query to select a single/next record from table.
      * 
-     * When `get` method is called, it returns `object|null|array|int|float|bool`, the selected single row, otherwise false if execution failed.
+     * When `get` method is called, it returns `object|null|array|int|float|bool`, 
+     * the selected single row, otherwise false if execution failed.
      * 
      * **Applicable To:**
      * 
@@ -3732,7 +4070,6 @@ final class Builder implements LazyInterface
         return $rollback;
     }
 
-
     /**
      * Releases an active database transaction if one is in progress.
      * 
@@ -3781,17 +4118,7 @@ final class Builder implements LazyInterface
     public function rename(string $to): bool 
     {
         self::assertTableName($to);
-
-        $sql = match ($this->db->getDriver()) {
-            'mysql', 'mysqli' => "RENAME TABLE {$this->tableName} TO {$to}",
-            'pgsql', 'sqlite', 'oci', 'oracle' => "ALTER TABLE {$this->tableName} RENAME TO {$to}",
-            'sqlsrv', 'mssql', 'dblib' => "EXEC sp_rename '{$this->tableName}', '{$to}'",
-            'cubrid' => "RENAME TABLE {$this->tableName} AS {$to}",
-            default  => throw new DatabaseException(
-                "Unsupported driver: {$this->db->getDriver()}",
-                DatabaseException::RUNTIME_ERROR
-            ),
-        };
+        $sql = Alter::getBuilderTableRename($this->db->getDriver(), $this->tableName, $to);
 
         return (bool) $this->db->exec($sql);
     }
@@ -3850,20 +4177,8 @@ final class Builder implements LazyInterface
         if(!in_array($mode, ['update', 'shared'], true)){
             throw new InvalidArgumentException("Invalid lock type: $mode");
         }
-        
-        $forUpdate = ($mode === 'update');
-
-        $this->lock = match ($this->db->getDriver()) {
-            'mysql', 'mysqli' => $forUpdate ? 'FOR UPDATE' : 'LOCK IN SHARE MODE',
-            'pgsql'           => $forUpdate ? 'FOR UPDATE' : 'FOR SHARE',
-            'sqlite'          => '', // SQLite locks the whole DB automatically
-            'sqlsrv', 'mssql', 'dblib' => $forUpdate 
-                ? 'WITH (UPDLOCK, ROWLOCK)' 
-                : 'WITH (HOLDLOCK, ROWLOCK)',
-            'cubrid'          => $forUpdate ? 'WITH LOCK' : '',
-            'oci', 'oracle'   => $forUpdate ? 'FOR UPDATE' : '',
-            default           => '',
-        };
+ 
+        $this->lock = Alter::getBuilderTableLock($this->db->getDriver(), ($mode === 'update'));
 
         return $this;
     }
@@ -4140,7 +4455,6 @@ final class Builder implements LazyInterface
      * @param array $columns Table columns to export (default: all).
      * 
      * @return bool Return true if export is successful, false otherwise.
-     * 
      * @throws DatabaseException If an invalid format is provided or if unable to create the export.
      */
     public function export(string $as = 'csv', ?string $filename = null, array $columns = ['*']): bool 
@@ -4154,7 +4468,6 @@ final class Builder implements LazyInterface
      * @param string|null $filename Optional name of the backup file (default: null). If not provided, table name and timestamp will be used.
      * 
      * @return bool Return true if backup is successful, false otherwise.
-     * 
      * @throws DatabaseException If unable to create the backup directory or if failed to create the backup.
      */
     public function backup(?string $filename = null): bool 
@@ -4285,6 +4598,7 @@ final class Builder implements LazyInterface
             'ordering' => [],
             'filters'  => [],
             'match'    => [],
+            'matches'  => [],
             'duplicate'    => [],
             'unionColumns' => [],
             'current'  => ['sql' => '', 'params' => [], 'columns' => [], 'cache' => []]
@@ -4299,7 +4613,6 @@ final class Builder implements LazyInterface
      * @param bool $assertTable Assert table name and alias.
      *
      * @return self Return a new instance of the Builder class.
-     *
      * @throws Exception If an error occurs during initialization.
      */
     private static function initializer(
@@ -4421,6 +4734,37 @@ final class Builder implements LazyInterface
     }
 
     /**
+     * Retrieves the most recent set of match columns defined by `match()`.
+     *
+     * @param string $fn The calling method method `against()` or `orderAgainst()`.
+     *
+     * @return string Return a comma-separated list of column names to be used in MATCH().
+     * @throws DatabaseException If no match columns have been defined or the format is invalid.
+     */
+    private function getMatchColumns(string $fn): string
+    {
+        $matches = $this->getOptions('matches');
+
+        if($matches === []){
+            throw new DatabaseException(
+                sprintf('No match columns defined. Use $query->match([...]) before calling $query->%s(...).', $fn),
+                DatabaseException::LOGIC_ERROR
+            );
+        }
+
+        $columns = $matches[array_key_last($matches)]['columns'] ?? null;
+
+        if($columns === null || $columns === ''){
+            throw new DatabaseException(
+                'Invalid or missing match columns. Expected non-empty array of column names.',
+                DatabaseException::LOGIC_ERROR
+            );
+        }
+
+        return $columns;
+    }
+
+    /**
      * Attempts to retrieve a cached result based on the current query state.
      *
      * @param int|null $mode The expected return mode (e.g. RETURN_STMT).
@@ -4514,7 +4858,7 @@ final class Builder implements LazyInterface
      */
     private function assertStrictConditions(string $fn, bool $required = false): void
     {
-        if (($required || $this->isStrictMode) && $this->conditions === []) {
+        if (!$this->isCollectMetadata && ($required || $this->isStrictMode) && $this->conditions === []) {
             throw new DatabaseException(
                 sprintf('Execution of %s is not allowed in strict mode without a "WHERE" condition.', $fn), 
                 DatabaseException::VALUE_FORBIDDEN
@@ -4533,11 +4877,37 @@ final class Builder implements LazyInterface
      */
     private function assertHandler(string $fn): void 
     {
-        if($this->handler === []){
+        if(!$this->isCollectMetadata && $this->handler === [] && $this->unions === []){
             throw new DatabaseException(
                 "Calling {$fn}(...) without a valid query build is not allowed.",
                 DatabaseException::BAD_METHOD_CALL
             );
+        }
+    }
+
+    /**
+     * Validates the SQL order direction.
+     *
+     * Ensures that the given `$order` value is either "ASC" or "DESC".
+     * Throws an exception if the value is not valid.
+     *
+     * @param string $order The order direction to validate.
+     * @param string|null $column Optional column name to validate.
+     *
+     * @return void
+     * @throws InvalidArgumentException If the order is not "ASC" or "DESC".
+     */
+    private function assertOrder(string $order, ?string $column = null): void 
+    {
+        if (!in_array($order, ['ASC', 'DESC'], true)) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid order "%s". Only "ASC" or "DESC" are allowed.',
+                $order
+            ));
+        }
+
+        if ($column !== null && (!$column || trim($column) === '')) {
+            throw new InvalidArgumentException('Column name must be a non-empty string for ordering.');
         }
     }
 
@@ -4556,6 +4926,59 @@ final class Builder implements LazyInterface
                 sprintf('Invalid: %s($query) requires a non-empty SQL query string.', $fn)
             );
         }
+    }
+
+    /**
+     * Assert SQL logical operators.
+     * 
+     * @param string|null $operator The base operator to check.
+     * @param string|null $clause An optional chain operator to check.
+     * @param string|null $nested An optional combined nested operator to check.
+     * 
+     * @return array{?operator,?clause,?nested} Return the value as upper-cased.
+     */
+    private function assertOperators(
+        string $fn,
+        ?string $operator, 
+        ?string $clause = null, 
+        ?string $nested = null
+    ): array 
+    {
+        $allowed = ['AND', 'OR'];
+        $suffix = 'Allowed operators are [AND, OR].';
+
+        $operator = ($operator !== null) ? strtoupper($operator) : null;
+        $clause = ($clause !== null) ? strtoupper($clause) : null;
+        $nested = ($nested !== null) ? strtoupper($nested) : null;
+
+        if ($operator !== null && !in_array($operator, $allowed, true)) {
+            throw new InvalidArgumentException(sprintf(
+                "Invalid %s(...) logical operator '%s'. %s.",
+                $fn,
+                $operator,
+                $suffix
+            ));
+        }
+
+        if ($clause !== null && !in_array($clause, $allowed, true)) {
+            throw new InvalidArgumentException(sprintf(
+                "Invalid %s(...) clause chain operator '%s'. %s",
+                $fn,
+                $clause,
+                $suffix
+            ));
+        }
+
+        if ($nested !== null && !in_array($nested, $allowed, true)) {
+            throw new InvalidArgumentException(sprintf(
+                "Invalid %s(...) combined nested operator '%s'. %s",
+                $fn,
+                $nested,
+                $suffix
+            ));
+        }
+
+        return [$operator, $clause, $nested];
     }
 
     /**
@@ -4627,7 +5050,7 @@ final class Builder implements LazyInterface
         }
 
         if ($alias) {
-            if (trim($table, '`') === '') {
+            if (trim($alias, '`') === '') {
                 throw new InvalidArgumentException(
                     'Table alias must be a non-empty backtick.'
                 );
@@ -4769,39 +5192,32 @@ final class Builder implements LazyInterface
             $this->options['current']['sql'] = $sql;
         }
 
-        $hasParams = ($this->getOptions('match') !== [] || $this->conditions !== []);
         $useTransaction = false;
+        $canExecute = (!$this->isCollectMetadata || $this->debugMode === self::DEBUG_NONE);
+        $hasParams = ($this->conditions !== [] 
+            || $this->getOptions('match') !== [] 
+            || $this->getOptions('binds') !== []);
 
         if ($method === 'delete' && $this->inSafeMode()) {
             $useTransaction = $this->transaction();
         }
 
         if($hasParams){
-            if(!$this->isCollectMetadata){
+            if($canExecute){
                 $this->db->prepare($sql);
             }
 
-            if(!$this->bindConditions()) {
-                $hasParams = $this->getOptions('binds') !== [];
-            }
+            $c = $this->bindConditions();
+            $b = $this->bindJoinPlaceholders();
+
+            $hasParams = $c || $b;
         }
 
-        if($hasParams){
-            $this->bindJoinPlaceholders();
-
-            if($this->isCollectMetadata || $this->debugMode !== self::DEBUG_NONE){
-                return $this->isCollectMetadata;
-            }
-
-            $this->db->execute();
-        }else{
-            if($this->isCollectMetadata || $this->debugMode !== self::DEBUG_NONE){
-                return $this->isCollectMetadata;
-            }
-
-            $this->db->query($sql);
+        if(!$canExecute){
+            return $this->isCollectMetadata;
         }
 
+        $hasParams ? $this->db->execute() : $this->db->query($sql);
         $sql = null;
 
         if ($this->db->ok()) {
@@ -4859,9 +5275,12 @@ final class Builder implements LazyInterface
 
         $isCompound = $isColumns || $isConditions || $limit > 0;
         $length = count($this->unions);
+        $alias = ($this->unionCombineAlias ?: 'un_compound');
 
         if($isCompound){
-            $columns = $isColumns ? implode(', ', $columns) : '*';
+            $columns = ($isColumns && $columns !== ['*']) 
+                ? implode(', ', $columns) 
+                : "{$alias}.*";
             $sqlParts[] = $this->isDistinct ? "SELECT DISTINCT {$columns} FROM (" : "SELECT {$columns} FROM (";
         }
 
@@ -4880,7 +5299,6 @@ final class Builder implements LazyInterface
         }
 
         if($isCompound){
-            $alias = $this->tableAlias ? $this->tableAlias : 'un_compound';
             $sqlParts[] = ") AS {$alias}";
         }
 
@@ -5040,7 +5458,7 @@ final class Builder implements LazyInterface
             'params' => $child['params'],
             'type' => $type
         ];
-
+        
         $this->reset();
         $union->reset();
         return $this;
@@ -5270,9 +5688,13 @@ final class Builder implements LazyInterface
      *               [2] mixed  The value to compare.
      *
      * @example - Example:
+     * 
      * ```php
      * [$name, $comparison, $value] = $this->getFromColumn(Builder::column('foo', '=', 'bar'));
-     * // $name = 'foo', $comparison = '=', $value = 'bar'
+     * 
+     * // $name = 'foo'
+     * // $comparison = '='
+     * // $value = 'bar'
      * ```
      */
     private function getFromColumn(array $column, bool $extractRaw = false, ?string $key = null): mixed 
@@ -5283,7 +5705,9 @@ final class Builder implements LazyInterface
         return [
             $key, 
             $column[$key]['comparison'] ?? '=', 
-            ($extractRaw && $value instanceof RawExpression) ? $value->getExpression() : $value
+            ($extractRaw && $value instanceof RawExpression) 
+                ? $value->getExpression() 
+                : (($value === null) ? 'NULL' : $value)
         ];
     }
 
@@ -5496,14 +5920,14 @@ final class Builder implements LazyInterface
                 $query .= (($condition['type'] ?? '') === 'OR') ? ' OR ' :  ' AND ';
             }
 
-            $query .= match ($condition['function']) {
-                'CONJOIN' => $this->buildGroupConditions(
+            $query .= match ($condition['mode']) {
+                self::CONJOIN => $this->buildGroupConditions(
                     $condition['conditions'], 
                     $index,
                     $condition['operator'],
                     $bindIndex
                 ),
-                'NESTED' => $this->buildGroupBindConditions(
+                self::NESTED => $this->buildGroupBindConditions(
                     $condition, 
                     $index,
                     $bindIndex
@@ -5542,31 +5966,31 @@ final class Builder implements LazyInterface
             $bindings = $this->conditions[$index];
             $value = $this->getValue($bindings['value']);
 
-            if($bindings['function'] !== 'INARRAY' && ($value instanceof RawExpression)){
+            if($bindings['mode'] !== self::INARRAY && ($value instanceof RawExpression)){
                 continue;
             }
 
-            switch ($bindings['function']) {
-                case 'AGAINST':
+            switch ($bindings['mode']) {
+                case self::AGAINST:
                     $totalBinds++;
                     $this->setBindValue(":match_column_{$index}", $value, $params);
                 break;
-                case 'CONJOIN':
+                case self::CONJOIN:
                     $bindIndex = 0;
                     $this->bindGroupConditions($bindings['conditions'], $index, $bindIndex, $params);
                     $totalBinds += $bindIndex;
                 break;
-                case 'NESTED':
+                case self::NESTED:
                     // Reset index
                     $bindIndex = 0;
                     $this->bindGroupConditions($bindings['X'], $index, $bindIndex, $params);
                     $this->bindGroupConditions($bindings['Y'], $index, $bindIndex, $params);
                     $totalBinds += $bindIndex;
                 break;
-                case 'INARRAY':
+                case self::INARRAY:
                     $this->bindInConditions($value, $bindings['column'], true, $totalBinds, $params);
                 break;
-                case 'INSET':
+                case self::INSET:
                     // skip
                 break;
                 default:
@@ -5621,17 +6045,17 @@ final class Builder implements LazyInterface
 
         $placeholder = $isRaw
             ? self::escape(value: $value ?? '', addSlashes: true)
-            : $this->trimPlaceholder(($condition['function'] === 'AGAINST') ? "match_column_{$index}" : $column);
+            : $this->trimPlaceholder(($condition['mode'] === self::AGAINST) ? "match_column_{$index}" : $column);
 
-        return match ($condition['function']) {
-            'REGULAR' => "{$logical}{$column} {$comparison} {$placeholder}",
-            'INARRAY' => "{$logical}{$column} {$comparison}(" . (
+        return match ($condition['mode']) {
+            self::REGULAR => "{$logical}{$column} {$comparison} {$placeholder}",
+            self::INARRAY => "{$logical}{$column} {$comparison}(" . (
                 $isRaw
                     ? self::escapeValues($value ?? [])
                     : $this->bindInConditions($value ?? [], $column)
             ) . ')',
-            'AGAINST' => "{$logical}MATCH($column) AGAINST ({$placeholder} {$comparison})",
-            'INSET' => self::buildInsetConditions($condition, $logical, $comparison),
+            self::AGAINST => "{$logical}MATCH($column) AGAINST ({$placeholder} {$comparison})",
+            self::INSET => self::buildInsetConditions($condition, $logical, $comparison),
             default => '',
         }; 
     }
@@ -5677,11 +6101,12 @@ final class Builder implements LazyInterface
     /**
      * Bind custom placeholder params for join tables.
      * 
-     * @return void
+     * @return bool
      */
-    private function bindJoinPlaceholders(): void 
+    private function bindJoinPlaceholders(): bool 
     {
-        foreach($this->getOptions('binds') as $key => $value){
+        $binds = 0;
+        foreach($this->getOptions('binds') as $placeholder => $value){
             if($value instanceof RawExpression){
                throw new DatabaseException(
                     sprintf('Bind value cannot be instance of %s', RawExpression::class),
@@ -5689,8 +6114,11 @@ final class Builder implements LazyInterface
                 );
             }
 
-            $this->setBindValue($key, $value);
+            $this->setBindValue($placeholder, $value);
+            $binds++;
         }
+
+        return $binds > 0;
     }
 
     /**
@@ -5920,19 +6348,19 @@ final class Builder implements LazyInterface
                 $bindings = $this->conditions[$index];
                 $value = $this->getValue($bindings['value']);
 
-                switch ($bindings['function']) {
-                    case 'AGAINST':
+                switch ($bindings['mode']) {
+                    case self::AGAINST:
                         $params[$this->trimPlaceholder("match_column_{$index}")] = self::escape($value);
                     break;
-                    case 'CONJOIN':
+                    case self::CONJOIN:
                         $this->bindDebugGroupConditions($bindings['conditions'], $index, $params);
                     break;
-                    case 'NESTED':
+                    case self::NESTED:
                         $bindIndex = 0;
                         $this->bindDebugGroupConditions($bindings['X'], $index, $params, $bindIndex);
                         $this->bindDebugGroupConditions($bindings['Y'], $index, $params, $bindIndex);
                     break;
-                    case 'INARRAY':
+                    case self::INARRAY:
                         $len = count($value);
                         for ($idx = 0; $idx < $len; $idx++) {
                             $placeholder = $this->trimPlaceholder("{$bindings['column']}_in_{$idx}");
@@ -6114,9 +6542,12 @@ final class Builder implements LazyInterface
         }
 
         $input = trim($input, " :\t\n\r\0\x0B");
+        
+        $value = ':';
+        $value .= (str_contains($input, '.') ? str_replace('.', '_', $input) : $input);
+        $value .= ($withId ? '_' . $this->getObjectId() : '');
     
-        return ':' . (str_contains($input, '.') ? str_replace('.', '_', $input) : $input) . 
-            ($withId ? '_' . $this->getObjectId() : '');
+        return $value;
     }
     
     /**
@@ -6131,11 +6562,11 @@ final class Builder implements LazyInterface
         $placeholders = '';
         $inserts = '';
 
-        foreach($values as $col => $value){
-            $inserts .= "$col, ";
+        foreach($values as $column => $value){
+            $inserts .= "$column, ";
             $placeholders .= ($value instanceof RawExpression) 
                 ? $value->getExpression() . ', ' 
-                : ":$col, ";
+                : ":$column, ";
         }
 
         return [rtrim($placeholders, ', '), rtrim($inserts, ', ')];
@@ -6151,19 +6582,17 @@ final class Builder implements LazyInterface
      */
     private function buildPlaceholder(array $columns, bool $asString = false): array|string
     {
-        $updateColumns = [];
+        $placeholders = [];
 
         foreach ($columns as $column => $val) {
             $value = $this->getValue($val);
-
-            if($value instanceof RawExpression){
-                $updateColumns[] = "{$column} = {$value->getExpression()}";
-            }else{
-                $updateColumns[] = "{$column} = " . $this->trimPlaceholder($column);
-            }
+            $placeholders[] = "{$column} = " . (($value instanceof RawExpression) 
+                ? $value->getExpression() 
+                : $this->trimPlaceholder($column)
+            );
         }
 
-        return $asString ? implode(', ', $updateColumns) : $updateColumns;
+        return $asString ? implode(', ', $placeholders) : $placeholders;
     }
 
     /**

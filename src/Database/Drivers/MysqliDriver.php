@@ -25,6 +25,13 @@ use \Luminova\Exceptions\DatabaseException;
 final class MysqliDriver implements DatabaseInterface 
 {
     /**
+     * Flag for unbound placeholder key.
+     * 
+     * @var string NO_BIND_KEY
+     */
+    private const NO_BIND_KEY = '__LMV_MYSQLI_NO_BIND_KEY__';
+
+    /**
      * Mysqli Database connection instance.
      * 
      * @var mysqli|null $connection 
@@ -39,18 +46,18 @@ final class MysqliDriver implements DatabaseInterface
     private mysqli_stmt|mysqli_result|bool $stmt = false;
 
     /**
-     * Debug mode flag.
-     * 
-     * @var bool $onDebug
-     */
-    private bool $onDebug = false;
-
-    /**
      * Database configuration.
      * 
      * @var CoreDatabase|null $config
      */
     private ?CoreDatabase $config = null;
+
+    /**
+     * Debug mode flag.
+     * 
+     * @var bool $onDebug
+     */
+    private bool $onDebug = false;
 
     /**
      * Database queries bind values.
@@ -469,11 +476,12 @@ final class MysqliDriver implements DatabaseInterface
     public static function getType(mixed $value): string  
     {
        return match (true) {
-            is_null($value), ($value === 'null'), ($value === 'NULL')  => 's',
+            is_null($value)  => 's',
             is_int($value),  is_bool($value) => 'i',
             is_float($value) => 'd',
-            is_string($value) => 's',
-            default => 'b'
+            is_resource($value), 
+            (is_string($value) && (bool) preg_match('~[^\x09\x0A\x0D\x20-\x7E]~', $value)) => 'b',
+            default => 's'
         };
     }
 
@@ -728,7 +736,7 @@ final class MysqliDriver implements DatabaseInterface
                     if($isNum){
                         $columns[] = $values;
                     }else{
-                        $columns[(string)$values[0]] = $values[1];
+                        $columns[(string) $values[0]] = $values[1];
                     }
                     continue;
                 }
@@ -975,7 +983,7 @@ final class MysqliDriver implements DatabaseInterface
             return false;
         }
 
-        [$types, $values, ] = $this->emulatePrepares($placeholders);
+        [$types, $values] = $this->prepareValues($placeholders);
 
         if($values === [] && $types === ''){
             return false;
@@ -991,31 +999,36 @@ final class MysqliDriver implements DatabaseInterface
      *
      * Used when prepare emulation is disabled. Determines type and value for each parameter row.
      *
-     * @param array $placeholders The raw placeholder array to process.
+     * @param array<string,mixed> $placeholders The raw placeholder array to process.
      *
      * @return array{string,array,string} A tuple containing:
      *   - string: Parameter types (e.g., "iss").
      *   - array: Values to bind.
-     *   - string: Unused third slot (placeholder for uniform return structure).
      */
     private function defaultPrepares(array $placeholders): array 
     {
         if (!$placeholders) {
-            return ['', [], ''];
+            return ['', []];
         }
 
         $types = '';
         $values = [];
 
-        foreach ($placeholders as &$row) {
+        foreach ($placeholders as $name => &$row) {
             [$type, $value] = $this->getRow($row);
-
             $types .= $type;
-            $values[] = $value;
-        }
+            $index = $this->metadata['positions'][ltrim($name, ':')] ?? null;
 
+            if($index === null){
+                $values[] = $value;
+            }else{
+                $values[$index] = $value;
+            }
+        }
+        
+        ksort($values);
         unset($row);
-        return [$types, $values, ''];
+        return [$types, $values];
     }
 
     /**
@@ -1060,96 +1073,135 @@ final class MysqliDriver implements DatabaseInterface
      */
     private function normalizeQuery(string $query): string
     {
-        if (!self::$isEmulatePrepares) {
-            $this->usePrepares = false;
-            return preg_replace(self::$pattern, '?', $query);
-        }
-
-        $placeholders = 0;
+        $count = 0;
+        $positions = [];
+        $placeholders = [];
 
         $converted = preg_replace_callback(
             self::$pattern,
-            function (array $match) use (&$placeholders): string {
-                $placeholders++;
+            function (array $match) use (&$count, &$positions, &$placeholders): string {
+                // Ensure placeholders maintained the current position
+                $name = $match[1] . (isset($positions[$match[1]]) ? '_' . ($count + 1) : '');
+
+                $positions[$name] = $count;
+                $placeholders[] = $match[1];
+                $count++;
+
                 return '?';
             },
             $query
         );
 
-        if ($placeholders === 0) {
+        if ($count === 0) {
             $this->usePrepares = false;
             return $converted;
         }
 
         $this->metadata = [
+            'count' => $count,
+            'positions' => $positions,
             'placeholders' => $placeholders,
-            'query' => $query,
+            'query' => $query
         ];
 
-        $this->usePrepares = true;
+        $this->usePrepares = self::$isEmulatePrepares;
         return $converted;
     }
 
     /**
-     * Emulates parameter expansion for repeated named placeholders.
+     * Normalizes and prepares query parameters for execution.
      *
-     * This method rewrites the query and parameters to support drivers that don't
-     * allow reusing the same named placeholder multiple times in a query (like MySQLi).
+     * Handles transformation of repeated named placeholders to ensure compatibility with 
+     * MySQLi drivers that do not support reusing the same named parameter more than once.
+     * If emulation is disabled or unnecessary, it returns the default binding structure.
      *
-     * @param array $params Key-value pairs of original parameter names and values.
+     * @param array<string,mixed> $params Associative array of named parameters to bind in the query. 
+     *                      Will be unset internally once processed.
      *
-     * @return array{array:bindings,string:query} Updated parameters and query.
-     *
-     * @throws DatabaseException If a required placeholder has no matching param.
+     * @return array{string,array} Return a tuple containing the types string and the bindings array.
+     * @throws DatabaseException If a placeholder is used in the query without a corresponding value.
      */
-    private function emulatePrepares(array &$params): array
+    private function prepareValues(array &$params): array
     {
-        if (!self::$isEmulatePrepares || !$this->usePrepares) {
-            return $this->defaultPrepares($params);
-        }
+        $count = $this->metadata['count'] ?? 0;
 
-        $query = $this->metadata['query'] ?? '';
-        $count = $this->metadata['placeholders'] ?? 0;
-
-        if($count === 0 || count($params) === $count){
-            return $this->defaultPrepares($params);
+        if (!self::$isEmulatePrepares || !$this->usePrepares || $count === 0 || count($params) === $count) {
+            $bindings = $this->defaultPrepares($params);
+            
+            unset($params);
+            return $bindings;
         }
 
         $nameCounts = [];
         $bindings = [];
         $types = '';
-        
-        $query = preg_replace_callback(
-            self::$pattern, 
-            function ($matches) use (&$nameCounts, &$bindings, &$params, &$types) {
-                $name = $matches[1];
-                $placeholder = ":$name";
 
-                if (!array_key_exists($name, $params) && !array_key_exists($placeholder, $params)) {
-                    throw new DatabaseException(
-                        "Missing parameter for placeholder '$placeholder' (expected in params array or binding).",
-                        DatabaseException::NOT_ALLOWED
-                    );
-                }
-
-                $count = $nameCounts[$name] = ($nameCounts[$name] ?? 0) + 1;
-                $unique = ($count === 1) ? $name : "{$name}_$count";
-                $row = $params[$name] ?? $params[$placeholder];
-
-                [$type, $value] = $this->getRow($row);
-                $types .= $type;
-                $bindings[] = $value;
-
-                unset($row);
-
-                return ":$unique";
-            }, 
-            $query
-        );
-
+        foreach ($this->metadata['placeholders'] as $name) {
+            $this->emulatePrepares(
+                $name,
+                $nameCounts,
+                $bindings,
+                $params,
+                $types
+            );
+        }
+       
+        ksort($bindings);
         unset($params);
 
-        return [$types, $bindings, $query];
+        return [$types, $bindings];
+    }
+
+    /**
+     * Rewrites repeated named placeholders into unique keys with proper bindings.
+     *
+     * This method is called per named placeholder to emulate parameter binding by creating
+     * unique keys (e.g., `:name`, `:name_2`, `:name_3`) and collecting their values and types.
+     *
+     * @param string $name         The original placeholder name (without colon).
+     * @param array  $nameCounts   Reference to a map tracking how many times a name appears.
+     * @param array  $bindings     Reference to the final list of values to bind by position.
+     * @param array  $params       Reference to the original parameters (by name or `:name`).
+     * @param string $types        Reference to the growing string of parameter types.
+     *
+     * @return string Return the rewritten placeholder (e.g., `:name_2`).
+     * @throws DatabaseException If the expected named parameter is not present in `$params`.
+     */
+    private function emulatePrepares(
+        string $name, 
+        array &$nameCounts, 
+        array &$bindings, 
+        array &$params, 
+        string &$types
+    ): string 
+    {
+        $row = $params[$name] ?? $params[":$name"] ?? self::NO_BIND_KEY;
+
+        if ($row === self::NO_BIND_KEY) {
+            throw new DatabaseException(
+                "Missing parameter for placeholder '$name' (expected in params array or binding).",
+                DatabaseException::NOT_ALLOWED
+            );
+        }
+
+        $count = $nameCounts[$name] = ($nameCounts[$name] ?? 0) + 1;
+        $unique = ($count === 1) ? $name : "{$name}_$count";
+        $index = $this->metadata['positions'][$unique] ?? null;
+
+        [$type, $value] = $this->getRow($row);
+        $types .= $type;
+
+        if($index === null){
+            $bindings[] = $value;
+        }elseif(isset($bindings[$index])){
+            $bindings[$count] = $value;
+        }else{
+            $bindings[$index] = $value;
+        }
+
+        unset($row);
+
+        return ":$unique";
     }
 
     /**

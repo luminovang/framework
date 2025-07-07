@@ -23,6 +23,7 @@ class Alter
     ): string
     {
         switch ($database) {
+            case 'sqlsrv':
             case 'sql-server':
                 return $alter
                     ? "ALTER TABLE {$table} ALTER COLUMN {$column} RESTART WITH {$input['start']};"
@@ -83,6 +84,7 @@ class Alter
     ): string {
         switch ($database) {
             case 'ms-access':
+                case 'sqlsrv':
             case 'sql-server':
                 return "ALTER TABLE {$table} ALTER COLUMN {$column} {$datatype};\n";
  
@@ -122,6 +124,7 @@ class Alter
                     "UPDATE {$table} SET {$column} = {$column}_temp;\n" .
                     "ALTER TABLE {$table} DROP COLUMN {$column}_temp;\n";
 
+            case 'sqlsrv':
             case 'sql-server':
                 return "ALTER TABLE {$table} ADD {$column}_temp {$datatype};\n" .
                     "UPDATE {$table} SET {$column}_temp = {$column};\n" .
@@ -186,6 +189,7 @@ class Alter
         mixed $to
     ): string {
         switch ($database) {
+            case 'sqlsrv':
             case 'sql-server':
                 return "EXEC sp_rename '{$table}.{$from}', '{$to}', 'COLUMN';\n";
 
@@ -211,6 +215,7 @@ class Alter
     public static function renameTable(string $database, string $from, string $to): string 
     {
         switch ($database) {
+            case 'sqlsrv':
             case 'sql-server':
                 return "EXEC sp_rename '$from', '$to'";
 
@@ -243,6 +248,7 @@ class Alter
         string $default
     ): string {
         switch ($database) {
+            case 'sqlsrv':
             case 'sql-server':
                 return "ALTER TABLE {$table} ADD CONSTRAINT df_{$column} DEFAULT {$default} FOR {$column};\n";
                 //return "ALTER TABLE {$table} ALTER CONSTRAINT df_{$column} DEFAULT {$default} FOR {$column};\n";
@@ -270,6 +276,7 @@ class Alter
         string $column
     ): string {
         switch ($database) {
+            case 'sqlsrv':
             case 'sql-server':
             case 'ms-access':
             case 'oracle':
@@ -293,6 +300,7 @@ class Alter
         string $column
     ): string {
         switch ($database) {
+            case 'sqlsrv':
             case 'sql-server':
             case 'ms-access':
             case 'oracle':
@@ -326,7 +334,8 @@ class Alter
         string $table,
         string $column,
         string $index
-    ): string {
+    ): string 
+    {
         $index = $index === 'INDEX' ? "" : " {$index}";
 
         return "ALTER TABLE {$table} DROP INDEX idx_{$column};\n
@@ -338,8 +347,10 @@ class Alter
         string $table,
         string $column,
         string $nullable
-    ): string {
+    ): string 
+    {
         switch ($database) {
+            case 'sqlsrv':
             case 'sql-server':
                 return "ALTER TABLE {$table} ALTER COLUMN {$column} {$nullable};\n";
 
@@ -359,11 +370,13 @@ class Alter
         string $table,
         string $column,
         string $charset
-    ): string {
+    ): string 
+    {
         switch ($database) {
             case 'oracle':
                 return "ALTER TABLE {$table} MODIFY {$column} CHAR CHARACTER SET {$charset};\n";
     
+            case 'sqlsrv':
             case 'sql-server':
             case 'ms-access':
                 echo "Charset modification is not supported for '{$database}'.";
@@ -386,7 +399,9 @@ class Alter
             case 'oracle':
                 return "ALTER TABLE {$table} MODIFY {$column} COLLATE {$collation};\n";
     
+            case 'sqlsrv':
             case 'sql-server':
+            case 'sqlsrv':
             case 'ms-access':
                 echo "Collation modification is not supported for '{$database}'.";
                 return '';
@@ -412,6 +427,7 @@ class Alter
         string $index
     ): string {
         switch ($database) {
+            case 'sqlsrv':
             case 'sql-server':
                 return "DROP INDEX {$table}.{$index};\n";
 
@@ -432,6 +448,7 @@ class Alter
         string $value
     ): string {
         switch ($database) {
+            case 'sqlsrv':
             case 'sql-server':
                 return "";
 
@@ -452,6 +469,7 @@ class Alter
         string $comment
     ): string {
         switch ($database) {
+            case 'sqlsrv':
             case 'sql-server':
                 return "";
 
@@ -472,6 +490,7 @@ class Alter
         string $engine
     ): string {
         switch ($database) {
+            case 'sqlsrv':
             case 'sql-server':
                 return "";
 
@@ -570,6 +589,35 @@ class Alter
                 "Unsupported database driver: {$driver}", 
                 DatabaseException::INVALID_ARGUMENTS
             ),
+        };
+    }
+
+    public static function getBuilderTableRename(string $driver, string $table, string $to): string 
+    {
+        return match ($driver) {
+            'mysql', 'mysqli' => "RENAME TABLE {$table} TO {$to}",
+            'pgsql', 'sqlite', 'oci', 'oracle' => "ALTER TABLE {$table} RENAME TO {$to}",
+            'sqlsrv', 'mssql', 'dblib' => "EXEC sp_rename '{$table}', '{$to}'",
+            'cubrid' => "RENAME TABLE {$table} AS {$to}",
+            default  => throw new DatabaseException(
+                "Unsupported driver: {$driver}",
+                DatabaseException::RUNTIME_ERROR
+            ),
+        };
+    }
+
+    public static function getBuilderTableLock(string $driver, bool $forUpdate): string 
+    {
+        return match ($driver) {
+            'mysql', 'mysqli' => $forUpdate ? 'FOR UPDATE' : 'LOCK IN SHARE MODE',
+            'pgsql'           => $forUpdate ? 'FOR UPDATE' : 'FOR SHARE',
+            'sqlite'          => '', // SQLite locks the whole DB automatically
+            'sqlsrv', 'mssql', 'dblib' => $forUpdate 
+                ? 'WITH (UPDLOCK, ROWLOCK)' 
+                : 'WITH (HOLDLOCK, ROWLOCK)',
+            'cubrid'          => $forUpdate ? 'WITH LOCK' : '',
+            'oci', 'oracle'   => $forUpdate ? 'FOR UPDATE' : '',
+            default           => '',
         };
     }
 }
