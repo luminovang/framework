@@ -19,6 +19,7 @@ use \Luminova\Errors\ErrorHandler;
 use \Stringable;
 use \Exception;
 use \Throwable;
+use function \Luminova\Funcs\root;
 
 abstract class AppException extends Exception implements ExceptionInterface, Stringable
 {
@@ -421,7 +422,7 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
                     throw $exception;
                 }
 
-                include_once root('/app/Errors/Defaults/') . 'cli.php';
+                include_once root('/app/Errors/Defaults/', 'cli.php');
                 exit(STATUS_ERROR);
             }
 

@@ -22,7 +22,7 @@ use \GuzzleHttp\Exception\GuzzleException;
 use \Luminova\Exceptions\Http\RequestException;
 use \Luminova\Exceptions\Http\ConnectException;
 use \Exception;
-use Throwable;
+use \Throwable;
 
 class Guzzle implements \Luminova\Interface\ClientInterface
 {

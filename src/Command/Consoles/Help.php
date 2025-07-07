@@ -13,7 +13,7 @@ namespace Luminova\Command\Consoles;
 use \Luminova\Base\BaseConsole;
 use \Luminova\Command\Consoles\Commands;
 
-class SystemHelp extends BaseConsole 
+class Help extends BaseConsole 
 {
     /**
      * {@inheritdoc}
@@ -41,7 +41,9 @@ class SystemHelp extends BaseConsole
 
         $command = $this->term->getArgument(1);
         $all = $this->term->getOption('all', false);
-        $helps = $all ? Commands::getCommands() :  Commands::get($command ?? 'help');
+        $helps = $all 
+            ? Commands::getCommands() 
+            : Commands::get($command ?? 'help');
 
         if($helps === []){
             return $this->term->oops($command);
@@ -49,6 +51,8 @@ class SystemHelp extends BaseConsole
 
         if($all){
             unset($helps['help']);
+        }else{
+            $helps['examples'] = Commands::getGlobalHelps();
         }
 
         $this->term->helper($helps, $all);

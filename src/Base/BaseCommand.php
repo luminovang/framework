@@ -18,6 +18,10 @@ use \Luminova\Utils\LazyObject;
 use \Luminova\Functions\Func;
 use \App\Application;
 use \App\Config\Files;
+use function \Luminova\Funcs\{
+    make_dir,
+    get_mime
+};
 
 abstract class BaseCommand extends Terminal implements RoutableInterface
 {

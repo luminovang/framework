@@ -12,6 +12,7 @@ namespace Luminova\Command\Consoles;
 
 use \Luminova\Base\BaseConsole;
 use \Luminova\Storages\FileManager;
+use function \Luminova\Funcs\root;
 
 class ClearWritable extends BaseConsole
 {

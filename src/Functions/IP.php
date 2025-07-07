@@ -18,6 +18,13 @@ use \Luminova\Functions\Tor;
 use \Luminova\Exceptions\AppException;
 use \Exception;
 use \JsonException;
+use function \Luminova\Funcs\{
+    root,
+    is_platform,
+    write_content,
+    get_content,
+    make_dir
+};
 
 final class IP
 {

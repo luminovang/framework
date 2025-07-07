@@ -21,6 +21,10 @@ use \DateTimeInterface;
 use \DateInterval;
 use \Exception;
 use \JsonException;
+use function \Luminova\Funcs\{
+    root,
+    make_dir
+};
 
 final class FileCache extends BaseCache
 {

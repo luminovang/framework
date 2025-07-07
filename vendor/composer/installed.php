@@ -3,7 +3,7 @@
         'name' => 'luminovang/framework',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'c588b35c1cefc3d5ed8a35fa2c813b1ca02dc6af',
+        'reference' => 'e93c0b441ce6bb07a71d4902778c67f3440a10d3',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -13,7 +13,7 @@
         'luminovang/framework' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'c588b35c1cefc3d5ed8a35fa2c813b1ca02dc6af',
+            'reference' => 'e93c0b441ce6bb07a71d4902778c67f3440a10d3',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

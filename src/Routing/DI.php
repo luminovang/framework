@@ -36,6 +36,7 @@ use \Luminova\Interface\CookieJarInterface;
 use \Luminova\Interface\HttpRequestInterface;
 use \Luminova\Interface\ViewResponseInterface;
 use \Luminova\Notifications\Firebase\Notification;
+use function \Luminova\Funcs\root;
 
 class DI
 {
@@ -155,7 +156,7 @@ class DI
             Notification::class  => Notification::class,
             Cookie::class, CookieInterface::class            => fn(): CookieInterface => new Cookie('_default'),
             CookieFileJar::class, CookieJarInterface::class  => fn(): CookieJarInterface => new CookieFileJar(
-                root('/writeable/temp/cookies.txt')
+                root('/writeable/temp/', 'cookies.txt')
             ),
             default => null,
         };

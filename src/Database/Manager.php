@@ -14,6 +14,10 @@ use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Storages\FileManager;
+use function \Luminova\Funcs\{
+    root,
+    make_dir
+};
 
 final class Manager implements LazyInterface
 {

@@ -13,6 +13,7 @@ namespace Luminova\Core;
 use \Luminova\Interface\ServicesInterface;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\RuntimeException;
+use function \Luminova\Funcs\get_class_name;
 
 abstract class CoreServices implements ServicesInterface, LazyInterface
 {

@@ -27,6 +27,10 @@ use \Luminova\Exceptions\AppException;
 use \JsonException;
 use \Throwable;
 use \Fiber;
+use function \Luminova\Funcs\{
+    root,
+    make_dir
+};
 
 class NovaLogger extends AbstractLogger
 {

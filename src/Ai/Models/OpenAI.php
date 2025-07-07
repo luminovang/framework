@@ -17,6 +17,11 @@ use \Luminova\Storages\FileManager;
 use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\JsonException;
+use function \Luminova\Funcs\{
+    root,
+    absolute_url,
+    write_content
+};
 use \CurlFile;
 
 class OpenAI implements AiInterface, LazyInterface

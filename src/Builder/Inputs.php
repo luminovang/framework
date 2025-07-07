@@ -11,6 +11,7 @@
 namespace Luminova\Builder;
 
 use \Luminova\Builder\Document;
+
 /**
  * Available input types handled dynamically
  * 

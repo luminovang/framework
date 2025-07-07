@@ -20,6 +20,10 @@ use \Luminova\Exceptions\JsonException;
 use \Luminova\Utils\WeakReference;
 use \WeakMap;
 use \Exception;
+use function \Luminova\Funcs\{
+    string_length,
+    http_status_header
+};
 
 class Response implements ViewResponseInterface
 {

@@ -33,6 +33,12 @@ use \Closure;
 use \stdClass;
 use \WeakMap;
 use \Throwable;
+use function \Luminova\Funcs\{
+    root,
+    filter_paths,
+    start_url,
+    get_class_name
+};
 
 trait View
 { 
@@ -755,7 +761,7 @@ trait View
      */
     public final function viewInfo(): array 
     {
-        $viewPath = root($this->__getViewPath()) . $this->activeView . self::__templateExtension();
+        $viewPath = root($this->__getViewPath(), $this->activeView . self::__templateExtension());
         $info = [
             'location' => $viewPath,
             'engine' => self::__templateEngine(),

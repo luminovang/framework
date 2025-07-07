@@ -19,6 +19,10 @@ use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \DateTimeInterface;
+use function \Luminova\Funcs\{
+    root,
+    get_class_name
+};
 
 abstract class BaseModel implements LazyInterface
 {

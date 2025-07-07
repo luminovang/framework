@@ -371,7 +371,7 @@ abstract class CoreApplication implements LazyInterface
      */
     public static function getInstance(): static 
     {
-        if(!self::$instance instanceof self){
+        if(!self::$instance instanceof static){
             self::$instance = new static();
         }
        

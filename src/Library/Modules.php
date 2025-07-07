@@ -10,6 +10,11 @@
  */
 namespace Luminova\Library;
 
+use function \Luminova\Funcs\{
+    root,
+    path
+};
+
 final class Modules
 {
     /**
@@ -27,7 +32,7 @@ final class Modules
      */
     public static function autoloadClass(string $class): void
     {
-        if (file_exists($modules = root('/app/Config/') . 'Modules.php')) {
+        if (file_exists($modules = root('/app/Config/', 'Modules.php'))) {
 
             $config = require_once $modules;
 

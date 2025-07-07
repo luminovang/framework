@@ -30,6 +30,7 @@ use \Luminova\Exceptions\SecurityException;
 use \Generator;
 use \Stringable;
 use \JsonException;
+use function \Luminova\Funcs\get_mime;
 
 /**
  * @method mixed getPut(string|null $field, mixed $default = null)

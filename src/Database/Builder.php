@@ -31,6 +31,7 @@ use \Luminova\Interface\PromiseInterface;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Exceptions\InvalidArgumentException;
+use function \Luminova\Funcs\{is_associative, is_command};
 
 final class Builder implements LazyInterface
 {  
@@ -538,7 +539,7 @@ final class Builder implements LazyInterface
      *     ->select(['name']);
      * ```
      */
-    public static function getInstance(?string $table = null, ?string $alias = null): static 
+    public static function getInstance(?string $table = null, ?string $alias = null): self 
     {
         return self::$instance ??= new self($table, $alias);
     }
@@ -1341,6 +1342,45 @@ final class Builder implements LazyInterface
     public function where(string $column, string $comparison, mixed $value): self
     {
         return $this->condition('AND', $column, $comparison, $value);
+    }
+
+    /**
+     * Add a raw SQL fragment to the WHERE clause.
+     *
+     * Accepts a string or a RawExpression object. This is useful when you need to insert
+     * custom SQL that can't be built using structured conditions.
+     *
+     * @param RawExpression|string $sql Raw SQL fragment to append to WHERE clause.
+     * 
+     * @return self Return instance of builder class.
+     * 
+     * > **Notes:**
+     * > - Use this method only when you're sure the input is safe.
+     * > - You must include the proper logical operator (e.g. AND, OR) in the raw SQL yourself.
+     * 
+     * @example - Example:
+     * 
+     * ```php
+     * Builder::table('users')
+     *   ->select()
+     *   ->whereClause('AND status <> "archived"')
+     *   ->whereClause(new RawExpression('OR deleted_at IS NULL'))
+     *   ->get()
+     * ```
+     */
+    public function whereClause(RawExpression|string $sql): self
+    {
+        if ($sql instanceof RawExpression) {
+            $sql = $sql->getExpression();
+        }
+
+        $sql = trim($sql);
+
+        if ($sql !== '') {
+            $this->options['whereRaw'][] = $sql;
+        }
+
+        return $this;
     }
 
     /**
@@ -2563,19 +2603,6 @@ final class Builder implements LazyInterface
      * @param bool $enable The caching status action.
      * 
      * @return self Return instance of builder class.
-     * @deprecated This method is deprecated use `cacheable` instead.
-     */
-    public function caching(bool $enable): self
-    {
-        return $this->cacheable($enable);
-    }
-
-    /**
-     * Globally enable or disabled all caching for subsequent select operations.
-     *
-     * @param bool $enable The caching status action.
-     * 
-     * @return self Return instance of builder class.
      * 
      * > **Note:** By default caching is enabled once you call the `cache` method.
      */
@@ -3555,10 +3582,10 @@ final class Builder implements LazyInterface
             return (bool) $result;
         }
 
-        return $this->buildExecutableStatement(
-            ' COUNT(*)', 'total',
+        return (bool) $this->buildExecutableStatement(
+            ' 1', 'total',
             ['*'], RETURN_NEXT // will be ignored
-        ) > 0;
+        );
     }
 
     /**
@@ -3579,10 +3606,11 @@ final class Builder implements LazyInterface
     public function exists(): bool
     {
         $query = Alter::getTableExists($this->db->getDriver());
-        $stmt = $this->db->prepare("SELECT COUNT(*) FROM {$query}")
+        $stmt = $this->db->prepare("SELECT 1 FROM {$query}")
             ->bind(':tableName', $this->tableName);
+        $stmt->execute();
         
-        return $stmt->execute() && $stmt->getCount() > 0;
+        return $stmt->ok() && !empty($stmt->fetch(RETURN_NEXT, FETCH_COLUMN));
     }
 
     /**
@@ -3851,6 +3879,8 @@ final class Builder implements LazyInterface
         $sql .= $this->getJoinConditions();
         $sql .= ' SET ' . $this->buildPlaceholder($columns, true);
         $this->buildConditions($sql);
+        $this->addRawWhereClause($sql);
+
         $limit = $this->maxLimit[1] ?? 0;
 
         if($limit > 0){
@@ -4599,6 +4629,7 @@ final class Builder implements LazyInterface
             'filters'  => [],
             'match'    => [],
             'matches'  => [],
+            'whereRaw' => [],
             'duplicate'    => [],
             'unionColumns' => [],
             'current'  => ['sql' => '', 'params' => [], 'columns' => [], 'cache' => []]
@@ -4858,7 +4889,12 @@ final class Builder implements LazyInterface
      */
     private function assertStrictConditions(string $fn, bool $required = false): void
     {
-        if (!$this->isCollectMetadata && ($required || $this->isStrictMode) && $this->conditions === []) {
+        if (
+            !$this->isCollectMetadata && 
+            ($required || $this->isStrictMode) && 
+            $this->conditions === [] &&
+            $this->options['whereRaw'] === []
+        ) {
             throw new DatabaseException(
                 sprintf('Execution of %s is not allowed in strict mode without a "WHERE" condition.', $fn), 
                 DatabaseException::VALUE_FORBIDDEN
@@ -4931,6 +4967,7 @@ final class Builder implements LazyInterface
     /**
      * Assert SQL logical operators.
      * 
+     * @param string $fn
      * @param string|null $operator The base operator to check.
      * @param string|null $clause An optional chain operator to check.
      * @param string|null $nested An optional combined nested operator to check.
@@ -5159,6 +5196,8 @@ final class Builder implements LazyInterface
             $this->buildConditions($sql);
         }
 
+        $this->addRawWhereClause($sql);
+
         if(!$isDelete){
             [$query, $isOrdered] = $this->addOrderAndGrouping();
             $sql .= $query;
@@ -5253,6 +5292,29 @@ final class Builder implements LazyInterface
     }
 
     /**
+     * Appends raw WHERE fragments into the final SQL string.
+     *
+     * @param string $sql The SQL string being built to appended.
+     */
+    private function addRawWhereClause(string &$sql): void 
+    {
+        $raw = $this->getOptions('whereRaw');
+    
+        if ($raw === []) {
+            return;
+        }
+        
+        $query = trim(implode(' ', $raw));
+
+        if($this->conditions === [] && stripos($sql, 'WHERE') === false){
+            $query = preg_replace('/^\s*(AND|OR)\b\s*/i', '', $query);
+            $sql .= ' WHERE';
+        }
+
+        $sql .= ' ' . $query;
+    }
+
+    /**
      * Compiles all UNION/UNION ALL statements into a single executable SQL string.
      *
      * @return array First item is the full SQL string, second is merged parameter bindings.
@@ -5274,7 +5336,6 @@ final class Builder implements LazyInterface
         $isConditions = $this->conditions !== [];
 
         $isCompound = $isColumns || $isConditions || $limit > 0;
-        $length = count($this->unions);
         $alias = ($this->unionCombineAlias ?: 'un_compound');
 
         if($isCompound){
@@ -5284,8 +5345,7 @@ final class Builder implements LazyInterface
             $sqlParts[] = $this->isDistinct ? "SELECT DISTINCT {$columns} FROM (" : "SELECT {$columns} FROM (";
         }
 
-        for ($index = 0; $index < $length; $index++) {
-            $union = $this->unions[$index];
+        foreach ($this->unions as $index => $union) {
             $sql = '(' . trim($union['sql']) . ')';
 
             if ($index === 0) {
@@ -5911,11 +5971,8 @@ final class Builder implements LazyInterface
 
         $firstCondition = true;
         $bindIndex = 0;
-        $length = count($this->conditions);
 
-        for ($index = 0; $index < $length; $index++) {
-            $condition = $this->conditions[$index];
-
+        foreach ($this->conditions as $index => $condition) {
             if (!$addWhere || ($addWhere && !$firstCondition)) {
                 $query .= (($condition['type'] ?? '') === 'OR') ? ' OR ' :  ' AND ';
             }
@@ -5960,54 +6017,44 @@ final class Builder implements LazyInterface
             return false;
         }
 
-        $length = count($this->conditions);
+        foreach ($this->conditions as $index => $condition) {
+            $value = $this->getValue($condition['value'] ?? null);
 
-        for ($index = 0; $index < $length; $index++) {
-            $bindings = $this->conditions[$index];
-            $value = $this->getValue($bindings['value']);
-
-            if($bindings['mode'] !== self::INARRAY && ($value instanceof RawExpression)){
+            if($condition['mode'] !== self::INARRAY && ($value instanceof RawExpression)){
                 continue;
             }
 
-            switch ($bindings['mode']) {
+            switch ($condition['mode']) {
                 case self::AGAINST:
                     $totalBinds++;
                     $this->setBindValue(":match_column_{$index}", $value, $params);
                 break;
                 case self::CONJOIN:
                     $bindIndex = 0;
-                    $this->bindGroupConditions($bindings['conditions'], $index, $bindIndex, $params);
+                    $this->bindGroupConditions($condition['conditions'], $index, $bindIndex, $params);
                     $totalBinds += $bindIndex;
                 break;
                 case self::NESTED:
                     // Reset index
                     $bindIndex = 0;
-                    $this->bindGroupConditions($bindings['X'], $index, $bindIndex, $params);
-                    $this->bindGroupConditions($bindings['Y'], $index, $bindIndex, $params);
+                    $this->bindGroupConditions($condition['X'], $index, $bindIndex, $params);
+                    $this->bindGroupConditions($condition['Y'], $index, $bindIndex, $params);
                     $totalBinds += $bindIndex;
                 break;
                 case self::INARRAY:
-                    $this->bindInConditions($value, $bindings['column'], true, $totalBinds, $params);
+                    $this->bindInConditions($value, $condition['column'], true, $totalBinds, $params);
                 break;
                 case self::INSET:
                     // skip
                 break;
                 default:
                     $totalBinds++;
-                    $this->setBindValue($this->trimPlaceholder($bindings['column']), $value, $params);
+                    $this->setBindValue($this->trimPlaceholder($condition['column']), $value, $params);
                 break;
             }
         }
-        
-        if($matches === []){
-            return $totalBinds > 0;
-        }
-
-        $len = count($matches);
-
-        for ($idx = 0; $idx < $len; $idx++) {
-            $order = $matches[$idx];
+ 
+        foreach ($matches as $idx => $order) {
             $value = $this->getValue($order['value']);
 
             if ($value instanceof RawExpression) {
@@ -6342,36 +6389,32 @@ final class Builder implements LazyInterface
                 }
             }
 
-            $length = count($this->conditions);
+            foreach ($this->conditions as $index => $condition) {
+                $value = $this->getValue($condition['value']);
 
-            for ($index = 0; $index < $length; $index++) {
-                $bindings = $this->conditions[$index];
-                $value = $this->getValue($bindings['value']);
-
-                switch ($bindings['mode']) {
+                switch ($condition['mode']) {
                     case self::AGAINST:
                         $params[$this->trimPlaceholder("match_column_{$index}")] = self::escape($value);
                     break;
                     case self::CONJOIN:
-                        $this->bindDebugGroupConditions($bindings['conditions'], $index, $params);
+                        $this->bindDebugGroupConditions($condition['conditions'], $index, $params);
                     break;
                     case self::NESTED:
                         $bindIndex = 0;
-                        $this->bindDebugGroupConditions($bindings['X'], $index, $params, $bindIndex);
-                        $this->bindDebugGroupConditions($bindings['Y'], $index, $params, $bindIndex);
+                        $this->bindDebugGroupConditions($condition['X'], $index, $params, $bindIndex);
+                        $this->bindDebugGroupConditions($condition['Y'], $index, $params, $bindIndex);
                     break;
                     case self::INARRAY:
-                        $len = count($value);
-                        for ($idx = 0; $idx < $len; $idx++) {
-                            $placeholder = $this->trimPlaceholder("{$bindings['column']}_in_{$idx}");
+                        foreach ($value as $idx => $val) {
+                            $placeholder = $this->trimPlaceholder("{$condition['column']}_in_{$idx}");
 
-                            $params[$placeholder] = is_array($value[$idx]) 
-                                ? self::escapeValues($value[$idx], true) 
-                                : $value[$idx];
+                            $params[$placeholder] = is_array($val) 
+                                ? self::escapeValues($val, true) 
+                                : $val;
                         }
                     break;
                     default: 
-                        $params[$this->trimPlaceholder($bindings['column'])] = self::escape($value);
+                        $params[$this->trimPlaceholder($condition['column'])] = self::escape($value);
                     break;
                 }
             }
@@ -6412,10 +6455,8 @@ final class Builder implements LazyInterface
         }
 
         $match = $isOrdered ? ' , ' : ' ORDER BY';
-        $length = count($matches);
 
-        for ($idx = 0; $idx < $length; $idx++) {
-            $order = $matches[$idx];
+        foreach ($matches as $idx => $order) {
             $value = $this->getValue($order['value']);
             $value = ($value instanceof RawExpression) 
                 ? self::escape(value: $value, addSlashes: true)
@@ -6444,20 +6485,18 @@ final class Builder implements LazyInterface
         }
 
         $having = ' HAVING';
-        $length = count($filters);
-
-        for ($idx = 0; $idx < $length; $idx++) {
-            $condition = $filters[$idx];
-            $expression = $condition['expression'];
+   
+        foreach ($filters as $idx => $filter) {
+            $expression = $filter['expression'];
 
             if($expression instanceof RawExpression){
                 $expression = $expression->getExpression();
             }
 
-            $value = self::escape($condition['value'], true);
-            $operator = ($idx > 0) ? ($condition['operator'] ?? 'AND') . ' ' : '';
+            $value = self::escape($filter['value'], true);
+            $operator = ($idx > 0) ? ($filter['operator'] ?? 'AND') . ' ' : '';
 
-            $having .= "{$operator}{$expression} {$condition['comparison']}) {$value} ";
+            $having .= "{$operator}{$expression} {$filter['comparison']}) {$value} ";
             
         }
 

@@ -15,6 +15,7 @@
 
 # Development files
 UPDATE.md
+CHANGES.md
 composer.lock
 command.phar
 phpdoc.xml

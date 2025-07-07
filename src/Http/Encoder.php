@@ -10,6 +10,8 @@
  */
 namespace Luminova\Http;
 
+use function \Luminova\Funcs\string_length;
+
 final class Encoder
 {
     /**

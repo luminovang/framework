@@ -15,6 +15,10 @@ use \Luminova\Http\Header;
 use \Luminova\Time\Timestamp;
 use \Luminova\Storages\FileManager;
 use \DateTimeInterface;
+use function \Luminova\Funcs\{
+    make_dir,
+    string_length
+};
 
 final class TemplateCache
 {

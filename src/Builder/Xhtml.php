@@ -15,6 +15,7 @@
 namespace Luminova\Builder;
 
 use \Luminova\Builder\Document;
+use function \Luminova\Funcs\escape;
 
 /**
  * Example usage:

@@ -15,6 +15,7 @@ use \Luminova\Interface\MailerInterface;
 use \Luminova\Exceptions\MailerException;
 use \Luminova\Functions\Func;
 use \Luminova\Logger\Logger;
+use function \Luminova\Funcs\get_content;
 
 class NovaMailer implements MailerInterface
 {

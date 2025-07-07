@@ -13,6 +13,10 @@ namespace Luminova\Languages;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\NotFoundException;
 use \Luminova\Exceptions\RuntimeException;
+use function \Luminova\Funcs\{
+    root,
+    locale
+};
 
 final class Translator implements LazyInterface
 {

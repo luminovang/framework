@@ -10,6 +10,7 @@
  */
 namespace Luminova\Command\Consoles;
 
+use \Luminova\Command\Terminal;
 use \Luminova\Base\BaseConsole;
 use \Luminova\Command\Utils\Text;
 use \Luminova\Command\Utils\Color;
@@ -39,9 +40,9 @@ class Lists extends BaseConsole
      */
     public function run(?array $options = []): int
     {
-        $this->listCommands();
+        $this->term->perse($options);
 
-        return STATUS_SUCCESS;
+        return $this->listCommands();
     }
 
     /**
@@ -55,26 +56,58 @@ class Lists extends BaseConsole
     /**
      * List all available luminova (novakit) commands.
      * 
-     * @return void
+     * @return int
      */
-    public function listCommands(): void 
+    public function listCommands(): int 
     {
+        $from = $this->term->getAnyOption('command', 'c', null);
         $commands = Commands::getCommands();
-        $groupedCommands = [];
-        
-        foreach ($commands as $line) {
-            $groupedCommands[$line['group']][] = $line;
-        }
+        $grouping = [];
 
-        foreach ($groupedCommands as $group => $list) {
-            $this->term->writeln($group);
-            
-            foreach ($list as $command) {
-                $name = Color::style(Text::padding($command['name'], 25, Text::LEFT), 'green');
-                $this->term->writeln('   ' . $name . $command['description']);
+        $from = $from ? (strstr($from, ':', true) ?: $from): null;
+       
+        foreach ($commands as $command => $line) {
+            if ($from && !str_starts_with($command, $from)) {
+                continue;
             }
 
-            $this->term->newLine();
+            $length = strlen($command);
+            $last = $grouping[$line['name']]['last'] ?? 0;
+
+            if($length > $last){
+                $grouping[$line['name']]['largest'] = $length;
+            }
+
+            $grouping[$line['name']]['commands'][] =  $line;
         }
+
+        if($grouping === []){
+            $this->term->oops($from ?? 'zsh');
+            
+            if(($suggest = Commands::suggest($from ?? 'zsh')) !== ''){
+                $this->term->fwrite($suggest, Terminal::STD_ERR);
+            }
+            
+            return STATUS_ERROR;
+        }
+
+        foreach ($grouping as $name => $list) {
+            $this->term->writeln(Text::style("Available {$name} Commands", Text::FONT_BOLD));
+            $this->term->newLine();
+            
+            foreach ($list['commands'] as $options) {
+                $label = Color::style($options['group'], 'lightYellow');
+                $spacing = Text::padding('', ($list['largest'] + 6) - strlen($options['group']), Text::RIGHT);
+                $value = $options['description'];
+
+                $this->term->writeln("  {$label}{$spacing}{$value}");
+            }
+            
+            if(!$from){
+                $this->term->newLine(2);
+            }
+        }
+
+        return STATUS_SUCCESS;
     }
 }

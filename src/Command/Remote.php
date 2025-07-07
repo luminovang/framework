@@ -17,7 +17,7 @@ use function \ssh2_auth_pubkey_file;
 use function \stream_set_blocking;
 use function \stream_get_contents;
 use function \fclose;
-use function \root;
+use function \Luminova\Funcs\root;
 use \Luminova\Exceptions\RuntimeException;
 
 class Remote
@@ -264,7 +264,7 @@ class Remote
             return false;
         }
 
-        $executable ??= 'php ' . root('public') . 'index.php';
+        $executable ??= 'php ' . root('/public/', 'index.php');
         $stream = ssh2_exec(
             $this->connection, 
             "{$executable} {$command}",

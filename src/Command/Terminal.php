@@ -21,6 +21,11 @@ use \Luminova\Security\Validation;
 use \Luminova\Command\Consoles\Commands;
 use \Luminova\Exceptions\IOException;
 use \Closure;
+use function \Luminova\Funcs\{
+    is_platform,
+    list_to_array,
+    is_command
+};
 
 class Terminal implements LazyInterface
 {
@@ -1251,19 +1256,6 @@ class Terminal implements LazyInterface
     }
 
     /**
-     * Perse commands.
-     * 
-     * @param array<string,mixed> $options Command arguments, options, and flags extracted from the executed command.
-     * 
-     * @return void 
-     * @deprecated This method has been deprecated use `perse` instead. 
-     */
-    public static final function explain(array $options): void
-    {
-        self::perse($options);
-    }
-
-    /**
      * Print new lines based on specified count.
      *
      * @param int $count The number of new lines to print.
@@ -1360,11 +1352,8 @@ class Terminal implements LazyInterface
         $heights = array_map(
             fn($row) => max(array_map(fn($header) => Text::height(
                 $retainNewlines 
-                ? Text::wrap(
-                    $row[$header], 
-                    $widths[array_search($header, $headers)]
-                 ) 
-                : $row[$header]
+                    ? Text::wrap($row[$header], $widths[array_search($header, $headers)]) 
+                    : $row[$header]
             ), $headers)),
             $rows
         );
@@ -1373,27 +1362,33 @@ class Terminal implements LazyInterface
         $table .= self::tBorder($widths, $chars, 'topLeft', 'topConnector', 'topRight', $borderColor);
         $table .= self::trow($headers, $widths, $headerColor ?? $foreground, $borderColor, $chars, true);
         $table .= self::tBorder($widths, $chars, 'leftConnector', 'crossings', 'rightConnector', $borderColor);
-    
+
         foreach ($rows as $index => $row) {
             $height = $heights[$index];
             $lines = array_map(
                 fn($header) => Text::lines(Text::wrap(
-                    $row[$header], 
+                    (string) $row[$header] ?? '', 
                     $widths[array_search($header, $headers)]
                 )),
                 $headers
             );
-    
+
             for ($lIdx = 0; $lIdx < $height; $lIdx++) {
                 $tData = Color::style($chars['vertical'], $borderColor);
+
                 foreach ($headers as $i => $header) {
-                    $tData .= ' ' . Color::style(str_pad(
-                        $retainNewlines ? ($lines[$i][$lIdx] ?? '') : implode(' ', $lines[$i] ?? ''),
-                        $widths[$i]), 
+                    $content = $lines[$i] ?? [];
+                    $tData .= ' ' . Color::style(
+                        str_pad($retainNewlines 
+                            ? ($content[$lIdx] ?? '') 
+                            : implode(' ', $content),
+                            $widths[$i]
+                        ), 
                         $foreground
                     );
                     $tData .= ' ' . Color::style($chars['vertical'], $borderColor);
                 }
+
                 $table .= $tData . PHP_EOL;
             }
     
@@ -2041,6 +2036,8 @@ class Terminal implements LazyInterface
     public static final function helper(array|null $helps, bool $all = false): void
     {
         $helps = ($helps === null) ? Commands::getCommands() : ($all ? $helps : [$helps]);
+        $total = count($helps);
+        $index = 0;
 
         foreach($helps as $name => $properties){
             if(!$properties){
@@ -2067,9 +2064,14 @@ class Terminal implements LazyInterface
                     }
 
                     self::writeln($value);
-                    self::newLine();
                 }
             }
+
+            if($index < $total - 1){
+                self::newLine();
+            }
+
+            $index++;
         }
     }
 
@@ -2314,8 +2316,6 @@ class Terminal implements LazyInterface
             }else{
                 self::writeln(Text::padding('', 8 - $minus, Text::RIGHT) . $values);
             }
-
-            self::newLine();
         }
     }
 

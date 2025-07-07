@@ -19,6 +19,10 @@ use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
 use \Closure;
 use \Throwable;
+use function \Luminova\Funcs\{
+    is_command,
+    shared,
+};
 
 final class Schema
 {

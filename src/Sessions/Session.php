@@ -18,7 +18,6 @@ use \Luminova\Interface\LazyInterface;
 use \App\Config\Session as SessionConfig;
 use \Luminova\Sessions\Managers\Session as SessionManager;
 use \Luminova\Base\BaseSessionHandler;
-use \Luminova\Errors\ErrorHandler;
 use \Luminova\Functions\IP;
 use \Luminova\Time\Time;
 use \Luminova\Logger\Logger;

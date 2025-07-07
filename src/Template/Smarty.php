@@ -19,6 +19,7 @@ use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Optimization\Minification;
 use \Exception;
 use \SmartyException;
+use function \Luminova\Funcs\make_dir;
 
 class Smarty 
 {

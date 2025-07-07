@@ -14,6 +14,12 @@ use \Luminova\Luminova;
 use \Luminova\Base\BaseConsole;
 use \App\Config\Template;
 use \Exception;
+use function \Luminova\Funcs\{
+    root,
+    filter_paths,
+    pascal_case,
+    write_content
+};
 
 class Generators extends BaseConsole 
 {
@@ -546,7 +552,7 @@ class Generators extends BaseConsole
      */
     private function saveFile(string $content, string $path, string $filename): bool 
     {
-        $filepath = root($path) . $filename;
+        $filepath = root($path, $filename);
         $continue = 'yes';
 
         if(file_exists($filepath)){

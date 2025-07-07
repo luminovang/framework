@@ -21,6 +21,7 @@ use function \pcntl_fork;
 use function \pcntl_wexitstatus;
 use function \pcntl_wifexited;
 use function \pcntl_waitpid;
+use function \Luminova\Funcs\array_merge_result;
 
 final class Queue implements Countable
 {

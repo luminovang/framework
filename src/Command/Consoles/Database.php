@@ -20,6 +20,14 @@ use \Luminova\Storages\FileManager;
 use \Luminova\Application\Caller;
 use \Luminova\Exceptions\AppException;
 use \Exception;
+use function \Luminova\Funcs\{
+    root,
+    write_content,
+    get_content,
+    make_dir,
+    get_class_name,
+    shared,
+};
 
 class Database extends BaseConsole 
 {

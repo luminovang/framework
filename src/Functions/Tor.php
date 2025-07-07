@@ -11,6 +11,12 @@
 namespace Luminova\Functions;
 
 use \Luminova\Exceptions\FileException;
+use function \Luminova\Funcs\{
+    root,
+    write_content,
+    get_content,
+    make_dir
+};
 
 final class Tor 
 {

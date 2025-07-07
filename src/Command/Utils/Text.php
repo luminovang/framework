@@ -537,7 +537,7 @@ final class Text
     ): string 
     {
         if (!$text) {
-            return '';
+            return $text;
         }
 
         $width = max(0, $width);
@@ -746,8 +746,8 @@ final class Text
      */
     public static function lines(string $text): array
     {
-        return ($text === '') 
-            ? [] 
+        return !$text
+            ? [$text] 
             : explode("\n", preg_replace('/\r\n|\r/', "\n", $text));
     }
 

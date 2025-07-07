@@ -23,6 +23,12 @@ use \FilesystemIterator;
 use \SplFileInfo;
 use \PhpToken;
 use \Throwable;
+use function \Luminova\Funcs\{
+    root,
+    pascal_case,
+    write_content,
+    make_dir
+};
 
 final class Tokenizer
 {

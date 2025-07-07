@@ -25,6 +25,11 @@ use \Memcached;
 use \DateInterval;
 use \DateTimeImmutable;
 use \Throwable;
+use function \Luminova\Funcs\{
+    root,
+    response,
+    is_command
+};
 
 class RateLimiter implements LazyInterface
 {

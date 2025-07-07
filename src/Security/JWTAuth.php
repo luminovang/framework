@@ -21,6 +21,12 @@ use \Luminova\Exceptions\EncryptionException;
 use \Closure;
 use \stdClass;
 use \Throwable;
+use function \Luminova\Funcs\{
+    root,
+    write_content,
+    get_content,
+    make_dir
+};
 
 class JWTAuth implements LazyInterface
 {

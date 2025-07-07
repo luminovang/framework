@@ -16,6 +16,12 @@ use \Luminova\Logger\LogLevel;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
+use function \Luminova\Funcs\{
+    root,
+    write_content,
+    get_content,
+    make_dir
+};
 
 abstract class CoreCronTasks
 {
