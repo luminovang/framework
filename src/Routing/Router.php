@@ -17,19 +17,14 @@ use \App\Config\Template;
 use \Luminova\Http\Header;
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Color;
-use \Luminova\Routing\DI;
-use \Luminova\Routing\Prefix;
-use \Luminova\Routing\Segments;
 use \Luminova\Base\BaseCommand;
 use \Luminova\Core\CoreApplication;
 use \Luminova\Attributes\Compiler;
 use \Luminova\Cache\TemplateCache;
-use \Luminova\Exceptions\RouterException;
-use \Luminova\Exceptions\AppException;
-use \Luminova\Interface\RoutableInterface;
-use \Luminova\Interface\RouterInterface;
-use \Luminova\Interface\ErrorHandlerInterface;
 use \Luminova\Utils\WeakReference;
+use \Luminova\Routing\{DI, Prefix, Segments};
+use \Luminova\Exceptions\{RouterException, AppException};
+use \Luminova\Interface\{RoutableInterface, RouterInterface, ErrorHandlerInterface};
 use \WeakMap;
 use \ReflectionMethod;
 use \ReflectionFunction;
@@ -41,6 +36,11 @@ use \ReflectionClass;
 use \Closure;
 use \Exception;
 use \Throwable;
+use function \Luminova\Funcs\{
+    root,
+    filter_paths,
+    is_command
+};
 
 final class Router implements RouterInterface
 {

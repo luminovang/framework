@@ -21,8 +21,12 @@ use \App\Config\Cron;
 use \ReflectionClass;
 use \DateInterval;
 use \Exception;
+use function \Luminova\Funcs\{
+    write_content,
+    make_dir
+};
 
-class CronJobs extends BaseConsole 
+class CronWorker extends BaseConsole 
 {
     /**
      * {@inheritdoc}
@@ -32,7 +36,7 @@ class CronJobs extends BaseConsole
     /**
      * {@inheritdoc}
      */
-    protected string $name = 'CronJobs';
+    protected string $name = 'CronWorker';
 
     /**
      * {@inheritdoc}

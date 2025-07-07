@@ -10,14 +10,12 @@
  */
 namespace Luminova\Logger;
 
-use \Psr\Log\LoggerInterface;
-use \Luminova\Logger\LogLevel;
-use \Luminova\Logger\NovaLogger;
-use \App\Config\Logger as LoggerConfig;
-use \Luminova\Functions\Func;
 use \Luminova\Http\Request;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Functions\Func;
+use \Psr\Log\LoggerInterface;
+use \App\Config\Logger as LoggerConfig;
+use \Luminova\Logger\{NovaLogger, LogLevel};
+use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
 use \Throwable;
 
 /**

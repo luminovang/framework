@@ -16,6 +16,7 @@ use \Luminova\Functions\IP;
 use \Luminova\Time\Time;
 use \Luminova\Exceptions\RuntimeException;
 use \ReturnTypeWillChange;
+use function \Luminova\Funcs\root;
 
 /**
  * Custom File Handler for session management with optional encryption support.

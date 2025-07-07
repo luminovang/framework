@@ -11,9 +11,8 @@
 namespace Luminova\Base;
 
 use \Luminova\Luminova;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Interface\HttpRequestInterface;
 use \Psr\Log\AbstractLogger;
+use \Luminova\Interface\{HttpRequestInterface, LazyInterface};
 
 abstract class BaseConfig implements LazyInterface
 {

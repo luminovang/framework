@@ -20,6 +20,11 @@ use \RecursiveIteratorIterator;
 use \RecursiveDirectoryIterator;
 use \SplFileObject;
 use \Exception;
+use function \Luminova\Funcs\{
+    root,
+    is_platform,
+    get_mime
+};
 
 class FileManager
 {
@@ -749,8 +754,10 @@ class FileManager
                     $read = min($chunk_size, $length);
                     echo fread($handler, $read);
                     $length -= $read;
-                    ob_flush();
-                    flush();
+                    if (ob_get_level() > 0) {
+                        ob_flush();
+                        flush();
+                    }
                     usleep($delay);
                 }
             } else {
@@ -776,8 +783,10 @@ class FileManager
                 $chunk_size = min($chunk_size, $end - $start + 1);
                 echo substr($content, $start, $chunk_size);
                 $start += $chunk_size;
-                ob_flush();
-                flush();
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                    flush();
+                }
                 usleep($delay);
             }
 

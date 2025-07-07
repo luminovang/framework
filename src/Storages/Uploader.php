@@ -15,6 +15,7 @@ use \Luminova\Storages\FileManager;
 use \Luminova\Exceptions\StorageException;
 use \SplFileObject;
 use \Throwable;
+use function \Luminova\Funcs\make_dir;
 
 final class Uploader
 {

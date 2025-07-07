@@ -12,7 +12,7 @@ namespace Luminova\Core;
 
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\JsonException;
-use stdClass;
+use \stdClass;
 
 abstract class CoreDatabase implements LazyInterface
 {

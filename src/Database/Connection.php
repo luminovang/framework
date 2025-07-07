@@ -17,8 +17,8 @@ use \App\Config\Database;
 use \Luminova\Logger\Logger;
 use \Luminova\Core\CoreDatabase;
 use \Luminova\Interface\LazyInterface;
-use \Luminova\Database\Drivers\PdoDriver;
 use \Luminova\Interface\DatabaseInterface;
+use \Luminova\Database\Drivers\PdoDriver;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Database\Drivers\MysqliDriver;
 
@@ -159,8 +159,8 @@ class Connection implements LazyInterface, Countable
     ): static 
     {
         $instance = $sharedInstance
-            ? (self::$instance ??= new self($pool, $maxConnections, false))
-            : new self($pool, $maxConnections, false);
+            ? self::getInstance($pool, $maxConnections, false)
+            : new static($pool, $maxConnections, false);
 
         $instance->shardServerLocation = $locationId;
         $instance->isShardFallbackOnError = $fallbackOnError;
@@ -186,7 +186,6 @@ class Connection implements LazyInterface, Countable
      * @param bool $autoConnect Whether to auto-connect on initialization (default: `true`).
      *
      * @return static Returns the singleton instance of the connection class.
-     *
      * @throws DatabaseException If connection retries fail, max connection limit is reached, an invalid driver is detected, or a connection error occurs.
      */
     public static function getInstance(
@@ -195,8 +194,8 @@ class Connection implements LazyInterface, Countable
         bool $autoConnect = true
     ): static
     {
-        if (!self::$instance instanceof self) {
-            self::$instance = new self($pool, $maxConnections, $autoConnect);
+        if (!self::$instance instanceof static) {
+            self::$instance = new static($pool, $maxConnections, $autoConnect);
         }
 
         return self::$instance;
@@ -345,7 +344,7 @@ class Connection implements LazyInterface, Countable
             return $connection;
         }
     
-        $err = 'HFailed all attempts to establish a database connection.';
+        $err = 'Failed all attempts to establish a database connection.';
 
         if(PRODUCTION){
             if(!self::$logEntry){

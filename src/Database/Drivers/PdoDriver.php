@@ -19,6 +19,7 @@ use \Luminova\Core\CoreDatabase;
 use \Luminova\Interface\ConnInterface;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
+use function \Luminova\Funcs\{shared, is_command};
 
 final class PdoDriver implements DatabaseInterface 
 {
@@ -160,6 +161,29 @@ final class PdoDriver implements DatabaseInterface
         return $this->isConnected() 
             ? ($this->connection->getAttribute(PDO::ATTR_DRIVER_NAME) ?? $this->config->getValue('pdo_version'))
             : null;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getVersion(): ?string
+    {
+        $version = match($this->getDriver()) {
+            'mysql'   => $this->connection->getAttribute(PDO::ATTR_SERVER_VERSION),
+            'cubrid'  => $this->query("SELECT version()"),
+            'dblib', 'sqlsrv'  => $this->query("SELECT @@VERSION"),
+            'sqlite'  => $this->query("SELECT sqlite_version()"),
+            'pgsql'   => $this->query("SHOW server_version"),
+            'oci'     => $this->query("SELECT * FROM v\$version"),
+            default   => null,
+        };
+
+        if($version instanceof PdoDriver && $version->ok()){
+            $version = $version->getStatement()
+                ->fetchColumn();
+        }
+
+        return $version;
     }
 
     /**
@@ -821,9 +845,9 @@ final class PdoDriver implements DatabaseInterface
         $username = $password = null;
         $version = strtolower($this->config->getValue('pdo_version'));
         $charset = $this->config->getValue('charset');
-        $dns = $this->dnsConnection($version, $charset);
+        $dsn = $this->dsnConnection($version, $charset);
 
-        if ($dns === null) {
+        if ($dsn === null) {
             throw new DatabaseException(
                 sprintf('Unsupported PDO driver: "%s"', $version),
                 DatabaseException::DATABASE_DRIVER_NOT_AVAILABLE
@@ -854,18 +878,18 @@ final class PdoDriver implements DatabaseInterface
             }
         }
 
-        $this->connection = new PDO($dns, $username, $password, $options);
+        $this->connection = new PDO($dsn, $username, $password, $options);
     }
 
     /**
-     * Get driver dns connection.
+     * Get driver connection Data Source Name (DSN).
      *
      * @param string $version Connection driver version name.
      * @param string|null $charset
      * 
      * @return string|null
      */
-    private function dnsConnection(string $version, ?string $charset = null): ?string
+    private function dsnConnection(string $version, ?string $charset = null): ?string
     {
         if($version === 'sqlite'){
             $sqlitePath = $this->config->getValue('sqlite_path');
@@ -882,7 +906,7 @@ final class PdoDriver implements DatabaseInterface
         $options = ($charset && $version === 'pgsql') ? ";options='--client_encoding={$charset}'" : '';
 
         return match($version){
-            'mysql' => $this->withMysqlDns($database, $host, $port, $charset),
+            'mysql' => $this->withMysqlDsn($database, $host, $port, $charset),
             'cubrid' => "cubrid:host={$host};port={$port};dbname={$database}",
             'dblib' => "dblib:host={$host}:{$port};dbname={$database}",
             'pgsql' => "pgsql:host={$host};port={$port};dbname={$database}{$options}",
@@ -897,19 +921,27 @@ final class PdoDriver implements DatabaseInterface
     }
 
     /**
-     * Get mysql connection dns based on environment.
+     * Get mysql connection dsn based on environment.
      * Cli or Force: Use Unix socket connection
      * Http: Use TCP/IP connection
      * 
-     * @return string Return database connection dns string.
+     * @return string Return database connection dsn string.
      */
-    private function withMysqlDns(string $database, string $host, int $port, ?string $charset = null): string
+    private function withMysqlDsn(string $database, string $host, int $port, ?string $charset = null): string
     {
         $options = $charset ? ";charset={$charset}" : '';
 
         if (NOVAKIT_ENV !== null || $this->config->getValue('socket') || is_command()) {
             $socketPath = $this->config->getValue('socket_path') ?: ini_get('pdo_mysql.default_socket');
 
+            if(!$socketPath){
+              throw new DatabaseException(sprintf(
+                    'PDO MySQL socket path not set. Define it in the environment as "%s", or configure "%s" in your php.ini.',
+                    'database.mysql.socket.path',
+                    'pdo_mysql.default_socket'
+                ));
+            }
+  
             return "mysql:unix_socket={$socketPath};dbname={$database}{$options}";
         }
 

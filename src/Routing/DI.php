@@ -13,29 +13,28 @@ namespace Luminova\Routing;
 use \Closure;
 use \Luminova\Seo\Schema;
 use \Luminova\Email\Mailer;
-use \Luminova\Http\Network;
-use \Luminova\Http\Request;
-use \Luminova\Cookies\Cookie;
-use \Luminova\Cache\FileCache;
 use \Luminova\Arrays\ArrayUtil;
 use \Luminova\Cache\RedisCache;
 use \Luminova\Http\Client\Curl;
 use \Luminova\Security\JWTAuth;
 use \Luminova\Sessions\Session;
-use \Luminova\Cache\MemoryCache;
 use \Luminova\Template\Response;
 use \Luminova\Application\Factory;
 use \Luminova\Languages\Translator;
-use \Luminova\Cookies\CookieFileJar;
-use \Luminova\Interface\ClientInterface;
-use \Luminova\Interface\CookieInterface;
-use \Luminova\Interface\NetworkInterface;
-use \Luminova\Security\Encryption\Sodium;
-use \Luminova\Security\Encryption\OpenSSL;
-use \Luminova\Interface\CookieJarInterface;
-use \Luminova\Interface\HttpRequestInterface;
-use \Luminova\Interface\ViewResponseInterface;
 use \Luminova\Notifications\Firebase\Notification;
+use \Luminova\Http\{Request, Network};
+use \Luminova\Cache\{FileCache, MemoryCache};
+use \Luminova\Cookies\{Cookie, CookieFileJar};
+use \Luminova\Security\Encryption\{Sodium, OpenSSL};
+use \Luminova\Interface\{
+    ClientInterface,
+    CookieInterface,
+    NetworkInterface,
+    CookieJarInterface,
+    HttpRequestInterface,
+    ViewResponseInterface,
+};
+use function \Luminova\Funcs\root;
 
 class DI
 {
@@ -155,7 +154,7 @@ class DI
             Notification::class  => Notification::class,
             Cookie::class, CookieInterface::class            => fn(): CookieInterface => new Cookie('_default'),
             CookieFileJar::class, CookieJarInterface::class  => fn(): CookieJarInterface => new CookieFileJar(
-                root('/writeable/temp/cookies.txt')
+                root('/writeable/temp/', 'cookies.txt')
             ),
             default => null,
         };

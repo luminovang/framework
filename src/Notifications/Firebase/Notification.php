@@ -27,6 +27,7 @@ use \Luminova\Exceptions\ErrorException;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Notifications\Models\Message;
 use \Exception;
+use function \Luminova\Funcs\root;
 
 class Notification implements LazyInterface
 {
@@ -132,7 +133,7 @@ class Notification implements LazyInterface
         }
 
         if (is_string($config) && !str_starts_with($config, '{')) {
-            $config = root('/writeable/credentials/') . $config;
+            $config = root('/writeable/credentials/', $config);
    
             if (!file_exists($config)) {
                 throw new RuntimeException(sprintf('Firebase notification service account not found in %s.', $config));

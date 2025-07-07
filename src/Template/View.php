@@ -10,21 +10,18 @@
  */
 namespace Luminova\Template;
 
-use \Luminova\Storages\FileManager;
-use \Luminova\Template\Smarty;
-use \Luminova\Template\Twig;
-use \Luminova\Http\Header;
 use \Luminova\Luminova; 
-use \Luminova\Interface\ExceptionInterface; 
-use \Luminova\Interface\PromiseInterface; 
-use \Luminova\Exceptions\ViewNotFoundException; 
-use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Time\Time;
+use \Luminova\Http\Header;
+use \Luminova\Storages\FileManager;
+use \Luminova\Utils\WeakReference;
 use \Luminova\Utils\Promise\Promise;
 use \Luminova\Time\Timestamp;
 use \Luminova\Optimization\Minification;
-use \Luminova\Utils\WeakReference;
 use \Luminova\Cache\TemplateCache;
+use \Luminova\Template\{Smarty, Twig};
+use \Luminova\Interface\{ExceptionInterface, PromiseInterface}; 
+use \Luminova\Exceptions\{ViewNotFoundException, RuntimeException}; 
 use \App\Config\Template as TemplateConfig;
 use \DateTimeInterface;
 use \DateTimeImmutable;
@@ -33,6 +30,12 @@ use \Closure;
 use \stdClass;
 use \WeakMap;
 use \Throwable;
+use function \Luminova\Funcs\{
+    root,
+    filter_paths,
+    start_url,
+    get_class_name
+};
 
 trait View
 { 
@@ -755,7 +758,7 @@ trait View
      */
     public final function viewInfo(): array 
     {
-        $viewPath = root($this->__getViewPath()) . $this->activeView . self::__templateExtension();
+        $viewPath = root($this->__getViewPath(), $this->activeView . self::__templateExtension());
         $info = [
             'location' => $viewPath,
             'engine' => self::__templateEngine(),

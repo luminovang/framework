@@ -10,25 +10,18 @@
  */
 namespace Luminova\Command;
 
-use \Luminova\Luminova;
-use \Luminova\Base\BaseConsole;
-use \Luminova\Command\Terminal;
-use \Luminova\Command\Consoles\Server;
-use \Luminova\Command\Consoles\SystemHelp;
-use \Luminova\Command\Consoles\Lists;
-use \Luminova\Command\Consoles\Database;
-use \Luminova\Command\Consoles\Generators;
-use \Luminova\Command\Consoles\Authenticate;
-use \Luminova\Command\Consoles\System;
-use \Luminova\Command\Consoles\Builder;
-use \Luminova\Command\Consoles\Context;
-use \Luminova\Command\Consoles\Commands;
-use \Luminova\Command\Consoles\CronJobs;
-use \Luminova\Command\Consoles\Logs;
-use \Luminova\Command\Consoles\ClearWritable;
-use \Luminova\Interface\LazyInterface;
-use \ReflectionClass;
 use \Throwable;
+use \ReflectionClass;
+use \Luminova\Luminova;
+use \Luminova\Command\Terminal;
+use \Luminova\Base\BaseConsole;
+use \Luminova\Command\Consoles\{
+    Help, Logs, Lists, Server, System,
+    Builder, Context, Commands, Database,
+    CronWorker, Generators, TaskWorker, Authenticate, ClearWritable
+};
+use \Luminova\Interface\LazyInterface;
+use function \Luminova\Funcs\root;
 
 final class Novakit 
 {
@@ -155,13 +148,7 @@ final class Novakit
         $className = self::find($command, $mode);
 
         if ($className === null) {
-            $instance::oops($command);
-
-            if(($suggest = Commands::suggest($command)) !== ''){
-                $instance->fwrite($suggest, Terminal::STD_ERR);
-            }
-
-            return STATUS_ERROR;
+            return self::failed($instance, $command);
         } 
        
         if(!self::newObject($className)){
@@ -172,6 +159,11 @@ final class Novakit
 
         if($instance::isHelp($options['options'])){
             $info = self::getCommand($command, $mode);
+
+            if($info === []){
+                return self::tryGroupHelps($instance, $command);
+            }
+
             $instance::header();
 
             if(self::$newConsole->help($info) === STATUS_ERROR){
@@ -212,10 +204,9 @@ final class Novakit
      */
     public static function find(string $group, string $mode = 'global'): ?string 
     {
-        $pos = strpos($group, ':');
-        $novakit = ($pos === false) ? $group : substr($group, 0, $pos); 
+        $novakit = strstr($group, ':', true) ?: $group;
         $controller = match($novakit){
-            '-h', '--help' => SystemHelp::class,
+            '-h', '--help' => Help::class,
             'auth', => Authenticate::class,
             'create', => Generators::class,
             'list' => Lists::class,
@@ -226,7 +217,8 @@ final class Novakit
             'context' => Context::class,
             'log' => Logs::class,
             'clear' => ClearWritable::class,
-            'cron' => CronJobs::class,
+            'cron' => CronWorker::class,
+            'task' => TaskWorker::class,
             default => null
         };
 
@@ -244,8 +236,8 @@ final class Novakit
             return null;
         }
 
-        return self::$consoles[$novakit] 
-            ?? self::$consoles[$group] 
+        return self::$consoles[$group] 
+            ?? self::$consoles[$novakit]
             ?? null;
     }
 
@@ -515,7 +507,7 @@ final class Novakit
             return;
         }
 
-        $bin = root('/bin/') . '.novakit-console.php';
+        $bin = root('/bin/', '.novakit-console.php');
 
         if(!file_exists($bin)){
             return;
@@ -531,4 +523,53 @@ final class Novakit
 
         $commands = null;
     }
+
+    /**
+     * Show group helps command.
+     * 
+     * @param Terminal<LazyInterface> $instance The terminal instance containing parsed command and arguments.
+     * @param string $command The executed command.
+     * 
+     * @return int Return status error.
+     */
+    private static function tryGroupHelps(LazyInterface $instance, string $command): int 
+    {
+        $max = 0;
+        $info = Commands::getGlobalHelps(strstr($command, ':', true) ?: $command, $max);
+
+        if($info === []){
+            return self::failed($instance, $command);
+        }
+
+        $instance::writeln(Text::style("Available {$command} Commands", Text::FONT_BOLD));
+        $instance::writeln("Run a specific command with '--help' to view its options and examples.");
+        $instance::newLine();
+
+        foreach ($info as $key => $value) {
+            $label = Color::style($key, 'lightYellow');
+            $spacing = Text::padding('', ($max + 6) - strlen($key), Text::RIGHT);
+            $instance::writeln("  {$label}{$spacing}{$value}");
+        }
+
+        return STATUS_SUCCESS;
+    }
+
+    /**
+     * Oops and suggest command.
+     * 
+     * @param Terminal<LazyInterface> $instance The terminal instance containing parsed command and arguments.
+     * @param string $command The executed command.
+     * 
+     * @return int Return status error.
+     */
+    private static function failed(LazyInterface $instance, string $command): int 
+    {
+        $instance::oops($command);
+
+        if(($suggest = Commands::suggest($command)) !== ''){
+            $instance->fwrite($suggest, Terminal::STD_ERR);
+        }
+
+        return STATUS_ERROR;
+    } 
 }

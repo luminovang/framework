@@ -21,6 +21,7 @@ use \Luminova\Core\CoreDatabase;
 use \Luminova\Interface\ConnInterface;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
+use function \Luminova\Funcs\{shared, is_command};
 
 final class MysqliDriver implements DatabaseInterface 
 {
@@ -223,6 +224,14 @@ final class MysqliDriver implements DatabaseInterface
     public function getDriver(): ?string 
     {
         return $this->isConnected() ? 'mysqli' : null;
+    }
+
+     /**
+     * {@inheritdoc}
+     */
+    public function getVersion(): ?string
+    {
+        return $this->isConnected() ? $this->connection->server_info : null;
     }
 
     /**
@@ -1220,6 +1229,14 @@ final class MysqliDriver implements DatabaseInterface
         $socketPath = null;
         if (NOVAKIT_ENV !== null || $this->config->getValue('socket') || is_command()) {
             $socketPath = $this->config->getValue('socket_path') ?: ini_get('mysqli.default_socket');
+
+            if(!$socketPath){
+              throw new DatabaseException(sprintf(
+                    'MySQLi socket path not set. Define it in the environment as "%s", or configure "%s" in your php.ini.',
+                    'database.mysql.socket.path',
+                    'mysqli.default_socket'
+                ));
+            }
         }
 
         $this->connection = mysqli_init() ?: null;

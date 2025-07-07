@@ -10,17 +10,21 @@
  */
 namespace Luminova\Command;
 
+use \Closure;
 use \Luminova\Boot;
 use \Luminova\Luminova;
 use \Luminova\Command\Novakit;
 use \Luminova\Functions\Ip;
 use \Luminova\Interface\LazyInterface;
-use \Luminova\Command\Utils\Text;
-use \Luminova\Command\Utils\Color;
+use \Luminova\Command\Utils\{Text, Color};
 use \Luminova\Security\Validation;
 use \Luminova\Command\Consoles\Commands;
 use \Luminova\Exceptions\IOException;
-use \Closure;
+use function \Luminova\Funcs\{
+    is_platform,
+    list_to_array,
+    is_command
+};
 
 class Terminal implements LazyInterface
 {
@@ -1251,19 +1255,6 @@ class Terminal implements LazyInterface
     }
 
     /**
-     * Perse commands.
-     * 
-     * @param array<string,mixed> $options Command arguments, options, and flags extracted from the executed command.
-     * 
-     * @return void 
-     * @deprecated This method has been deprecated use `perse` instead. 
-     */
-    public static final function explain(array $options): void
-    {
-        self::perse($options);
-    }
-
-    /**
      * Print new lines based on specified count.
      *
      * @param int $count The number of new lines to print.
@@ -1309,7 +1300,7 @@ class Terminal implements LazyInterface
      * @param string|null $headerColor An optional text color for the table header columns (default: null).
      * @param string|null $borderColor An optional color for the table borders (default: null).
      * @param bool $border Indicate whether to display borders between each table raw (default: true).
-     * @param bool $retainNewlines Indicate whether to retain newline or not (default: false).
+     * @param bool $shouldRetainNewlines Indicate whether to retain newline or not (default: false).
      * 
      * @return string Return the formatted table as a string, ready to be output to the console.
      * 
@@ -1332,75 +1323,57 @@ class Terminal implements LazyInterface
         ?string $headerColor = null, 
         ?string $borderColor = null,
         bool $border = true,
-        bool $retainNewlines = false
+        bool $shouldRetainNewlines = false
     ): string
     {
-        $chars = [
-            'topLeft' => Text::corners('topLeft'),
-            'topRight' => Text::corners('topRight'),
-            'bottomLeft' => Text::corners('bottomLeft'),
-            'bottomRight' => Text::corners('bottomRight'),
-            'topConnector' => Text::corners('topConnector'),
-            'bottomConnector' => Text::corners('bottomConnector'),
-            'crossings' => Text::corners('crossings'),
-            'leftConnector' => Text::corners('leftConnector'),
-            'rightConnector' => Text::corners('rightConnector'),
-            'horizontal' => Text::corners('horizontal'),
-            'vertical' => Text::corners('vertical')
-        ];
-    
-        $widths = array_map(
-            fn($header) => max(
-                Text::largest($header)[1], 
-                max(array_map(fn($value) => Text::largest($value)[1], array_column($rows, $header)))
-            ), 
-            $headers
-        );
-    
-        $heights = array_map(
-            fn($row) => max(array_map(fn($header) => Text::height(
-                $retainNewlines 
-                ? Text::wrap(
-                    $row[$header], 
-                    $widths[array_search($header, $headers)]
-                 ) 
-                : $row[$header]
-            ), $headers)),
-            $rows
-        );
-    
+        $widths = self::getTableHeaderWidths($headers, $rows);
+        $heights = self::getTableHeaderHeights($headers, $rows, $widths, $shouldRetainNewlines);
+        $verticalBorder = Color::style(self::getTableCorner('vertical'), $borderColor);
+
         $table = '';
-        $table .= self::tBorder($widths, $chars, 'topLeft', 'topConnector', 'topRight', $borderColor);
-        $table .= self::trow($headers, $widths, $headerColor ?? $foreground, $borderColor, $chars, true);
-        $table .= self::tBorder($widths, $chars, 'leftConnector', 'crossings', 'rightConnector', $borderColor);
-    
+        $table .= self::tBorder($widths, 'topLeft', 'topConnector', 'topRight', $borderColor);
+        $table .= self::trow($headers, $widths, $headerColor ?? $foreground, $verticalBorder, true);
+        $table .= self::tBorder($widths, 'leftConnector', 'crossings', 'rightConnector', $borderColor);
+
         foreach ($rows as $index => $row) {
             $height = $heights[$index];
             $lines = array_map(
                 fn($header) => Text::lines(Text::wrap(
-                    $row[$header], 
+                    (string) $row[$header] ?? '', 
                     $widths[array_search($header, $headers)]
                 )),
                 $headers
             );
-    
+
             for ($lIdx = 0; $lIdx < $height; $lIdx++) {
-                $tData = Color::style($chars['vertical'], $borderColor);
+                $tData = $verticalBorder;
+
                 foreach ($headers as $i => $header) {
-                    $tData .= ' ' . Color::style(str_pad(
-                        $retainNewlines ? ($lines[$i][$lIdx] ?? '') : implode(' ', $lines[$i] ?? ''),
-                        $widths[$i]), 
-                        $foreground
-                    );
-                    $tData .= ' ' . Color::style($chars['vertical'], $borderColor);
+                    $value = $lines[$i] ?? [];
+                    $hWidth = $widths[$i];
+
+                    $tRow = ' ' . Color::style(str_pad(
+                        $shouldRetainNewlines ? ($value[$lIdx] ?? '') : implode(' ', $value),
+                        $hWidth
+                    ), 
+                    $foreground);
+
+                    $width = Text::strlen($tRow);
+
+                    if($hWidth > $width){
+                        $tRow .= Text::padding('', $hWidth - $width, Text::RIGHT);
+                    }
+
+                    $tData .= $tRow;
+                    $tData .= ' ' . $verticalBorder;
                 }
+
                 $table .= $tData . PHP_EOL;
             }
     
             if ($border && $index < count($rows) - 1) {
                 $table .= self::tBorder(
                     $widths, 
-                    $chars, 
                     'leftConnector', 
                     'crossings', 
                     'rightConnector', 
@@ -1411,7 +1384,6 @@ class Terminal implements LazyInterface
     
         $table .= self::tBorder(
             $widths, 
-            $chars, 
             'bottomLeft', 
             'bottomConnector', 
             'bottomRight', 
@@ -2041,6 +2013,7 @@ class Terminal implements LazyInterface
     public static final function helper(array|null $helps, bool $all = false): void
     {
         $helps = ($helps === null) ? Commands::getCommands() : ($all ? $helps : [$helps]);
+        $leftPadding = Text::padding('', 3, Text::LEFT);
 
         foreach($helps as $name => $properties){
             if(!$properties){
@@ -2049,8 +2022,12 @@ class Terminal implements LazyInterface
 
             if($all){
                 self::newLine();
-                self::writeln("------[{$name} Help Information]------");
+                $head = Color::apply("------[{$name} Help Information]------", Text::FONT_BOLD, 'brightCyan');
+                self::writeln($head);
             }
+
+            $total = count($properties);
+            $index = 0;
 
             foreach($properties as $key => $value){
                 if($key === 'users' || $key === 'authentication'){
@@ -2059,16 +2036,18 @@ class Terminal implements LazyInterface
 
                 if(is_array($value)){
                     if(in_array($key, ['usages', 'examples', 'options'], true)){
-                        self::printHelp($value, $key);
+                        self::printHelp($value, $key, $leftPadding);
                     }
                 }elseif($key === 'usages' || $key === 'description'){
-                    if($key === 'usages'){
-                        self::writeln(ucfirst($key) . ':');
-                    }
+                    self::writeln(ucfirst($key) . ':', 'lightYellow');
+                    self::writeln($leftPadding . trim($value));
+                }
 
-                    self::writeln($value);
+                if($index < $total - 1){
                     self::newLine();
                 }
+
+                $index++;
             }
         }
     }
@@ -2290,32 +2269,53 @@ class Terminal implements LazyInterface
      * 
      * @param array $option Help line options.
      * @param string $key Help line key.
+     * @param string $leftPadding
      * 
      * @return void
      */
-    private static function printHelp(array $options, string $key): void 
+    private static function printHelp(array $options, string $key, string $leftPadding): void 
     {
         if($options === []){
             return;
         }
         
-        $minus = ($key === 'usages' || $key === 'examples') ? 1 : 0;
         $color = self::isColorSupported() 
-            ? (($key === 'usages') ? 'yellow' : (($key === 'usages') ? 'lightYellow' : 'lightGreen'))
+            ? (($key === 'usages') ? 'cyan' : (($key === 'usages') ? 'lightYellow' : 'lightGreen'))
             : null;
-        self::writeln(ucfirst($key) . ':');
-        
-        foreach($options as $info => $values){
-            if(is_string($info)){ 
-                $info  = ($color === null) ? $info : Color::style($info, $color);
+        self::writeln(ucfirst($key) . ':', 'lightYellow');
 
-                self::writeln(Text::padding('', 8 - $minus, Text::RIGHT) . $info);
-                self::writeln(Text::padding('', 11 - $minus, Text::RIGHT) . $values);
-            }else{
-                self::writeln(Text::padding('', 8 - $minus, Text::RIGHT) . $values);
+        $largest = 0;
+
+        if($key === 'options'){
+            foreach(array_keys($options) as $option){
+                $length = strlen($option);
+
+                if($length > $largest){
+                    $largest = $length;
+                }
             }
+        }
 
-            self::newLine();
+        $rightPadding = Text::padding('', 9, Text::RIGHT);
+        
+        foreach($options as $info => $value){
+            $value = trim($value);
+            
+            if($key === 'options'){
+                $label = is_string($info) ? Color::style($info, $color) : '';
+                $spacing = Text::padding('', ($largest + 6) - strlen($info), Text::RIGHT);
+
+                self::writeln("{$leftPadding}{$label}{$spacing}{$value}");
+            }else{
+                if(is_string($info)){ 
+                    $info  = ($color === null) ? $info : Color::style($info, $color);
+
+                    self::writeln($leftPadding . $info);
+                    self::writeln($rightPadding . $value);
+                }else{
+                    self::writeln($leftPadding . $value, ($key === 'usages') ? $color : null);
+                }
+            }
         }
     }
 
@@ -2337,10 +2337,83 @@ class Terminal implements LazyInterface
     }
 
     /**
+     * Get table corners.
+     * 
+     * @param string $position The corner position.
+     * 
+     * @return string Return the table corner based on position.
+     */
+    private static function getTableCorner(string $position): string
+    {
+        return match($position){
+            'topLeft' => Text::corners('topLeft'),
+            'topRight' => Text::corners('topRight'),
+            'bottomLeft' => Text::corners('bottomLeft'),
+            'bottomRight' => Text::corners('bottomRight'),
+            'topConnector' => Text::corners('topConnector'),
+            'bottomConnector' => Text::corners('bottomConnector'),
+            'rightConnector' => Text::corners('rightConnector'),
+            'leftConnector' => Text::corners('leftConnector'),
+            'horizontal' => Text::corners('horizontal'),
+            'crossings' => Text::corners('crossings'),
+            'vertical' => Text::corners('vertical'),
+            default => ''
+        };
+    }
+
+    /**
+     * Calculate the maximum width for each column header based on the header name
+     * and the content in each row. The width is determined by the largest visual
+     * length of any value in that column.
+     *
+     * @param array $headers The list of column headers.
+     * @param array $rows The rows of table data, where each row is an associative array.
+     *
+     * @return array An array of maximum widths for each header, in the same order as $headers.
+     */
+    private static function getTableHeaderWidths(array $headers, array $rows): array 
+    {
+        return array_map(
+            fn($header) => max(
+                Text::largest($header)[1], 
+                max(array_map(fn($value) => Text::largest($value)[1], array_column($rows, $header)))
+            ), 
+            $headers
+        );
+    }
+
+    /**
+     * Calculate the maximum height (number of lines) needed for each row in the table,
+     * based on wrapped content width and whether line breaks should be retained.
+     *
+     * @param array $headers The list of column headers.
+     * @param array $rows The rows of table data.
+     * @param array $widths The calculated widths for each column.
+     * @param bool $isRetainNewline Whether to keep existing newlines when wrapping text.
+     *
+     * @return array An array of heights (line counts) for each row.
+     */
+    private static function getTableHeaderHeights(
+        array $headers, 
+        array $rows, 
+        array $widths,
+        bool $isRetainNewline
+    ): array 
+    {
+        return array_map(
+            fn($row) => max(array_map(fn($header) => Text::height(
+                $isRetainNewline 
+                    ? Text::wrap($row[$header], $widths[array_search($header, $headers)]) 
+                    : $row[$header]
+            ), $headers)),
+            $rows
+        );
+    }
+
+    /**
      * Generates a horizontal border line for the table based on column widths.
      *
      * @param array $widths Array of column widths.
-     * @param array $chars Array of table border characters.
      * @param string $left Character used for the left corner of the border line.
      * @param string $connector Character used to connect columns within the border line.
      * @param string $right Character used for the right corner of the border line.
@@ -2350,19 +2423,18 @@ class Terminal implements LazyInterface
      */
     private static function tBorder(
         array $widths, 
-        array $chars, 
         string $left, 
         string $connector, 
         string $right, 
         ?string $color
     ): string
     {
-        $border = $chars[$left];
+        $border = self::getTableCorner($left);
         foreach ($widths as $i => $width) {
-            $border .= str_repeat($chars['horizontal'], $width + 2);
+            $border .= str_repeat(self::getTableCorner('horizontal'), $width + 2);
             $border .= $i < count($widths) - 1 
-                ? $chars[$connector]
-                : $chars[$right];
+                ? self::getTableCorner($connector)
+                : self::getTableCorner($right);
         }
 
         return Color::style($border, $color) . PHP_EOL;
@@ -2374,7 +2446,6 @@ class Terminal implements LazyInterface
      * @param array $row Array of cell values for each column in the row.
      * @param array $widths Array of column widths, matching the indices of $row.
      * @param ?string $foreground Optional color to apply to the cell content.
-     * @param array $chars Array of table border characters.
      * @param bool $isHeader Flag indicating if the row is a header row; applies bold styling if true.
      * 
      * @return string Return formatted string representing the row with each cell padded to its column width.
@@ -2383,19 +2454,19 @@ class Terminal implements LazyInterface
         array $row, 
         array $widths, 
         ?string $foreground, 
-        ?string $borderColor, 
-        array $chars, 
+        string $verticalBorder,
         bool $isHeader = false
     ): string
     {
-        $tCell = Color::style($chars['vertical'], $borderColor);
+        $tCell = $verticalBorder;
+
         foreach ($row as $i => $cell) {
             $tCell .= ' ' . Color::apply(
                 str_pad($cell, $widths[$i]), 
                 $isHeader ? Text::FONT_BOLD : Text::NO_FONT, 
                 $foreground
             );
-            $tCell .= ' ' . Color::style($chars['vertical'], $borderColor);
+            $tCell .= ' ' . $verticalBorder;
         }
 
         return $tCell . PHP_EOL;
@@ -2412,8 +2483,8 @@ class Terminal implements LazyInterface
      * @return string Return the formatted list output.
      */
     private static function tablistUpdate(
-        $options, 
-        $index,
+        array $options, 
+        int $index,
         string $foreground = 'green', 
         ?string $background = null
     ): string

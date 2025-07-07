@@ -11,10 +11,10 @@
 namespace Luminova\Http;
 
 use \Luminova\Interface\LazyInterface;
-use \Luminova\Functions\Func;
-use \Luminova\Functions\Maths;
+use \Luminova\Functions\{Func, Maths};
 use \Luminova\Exceptions\ErrorException;
 use \Luminova\Http\FileConfig;
+use function \Luminova\Funcs\get_mime;
 
 class File implements LazyInterface
 {

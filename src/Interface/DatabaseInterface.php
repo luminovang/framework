@@ -41,6 +41,18 @@ interface DatabaseInterface
     public function getDriver(): ?string;
 
     /**
+     * Returns the database server version string for the current connection.
+     *
+     * The method uses a driver-specific approach to fetch the server version, depending
+     * on the underlying database driver in use (e.g., MySQL, PostgreSQL, SQLite, etc.).
+     *
+     * @return string|null Return the server version string or null if the version cannot be determined.
+     * 
+     * > (e.g., "8.0.34", "PostgreSQL 15.2", "Microsoft SQL Server 2019"), 
+     */
+    public function getVersion(): ?string;
+
+    /**
      * Retrieve a specific database configuration property.
      * 
      * This method allows fetching configuration values related to the database connection.

@@ -10,17 +10,16 @@
  */
 namespace Luminova\Cache;
 
-use \Luminova\Base\BaseCache;
-use \Luminova\Storages\FileManager;
 use \Luminova\Logger\Logger;
 use \Luminova\Time\Timestamp;
-use \Luminova\Exceptions\AppException;
-use \Luminova\Exceptions\InvalidArgumentException;
-use \Luminova\Exceptions\CacheException;
+use \Luminova\Base\BaseCache;
+use \Luminova\Storages\FileManager;
+use \Luminova\Exceptions\{AppException, CacheException, InvalidArgumentException};
 use \DateTimeInterface;
 use \DateInterval;
 use \Exception;
 use \JsonException;
+use function \Luminova\Funcs\{root, make_dir};
 
 final class FileCache extends BaseCache
 {

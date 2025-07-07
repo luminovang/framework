@@ -10,9 +10,9 @@
  */
 namespace Luminova\Cookies;
 
+use \Luminova\Time\Time;
 use \Luminova\Cookies\BaseCookie;
 use \App\Config\Cookie as CookieConfig;
-use \Luminova\Time\Time;
 use \Luminova\Interface\CookieInterface;
 use \Luminova\Exceptions\CookieException;
 use \Stringable;

@@ -10,15 +10,14 @@
  */
 namespace Luminova\Base;
 
+use \DateTimeInterface;
 use \Luminova\Database\Builder;
 use \Luminova\Security\Validation;
 use \Luminova\Storages\FileManager;
 use \Peterujah\NanoBlock\SearchController as SearchInstance;
-use \Luminova\Interface\DatabaseInterface;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\InvalidArgumentException;
-use \DateTimeInterface;
+use \Luminova\Interface\{DatabaseInterface, LazyInterface};
+use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
+use function \Luminova\Funcs\{root, get_class_name};
 
 abstract class BaseModel implements LazyInterface
 {

@@ -10,6 +10,7 @@
  */
 namespace Luminova\Seo;  
 
+use \App\Application;
 use \App\Config\Sitemap as SitemapConfig;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Utils\LazyObject;
@@ -23,6 +24,12 @@ use \Luminova\Functions\Maths;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\AppException;
 use \DOMDocument;
+use function \Luminova\Funcs\{
+    root,
+    app,
+    write_content,
+    is_command
+};
 
 final class Sitemap
 {
@@ -97,6 +104,13 @@ final class Sitemap
     private static string $http = '';
 
     /**
+     * Connection url label.
+     * 
+     * @var string $label  
+     */
+    private static string $label = '';
+
+    /**
      * Generate a sitemap and store in in `public` directory.
      * 
      * @param string|null $url The start URL to generate sitemap of (default: null)
@@ -163,7 +177,7 @@ final class Sitemap
         self::$memoryThreshold = round(Maths::toBytes($totalMemory) * 0.7);
 
         $urls = self::getUrls($url);
-        $app = app();
+        $app = Application::getInstance();
         
         if($urls === false || $urls === []){
             return false;
@@ -176,7 +190,7 @@ final class Sitemap
 
         $xml .= '</urlset>';
 
-        if(write_content(root('public') . $basename, $xml)){
+        if(write_content(root('public', $basename), $xml)){
             self::_print('');
             self::_print('header');
             self::_print(Text::block('Your sitemap was completed successfully', Text::CENTER, 1, 'white', 'green'));
@@ -469,6 +483,7 @@ final class Sitemap
             return self::$urls;
         }
         
+        self::$label = '';
         $url = self::replaceUrls($url);
         $found = 0;
         $deepScans = [];
@@ -476,6 +491,11 @@ final class Sitemap
     
         if ($html === false) {
             self::$failed[] = $url;
+            if(self::$label){
+                self::_print('flush', null, 'writeln', self::$label);
+            }
+            
+            self::_print('[Failed] ' . $url, 'red');
 
             if($deep){
                 return false;
@@ -556,8 +576,9 @@ final class Sitemap
     private static function connection(string $url): array|bool
     {
         $url = self::toUrl($url);
-        $scanning = '[Scanning] ' . $url;
-        self::_print($scanning, 'cyan');
+        self::$label = '[Scanning] ' . $url;
+        
+        self::_print(self::$label, 'cyan');
 
         try{
             /**
@@ -573,19 +594,22 @@ final class Sitemap
                 )
             ]))->request('GET', $url));
             
-            self::_print('flush', null, 'writeln', $scanning);
+            self::_print('flush', null, 'writeln', self::$label);
 
             if ($response->getStatusCode() !== 200) {
-                self::_print("[{$response->getStatusCode()}] {$url}", 'red');
+                self::$label = "[{$response->getStatusCode()}] {$url}";
+                self::_print(self::$label, 'red');
                 return false;
             }
 
             if (!$response->getContents()) {
-                self::_print('[Error] Empty response from ' . $url, 'red');
+                self::$label = "[Error] Empty response from {$url}";
+                self::_print(self::$label, 'red');
                 return false;
             }
 
-            self::_print('[Done] ' . $url);
+            self::$label = "[Done] {$url}";
+            self::_print(self::$label);
             self::$visited[] = $url;
             $modified = $response->getFileTime();
 
@@ -595,8 +619,10 @@ final class Sitemap
             ];
         }catch(AppException $e){
             self::_print('flush');
-            self::_print('flush', null, 'writeln', $scanning);
-            self::_print('[Error] ' . $e->getMessage(), 'red');
+            self::_print('flush', null, 'writeln', self::$label);
+
+            self::$label = '[Error] ' . $e->getMessage();
+            self::_print(self::$label, 'red');
         }
 
         return false;

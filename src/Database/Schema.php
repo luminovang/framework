@@ -10,15 +10,17 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Database\Table;
-use \Luminova\Database\Alter;
-use \Luminova\Database\Connection;
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Color;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
+use \Luminova\Database\{Table, Alter, Connection};
 use \Closure;
 use \Throwable;
+use function \Luminova\Funcs\{
+    is_command,
+    shared,
+};
 
 final class Schema
 {

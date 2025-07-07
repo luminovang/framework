@@ -10,10 +10,10 @@
  */
 namespace Luminova\Email;
 
-use \Luminova\Interface\MailerInterface;
-use \Luminova\Interface\LazyInterface;
 use \Luminova\Luminova;
 use \Luminova\Base\BaseMailer;
+use \Luminova\Interface\MailerInterface;
+use \Luminova\Interface\LazyInterface;
 use \App\Config\Mailer as MailerConfig;
 use \Luminova\Exceptions\MailerException;
 use \Luminova\Exceptions\AppException;

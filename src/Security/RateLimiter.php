@@ -10,13 +10,13 @@
  */
 namespace Luminova\Security;
 
-use \Luminova\Interface\LazyInterface;
+use \Luminova\Http\Header;
+use \Luminova\Functions\IP;
 use \Luminova\Base\BaseCache;
+use \Luminova\Cache\FileCache;
 use \Psr\SimpleCache\CacheInterface;
 use \Psr\Cache\CacheItemPoolInterface;
-use \Luminova\Cache\FileCache;
-use \Luminova\Functions\IP;
-use \Luminova\Http\Header;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\RuntimeException;
 use \Predis\Client as PredisClient;
@@ -25,6 +25,7 @@ use \Memcached;
 use \DateInterval;
 use \DateTimeImmutable;
 use \Throwable;
+use function \Luminova\Funcs\{root, response, is_command};
 
 class RateLimiter implements LazyInterface
 {

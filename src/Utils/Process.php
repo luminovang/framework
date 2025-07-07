@@ -21,6 +21,7 @@ use \Fiber;
 use \FiberError;
 use \Exception;
 use \Generator;
+use function \Luminova\Funcs\array_merge_result;
 
 class Process
 {

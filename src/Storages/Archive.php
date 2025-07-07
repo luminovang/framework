@@ -15,6 +15,7 @@ use \PharData;
 use \Phar;
 use \Luminova\Exceptions\FileException;
 use \Exception;
+use function \Luminova\Funcs\make_dir;
 
 class Archive 
 {

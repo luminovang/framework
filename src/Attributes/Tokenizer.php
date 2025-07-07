@@ -10,12 +10,12 @@
  */
 namespace Luminova\Attributes;
 
-use \Luminova\Routing\Router;
+
 use \Luminova\Logger\Logger;
+use \Luminova\Routing\Router;
 use \Luminova\Exceptions\RouterException;
-use \Luminova\Base\BaseController;
-use \Luminova\Base\BaseCommand;
 use \Luminova\Interface\RoutableInterface;
+use \Luminova\Base\{BaseCommand, BaseController};
 use \RecursiveDirectoryIterator;
 use \RecursiveIteratorIterator;
 use \RecursiveCallbackFilterIterator;
@@ -23,6 +23,12 @@ use \FilesystemIterator;
 use \SplFileInfo;
 use \PhpToken;
 use \Throwable;
+use function \Luminova\Funcs\{
+    root,
+    pascal_case,
+    write_content,
+    make_dir
+};
 
 final class Tokenizer
 {
@@ -248,7 +254,7 @@ final class Tokenizer
      *
      * @param string $filePath  Full path to the PHP file.
      * @param string $className The expected class name.
-     * @param string $url The Retuest URL to match.
+     * @param string $url The Request URL to match.
      * @param string $attrClass The attribute class to match.
      * 
      * @return string|null Fully-qualified class name if found, or null.

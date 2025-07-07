@@ -11,9 +11,8 @@
 namespace Luminova\Functions;
 
 use \Laminas\Escaper\Escaper;
-use \Luminova\Exceptions\BadMethodCallException;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Exceptions\{RuntimeException, BadMethodCallException, InvalidArgumentException};
+use function \Luminova\Funcs\is_utf8;
 
 class Escape
 {
@@ -289,7 +288,9 @@ class Escape
      */
     protected function fromUtf8(string $string): string
     {
-        return ($this->encoding === 'utf-8') ? $string : $this->convertEncoding($string, $this->encoding, 'UTF-8');
+        return ($this->encoding === 'utf-8') 
+            ? $string 
+            : $this->convertEncoding($string, $this->encoding, 'UTF-8');
     }
 
     /**
@@ -304,11 +305,6 @@ class Escape
     protected function convertEncoding(array|string $string, string $to, null|array|string $from = null): string
     {
         $result = mb_convert_encoding($string, $to, $from);
-
-        if ($result === false) {
-            return '';
-        }
-
-        return $result;
+        return ($result === false) ? '' : $result;
     }
 }

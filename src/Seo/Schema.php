@@ -13,6 +13,7 @@ namespace Luminova\Seo;
 
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Time\Time;
+use function \Luminova\Funcs\{root, kebab_case};
 
 final class Schema implements LazyInterface
 {
@@ -699,7 +700,7 @@ final class Schema implements LazyInterface
      */
     private static function loadSchema(): array
     {
-        $path = root('/app/Config/') . 'Schema.php';
+        $path = root('/app/Config/', 'Schema.php');
     
         if (file_exists($path)) {
             return require $path;

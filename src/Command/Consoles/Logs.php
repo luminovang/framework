@@ -14,6 +14,7 @@ use \Luminova\Base\BaseConsole;
 use \Luminova\Command\Utils\Color;
 use \SplFileObject;
 use \Exception;
+use function \Luminova\Funcs\root;
 
 class Logs extends BaseConsole 
 {
@@ -84,7 +85,7 @@ class Logs extends BaseConsole
      */
     private function getLogFile(string $level): string|bool 
     {
-        $filePath = root('/writeable/logs/') . $level . '.log';
+        $filePath = root('/writeable/logs/', $level . '.log');
 
         if (!file_exists($filePath) || !is_readable($filePath)) {
             $this->term->writeln(sprintf('Log: "%s" not found or not readable', $level), 'red');

@@ -12,11 +12,9 @@ declare(strict_types=1);
 namespace Luminova\Core;
 
 use \Luminova\Luminova;
-use \Luminova\Routing\DI;
 use \Luminova\Template\View;
-use \Luminova\Routing\Router;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Interface\RouterInterface;
+use \Luminova\Routing\{Router, DI};
+use \Luminova\Interface\{RouterInterface, LazyInterface};
 use \Closure;
 
 abstract class CoreApplication implements LazyInterface
@@ -371,7 +369,7 @@ abstract class CoreApplication implements LazyInterface
      */
     public static function getInstance(): static 
     {
-        if(!self::$instance instanceof self){
+        if(!self::$instance instanceof static){
             self::$instance = new static();
         }
        

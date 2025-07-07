@@ -13,6 +13,14 @@ namespace Luminova\Command\Consoles;
 use \Luminova\Base\BaseConsole;
 use \Luminova\Attributes\Compiler;
 use \Luminova\Storages\FileManager;
+use function \Luminova\Funcs\{
+    root,
+    camel_case,
+    write_content,
+    get_content,
+    make_dir,
+    has_uppercase
+};
 
 class Context extends BaseConsole 
 {
@@ -88,7 +96,7 @@ class Context extends BaseConsole
         $camelCase = camel_case('on' . $name) . 'Error';
         $controller = ucfirst($name) . 'Controller::index';
         $onError = ($noError ? '' : ', ' . "[ErrorController::class, '$camelCase']");
-        $index = root('public') . 'index.php';
+        $index = root('/public/', 'index.php');
         $indexContent = get_content($index);
 
         $handler = <<<PHP
@@ -122,7 +130,7 @@ class Context extends BaseConsole
 
             if($input === 'yes'){
                 if(write_content($index, $content)){
-                    write_content(root('routes') . $name . '.php', $handler);
+                    write_content(root('/routes/', $name . '.php'), $handler);
                     $this->term->writeln("Route context installed: {$name}", 'green');
 
                     return STATUS_SUCCESS;
@@ -134,7 +142,7 @@ class Context extends BaseConsole
             return STATUS_ERROR;
         }else{
             if(write_content($index, $content)){
-                write_content(root('routes') . $name . '.php', $handler);
+                write_content(root('/routes/', $name . '.php'), $handler);
                 $this->term->writeln("Route context installed: {$name}", 'green');
 
                 return STATUS_SUCCESS;
@@ -277,7 +285,7 @@ class Context extends BaseConsole
         }
 
         if ($newPrefix !== '') {
-            $index = root('public') . 'index.php';
+            $index = root('/public/', 'index.php');
             $indexContent = get_content($index);
             $search = "Boot::http()->router->context(";
             $startPos = strpos($indexContent, $search);
@@ -315,7 +323,7 @@ class Context extends BaseConsole
      * 
      * @return string class method name.
      */
-    private function getMethodType(array|null $methods): string 
+    private function getMethodType(?array $methods): string 
     {
         if($methods === null){
             return 'get(';

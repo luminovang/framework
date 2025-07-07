@@ -19,6 +19,7 @@ use \Luminova\Http\File;
 use \Luminova\Time\Time;
 use \Luminova\Exceptions\StorageException;
 use \Exception;
+use function \Luminova\Funcs\configs;
 
 class Storage extends Adapters
 {

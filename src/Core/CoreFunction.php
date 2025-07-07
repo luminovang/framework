@@ -10,11 +10,8 @@
  */
 namespace Luminova\Core;
 
-use \Luminova\Functions\IP;
 use \Luminova\Storages\FileManager;
-use \Luminova\Functions\Tor;
-use \Luminova\Functions\Maths;
-use \Luminova\Functions\Func;
+use \Luminova\Functions\{IP, Func, Maths, Tor};
 
 abstract class CoreFunction extends Func
 {

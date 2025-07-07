@@ -11,16 +11,22 @@ declare(strict_types=1);
  */
 namespace Luminova\Base;
 
-use \Luminova\Interface\RoutableInterface;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Interface\ValidationInterface;
-use \Luminova\Interface\HttpRequestInterface;
-use \Luminova\Core\CoreApplication;
-use \Luminova\Http\Request;
-use \Luminova\Security\Validation;
-use \Luminova\Utils\LazyObject;
 use \App\Application;
+use \Luminova\Http\Request;
+use \Luminova\Utils\LazyObject;
+use \Luminova\Security\Validation;
+use \Luminova\Core\CoreApplication;
+use \Luminova\Interface\{
+    RoutableInterface, 
+    LazyInterface, 
+    ValidationInterface, 
+    HttpRequestInterface
+};
 
+/**
+ * A class to extend when building an HTTP controller for API or Website.
+ * It specialize with custom rendering and request handling and input validation.
+ */
 abstract class BaseController implements RoutableInterface
 {
     /**

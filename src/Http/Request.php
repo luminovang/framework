@@ -11,25 +11,17 @@
 namespace Luminova\Http;
 
 use \Luminova\Luminova;
-use \Luminova\Http\Header;
-use \Luminova\Http\Server;
-use \Luminova\Http\File;
-use \Luminova\Http\UserAgent;
-use \Luminova\Cookies\CookieFileJar;
-use \Luminova\Functions\IP;
-use \Luminova\Functions\Func;
 use \Luminova\Utils\LazyObject;
-use \App\Config\Security;
-use \App\Config\Files;
-use \App\Config\Session;
-use \Luminova\Interface\CookieJarInterface;
-use \Luminova\Interface\HttpRequestInterface;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Exceptions\InvalidArgumentException;
-use \Luminova\Exceptions\SecurityException;
+use \Luminova\Cookies\CookieFileJar;
+use \Luminova\Functions\{IP, Func};
+use \App\Config\{Security, Files, Session};
+use \Luminova\Http\{Header, Server, File, UserAgent};
+use \Luminova\Interface\{HttpRequestInterface, LazyInterface, CookieJarInterface};
+use \Luminova\Exceptions\{InvalidArgumentException, SecurityException};
 use \Generator;
 use \Stringable;
 use \JsonException;
+use function \Luminova\Funcs\get_mime;
 
 /**
  * @method mixed getPut(string|null $field, mixed $default = null)

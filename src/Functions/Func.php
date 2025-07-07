@@ -10,17 +10,17 @@
  */
 namespace Luminova\Functions;
 
-use \Luminova\Exceptions\InvalidArgumentException;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Storages\FileManager;
 use \Luminova\Base\BaseConfig;
+use \Luminova\Storages\FileManager;
+use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
+use function \Luminova\Funcs\{root, get_mime};
 
 class Func
 {
 	/**
 	 * Binary magic numbers.
 	 * 
-	 * @var array $magicNumbers
+	 * @var array<string,string> $magicNumbers
 	 */
 	private static array $magicNumbers = [
 		"\x89PNG\r\n\x1A\n" => 'png',

@@ -11,15 +11,10 @@
 namespace Luminova\Http;
 
 use \Luminova\Http\Client\Curl;
-use \Luminova\Utils\Promise\Promise;
-use \Luminova\Utils\Promise\RejectedPromise;
-use \Luminova\Interface\NetworkInterface;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Interface\PromiseInterface;
-use \Psr\Http\Message\ResponseInterface;
-use \Psr\Http\Message\RequestInterface;
-use \Psr\Http\Message\UriInterface;
 use \Psr\Http\Client\ClientInterface;
+use \Luminova\Utils\Promise\{Promise, RejectedPromise};
+use \Psr\Http\Message\{ResponseInterface, RequestInterface, UriInterface};
+use \Luminova\Interface\{NetworkInterface, LazyInterface, PromiseInterface};
 use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
 use \GuzzleHttp\Exception\GuzzleException;
 use \Luminova\Exceptions\AppException;

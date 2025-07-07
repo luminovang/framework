@@ -12,11 +12,15 @@ namespace Luminova\Arrays;
 
 use \Luminova\Arrays\Listify;
 use \Luminova\interface\LazyInterface;
-use \Luminova\Exceptions\JsonException;
-use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\{JsonException, RuntimeException};
 use \Countable;
 use \Stringable;
 use \ArrayIterator;
+use function \Luminova\Funcs\{
+    is_nested,
+    is_associative,
+    array_merge_recursive_distinct
+};
 
 class ArrayUtil implements LazyInterface, Countable, Stringable
 {
@@ -81,12 +85,13 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
      * Check if the current array is a nested array by containing array as value.
      * 
      * @param bool $recursive Whether to check deeply nested array values (default: false).
+     * @param bool $strict Whether to require all values to be arrays (default: false).
      * 
      * @return bool Return true if the array is nested, false otherwise.
      */
-    public function isNested(bool $recursive = false): bool
+    public function isNested(bool $recursive = false, bool $strict = false): bool
     {
-        return is_nested($this->array, $recursive);
+        return is_nested($this->array, $recursive, $strict);
     }
 
     /**
@@ -393,6 +398,7 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
             ? $replacements->get() 
             : $replacements;
         $this->array = array_replace($this->array, $replacements);
+
         return $this;
     }
 
@@ -407,6 +413,7 @@ class ArrayUtil implements LazyInterface, Countable, Stringable
     {
         $array = ($array instanceof ArrayUtil) ? $array->get() : $array;
         $this->array = array_merge($this->array, $array);
+        
         return $this;
     }
 

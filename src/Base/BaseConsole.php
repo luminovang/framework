@@ -16,6 +16,11 @@ use \Luminova\Command\Terminal;
 use \Luminova\Utils\LazyObject;
 use \App\Application;
 
+/**
+ * A class to extend when building a console CLI controller for Novakit commands.
+ * It specialize with handling commands using Luminova novakit command-line helper.
+ * All commands must be register in `/bin/.novakit-console.php` and execute with `php novakit <command>` to run registered commands.
+ */
 abstract class BaseConsole
 {
     /**

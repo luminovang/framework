@@ -537,7 +537,7 @@ final class Text
     ): string 
     {
         if (!$text) {
-            return '';
+            return $text;
         }
 
         $width = max(0, $width);
@@ -609,9 +609,16 @@ final class Text
         }
 
         $string = self::hasAnsi($string) ? self::strip($string) : $string;
-        $string = self::hasEmoji($string) ? self::stripEmojis($string) : $string;
+        $hasEmoji = self::hasEmoji($string);
+        $textString = $hasEmoji ? self::stripEmojis($string) : $string;
 
-        return mb_strlen($string, $encoding);
+        $length = mb_strlen($textString, $encoding);
+
+        if($hasEmoji){
+            $length += self::emojiStrlen($string);
+        }
+
+        return $length;
     }
 
     /**
@@ -623,15 +630,24 @@ final class Text
      */
     public static function emojiStrlen(string $string): int 
     {
+        static $isGraph = null;
         preg_match_all('/\X/u', $string, $matches);
-        
+
+        if(empty($matches[0])){
+            return 0;
+        }
+
+        $isGraph ??= function_exists('grapheme_strlen');
         $emojiLength = 0;
+
         foreach ($matches[0] as $char) {
             if (preg_match(self::$emojiPattern, $char)) {
-                $emojiLength += mb_strlen($char, 'UTF-8');
+                $emojiLength += $isGraph 
+                    ? (grapheme_strlen($char) ?: 1) 
+                    : mb_strlen($char, 'UTF-8');
             }
         }
-        
+
         return $emojiLength;
     }
 
@@ -746,8 +762,8 @@ final class Text
      */
     public static function lines(string $text): array
     {
-        return ($text === '') 
-            ? [] 
+        return !$text
+            ? [$text] 
             : explode("\n", preg_replace('/\r\n|\r/', "\n", $text));
     }
 

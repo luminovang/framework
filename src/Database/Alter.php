@@ -10,7 +10,7 @@
  */
 namespace Luminova\Database;
 
-use Luminova\Exceptions\DatabaseException;
+use \Luminova\Exceptions\DatabaseException;
 
 class Alter 
 {

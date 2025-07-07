@@ -13,12 +13,12 @@ namespace Luminova\Template;
 use \Luminova\Luminova;
 use \Smarty\Smarty as SmartyTemplate;
 use \App\Config\Template as TemplateConfig;
-use \App\Config\Templates\Smarty\Classes;
-use \App\Config\Templates\Smarty\Modifiers;
-use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Optimization\Minification;
+use \Luminova\Exceptions\RuntimeException;
+use \App\Config\Templates\Smarty\{Classes, Modifiers};
 use \Exception;
 use \SmartyException;
+use function \Luminova\Funcs\make_dir;
 
 class Smarty 
 {

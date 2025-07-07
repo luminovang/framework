@@ -17,6 +17,10 @@ use \Luminova\Storages\FileManager;
 use \Peterujah\NanoBlock\NanoImage;
 use \Luminova\Exceptions\RuntimeException;
 use \Exception;
+use function \Luminova\Funcs\{
+    root,
+    get_mime
+};
 
 final class FileDelivery
 {

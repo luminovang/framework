@@ -25,49 +25,27 @@ final class Commands
         'help' => [
             'name' => 'Help',
             'group' => 'help',
-            'description' => 'his command displays help options for the Novakit CLI tool.',
+            'description' => 'Displays help information for novakit or application controller-based commands.',
             'usages' => [
-                'php novakit <command> --help',
-                'php index.php <controller-command> --help',
-                'php novakit <NovaKitCommand> --help',
-                'php index.php <ControllerCommandGroup> --help',
-                'php novakit <NovaKitCommand> --foo=bar baz',
-                'php index.php <ControllerCommandGroup> --foo=bar --baz',
+                'php novakit <command> --help' => 'Display help for a specific NovaKit command.',
+                'php novakit <group:namespace> --help' => 'Display help for a namespaced NovaKit group command.',
+                'php novakit <group> --help' => 'Alternative syntax to list all commands under a NovaKit group.',
+                'php index.php <command-group> --help' => 'Display help for a controller-based command (via index.php).',
+                'php novakit list' => 'List all available NovaKit and controller commands.',
+                'php novakit list --command=<name>' => 'List commands under a specific NovaKit group, namespace, or controller command group.',
+                'php novakit <command> --foo=bar --baz' => 'Execute a NovaKit command with options or arguments.',
+                'php novakit <group:namespace> --foo=bar --baz' => 'Execute a namespaced NovaKit command with options or arguments.',
+                'php index.php <command-group> --foo=bar --baz' => 'Execute a routable controller command from index.php.',
             ],
             'options' => [
-                '-h, --help' => "Display help message related to novakit or controller command.",
-                '--system-info' => "Display basic system information.",
-                '-a, --all' => "Display all available novakit help messages.",
-                '--no-header' => "Disable displaying novakit header information.",
-                '--no-color' => "Disable displaying colored text.",
-                '-v, --version' => "Display Framework and Novakit Command Line version information."
+                '-h, --help' => 'Display help message related to NovaKit or controller command.',
+                '--system-info' => 'Display basic system information (e.g. PHP version, OS, memory).',
+                '-a, --all' => 'Show full list of available NovaKit commands and descriptions.',
+                '--no-header' => 'Suppress the NovaKit header banner in output.',
+                '--no-color' => 'Disable color formatting in the output.',
+                '-v, --version' => 'Display the version of the framework and NovaKit CLI.',
             ],
-            'examples' => [
-                'php novakit list --help' => 'Display help for listing all available commands and their descriptions.',
-                'php novakit server --help' => 'Displays help for starting the Luminova PHP development server.',
-                'php novakit context --help' => "Displays help for installing the application router context.",
-                'php novakit cache --help' => "Displays help for managing system caches: clear, delete by key, or list cache items.",
-                'php novakit build:project --help' => 'Displays help for building the Luminova PHP project.',
-                'php novakit generate:key --help' => "Displays help for generating an application encryption key and storing it in environment variables.",
-                'php novakit auth --help' => "Displays help for CLI user authentication.",
-                'php novakit generate:sitemap --help' => "Displays help for generating the website sitemap.",
-                'php novakit env:add --help' => "Displays help for adding or updating an environment variable.",
-                'php novakit env:setup --help' => "Displays help for configuring environment variable based on context.",
-                'php novakit env:cache --help' => "Displays help for generating cache version of environment variable for production.",
-                'php novakit env:remove --help' => "Displays help for removing a variable from the .env file.",
-                'php novakit create:controller --help' => "Displays help for creating a new controller class.",
-                'php novakit create:view --help' => "Displays help for creating a new template view.",
-                'php novakit create:class --help' => "Displays help for creating a new class file.",
-                'php novakit create:model --help' => "Displays help for creating a new model class file.",
-                'php novakit db:drop --help' => "Displays help for dropping the database migration table.",
-                'php novakit db:alter --help' => "Displays help for altering database migration tables and columns.",
-                'php novakit db:truncate --help' => "Displays help for truncating a database table to clear all records.",
-                'php novakit db:seed --help' => "Displays help for executing database seeders.",
-                'php novakit db:migrate --help' => 'Displays help for executing database table migrations.',
-                'php novakit cron:create --help' => "Displays help for creating cron tasks and locking them in the cron lock file.",
-                'php novakit cron:run --help' => "Displays help for running cron jobs that are locked in the cron lock file.",
-                'php index.php YourControllerCommandGroup --help' => 'Display help information related to routable CLI controller commands.',
-            ],
+            'examples' => [],
         ],
 
         'list' => [
@@ -78,7 +56,8 @@ final class Commands
                 'php novakit list',
             ],
             'options' => [
-                '-h, --help' => 'Show help information for this command.'
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --command' => 'Optional. Specify command to list (e.g, task::list or task).'
             ],
             'examples' => [],
         ],
@@ -523,7 +502,7 @@ final class Commands
         ],
 
         'cron:create' => [
-            'name' => 'Cron',
+            'name' => 'CronWorker',
             'group' => 'cron:create',
             'description' => "Creates cron tasks and locks them in the cron lock file.",
             'usages' => [
@@ -540,7 +519,7 @@ final class Commands
         ],
 
         'cron:run' => [
-            'name' => 'Cron',
+            'name' => 'CronWorker',
             'group' => 'cron:run',
             'description' => "Runs cron jobs that were locked in the cron lock file.",
             'usages' => [
@@ -555,6 +534,276 @@ final class Commands
                 'php novakit cron:run',
                 'php novakit cron:run --force',
                 'php novakit cron:run --sleep=100000'
+            ],
+        ],
+
+        'task:init' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:init',
+            'description' => 'Initialize the task queue system and create the required table in your database. Used to initialize the task system.',
+            'usages' => [
+                'php novakit task:init'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class' => 'Optional. Fully qualified class name that implements the task queue. Defaults to App\\Tasks\\TaskQueue.',
+            ],
+            'examples' => [
+                'php novakit task:init --class=App\\Tasks\\MyTask' => 'Creates a task queue table using your custom task class.',
+            ],
+        ],
+
+        'task:deinit' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:deinit',
+            'description' => 'Drop the task queue table from the database. Removes all associated tasks.',
+            'usages' => [
+                'php novakit task:deinit'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class' => 'Optional. Fully qualified class name to identify the task table. Defaults to App\\Tasks\\TaskQueue.',
+            ],
+            'examples' => [
+                'php novakit task:deinit --class=App\\Tasks\\MyTask' => 'Drops the task table defined in your custom task class.',
+            ],
+        ],
+
+        'task:queue' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:queue',
+            'description' => 'Add a new task to the queue for later execution.',
+            'usages' => [
+                'php novakit task:queue -t=App\\Utils\\MyHandler@run -a=\'["param1", 2, true]\''
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class'    => 'Optional. Task class used to queue tasks. Defaults to App\\Tasks\\TaskQueue.',
+                '-t, --task' => 'Handler to execute: a function name, static method (Class::method), or instance method (Class@method). Optional if tasks are already queued via TaskQueue->tasks().',
+                '-a, --args'     => 'Optional. JSON array of arguments to pass to the handler.',
+                '-s, --schedule' => 'Optional. Delay the task execution. Accepts a UNIX timestamp, formatted date (Y-m-d H:i:s), or relative time (e.g., "+5 minutes").',
+                '-p, --priority' => 'Optional. Task execution priority (0 = highest, 100 = lowest). Defaults to 0.',
+                '-f, --forever' => 'Optional. Recheck interval in minutes (≥ 5) for forever tasks to run again after marked completed or failed.',
+                '-r, --retries' => 'Optional. The number of times to retry task if failed (default: 0) Unlimited.',
+            ],
+            'examples' => [
+                'php novakit task:queue -t=App\\Service@handle -a=\'["foo", 42]\''
+                    => 'Queue a class method with parameters.',
+            ],
+        ],
+
+        'task:list' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:list',
+            'description' => 'List tasks in the queue with optional filters.',
+            'usages' => [
+                'php novakit task:list --status=pending --limit=10 --offset=0'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class'  => 'Optional. Task queue class. Defaults to App\\Tasks\\TaskQueue.',
+                '-s, --status' => 'Optional. Filter by task status: pending, running, completed, etc.',
+                '-l, --limit'  => 'Optional. Maximum number of tasks to list.',
+                '-o, --offset' => 'Optional. Number of tasks to skip.',
+            ],
+            'examples' => [
+                'php novakit task:list --status=pending --limit=5' => 'Lists the first 5 pending tasks.',
+            ],
+        ],
+
+        'task:export' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:export',
+            'description' => 'Export all tasks from the queue with optional status filtering.',
+            'usages' => [
+                'php novakit task:export --dir=path/to/export/tasks.php --status=pending'
+            ],
+            'options' => [
+                '-h, --help'   => 'Show help information for this command.',
+                '-c, --class'  => 'Optional. Task queue class. Defaults to App\\Tasks\\TaskQueue.',
+                '-d, --dir'    => 'Required. File path to save the exported tasks.',
+                '-s, --status' => 'Optional. Task status to filter (e.g., all, pending, failed). Default is "all".',
+            ],
+            'examples' => [
+                'php novakit task:export --dir=path/to/export/tasks.php' => 'Export all tasks to the specified file.',
+            ],
+        ],
+
+        'task:info' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:info',
+            'description' => 'View detailed information about a specific task by ID.',
+            'usages' => [
+                'php novakit task:info --id=42'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class' => 'Optional. Task queue class.',
+                '-i, --id'    => 'Required. ID of the task to inspect.',
+            ],
+            'examples' => [
+                'php novakit task:info --id=99' => 'Show detailed info of task #99.',
+            ],
+        ],
+
+        'task:delete' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:delete',
+            'description' => 'Delete a specific task from the queue.',
+            'usages' => [
+                'php novakit task:delete --id=42'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class' => 'Optional. Task queue class.',
+                '-i, --id'    => 'Required. ID of the task to delete.',
+            ],
+            'examples' => [
+                'php novakit task:delete --id=15' => 'Remove task #15 from the database.',
+            ],
+        ],
+
+        'task:purge' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:purge',
+            'description' => 'Clear all tasks of a given status (e.g., completed).',
+            'usages' => [
+                'php novakit task:purge --status=completed'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class'  => 'Optional. Task queue class.',
+                '-s, --status' => 'Optional. Task status to clear. Defaults to all.',
+            ],
+            'examples' => [
+                'php novakit task:purge --status=failed' => 'Remove all failed tasks.',
+            ],
+        ],
+
+        'task:pause' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:pause',
+            'description' => 'Pause a running or pending task.',
+            'usages' => [
+                'php novakit task:pause --id=42'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class' => 'Optional. Task queue class.',
+                '-i, --id'    => 'Required. ID of the task to pause.',
+                '-p, --priority' => 'Optional. Task execution priority (0 = highest, 100 = lowest).',
+            ],
+            'examples' => [
+                'php novakit task:pause --id=7' => 'Pause task #7 if supported.',
+            ],
+        ],
+
+        'task:resume' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:resume',
+            'description' => 'Resume a previously paused task.',
+            'usages' => [
+                'php novakit task:resume --id=42'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class' => 'Optional. Task queue class.',
+                '-i, --id'    => 'Required. ID of the paused task.',
+            ],
+            'examples' => [
+                'php novakit task:resume --id=7' => 'Resume task #7.',
+            ],
+        ],
+
+        'task:retry' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:retry',
+            'description' => 'Retry a failed task by marking it as pending.',
+            'usages' => [
+                'php novakit task:retry --id=42'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class' => 'Optional. Task queue class.',
+                '-i, --id'    => 'Required. ID of the failed task to retry.',
+            ],
+            'examples' => [
+                'php novakit task:retry --id=9' => 'Retry a failed task.',
+            ],
+        ],
+
+        'task:sig' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:sig',
+            'description' => 'Send control signals to the task worker (stop or resume).',
+            'usages' => [
+                'php novakit task:sig --stop-worker',
+                'php novakit task:sig --resume-worker',
+            ],
+            'options' => [
+                '-h, --help'         => 'Show help information for this command.',
+                '-c, --class'        => 'Optional. Task queue class. Defaults to App\\Tasks\\TaskQueue.',
+                '-s, --stop-worker'  => 'Stop the worker by creating a signal lock file.',
+                '-r, --resume-worker'=> 'Resume the worker by removing the signal lock file.',
+            ],
+            'examples' => [
+                'php novakit task:sig --stop-worker'  => 'Tells the running task worker to gracefully shut down.',
+                'php novakit task:sig --resume-worker'=> 'Allows a previously stopped worker to continue by removing the signal file.',
+            ],
+        ],
+
+        'task:status' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:status',
+            'description' => 'Update the status of a specific task.',
+            'usages' => [
+                'php novakit task:status --id=42 --status=completed'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class'  => 'Optional. Task queue class.',
+                '-i, --id'     => 'Required. Task ID to update.',
+                '-s, --status' => 'Required. New status: pending, paused, running, completed, etc.',
+            ],
+            'examples' => [
+                'php novakit task:status --id=42 --status=paused' => 'Manually set task #42 as paused.',
+            ],
+        ],
+
+        'task:run' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:run',
+            'description' => 'Execute queued tasks in a worker loop. Can limit execution or auto-exit after inactivity.',
+            'usages' => [
+                'php novakit task:run --limit=10 --sleep=500000 --idle=5'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class'  => 'Optional. Task queue class.',
+                '-o, --output' => 'Optional. Log output path or log level (e.g., debug).',
+                '-s, --sleep'  => 'Optional. Microseconds to wait between tasks. Default: 100000 (0.1s).',
+                '-l, --limit'  => 'Optional. Max number of tasks to process in one loop.',
+                '-i, --idle'   => 'Optional. Max idle attempts before stopping.',
+                '-f, --flock-worker' => 'Optional. Use a file lock to prevent multiple worker instances from running at the same time.',
+            ],
+            'examples' => [
+                'php novakit task:run --output=debug --limit=5' => 'Run and log 5 tasks with debug output.',
+            ],
+        ],
+
+        'task:listen' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:listen',
+            'description' => 'Listen for new task events written to the task log file. Useful for real-time CLI monitoring.',
+            'usages' => [
+                'php novakit task:listen'
+            ],
+            'options' => [
+                '-h, --help' => 'Show help information for this command.',
+                '-c, --class' => 'Optional. Task queue class with logEvents file path set.',
+            ],
+            'examples' => [
+                'php novakit task:listen --class=App\\Tasks\\MyTask' => 'Listen to events from a custom task class.',
             ],
         ],
 
@@ -750,6 +999,48 @@ final class Commands
     }
 
     /**
+     * Get help examples of all commands.
+     * 
+     * @return array
+     */
+    public static function getGlobalHelps(?string $group = null, ?int &$largest = null): array 
+    {
+        $examples = [];
+        $last = 0;
+
+        foreach (self::$commands as $command => $value) {
+            if ($command === 'help' || ($group && !str_starts_with($command, $group))) {
+                continue;
+            }
+
+            $name = strstr($command, ':', true) ?: $command;
+            $key = "php novakit $command --help";
+
+            if($largest !== null){
+                $length = strlen($key);
+
+                if($length > $last){
+                    $largest = $length;
+                }
+            }
+
+            $examples[$key] = $group 
+                ? ($value['description'] ?? 'Show available command usage and help.')
+                : sprintf(
+                    "Display help for %s command group: %s",
+                    $command,
+                    $name
+                );
+            }
+
+        if(!$group){
+            $examples['php index.php CommandGroup --help'] = 'Display help for routable CLI controller commands.';
+        }
+
+        return $examples;
+    }
+
+    /**
      * Format help command descriptions.
      * 
      * @return string Return formatted help command descriptions.
@@ -757,16 +1048,16 @@ final class Commands
     private static function getDescription(): string 
     {
         $title = Color::apply(
-            "PHP Luminova Novakit Command Help (Novakit Version: " . Luminova::NOVAKIT_VERSION .
+            " PHP Luminova Novakit Command Help (Novakit Version: " . Luminova::NOVAKIT_VERSION .
             ", Framework Version: " . Luminova::VERSION . ")",
-            Text::FONT_BOLD, 'yellow'
+            Text::FONT_BOLD, 'brightBlack'
         );
     
         $note = Color::apply('IMPORTANT NOTE:', Text::FONT_BOLD, 'red');
         $flags = Color::apply('--help (-h)', null, 'yellow');
     
         return <<<TEXT
-            {$title}
+            {$title}\n
             This command displays help options for the Novakit CLI tool.
             
             To execute `novakit` commands, run them from your application's root directory (e.g., 'php novakit command'). 

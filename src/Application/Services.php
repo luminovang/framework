@@ -15,6 +15,13 @@ use \Luminova\Exceptions\RuntimeException;
 use \Throwable;
 use \ReflectionClass;
 use \ReflectionException;
+use function \Luminova\Funcs\{
+    path,
+    write_content,
+    get_content,
+    make_dir,
+    get_class_name
+};
 
 final class Services 
 {

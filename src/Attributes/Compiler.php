@@ -11,13 +11,10 @@
 namespace Luminova\Attributes;
 
 use \Luminova\Luminova;
-use \Luminova\Attributes\Tokenizer;
-use \Luminova\Attributes\Route;
-use \Luminova\Attributes\Error;
-use \Luminova\Attributes\Prefix;
 use \Luminova\Routing\Router;
-use \Luminova\Interface\RoutableInterface;
 use \Luminova\Exceptions\RouterException;
+use \Luminova\Interface\RoutableInterface;
+use \Luminova\Attributes\{Route, Error, Prefix, Tokenizer};
 use \ReflectionClass;
 use \ReflectionMethod;
 use \SplFileInfo;

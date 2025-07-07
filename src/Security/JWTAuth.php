@@ -10,17 +10,21 @@
  */
 namespace Luminova\Security;
 
-use \Firebase\JWT\JWT;
-use \Firebase\JWT\Key;
+use \Luminova\Luminova;
 use \Luminova\Time\Time;
 use \Luminova\Logger\Logger;
 use \Luminova\Interface\LazyInterface;
-use \Luminova\Luminova;
-use \Luminova\Exceptions\AppException;
-use \Luminova\Exceptions\EncryptionException;
+use \Firebase\JWT\{JWT, Key};
+use \Luminova\Exceptions\{AppException, EncryptionException};
 use \Closure;
 use \stdClass;
 use \Throwable;
+use function \Luminova\Funcs\{
+    root,
+    write_content,
+    get_content,
+    make_dir
+};
 
 class JWTAuth implements LazyInterface
 {

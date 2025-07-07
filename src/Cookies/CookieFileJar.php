@@ -19,6 +19,12 @@ use \Luminova\Exceptions\FileException;
 use \JsonException;
 use \Stringable;
 use \Countable;
+use function \Luminova\Funcs\{
+    root,
+    write_content,
+    get_content,
+    make_dir
+};
 
 class CookieFileJar extends BaseCookie implements CookieJarInterface, Stringable, Countable
 {
@@ -776,7 +782,7 @@ class CookieFileJar extends BaseCookie implements CookieJarInterface, Stringable
             $this->cookies = $this->getCookies();
         }else{
             $this->cookies = $from;
-            $this->filePath ??= root('/writeable/temp/') . 'cookies.txt';
+            $this->filePath ??= root('/writeable/temp/', 'cookies.txt');
 
             if($this->cookies !== []){
                 $this->save();

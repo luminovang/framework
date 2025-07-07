@@ -17,6 +17,11 @@ use \Luminova\Command\Utils\Text;
 use \Luminova\Security\Crypter;
 use \SplFileObject;
 use \Throwable;
+use function \Luminova\Funcs\{
+    root,
+    write_content,
+    get_content
+};
 
 class System extends BaseConsole 
 {
@@ -98,7 +103,7 @@ class System extends BaseConsole
         setenv($key, $value, true);
         $this->term->header();
         $this->term->success('Variable "' . $key . '" added successfully');
-        $this->term->writeln('Optionally run "php novakit env:cache" to create updated cache version of environment veriables.');
+        $this->term->writeln('Optionally run "php novakit env:cache" to create updated cache version of environment variables.');
 
         return STATUS_SUCCESS;
     }
@@ -110,8 +115,8 @@ class System extends BaseConsole
      */
     private function cacheEnv(): int 
     {
-        $path = root() .  '.env';
-        $envCache = root('writeable/') . '.env-cache.php';
+        $path = root(null, '.env');
+        $envCache = root('/writeable/', '.env-cache.php');
 
         if (!file_exists($path)) {
             $this->term->beeps();
@@ -474,8 +479,8 @@ class System extends BaseConsole
             return STATUS_ERROR;
         }
 
-        $envFile = root() . '.env';
-        $envCache = root('writeable/') . '.env-cache.php';
+        $envFile = root(null, '.env');
+        $envCache = root('/writeable/', '.env-cache.php');
         $envContents = get_content($envFile);
         
         if($envContents === false){

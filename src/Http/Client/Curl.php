@@ -37,6 +37,7 @@ use \CURLFile;
 use \Exception;
 use \JsonException;
 use \Throwable;
+use function \Luminova\Funcs\array_extend_default;
 
 class Curl implements ClientInterface
 {
@@ -528,7 +529,7 @@ class Curl implements ClientInterface
             $this->setSsl($ssl, $verify);
         }
 
-        if (in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
+        if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
             $isBody = isset($this->mutable['body']);
             $isParam = isset($this->mutable['form_params']);
             $isMultipart = isset($this->mutable['multipart']);

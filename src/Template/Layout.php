@@ -11,6 +11,7 @@
 namespace Luminova\Template;
 
 use \Luminova\Exceptions\RuntimeException;
+use function \Luminova\Funcs\{root, filter_paths};
 
 final class Layout
 {

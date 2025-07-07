@@ -13,6 +13,8 @@ namespace Luminova\Database;
 abstract class Migration 
 {
     /**
+     * Invokable controllers.
+     * 
      * @var array<int,class-string<Migration>> $invokes
      */
     private static array $invokes = [];

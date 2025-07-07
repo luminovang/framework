@@ -12,9 +12,8 @@ namespace Luminova\Security;
 
 use \App\Config\Encryption;
 use \Luminova\Interface\EncryptionInterface;
-use \Luminova\Security\Encryption\OpenSSL;
-use \Luminova\Security\Encryption\Sodium;
 use \Luminova\Exceptions\EncryptionException;
+use \Luminova\Security\Encryption\{OpenSSL, Sodium};
 
 final class Crypter 
 {

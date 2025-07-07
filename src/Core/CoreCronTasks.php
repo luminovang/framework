@@ -10,12 +10,16 @@
  */
 namespace Luminova\Core;
 
-use \Luminova\Time\Time;
-use \Luminova\Time\CronInterval;
 use \Luminova\Logger\LogLevel;
 use \Luminova\Base\BaseCommand;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Time\{Time, CronInterval};
+use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
+use function \Luminova\Funcs\{
+    root,
+    write_content,
+    get_content,
+    make_dir
+};
 
 abstract class CoreCronTasks
 {

@@ -11,10 +11,9 @@
 namespace Luminova\Template;
 
 use \Luminova\Luminova;
-use \Twig\Loader\FilesystemLoader;
 use \Twig\Environment;
-use \Twig\Error\RuntimeError;
-use \Twig\Error\SyntaxError;
+use \Twig\Loader\FilesystemLoader;
+use \Twig\Error\{RuntimeError, SyntaxError};
 use \App\Config\Template as TemplateConfig;
 use \App\Config\Templates\Twig\Extensions;
 use \Luminova\Optimization\Minification;

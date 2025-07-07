@@ -12,6 +12,7 @@
 namespace Luminova\Storages;
 
 use \Luminova\Exceptions\FileException;
+use function \Luminova\Funcs\make_dir;
 
 class StreamWrapper 
 {

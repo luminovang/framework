@@ -10,11 +10,10 @@
  */
 namespace Luminova\Security;
 
-use \Luminova\Interface\ValidationInterface;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Functions\Func;
-use \Luminova\Functions\IP;
 use \Throwable;
+use \Luminova\Functions\{Func, IP};
+use \Luminova\Interface\{LazyInterface, ValidationInterface};
+use function \Luminova\Funcs\{is_empty, list_to_array, list_in_array};
 
 final class Validation implements ValidationInterface, LazyInterface
 {

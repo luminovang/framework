@@ -13,6 +13,10 @@ namespace Luminova\Command\Consoles;
 use \Luminova\Base\BaseConsole;
 use \Luminova\Security\Crypter;
 use \Luminova\Database\Builder;
+use function \Luminova\Funcs\{
+    root, 
+    get_content
+};
 
 class Authenticate extends BaseConsole 
 {
@@ -97,7 +101,7 @@ class Authenticate extends BaseConsole
 
     public function deAuthenticate(string $systemId): int 
     {
-        $input = root('/writeable/.cli_users/') . "{$systemId}.php";
+        $input = root('/writeable/.cli_users/', "{$systemId}.php");
         
         if(file_exists($input)){
             if(unlink($input)){
@@ -112,7 +116,7 @@ class Authenticate extends BaseConsole
 
     public function isOnline(string $systemId): int 
     {
-        $input = root('/writeable/.cli_users/') . "{$systemId}.php";
+        $input = root('/writeable/.cli_users/', "{$systemId}.php");
         return file_exists($input) ? STATUS_SUCCESS : STATUS_ERROR;
     }
 
@@ -131,7 +135,7 @@ class Authenticate extends BaseConsole
             $input = $this->term->input('Enter private key, key path: or enter to get key locally: ');
         
             if(!$input && !PRODUCTION){
-                $input = root('/writeable/keys/') . 'cli-auth-private.key';
+                $input = root('/writeable/keys/', 'cli-auth-private.key');
 
                 if (!file_exists($input)) {
                     $input = '';
@@ -154,7 +158,7 @@ class Authenticate extends BaseConsole
             $key = $user->content;
 
             if(is_file($key)){
-                $path = root(dirname($key)) . basename($key);
+                $path = root(dirname($key), basename($key));
                 $key = file_exists($path) ? get_content($path) : '';
             }
 
