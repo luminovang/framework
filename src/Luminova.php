@@ -24,7 +24,7 @@ final class Luminova
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.6.4';
+    public const VERSION = '3.6.5';
 
     /**
      * Framework version name.
