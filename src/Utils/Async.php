@@ -644,7 +644,7 @@ class Async
         $tasks = [];
 
         foreach ($this->tasks as $key => $task) {
-            $tasks['task_' . strval($key)] = ($task instanceof Fiber)
+            $tasks["task_{$key}"] = ($task instanceof Fiber)
                 ? $task 
                 : new Fiber($task);
         }

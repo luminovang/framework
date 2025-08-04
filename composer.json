@@ -1,7 +1,11 @@
 {
     "name": "luminovang/framework",
-    "description": "Luminova PHP framework design for speed",
-    "keywords": ["Framework","PHP","MVC","PHP Framework", "Luminova", "PHP Luminova Framework", "Luminova Ng", "PHP Luminova"],
+    "description": "Reusable and core component for the Luminova PHP framework.",
+    "keywords": [
+        "luminova", "php luminova", "php luminova framework", "luminova ng", "novakit",
+        "php", "php framework", "framework", "mvc", "hmvc",
+        "component", "module", "php routing"
+    ],
     "license": "MIT",
     "type": "library",
     "homepage": "https://luminova.ng",
@@ -32,13 +36,14 @@
         "friendsofphp/php-cs-fixer": "^3.64"
     },
     "suggest": {
-        "luminovang/luminova": "To use this module you need to install it through luminovang/framework.",
-        "ext-curl": "Needed if you use CURLRequest class",
-        "ext-exif": "Needed if you run Image class tests",
-        "ext-fileinfo": "Needed to improve mime type detection for files",
-        "ext-mysqli": "Needed if you use MySQL",
-        "ext-intl": "Needed if you use Local",
-        "ext-sodium": "Needed if you want sodium encryption"
+        "luminovang/luminova": "Required when using this component within the full Luminova framework.",
+        "opis/closure": "Required if you want to store anonymous functions or closures in the BackgroundTaskQueue system.",
+        "ext-curl": "Required for the CURLRequest class.",
+        "ext-exif": "Required for running tests on the Image class.",
+        "ext-fileinfo": "Improves MIME type detection for files.",
+        "ext-mysqli": "Required for using MySQL connections.",
+        "ext-intl": "Required for locale, internationalization, and formatting support.",
+        "ext-sodium": "Required for using sodium-based encryption."
     },
     "autoload": {
         "psr-4": {
@@ -66,9 +71,9 @@
         ]
     },
     "scripts-descriptions": {
-        "analyze-app": "Performs static analysis on the framework modules using phpstan.",
-        "analyze-code": "Analyzes the framework's code for style and standards compliance using rector.",
-        "cs-fix": "Fixes coding style issues to comply with PHP standards using php-cs-fixer."
+        "analyze-app": "Run static analysis on framework modules using PHPStan.",
+        "analyze-code": "Check code style and perform automated refactoring with Rector (dry run).",
+        "cs-fix": "Fix coding style issues using PHP-CS-Fixer."
     },
     "minimum-stability": "stable",
     "prefer-stable": true

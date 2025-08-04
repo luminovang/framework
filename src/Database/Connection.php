@@ -44,20 +44,6 @@ class Connection implements LazyInterface, Countable
     private static ?self $instance = null;
 
     /**
-     * Indicates whether to use a connections pool.
-     *
-     * @var bool $pool
-     */
-    private bool $pool = false;
-
-    /**
-     * Maximum number of open database connections.
-     *
-     * @var int $maxPoolConnections
-     */
-    private int $maxPoolConnections = 0;
-
-    /**
      * Accumulate critical log messages
      * 
      * @var string $logEntry
@@ -92,18 +78,22 @@ class Connection implements LazyInterface, Countable
      *
      * @param bool|null $pool Whether to enable connection pooling. 
      *                         Overrides the `database.connection.pool` environment setting if set.
-     * @param int|null $maxConnections Maximum number of pooled connections. 
+     * @param int|null $maxPoolConnections Maximum number of pooled connections. 
      *                                   Overrides `database.max.connections` from the environment if set.
      * @param bool $autoConnect Whether to immediately initiate the database connection (default: true).
      *
      * @throws DatabaseException If connection retries fail, the connection limit is exceeded, an invalid driver is specified, or any error occurs during connection.
      */
-    public function __construct(?bool $pool = null, ?int $maxConnections = null, bool $autoConnect = true)
+    public function __construct(
+        private ?bool $pool = null, 
+        private ?int $maxPoolConnections = null, 
+        private bool $autoConnect = true
+    )
     {
-        $this->maxPoolConnections = $maxConnections ?? (int) env('database.max.connections', 3);
-        $this->pool = $pool ?? (bool) env('database.connection.pool', false);
+        $this->maxPoolConnections ??= (int) env('database.max.connections', 3);
+        $this->pool ??= (bool) env('database.connection.pool', false);
 
-        if ($autoConnect) {
+        if ($this->autoConnect) {
             $this->db = $this->connect();
         }
     }
@@ -142,7 +132,7 @@ class Connection implements LazyInterface, Countable
      * @param string  $locationId         Shard identifier (e.g., region name or server key).
      * @param bool    $fallbackOnError    Fallback to a backup server if shard server connection is unavailable.
      * @param ?bool   $pool               Enable connection pooling (if applicable).
-     * @param ?int    $maxConnections     Maximum number of connections allowed in the pool.
+     * @param ?int    $maxPoolConnections     Maximum number of connections allowed in the pool.
      * @param bool    $sharedInstance     Reuse a shared static instance if set to true.
      * 
      * @return Connection Returns an initialized database connection instance.
@@ -152,13 +142,13 @@ class Connection implements LazyInterface, Countable
         string $locationId, 
         bool $fallbackOnError = false,
         ?bool $pool = null, 
-        ?int $maxConnections = null,
+        ?int $maxPoolConnections = null,
         bool $sharedInstance = false
     ): static 
     {
         $instance = $sharedInstance
-            ? self::getInstance($pool, $maxConnections, false)
-            : new static($pool, $maxConnections, false);
+            ? self::getInstance($pool, $maxPoolConnections, false)
+            : new static($pool, $maxPoolConnections, false);
 
         $instance->shardServerLocation = $locationId;
         $instance->isShardFallbackOnError = $fallbackOnError;
@@ -179,7 +169,7 @@ class Connection implements LazyInterface, Countable
      *
      * @param bool|null $pool Enables or disables connection pooling.
      *                         Defaults to `database.connection.pool` from the environment.
-     * @param int|null $maxConnections Optional. Maximum number of allowed connections.
+     * @param int|null $maxPoolConnections Optional. Maximum number of allowed connections.
      *                     Defaults to `database.max.connections` from the environment.
      * @param bool $autoConnect Whether to auto-connect on initialization (default: `true`).
      *
@@ -188,12 +178,12 @@ class Connection implements LazyInterface, Countable
      */
     public static function getInstance(
         ?bool $pool = null, 
-        ?int $maxConnections = null, 
+        ?int $maxPoolConnections = null, 
         bool $autoConnect = true
     ): static
     {
         if (!self::$instance instanceof static) {
-            self::$instance = new static($pool, $maxConnections, $autoConnect);
+            self::$instance = new static($pool, $maxPoolConnections, $autoConnect);
         }
 
         return self::$instance;

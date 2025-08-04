@@ -10,11 +10,11 @@
  */
 namespace Luminova\Base;
 
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Core\CoreApplication;
+use \App\Application;
 use \Luminova\Command\Terminal;
 use \Luminova\Utils\LazyObject;
-use \App\Application;
+use \Luminova\Core\CoreApplication;
+use \Luminova\Interface\LazyInterface;
 
 /**
  * A class to extend when building a console CLI controller for Novakit commands.

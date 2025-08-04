@@ -1,5 +1,4 @@
 <?php 
-declare(strict_types = 1);
 /**
  * Luminova Framework
  *
@@ -7,13 +6,17 @@ declare(strict_types = 1);
  * @author Ujah Chigozie Peter
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
- * @link https://luminova.ng
  */
-$ignoreErrors = [];
-$ignoreErrors[] = [
-	'message' => '#^Parameter \\#1 \\$node \\(PhpParser\\\\Node\\\\Stmt\\) of method Luminova\\\\Debugger\\\\PHPStanRules\\:\\:processNode\\(\\) should be contravariant with parameter \\$node \\(PhpParser\\\\Node\\) of method PHPStan\\\\Rules\\\\Rule\\<PhpParser\\\\Node\\>\\:\\:processNode\\(\\)$#',
-	'count' => 1,
-	'path' => __DIR__ . '/src/Debugger/PHPStanRules.php',
-];
+declare(strict_types = 1);
 
-return ['parameters' => ['ignoreErrors' => $ignoreErrors]];
+return [
+	'parameters' => [
+		'ignoreErrors' => [
+			[
+				'message' => '#^Parameter \\#1 \\$node \\(PhpParser\\\\Node\\\\Stmt\\) of method Luminova\\\\Debugger\\\\PHPStanRules\\:\\:processNode\\(\\) should be contravariant with parameter \\$node \\(PhpParser\\\\Node\\) of method PHPStan\\\\Rules\\\\Rule\\<PhpParser\\\\Node\\>\\:\\:processNode\\(\\)$#',
+				'count' => 1,
+				'path' => __DIR__ . '/src/Debugger/PHPStanRules.php',
+			]
+		]
+	]
+];

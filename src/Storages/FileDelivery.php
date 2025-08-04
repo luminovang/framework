@@ -10,17 +10,14 @@
  */
 namespace Luminova\Storages;
 
+use \Exception;
 use \Luminova\Luminova;
 use \Luminova\Http\Header;
 use \Luminova\Security\Crypter;
 use \Luminova\Storages\FileManager;
 use \Peterujah\NanoBlock\NanoImage;
 use \Luminova\Exceptions\RuntimeException;
-use \Exception;
-use function \Luminova\Funcs\{
-    root,
-    get_mime
-};
+use function \Luminova\Funcs\{root, get_mime};
 
 final class FileDelivery
 {

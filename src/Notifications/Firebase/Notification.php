@@ -10,8 +10,9 @@
  */
 namespace Luminova\Notifications\Firebase;
 
-use \Luminova\Interface\LazyInterface;
+use \Exception;
 use \Kreait\Firebase\Factory;
+use \Luminova\Interface\LazyInterface;
 use \Kreait\Firebase\Contract\Messaging;
 use \Luminova\Exceptions\ErrorException;
 use \Luminova\Exceptions\RuntimeException;
@@ -28,7 +29,6 @@ use \Kreait\Firebase\Messaging\{
     RawMessageFromArray,
     MulticastSendReport
 };
-use \Exception;
 use function \Luminova\Funcs\root;
 
 class Notification implements LazyInterface

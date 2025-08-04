@@ -10,13 +10,13 @@
  */
 namespace Luminova\Base;
 
-use \Luminova\Interface\LazyInterface;
+use \Closure;
+use \DateInterval;
+use \DateTimeInterface;
 use \Luminova\Time\Timestamp;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\CacheException;
-use \Closure;
-use \DateTimeInterface;
-use \DateInterval;
 
 abstract class BaseCache implements LazyInterface
 {

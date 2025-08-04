@@ -149,6 +149,7 @@ function request(bool $shared = true): HttpRequestInterface
     }
 
     static $instance = null;
+    
     if (!$instance instanceof Request) {
         $instance = new Request();
     }
@@ -241,9 +242,9 @@ function href(?string $view = null, bool $absolute = false): string
  */
 function asset(?string $filename = null, bool $absolute = false): string
 {
-    $filename = 'assets/' . (($filename === null) ? '' : \ltrim($filename, '/'));
+    $filename = ($filename === null) ? '' : \ltrim($filename, '/');
 
-    return href($filename, $absolute);
+    return href('assets/' . $filename, $absolute);
 }
 
 /**
@@ -493,7 +494,7 @@ function start_url(?string $route = null): string
         ?? $_SERVER['HOST'] 
         ?? $_SERVER['SERVER_NAME'] 
         ?? $_SERVER['SERVER_ADDR'] 
-        ?? '';
+        ?? 'localhost';
 
     return URL_SCHEME . '://' . $hostname . '/' . CONTROLLER_SCRIPT_PATH . $route;
 }
@@ -815,7 +816,7 @@ function is_tor(?string $ip = null, int $expiration = 2592000): bool
  */
 function ip_address(bool $ipInfo = false, array $options = []): string|object|null
 {
-    return $ipInfo ? IP::info(null, $options): IP::get();
+    return $ipInfo ? IP::info(options: $options) : IP::get();
 }
 
 /**

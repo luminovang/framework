@@ -185,7 +185,7 @@ final class Boot
      * @param string $filename Path to the file.
      * @param string $mode File access mode (e.g., 'r', 'w').
      *
-     * @return resource Return a valid stream resource.
+     * @return resource|null Return a valid stream resource.
      * @throws RuntimeException If the file can't be opened.
      */
     public static function tryFopen(string $filename, string $mode): mixed

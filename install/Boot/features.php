@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @license See LICENSE file
  * @link https://luminova.ng
  */
-use function \Luminova\Funcs\{root, import};
+use function \Luminova\Funcs\import;
 
 /**
  * Autoload register PSR-4 classes.
@@ -29,7 +29,7 @@ if (env('feature.app.services', false)) {
  * Initialize and register class modules and aliases.
  */
 if (!defined('__INIT_DEV_MODULES__') && env('feature.app.class.alias', false)) {
-    $config = import(root('/app/Config/', 'Modules.php'), true, true);
+    $config = import('app:Config/Modules.php', true, true);
 
     if (is_array($config['alias'] ?? null)) {
         foreach ($config['alias'] as $alias => $namespace) {
@@ -46,6 +46,6 @@ if (!defined('__INIT_DEV_MODULES__') && env('feature.app.class.alias', false)) {
  * Load and initialize dev global functions.
  */
 if (!defined('__INIT_DEV_FUNCTIONS__') && env('feature.app.dev.functions', false)) {
-    import(root('/app/Utils/', 'Global.php'), true, true);
+    import('app:Utils/Global.php', true, true);
     define('__INIT_DEV_FUNCTIONS__', true);
 }

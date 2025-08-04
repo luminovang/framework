@@ -11,6 +11,17 @@ declare(strict_types=1);
  */
 namespace Luminova\Routing;
 
+use \WeakMap;
+use \Closure;
+use \Throwable;
+use \Exception;
+use \ReflectionClass;
+use \ReflectionMethod;
+use \ReflectionFunction;
+use \ReflectionNamedType;
+use \ReflectionUnionType;
+use \ReflectionException;
+use \ReflectionIntersectionType;
 use \Luminova\Luminova;
 use \App\Application;
 use \App\Config\Template;
@@ -23,24 +34,9 @@ use \Luminova\Attributes\Compiler;
 use \Luminova\Cache\TemplateCache;
 use \Luminova\Utils\WeakReference;
 use \Luminova\Routing\{DI, Prefix, Segments};
-use \Luminova\Exceptions\{RouterException, AppException};
+use \Luminova\Exceptions\{AppException, RouterException};
 use \Luminova\Interface\{RoutableInterface, RouterInterface, ErrorHandlerInterface};
-use \WeakMap;
-use \ReflectionMethod;
-use \ReflectionFunction;
-use \ReflectionNamedType;
-use \ReflectionUnionType;
-use \ReflectionException;
-use \ReflectionIntersectionType;
-use \ReflectionClass;
-use \Closure;
-use \Exception;
-use \Throwable;
-use function \Luminova\Funcs\{
-    root,
-    filter_paths,
-    is_command
-};
+use function \Luminova\Funcs\{root, filter_paths, is_command};
 
 final class Router implements RouterInterface
 {

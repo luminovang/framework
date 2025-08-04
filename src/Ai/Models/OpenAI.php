@@ -10,16 +10,12 @@
 */
 namespace Luminova\Ai\Models;
 
+use \CurlFile;
 use \Luminova\Http\Client\Curl;
 use \Luminova\Storages\FileManager;
 use \Luminova\Interface\{AiInterface, LazyInterface};
 use \Luminova\Exceptions\{AppException, JsonException, RuntimeException};
-use function \Luminova\Funcs\{
-    root,
-    absolute_url,
-    write_content
-};
-use \CurlFile;
+use function \Luminova\Funcs\{root, absolute_url, write_content};
 
 class OpenAI implements AiInterface, LazyInterface
 {

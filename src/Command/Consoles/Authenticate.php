@@ -13,10 +13,7 @@ namespace Luminova\Command\Consoles;
 use \Luminova\Base\BaseConsole;
 use \Luminova\Security\Crypter;
 use \Luminova\Database\Builder;
-use function \Luminova\Funcs\{
-    root, 
-    get_content
-};
+use function \Luminova\Funcs\{root, get_content};
 
 class Authenticate extends BaseConsole 
 {

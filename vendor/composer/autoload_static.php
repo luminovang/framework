@@ -33,7 +33,6 @@ class ComposerStaticInit9bbe5f33f53702290b6f40e5fff6e1ff
         'Luminova\\Attributes\\Error' => __DIR__ . '/../..' . '/src/Attributes/Error.php',
         'Luminova\\Attributes\\Group' => __DIR__ . '/../..' . '/src/Attributes/Group.php',
         'Luminova\\Attributes\\Prefix' => __DIR__ . '/../..' . '/src/Attributes/Prefix.php',
-        'Luminova\\Attributes\\Reflector' => __DIR__ . '/../..' . '/src/Attributes/Reflector.php',
         'Luminova\\Attributes\\Route' => __DIR__ . '/../..' . '/src/Attributes/Route.php',
         'Luminova\\Attributes\\Tokenizer' => __DIR__ . '/../..' . '/src/Attributes/Tokenizer.php',
         'Luminova\\Base\\BaseCache' => __DIR__ . '/../..' . '/src/Base/BaseCache.php',

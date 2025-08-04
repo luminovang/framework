@@ -20,11 +20,7 @@ use \RecursiveIteratorIterator;
 use \RecursiveDirectoryIterator;
 use \SplFileObject;
 use \Exception;
-use function \Luminova\Funcs\{
-    root,
-    is_platform,
-    get_mime
-};
+use function \Luminova\Funcs\{root, is_platform, get_mime};
 
 class FileManager
 {

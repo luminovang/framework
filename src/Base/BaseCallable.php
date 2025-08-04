@@ -10,8 +10,8 @@
  */
 namespace Luminova\Base;
 
-use \Luminova\Exceptions\RuntimeException;
 use \Closure;
+use \Luminova\Exceptions\RuntimeException;
 
 abstract class BaseCallable
 {

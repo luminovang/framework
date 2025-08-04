@@ -1514,7 +1514,7 @@ trait View
             ? '/app/Modules/' . ($this->moduleName === ''? '' : $this->moduleName . '/') . 'Views/'
             : self::$viewFolder . '/';
     
-        return self::__getSystemPath($module . ($this->subfolder !== '' ? $this->subfolder : ''));
+        return self::__getSystemPath($module . $this->subfolder);
     }
 
     /** 
@@ -1552,9 +1552,8 @@ trait View
         }
 
         $relative = (($level === 0) ? './' : str_repeat('../', $level));
-        $relative .= (NOVAKIT_ENV === null) ? 'public/' : '';
-        
-        return $relative;
+
+        return $relative . ((NOVAKIT_ENV === null) ? 'public/' : '');
     }
 
     /** 

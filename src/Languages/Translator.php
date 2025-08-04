@@ -13,7 +13,7 @@ namespace Luminova\Languages;
 use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\NotFoundException;
 use \Luminova\Exceptions\RuntimeException;
-use function \Luminova\Funcs\{root, locale};
+use function \Luminova\Funcs\{root, locale, import};
 
 final class Translator implements LazyInterface
 {
@@ -114,11 +114,7 @@ final class Translator implements LazyInterface
             ? __DIR__ . DIRECTORY_SEPARATOR . 'Locals' . DIRECTORY_SEPARATOR 
             : root('/app/Languages/');
 
-        if (file_exists($path . $filename)) {
-            return include_once $path . $filename;
-        }
-
-        return [];
+        return import($path . $filename, throw: false, once: true) ?? [];
     }
 
     /**
@@ -136,6 +132,7 @@ final class Translator implements LazyInterface
         }
 
         $array = [];
+        
         foreach ($placeholders as $key => $value) {
             $array['{' . $key . '}'] = $value;
         }

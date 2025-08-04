@@ -18,7 +18,6 @@ return array(
     'Luminova\\Attributes\\Error' => $baseDir . '/src/Attributes/Error.php',
     'Luminova\\Attributes\\Group' => $baseDir . '/src/Attributes/Group.php',
     'Luminova\\Attributes\\Prefix' => $baseDir . '/src/Attributes/Prefix.php',
-    'Luminova\\Attributes\\Reflector' => $baseDir . '/src/Attributes/Reflector.php',
     'Luminova\\Attributes\\Route' => $baseDir . '/src/Attributes/Route.php',
     'Luminova\\Attributes\\Tokenizer' => $baseDir . '/src/Attributes/Tokenizer.php',
     'Luminova\\Base\\BaseCache' => $baseDir . '/src/Base/BaseCache.php',

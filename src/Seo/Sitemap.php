@@ -10,6 +10,7 @@
  */
 namespace Luminova\Seo;  
 
+use \DOMDocument;
 use \App\Application;
 use \App\Config\Sitemap as SitemapConfig;
 use \Luminova\Utils\Async;
@@ -22,12 +23,7 @@ use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Command\Utils\{Text, Color};
-use \DOMDocument;
-use function \Luminova\Funcs\{
-    root,
-    write_content,
-    is_command
-};
+use function \Luminova\Funcs\{root, write_content, is_command};
 
 final class Sitemap
 {

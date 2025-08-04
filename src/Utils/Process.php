@@ -195,7 +195,7 @@ class Process
      */
     public function __sleep(): array
     {
-        throw new BadMethodCallException(sprintf('Cannot serialize %s', __CLASS__));
+        throw new BadMethodCallException(sprintf('Cannot serialize %s', self::class));
     }
 
     /**
@@ -205,7 +205,7 @@ class Process
      */
     public function __wakeup(): void
     {
-        throw new BadMethodCallException(sprintf('Cannot unserialize %s', __CLASS__));
+        throw new BadMethodCallException(sprintf('Cannot unserialize %s', self::class));
     }
 
     /**
@@ -243,7 +243,9 @@ class Process
 
         if(self::$isFiberSupported){
             try{
-                $this->fiber = new Fiber([$this, 'runExecutor']);
+                $this->fiber = new Fiber(function () : void {
+                    $this->runExecutor();
+                });
                 $this->fiber->start();
 
                 if ($this->fiber->isTerminated()) {
@@ -271,7 +273,7 @@ class Process
         $this->startTime = microtime(true);
         if($this->waitForFibers()){
             if (!$this->open) {
-                self::onError('Process not started. You need to call run() first.');
+                $this->onError('Process not started. You need to call run() first.');
             }
 
             match ($this->executor) {
@@ -408,7 +410,7 @@ class Process
     public function getStartTime(): float
     {
         if (!$this->open) {
-            self::onError("Process not started yet, You need to call run() first before you can get the start time.");
+            $this->onError("Process not started yet, You need to call run() first before you can get the start time.");
         }
 
         return $this->startTime;
@@ -545,7 +547,7 @@ class Process
         foreach ($options as $key => $value) {
             if (!in_array($key, self::$supportedOptions)) {
                 $this->options = $defaultOptions;
-                self::onError(sprintf(
+                $this->onError(sprintf(
                     'Invalid option "%s". Supported options are: "%s".', 
                     $key, 
                     implode('", "', self::$supportedOptions)
@@ -638,25 +640,23 @@ class Process
      */
     private function waitForFibers(): bool 
     {
-        if(self::$isFiberSupported){
-            if ($this->fiber instanceof Fiber && !$this->isComplete){
-                if ($this->fiber->isSuspended()) {
-                    try{
-                        $this->fiber->resume();
-                    }catch(Exception|FiberError $e){
-                        throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
-                    }
+        if (self::$isFiberSupported && $this->fiber instanceof Fiber && !$this->isComplete){
+            if ($this->fiber->isSuspended()) {
+                try{
+                    $this->fiber->resume();
+                }catch(Exception|FiberError $e){
+                    throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
                 }
+            }
 
-                if($this->fiber->isTerminated()) {
-                    $this->fiber = null;
-                }
+            if($this->fiber->isTerminated()) {
+                $this->fiber = null;
             }
         }
 
         if (!$this->process) {
             $this->cleanup();
-            self::onError(sprintf("Failed to run process with %s.", $this->executor));
+            $this->onError(sprintf("Failed to run process with %s.", $this->executor));
             return false;
         }
 
@@ -689,7 +689,7 @@ class Process
         $this->startTime = null;
 
         if($timeout !== null){
-            self::onError(
+            $this->onError(
                 sprintf("The process has timed out after %d seconds.", $timeout),
                 RuntimeException::TIMEOUT_ERROR
             );            
@@ -713,7 +713,7 @@ class Process
         
         if (!in_array($this->executor, [self::EXECUTOR_CALLBACK, self::EXECUTOR_STREAM])) {
             if(!function_exists($this->executor)){
-                self::onError(sprintf('The Process executor: %s is not available on your PHP environment', $this->executor));
+                $this->onError(sprintf('The Process executor: %s is not available on your PHP environment', $this->executor));
             }
 
             $this->input = $this->getCommand();
@@ -740,11 +740,11 @@ class Process
                     return $this->input;
                 }
 
-                self::onError('Invalid stream resource provided.');
+                $this->onError('Invalid stream resource provided.');
                 return false;
             })(),
             default => (function() {
-                self::onError('Invalid execution method specified.');
+                $this->onError('Invalid execution method specified.');
                 return false;
             })()
         };
@@ -912,7 +912,7 @@ class Process
      * @return never
      * @throws RuntimeException Throws an exception message.
      */
-    private static function onError(
+    private function onError(
         string $message, 
         int $code = RuntimeException::PROCESS_ERROR
     ): void 

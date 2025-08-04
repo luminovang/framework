@@ -219,12 +219,13 @@ class HttpServer
         $command = shell_exec("lsof -t -i :{$port}");
         $pid = trim($command ?? '');
 
-        if ($pid) {
+        if ($pid !== '' && $pid !== '0') {
             $kill = "kill -9 {$pid}";
             shell_exec($kill);
 
-            $stillAlive = shell_exec("lsof -t -i :{$port}");
-            if (!trim($stillAlive ?? '')) {
+            $stillAlive = trim(shell_exec("lsof -t -i :{$port}") ?: '');
+
+            if ($stillAlive === '' || $stillAlive === '0') {
                 $this->_echo("Port {$port} was freed successfully.");
                 return true;
             }
@@ -462,7 +463,7 @@ class HttpServer
             $this->socket = null;
 
             if($this->running){
-                foreach (self::$sockets as $idx => $socket) {
+                foreach (array_keys(self::$sockets) as $idx) {
                     $this->removeClient($idx, self::$connections[$idx][1] ?? '');
                 }
             }
@@ -593,9 +594,7 @@ class HttpServer
      */
     public function ping(): void
     {
-        $this->route('GET', '/ping(?:/.*)?', function() {
-            return self::$responses['PING'];
-        });
+        $this->route('GET', '/ping(?:/.*)?', fn() => self::$responses['PING']);
     }
 
     /**

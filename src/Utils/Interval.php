@@ -175,17 +175,15 @@ final class Interval
             $value = Fiber::suspend();
             usleep($milliseconds * 1_000);
 
-            if ($this->running) {
-                try{
-                    $callback($value ?? $this->value);
-                    $this->value = null;
-                }catch(Exception $e){
-                    throw new RuntimeException(
-                        'Failure while executing callback: ' . $e->getMessage(),
-                        $e->getCode(),
-                        $e
-                    );
-                }
+            try{
+                $callback($value ?? $this->value);
+                $this->value = null;
+            }catch(Exception $e){
+                throw new RuntimeException(
+                    'Failure while executing callback: ' . $e->getMessage(),
+                    $e->getCode(),
+                    $e
+                );
             }
         }
     }

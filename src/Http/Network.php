@@ -10,6 +10,8 @@
  */
 namespace Luminova\Http;
 
+use \Exception;
+use \Throwable;
 use \Luminova\Http\Client\Curl;
 use \Psr\Http\Client\ClientInterface;
 use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
@@ -20,8 +22,6 @@ use \Luminova\Exceptions\BadMethodCallException;
 use \Luminova\Utils\Promise\{Promise, RejectedPromise};
 use \Psr\Http\Message\{ResponseInterface, RequestInterface, UriInterface};
 use \Luminova\Interface\{NetworkInterface, LazyInterface, PromiseInterface};
-use \Exception;
-use \Throwable;
 
 class Network implements NetworkInterface, LazyInterface
 {

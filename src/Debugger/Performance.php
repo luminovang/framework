@@ -15,10 +15,7 @@ use \Luminova\Http\Request;
 use \Luminova\Logger\Logger;
 use \Luminova\Command\Terminal;
 use \Luminova\Functions\{IP, Maths};
-use function \Luminova\Funcs\{
-    filter_paths,
-    shared
-};
+use function \Luminova\Funcs\{shared, filter_paths};
 
 final class Performance
 {

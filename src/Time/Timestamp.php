@@ -73,8 +73,13 @@ class Timestamp
 
         if($ttl instanceof DateTimeInterface){
             $diff = $now->diff($ttl);
-            
-            return $diff->s + ($diff->i * 60) + ($diff->h * 3600) + ($diff->d * 86400) + ($diff->m * 2592000) + ($diff->y * 31536000);
+     
+            return $diff->s 
+                + ($diff->i * 60) 
+                + ($diff->h * 3600) 
+                + ($diff->d * 86400) 
+                + ($diff->m * 2_592_000) 
+                + ($diff->y * 31_536_000);
         }
 
         return 0;

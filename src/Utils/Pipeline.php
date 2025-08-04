@@ -130,8 +130,8 @@ final class Pipeline implements LazyInterface
     public function pipe(mixed $handler): self
     {
         if($this->async && is_callable($handler)){
-            // Check if Fibers is supported only once
-            self::$isFiber = (self::$isFiber === null) ? class_exists('Fiber') : self::$isFiber;
+            self::$isFiber ??= class_exists('Fiber');
+            
             $this->async($handler);
             return $this;
         }

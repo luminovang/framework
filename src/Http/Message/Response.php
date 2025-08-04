@@ -64,9 +64,8 @@ class Response implements ResponseInterface, Stringable
         }
 
         $response .= "\r\n";
-        $response .= $this->contents;
-
-        return $response; 
+ 
+        return $response . $this->contents;
     }
 
     /**

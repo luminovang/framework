@@ -24,18 +24,18 @@ class Func
 	 */
 	private static array $magicNumbers = [
 		"\x89PNG\r\n\x1A\n" => 'png',
-		"\xFF\xD8\xFF" => 'jpg',
-		"\x25\x50\x44\x46" => 'pdf',
-		"\x50\x4B\x03\x04" => 'zip',
-		"\x49\x44\x33" => 'mp3',
-		"\x47\x49\x46\x38" => 'gif',
-		"\xD0\xCF\x11\xE0" => 'doc', 
-		"\x50\x4B\x03\x04" => 'docx', 
-		"\x50\x4B\x07\x08" => 'xlsx',
-		"\x52\x49\x46\x46" => 'wav',
-		"\x00\x00\x01\xBA" => 'mpg',
-		"\x00\x00\x01\xB3" => 'mpg',
-		"\x1A\x45\xDF\xA3" => 'mkv'
+		"\xFF\xD8\xFF" 	    => 'jpg',
+		"\x25\x50\x44\x46"  => 'pdf',
+		"\x50\x4B\x03\x04"  => 'zip',
+		"\x49\x44\x33" 	    => 'mp3',
+		"\x47\x49\x46\x38"  => 'gif',
+		"\xD0\xCF\x11\xE0"  => 'doc', 
+		"\x50\x4B\x03\x04"  => 'docx', 
+		"\x50\x4B\x07\x08"  => 'xlsx',
+		"\x52\x49\x46\x46"  => 'wav',
+		"\x00\x00\x01\xBA"  => 'mpg',
+		"\x00\x00\x01\xB3"  => 'mpg',
+		"\x1A\x45\xDF\xA3"  => 'mkv'
 	];
 
 	/**
@@ -57,8 +57,8 @@ class Func
 		bool $noHtml = true
 	): string 
 	{
-		if($text  === ''){
-			return  $text;
+		if($text === ''){
+			return $text;
 		}
 
 		if($noHtml){

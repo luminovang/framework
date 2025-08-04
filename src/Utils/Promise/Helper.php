@@ -14,9 +14,8 @@ use \Throwable;
 use \ReflectionNamedType;
 use \ReflectionUnionType;
 use \ReflectionIntersectionType;
-use \Luminova\Exceptions\LogicException;
-use \Luminova\Exceptions\ErrorException;
 use \Luminova\Interface\PromiseInterface;
+use \Luminova\Exceptions\{ErrorException, LogicException};
 use \Luminova\Utils\Promise\{Promise, RejectedPromise, FulfilledPromise};
 
 final class Helper 

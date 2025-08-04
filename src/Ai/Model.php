@@ -10,9 +10,9 @@
 */
 namespace Luminova\Ai;
 
-use \Luminova\Interface\AiInterface;
-use \Luminova\Ai\Models\OpenAI;
 use \App\Config\AI;
+use \Luminova\Ai\Models\OpenAI;
+use \Luminova\Interface\AiInterface;
 use \Luminova\Exceptions\{AppException, RuntimeException};
 use \Throwable;
 

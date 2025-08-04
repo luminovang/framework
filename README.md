@@ -9,80 +9,86 @@
 
 ![Local Image](https://github.com/luminovang/luminova/raw/main/docs/logo.svg)
 
-# PHP Luminova Framework
+# Luminova PHP Framework
 
-**The framework you didn’t know you needed**
-
-Luminova is a lightweight yet capable web framework built for PHP 8+. It supports **MVC** and **HMVC** architecture, offers a modular core, and emphasizes simplicity, performance, and flexibility. Whether you prefer attribute-based routing or traditional callbacks, you’re covered.
+Luminova is a modern, lightweight, and modular PHP 8+ framework that brings simplicity and power together. Designed with **MVC** and **HMVC** architecture in mind, Luminova offers native PHP templating, support for external engines like Twig and Smarty, and a pragmatic development experience without unnecessary complexity.
 
 ---
 
 ## Installation
 
-> I don't think this is what you intended to install, but if you're feeling adventurous.
-
-Install this framework directly via Composer:
-
-```bash
-composer install luminovang/framework
-```
-
-**Start building with Luminova:**
-
-To install the Luminova framework full scaffolding for [application development](https://github.com/luminovang/luminova). Use the following command:
+**Install via Composer:**
 
 ```bash
 composer create-project luminovang/luminova my-project
 ```
 
+Need only the core components for integration or extension?
+
+```bash
+composer install luminovang/framework
+```
+
+> Use the `luminova` scaffolding if you're building a full application.
+
 ---
 
-## Feature Checklist
+## Features at a Glance
 
-You need features. Luminova has them — without bloat:
+Luminova is minimal where it should be and powerful where it matters:
 
-* MVC/HMVC architecture
-* PHP 8 attributes or traditional route declarations
-* Middlewares and Input validation
-* Request handling and File uploader
-* ORM with smart caching
-* Multiple DB support + sharding + fallback
+* Modular MVC/HMVC architecture
+* Attribute-based or callback-style routing
+* Middleware and input validation
+* Smart ORM with caching, sharding, and fallback support
 * Database migrations & seeders
-* Custom service manager
-* CLI commands via **Novakit**
-* CRON-ready execution
-* CDN module & Private File delivery
-* Multiple cloud storage support
-* SEO tools: Sitemap & Schema generators
-* Smart view content minification + auto codeblock copy button 
-* Asset management
-* Template engines: (PHP, Twig, Smarty)
-* Symbolic locale management
-* Built-in API helpers
-* Push notifications
-* Clean CLI tools
+* CLI command system (via **Novakit**)
+* CRON-ready CLI execution
+* File uploads, private file delivery, CDN support
+* SEO tools: sitemap, schema, OpenGraph
+* Auto-minifying views with syntax highlighting and copy buttons
+* Asset management (local and cloud)
+* PHP, Twig, or Smarty templating
+* Native locale and translation tools
+* REST-friendly API helpers
+* Web push notification helpers
+* Built-in encryption and decryption
+* Session and user login management
+* PHP Fiber Async 
 * Promise resolver
-* Async Helper
-* Encryption + Decryption module
-* Backend Session module + User login helpers
-* Utility Classes and Helper functions that actually helps
-* and more...
+* Background task queue system
+* Developer-friendly utilities and helper functions
+* ...and growing with every release
 
 ---
 
-## Why Luminova?
+## Why Choose Luminova?
 
-* No over-engineering. Just practical design.
-* Minimal configuration. Maximum flexibility.
-* Clean syntax. Easy to read, easier to maintain.
-* Full support for modern PHP 8+ features.
-* Active development and frequent updates.
+* **No bloat. No boilerplate.** Just core tools that work.
+* **Straightforward and readable syntax**
+* **Modern PHP 8+ support** — take full advantage of attributes, union types, constructor property promotion, etc.
+* **Works your way** — customize as little or as much as you need.
+* **Actively maintained** and used in production.
 
 ---
 
-## Get Started
+## Documentation & Resources
 
-If you're tired of bloated frameworks and ready for something straightforward?
+* [Official Docs](https://luminova.ng/docs)
+* [GitHub Documentation Repo](https://github.com/luminovang/documentation/)
+* [Luminova Starter Scaffolding](https://github.com/luminovang/luminova)
 
-* [Official Documentation](https://luminova.ng/docs)
-* [GitHub Docs Repo](https://github.com/luminovang/documentation/)
+---
+
+## Community & Support
+
+Found a bug? Want to contribute or request a feature?
+
+* [GitHub Issues](https://github.com/luminovang/framework/issues)
+* [Pull Requests Welcome](https://github.com/luminovang/framework/pulls)
+
+---
+
+## License
+
+Luminova is open-source software licensed under the [MIT License](LICENSE).

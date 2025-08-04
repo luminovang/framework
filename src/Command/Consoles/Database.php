@@ -10,16 +10,14 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Interface\DatabaseInterface;
-use \Luminova\Base\BaseConsole;
-use \Luminova\Database\Builder;
-use \Luminova\Command\Utils\Color;
-use \Luminova\Database\Migration;
-use \Luminova\Database\Seeder;
-use \Luminova\Storages\FileManager;
-use \Luminova\Application\Caller;
-use \Luminova\Exceptions\AppException;
 use \Exception;
+use \Luminova\Base\BaseConsole;
+use \Luminova\Application\Caller;
+use \Luminova\Command\Utils\Color;
+use \Luminova\Storages\FileManager;
+use \Luminova\Exceptions\AppException;
+use \Luminova\Interface\DatabaseInterface;
+use \Luminova\Database\{Seeder, Builder, Migration};
 use function \Luminova\Funcs\{
     root,
     write_content,

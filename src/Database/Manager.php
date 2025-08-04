@@ -11,7 +11,8 @@
 namespace Luminova\Database;
 
 use \Luminova\Storages\FileManager;
-use \Luminova\Interface\{LazyInterface, DatabaseInterface, DatabaseException};
+use \Luminova\Interface\{LazyInterface, DatabaseInterface};
+use \Luminova\Exceptions\DatabaseException;
 use function \Luminova\Funcs\{root, make_dir};
 
 final class Manager implements LazyInterface
@@ -73,7 +74,7 @@ final class Manager implements LazyInterface
         }
 
         $columns = ($columns === ['*'])  ? '*' : implode(", ", $columns);
-        $values = $this->db->query("SELECT {$columns} FROM " . $this->table)->fetch('all', FETCH_ASSOC);
+        $values = $this->db->query("SELECT {$columns} FROM {$this->table}")->fetch('all', FETCH_ASSOC);
 
         if (!empty($values)) {
             if($as === 'csv'){

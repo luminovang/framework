@@ -13,9 +13,9 @@ namespace Luminova\Template;
 use \WeakMap;
 use \Exception;
 use \Luminova\Utils\WeakReference;
+use \Luminova\Http\{Header, Encoder};
 use \Luminova\Exceptions\JsonException;
 use \Luminova\Optimization\Minification;
-use \Luminova\Http\{Header, Encoder};
 use \Luminova\Interface\ViewResponseInterface;
 use \Luminova\Storages\{FileManager, FileDelivery};
 use function \Luminova\Funcs\{string_length, http_status_header};
@@ -147,9 +147,9 @@ class Response implements ViewResponseInterface
      */
     public function sendStatus(): bool
     {
-        return ($this->status >= 100 && $this->status < 600) 
-            ? http_status_header($this->status)
-            : false;
+        return $this->status >= 100 
+            && $this->status < 600 
+            && http_status_header($this->status);
     }
 
     /**

@@ -152,13 +152,13 @@ class CronInterval
         if ($minute === '*') {
             $nextRun = $nextRun->modify('+1 minute');
         } elseif (str_starts_with($minute, '*/')) {
-            $interval = self::parseFormat($minute, 2);
+            $interval = self::parseFormat($minute);
             $nextRun = $nextRun->modify('+' . $interval . ' minutes');
         }
     
         if ($hour !== '*') {
             if (str_starts_with($hour, '*/')) {
-                $interval = self::parseFormat($hour, 2);
+                $interval = self::parseFormat($hour);
                 $nextRun = $nextRun->modify('+' . $interval . ' hours');
             } else {
                 $interval = (int) $hour;
@@ -168,7 +168,7 @@ class CronInterval
         }
     
         if ($day !== '*' && str_starts_with($day, '*/')) {
-            $interval = self::parseFormat($day, 2);
+            $interval = self::parseFormat($day);
             $nextRun = $nextRun->modify('+' . $interval . ' days');
         }
     

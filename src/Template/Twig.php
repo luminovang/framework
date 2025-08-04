@@ -113,7 +113,7 @@ class Twig
         array $options = []
     ): static
     {
-        if(self::$instance === null){
+        if(!self::$instance instanceof self){
             self::$instance = new self($config, $root, $viewPath, $options);
         }
 

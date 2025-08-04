@@ -10,10 +10,10 @@
  */
 namespace Luminova\Interface;
 
+use \Generator;
 use \Luminova\Http\{File, Server, Header, UserAgent};
 use \Luminova\Interface\{LazyInterface, CookieJarInterface};
 use \Luminova\Exceptions\{SecurityException, InvalidArgumentException};
-use \Generator;
 
 /**
  * Anonymous methods to retrieve values from HTTP request fields. 

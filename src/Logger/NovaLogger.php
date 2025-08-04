@@ -10,6 +10,9 @@
  */
 namespace Luminova\Logger;
 
+use \Fiber;
+use \Throwable;
+use \JsonException;
 use \App\Config\Logger;
 use \Luminova\Time\Time;
 use \Luminova\Email\Mailer;
@@ -20,9 +23,6 @@ use \Luminova\Http\Client\Curl;
 use \Luminova\Functions\{IP, Func};
 use \Luminova\Storages\{Archive, FileManager};
 use \Luminova\Exceptions\{AppException, FileException, InvalidArgumentException};
-use \JsonException;
-use \Throwable;
-use \Fiber;
 use function \Luminova\Funcs\{root, make_dir};
 
 class NovaLogger extends AbstractLogger

@@ -598,13 +598,12 @@ class Time extends DateTimeImmutable implements Stringable
                 $now = new DateTime($datetime);
             }
 
-            if($timezone  !== null){
+            if($timezone instanceof DateTimeZone){
                 $now = $now->setTimezone($timezone);
             }
         }
 
-        $datetime = $now->format('Y-m-d H:i:s.u');
-        return $datetime;
+        return $now->format('Y-m-d H:i:s.u');
     }
 
     /**
