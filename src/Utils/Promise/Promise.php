@@ -10,18 +10,16 @@
  */
 namespace Luminova\Utils\Promise;
 
-use \Luminova\Utils\Promise\Helper;
-use \Luminova\Utils\Promise\Queue;
 use \Luminova\Interface\PromiseInterface;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\ErrorException;
-use \ReflectionFunction;
+use \Luminova\Utils\Promise\{Queue, Helper};
+use \Luminova\Exceptions\{ErrorException, RuntimeException};
+use \Closure;
+use \Throwable;
 use \ReflectionMethod;
+use \ReflectionFunction;
 use \ReflectionNamedType;
 use \ReflectionUnionType;
 use \ReflectionIntersectionType;
-use \Closure;
-use \Throwable;
 
 class Promise implements PromiseInterface
 {

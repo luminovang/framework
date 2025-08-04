@@ -78,7 +78,11 @@ class Time extends DateTimeImmutable implements Stringable
         try {
             parent::__construct($datetime, $this->timezone);
         } catch (Exception $e) {
-            throw new DateTimeException('Error occurred while constructing DateTimeImmutable object: ' . $e->getMessage(), $e->getCode(), $e);
+            throw new DateTimeException(
+                sprintf('Error occurred while constructing DateTimeImmutable object: %s', $e->getMessage()), 
+                $e->getCode(), 
+                $e
+            );
         }
     }
 
@@ -456,11 +460,11 @@ class Time extends DateTimeImmutable implements Stringable
     /**
      * Returns a formatted datetime to your preferred format.
      * 
-     * @param null|string $format Format to return (default: `YYYY-MM-DD HH:MM:SS`).
+     * @param string|null $format Format to return (default: `YYYY-MM-DD HH:MM:SS`).
      * 
-     * @return false|string Formatted datetime string otherwise false.
+     * @return string|false Formatted datetime string otherwise false.
      */
-    public function toFormat(?string $format = null): bool|string
+    public function toFormat(?string $format = null): string|bool
     {
         $format ??= $this->stringFormat;
 
@@ -470,9 +474,9 @@ class Time extends DateTimeImmutable implements Stringable
     /**
      * Returns a formatted time string (ex. 17:17:17).
      *
-     * @return string Formatted time string otherwise false.
+     * @return string|false Formatted time string otherwise false.
      */
-    public function toTime(): bool|string
+    public function toTime(): string|bool
     {
         return $this->toFormat('HH:mm:ss');
     }
@@ -581,6 +585,7 @@ class Time extends DateTimeImmutable implements Stringable
     public static function fromRelative(string $datetime, DateTimeZone|string|null $timezone = null): string
     {
         $timezone = is_string($timezone) ? self::timezone($timezone): $timezone;
+        
         if(self::isAgo($datetime)){
             $now = self::agoToDatetime($datetime, $timezone);
         }else{

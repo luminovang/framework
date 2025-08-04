@@ -10,9 +10,9 @@
  */
 namespace Luminova\Time;
 
-use \Luminova\Time\Time;
 use \DateTimeZone;
 use \DateInterval;
+use \Luminova\Time\Time;
 use \Luminova\Exceptions\InvalidArgumentException;
 
 class Task

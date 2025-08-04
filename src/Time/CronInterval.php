@@ -10,9 +10,9 @@
  */
 namespace Luminova\Time;
 
+use \DateTimeZone;
 use \Luminova\Time\Time;
 use \Luminova\Exceptions\RuntimeException;
-use \DateTimeZone;
 
 class CronInterval 
 {

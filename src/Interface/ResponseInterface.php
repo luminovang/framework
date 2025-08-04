@@ -10,10 +10,8 @@
  */
 namespace Luminova\Interface;
 
-use \Psr\Http\Message\StreamInterface;
-use \Psr\Http\Message\MessageInterface;
-use \Luminova\Exceptions\InvalidArgumentException;
-use \Luminova\Exceptions\RuntimeException;
+use \Psr\Http\Message\{StreamInterface, MessageInterface};
+use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
 
 interface ResponseInterface extends \Psr\Http\Message\ResponseInterface
 {

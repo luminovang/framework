@@ -10,14 +10,13 @@
  */
 namespace Luminova\Template;
 
+use \Throwable;
 use \Luminova\Luminova;
 use \Smarty\Smarty as SmartyTemplate;
 use \App\Config\Template as TemplateConfig;
 use \Luminova\Optimization\Minification;
 use \Luminova\Exceptions\RuntimeException;
 use \App\Config\Templates\Smarty\{Classes, Modifiers};
-use \Exception;
-use \SmartyException;
 use function \Luminova\Funcs\make_dir;
 
 class Smarty 
@@ -92,18 +91,18 @@ class Smarty
         self::$root = $root;
         self::$config = $config;
 
-        if(class_exists(SmartyTemplate::class)){
-            $this->smarty = new SmartyTemplate();
-            self::makeDirs();
-        }else{
-            throw new RuntimeException('Smarty is not available, run composer command "composer require smarty/smarty" if you want to use smarty template', 1991);
+        if(!class_exists(SmartyTemplate::class)){
+            throw new RuntimeException(
+                'Smarty is not available, run composer command "composer require smarty/smarty" if you want to use smarty template'
+            );
         }
 
-        $suffix = DIRECTORY_SEPARATOR . 'smarty';
+        $this->smarty = new SmartyTemplate();
+        self::makeDirs();
 
-        $this->smarty->setCompileDir($root . Luminova::bothTrim(self::$config->compileFolder) . $suffix);
-        $this->smarty->setConfigDir($root . Luminova::bothTrim(self::$config->configFolder) . $suffix);
-        $this->smarty->setCacheDir($root . Luminova::bothTrim(self::$config->cacheFolder) . $suffix);
+        $this->smarty->setCompileDir($root . Luminova::bothTrim(self::$config->compileFolder) . 'smarty');
+        $this->smarty->setConfigDir($root . Luminova::bothTrim(self::$config->configFolder) . 'smarty');
+        $this->smarty->setCacheDir($root . Luminova::bothTrim(self::$config->cacheFolder) . 'smarty');
         $this->smarty->addExtension(new Modifiers());
 
         if(PRODUCTION){
@@ -118,7 +117,7 @@ class Smarty
      * @param string $root framework root directory.
      * @param array $options Filesystem loader configuration.
      * 
-     * @return static static instance 
+     * @return static Return a static instance.
      * @throws RuntimeException
     */
     public static function getInstance(TemplateConfig $config, string $root, array $options = []): static
@@ -146,7 +145,7 @@ class Smarty
      * 
      * @param string $viewPath smarty template directory
      * 
-     * @return self $this Luminova smarty class instance
+     * @return self Luminova smarty class instance
     */
     public function setPath(string $viewPath): self 
     {
@@ -317,7 +316,7 @@ class Smarty
             echo $content;
 
             return true;
-        }catch(Exception | SmartyException $e){
+        }catch(Throwable $e){
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
     }
@@ -336,7 +335,7 @@ class Smarty
         ];
 
         foreach ($directories as $dir) {
-            $path = self::$root . Luminova::bothTrim($dir) . DIRECTORY_SEPARATOR . 'smarty';
+            $path = self::$root . Luminova::bothTrim($dir) . 'smarty';
             
             if (!file_exists($path)) {
                 make_dir(self::$root . $dir);

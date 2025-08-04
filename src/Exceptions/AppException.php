@@ -12,13 +12,13 @@
  */
 namespace Luminova\Exceptions;
 
+use \Throwable;
+use \Exception;
+use \Stringable;
 use \Luminova\Luminova;
 use \Luminova\Logger\Logger;
 use \Luminova\Errors\ErrorHandler;
 use \Luminova\Interface\ExceptionInterface;
-use \Stringable;
-use \Exception;
-use \Throwable;
 use function \Luminova\Funcs\root;
 
 abstract class AppException extends Exception implements ExceptionInterface, Stringable

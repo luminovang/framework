@@ -201,7 +201,7 @@ final class Boot
 
         if (!is_resource($handle)) {
             throw new RuntimeException(sprintf(
-                'Failed to open file "%s" with mode "%s"%s',
+                'BootError: Failed to open file "%s" with mode "%s"%s',
                 $filename,
                 $mode,
                 $error ? ': ' . $error->getMessage() : ''

@@ -17,8 +17,6 @@ use \League\Flysystem\UnixVisibility\PortableVisibilityConverter as UnixVisibili
 
 use \League\Flysystem\Ftp\FtpAdapter;
 use \League\Flysystem\Ftp\FtpConnectionOptions;
-use \League\Flysystem\Ftp\FtpConnectionProvider;
-use \League\Flysystem\Ftp\NoopCommandConnectivityChecker;
 
 use \League\Flysystem\InMemory\InMemoryFilesystemAdapter as MemoryAdapter;
 use \League\Flysystem\ReadOnly\ReadOnlyFilesystemAdapter as ReadOnlyAdapter;
@@ -36,7 +34,6 @@ use \League\Flysystem\GoogleCloudStorage\GoogleCloudStorageAdapter as GoogleClou
 use \Google\Cloud\Storage\StorageClient as GoggleClient;
 
 use \League\Flysystem\PhpseclibV2\SftpConnectionProvider as SftpV2Client;
-use \League\Flysystem\PhpseclibV2\SftpAdapter as SftpV2Adapter;
 use \League\Flysystem\PhpseclibV3\SftpConnectionProvider as SftpV3Client;
 use \League\Flysystem\PhpseclibV3\SftpAdapter as SftpV3Adapter;
 

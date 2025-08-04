@@ -12,14 +12,14 @@ namespace Luminova\Http;
 
 use \Luminova\Http\Client\Curl;
 use \Psr\Http\Client\ClientInterface;
-use \Luminova\Utils\Promise\{Promise, RejectedPromise};
-use \Psr\Http\Message\{ResponseInterface, RequestInterface, UriInterface};
-use \Luminova\Interface\{NetworkInterface, LazyInterface, PromiseInterface};
 use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
 use \GuzzleHttp\Exception\GuzzleException;
 use \Luminova\Exceptions\AppException;
 use \Luminova\Exceptions\Http\RequestException;
 use \Luminova\Exceptions\BadMethodCallException;
+use \Luminova\Utils\Promise\{Promise, RejectedPromise};
+use \Psr\Http\Message\{ResponseInterface, RequestInterface, UriInterface};
+use \Luminova\Interface\{NetworkInterface, LazyInterface, PromiseInterface};
 use \Exception;
 use \Throwable;
 

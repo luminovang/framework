@@ -574,7 +574,7 @@ class NovaLogger extends AbstractLogger
     ): string 
     {
         $message = sprintf(
-            $name ? '[%s] [%s] [%s]: %s' : '[%s]%s [%s]: %s', 
+            $name ? '[%s] [%s] [%s] %s' : '[%s]%s [%s] %s', 
             strtoupper($level), 
             $name ?? '',
             Time::now()->format('Y-m-d\TH:i:s.uP'), 

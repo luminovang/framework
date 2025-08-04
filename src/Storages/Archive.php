@@ -10,11 +10,11 @@
  */
 namespace Luminova\Storages;
 
-use \ZipArchive;
-use \PharData;
 use \Phar;
-use \Luminova\Exceptions\FileException;
+use \PharData;
 use \Exception;
+use \ZipArchive;
+use \Luminova\Exceptions\FileException;
 use function \Luminova\Funcs\make_dir;
 
 class Archive 

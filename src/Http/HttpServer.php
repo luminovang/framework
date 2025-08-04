@@ -11,8 +11,8 @@
  */
 namespace Luminova\Http;
 
-use \Luminova\Http\HttpServerTrait;
 use \Luminova\Http\Request;
+use \Luminova\Http\HttpServerTrait;
 use \Luminova\Exceptions\RuntimeException;
 use \Closure;
 

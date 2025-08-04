@@ -10,9 +10,9 @@
  */
 namespace Luminova\Time;
 
-use \Luminova\Time\Time;
-use \DateTimeInterface;
 use \DateInterval;
+use \DateTimeInterface;
+use \Luminova\Time\Time;
 use \Luminova\Exceptions\DateTimeException;
 
 class Timestamp

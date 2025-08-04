@@ -12,11 +12,9 @@ namespace Luminova\Email;
 
 use \Luminova\Luminova;
 use \Luminova\Base\BaseMailer;
-use \Luminova\Interface\MailerInterface;
-use \Luminova\Interface\LazyInterface;
 use \App\Config\Mailer as MailerConfig;
-use \Luminova\Exceptions\MailerException;
-use \Luminova\Exceptions\AppException;
+use \Luminova\Interface\{LazyInterface, MailerInterface};
+use \Luminova\Exceptions\{AppException, MailerException};
 use \Exception;
 
 class Mailer implements LazyInterface

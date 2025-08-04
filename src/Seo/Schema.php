@@ -11,8 +11,8 @@
  */
 namespace Luminova\Seo;  
 
-use \Luminova\Interface\LazyInterface;
 use \Luminova\Time\Time;
+use \Luminova\Interface\LazyInterface;
 use function \Luminova\Funcs\{root, kebab_case};
 
 final class Schema implements LazyInterface

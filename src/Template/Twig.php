@@ -10,10 +10,10 @@
  */
 namespace Luminova\Template;
 
+use \Throwable;
 use \Luminova\Luminova;
 use \Twig\Environment;
 use \Twig\Loader\FilesystemLoader;
-use \Twig\Error\{RuntimeError, SyntaxError};
 use \App\Config\Template as TemplateConfig;
 use \App\Config\Templates\Twig\Extensions;
 use \Luminova\Optimization\Minification;
@@ -82,21 +82,17 @@ class Twig
         array $options = []
     )
     {
+        if(!class_exists(Environment::class)){
+            throw new RuntimeException('Twig is not available, run composer command "composer require "twig/twig:^3.0" if you want to use Twig template');
+        }
+
         self::$root = $root;
+        $options['cache'] = $options['caching'] 
+            ? $root . Luminova::bothTrim($config->cacheFolder) . 'twig' 
+            : false;
 
-        if($options['caching']){
-            $suffix = DIRECTORY_SEPARATOR . 'twig';
-            $options['cache'] = $root . Luminova::bothTrim($config->cacheFolder) . $suffix;
-        }else{
-            $options['cache'] = false;
-        }
-
-        if(class_exists(Environment::class)){
-            $this->twig = new Environment(new FilesystemLoader($viewPath), $options);
-            $this->twig->addExtension(new Extensions());
-        }else{
-            throw new RuntimeException('Twig is not available, run composer command "composer require "twig/twig:^3.0" if you want to use Twig template', 1991);
-        }
+        $this->twig = new Environment(new FilesystemLoader($viewPath), $options);
+        $this->twig->addExtension(new Extensions());
     }
 
     /**
@@ -110,7 +106,12 @@ class Twig
      * @return static static instance 
      * @throws RuntimeException
     */
-    public static function getInstance(TemplateConfig $config, string $root, string $viewPath, array $options = []): static
+    public static function getInstance(
+        TemplateConfig $config, 
+        string $root, 
+        string $viewPath, 
+        array $options = []
+    ): static
     {
         if(self::$instance === null){
             self::$instance = new self($config, $root, $viewPath, $options);
@@ -215,9 +216,8 @@ class Twig
             }
 
             echo $content;
-
             return true;
-        }catch(RuntimeError|SyntaxError $e){
+        }catch(Throwable $e){
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
     }

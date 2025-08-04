@@ -11,14 +11,9 @@
 namespace Luminova\Interface;
 
 use \Psr\Http\Client\ClientInterface;
-use \Psr\Http\Message\RequestInterface;
-use \Psr\Http\Message\UriInterface;
-use \Psr\Http\Message\ResponseInterface;
 use \Luminova\Interface\PromiseInterface;
-use \Luminova\Exceptions\Http\RequestException;
-use \Luminova\Exceptions\Http\ConnectException;
-use \Luminova\Exceptions\Http\ClientException;
-use \Luminova\Exceptions\Http\ServerException;
+use \Psr\Http\Message\{UriInterface, RequestInterface, ResponseInterface};
+use \Luminova\Exceptions\Http\{ServerException, ClientException, ConnectException, RequestException};
 
 interface NetworkInterface
 {

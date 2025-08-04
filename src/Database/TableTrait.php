@@ -10,8 +10,7 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Database\Alter;
-use \Luminova\Database\Table;
+use \Luminova\Database\{Table, Alter};
 use \Luminova\Exceptions\DatabaseException;
 
 /**

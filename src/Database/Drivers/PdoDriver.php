@@ -16,9 +16,8 @@ use \Throwable;
 use \PDOException;
 use \PDOStatement;
 use \Luminova\Core\CoreDatabase;
-use \Luminova\Interface\ConnInterface;
-use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
+use \Luminova\Interface\{ConnInterface, DatabaseInterface};
 use function \Luminova\Funcs\{shared, is_command};
 
 final class PdoDriver implements DatabaseInterface 

@@ -11,8 +11,8 @@
 namespace Luminova\Utils;
 
 use \Fiber;
-use \Exception;
 use \Throwable;
+use \Exception;
 use \Luminova\Utils\Promise\Promise;
 use \Luminova\Interface\PromiseInterface;
 use \Luminova\Exceptions\RuntimeException;

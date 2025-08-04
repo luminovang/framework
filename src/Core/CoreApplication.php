@@ -280,7 +280,7 @@ abstract class CoreApplication implements LazyInterface
      * - `method`    (string|null) Optional controller class method name.
      * - `attrFiles` (int) Number of controller files scanned for matched attributes.
      * - `cache`     (bool) Whether cached version rendered or new content.
-     * - `staticCache` (bool) Whether is a static cached version (e.g, page.html) or regular cache (e.g, `page`).
+     * - `staticCache` (bool) Whether a static cached version was served (e.g, page.html) or regular cache (e.g, `page`).
      * 
      * @return void 
      */
@@ -344,6 +344,26 @@ abstract class CoreApplication implements LazyInterface
      * @return void 
      */
     protected function onCommandPresent(array $options): void {}
+
+    /**
+     * Called after script shutdown triggered by a fatal error or forced termination.
+     * 
+     * This hook gives the application a final chance to inspect the shutdown state.
+     * If it returns `false`, the framework will skip further error handling—allowing
+     * the application to take full control (e.g., for custom logging or rendering).
+     * 
+     * Returning `true` lets the framework continue with its default error page or logging flow.
+     *
+     * @param array<string,mixed> $error The last recorded error before shutdown (if any).
+     * 
+     * @return bool Return `false` to take over shutdown handling, `true` to let the framework proceed.
+     * 
+     * > **Note:** This hook only get called if shutting down because of an error.
+     */
+    public static function onShutdown(array $error): bool 
+    {
+        return true;
+    }
 
     /**
      * Set the singleton instance to a new application instance.

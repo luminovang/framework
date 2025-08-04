@@ -11,11 +11,10 @@
 namespace Luminova\Debugger; 
 
 use \Luminova\Luminova;
-use \Luminova\Functions\Maths;
-use \Luminova\Functions\IP;
-use \Luminova\Command\Terminal;
 use \Luminova\Http\Request;
 use \Luminova\Logger\Logger;
+use \Luminova\Command\Terminal;
+use \Luminova\Functions\{IP, Maths};
 use function \Luminova\Funcs\{
     filter_paths,
     shared
@@ -108,7 +107,7 @@ final class Performance
         }
 
         self::$request ??= new Request();
-        $classInfo = Luminova::getClassInfo();
+        $classMetadata = Luminova::getClassMetadata();
  
         $info = [
             'Framework' => Luminova::copyright(),
@@ -116,8 +115,8 @@ final class Performance
             'IP Address' => self::esc(IP::get()),
             'Environment' => ENVIRONMENT,
             'Script Path' => CONTROLLER_SCRIPT_PATH,
-            'Controller' => (!empty($classInfo['namespace'])) 
-                ? $classInfo['namespace'] . '::' . $classInfo['method'] . '()' 
+            'Controller' => (!empty($classMetadata['namespace'])) 
+                ? $classMetadata['namespace'] . '::' . $classMetadata['method'] . '()' 
                 : 'N/A',
             'Cache File' =>  env('page.caching', false) ? Luminova::getCacheId() . '.lmv' : 'N/A',
             'Server Software' => self::esc($_SERVER['SERVER_SOFTWARE'] ?? 'Not Set'),
@@ -129,8 +128,8 @@ final class Performance
             'Cookies' => self::$request->getCookie()->isEmpty() ? null : self::$request->getCookie()->count(),
             'Is Secure' => (self::$request->isSecure() ? 'YES' : 'NO'),
             'Is AJAX' => (self::$request->isAJAX() ? 'YES' : 'NO'),
-            'Is Cache' =>  (!empty($classInfo['cache'])) ? 'YES' : 'NO',
-            'Is Static Cache' =>  (!empty($classInfo['staticCache'])) ? 'YES' : 'NO',
+            'Is Cache' =>  (!empty($classMetadata['cache'])) ? 'YES' : 'NO',
+            'Is Static Cache' =>  (!empty($classMetadata['staticCache'])) ? 'YES' : 'NO',
         ];
 
         if($isApi){
@@ -196,7 +195,7 @@ final class Performance
             return;
         }
 
-        $classInfo = Luminova::getClassInfo();
+        $classMetadata = Luminova::getClassMetadata();
 
         // Display basic system information
         $info = [
@@ -205,7 +204,7 @@ final class Performance
             'PHP Version' => PHP_VERSION,
             'Environment' => ENVIRONMENT,
             'Script Path' => CONTROLLER_SCRIPT_PATH,
-            'Controller' => (!empty($classInfo['namespace'])) ? $classInfo['namespace'] . '::' . $classInfo['method'] . '()' : 'N/A',
+            'Controller' => (!empty($classMetadata['namespace'])) ? $classMetadata['namespace'] . '::' . $classMetadata['method'] . '()' : 'N/A',
             'Server Software' => self::esc($_SERVER['SERVER_SOFTWARE'] ?? 'Not Set'),
             'Method' => 'CLI',
             'Group' => $context['commands']['group'] ?? 'N/A',
@@ -436,7 +435,7 @@ final class Performance
             };
         }
 
-        $filename = Luminova::getClassInfo()['filename'] ?? null;
+        $filename = Luminova::getClassMetadata()['filename'] ?? null;
         $index = 0;
 
         foreach (self::$filesLoaded ?? get_included_files() as $file) {
@@ -584,7 +583,7 @@ final class Performance
      */
     private static function fileCount(): array 
     {
-        $unused = ((Luminova::getClassInfo()['attrFiles'] ?? 1) - 1);
+        $unused = max(Luminova::getClassMetadata()['attrFiles'] ?? 1, 1) - 1;
         return [count(self::$filesLoaded) - 1 - $unused, $unused];
     }
 }

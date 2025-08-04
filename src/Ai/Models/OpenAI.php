@@ -10,13 +10,10 @@
 */
 namespace Luminova\Ai\Models;
 
-use \Luminova\Interface\AiInterface;
-use \Luminova\Interface\LazyInterface;
 use \Luminova\Http\Client\Curl;
 use \Luminova\Storages\FileManager;
-use \Luminova\Exceptions\AppException;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\JsonException;
+use \Luminova\Interface\{AiInterface, LazyInterface};
+use \Luminova\Exceptions\{AppException, JsonException, RuntimeException};
 use function \Luminova\Funcs\{
     root,
     absolute_url,

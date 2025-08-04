@@ -11,16 +11,14 @@
 namespace Luminova\Http\Client;
 
 use \Luminova\Luminova;
-use \Luminova\Utils\Promise\Promise;
 use \GuzzleHttp\Client;
+use \Luminova\Utils\Promise\Promise;
 use \Psr\Http\Client\ClientInterface;
-use \Psr\Http\Message\ResponseInterface;
-use \Psr\Http\Message\RequestInterface;
-use \Psr\Http\Message\UriInterface;
 use \Luminova\Interface\PromiseInterface;
 use \GuzzleHttp\Exception\GuzzleException;
 use \Luminova\Exceptions\Http\RequestException;
 use \Luminova\Exceptions\Http\ConnectException;
+use \Psr\Http\Message\{UriInterface, RequestInterface, ResponseInterface};
 use \Exception;
 use \Throwable;
 

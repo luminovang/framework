@@ -272,7 +272,7 @@ final class TemplateCache
     
         $ifNoneMatch = trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '');
         $eTag = self::$cache['ETag'] ?? null;
-        Luminova::addClassInfo('cache', true);
+        Luminova::addClassMetadata('cache', true);
     
         // Check if the ETag matches the client's If-None-Match header
         if ($eTag && $ifNoneMatch === "\"$eTag\"") {

@@ -11,8 +11,8 @@
 namespace Luminova\Utils;
 
 use \Fiber;
-use \Luminova\Exceptions\RuntimeException;
 use \Exception;
+use \Luminova\Exceptions\RuntimeException;
 
 final class Interval
 {

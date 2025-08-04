@@ -13,8 +13,7 @@ namespace Luminova\Ai;
 use \Luminova\Interface\AiInterface;
 use \Luminova\Ai\Models\OpenAI;
 use \App\Config\AI;
-use \Luminova\Exceptions\AppException;
-use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\{AppException, RuntimeException};
 use \Throwable;
 
 final class Model

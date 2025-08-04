@@ -10,18 +10,14 @@
  */
 namespace Luminova\Base;
 
-use \Luminova\Core\CoreApplication;
-use \Luminova\Command\Terminal;
-use \Luminova\Utils\LazyObject;
-use \Luminova\Functions\Func;
 use \App\Application;
 use \App\Config\Files;
+use \Luminova\Functions\Func;
+use \Luminova\Command\Terminal;
+use \Luminova\Utils\LazyObject;
+use \Luminova\Core\CoreApplication;
 use \Luminova\Interface\{RoutableInterface, LazyInterface};
-use function \Luminova\Funcs\{
-    make_dir,
-    get_mime
-};
-
+use function \Luminova\Funcs\{make_dir, get_mime};
 
 /**
  * A class to extend when building a CLI controller for routable commands.

@@ -12,20 +12,22 @@ namespace Luminova\Notifications\Firebase;
 
 use \Luminova\Interface\LazyInterface;
 use \Kreait\Firebase\Factory;
-use \Kreait\Firebase\Messaging\CloudMessage;
-use \Kreait\Firebase\Messaging\Notification as Notifier;
 use \Kreait\Firebase\Contract\Messaging;
-use \Kreait\Firebase\Messaging\Message as MessageCaster;
-use \Kreait\Firebase\Messaging\MulticastSendReport;
-use \Kreait\Firebase\Messaging\AndroidConfig;
-use \Kreait\Firebase\Messaging\WebPushConfig;
-use \Kreait\Firebase\Messaging\ApnsConfig;
-use \Kreait\Firebase\Messaging\FcmOptions;
-use \Kreait\Firebase\Messaging\MessageTarget;
-use \Kreait\Firebase\Messaging\RawMessageFromArray;
 use \Luminova\Exceptions\ErrorException;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Notifications\Models\Message;
+use \Kreait\Firebase\Messaging\Notification as Notifier;
+use \Kreait\Firebase\Messaging\Message as MessageCaster;
+use \Kreait\Firebase\Messaging\{
+    AndroidConfig,
+    CloudMessage,
+    WebPushConfig,
+    ApnsConfig,
+    FcmOptions,
+    MessageTarget,
+    RawMessageFromArray,
+    MulticastSendReport
+};
 use \Exception;
 use function \Luminova\Funcs\root;
 

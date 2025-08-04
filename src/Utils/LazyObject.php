@@ -15,9 +15,7 @@ use \Throwable;
 use \Stringable;
 use \ReflectionClass;
 use \Luminova\Interface\LazyInterface;
-use \Luminova\Exceptions\AppException;
-use \Luminova\Exceptions\LogicException;
-use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\{AppException, LogicException, RuntimeException};
 
 class LazyObject implements LazyInterface, Stringable
 {

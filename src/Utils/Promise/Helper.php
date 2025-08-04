@@ -10,16 +10,14 @@
  */
 namespace Luminova\Utils\Promise;
 
-use \Luminova\Utils\Promise\Promise;
-use \Luminova\Utils\Promise\FulfilledPromise;
-use \Luminova\Utils\Promise\RejectedPromise;
-use \Luminova\Interface\PromiseInterface;
-use \Luminova\Exceptions\ErrorException;
-use \Luminova\Exceptions\LogicException;
+use \Throwable;
 use \ReflectionNamedType;
 use \ReflectionUnionType;
 use \ReflectionIntersectionType;
-use \Throwable;
+use \Luminova\Exceptions\LogicException;
+use \Luminova\Exceptions\ErrorException;
+use \Luminova\Interface\PromiseInterface;
+use \Luminova\Utils\Promise\{Promise, RejectedPromise, FulfilledPromise};
 
 final class Helper 
 {

@@ -98,7 +98,7 @@ final class Compiler
             return;
         }
 
-        Luminova::addClassInfo('filename', $fileName);
+        Luminova::addClassMetadata('filename', $fileName);
 
         /**
          * Handle context attributes and register error handlers.
@@ -195,7 +195,7 @@ final class Compiler
             return;
         }
 
-        Luminova::addClassInfo('filename', $fileName);
+        Luminova::addClassMetadata('filename', $fileName);
 
         foreach ($instance->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
             $callback = $fileName . '::' . $method->getName();

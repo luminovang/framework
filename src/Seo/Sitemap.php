@@ -12,21 +12,19 @@ namespace Luminova\Seo;
 
 use \App\Application;
 use \App\Config\Sitemap as SitemapConfig;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Utils\LazyObject;
-use \Luminova\Core\CoreApplication;
-use \Luminova\Command\Terminal;
-use \Luminova\Command\Utils\Color;
-use \Luminova\Http\Client\Curl;
 use \Luminova\Utils\Async;
-use \Luminova\Command\Utils\Text;
 use \Luminova\Functions\Maths;
-use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Utils\LazyObject;
+use \Luminova\Http\Client\Curl;
+use \Luminova\Command\Terminal;
+use \Luminova\Core\CoreApplication;
+use \Luminova\Interface\LazyInterface;
 use \Luminova\Exceptions\AppException;
+use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Command\Utils\{Text, Color};
 use \DOMDocument;
 use function \Luminova\Funcs\{
     root,
-    app,
     write_content,
     is_command
 };

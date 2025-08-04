@@ -422,7 +422,7 @@ final class Router implements RouterInterface
             $exitCode = self::runAsHttp();
         }
 
-        self::$application->__on('onFinish', Luminova::getClassInfo());
+        self::$application->__on('onFinish', Luminova::getClassMetadata());
         Luminova::profiling('stop', $context);
         exit($exitCode);
     }
@@ -958,7 +958,8 @@ final class Router implements RouterInterface
      * 
      * @param string $from The name of the controller for which to retrieve the routes.
      * 
-     * @return array Return an array of routes registered for the given controller and HTTP method, or an empty array if none are found.
+     * @return array Return an array of routes registered for the given controller 
+     * and HTTP method, or an empty array if none are found.
      */
     private static function getRoutes(string $from): array 
     {
@@ -1022,7 +1023,7 @@ final class Router implements RouterInterface
                 // Remove the matched file extension to render the request normally
                 self::$uri = substr(self::$uri, 0, -strlen($matches[0]));
             }elseif($expired === false && self::$weak[self::$application]->read() === true){
-                Luminova::setClassInfo([
+                Luminova::setClassMetadata([
                     'staticCache' => true, 
                     'cache' => true
                 ]);
@@ -1223,7 +1224,7 @@ final class Router implements RouterInterface
     /**
      * Execute router HTTP callback class method with the given parameters using instance callback or reflection class.
      *
-     * @param Closure|array{0:class-string<RoutableInterface>,1:string}|string $callback Class public callback method eg: UserController:update.
+     * @param Closure|array{0:class-string<RoutableInterface>,1:string}|string $callback Class public callback method (e.g, UserController:update).
      * @param array $arguments Method arguments to pass to callback method.
      * @param bool $injection Force use dependency injection (default: false).
      * @param bool $isCliMiddleware Indicate Whether caller is CLI middleware (default: false).
@@ -1255,7 +1256,7 @@ final class Router implements RouterInterface
                 ? ($arguments['params'] ?? []) 
                 : $arguments;
             
-            Luminova::setClassInfo([
+            Luminova::setClassMetadata([
                 'namespace' => '\\Closure', 
                 'method' => 'function'
             ]);
@@ -1314,7 +1315,7 @@ final class Router implements RouterInterface
             return STATUS_ERROR;
         }
 
-        Luminova::setClassInfo([
+        Luminova::setClassMetadata([
             'namespace' => $namespace, 
             'method' => $method,
             'uri' => self::$uri
@@ -1380,7 +1381,7 @@ final class Router implements RouterInterface
                     if($result !== STATUS_SUCCESS){
                         $failed = $class->getMethod('onMiddlewareFailure');
                         $failed->setAccessible(true);
-                        $failed->invokeArgs($instance, [self::$uri, Luminova::getClassInfo()]);
+                        $failed->invokeArgs($instance, [self::$uri, Luminova::getClassMetadata()]);
                     }
 
                     return $result;
@@ -1717,7 +1718,11 @@ final class Router implements RouterInterface
             return $views;
         }
 
-        $result = self::$term->extract(array_slice($_SERVER['argv'], 2), true);
+        $result = self::$term->extract(
+            array_slice($_SERVER['argv'], 2), 
+            true
+        );
+
         $views['view'] = '/' . implode('/', $result['arguments']);
         $views['options'] = $result['options'];
 
@@ -1759,14 +1764,14 @@ final class Router implements RouterInterface
             return;
         }
 
-        Luminova::setClassInfo([
+        Luminova::setClassMetadata([
             'filename'    => null,
             'uri'         => null,
             'namespace'   => null,
             'method'      => null,
             'attrFiles'   => 1,
             'cache'       => false,
-            'staticCache' => false
+            'staticCache' => false,
         ]);
     }
 }

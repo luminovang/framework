@@ -10,9 +10,9 @@
  */
 namespace Luminova\Optimization;
 
+use \JsonException;
 use \Luminova\Http\Header;
 use \Luminova\Exceptions\RuntimeException;
-use \JsonException;
 use function \Luminova\Funcs\string_length;
 
 final class Minification 

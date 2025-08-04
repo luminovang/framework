@@ -12,8 +12,7 @@ namespace Luminova\Interface;
 
 use \App\Application;
 use \Luminova\Core\CoreApplication;
-use \Luminova\Routing\Prefix;
-use \Luminova\Routing\Segments;
+use \Luminova\Routing\{Prefix, Segments};
 use \Luminova\Exceptions\RouterException;
 use \Luminova\Interface\ErrorHandlerInterface;
 use \Closure;

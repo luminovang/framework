@@ -10,10 +10,9 @@
  */
 namespace Luminova\Utils\Promise;
 
-use \Luminova\Utils\Promise\Promise;
-use \Luminova\Utils\Promise\Helper;
 use \Luminova\Interface\PromiseInterface;
 use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Utils\Promise\{Helper, Promise};
 use \Throwable;
 
 final class FulfilledPromise implements PromiseInterface

@@ -10,10 +10,7 @@
  */
 namespace Luminova\Library;
 
-use function \Luminova\Funcs\{
-    root,
-    path
-};
+use function \Luminova\Funcs\{root, path};
 
 final class Modules
 {

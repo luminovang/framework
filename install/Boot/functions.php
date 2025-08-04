@@ -306,31 +306,89 @@ function func(?string $context = null, mixed ...$arguments): mixed
     return null;
 }
 
+
 /**
- * Import or load file if it exists.
+ * Imports a PHP file from a full path or a scheme-based virtual path.
  * 
- * This function uses `require` or `include` with options to use `_once` variants 
- * to load file and return it result if any.
- *
- * @param string $path    Full path to the file to import.
- * @param bool   $throw   If true, throws an exception when the file is missing (default: `false`).
- * @param bool   $once    If true, uses `*_once` variants (`require_once/include_once`) (default: `true`).
+ * This function supports resolving virtual paths using predefined schemes 
+ * such as `app:Config/main.php`, which will resolve to `root('app', 'Config/main.php')`.
+ * You can also pass traditional full paths like `app/Config/main.php` directly.
+ * 
+ * The function will attempt to include or require the specified file and return
+ * its result (if any). You can control whether to throw an exception if the file 
+ * is not found, and whether to include the file once or multiple times.
+ * 
+ * **Supported Schemes:**
+ * - `app`:          Resolves to `root/app/*`
+ * - `package`:      Resolves to `root/system/plugins/*`
+ * - `system`:       Resolves to `root/system/*`
+ * - `view`:         Resolves to `root/resources/Views/*`
+ * - `public`:       Resolves to `root/public/*`
+ * - `writeable`:    Resolves to `root/writeable/*`
+ * - `libraries`:    Resolves to `root/libraries/*`
+ * - `resources`:    Resolves to `root/resources/*`
+ * - `routes`:       Resolves to `root/routes/*`
+ * - `bootstrap`:    Resolves to `root/bootstrap/*`
+ * - `bin`:          Resolves to `root/bin/*`
+ * - `node`:         Resolves to `root/node/*`
+ * 
+ * @param string $path    The file path to import. May include a scheme prefix (e.g., `app:Config/file.php`).
+ * @param bool   $throw   If true, throws RuntimeException when the file does not exist (default: `false`).
+ * @param bool   $once    If true, uses `*_once` variants to avoid multiple imports (default: `true`).
  * @param bool   $require If true, uses `require/require_once`, otherwise uses `include/include_once` (default: `true`).
- *
- * @return mixed Returns the result of the file, or null if not loaded or no result.
- * @throws RuntimeException If the file doesn't exist and $throw is true.
- * @example - Usages:
+ * 
+ * @return mixed Returns the result of the included file, or null if file not found and `$throw` is false.
+ * @throws RuntimeException If the file does not exist and `$throw` is true.
+ * 
+ * @example Import using scheme (recommended):
  * ```php
- * import(
- *      path: 'app/Config/text.php',
- *      throw: true, // Throw exception if file not found,
- *      once: true, // Include once,
- *      require: true // Use required instead
- * );
+ * // Resolves to: root('app', 'Config/settings.php')
+ * import('app:Config/settings.php');
+ * ```
+ * 
+ * @example Import packages (composer vendor):
+ * ```php
+ * import('package:brick/math/src/BigNumber.php');
+ * ```
+ * 
+ * @example Import using direct file path:
+ * ```php
+ * import('app/Config/settings.php');
+ * ```
+ * 
+ * @example Force exception when file is missing:
+ * ```php
+ * import('app:Config/missing.php', throw: true);
+ * ```
+ * 
+ * @example Use include instead of require:
+ * ```php
+ * import('system:Bootstrap/init.php', require: false);
+ * ```
+ * 
+ * @example Allow multiple imports of same file:
+ * ```php
+ * import('routes:api.php', once: false);
  * ```
  */
 function import(string $path, bool $throw = false, bool $once = true, bool $require = true): mixed
 {
+    if (\preg_match('/^([a-z_]+):(\/?.+)$/i', $path, $matches)) {
+        [$_, $scheme, $subPath] = $matches;
+
+        if ($scheme !== 'builds') {
+            if ($scheme === 'package' || $scheme === 'view') {
+                $path = root(($scheme === 'package') 
+                    ? '/system/plugins/' 
+                    : '/resources/Views/', 
+                    $subPath
+                );
+            }elseif (\in_array($scheme, Luminova::$systemPaths, true)) {
+                $path = root($scheme, $subPath);
+            }
+        }
+    }
+
     if (\is_file($path)) {
         return $require
             ? ($once ? require_once $path : require $path)

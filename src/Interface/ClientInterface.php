@@ -10,15 +10,11 @@
  */
 namespace Luminova\Interface;
 
-use \Psr\Http\Message\ResponseInterface;
-use \Psr\Http\Message\RequestInterface;
-use \Psr\Http\Message\UriInterface;
+
 use \Psr\Http\Client\ClientInterface as PsrClientInterface;
 use \Luminova\Interface\PromiseInterface;
-use \Luminova\Exceptions\Http\RequestException;
-use \Luminova\Exceptions\Http\ConnectException;
-use \Luminova\Exceptions\Http\ClientException;
-use \Luminova\Exceptions\Http\ServerException;
+use \Psr\Http\Message\{UriInterface, RequestInterface, ResponseInterface};
+use \Luminova\Exceptions\Http\{RequestException, ConnectException, ClientException, ServerException};
 
 interface ClientInterface extends PsrClientInterface
 {

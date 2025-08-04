@@ -276,7 +276,7 @@ abstract class BaseController implements RoutableInterface
      * Use this method to render a view or display an error message.
      *  
      * @param string $uri The request URI, useful for logging or triggering an error view.  
-     * @param array<string,mixed> $classInfo Information about the class where the middleware check failed.  
+     * @param array<string,mixed> $classMetadata Information about the class where the middleware check failed.  
      *  
      * @return void 
      * 
@@ -293,12 +293,12 @@ abstract class BaseController implements RoutableInterface
      *          return $this->app->session->online() ? STATUS_SUCCESS : STATUS_ERROR;
      *      }
      * 
-     *      protected function onMiddlewareFailure(string $uri, array $classInfo): void 
+     *      protected function onMiddlewareFailure(string $uri, array $classMetadata): void 
      *      {
      *          $this->view('login');
      *      }
      * }
      * ```
      */
-    protected function onMiddlewareFailure(string $uri, array $classInfo): void {}
+    protected function onMiddlewareFailure(string $uri, array $classMetadata): void {}
 }

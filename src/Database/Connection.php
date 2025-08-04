@@ -16,11 +16,9 @@ use \Exception;
 use \App\Config\Database;
 use \Luminova\Logger\Logger;
 use \Luminova\Core\CoreDatabase;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Interface\DatabaseInterface;
-use \Luminova\Database\Drivers\PdoDriver;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Database\Drivers\MysqliDriver;
+use \Luminova\Database\Drivers\{PdoDriver, MysqliDriver};
+use \Luminova\Interface\{LazyInterface, DatabaseInterface};
 
 class Connection implements LazyInterface, Countable
 {

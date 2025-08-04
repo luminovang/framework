@@ -10,14 +10,9 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Http\File;
-use \Luminova\Http\Server;
-use \Luminova\Http\Header;
-use \Luminova\Http\UserAgent;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Interface\CookieJarInterface;
-use \Luminova\Exceptions\InvalidArgumentException;
-use \Luminova\Exceptions\SecurityException;
+use \Luminova\Http\{File, Server, Header, UserAgent};
+use \Luminova\Interface\{LazyInterface, CookieJarInterface};
+use \Luminova\Exceptions\{SecurityException, InvalidArgumentException};
 use \Generator;
 
 /**

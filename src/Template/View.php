@@ -500,7 +500,7 @@ trait View
      * @return bool Returns true if cache doesn't exist or expired.
      * @throws RuntimeException Throw if the cached version doesn't match with the current view type.
      */
-    public final function expired(string|null $viewType = 'html'): bool
+    public final function expired(?string $viewType = 'html'): bool
     {
         $expired = self::__getCache()->expired($viewType);
 
@@ -619,7 +619,7 @@ trait View
     
         if(!in_array($viewType, self::$SUPPORTED_TYPES, true)){
             throw new RuntimeException(sprintf(
-                'Invalid argument, unsupported view type: "%s" for view: "%s", supported types (%s). To render other formats use helper function `response()->render()`', 
+                'Invalid argument, unsupported view type: "%s" for view: "%s", supported types (%s). To render other formats use helper function `Luminova\Funcs\response()->render()`', 
                 $viewType, 
                 $viewName,
                 implode(', ', self::$SUPPORTED_TYPES)
@@ -876,11 +876,7 @@ trait View
      * @return string|bool  Return true on success, false on failure.
      * @throws ViewNotFoundException Throw if view file is not found.
      */
-    private function __renderTemplate(
-        array $options = [], 
-        int $status = 200, 
-        bool $return = false
-    ): string|bool
+    private function __renderTemplate(array $options = [], int $status = 200, bool $return = false): string|bool
     {
         try {
             $cacheable = $this->__shouldCache();
@@ -1544,7 +1540,8 @@ trait View
     private static function __toRelativeLevel(): string 
     {
         $level = self::$assetDepth;
-        if($level === 0 && isset($_SERVER['REQUEST_URI'])){
+        
+        if($level === 0 && !empty($_SERVER['REQUEST_URI'])){
             $url = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen(Luminova::getBase()));
 
             if (($pos = strpos($url, '?')) !== false) {

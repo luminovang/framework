@@ -10,17 +10,15 @@
  */
 namespace Luminova\Utils;
 
+use \Fiber;
+use \Closure;
+use \Exception;
+use \Generator;
+use \FiberError;
 use \Luminova\Storages\Stream;
 use \Luminova\Command\Terminal;
 use \Psr\Http\Message\StreamInterface;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\BadMethodCallException;
-use \Luminova\Exceptions\InvalidArgumentException;
-use \Closure;
-use \Fiber;
-use \FiberError;
-use \Exception;
-use \Generator;
+use \Luminova\Exceptions\{RuntimeException, BadMethodCallException, InvalidArgumentException};
 use function \Luminova\Funcs\array_merge_result;
 
 class Process

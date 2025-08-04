@@ -39,9 +39,7 @@ final class Environment
             $parts = explode('=', $line, 2);
             if (count($parts) >= 2) {
                 [$name, $value] = $parts;
-                $name = trim($name);
-                $value = trim($value);
-                setenv($name, $value);
+                setenv(trim($name), trim($value));
             }
         }
     }
