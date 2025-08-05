@@ -10,15 +10,16 @@
  */
 namespace Luminova\Sessions\Handlers;
 
-use \Luminova\Security\Crypter;
-use \Luminova\Base\BaseSessionHandler;
-use \Luminova\Exceptions\RuntimeException;
+
 use \ReturnTypeWillChange;
+use \Luminova\Base\SessionHandler;
+use \Luminova\Security\Encryption\Crypter;
+use \Luminova\Exceptions\RuntimeException;
 
 /**
  * Custom Array Handler for session management with optional encryption support.
  */
-class ArrayHandler extends BaseSessionHandler
+class ArrayHandler extends SessionHandler
 {
     /**
      * Array storage. 
@@ -58,7 +59,9 @@ class ArrayHandler extends BaseSessionHandler
      */
     public function open(string $path, string $name): bool
     {
-        return $this->options['onCreate'] ? ($this->options['onCreate'])($path, $name, 'array') : true;
+        return $this->options['onCreate'] 
+            ? ($this->options['onCreate'])($path, $name, 'array') 
+            : true;
     }
 
     /**

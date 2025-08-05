@@ -10,16 +10,16 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Exception;
-use \Luminova\Base\BaseConsole;
-use \Luminova\Application\Caller;
+use \Throwable;
+use \Luminova\Base\Console;
 use \Luminova\Command\Utils\Color;
-use \Luminova\Storages\FileManager;
-use \Luminova\Exceptions\AppException;
+use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Foundation\Module\Caller;
 use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Database\{Seeder, Builder, Migration};
 use function \Luminova\Funcs\{
     root,
+    array_last,
     write_content,
     get_content,
     make_dir,
@@ -27,7 +27,7 @@ use function \Luminova\Funcs\{
     shared,
 };
 
-class Database extends BaseConsole 
+class Database extends Console 
 {
     /**
      * {@inheritdoc}
@@ -71,8 +71,8 @@ class Database extends BaseConsole
         setenv('throw.cli.exceptions', 'true');
         try{
             self::$builder ??= Builder::getInstance();
-        }catch(AppException|Exception $e){
-            $this->writeln("Database Connection Error: " . $e->getMessage(), 'white', 'red');
+        }catch(Throwable $e){
+            $this->term->writeln("Database Connection Error: " . $e->getMessage(), 'white', 'red');
             return STATUS_ERROR;
         }
 
@@ -205,7 +205,7 @@ class Database extends BaseConsole
                 if (empty($lock[$class]['metadata'])) {
                     unset($lock[$class]);
                 } else {
-                    $last = end($metadata);
+                    $last = array_last($metadata);
                     $lock[$class]['latestVersion'] = $last['version'];
                 }
 
@@ -281,7 +281,7 @@ class Database extends BaseConsole
             }
 
             $this->term->writeln("No pending migration table to alter.", 'black', 'yellow');
-        } catch (AppException|Exception $e) {
+        } catch (Throwable $e) {
             $this->term->writeln("Migration alter execution failed: " . $e->getMessage(), 'white', 'red');
         }
 
@@ -412,7 +412,7 @@ class Database extends BaseConsole
             }
 
             $this->term->writeln("Failed: No seeder was execution.", 'red');
-        } catch (AppException|Exception $e) {
+        } catch (Throwable $e) {
             $this->term->writeln("Seeder execution failed: " . $e->getMessage(), 'white', 'red');
         }
 
@@ -534,12 +534,13 @@ class Database extends BaseConsole
             }
 
             $this->term->writeln("Failed: no migration execution", 'red');
-        } catch (AppException|Exception $e) {
+        } catch (Throwable $e) {
             $db = shared('DROP_TRANSACTION');
 
             if($db instanceof DatabaseInterface && $db->inTransaction()){
                 $db->rollback();
             }
+
             $this->term->writeln("Migration execution failed: " . $e->getMessage(), 'white', 'red');
         }
 
@@ -602,7 +603,7 @@ class Database extends BaseConsole
                 $db->rollback();
             }
             
-        } catch (Exception|AppException $e) {
+        } catch (Throwable $e) {
             $db = shared('DROP_TRANSACTION');
             if ($db instanceof DatabaseInterface && $db->inTransaction()) {
                 $db->rollback();
@@ -627,7 +628,7 @@ class Database extends BaseConsole
             $seeder->run(self::$builder);
             $this->term->writeln("[" . Color::style(get_class_name($seeder), 'green') . "] Execution completed.");
             return true;
-        } catch (Exception|AppException $e) {
+        } catch (Throwable $e) {
             $this->term->writeln("Error: " . $e->getMessage(), 'white', 'red');
         }
         return false;
@@ -726,7 +727,7 @@ class Database extends BaseConsole
                         }
 
                         $this->term->writeln("Failed: No migrations were rolled back to version '{$input}'.", 'red');
-                    } catch (Exception|AppException $e) {
+                    } catch (Throwable $e) {
                         $db = shared('DROP_TRANSACTION');
                         
                         if ($db instanceof DatabaseInterface && $db->inTransaction()) {
@@ -842,7 +843,7 @@ class Database extends BaseConsole
                         }
 
                         $this->term->writeln("Failed: No seeder was rolled back to version '{$input}'.", 'red');
-                    } catch (Exception|AppException $e) {
+                    } catch (Throwable $e) {
                         $this->term->writeln("Error: {$e->getMessage()}", 'red');
                     }
                 }else{

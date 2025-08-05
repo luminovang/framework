@@ -10,20 +10,39 @@
  */
 namespace Luminova\Http;
 
-use \Exception;
 use \Throwable;
-use \Luminova\Http\Client\Curl;
+use \Luminova\Http\Client\Novio;
 use \Psr\Http\Client\ClientInterface;
-use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
 use \GuzzleHttp\Exception\GuzzleException;
-use \Luminova\Exceptions\AppException;
-use \Luminova\Exceptions\Http\RequestException;
-use \Luminova\Exceptions\BadMethodCallException;
-use \Luminova\Utils\Promise\{Promise, RejectedPromise};
+use \Luminova\Utility\Promise\{Promise, Rejected};
+use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
 use \Psr\Http\Message\{ResponseInterface, RequestInterface, UriInterface};
-use \Luminova\Interface\{NetworkInterface, LazyInterface, PromiseInterface};
+use \Luminova\Interface\{NetworkInterface, LazyObjectInterface, PromiseInterface};
+use \Luminova\Exceptions\{AppException, Http\RequestException, BadMethodCallException};
 
-class Network implements NetworkInterface, LazyInterface
+/**
+ * Network client for making HTTP requests synchronously or asynchronously.
+ * 
+ * Supports dynamic method resolution for HTTP verbs such as GET, POST, PUT, etc.
+ * Use `config()` to set default configuration (e.g., base_uri).
+ *
+ * @method static ResponseInterface<\T> get(UriInterface<\T>|string $url, array $options = [])
+ * @method static ResponseInterface<\T> post(UriInterface<\T>|string $url, array $options = [])
+ * @method static ResponseInterface<\T> put(UriInterface<\T>|string $url, array $options = [])
+ * @method static ResponseInterface<\T> patch(UriInterface<\T>|string $url, array $options = [])
+ * @method static ResponseInterface<\T> delete(UriInterface<\T>|string $url, array $options = [])
+ * @method static ResponseInterface<\T> head(UriInterface<\T>|string $url, array $options = [])
+ * @method static ResponseInterface<\T> options(UriInterface<\T>|string $url, array $options = [])
+ *
+ * @method static PromiseInterface<\T> getAsync(UriInterface<\T>|string $url, array $options = [])
+ * @method static PromiseInterface<\T> postAsync(UriInterface<\T>|string $url, array $options = [])
+ * @method static PromiseInterface<\T> putAsync(UriInterface<\T>|string $url, array $options = [])
+ * @method static PromiseInterface<\T> patchAsync(UriInterface<\T>|string $url, array $options = [])
+ * @method static PromiseInterface<\T> deleteAsync(UriInterface<\T>|string $url, array $options = [])
+ * @method static PromiseInterface<\T> headAsync(UriInterface<\T>|string $url, array $options = [])
+ * @method static PromiseInterface<\T> optionsAsync(UriInterface<\T>|string $url, array $options = [])
+ */
+class Network implements NetworkInterface, LazyObjectInterface
 {
     /**
      * Custom flag to skip header in request.
@@ -40,11 +59,25 @@ class Network implements NetworkInterface, LazyInterface
     private ?ClientInterface $client = null;
 
     /**
+     * Static method instance.
+     * 
+     * @var NetworkInterface|null $instance
+     */
+    private static ?NetworkInterface $instance = null;
+
+    /**
+     * The network client interface to use.
+     * 
+     * @var array<string,mixed> $config
+     */
+    private static array $config = [];
+
+    /**
      * {@inheritdoc}
      */
     public function __construct(?ClientInterface $client = null)
     {
-        $this->client = $client ?? new Curl();
+        $this->client = $client ?? new Novio(self::$config);
     }
 
     /**
@@ -52,25 +85,29 @@ class Network implements NetworkInterface, LazyInterface
      */
     public function __call(string $method, array $arguments): mixed
     {
-        if (count($arguments) < 1) {
-            $error = new BadMethodCallException(sprintf(
-                'Bad method call: request method "->%s(...)" require a URI and optional options array',
-                $method
-            ));
+        return $this->resolve($method, $arguments);
+    }
 
-            if(str_ends_with($method, 'Async')){
-                return new RejectedPromise($error);
-            }
-
-            throw $error;
+    /**
+     * {@inheritdoc}
+     * @since 3.6.8
+     */
+    public static function __callStatic(string $method, array $arguments): mixed
+    {
+        if(!self::$instance instanceof self){
+            self::$instance = new self();
         }
 
-        $url = $arguments[0] ?? '';
-        $options = $arguments[1] ?? [];
+        return self::$instance->resolve($method, $arguments, true);
+    }
 
-        return str_ends_with($method, 'Async')
-            ? $this->requestAsync(substr($method, 0, -5), $url, $options)
-            : $this->client->request($method, $url, $options);
+    /**
+     * {@inheritdoc}
+     * @since 3.6.8
+     */
+    public static function config(array $config): void
+    {
+        self::$config = $config;
     }
 
     /**
@@ -86,60 +123,51 @@ class Network implements NetworkInterface, LazyInterface
     /**
      * {@inheritdoc}
      */
-    public function get(
-        string $uri = '', 
-        array $options = []
-    ): ResponseInterface
+    public function get(UriInterface|string $uri = '', array $options = []): ResponseInterface
     {
-        return $this->client->request('GET', $uri, $options);
+        try{
+            return $this->client->request('GET', $uri, $options);
+        } catch (Throwable $e) {
+            return $this->handleRequestException($e, false);
+        }
     }
 
     /**
      * {@inheritdoc}
      */
-    public function fetch(
-        UriInterface|string $uri = '', 
-        string $method = 'GET', 
-        array $options = []
-    ): PromiseInterface
+    public function fetch(UriInterface|string $uri = '', string $method = 'GET', array $options = []): PromiseInterface
     {
-        return $this->client->requestAsync(
-            $method, 
-            $uri, 
-            $options
-        );
+        return $this->requestAsync($method, $uri, $options);
     }
 
     /**
      * {@inheritdoc}
      */
-    public function post(
-        string $uri = '', 
-        array $options = []
-    ): ResponseInterface
+    public function post(UriInterface|string $uri = '', array $options = []): ResponseInterface
     {
-        return $this->client->request('POST', $uri, $options);
+        try{
+            return $this->client->request('POST', $uri, $options);
+        } catch (Throwable $e) {
+            return $this->handleRequestException($e, false);
+        }
     }
 
     /**
      * {@inheritdoc}
      */
-    public function request(
-        string $method, 
-        UriInterface|string $uri = '', 
-        array $options = []
-    ): ResponseInterface
+    public function request(string $method, UriInterface|string $uri = '', array $options = []): ResponseInterface
     {
-        return $this->client->request($method, $uri, $options);
+        try{
+            return $this->client->request($method, $uri, $options);
+        } catch (Throwable $e) {
+            return $this->handleRequestException($e, false);
+        }
     }
 
     /**
      * {@inheritdoc}
      */
-    public function send(
-        RequestInterface $request, 
-        array $options = []
-    ): ResponseInterface
+    public function send(RequestInterface $request, array $options = []): ResponseInterface
     {
         return $this->doSend($request, $options);
     }
@@ -147,10 +175,7 @@ class Network implements NetworkInterface, LazyInterface
     /**
      * {@inheritdoc}
      */
-    public function sendAsync(
-        RequestInterface $request, 
-        array $options = []
-    ): PromiseInterface
+    public function sendAsync(RequestInterface $request, array $options = []): PromiseInterface
     {
         return $this->doSend($request, $options, true, true);
     }
@@ -158,28 +183,24 @@ class Network implements NetworkInterface, LazyInterface
     /**
      * {@inheritdoc}
      */
-    public function requestAsync(
-        string $method, 
-        UriInterface|string $uri = '', 
-        array $options = []
-    ): PromiseInterface
+    public function requestAsync(string $method, UriInterface|string $uri = '', array $options = []): PromiseInterface
     {
-        return $this->client->requestAsync(
-            $method, 
-            $uri, 
-            $options
-        );
+        try{
+            return $this->client->requestAsync($method, $uri, $options);
+        } catch (Throwable $e) {
+            return $this->handleRequestException($e, true);
+        }
     }
 
     /**
      * Send request from request object.
      * 
-     * @param RequestInterface $request
+     * @param RequestInterface<\T> $request
      * @param array $options
      * @param bool $async
      * @param bool $promise
      * 
-     * @return PromiseInterface<\T>|ResponseInterface<\T> Return guzzle promise or response object for cURL client.
+     * @return PromiseInterface<\T>|ResponseInterface<\T> Return guzzle promise or response object for Novio client.
     */
     private function doSend(
         RequestInterface $request, 
@@ -192,24 +213,8 @@ class Network implements NetworkInterface, LazyInterface
             return $async 
                 ? $this->client->sendAsync($request, $options)
                 : $this->client->send($request, $options);
-        }catch (GuzzleRequestException $e) {
-            if($promise){
-                return new Promise(function($resolve, $reject) use($e){
-                    ($e->getResponse() instanceof ResponseInterface)
-                        ? $resolve($e->getResponse())
-                        : $reject($e);
-                });
-            }
-
-            return $this->handleGuzzleRequestException($e);
-        } catch (GuzzleException|Exception $e) {
-            if($promise){
-                return new RejectedPromise(
-                    ($e instanceof AppException) ? $e : new RequestException($e->getMessage(), $e->getCode(), $e)
-                );
-            }
-
-            throw new RequestException($e->getMessage(), $e->getCode(), $e);
+        } catch (Throwable $e) {
+            return $this->handleRequestException($e, $promise);
         }
     }
 
@@ -219,15 +224,32 @@ class Network implements NetworkInterface, LazyInterface
      * This method processes a Guzzle request exception, checking if a valid response is present.
      * If a response is available, it returns the ResponseInterface; otherwise, it returns null.
      *
-     * @param Throwable $e The exception thrown during a Guzzle request.
+     * @param Throwable $e The exception thrown during request.
+     * @param bool $promise
      *
-     * @return ResponseInterface|null Returns the response if present, or null if no response is available.
+     * @return PromiseInterface<\T>|ResponseInterface<\T>|never Returns the response if present, or null if no response is available.
      * @throws RequestException $e Throw the exception encountered during a request.
      */
-    private function handleGuzzleRequestException(Throwable $e): ?ResponseInterface
+    private function handleRequestException(Throwable $e, bool $promise = false): PromiseInterface|ResponseInterface
     {
-        if (($e instanceof GuzzleRequestException) && $e->getResponse() instanceof ResponseInterface) {
-            return $e->getResponse();
+        if($e instanceof GuzzleRequestException) {
+            if($promise){
+                return new Promise(function($resolve, $reject) use($e){
+                    ($e->getResponse() instanceof ResponseInterface)
+                        ? $resolve($e->getResponse())
+                        : $reject($e);
+                });
+            }
+
+            if ($e->getResponse() instanceof ResponseInterface) {
+                return $e->getResponse();
+            }
+        }
+        
+        if($promise){
+            return new Rejected(
+                ($e instanceof AppException) ? $e : new RequestException($e->getMessage(), $e->getCode(), $e)
+            );
         }
 
         $this->handleAppException($e);
@@ -261,5 +283,52 @@ class Network implements NetworkInterface, LazyInterface
         }
 
         throw new RequestException($e->getMessage(), $e->getCode(), $e);
+    }
+
+    /**
+     * Resolves the dynamic method name and performs the corresponding HTTP request.
+     *
+     * @param string  $method The HTTP method (e.g., 'get', 'post', 'put', etc.)
+     * @param array   $arguments Contains URL as first element and optional options array as second.
+     * @param bool    $isStatic  Flag to indicate static method context.
+     *
+     * @return mixed Response object or a Promise.
+     *
+     * @throws BadMethodCallException for invalid static calls with no arguments.
+     */
+    private function resolve(string $method, array $arguments, bool $isStatic = false): mixed
+    {
+        $options = $arguments[1] ?? [];
+        $url = $arguments[0] ?? '';
+        $isAsync = str_ends_with($method, 'Async');
+
+        if ($isStatic) {
+            $base = $options['base_uri'] 
+                ?? self::$config['base_uri'] 
+                ?? null;
+
+            if ($url === '' && empty($base)) {
+                $error = new BadMethodCallException(sprintf(
+                    'Bad static method call: Network::%s(...) requires at least a URL, or set base_uri via Network::config().',
+                    $method
+                ));
+
+                if($isAsync){
+                    return new Rejected($error);
+                }
+
+                throw $error;
+            }
+        }
+
+        try{
+            if ($isAsync) {
+                return $this->client->requestAsync(substr($method, 0, -5), $url, $options);
+            }
+
+            return $this->client->request($method, $url, $options);
+        } catch (Throwable $e) {
+            return $this->handleRequestException($e, $isAsync);
+        }
     }
 }

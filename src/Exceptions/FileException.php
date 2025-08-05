@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class FileException extends AppException
 {
@@ -19,12 +20,12 @@ class FileException extends AppException
      * Constructor for FileException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code  The exception code (default: 6204).
+     * @param string|int $code  The exception code (default: `ErrorCode::FILESYSTEM_ERROR`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::FILESYSTEM_ERROR, 
+        string|int $code = ErrorCode::FILESYSTEM_ERROR, 
         ?Throwable $previous = null
     )
     {
@@ -48,7 +49,7 @@ class FileException extends AppException
     {
         static::throwException(
             'Unable to write file: "' . $file . '", ' . $message, 
-            self::WRITE_PERMISSION_DENIED, 
+            ErrorCode::WRITE_PERMISSION_DENIED, 
             $previous
         );
     }
@@ -70,7 +71,7 @@ class FileException extends AppException
     {
         static::throwException(
             'Unable to open file: "' . $file . '", ' . $message, 
-            self::READ_PERMISSION_DENIED, 
+            ErrorCode::READ_PERMISSION_DENIED, 
             $previous
         );
     }
@@ -92,7 +93,7 @@ class FileException extends AppException
     {
         static::throwException(
             'Unable to create a directory: "' . $path . '", ' . $message, 
-            self::CREATE_DIR_FAILED, 
+            ErrorCode::CREATE_DIR_FAILED, 
             $previous
         );
     }
@@ -114,7 +115,7 @@ class FileException extends AppException
     {
         static::throwException(
             'Unable to set permission for file: "' . $path . '", ' . $message, 
-            self::SET_PERMISSION_FAILED, 
+            ErrorCode::SET_PERMISSION_FAILED, 
             $previous
         );
     }

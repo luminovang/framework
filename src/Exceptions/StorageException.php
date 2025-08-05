@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class StorageException extends AppException
 {
@@ -19,12 +20,12 @@ class StorageException extends AppException
      * Constructor for StorageException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code  The exception code (default: 5079).
+     * @param string|int $code  The exception code (default: `ErrorCode::STORAGE_ERROR`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::STORAGE_ERROR, 
+        string|int $code = ErrorCode::STORAGE_ERROR, 
         ?Throwable $previous = null
     )
     {

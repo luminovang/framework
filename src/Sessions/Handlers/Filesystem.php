@@ -11,17 +11,17 @@
 namespace Luminova\Sessions\Handlers;
 
 use \Luminova\Time\Time;
-use \Luminova\Functions\IP;
-use \Luminova\Security\Crypter;
-use \Luminova\Base\BaseSessionHandler;
-use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Utility\IP;
 use \ReturnTypeWillChange;
 use function \Luminova\Funcs\root;
+use \Luminova\Base\SessionHandler;
+use \Luminova\Security\Encryption\Crypter;
+use \Luminova\Exceptions\RuntimeException;
 
 /**
  * Custom File Handler for session management with optional encryption support.
  */
-class Filesystem extends BaseSessionHandler
+class Filesystem extends SessionHandler
 {
     /**
      * The directory where session files will be stored.

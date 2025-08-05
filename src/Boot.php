@@ -12,7 +12,7 @@ namespace Luminova;
 
 use \Throwable;
 use \App\Application;
-use \Luminova\Luminova;
+use \Luminova\Foundation\Error\Guard;
 use \Luminova\Exceptions\RuntimeException;
 
 /**
@@ -57,7 +57,7 @@ final class Boot
     public static function init(): void
     {
         self::warmup();
-        Luminova::initialize();
+        Guard::register();
         self::finish();
     }
 
@@ -94,7 +94,7 @@ final class Boot
      * registers error handlers, and loads required core modules before returning 
      * the application instance.
      *
-     * @return Application<CoreApplication,LazyInterface> Return the application instance.
+     * @return Application<Luminova\Foundation\Core\Application,LazyObjectInterface> Return the application instance.
      * @example - Usage (public/index.php)
      * 
      * ```php
@@ -171,7 +171,8 @@ final class Boot
         self::override();
 
         require_once __DIR__ . '/../bootstrap/functions.php';
-        require_once __DIR__ . '/Errors/ErrorHandler.php';
+        require_once __DIR__ . '/Foundation/Error/Guard.php';
+        require_once __DIR__ . '/Foundation/Error/Message.php';
         require_once __DIR__ . '/Luminova.php';
 
         self::$isWarmed = true;
@@ -201,11 +202,11 @@ final class Boot
 
         if (!is_resource($handle)) {
             throw new RuntimeException(sprintf(
-                'BootError: Failed to open file "%s" with mode "%s"%s',
+                'Boot Error: Failed to open file "%s" with mode "%s"%s',
                 $filename,
                 $mode,
                 $error ? ': ' . $error->getMessage() : ''
-            ), RuntimeException::ERROR, $error);
+            ), previous: $error);
         }
 
         return $handle;

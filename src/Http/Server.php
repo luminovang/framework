@@ -11,10 +11,10 @@
 namespace Luminova\Http;
 
 use \Luminova\Luminova;
-use \Luminova\Interface\LazyInterface;
+use \Luminova\Interface\LazyObjectInterface;
 use \Countable;
 
-class Server implements LazyInterface, Countable
+class Server implements LazyObjectInterface, Countable
 {
     /**
      * Initializes the server constructor.

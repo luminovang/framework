@@ -236,6 +236,16 @@ final class RawExpression implements Stringable, JsonSerializable
     }
 
     /**
+     * Get the raw SQL expression.
+     *
+     * @return string Return the raw SQL expression.
+     */
+    public function toString(): string
+    {
+        return $this->expression;
+    }
+
+    /**
      * Convert the raw expression to a string.
      *
      * This allows seamless usage in string contexts.

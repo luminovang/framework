@@ -15,14 +15,14 @@ use function \Luminova\Funcs\import;
  * Autoload register PSR-4 classes.
  */
 if (env('feature.app.autoload.psr4', false)) {
-    \Luminova\Library\Modules::register();
+    \Luminova\Foundation\Module\Autoloader::register();
 }
 
 /**
  * Register application services.
  */
 if (env('feature.app.services', false)) {
-    \Luminova\Funcs\factory('register');
+    \Luminova\Foundation\Module\Factory::register();
 }
 
 /**

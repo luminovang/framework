@@ -10,17 +10,16 @@
  */
 namespace Luminova\Http\Client;
 
+use \Throwable;
 use \Luminova\Luminova;
 use \GuzzleHttp\Client;
-use \Luminova\Utils\Promise\Promise;
+use \Luminova\Utility\Promise\Promise;
 use \Psr\Http\Client\ClientInterface;
 use \Luminova\Interface\PromiseInterface;
 use \GuzzleHttp\Exception\GuzzleException;
 use \Luminova\Exceptions\Http\RequestException;
 use \Luminova\Exceptions\Http\ConnectException;
 use \Psr\Http\Message\{UriInterface, RequestInterface, ResponseInterface};
-use \Exception;
-use \Throwable;
 
 class Guzzle implements \Luminova\Interface\ClientInterface
 {
@@ -165,7 +164,7 @@ class Guzzle implements \Luminova\Interface\ClientInterface
             }
 
             throw new RequestException($e->getMessage(), $e->getCode(), $e);
-        } catch (GuzzleException|Exception $e) {
+        } catch (Throwable $e) {
             throw new ConnectException($e->getMessage(), $e->getCode(), $e);
         }
     }

@@ -10,18 +10,17 @@
  */
 namespace Luminova\Cache;
 
-use \Exception;
+use \Throwable;
 use \DateInterval;
-use \JsonException;
 use \DateTimeInterface;
 use \Luminova\Logger\Logger;
 use \Luminova\Time\Timestamp;
-use \Luminova\Base\BaseCache;
-use \Luminova\Storages\FileManager;
+use \Luminova\Base\Cache;
+use \Luminova\Utility\Storage\FileManager;
 use \Luminova\Exceptions\{AppException, CacheException, InvalidArgumentException};
 use function \Luminova\Funcs\{root, make_dir};
 
-final class FileCache extends BaseCache
+final class FileCache extends Cache
 {
     /**
      * Hold the cache directory path.
@@ -276,7 +275,7 @@ final class FileCache extends BaseCache
             if (!$this->read()) {
                 return false;
             }
-        }catch(Exception|AppException){
+        }catch(Throwable){
             return false;
         }
 
@@ -424,7 +423,11 @@ final class FileCache extends BaseCache
                     );
                 }
             }
-        }catch(Exception|AppException|JsonException $e){
+        }catch(Throwable $e){
+            if($e instanceof AppException){
+                throw $e;
+            }
+
             throw new CacheException($e->getMessage());
         }
 
@@ -468,7 +471,7 @@ final class FileCache extends BaseCache
 
         $filepath = $this->getPath();
         try{
-            if (!is_readable($filepath)) {
+            if (!is_readable($filepath) || !is_file($filepath)) {
                 return false;
             }
 
@@ -482,7 +485,7 @@ final class FileCache extends BaseCache
 
             return true;
 
-        }catch(Exception|AppException|JsonException $e){
+        }catch(Throwable $e){
             unlink($filepath);
 
             if(PRODUCTION){
@@ -491,6 +494,10 @@ final class FileCache extends BaseCache
                 ]);
 
                 return false;
+            }
+
+            if($e instanceof AppException){
+                throw $e;
             }
 
             throw new CacheException(sprintf('Failed to read cache content: %s', $e->getMessage()));
@@ -516,13 +523,17 @@ final class FileCache extends BaseCache
                 json_encode($this->items[$this->storage], JSON_THROW_ON_ERROR), 
                 LOCK_EX
             );
-        }catch(Exception|AppException|JsonException $e){
+        }catch(Throwable $e){
             if(PRODUCTION){
                 Logger::dispatch('error', sprintf('Unable to commit cache: %s', $e->getMessage()), [
                     'class' => self::class
                 ]);
 
                 return false;
+            }
+
+            if($e instanceof AppException){
+                throw $e;
             }
 
             throw new CacheException(sprintf('Unable to commit cache: %s', $e->getMessage()));

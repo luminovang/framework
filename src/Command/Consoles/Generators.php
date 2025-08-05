@@ -11,7 +11,7 @@
 namespace Luminova\Command\Consoles;
 
 use \Luminova\Luminova;
-use \Luminova\Base\BaseConsole;
+use \Luminova\Base\Console;
 use \App\Config\Template;
 use \Exception;
 use function \Luminova\Funcs\{
@@ -21,7 +21,7 @@ use function \Luminova\Funcs\{
     write_content
 };
 
-class Generators extends BaseConsole 
+class Generators extends Console 
 {
     /**
      * {@inheritdoc}
@@ -134,26 +134,26 @@ class Generators extends BaseConsole
         $onHmvcCreate = ($hmvc  && $module) ? "\$this->app->setModule('$module');\n" : '';
         
         if($type === 'command'){
-            $use .= "BaseCommand;\n";
+            $use .= "Command;\n";
             $use .= "use \Luminova\Attributes\Group;\n";
 
-            $extend = 'BaseCommand';
+            $extend = 'Command';
             $namespace .= '\\Cli';
             $prefix = "#[Group(name: 'my-command-name')]";
         }elseif($type === 'console'){
-            $use .= 'BaseConsole;';
-            $extend = 'BaseConsole';
+            $use .= 'Console;';
+            $extend = 'Console';
         }else{
             $limitation = $module ? strtolower($module) : '';
 
-            $use .= "BaseController;\n";
+            $use .= "Controller;\n";
             $use .= "use \Luminova\Attributes\Prefix;\n";
             $use .= "use \Luminova\Attributes\Route;\n";
             $use .= 'use \App\Errors\Controllers\ErrorController;';
 
             $namespace .= '\\Http';
             $prefix = "#[Prefix(pattern: '/$limitation.*', onError: [ErrorController::class, 'onWebError'])]";
-            $extend = 'BaseController';
+            $extend = 'Controller';
         }
 
         if($implement){
@@ -384,7 +384,7 @@ class Generators extends BaseConsole
         $namespace = $hmvc 
             ? 'namespace App\Modules\\' . ($module ? $module . '\\' : '') . 'Models;' 
             : 'namespace App\Models;';
-        $extends = " extends BaseModel";
+        $extends = " extends Model";
         $implement = $implementClass ? " implements $implementClass" : '';
         $name = pascal_case($name);
         $table = strtolower($module ? "{$name}_{$module}" : $name) . '_table';
@@ -393,7 +393,7 @@ class Generators extends BaseConsole
         <?php
         $namespace
 
-        use \Luminova\Base\BaseModel;
+        use \Luminova\Base\Model;
         use \Luminova\Database\Builder;
         use \Luminova\Security\Validation;
         use \DateTimeInterface;

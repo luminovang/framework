@@ -176,7 +176,7 @@ class Cookie extends BaseCookie implements CookieInterface, Stringable
         $finalValue = $this->toValue($value);
 
         if($finalValue === false){
-            throw CookieException::throwWith('invalid_value', __FUNCTION__ . '->($value)" ');
+            throw CookieException::rethrow('invalid_value', __FUNCTION__ . '->($value)" ');
         }
         
         $this->saveGlobal(null, $value);
@@ -502,11 +502,11 @@ class Cookie extends BaseCookie implements CookieInterface, Stringable
     private function validateName(): void
     {
         if ($this->name === '') {
-            throw CookieException::throwWith('empty_name');
+            throw CookieException::rethrow('empty_name');
         }
 
         if ($this->raw && strpbrk($this->name, self::RESERVED_CHAR_LIST) !== false) {
-            throw CookieException::throwWith('invalid_name', $this->name);
+            throw CookieException::rethrow('invalid_name', $this->name);
         }
     }
 
@@ -519,11 +519,11 @@ class Cookie extends BaseCookie implements CookieInterface, Stringable
     private function validatePrefix(): void
     {
         if (str_starts_with($this->prefix, '__Secure-') && !$this->secure) {
-            throw CookieException::throwWith('invalid_secure_prefix');
+            throw CookieException::rethrow('invalid_secure_prefix');
         }
 
         if (str_starts_with($this->prefix, '__Host-') && (!$this->secure || $this->domain !== '' || $this->path !== '/')) {
-            throw CookieException::throwWith('invalid_host_prefix');
+            throw CookieException::rethrow('invalid_host_prefix');
         }
     }
 
@@ -546,11 +546,11 @@ class Cookie extends BaseCookie implements CookieInterface, Stringable
         $sameSite = strtolower($sameSite);
 
         if (!in_array($sameSite, ['none', 'lax', 'strict'], true)) {
-            throw CookieException::throwWith('invalid_same_site', $sameSite);
+            throw CookieException::rethrow('invalid_same_site', $sameSite);
         }
 
         if ($sameSite === 'none' && !$this->secure) {
-            throw CookieException::throwWith('invalid_same_site_none');
+            throw CookieException::rethrow('invalid_same_site_none');
         }
     }
 

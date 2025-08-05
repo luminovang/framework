@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions\Http;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class RequestException extends AppException
 {
@@ -19,12 +20,12 @@ class RequestException extends AppException
      * Constructor for RequestException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code The exception code (default: 4976).
+     * @param string|int $code The exception code (default: `ErrorCode::HTTP_REQUEST_ERROR`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::HTTP_REQUEST_ERROR, 
+        string|int $code = ErrorCode::HTTP_REQUEST_ERROR, 
         ?Throwable $previous = null
     )
     {

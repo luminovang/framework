@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class CookieException extends AppException
 {
@@ -32,12 +33,12 @@ class CookieException extends AppException
      * Constructor for CacheException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code The exception code (default: 4961).
+     * @param string|int $code The exception code (default: `ErrorCode::COOKIE_ERROR`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::COOKIE_ERROR, 
+        string|int $code = ErrorCode::COOKIE_ERROR, 
         ?Throwable $previous = null
     )
     {
@@ -49,19 +50,31 @@ class CookieException extends AppException
      *
      * @param string $type The type of error.
      * @param mixed|null $name The cookie name associated with the error (if applicable).
-     * @param string|int $code The exception code (default: 4961).
+     * @param string|int $code The exception code (default: `ErrorCode::COOKIE_ERROR`).
      * 
      * @return static
      */
-    public static function throwWith(
+    public static function rethrow(
         string $type, 
         mixed $name = null, 
-        string|int $code = self::COOKIE_ERROR
+        string|int $code = ErrorCode::COOKIE_ERROR
     ): static
     {
         $message = self::$types[$type] ?? 'Unknown error occurred while creating cookie';
-        $message = ($name === null) ? $message : sprintf($message, $name);
 
-        return new self($message, $code);
+        [$file, $line] = parent::trace(2);
+
+        $e = new self(($name === null) 
+            ? $message 
+            : sprintf($message, $name), 
+            $code
+        );
+
+        if($file){
+            $e->setLine($line)->setFile($file);
+        }
+
+        throw $e;
+        
     }
 }

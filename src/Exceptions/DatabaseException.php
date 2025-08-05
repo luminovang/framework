@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class DatabaseException extends AppException
 {
@@ -19,12 +20,12 @@ class DatabaseException extends AppException
      * Constructor for DatabaseException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code The exception code (default: 1500).
+     * @param string|int $code The exception code (default: `ErrorCode::DATABASE_ERROR`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::DATABASE_ERROR, 
+        string|int $code = ErrorCode::DATABASE_ERROR, 
         ?Throwable $previous = null
     )
     {

@@ -27,6 +27,9 @@ cli.help
 # Ignore modules
 /src/Command/Auth/
 /src/Ftp/
+/src/Config/
+/src/Base/Invokable.php
 /src/Cache/RedisCache.php
+/src/Attributes/Status.php
 /src/Security/Throttler.php
 /src/Attributes/Reflector.php

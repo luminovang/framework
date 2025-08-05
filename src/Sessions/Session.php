@@ -13,16 +13,18 @@ declare(strict_types=1);
  */
 namespace Luminova\Sessions;
 
-use \App\Config\Session as SessionConfig;
+use \Luminova\Luminova;
 use \Luminova\Time\Time;
-use \Luminova\Functions\IP;
+use \Luminova\Utility\IP;
 use \Luminova\Logger\Logger;
-use \Luminova\Base\BaseSessionHandler;
+use \Luminova\Base\SessionHandler;
+use \App\Config\Session as SessionConfig;
+use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Sessions\Managers\Session as SessionManager;
-use \Luminova\Exceptions\{LogicException, RuntimeException};
-use \Luminova\Interface\{LazyInterface, SessionManagerInterface};
+use \Luminova\Interface\{LazyObjectInterface, SessionManagerInterface};
+use \Luminova\Exceptions\{ErrorCode, LogicException, RuntimeException};
 
-class Session implements LazyInterface
+class Session implements LazyObjectInterface
 {
     /**
      * Session manager interface
@@ -60,6 +62,38 @@ class Session implements LazyInterface
     private const COMMITTED = 2;
 
     /**
+     * At least one required role must exist in user roles.
+     * 
+     * @var int GUARD_ANY
+     * @see guard()
+     */
+    public const GUARD_ANY   = 0;
+
+    /**
+     * All required roles must be present in user roles (but extras allowed).
+     * 
+     * @var int GUARD_ALL
+     * @see guard()
+     */
+    public const GUARD_ALL   = 1;
+
+    /**
+     * Exact match — all and only the specified roles must exist.
+     * 
+     * @var int GUARD_EXACT
+     * @see guard()
+     */
+    public const GUARD_EXACT = 2;
+
+    /**
+     * None of the given roles should be present (e.g., guest access only).
+     * 
+     * @var int GUARD_NONE
+     * @see guard()
+     */
+    public const GUARD_NONE  = 3;
+
+    /**
      * Session start status.
      * 
      * @var int $status 
@@ -76,9 +110,9 @@ class Session implements LazyInterface
     /**
      * Session handler.
      * 
-     * @var BaseSessionHandler $handler 
+     * @var SessionHandler $handler 
      */
-    private ?BaseSessionHandler $handler = null;
+    private ?SessionHandler $handler = null;
 
     /**
      * Callback handler for ip change.
@@ -177,6 +211,95 @@ class Session implements LazyInterface
         }
 
         return self::$instance;
+    }
+
+    /**
+     * Convert a string into a valid PHP session ID.
+     *
+     * This method generates a session ID that conforms to the current PHP
+     * session configuration (`session.sid_bits_per_character` and `session.sid_length`).
+     * If the input string is already a hash, it uses it directly.
+     * 
+     * Character sets based on `session.sid_bits_per_character`:
+     * - 4: Hexadecimal characters [0-9a-f]
+     * - 5: Base32 characters [0-9a-v]
+     * - 6: Extended base64 characters [0-9a-zA-Z,-]
+     *
+     * @param string $input The input string to convert.
+     * @param string $algo The hashing algorithm to use if input is not already hashed (Default `sha256`).
+     *
+     * @return string|null Return a valid PHP session ID based on the current configuration or null if failed.
+     *
+     * @throws RuntimeException If `session.sid_bits_per_character` is unsupported.
+     * @example - Examples:
+     * 
+     * Convert CLI System Id to php session Id:
+     * 
+     * ```php
+     * $sid = Session::toSessionId(Terminal::getSystemId());
+     * ```
+     * Convert string to session Id:
+     * ```php
+     * $sid = Session::toSessionId('user-id');
+     * ```
+     */
+    public static function toSessionId(string $input, string $algo = 'sha256'): ?string
+    {
+        $bitsPerCharacter = (int) ini_get('session.sid_bits_per_character');
+        $sidLength = (int) ini_get('session.sid_length');
+
+        if($bitsPerCharacter <= 0){
+            $bitsPerCharacter = 4;
+        }
+
+        if($sidLength <= 0){
+            $sidLength = 32;
+        }
+
+        $chars = match ($bitsPerCharacter) {
+            4 => '0123456789abcdef',
+            5 => '0123456789abcdefghijklmnopqrstuv',
+            6 => '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ,-',
+            default => throw new RuntimeException(
+                sprintf("Unsupported session.sid_bits_per_character value: '%d'.", $bitsPerCharacter)
+            )
+        };
+
+        $hash = preg_match('/^[0-9a-f]{64}$/i', $input) ? $input : hash($algo, $input);
+
+        // Convert hash to raw bytes
+        $bytes = hex2bin($hash);
+
+        if($bytes === false){
+            return null;
+        }
+
+        $result = '';
+        $mask = (1 << $bitsPerCharacter) - 1;
+        $totalBits = strlen($bytes) * 8;
+
+        $bitIndex = 0;
+        for ($i = 0; $i < $sidLength; $i++) {
+            // Calculate which byte(s) to read
+            $byteIndex = intdiv($bitIndex, 8);
+            $offset = $bitIndex % 8;
+
+            // Read 16 bits to safely cover cross-byte boundary
+            $byte1 = ord($bytes[$byteIndex]);
+            $byte2 = ($byteIndex + 1 < strlen($bytes)) ? ord($bytes[$byteIndex + 1]) : 0;
+            $combined = ($byte1 << 8) | $byte2;
+
+            // Extract bits
+            $chunk = ($combined >> (16 - $offset - $bitsPerCharacter)) & $mask;
+            $result .= $chars[$chunk];
+
+            $bitIndex += $bitsPerCharacter;
+            if ($bitIndex >= $totalBits) {
+                $bitIndex = 0; // Wrap around if needed
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -281,7 +404,7 @@ class Session implements LazyInterface
     /** 
      * Retrieves the client's online session login token.
      * 
-     * This method returns a randomly generated token when `synchronize()` is called.
+     * This method returns a randomly generated token when `login()` or `synchronize()` is called.
      * The returned token can be used to track the online session state, 
      * validate session integrity or prevent session fixation attacks.
      * 
@@ -295,7 +418,7 @@ class Session implements LazyInterface
     /** 
      * Retrieves the client login session date and time in ISO 8601 format.
      * 
-     * The session datetime is generated automatically when `synchronize()` is called, 
+     * The session datetime is generated automatically when `login()` or `synchronize()` is called, 
      * marking the moment the session login was established.
      * 
      * @return string Return the session login datetime in ISO 8601 format, or `null` if not logged in.
@@ -309,7 +432,7 @@ class Session implements LazyInterface
     /**
      * Retrieves the client login session creation timestamp.
      * 
-     * The session timestamp is generated automatically when `synchronize()` is called, 
+     * The session timestamp is generated automatically when `login()` or `synchronize()` is called, 
      * marking the moment the session login was established.
      *
      * @return int Return he Unix timestamp when the session was created.
@@ -398,6 +521,31 @@ class Session implements LazyInterface
     }
 
     /**
+     * Get the list of roles assigned to the current session user.
+     *
+     * Retrieves roles from the session metadata. Returns an empty array if no roles are set.
+     *
+     * @return array<int,string|int> Return a list of assigned roles or an empty array if none.
+     * 
+     * @see roles() - Set user roles.
+     * @see guard() - Guard access by user roles.
+     * @since 3.6.8
+     *
+     * @example - Example:
+     * ```php
+     * $roles = $session->getRoles();
+     * 
+     * if (in_array('admin', $roles)) {
+     *     // grant admin access
+     * }
+     * ```
+     */
+    public function getRoles(): array 
+    {
+        return $this->getMeta('roles') ?? [];
+    }
+
+    /**
      * Sets the session save handler responsible for managing session storage.
      * 
      * This method allows specifying a custom session save handler, such as a 
@@ -408,7 +556,7 @@ class Session implements LazyInterface
      * - `Luminova\Sessions\Handlers\Filesystem`: Saves session data in files.
      * - `Luminova\Sessions\Handlers\ArrayHandler`: Stores session data temporarily in an array.
      *
-     * @param BaseSessionHandler $handler The session save handler instance.
+     * @param SessionHandler $handler The session save handler instance.
      *
      * @return self Returns the instance of session class.
      *
@@ -416,7 +564,7 @@ class Session implements LazyInterface
      * @see https://luminova.ng/docs/edit/0.0.0/sessions/filesystem-handler
      * @see https://luminova.ng/docs/edit/0.0.0/base/session-handler
      */
-    public function setHandler(BaseSessionHandler $handler): self
+    public function setHandler(SessionHandler $handler): self
     {
         $this->handler = $handler;
         return $this;
@@ -601,7 +749,7 @@ class Session implements LazyInterface
     /** 
      * Determines if the client has successfully logged in.
      * 
-     * This method verifies whether the `synchronize()` method has been called,
+     * This method verifies whether the `login()` or `synchronize()` method has been called,
      * meaning the session user is considered online. It optionally checks a 
      * specific session storage; otherwise, it defaults to the current storage.
      * 
@@ -622,21 +770,33 @@ class Session implements LazyInterface
     /**
      * Checks if the current session or cookie status matches the given status.
      *
-     * @param int $sessionStatus The session status to check.
-     *                           - `self::DISABLED` (PHP_SESSION_DISABLED): Sessions are disabled.
-     *                           - `self::NONE` (PHP_SESSION_NONE): Sessions or cookie are enabled but no session exists.
-     *                           - `self::ACTIVE` (PHP_SESSION_ACTIVE): A session or cookie is currently active.
+     * @param int $status The session status to check.
+     *                       - `Session::DISABLED` (PHP_SESSION_DISABLED): Sessions are disabled.
+     *                       - `Session::NONE` (PHP_SESSION_NONE): Sessions or cookie are enabled but no session exists.
+     *                       - `Session::ACTIVE` (PHP_SESSION_ACTIVE): A session or cookie is currently active.
      *
      * @return bool Returns `true` if the current session status matches the given status, otherwise `false`.
      */
-    public function is(int $sessionStatus = self::ACTIVE): bool 
+    public function is(int $status = self::ACTIVE): bool 
     {
-        return $this->manager->status() === match ($sessionStatus) {
+        return $this->manager->status() === match ($status) {
             self::DISABLED => PHP_SESSION_DISABLED,
             self::NONE     => PHP_SESSION_NONE,
             self::ACTIVE   => PHP_SESSION_ACTIVE,
             default        => null
         };
+    }
+
+    /**
+     * Checks if the session has started.
+     * 
+     * This method will return true after calling `start` session method.
+     * 
+     * @return bool Returns `true` if session has stated, otherwise `false`.
+     */
+    public function isStarted(): bool 
+    {
+        return self::$isStarted && self::$status === self::STARTED;
     }
 
     /** 
@@ -801,6 +961,8 @@ class Session implements LazyInterface
      * 
      * This method replaces the default PHP `session_start()`, with additional configuration and security implementations.
      * 
+     * It also capable of starting session in CLI and persist session when use `Terminal::getSystemId()` as session id.
+     * 
      * @param string|null $sessionId Optional specify a valid PHP session identifier (e.g,`session_id()`).
      *
      * @return bool Return true if session started successfully, false otherwise.
@@ -810,9 +972,10 @@ class Session implements LazyInterface
      * 
      * ```php
      * namespace App;
-     * use Luminova\Core\CoreApplication;
+     * 
      * use Luminova\Sessions\Session;
-     * class Application extends CoreApplication
+     * 
+     * class Application extends Luminova\Foundation\Core\Application
      * {
      *      protected ?Session $session = null;
      *      protected function onCreate(): void 
@@ -841,7 +1004,7 @@ class Session implements LazyInterface
             }
 
             $this->setSaveHandler();
-        }elseif($this->handler instanceof BaseSessionHandler){
+        }elseif($this->handler instanceof SessionHandler){
             throw new RuntimeException(
                 sprintf(
                     'Session Implementation Error: The "%s" class does not support a session save handler. 
@@ -849,7 +1012,7 @@ class Session implements LazyInterface
                     $this->manager::class,
                     SessionManager::class
                 ),
-                RuntimeException::LOGIC_ERROR
+                ErrorCode::LOGIC_ERROR
             );
         }
 
@@ -885,29 +1048,40 @@ class Session implements LazyInterface
      * with a specific IP address. Session data is synchronized and stored using the configured 
      * session manager and save handler.
      *
-     * @param string|null $ip Optional IP address to associate with login session. If not provided,
-     *                        the client's current IP address will be used if strict IP validation is enabled.
+     * @param string|null $ip Optional IP address to associate with login session (default: null). 
+     *                  If not provided, the client's current IP address will be used if strict IP validation is enabled.
+     * @param array<int,string|int> $roles Optional list of roles to assign (e.g., ['admin', 'editor']).
      *
      * @return bool Returns true if session login was started, otherwise false.
      * @throws LogicException If strict IP validation is disabled and IP address is provided.
      * @throws RuntimeException If an operation is attempted without an active session.
+     * @throws InvalidArgumentException If roles are not in a proper indexed list format.
      * 
      * @example - Synchronizing a user login session:
      * ```php
      * namespace App\Controllers\Http;
      * 
      * use Luminova\Base\BaseController;
+     * 
      * class AdminController extends BaseController
      * {
      *      public function loginAction(): int 
      *      {
      *          $username = $this->request->getPost('username');
      *          $password = $this->request->getPost('password');
+     * 
+     *          // Authenticate login credentials
      *          if($username === 'admin' && $password === 'password'){
+     *              // Set client data
      *              $this->app->session->put('username', $username);
      *              $this->app->session->put('email', 'admin@example.com');
-     *              $this->app->session->save(); // Save client data
-     *              $this->app->session->synchronize(); // Login client
+     * 
+     *              // Save client data
+     *              $this->app->session->save();
+     * 
+     *              // Login client
+     *              $this->app->session->login();
+     * 
      *              return response()->json(['success' => true]);
      *          }
      * 
@@ -919,7 +1093,7 @@ class Session implements LazyInterface
      * > **Note:** If `$strictSessionIp` is enabled, the session automatically associates with 
      * > the client's IP address. If no IP is provided, it will be detected and assigned.
      */
-    public function synchronize(?string $ip = null): bool
+    public function login(?string $ip = null, array $roles = []): bool
     {
         if($this->online()){
             return true;
@@ -938,12 +1112,18 @@ class Session implements LazyInterface
             ));
         }
        
-        $metadata['online']     = 'on';
-        $metadata['token']      = bin2hex(random_bytes(36));
-        $metadata['timestamp']  = Time::now()->getTimestamp();
-        $metadata['agent']          = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
-        $metadata['fingerprint']    = hash('sha256', APP_NAME . ($_SERVER['HTTP_USER_AGENT'] ?? '') . ($metadata['ip'] ?? IP::get()));
-        $metadata['attempts']       = 0;
+        $this->assertRoles($roles);
+        $fingerprint = APP_NAME 
+            . ($_SERVER['HTTP_USER_AGENT'] ?? '')
+            . ($metadata['ip'] ?? IP::get());
+
+        $metadata['online']      = 'on';
+        $metadata['token']       = bin2hex(random_bytes(36));
+        $metadata['timestamp']   = Time::now()->getTimestamp();
+        $metadata['agent']       = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
+        $metadata['fingerprint'] = hash('sha256', $fingerprint);
+        $metadata['attempts']    = 0;
+        $metadata['roles']       = $roles;
         $metadata['last_activity']  = time();
 
         $this->manager->setItem(self::METADATA, $metadata);
@@ -953,19 +1133,152 @@ class Session implements LazyInterface
     /**
      * Logs in the user by synchronizing session login metadata.
      *
-     * This method serves as an alias for `synchronize()`, which initializes and 
+     * This method serves as an alias for `login()`, which initializes and 
      * maintains the session state after a successful login. If IP validation is enabled, 
      * the session will be linked to the provided IP address.
      *
      * @param string|null $ip Optional IP address to associate with the session.
+     * @param array<int,string|int> $roles Optional list of roles to assign (e.g., ['admin', 'editor']).
      * 
      * @return bool Returns true if the session was successfully started, otherwise false.
+     * 
+     * @throws LogicException If strict IP validation is disabled and IP address is provided.
+     * @throws RuntimeException If an operation is attempted without an active session.
+     * @throws InvalidArgumentException If roles are not in a proper indexed list format.
      *
-     * @see synchronize()
+     * @see login()
      */
-    public function login(?string $ip = null): bool
+    public function synchronize(?string $ip = null, array $roles = []): bool
     {
-        return $this->synchronize($ip);
+        return $this->login($ip, $roles);
+    }
+
+    /**
+     * Assign roles to the current session user.
+     *
+     * This method stores the specified roles in the session metadata,
+     * allowing you to associate access levels or permissions with the session.
+     *
+     * @param array<int,string|int> $roles A list of roles (e.g., ['admin', 'editor']).
+     *
+     * @return self Returns the current Session instance for method chaining.
+     * @throws InvalidArgumentException If roles are not in a proper indexed list format.
+     * 
+     * @see guard() - Guard access by user roles.
+     * @see getRoles() - Get user roles.
+     * @since 3.6.8
+     *
+     * @example - Example:
+     * ```php
+     * $session->roles(['admin', 'editor']);
+     * ```
+     */
+    public function roles(array $roles): self 
+    {
+        $this->assertRoles($roles);
+        $this->setMetadata('roles', $roles);
+        
+        return $this;
+    }
+
+    /**
+     * Checks if the current session user has the specified roles.
+     *
+     * This method guards routes or logic by evaluating the session roles against the required ones.
+     * It supports multiple modes:
+     *
+     * - `GUARD_ANY` (default): At least one required role must exist in user roles.
+     * - `GUARD_ALL`: All required roles must be present in user roles (but extras allowed).
+     * - `GUARD_EXACT`: Exact match — all and only the specified roles must exist.
+     * - `GUARD_NONE`: None of the given roles should be present (e.g., guest access only).
+     *
+     * Returns `true` if access is denied (guard failed), and `false` if access is granted.
+     * This mimics Swift-style early-exit.
+     *
+     * @param array<int,string|int> $roles A list of required role(s) to validate against the session.
+     * @param int $mode Guard match mode. One of: (`GUARD_ANY`, `GUARD_ALL`, `GUARD_EXACT`, `GUARD_NONE`).
+     * @param (callable(array $roles, array $subscriptions):void)|null $onDenied Optional handler to call if access is denied.
+     *
+     * @return bool Returns `true` if access is denied, `false` if access is allowed.
+     * @throws InvalidArgumentException If an invalid mode was provided or if roles are not in a proper indexed list format.
+     *
+     * @see roles() To assign user roles.
+     * @see getRoles() To retrieve current user roles.
+     * 
+     * @since 3.6.8
+     *
+     * @example - Allow access if user has any of the roles:
+     * ```php
+     * if (!$session->guard(['admin', 'editor'])) {
+     *     // access granted
+     * }
+     * ```
+     *
+     * @example - Require all roles:
+     * ```php
+     * if (!$session->guard(['admin', 'editor'], Session::GUARD_ALL)) {
+     *     // access granted
+     * }
+     * ```
+     *
+     * @example - Require exact match:
+     * ```php
+     * if (!$session->guard(['admin', 'editor'], Session::GUARD_EXACT)) {
+     *     // access granted
+     * }
+     * ```
+     *
+     * @example - Deny access if user has any of the listed roles:
+     * ```php
+     * if ($session->guard(['banned', 'suspended'], Session::GUARD_NONE)) {
+     *     // access denied
+     * }
+     * ```
+     *
+     * @example - With custom failure handler:
+     * ```php
+     * $session->guard(['admin'], Session::GUARD_ANY, function(array $expected, array $roles): void {
+     *     throw new AccessDeniedException('Not allowed.');
+     * });
+     * ```
+     */
+    public function guard(array $roles, int $mode = self::GUARD_ANY, ?callable $onDenied = null): bool
+    {
+        if ($roles === []) {
+            return false;
+        }
+
+        $this->assertRoles($roles);
+        $passed = false;
+        $subscriptions = [];
+
+        if($this->online()){
+            $subscriptions = $this->getRoles();
+            $passed = match ($mode) {
+                self::GUARD_EXACT => (
+                    count($roles) === count($subscriptions)
+                    && array_diff($roles, $subscriptions) === []
+                    && array_diff($subscriptions, $roles) === []
+                ),
+                self::GUARD_ALL  => array_diff($roles, $subscriptions) === [],
+                self::GUARD_NONE => array_intersect($roles, $subscriptions) === [],
+                self::GUARD_ANY  => array_intersect($roles, $subscriptions) !== [],
+                default => throw new InvalidArgumentException(sprintf(
+                    'Invalid guard mode "%s" provided. Expected one of: GUARD_ANY (%d), GUARD_ALL (%d), GUARD_EXACT (%d), GUARD_NONE (%d).',
+                    $mode,
+                    self::GUARD_ANY,
+                    self::GUARD_ALL,
+                    self::GUARD_EXACT,
+                    self::GUARD_NONE
+                )),
+            };
+        }
+
+        if (!$passed && $onDenied && is_callable($onDenied)) {
+            $onDenied($roles, $subscriptions);
+        }
+
+        return !$passed;
     }
 
     /**
@@ -1060,7 +1373,7 @@ class Session implements LazyInterface
      * - `true`: The session is terminate the client login session.
      * - `false`: The session remains active, allowing manual handling what happens on IP change event.
      *
-     * @param callable $onChange A callback function to handle the IP change event. 
+     * @param (callable(static $instance, string $lastIp, array $ipChanges):bool) $onChange A callback function to handle the IP change event. 
      *                           The function receives the `Session` instance, the previous IP, 
      *                           and array list of IP changes as arguments.
      * 
@@ -1070,10 +1383,10 @@ class Session implements LazyInterface
      * 
      * ```php
      * namespace App;
-     * use Luminova\Core\CoreApplication;
+     * 
      * use Luminova\Sessions\Session;
      * 
-     * class Application extends CoreApplication
+     * class Application extends Luminova\Foundation\Core\Application
      * {
      *     protected ?Session $session = null;
      * 
@@ -1160,6 +1473,14 @@ class Session implements LazyInterface
 
         ini_set('session.use_trans_sid', '0');
         ini_set('session.use_strict_mode', '1');
+
+        if (PHP_SAPI === 'cli' || Luminova::isCommand()) {
+            ini_set('session.use_cookies', '0');
+            ini_set('session.use_only_cookies', '0');
+            ini_set('session.cache_limiter', '');
+            return;
+        }
+
         ini_set('session.use_cookies', '1');
         ini_set('session.use_only_cookies', '1');
     }
@@ -1202,7 +1523,7 @@ class Session implements LazyInterface
      */
     private function setSaveHandler(): void 
     {
-        if ($this->handler instanceof BaseSessionHandler) {
+        if ($this->handler instanceof SessionHandler) {
             if(self::$config instanceof SessionConfig){
                 $this->handler->setConfig(self::$config);
             }
@@ -1212,27 +1533,26 @@ class Session implements LazyInterface
     }
 
     /**
-     * Stores metadata information in session storage.
+     * Set a metadata key-value pair for the current session.
      *
-     * This method allows saving session-related metadata such as attempts, user agent, 
-     * expiration time, and other session attributes.
+     * Skips saving if `online` is true and the session is not marked as "online".
      *
-     * @param string $key The metadata key.
-     * @param mixed $value The metadata value.
-     * @param string|null $storage Optional storage name.
-     * @param bool $online Whether to update when online only (default: true).
-     * 
-     * @return void
+     * @param string      $key      Metadata key.
+     * @param mixed       $value    Metadata value.
+     * @param string|null $storage  Optional custom storage key.
+     * @param bool        $whenOnline   Whether to enforce that session is "online".
      */
-    private function setMetadata(string $key, mixed $value, ?string $storage = null, bool $online = true): void 
+    private function setMetadata(string $key, mixed $value, ?string $storage = null, bool $whenOnline = true): void 
     {
         $metadata = $this->getMetadata($storage);
 
-        if(
-            $online 
-            && (!isset($data['online'], $data['token']) || ($metadata['online']??'off') !== 'on')
-        ){
-            return;
+        if ($whenOnline) {
+            $isOnline = ($metadata['online'] ?? 'off') === 'on';
+            $hasToken = isset($metadata['token']);
+
+            if ($metadata === [] || !$isOnline || !$hasToken) {
+                return;
+            }
         }
 
         $metadata[$key] = $value;
@@ -1249,5 +1569,25 @@ class Session implements LazyInterface
     private function setActivity(?string $storage = null): void 
     {
         $this->setMetadata('last_activity', time(), $storage);
+    }
+
+    /**
+     * Assert that the given roles array is a non-empty, ordered list.
+     *
+     * @param array<int, string|int> $roles The roles to validate.
+     *
+     * @throws InvalidArgumentException If roles are not in a proper indexed list format.
+     */
+    private static function assertRoles(array $roles): void
+    {
+        if ($roles === []) {
+            return;
+        }
+
+        if (!array_is_list($roles)) {
+            throw new InvalidArgumentException(
+                'Roles must be a sequential indexed array (a list) of strings or integers.'
+            );
+        }
     }
 }

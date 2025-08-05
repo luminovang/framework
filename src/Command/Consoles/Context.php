@@ -10,9 +10,9 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\BaseConsole;
-use \Luminova\Attributes\Compiler;
-use \Luminova\Storages\FileManager;
+use \Luminova\Base\Console;
+use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Attributes\Internal\Compiler;
 use function \Luminova\Funcs\{
     root,
     camel_case,
@@ -22,7 +22,7 @@ use function \Luminova\Funcs\{
     has_uppercase
 };
 
-class Context extends BaseConsole 
+class Context extends Console 
 {
     /**
      * {@inheritdoc}
@@ -182,6 +182,7 @@ class Context extends BaseConsole
     private function buildAttributes(): int
     {
         $hmvc = env('feature.app.hmvc', false);
+        $apiPrefix = env('app.api.prefix', 'api');
         $collector = (new Compiler('', false, $hmvc))->export($hmvc ? 'app/Modules' : 'app/Controllers');
 
         $head = "<?php\nuse \Luminova\Routing\Router;\n/** @var \Luminova\Routing\Router \$router */\n/** @var \App\Application \$app */\n\n";
@@ -207,7 +208,7 @@ class Context extends BaseConsole
                         $hasGroup = true;
                         if($ctx === 'http'){
                             $httpContents .= "\n\$router->bind('/{$group}', static function(Router \$router){\n";
-                        }elseif($ctx === 'api'){
+                        }elseif($ctx === 'api' || $ctx === $apiPrefix){
                             $apiContents .= "\n\$router->bind('/{$group}', static function(Router \$router){\n";
                         }
                     }elseif($ctx === 'cli'){
@@ -228,8 +229,10 @@ class Context extends BaseConsole
                                 $method = $this->getMethodType($line['methods']);
                                 $httpContents .= "\$router->{$method}'{$pattern}', '{$line['callback']}');\n";
                             }
-                        }elseif($ctx === 'api'){
-                            $pattern = $hasGroup ? substr($line['pattern'], strlen('/api/' . $group)) : ltrim($line['pattern'], 'api/');
+                        }elseif($ctx === 'api' || $ctx === $apiPrefix){
+                            $pattern = $hasGroup 
+                                ? substr($line['pattern'], strlen("/$apiPrefix/" . $group)) 
+                                : ltrim($line['pattern'], "$apiPrefix/");
                             $pattern = '/' . trim($pattern, '/');
                             $apiContents .= ($hasGroup ? '   ' : '');
 
@@ -257,7 +260,7 @@ class Context extends BaseConsole
                         if($ctx === 'http'){
                             $httpContents .= "});\n\n";
                             
-                        }elseif($ctx === 'api'){
+                        }elseif($ctx === 'api' || $ctx === $apiPrefix){
                             $apiContents .= "});\n\n";
                         }
                     }elseif($ctx === 'cli'){

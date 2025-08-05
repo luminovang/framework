@@ -11,11 +11,11 @@
 namespace Luminova\Command\Consoles;
 
 use \Luminova\Luminova;
-use \Luminova\Base\BaseConsole;
+use \Luminova\Base\Console;
 use \Luminova\Command\Utils\Color;
-use \Luminova\Functions\IP;
+use \Luminova\Utility\IP;
 
-class Server extends BaseConsole 
+class Server extends Console 
 {
     /**
      * {@inheritdoc}
@@ -51,7 +51,7 @@ class Server extends BaseConsole
     {
         $this->term->perse($options);
 
-        $host = $this->term->getAnyOption('host', 'h', 'localhost');
+        $host = $this->term->getAnyOption('host', 'a', 'localhost');
         $testing = $this->term->getAnyOption('testing', 't', false);
 
         if($testing){

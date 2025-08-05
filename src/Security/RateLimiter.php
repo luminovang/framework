@@ -16,18 +16,18 @@ use \Throwable;
 use \DateInterval;
 use \DateTimeImmutable;
 use \Luminova\Http\Header;
-use \Luminova\Functions\IP;
-use \Luminova\Base\BaseCache;
+use \Luminova\Utility\IP;
+use \Luminova\Base\Cache;
 use \Luminova\Cache\FileCache;
 use \Predis\Client as PredisClient;
 use \Psr\SimpleCache\CacheInterface;
 use \Psr\Cache\CacheItemPoolInterface;
-use \Luminova\Interface\LazyInterface;
+use \Luminova\Interface\LazyObjectInterface;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
 use function \Luminova\Funcs\{root, response, is_command};
 
-class RateLimiter implements LazyInterface
+class RateLimiter implements LazyObjectInterface
 {
     /**
      * Time-to-live window in seconds.
@@ -137,12 +137,12 @@ class RateLimiter implements LazyInterface
      * 
      * - PSR-6: `CacheItemPoolInterface` (e.g., CustomCache)
      * - PSR-16: `CacheInterface` (e.g., Psr\SimpleCache\CacheInterface)
-     * - `BaseCache`: Luminova's custom file or memory cache.
+     * - `Cache`: Luminova's custom file or memory cache.
      * - `Memcached`: Native Memcached instance.
      * - `Redis`: PHP Redis extension instance.
      * - `PredisClient`: Predis library instance.
      *
-     * @param CacheItemPoolInterface|CacheInterface|BaseCache|Memcached|PredisClient|Redis|null $cache
+     * @param CacheItemPoolInterface|CacheInterface|Cache|Memcached|PredisClient|Redis|null $cache
      *        Optional cache instance. If null, the default Luminova file-based cache will be used.
      * @param int $limit Maximum number of allowed requests within the TTL window (Default: 10).
      * @param DateInterval|int $ttl Time-to-live for request tracking, in seconds or as a DateInterval (default: 60).
@@ -175,7 +175,7 @@ class RateLimiter implements LazyInterface
      * ```
      */
     public function __construct(
-        private CacheItemPoolInterface|CacheInterface|BaseCache|Memcached|PredisClient|Redis|null $cache = null,
+        private CacheItemPoolInterface|CacheInterface|Cache|Memcached|PredisClient|Redis|null $cache = null,
         private int $limit = 10,
         DateInterval|int $ttl = 60,
         private string $persistentId = ''
@@ -196,15 +196,15 @@ class RateLimiter implements LazyInterface
      * - PSR-6 (`CacheItemPoolInterface`) and PSR-16 (`CacheInterface`) implementations
      * - Native `Memcached` or `Redis` instances
      * - `PredisClient` instance
-     * - Luminova's custom `BaseCache`
+     * - Luminova's custom `Cache`
      * 
      * If no cache is set explicitly, the default fallback is Luminova's file-based cache.
      *
-     * @param CacheItemPoolInterface|CacheInterface|BaseCache|Memcached|PredisClient|Redis $cache The cache instance used to store limiter data.
+     * @param CacheItemPoolInterface|CacheInterface|Cache|Memcached|PredisClient|Redis $cache The cache instance used to store limiter data.
      * 
      * @return self Returns the instance of RateLimiter class.
      */
-    public function setCache(CacheItemPoolInterface|CacheInterface|BaseCache|Memcached|PredisClient|Redis $cache): self 
+    public function setCache(CacheItemPoolInterface|CacheInterface|Cache|Memcached|PredisClient|Redis $cache): self 
     {
         $this->cache = $cache;
         return $this;
@@ -706,7 +706,7 @@ class RateLimiter implements LazyInterface
             $this->cache instanceof Redis, $this->cache instanceof PredisClient => $this->cache->exists($key),
             $this->cache instanceof Memcached => $this->cache->get($key),
             $this->cache instanceof CacheItemPoolInterface,
-                $this->cache instanceof BaseCache => $this->cache->hasItem($key),
+                $this->cache instanceof Cache => $this->cache->hasItem($key),
             default => false,
         };
 
@@ -740,7 +740,7 @@ class RateLimiter implements LazyInterface
         return match (true) {
             $this->cache instanceof CacheInterface => $this->cache->set($key, $value, $this->ttl),
             $this->cache instanceof Memcached => $this->cache->set($key, $value, time() + $this->ttl),
-            $this->cache instanceof BaseCache => $this->cache->setItem($key, $value, $this->ttl),
+            $this->cache instanceof Cache => $this->cache->setItem($key, $value, $this->ttl),
             $this->cache instanceof CacheItemPoolInterface =>
                 $this->cache->save($this->cache->getItem($key)->expiresAfter($this->ttl)->set($value)),
             $this->cache instanceof Redis,
@@ -760,7 +760,7 @@ class RateLimiter implements LazyInterface
     {
         $result = match (true) {
             $this->cache instanceof CacheItemPoolInterface => $this->cache->getItem($key)->get(),
-            $this->cache instanceof BaseCache => $this->cache->getItem($key),
+            $this->cache instanceof Cache => $this->cache->getItem($key),
             default => $this->cache->get($key)
         };
 
@@ -837,7 +837,7 @@ class RateLimiter implements LazyInterface
      * Asserts the validity of the cache instance and the key.
      *
      * This method checks if the provided cache instance is an instance of one of the supported cache interfaces
-     * (CacheInterface, CacheItemPoolInterface, BaseCache, Memcached, Redis, PredisClient). 
+     * (CacheInterface, CacheItemPoolInterface, Cache, Memcached, Redis, PredisClient). 
      * It also checks if the provided key is not an empty string.
      *
      * @param string|null $key The user-defined key (e.g., user ID or session).
@@ -852,7 +852,7 @@ class RateLimiter implements LazyInterface
         if (
             !$this->cache instanceof CacheInterface &&
             !$this->cache instanceof CacheItemPoolInterface &&
-            !$this->cache instanceof BaseCache && 
+            !$this->cache instanceof Cache && 
             !$this->cache instanceof Memcached && 
             !$this->cache instanceof Redis && 
             !$this->cache instanceof PredisClient
@@ -861,7 +861,7 @@ class RateLimiter implements LazyInterface
                 'Invalid cache instance. Expected an instance of %s, %s, %s, %s, %s, or %s.',
                 CacheInterface::class,
                 CacheItemPoolInterface::class,
-                BaseCache::class,
+                Cache::class,
                 Memcached::class,
                 Redis::class,
                 PredisClient::class

@@ -134,6 +134,13 @@ interface ResponseInterface extends \Psr\Http\Message\ResponseInterface
     public function getContents(): string;
 
     /**
+     * Retrieves the request response contents length.
+     * 
+     * @return int Returns the content length.
+     */
+    public function getLength(): int;
+
+    /**
      * Retrieves additional information about the response.
      *
      * @return array<string,mixed> Return an associative array of response metadata.

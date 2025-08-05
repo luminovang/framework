@@ -10,10 +10,10 @@
  */
 namespace Luminova\Security;
 
-use \Luminova\Security\Authenticator\Google;
-use \Luminova\Interface\AuthenticatorInterface;
 use \Luminova\Exceptions\EncryptionException;
+use \Luminova\Interface\AuthenticatorInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Security\Authenticator\Google;
 use \Endroid\QrCode\{
     QrCode,
     Writer\PngWriter,

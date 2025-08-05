@@ -13,7 +13,7 @@ namespace Luminova\Cache;
 use \Luminova\Luminova;
 use \Luminova\Http\Header;
 use \Luminova\Time\Timestamp;
-use \Luminova\Storages\FileManager;
+use \Luminova\Utility\Storage\FileManager;
 use \DateTimeInterface;
 use function \Luminova\Funcs\{make_dir, string_length};
 
@@ -474,7 +474,7 @@ final class TemplateCache
     {
         $immutable = (self::$cache['CacheImmutable'] ?? false) ? ', immutable' : '';
         $headers = self::$cache['Headers'] ?? [];
-        $headers['default_headers'] = true;
+        $headers['X-System-Default-Headers'] = true;
         $headers['Expires'] = gmdate('D, d M Y H:i:s \G\M\T', self::$cache['Expiry']);
         $headers['Last-Modified'] = gmdate('D, d M Y H:i:s \G\M\T', self::$cache['Modify']);
         $headers['Cache-Control'] = 'public, max-age=' . self::$cache['MaxAge'] . $immutable;

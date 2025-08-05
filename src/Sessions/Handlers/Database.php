@@ -10,19 +10,19 @@
  */
 namespace Luminova\Sessions\Handlers;
 
-use \Luminova\Time\Time;
-use \Luminova\Functions\IP;
-use \Luminova\Logger\Logger;
-use \Luminova\Security\Crypter;
-use \Luminova\Database\Builder;
-use \Luminova\Base\BaseSessionHandler;
-use \ReturnTypeWillChange;
 use \Throwable;
+use \Luminova\Time\Time;
+use \Luminova\Utility\IP;
+use \ReturnTypeWillChange;
+use \Luminova\Logger\Logger;
+use \Luminova\Database\Builder;
+use \Luminova\Base\SessionHandler;
+use \Luminova\Security\Encryption\Crypter;
 
 /**
  * Custom Database for session management with optional encryption support.
  */
-class Database extends BaseSessionHandler
+class Database extends SessionHandler
 {
     /**
      * Client session ip address.
@@ -417,6 +417,6 @@ class Database extends BaseSessionHandler
             return '';
         }
         
-        return self::$ipAddress ??= IP::toNumeric() ?: '';
+        return self::$ipAddress ??= IP::toHex() ?: '';
     }
 }

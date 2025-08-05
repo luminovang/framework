@@ -10,9 +10,9 @@
 namespace App\Tasks;
 
 use \Closure;
-use \Luminova\Base\BaseTaskQueue;
+use \Luminova\Base\Queue;
 
-class TaskQueue extends BaseTaskQueue
+class TaskQueue extends Queue
 {
     /**
      * {@inheritDoc}

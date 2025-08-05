@@ -13,20 +13,16 @@ namespace Luminova\Command;
 use \Closure;
 use \Luminova\Boot;
 use \Luminova\Luminova;
-use \Luminova\Functions\Ip;
+use \Luminova\Utility\IP;
 use \Luminova\Command\Novakit;
 use \Luminova\Security\Validation;
 use \Luminova\Exceptions\IOException;
-use \Luminova\Interface\LazyInterface;
 use \Luminova\Command\Consoles\Commands;
 use \Luminova\Command\Utils\{Text, Color};
-use function \Luminova\Funcs\{
-    is_platform,
-    list_to_array,
-    is_command
-};
+use \Luminova\Interface\LazyObjectInterface;
+use function \Luminova\Funcs\{is_platform, list_to_array, is_command};
 
-class Terminal implements LazyInterface
+class Terminal implements LazyObjectInterface
 {
     /**
      * Represents the standard output stream.
@@ -405,7 +401,7 @@ class Terminal implements LazyInterface
         $rules = (($validations === 'none')
             ? false 
             : (($rules !== [] && is_array($rules))
-                ? "required|in_array(" .  implode(",", $rules) . ")" 
+                ? "required|in_array([" .  implode(",", $rules) . "])" 
                 : $rules)
             );
 
@@ -432,7 +428,6 @@ class Terminal implements LazyInterface
      * 
      * Display array index key as the option identifier to select.
      * If you use associative array users will still see index key instead.
-     *
      *
      * @param string $text  The chooser description message to prompt.
      * @param array  $options The list of options to prompt (e.g, ['male' => 'Male', 'female' => 'Female] or ['male', 'female']).
@@ -472,7 +467,7 @@ class Terminal implements LazyInterface
             $index++;
         }
         
-        $rules = $required ? "required|keys_exist(" . rtrim($rules, ',')  . ")" : 'nullable';
+        $rules = $required ? "required|key_exist([" . rtrim($rules, ',')  . "])" : 'nullable';
         self::writeln($text);
         self::writeOptions($optionValues, strlen((string) $lastIndex));
         self::writeln($placeholder);
@@ -576,7 +571,7 @@ class Terminal implements LazyInterface
         $title ??= $url;
         self::write(self::isAnsiSupported() 
             ? "\033]8;;{$url}\033\\{$title}\033]8;;\033\\" 
-            : $url
+            : "\033[4m{$url}\033[0m"
         );
     }
 
@@ -852,7 +847,7 @@ class Terminal implements LazyInterface
      * Captures a key press event and returns the corresponding key name.
      * Supports arrow keys, tab, enter, escape, and Ctrl+C.
      *
-     * @param callable|null $callback Optional callback function that receives the raw key and its name.
+     * @param (callable(string $key, string $name):mixed)|null $callback Optional callback function that receives the raw key and its name.
      * 
      * @return array<key:ansi,name:string>|mixed Return an array key nnd name or the result of the callback function.
      */
@@ -957,13 +952,13 @@ class Terminal implements LazyInterface
      */
     public static function validate(string $value, array $rules): bool
     {
-        self::$validation ??= new Validation();
-        self::$validation->setRules($rules);
         $field = [
             'input' => $value
         ]; 
-
-        if (!self::$validation->validate($field)) {
+        self::$validation ??= new Validation();
+        self::$validation->setRules($rules)->setBody($field);
+       
+        if (!self::$validation->validate()) {
             self::error(self::$validation->getError('input'));
             return false;
         }
@@ -1036,20 +1031,22 @@ class Terminal implements LazyInterface
      * @param string $text The error message to display.
      * @param string|null $foreground The text color (default: white).
      * @param string|null $background The background color (default: red).
+     * @param int|null $width Optional layout width (default, `null` auto).
      *
      * @return void
      */
     public static function error(
         string $text, 
         string|null $foreground = 'white', 
-        string|null $background = 'red'
+        string|null $background = 'red',
+        ?int $width = null
     ): void
     {
         if(($foreground || $background) && !self::isColorSupported(self::STD_ERR)){
             $foreground = $background = null;
         }
 
-        self::fwrite(Text::block($text, Text::LEFT, 1, $foreground, $background), self::STD_ERR);
+        self::fwrite(Text::block($text, Text::LEFT, 1, $foreground, $background, width: $width), self::STD_ERR);
     }
 
     /**
@@ -1059,20 +1056,22 @@ class Terminal implements LazyInterface
      * @param string $text The success message to display.
      * @param string|null $foreground The text color (default: white).
      * @param string|null $background The background color (default: green).
+     * @param int|null $width Optional layout width (default, `null` auto).
      *
      * @return void
      */
     public static function success(
         string $text, 
         string|null $foreground = 'white', 
-        string|null $background = 'green'
+        string|null $background = 'green',
+        ?int $width = null
     ): void
     {
         if(($foreground || $background) && !self::isColorSupported(self::STD_OUT)){
             $foreground = $background = null;
         }
 
-        self::fwrite(Text::block($text, Text::LEFT, 1, $foreground, $background));
+        self::fwrite(Text::block($text, Text::LEFT, 1, $foreground, $background, width: $width));
     }
 
     /**
@@ -1647,6 +1646,61 @@ class Terminal implements LazyInterface
     }
 
     /**
+     * Get the verbosity level from CLI options.
+     *
+     * This method checks for both short (`-v`, `-vv`, `-vvv`) 
+     * and long (`--verbose` or `--verbose=<level>`) flags.  
+     * Returns an integer level between 0 (silent) and `$max` (most verbose).
+     * 
+     * Level meaning:
+     * - 0 = Silent or default mode
+     * - 1 = Verbose
+     * - 2 = More verbose
+     * - 3 = Debug-level verbosity
+     * - n = More-level verbosity
+     *
+     * @param string $short The short flag key (default: `v`).
+     * @param string $long The long flag alias (default: `verbose`).
+     * @param int $maxLevel The maximum verbosity level (default: `3`).
+     * @param int $default Default verbose level (default: 0).
+     *
+     * @return int Returns the verbosity level between 0 and `$max` or default if not specified.
+     * @example - In Code:
+     * 
+     * ```php
+     * $verbose = $this->term->getVerbose(maxLevel: 5, default: 0);
+     * ```
+     * 
+     * @example - In Command:
+     * ```bash
+     *   php novakit script -v           # returns 1
+     *   php novakit script -vv          # returns 2
+     *   php novakit script -vvv         # returns 3
+     *   php novakit script --verbose=2  # returns 2
+     *   php novakit script              # returns default level 0
+     * ```
+     */
+    public static function getVerbose(
+        string $short = 'v', 
+        string $long = 'verbose', 
+        int $maxLevel = 3,
+        int $default = 0
+    ): int 
+    {
+        foreach (self::getOptions() as $opt => $value) {
+            if ($long === $opt) {
+                return min((int) $value, $maxLevel);
+            }
+            
+            if (preg_match('/^(' . preg_quote($short, '/') . '+)$/', $opt, $match)) {
+                return min(strlen($match[1]), $maxLevel);
+            }
+        }
+
+        return $default;
+    }
+
+    /**
      * Returns the command controller class method name.
      * 
      * @return string|null Return the command controller class method or null.
@@ -2105,7 +2159,12 @@ class Terminal implements LazyInterface
      *
      * @return string Return a hashed system identifier based on the specified algorithm.
      */
-    public static function getSystemId(string $prefix = '', string $algo = 'sha256',  bool $binary = false): string
+    public static function getSystemId(
+        string $prefix = '', 
+        string $algo = 'sha256',  
+        bool $binary = false,
+        bool $forSession = false
+    ): string
     {
         if(self::$session['id'] !== null){
             return self::$session['id'];
@@ -2611,7 +2670,8 @@ class Terminal implements LazyInterface
      * @param string $message The message to display to the user prompting for the password.
      * @param int $timeout The maximum time in seconds to wait for user input before timing out.
      *
-     * @return string Return the entered password, or an empty string if no password was provided or an error occurred.
+     * @return string Return the entered password, or an empty string 
+     *          if no password was provided or an error occurred.
      * @ignore
      */
     protected static function getWindowsHiddenPassword(string $message, int $timeout): string
@@ -2659,27 +2719,28 @@ class Terminal implements LazyInterface
 
         if (is_platform('windows')) {
             // Use PowerShell to get console size on Windows
-            $size = self::_shell('powershell -command "Get-Host | ForEach-Object { $_.UI.RawUI.WindowSize.Height; $_.UI.RawUI.WindowSize.Width }"');
+            $size = self::_shell(
+                'powershell -command "Get-Host | ForEach-Object { $_.UI.RawUI.WindowSize.Height; $_.UI.RawUI.WindowSize.Width }"'
+            );
 
             if ($size) {
                 $dimensions = explode("\n", trim($size));
-                $height = (int) $dimensions[0] ?? 0;
-                $width = (int) $dimensions[1] ?? 0;
+                $height = isset($dimensions[0]) ? (int)$dimensions[0] : 0;
+                $width  = isset($dimensions[1]) ? (int)$dimensions[1] : 0;
             }else{
                 $size = self::_exec('mode con');
-                preg_match('/Columns:\s+(\d+)/i', $size, $colMatch);
-                preg_match('/Lines:\s+(\d+)/i', $size, $rowMatch);
+                preg_match('/Columns:\s+(\d+)/i', $size, $col);
+                preg_match('/Lines:\s+(\d+)/i', $size, $row);
 
-                $height = (int) $colMatch[1] ?? 0;
-                $width = (int) $rowMatch[1] ?? 0;
+                $height = isset($row[1]) ? (int)$row[1] : 0;
+                $width  = isset($col[1]) ? (int)$col[1] : 0;
             }
         } else {
             // Fallback for Unix-like systems
             $size = self::_exec('stty size');
             if ($size && preg_match('/(\d+)\s+(\d+)/', $size, $matches)) {
-
-                $height = (int) $matches[1] ?? 0;
-                $width = (int) $matches[1] ?? 0;
+                $height = isset($matches[1]) ? (int)$matches[1] : 0;
+                $width  = isset($matches[2]) ? (int)$matches[2] : 0;
             }
         }
 

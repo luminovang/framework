@@ -24,7 +24,7 @@ interface CookieJarInterface
      * @param array<string,mixed> $config Optional configurations or settings to apply to the 
      *        new or updated cookie.
      * 
-     * @return static<CookieJarInterface> Returns the created or updated cookie jar instance.
+     * @return static Returns the created or updated cookie jar instance.
      * @throws CookieException If invalid source file location is provided.
      * @throws FileException If the `$from` is provided as an array, the cookie jar is not in read-only mode, and writing the cookies to the file fails.
      */
@@ -37,7 +37,7 @@ interface CookieJarInterface
      * @param mixed $value The value of the cookie.
      * @param array $options An array of cookie options.
      * 
-     * @return static<CookieJarInterface> Return instance of Cookie Jar.
+     * @return static Return instance of Cookie Jar.
      * @throws FileException If writing the cookies to the file fails.
      */
     public function set(mixed $name, mixed $value, array $options = []): CookieJarInterface;
@@ -47,7 +47,7 @@ interface CookieJarInterface
      * 
      * @param mixed $value The value to set.
      * 
-     * @return static<CookieJarInterface> Return instance of Cookie Jar.
+     * @return static Return instance of Cookie Jar.
      * @throws CookieException Throws if called without cookie name specified.
      * @throws FileException If writing the cookies to the file fails.
      */
@@ -58,7 +58,7 @@ interface CookieJarInterface
      * 
      * @param CookieConfig|array $options An array of cookie options or cookie config class object.
      * 
-     * @return static<CookieJarInterface> Return instance of Cookie Jar.
+     * @return static Return instance of Cookie Jar.
      * @throws CookieException Throws if called without cookie name specified.
      * @throws FileException If writing the cookies to the file fails.
      */
@@ -70,7 +70,7 @@ interface CookieJarInterface
      *
      * @param string $path The custom path to set.
      * 
-     * @return static<CookieJarInterface> Returns the current instance for method chaining.
+     * @return static Returns the current instance for method chaining.
      * > **Note:** If set a custom cookie request path, you must also set domain `setCookieDomain`.
      */
     public function setCookiePath(string $path): self;
@@ -81,7 +81,7 @@ interface CookieJarInterface
      *
      * @param string $domain The custom domain to set.
      * 
-     * @return static<CookieJarInterface> Returns the current instance for method chaining.
+     * @return static Returns the current instance for method chaining.
      * > **Note:** If set a custom cookie request domain, you must also set path `setCookiePath`.
      */
     public function setCookieDomain(string $domain): self;
@@ -91,7 +91,7 @@ interface CookieJarInterface
      * 
      * @param array<string,array<string,mixed>> $cookies The array of cookies to set.
      * 
-     * @return static<CookieJarInterface> Return instance of Cookie Jar.
+     * @return static Return instance of Cookie Jar.
      * @throws FileException If writing the cookies to the file fails.
      */
     public function setCookies(array $cookies): self;
@@ -121,7 +121,7 @@ interface CookieJarInterface
      * 
      * @param string $name The name of cookie to access.
      * 
-     * @return static<CookieJarInterface> Return instance of cookie class.
+     * @return static Return instance of cookie class.
      * 
      * @example - Manage Cookie By Name:
      * 
@@ -358,11 +358,7 @@ interface CookieJarInterface
     * }
     * ```
     */
-    public static function getFromGlobal(
-        array $cookies, 
-        bool $raw = false, 
-        array $default = []
-    ): array;
+    public static function getFromGlobal(array $cookies, bool $raw = false, array $default = []): array;
 
     /** 
      * Count the number of cookies in storage.

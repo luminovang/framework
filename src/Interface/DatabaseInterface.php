@@ -10,20 +10,20 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Core\CoreDatabase;
 use \Luminova\Interface\ConnInterface;
+use \Luminova\Foundation\Core\Database;
 use \Luminova\Exceptions\DatabaseException;
 use \PDOStatement;
 use \mysqli_stmt;
 
-interface DatabaseInterface  
+interface DatabaseInterface
 {
     /**
      * Initialize database driver constructor for configurations.
      *
-     * @param CoreDatabase $config The database connection configuration.
+     * @param Database $config The core database connection configuration.
      */
-    public function __construct(CoreDatabase $config);
+    public function __construct(Database $config);
 
     /**
      * Establish a database connection.

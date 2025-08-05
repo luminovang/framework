@@ -10,7 +10,7 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Database\TableTrait;
+use \Luminova\Database\Helpers\TableTrait;
 use \Luminova\Exceptions\DatabaseException;
 
 final class Table 
@@ -643,7 +643,9 @@ final class Table
             $primaries = $this->getTableOptions('primary');
 
             if ($primaries !== null && $primaries !== [] && in_array($this->getColumnName(), $primaries)) {
-                throw new DatabaseException('Cannot add primary key constraint when multiple columns are designated as primary key.');
+                throw new DatabaseException(
+                    'Cannot add primary key constraint when multiple columns are designated as primary key.'
+                );
             }
 
             return $this->add('pkConstraint', self::COLUMN_NAME, false);

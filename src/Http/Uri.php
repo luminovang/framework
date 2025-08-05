@@ -10,12 +10,13 @@
  */
 namespace Luminova\Http;
 
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Exceptions\ErrorException;
-use \Psr\Http\Message\UriInterface;
 use \Stringable;
+use \Luminova\Exceptions\ErrorCode;
+use \Psr\Http\Message\UriInterface;
+use \Luminova\Interface\LazyObjectInterface;
+use \Luminova\Exceptions\RuntimeException;
 
-class Uri implements UriInterface, LazyInterface, Stringable
+class Uri implements UriInterface, LazyObjectInterface, Stringable
 {
     /**
      * Constructs a new Uri instance with optional components.
@@ -183,41 +184,45 @@ class Uri implements UriInterface, LazyInterface, Stringable
     }
 
     /**
-     * Converts the URI's host to its ASCII representation using IDN (Internationalized Domain Names) conversion.
+     * Convert the URI host to its ASCII-compatible form (Punycode).
      *
-     * This method converts the host component of the URI to its ASCII representation,
-     * which is necessary for proper handling of internationalized domain names.
-     * It uses the `idn_to_ascii` function with the specified options for the conversion.
+     * Internationalized domain names (IDNs) such as `münchen.de` must be converted
+     * to ASCII (e.g. `xn--mnchen-3ya.de`) for proper resolution in DNS and HTTP clients.
+     * This method performs that conversion on the host component of the URI.
      *
-     * @param int $option The option flag for IDN conversion. Defaults to IDNA_DEFAULT.
-     *                    See the PHP manual for possible values (e.g., IDNA_NONTRANSITIONAL_TO_ASCII).
+     * @param int $option  The IDN to ASCII conversion flags (default: `IDNA_DEFAULT`).
+     * @param int $variant IDN variant (default: `INTL_IDNA_VARIANT_UTS46`).
      *
-     * @return string Return the full URI string with the host converted to its ASCII representation.
-     * @throws ErrorException If IDN support is unavailable or if the conversion fails.
+     * @return string Return full URI string with the host normalized to ASCII.
+     * @throws RuntimeException If IDN conversion is not supported or the conversion fails.
      */
-    public function toAsciiIdn(int $option = IDNA_DEFAULT): string
+    public function toAsciiIdn(int $option = \IDNA_DEFAULT, int $variant = \INTL_IDNA_VARIANT_UTS46): string
     {
         if (!function_exists('idn_to_ascii') || !defined('INTL_IDNA_VARIANT_UTS46')) {
-            throw new ErrorException(
-                'IDN support is unavailable: Install the `ext-intl` extension or the `polyfill-intl-idn` library.',
-                ErrorException::NOT_SUPPORTED
+            throw new RuntimeException(
+                'IDN conversion is not available. Install the `ext-intl` extension.',
+                ErrorCode::NOT_SUPPORTED
             );
         }
 
         $info = [];
-        $host = idn_to_ascii(
-            $this->host,
-            $option,
-            INTL_IDNA_VARIANT_UTS46,
-            $info
-        );
-
+        $host = idn_to_ascii($this->host, $option, $variant, $info);
+ 
         if ($host === false) {
-            throw new ErrorException(self::getIdnError($info['errors'] ?? 0));
+            throw new RuntimeException(sprintf(
+                self::getIdnError($info['errors'] ?? 0),
+                $this->host
+            ));
         }
      
-        $authority = ($this->userInfo !== '') ? $this->userInfo . '@' . $host : $host;
-        $authority .= ($this->port !== null) ? ':' . $this->port : '';
+        $authority = ($this->userInfo !== '') 
+            ? $this->userInfo . '@' . $host 
+            : $host;
+        
+        if ($this->port !== null) {
+            $authority .= ':' . $this->port;
+        }
+        
         return $this->getString($authority);
     }
 
@@ -226,9 +231,9 @@ class Uri implements UriInterface, LazyInterface, Stringable
      * 
      * @param string $scheme The new scheme (e.g., "http", "https").
      * 
-     * @return UriInterface Return a new instance with the updated scheme.
+     * @return self Return a new instance with the updated scheme.
      */
-    public function withScheme(string $scheme): UriInterface
+    public function withScheme(string $scheme): self
     {
         $clone = clone $this;
         $clone->scheme = $scheme;
@@ -240,9 +245,10 @@ class Uri implements UriInterface, LazyInterface, Stringable
      * 
      * @param string $user The username.
      * @param string|null $password The password (optional).
-     * @return UriInterface Return a new instance with the updated user info.
+     * 
+     * @return self Return a new instance with the updated user info.
      */
-    public function withUserInfo(string $user, ?string $password = null): UriInterface
+    public function withUserInfo(string $user, ?string $password = null): self
     {
         $clone = clone $this;
         $clone->userInfo = $password ? "$user:$password" : $user;
@@ -253,9 +259,10 @@ class Uri implements UriInterface, LazyInterface, Stringable
      * Returns a new instance with the specified host.
      * 
      * @param string $host The new host (e.g., "example.com").
-     * @return UriInterface Return a new instance with the updated host.
+     * 
+     * @return self Return a new instance with the updated host.
      */
-    public function withHost(string $host): UriInterface
+    public function withHost(string $host): self
     {
         $clone = clone $this;
         $clone->host = $host;
@@ -266,9 +273,10 @@ class Uri implements UriInterface, LazyInterface, Stringable
      * Returns a new instance with the specified port.
      * 
      * @param int|null $port The new port or null for no port.
-     * @return UriInterface Return a new instance with the updated port.
+     * 
+     * @return self Return a new instance with the updated port.
      */
-    public function withPort(?int $port): UriInterface
+    public function withPort(?int $port): self
     {
         $clone = clone $this;
         $clone->port = $port;
@@ -279,9 +287,10 @@ class Uri implements UriInterface, LazyInterface, Stringable
      * Returns a new instance with the specified path.
      * 
      * @param string $path The new path (e.g., "/api/resource").
-     * @return UriInterface Return a new instance with the updated path.
+     * 
+     * @return self Return a new instance with the updated path.
      */
-    public function withPath(string $path): UriInterface
+    public function withPath(string $path): self
     {
         $clone = clone $this;
         $clone->path = $path;
@@ -292,9 +301,10 @@ class Uri implements UriInterface, LazyInterface, Stringable
      * Returns a new instance with the specified query string.
      * 
      * @param string $query The new query string (e.g., "key=value").
-     * @return UriInterface Return a new instance with the updated query string.
+     * 
+     * @return self Return a new instance with the updated query string.
      */
-    public function withQuery(string $query): UriInterface
+    public function withQuery(string $query): self
     {
         $clone = clone $this;
         $clone->query = $query;
@@ -305,9 +315,10 @@ class Uri implements UriInterface, LazyInterface, Stringable
      * Returns a new instance with the specified fragment.
      * 
      * @param string $fragment The new fragment (e.g., "section1").
-     * @return UriInterface Return a new instance with the updated fragment.
+     * 
+     * @return self Return a new instance with the updated fragment.
      */
-    public function withFragment(string $fragment): UriInterface
+    public function withFragment(string $fragment): self
     {
         $clone = clone $this;
         $clone->fragment = $fragment;
@@ -364,7 +375,8 @@ class Uri implements UriInterface, LazyInterface, Stringable
             }
         }
 
-        $message = 'IDN conversion failed: Unable to convert the host to ASCII.';
+        
+        $message = 'Failed to convert host "%s" to ASCII (IDN).';
 
         if ($messages) {
             $message .= ' Errors: ' . implode(', ', $messages);

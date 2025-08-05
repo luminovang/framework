@@ -10,11 +10,11 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\BaseConsole;
-use \Luminova\Storages\FileManager;
+use \Luminova\Base\Console;
+use \Luminova\Utility\Storage\FileManager;
 use function \Luminova\Funcs\root;
 
-class ClearWritable extends BaseConsole
+class ClearWritable extends Console
 {
     /**
      * {@inheritdoc}

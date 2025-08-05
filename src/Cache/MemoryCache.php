@@ -10,16 +10,17 @@
  */
 namespace Luminova\Cache;
 
-use \Luminova\Base\BaseCache;
+use \Throwable;
+use \Memcached;
+use \Exception;
+use \DateInterval;
+use \DateTimeInterface;
+use \Luminova\Base\Cache;
 use \Luminova\Time\Timestamp;
 use \Luminova\Logger\Logger;
 use \Luminova\Exceptions\CacheException;
-use \Memcached;
-use \DateTimeInterface;
-use \DateInterval;
-use \Exception;
 
-final class MemoryCache extends BaseCache
+final class MemoryCache extends Cache
 {
     /**
      * Hold the cache instance Singleton.
@@ -230,7 +231,7 @@ final class MemoryCache extends BaseCache
         try {
             $this->getConn()->set('__ping__', 'PONG', 10);
             return $this->getConn()->get('__ping__');
-        } catch (Exception) {
+        } catch (Throwable) {
             return null;
         }
     }
@@ -626,12 +627,16 @@ final class MemoryCache extends BaseCache
             // TTL (Time-To-Live) for cache storage (default: 0 never expire).
             // Item expiration is set withing the payload.
             return $this->getConn()->setMultiByKey($this->storage, $this->items, 0);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             if (PRODUCTION) {
                 Logger::dispatch('error', sprintf('Unable to commit cache: %s', $e->getMessage()), [
                     'class' => self::class
                 ]);
                 return false;
+            }
+
+            if($e instanceof AppException){
+                throw $e;
             }
 
             throw new CacheException(sprintf('Unable to commit cache: %s', $e->getMessage()));

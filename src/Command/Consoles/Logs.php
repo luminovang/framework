@@ -10,13 +10,13 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\BaseConsole;
+use \Luminova\Base\Console;
 use \Luminova\Command\Utils\Color;
 use \SplFileObject;
 use \Exception;
 use function \Luminova\Funcs\root;
 
-class Logs extends BaseConsole 
+class Logs extends Console 
 {
     /**
      * {@inheritdoc}

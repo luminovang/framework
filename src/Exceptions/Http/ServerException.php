@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions\Http;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class ServerException extends AppException
 {
@@ -19,12 +20,12 @@ class ServerException extends AppException
      * Constructor for ServerException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code The exception code (default: 4977).
+     * @param string|int $code The exception code (default: `ErrorCode::HTTP_SERVER_ERROR`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::HTTP_SERVER_ERROR, 
+        string|int $code = ErrorCode::HTTP_SERVER_ERROR, 
         ?Throwable $previous = null
     )
     {

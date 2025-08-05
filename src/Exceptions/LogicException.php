@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class LogicException extends AppException
 {
@@ -19,12 +20,12 @@ class LogicException extends AppException
      * Constructor for LogicException.
      *
      * @param string $message The exception message.
-     * @param string|int $code The exception code (default: AppException::LogicException).
+     * @param string|int $code The exception code (default: `ErrorCode::LOGIC_ERROR`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::LOGIC_ERROR, 
+        string|int $code = ErrorCode::LOGIC_ERROR, 
         ?Throwable $previous = null
     )
     {

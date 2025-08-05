@@ -10,12 +10,13 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\BaseConsole;
-use \Luminova\Security\Crypter;
+use \Luminova\Base\Console;
 use \Luminova\Database\Builder;
+use \Luminova\Security\Password;
+use \Luminova\Security\Encryption\Key;
 use function \Luminova\Funcs\{root, get_content};
 
-class Authenticate extends BaseConsole 
+class Authenticate extends Console 
 {
     /**
      * {@inheritdoc}
@@ -150,7 +151,7 @@ class Authenticate extends BaseConsole
         $isValid = false;
 
         if($user->auth === 'password'){
-            $isValid = ($skipPass && $value === '') || Crypter::isPassword($value, $user->content);
+            $isValid = ($skipPass && $value === '') || Password::verify($value, $user->content);
         }elseif($user->auth === 'key'){
             $key = $user->content;
 
@@ -159,7 +160,7 @@ class Authenticate extends BaseConsole
                 $key = file_exists($path) ? get_content($path) : '';
             }
 
-            $isValid = $key && Crypter::isKeyMatch($value, $key);
+            $isValid = $key && Key::isMatch($value, $key);
         }
 
         if ($isValid) {

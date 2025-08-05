@@ -14,9 +14,9 @@ use \Closure;
 use \Throwable;
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Color;
-use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Database\{Table, Alter, Connection};
+use \Luminova\Interface\DatabaseInterface;
+use \Luminova\Database\{Table, Helpers\Alter, Connection};
 use function \Luminova\Funcs\{shared, is_command};
 
 final class Schema

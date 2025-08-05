@@ -10,51 +10,60 @@
  */
 namespace Luminova\Routing;
 
-use \Luminova\Interface\ErrorHandlerInterface;
-use \Luminova\Exceptions\RuntimeException;
 use \Closure;
+use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Interface\ErrorHandlerInterface;
 
 final class Prefix 
 {
     /** 
-     * Default WEB controller type.
+     * Default prefix for standard HTTP request URIs.
      * 
      * @var string WEB
      */
     public const WEB = 'web';
 
     /** 
-     * Default API controller type.
+     * Suggested custom prefix for API routes (/api).
      * 
      * @var string API
      */
     public const API = 'api';
 
     /** 
-     * Default CLI controller type.
+     * Default prefix for all CLI commands.
      * 
      * @var string CLI
      */
     public const CLI = 'cli';
 
     /** 
-     * Default CONSOLE controller type.
+     * Suggested custom prefix for control panel routes.
+     * 
+     * @var string PANEL
+     */
+    public const PANEL = 'panel';
+
+    /** 
+     * Suggested custom prefix for admin routes (/admin).
+     * 
+     * @var string ADMIN
+     */
+    public const ADMIN = 'admin';
+
+    /** 
+     * Suggested custom prefix for console routes.
      * 
      * @var string CONSOLE
      */
     public const CONSOLE = 'console';
 
     /** 
-     * Default WEBHOOK controller type.
+     * Suggested custom prefix for webhook endpoints.
      * 
      * @var string WEBHOOK
      */
     public const WEBHOOK = 'webhook';
-
-    /**
-     * @var string $name
-     */
-    private string $name = '';
 
     /**
      * Error handler.
@@ -72,19 +81,18 @@ final class Prefix
 
     /**
      * Initialize constructor to register a router prefix.
+     * 
      * This constructor serves as a url prefix locator for your application routing.
      * 
-     * @param string $name The route url prefix name (e.g, `blog`).
+     * @param string $prefix The route URI prefix name (e.g, `blog`).
      * @param Closure|array{0:class-string<ErrorHandlerInterface>,1:string}|null $onError Optional prefix context error handler.
      *      - Callable Array - Method name in [App\Errors\Controllers\ErrorController::class, 'methodname']; to handle error.
      *      - Closure - Closure(class-string<\T> $arguments [, mixed $... ]): int.
      * 
      * @throws RuntimeException Throws if invalid error handler was provided.
      */
-    public function __construct(string $name, Closure|array|null $onError = null) 
+    public function __construct(private string $prefix, Closure|array|null $onError = null) 
     {
-        $this->name = $name;
-
         if(
             $onError !== null && 
             !($onError instanceof Closure) && 
@@ -97,8 +105,8 @@ final class Prefix
 
         $this->onError = $onError;
 
-        if($name !== self::WEB){
-            self::$prefixes[$name] = $name;
+        if($this->prefix !== self::WEB){
+            self::$prefixes[$this->prefix] = $this->prefix;
         }
     }
 
@@ -108,9 +116,9 @@ final class Prefix
      * @return string Return route prefix name.
      * @internal
      */
-    public function getName(): string 
+    public function getPrefix(): string 
     {
-        return $this->name;
+        return $this->prefix;
     }
 
     /**

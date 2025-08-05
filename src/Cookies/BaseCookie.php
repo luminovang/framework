@@ -10,12 +10,12 @@
  */
 namespace Luminova\Cookies;
 
-use \Luminova\Interface\LazyInterface;
+use \Luminova\Interface\LazyObjectInterface;
 use \App\Config\Cookie as CookieConfig;
 use \Luminova\Time\Time;
 use \Luminova\Time\Timestamp;
 
-abstract class BaseCookie implements LazyInterface
+abstract class BaseCookie implements LazyObjectInterface
 {
     /**
      * Cookies will be sent in all contexts, i.e., in responses to both

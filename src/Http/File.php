@@ -10,13 +10,13 @@
  */
 namespace Luminova\Http;
 
-use \Luminova\Http\FileConfig;
-use \Luminova\Interface\LazyInterface;
-use \Luminova\Functions\{Func, Maths};
-use \Luminova\Exceptions\ErrorException;
+use \Luminova\Http\Helper\FileConfig;
+use \Luminova\Interface\LazyObjectInterface;
+use \Luminova\Common\{Helpers, Maths};
+use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
 use function \Luminova\Funcs\get_mime;
 
-class File implements LazyInterface
+class File implements LazyObjectInterface
 {
     /**
      * Upload error file has not size.
@@ -291,7 +291,7 @@ class File implements LazyInterface
      *
      * > **Note:** The property value maybe be null if not configured.
      *
-     * @return FileConfig Returns instabce of upload configuration.
+     * @return FileConfig Returns instance of upload configuration.
      * 
      * @example - Example:
      * 
@@ -338,7 +338,7 @@ class File implements LazyInterface
             return $this->isBinary;
         }
 
-        return $this->isBin = ($this->content === null) ? false : Func::isBinary($this->content);
+        return $this->isBin = ($this->content === null) ? false : Helpers::isBinary($this->content);
     }
 
     /**
@@ -364,7 +364,7 @@ class File implements LazyInterface
 
         return $this->isBase64 = ($this->content === null) 
             ? false 
-            : Func::isBase64Encoded(
+            : Helpers::isBase64Encoded(
                 $this->content, 
                 (!$this->config instanceof FileConfig) ? false : ($this->config->base64Strict ?? false)
             );
@@ -388,20 +388,20 @@ class File implements LazyInterface
      *              the provided name (default: true).
      * 
      * @return self Return instance of file object.
-     * @throws ErrorException Throws if the file name contains directory paths or, when 
-     *          `replaceExtension` is enabled, lacks a valid file extension.
+     * @throws InvalidArgumentException Throws if the file name contains directory paths.
+     * @throws RuntimeException If `replaceExtension` is enabled and filename lacks a valid file extension.
      */
     public function setName(string $name, bool $replaceExtension = true): self
     {
         if (str_contains($name, DIRECTORY_SEPARATOR)) {
-            throw new ErrorException('Filename cannot contain paths.');
+            throw new InvalidArgumentException('Filename cannot contain paths.');
         }
 
         if($replaceExtension){
             $extension = pathinfo($name, PATHINFO_EXTENSION);
 
             if (!$extension) {
-                throw new ErrorException('Filename does not have a valid file extension type.');
+                throw new RuntimeException('Filename does not have a valid file extension type.');
             }
 
             $this->extension = strtolower($extension);
@@ -461,7 +461,7 @@ class File implements LazyInterface
     /**
      * Sets the file's error or feedback message and status code.
      * 
-     * Commonly used by the `Luminova\Storages\Uploader` class to provide
+     * Commonly used by the `Luminova\Utility\Storage\Uploader` class to provide
      * feedback on upload errors or processing issues.
      *
      * @param string $message The descriptive error or feedback message.
@@ -500,6 +500,28 @@ class File implements LazyInterface
         }
 
         $this->temp = null;
+    }
+
+    /**
+     * Get array representation of uploaded file object.
+     * 
+     * This method creates an array from file-object properties into an associative array.
+     *
+     * @return array<string,mixed> Returns an array of file upload.
+     */
+    public function toArray(): array
+    {
+        return [
+            'index'     => $this->index,
+            'name'      => $this->name,
+            'type'      => $this->type,
+            'size'      => $this->size,
+            'extension' => $this->extension,
+            'temp'      => $this->temp,
+            'error'     => $this->error,
+            'content'   => $this->content,
+            'isBlob'    => $this->isBlob,
+        ];
     }
 
     /**

@@ -10,23 +10,23 @@
  */
 namespace Luminova\Sessions\Managers;
 
+use \Throwable;
 use \Luminova\Logger\Logger;
-use \Luminova\Base\BaseConfig;
 use \Luminova\Sessions\Session;
-use \Luminova\Security\Crypter;
+use \Luminova\Base\Configuration;
 use \Luminova\Exceptions\JsonException;
 use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Security\Encryption\Crypter;
 use \Luminova\Interface\SessionManagerInterface;
-use \Throwable;
 
 final class Cookie implements SessionManagerInterface 
 {
     /**
      * Cookie config. 
      * 
-     * @var BaseConfig $config
+     * @var Configuration $config
      */
-    private ?BaseConfig $config = null;
+    private ?Configuration $config = null;
 
     /**
      * The session storage index name.
@@ -50,6 +50,13 @@ final class Cookie implements SessionManagerInterface
     private static bool $writeClose = false;
 
     /**
+     * The session id
+     * 
+     * @var string|null $sid
+     */
+    private static ?string $sid = null;
+
+    /**
      * {@inheritdoc}
      */
     public function __construct(private string $storage = 'global') {}
@@ -57,7 +64,7 @@ final class Cookie implements SessionManagerInterface
     /**
      * {@inheritdoc}
      */
-    public function setConfig(BaseConfig $config): void
+    public function setConfig(Configuration $config): void
     {
         $this->config = $config;
     }
@@ -172,7 +179,10 @@ final class Cookie implements SessionManagerInterface
         }
 
         if(isset($_COOKIE[self::$table]) || isset($_COOKIE[self::$secureTable])) {
-            if($this->store(self::$table, '', $expire) || $this->store(self::$secureTable, '', $expire)){
+            if(
+                $this->store(self::$table, '', $expire) || 
+                $this->store(self::$secureTable, '', $expire)
+            ){
                 $_COOKIE[self::$table] = [];
                 $_COOKIE[self::$secureTable] = null;
 
@@ -214,9 +224,12 @@ final class Cookie implements SessionManagerInterface
         }
 
         if(self::isValidId($sessionId)){
-            return $this->create($sessionId) 
-                ? true
-                : (PRODUCTION ? $this->create() : false);
+            if($this->create($sessionId)){
+                self::$sid = $sessionId;
+                return true;
+            }
+            
+            return false;
         }
 
         $error = "Session Cookie Error: The provided session cookie ID '{$sessionId}' is invalid.";
@@ -244,7 +257,7 @@ final class Cookie implements SessionManagerInterface
      */
     public function getId(): ?string
     {
-        return $_COOKIE[self::$secureTable] ?? null;
+        return $_COOKIE[self::$secureTable] ?? self::$sid;
     }
 
     /** 

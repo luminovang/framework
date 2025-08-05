@@ -203,7 +203,7 @@ class CookieFileJar extends BaseCookie implements CookieJarInterface, Stringable
     {
         $finalValue = $this->toValue($value);
         if($finalValue === false){
-            throw CookieException::throwWith('invalid_value', __FUNCTION__ . '->(..., $value)" ');
+            throw CookieException::rethrow('invalid_value', __FUNCTION__ . '->(..., $value)" ');
         }
 
         $this->cookies[$name] = [
@@ -225,7 +225,7 @@ class CookieFileJar extends BaseCookie implements CookieJarInterface, Stringable
         $finalValue = $this->toValue($value);
 
         if($finalValue === false){
-            throw CookieException::throwWith('invalid_value', __FUNCTION__ . '->($value)" ');
+            throw CookieException::rethrow('invalid_value', __FUNCTION__ . '->($value)" ');
         }
 
         $this->cookies[$this->config['name']]['value'] = $finalValue;

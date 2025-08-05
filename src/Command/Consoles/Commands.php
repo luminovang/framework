@@ -102,23 +102,23 @@ final class Commands
         ],
 
         'server' => [
-            'name' => 'Server',
-            'group' => 'server',
-            'description' => 'Starts the Luminova PHP development server.',
+            'name'        => 'Server',
+            'group'       => 'server',
+            'description' => 'Start the Luminova PHP development server. Optionally bind it to a specific hostname or use the machine\'s local network address for testing on other devices.',
             'usages' => [
                 'php novakit server',
             ],
             'options' => [
-                '-b, --php'   => 'Specify the PHP binary location.',
-                '-h, --host'  => 'Specify the development hostname.',
-                '-p, --port'  => 'Specify the port for the development server.',
-                '-t, --testing' => 'Start the server with the network address for testing on other devices.',
-                '-h, --help' => 'Show help information for this command.'
+                '-b, --php'      => 'Specify a custom PHP binary path.',
+                '-a, --host'     => 'Bind the server to a specific hostname or address.',
+                '-p, --port'     => 'Set the port for the development server. Defaults to 8080.',
+                '-t, --testing'  => 'Bind the server to the machine\'s local network address for testing on other devices.',
+                '-h, --help'     => 'Display help information for this command.'
             ],
             'examples' => [
                 'php novakit server' => 'Start the development server on localhost.',
-                'php novakit server --port=8080 --testing' => 'Start the server on port 8080 for testing on other devices.',
-                'php novakit server --host=localhost --port=8080 --php=<PHP-BINARY-PATH>' => 'Start the server using a specified PHP binary.',
+                'php novakit server --port=8080 --testing' => 'Start the server on port 8080 and make it accessible to other devices on the same network.',
+                'php novakit server --host=localhost --port=8080 --php=<PHP-BINARY-PATH>' => 'Start the server using a specified PHP binary and host configuration.',
             ],
         ],
 
@@ -140,26 +140,29 @@ final class Commands
         ],
 
         'generate:key' => [
-            'name' => 'System',
-            'group' => 'generate:key',
-            'description' => "Generates an application encryption key and stores it in environment variables.",
+            'name'        => 'System',
+            'group'       => 'generate:key',
+            'description' => 'Generate a new application encryption key and optionally write it to the environment file.',
             'usages' => [
                 'php novakit generate:key'
             ],
             'options' => [
-                '--no-save' => 'Do not save the generated application key to the .env file.',
-                '-h, --help' => 'Show help information for this command.'
+                '-n, --no-save' => 'Generate the key without writing it to the .env file under "app.key".',
+                '-l, --length' => 'Set a custom key length. Defaults to length required by the current encryption method.',
+                '-p, --prefix' => 'Add a key prefix, for example "sk-".',
+                '-h, --help'   => 'Show help information for this command.'
             ],
             'examples' => [
                 'php novakit generate:key',
                 'php novakit generate:key --no-save',
+                'php novakit generate:key --length=36 --prefix=sk- --no-save'
             ],
         ],
 
         'generate:sitemap' => [
             'name' => 'System',
             'group' => 'generate:sitemap',
-            'description' => "Generates the application website sitemap.",
+            'description' => "Deprecated: Use 'php novakit sitemap' instead. Generates the application website sitemap.",
             'usages' => [
                 'php novakit generate:sitemap',
             ],
@@ -167,6 +170,51 @@ final class Commands
                 '-h, --help' => 'Show help information for this command.'
             ],
             'examples' => [],
+            'deprecated' => true,
+        ],
+
+        'sitemap' => [
+            'name' => 'Sitemap',
+            'group' => 'sitemap',
+            'description' => "Generates an XML sitemap or scans your website for broken links.",
+            'usages' => [
+                'php novakit sitemap --url=<start-url>' => 'Generate a sitemap starting from the specified URL.',
+                'php novakit sitemap --url=<start-url> --broken' => 'Scan for broken links instead of generating a sitemap.',
+                'php novakit sitemap --url=<start-url> --basename=custom.xml' => 'Generate a sitemap with a custom file name.',
+            ],
+            'options' => [
+                '-u,  --url'             => "Start URL to scan (default: value of 'env(dev.app.start.url)').",
+                '-f,  --basename'        => "Output file name (default: sitemap.xml or broken.sitemap.json for broken links).",
+                '-b,  --broken'          => "Generate a JSON report of broken links instead of an XML sitemap.",
+                '-t,  --link-tree'      => "Generate a plain TXT report of all website links instead of an XML sitemap or JSON broken links report.",
+                '--format'     =>    'Custom output format for link tree, e.g., "{url} | {title} | {status} | {lastmod}". Default is "{url} {title} ({status})"',
+                '-l,  --limit'           => "Maximum number of URLs to scan (0 = no limit).",
+                '-d,  --delay'           => "Delay in seconds between each URL scan (minimum: 1).",
+                '-e,  --max-execution'   => "Maximum script execution time in seconds (0 = unlimited).",
+                '-p,  --prefix'          => "Only scan URLs starting with this prefix.",
+                '-c,  --change'          => "Set the expected change frequency (always, daily, weekly, etc.).",
+                '-s,  --html'            => "Include static .html versions of URLs in the sitemap.",
+                '-v,  --verbose'         => "Set output verbosity (use -v multiple times for more detail).",
+                '-n,  --dry-run'         => "Perform a full scan without writing any output files.",
+                '-a,  --ignore-assets'    => "Ignore URLs pointing to asset directories (e.g., /public/assets/ or /assets/).",
+                '-h,  --help'            => "Show help information for this command."
+            ],
+            'examples' => [
+                "\033[1;36mSitemap Generation\033[0m",
+                'php novakit sitemap',
+                'php novakit sitemap --url=https://example.com --basename=new_sitemap.xml',
+                'php novakit sitemap --url=https://example.com --limit=100',
+                'php novakit sitemap --url=https://example.com --delay=2 --max-execution=600',
+                'php novakit sitemap --url=https://example.com --prefix=blog --html',
+                'php novakit sitemap --url=https://example.com --change=daily',
+                '',
+                "\033[1;36mBroken Link Scan\033[0m",
+                'php novakit sitemap --broken',
+                'php novakit sitemap --url=https://example.com --broken --basename=scan.json',
+                'php novakit sitemap --url=https://localhost --broken --limit=50',
+                "\033[1;36mLink Tree Scan\033[0m",
+                'php novakit sitemap -t --format "{url} | {title}"'
+            ],
         ],
 
         'env:add' => [

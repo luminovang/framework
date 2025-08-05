@@ -160,6 +160,45 @@ function __cache_env(array $entries, string $path): bool
 }
 
 /**
+ * Convert a numeric string into its appropriate numeric type.
+ * 
+ * This method detects whether the given string represents
+ * a floating-point number or an integer. If the string
+ * contains a decimal point (.) or scientific notation (e),
+ * it is converted to a float; otherwise, it is converted to an int.
+ * 
+ * @param string $value The numeric string to convert.
+ * @param bool $toLowercase Whether to convert the string to lowercase before processing.
+ *                    Useful when checking for scientific notation (e.g., "1E3").
+ * 
+ * @return float|int Returns the numeric value as int or float depending on the input.
+ */
+function to_numeric(string $value, bool $toLowercase = false): float|int
+{
+    $value = trim($value);
+
+    if ($value === '') {
+        return 0;
+    }
+
+    if ($toLowercase) {
+        $value = strtolower($value);
+    }
+
+    if (ctype_digit($value)) {
+        return (int) $value;
+    }
+
+    if (!is_numeric($value)) {
+        return 0;
+    }
+
+    return (str_contains($value, '.') || str_contains($value, 'e'))
+        ? (float) $value
+        : (int) $value;
+}
+
+/**
  * Sets an environment variable, optionally saving it to the `.env` file.
  *
  * @param string $key The environment variable key.
@@ -280,7 +319,7 @@ function env(string $key, mixed $default = null): mixed
     $value = trim($value);
 
     if (is_numeric($value)) {
-        return $_ENV[$key] = $_SERVER[$key] = $value + 0;
+        return $_ENV[$key] = $_SERVER[$key] = to_numeric($value, true);
     }
 
     if($value === '[]'){
@@ -310,7 +349,7 @@ function env(string $key, mixed $default = null): mixed
                 'true'  => true,
                 'false' => false,
                 'null'  => null,
-                is_numeric($item) => $item + 0,
+                is_numeric($item) => to_numeric($item, true),
                 default => $item
             };
         }, explode(',', trim($value, '[] ')));

@@ -10,10 +10,10 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\BaseConsole;
+use \Luminova\Base\Console;
 use \Luminova\Command\Consoles\Commands;
 
-class Help extends BaseConsole 
+class Help extends Console 
 {
     /**
      * {@inheritdoc}

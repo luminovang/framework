@@ -10,59 +10,124 @@
  */
 namespace Luminova\Template;
 
+use \Closure;
+use \Throwable;
+use \DateTimeZone;
+use \DateTimeInterface;
+use \DateTimeImmutable;
 use \Luminova\Luminova; 
 use \Luminova\Time\Time;
 use \Luminova\Http\Header;
-use \Luminova\Storages\FileManager;
-use \Luminova\Utils\WeakReference;
-use \Luminova\Utils\Promise\Promise;
+use \Luminova\Logger\Logger;
+use \Luminova\Http\HttpCode;
 use \Luminova\Time\Timestamp;
-use \Luminova\Optimization\Minification;
 use \Luminova\Cache\TemplateCache;
-use \Luminova\Template\{Smarty, Twig};
-use \Luminova\Interface\{ExceptionInterface, PromiseInterface}; 
-use \Luminova\Exceptions\{ViewNotFoundException, RuntimeException}; 
+use \Luminova\Component\Seo\Minifier;
+use \Luminova\Utility\Promise\Promise;
+use \Luminova\Foundation\Core\Application;
+use \Luminova\Utility\Storage\FileManager;
 use \App\Config\Template as TemplateConfig;
-use \DateTimeInterface;
-use \DateTimeImmutable;
-use \DateTimeZone;
-use \Closure;
-use \stdClass;
-use \WeakMap;
-use \Throwable;
-use function \Luminova\Funcs\{
-    root,
-    filter_paths,
-    start_url,
-    get_class_name
-};
+use \Luminova\Template\{Response, Engines\Scope, Engines\Twig, Engines\Smarty};
+use \Luminova\Interface\{LazyObjectInterface, ExceptionInterface, PromiseInterface}; 
+use \Luminova\Exceptions\{
+    ErrorCode,
+    ErrorException,
+    AppException,
+    RuntimeException, 
+    ViewNotFoundException, 
+    Http\ResponseException,
+    BadMethodCallException, 
+    InvalidArgumentException
+}; 
+use function \Luminova\Funcs\{root, filter_paths, get_class_name};
 
-trait View
+/**
+ * Template view helper. 
+ * 
+ * @property \App\Application<\Luminova\Foundation\Core\Application>|null $app
+ */
+final class View implements LazyObjectInterface
 { 
+    /**
+     * When rendering HTML contents.
+     *
+     * @var string HTML
+     */
+    public const HTML = 'html';
+
+    /**
+     * When rendering data as JSON.
+     *
+     * @var string JSON
+     */
+    public const JSON = 'json';
+
+    /**
+     * When rendering plain text content.
+     *
+     * @var string TEXT
+     */
+    public const TEXT = 'txt';
+
+    /**
+     * When rendering XML content.
+     *
+     * @var string
+     */
+    public const XML = 'xml';
+
+    /**
+     * When rendering JavaScript (.js) content.
+     *
+     * @var string
+     */
+    public const JS = 'js';
+
+    /**
+     * When rendering Cascading Style Sheets (.css).
+     *
+     * @var string
+     */
+    public const CSS = 'css';
+
+    /**
+     * When rendering RDF (Resource Description Framework) data.
+     *
+     * @var string
+     */
+    public const RDF = 'rdf';
+
+    /**
+     * When rendering Atom feeds.
+     *
+     * @var string
+     */
+    public const ATOM = 'atom';
+
+    /**
+     * When rendering RSS (Really Simple Syndication) feeds.
+     *
+     * @var string
+     */
+    public const RSS = 'rss';
+
     /**
      * Supported view types.
      *
-     * @var string[] $SUPPORTED_TYPES
+     * @var string[] SUPPORTED_TYPES
      */
-    private static array $SUPPORTED_TYPES = [
-        'html', 'json', 'text', 
-        'txt', 'xml', 'js', 'bin',
-        'css', 'rdf', 'atom', 'rss'
+    private const SUPPORTED_TYPES = [
+        self::HTML, self::JSON, 'text', 
+        self::TEXT, self::XML, self::JS, 'bin',
+        self::CSS, self::RDF, self::ATOM, self::RSS
     ];
-
-    /**
-     * Template configuration.
-     * 
-     * @var TemplateConfig $config
-     */
-    private static ?TemplateConfig $config = null;
 
     /**
      * Flag for key not found.
      * 
      * @var string KEY_NOT_FOUND
      */
-    protected static string $KEY_NOT_FOUND = '__nothing__';
+    public const KEY_NOT_FOUND = '__nothing__';
 
     /** 
      * Framework project document root.
@@ -72,67 +137,74 @@ trait View
     private static ?string $root = null;
 
     /** 
-     * View template full filename.
+     * View template full filename (pathname+filename).
      * 
      * @var string $filepath 
      */
     private string $filepath = '';
 
     /**
-     * View template directory.
+     * View template resolved root directory.
      * 
-     * @var string $viewsDirectory 
+     * @var string $pathname 
      */
-    private string $viewsDirectory = '';
+    private string $pathname = '';
+
+    /** 
+     * The resolved template filename.
+     * 
+     * @var string $filename 
+     */
+    private string $filename = '';
+
+     /** 
+     * The original template name.
+     * 
+     * @var string $template 
+     */
+    private string $template = '';
 
     /**
-     * Type of view content.
+     * The template content type.
      * 
-     * @var string $viewType 
+     * @var string $type 
      */
-    private string $viewType = 'html';
+    private string $type = self::HTML;
 
     /** 
-     * The project view file directory.
+     * Template views root folder (HMVC and MVC).
      * 
-     * @var string $viewFolder 
+     * @var string $folder 
      */
-    private static string $viewFolder = 'resources/Views';
+    private static string $folder = 'resources/Views';
 
     /** 
-     * The view sub directory.
+     * Template views subfolder (HMVC and MVC).
      * 
      * @var string $subfolder 
      */
     private string $subfolder = '';
 
     /** 
-     * The HMVC module directory name.
+     * The HMVC module/directory name.
      * 
-     * @var string $moduleName 
+     * @var string $module 
      */
-    private string $moduleName = '';
-
-    /** 
-     * Holds the router active page name.
-     * 
-     * @var string $activeView 
-     */
-    private string $activeView = '';
+    private string $module = '';
 
     /** 
      * Holds the array attributes.
      * 
-     * @var array $publicOptions 
+     * @var array<string,mixed> $options 
      */
-    private static array $publicOptions = [];
+    private static array $options = [];
 
     /** 
      * Ignore or allow view optimization.
      * 
-     * @var array<string,array> $cacheOption
+     * @var array<string,array> $cacheConfig
      */
-    private array $cacheOption = [];
+    private array $cacheConfig = [];
 
     /**
      * Force use of cache response.
@@ -142,18 +214,11 @@ trait View
     private bool $forceCache = false;
 
     /**
-     * Response cache expiry ttl.
+     * Default template cache path.
      * 
-     * @var DateTimeInterface|int|null $cacheExpiry 
+     * @var string|null $cachePath 
      */
-    private DateTimeInterface|int|null $cacheExpiry = 0;
-
-    /**
-     * Default cache path.
-     * 
-     * @var string|null $cacheFolder 
-     */
-    private static ?string $cacheFolder = null;
+    private static ?string $cachePath = null;
 
     /**
      * Minify page content.
@@ -165,9 +230,9 @@ trait View
     /**
      * Should cache view base.
      * 
-     * @var bool $cacheView
+     * @var bool $cacheable
      */
-    private bool $cacheView = false;
+    private bool $cacheable = false;
 
     /**
      * Should minify codeblock tags.
@@ -177,18 +242,25 @@ trait View
     private bool $minifyCodeblocks = false;
 
     /**
-     * Whether its HMVC or MVC module.
-     * 
-     * @var bool $useHmvcModule 
-     */
-    private static bool $useHmvcModule = false;
-
-    /**
      * Allow copy codeblock.
      * 
-     * @var bool $codeblockButton 
+     * @var bool $minifyCodeCopyable 
      */
-    private bool $codeblockButton = false;
+    private bool $minifyCodeCopyable = false;
+
+    /**
+     * Whether its HMVC or MVC module.
+     * 
+     * @var bool $isHmvcModule 
+     */
+    private static bool $isHmvcModule = false;
+
+    /**
+     * Mark isolation object.
+     * 
+     * @var bool $isIsolationObject 
+     */
+    public bool $isIsolationObject = false;
 
     /**
      * View headers.
@@ -198,95 +270,351 @@ trait View
     private array $headers = [];
 
     /**
-     * Holds asset relative depth position.
+     * View exports.
      * 
-     * @var int $assetDepth 
+     * @var array<string,mixed> $exports
      */
-    private static int $assetDepth = 0;
+    private static array $exports = [];
 
     /**
-     * Weak object reference.
+     * Holds relative assets parent level.
      * 
-     * @var WeakMap|null $weak
+     * @var int $uriPathDepth 
      */
-    private static ?WeakMap $weak = null;
+    private static int $uriPathDepth = 0;
 
     /**
-     * Exported object reference.
+     * Holds HTTP status code.
      * 
-     * @var WeakReference|null $reference
+     * @var int $status 
      */
-    private static ?WeakReference $reference = null;
+    private int $status = 0;
 
-    /** 
-     * Initialize template view configuration.
-     *
-     * @return void
-     * @internal 
+    /**
+     * Response cache expiry ttl.
+     * 
+     * @var DateTimeInterface|int|null $expiration 
      */
-    protected final function onInitialized(): void
+    private DateTimeInterface|int|null $expiration = 0;
+
+    /**
+     * Template configuration.
+     * 
+     * @var TemplateConfig|null $config
+     */
+    private static ?TemplateConfig $config = null;
+
+    /**
+     * Instance of application object.
+     * 
+     * Without circular reference to (view)
+     * 
+     * @var App\Application<CoreApplication>|null $app
+     */
+    public ?Application $app = null;
+
+    /**
+     * Initialize the View object.
+     * 
+     * This constructor sets up template configuration for view management, and loads environment-based options.
+     * 
+     * @param App\Application<Application>|null $app Optional application object. 
+     * @throws RuntimeException If `$app` is not null and not an instance of Application class.
+     * 
+     * > **Note:** 
+     * > If `$app` is null, templates will not have access to the application instance via (`$this->app` or `$self->app`).
+     */
+    public function __construct(?Application $app = null)
     {
         self::$config ??= new TemplateConfig();
-        self::$weak ??= new WeakMap();
-        self::$reference ??= new WeakReference(); // Public and Protected Classes
-
-        self::$weak[self::$reference] = [];
         self::$root ??= root();
-        self::$assetDepth = 0;
-        self::$minifyContent = (bool) env('page.minification', false);
-        self::$useHmvcModule = env('feature.app.hmvc', false);
-        self::$cacheFolder = self::__getSystemPath(self::__trimRight(self::$config->cacheFolder) . 'default');
-        $this->cacheView = (bool) env('page.caching', false);
-        $this->cacheExpiry = (int) env('page.cache.expiry', 0);
-    }
+        self::$exports = [];
+        self::$uriPathDepth = 0;
 
-    /** 
-     * Get property from view options or application exported, public and protected properties.
-     *
-     * @param string $key The property name.
-     *
-     * @return mixed Return option value or class object.
-     * @internal 
-     */
-    protected static final function attrGetter(string $key): mixed 
-    {
-        if (array_key_exists($key, self::$publicOptions)) {
-            return self::$publicOptions[$key];
+        // Feature flags from .env or runtime config
+        self::$minifyContent = (bool) env('page.minification', false);
+        self::$isHmvcModule = env('feature.app.hmvc', false);
+        self::$cachePath = self::getSystemPath(
+            rtrim(self::$config->cacheFolder, TRIM_DS) . DIRECTORY_SEPARATOR . 'default'
+        );
+
+        $this->cacheable = (bool) env('page.caching', false);
+        $this->expiration = (int) env('page.cache.expiry', 0);
+
+        if($app === null){
+            return;
         }
 
-        return self::$weak[self::$reference][$key] ?? self::$KEY_NOT_FOUND;
+        if (!($app instanceof Application)) {
+            throw new RuntimeException(sprintf(
+                'View expected an instance of App\Application<Luminova\Foundation\Core\Application>, %s given.',
+                $app::class
+            ));
+        }
+
+        $this->app = clone $app;
+        $app = null;
     }
 
-    /** 
-     * Set if HTML codeblock tags should be ignore during page minification.
+    /**
+     * Retrieve a protected property or dynamic attribute from template options or exported classes.
      *
-     * @param bool $minify Indicate if codeblocks should be minified.
-     * @param bool $button Indicate if codeblock tags should include a copy button (default: false).
-     *
-     * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
+     * @param string $property The property or class alias name.
+     * 
+     * @return mixed|null Return the property value or null if not found.
+     * @ignore
      */
-    public final function codeblock(bool $minify, bool $button = false): self 
+    public function __get(string $property): mixed
     {
-        $this->minifyCodeblocks = $minify;
-        $this->codeblockButton = $button;
+        $result = $this->getProperty($property, true, false);
 
-        return $this;
+        if($result === self::KEY_NOT_FOUND){
+            return $this->__log($property);
+        }
+
+        return $result;
     }
 
-    /** 
-     * Set the view directory or subfolder within the application to search for view files in one of the following locations:
-     * 
-     * - `resources/Views/`
-     * - `app/Modules/Views/`
-     * - `app/Modules/<Module>/Views/`
+    /**
+     * Handle dynamic calls to instance methods.
      *
-     * @param string $path The folder name to search for the view.
+     * @param string $method The name of the method being called.
+     * @param array  $arguments The arguments passed to the method.
      *
-     * @return self Returns the instance of the `View` class or `CoreApplication`, depending on the context.
+     * @return mixed Return the result of the called method, or null if method not found.
+     * @ignore
+     */
+    public function __call(string $method, array $arguments): mixed
+    {
+        return self::__fromExport($method, $arguments);
+    }
+
+    /**
+     * Handle dynamic static method calls.
+     *
+     * @param string $method    The name of the static method being called.
+     * @param array  $arguments The arguments passed to the static method.
+     *
+     * @return mixed Return the result of the called method, or null if method not found.
+     * @ignore
+     */
+    public static function __callStatic(string $method, array $arguments): mixed
+    {
+        return self::__fromExport($method, $arguments, true);
+    }
+
+    /**
+     * Handle dynamic setting of template options within or outside the view.
+     *
+     * @param string $name The option name.
+     * @param array  $value The value to be assigned name.
+     *
+     * @return void
+     * @ignore
+     */
+    public function __set(string $name, mixed $value): void 
+    {
+        self::assertOptionKey($name);
+        self::$options[$name] = $value;
+    }
+
+    /**
+     * Break the circular reference to `$app` object.
      * 
-     * - If called in a controller's `onCreate` or `__construct` method, the entire controller's views will be searched in the specified folder.
-     * - If called in the application's `onCreate` or `__construct` method, the application's views will be searched in the specified folder.
-     * - If called within a specific controller method before rendering, only that method's view will be searched in the specified folder.
+     * So templates can't get the view via $self->view->app
+     * 
+     * @internal Used in scope isolation.
+     */
+    public function __clone()
+    {
+        $this->app = null;
+    }
+
+    /**
+     * When checking if property isset.
+     * 
+     * @param string $property The property as option name or export alias.
+     * 
+     * @return bool Return true if property isset.
+     */
+    public function __isset(string $property): bool
+    {
+        if(property_exists($this, $property)){
+            return true;
+        }
+
+        return $this->hasOption($property) || $this->isExported($property);
+    }
+
+    /**
+     * When unsetting a property.
+     * 
+     * @param string $property The property as option name or export alias.
+     * 
+     * @return void
+     */
+    public function __unset(string $property): void 
+    {
+        if($this->isExported($property)){
+            unset(self::$exports[$property]);
+            return;
+        }
+
+        unset(self::$options[$property]);
+    }
+
+    /**
+     * Checks if a method exists in the view object.
+     *
+     * @param string $method The method name to check for.
+     *
+     * @return bool Return true if the method exists in the target object; otherwise, false.
+     * @internal Allow lazy initialization in Application to execute object.
+     */
+    public final function hasMethod(string $method): mixed
+    {
+        return method_exists($this, $method);
+    }
+
+    /**
+     * Checks if a given name exists as a view content option.
+     *
+     * Useful for determining whether a value was set in the current view
+     * context via configuration options.
+     *
+     * @param string $name The option name to check.
+     *
+     * @return bool Returns `true` if the option exists, otherwise `false`.
+     */
+    public final function hasOption(string $name): bool 
+    {
+        if(self::$options === []){
+            return false;
+        }
+
+        return array_key_exists($name, self::$options);
+    }
+
+    /**
+     * Checks if a given property exists in template exported object.
+     *
+     * Useful for determining whether a value was made available to the
+     * current view via the `export()` method.
+     *
+     * @param string $name The export name or alias to check.
+     *
+     * @return bool Returns `true` if the export exists, otherwise `false`.
+     */
+    public final function isExported(string $name): bool 
+    {
+         if(self::$exports === []){
+            return false;
+        }
+
+        return array_key_exists($name, self::$exports);
+    }
+
+    /**
+     * Retrieves a property exported from the application context to template scope.
+     *
+     * @param string $name The export property class name or alias used when exporting.
+     * 
+     * @return mixed|null Return the export value, or null if not found.
+     */
+    public final function getExport(string $name): mixed 
+    {
+        $value = $this->getProperty($name, false, false);
+
+        return ($value === self::KEY_NOT_FOUND) ? null : $value;
+    }
+
+    /**
+     * Retrieves a value from the view's context options.
+     *
+     * If the key does not exist, the method also checks for the same key prefixed with `_`
+     * to support backward compatibility when `$variablePrefixing` is not null.
+     *
+     * @param string $key The option name.
+     *
+     * @return mixed|null Return the option value if found; otherwise, `null`.
+     */
+    public final function getOption(string $key): mixed 
+    {
+        return self::$options[$key] 
+            ?? self::$options["_$key"]
+            ?? null;
+    }
+
+    /**
+     * Returns all context options available to the view.
+     *
+     * This includes any keys with or without prefixing depending on the `$variablePrefixing` configuration.
+     *
+     * @return array<string,mixed> Return an associative array of all view context options.
+     */
+    public final function getExports(): array 
+    {
+        return self::$exports;
+    }
+
+    /**
+     * Returns all template context options extracted for the view.
+     * 
+     * This will return option key value if template variable prefixing 
+     * configuration `$variablePrefixing` is not set to null.
+     *
+     * @return array<string,mixed> Return an associative array of view context options.
+     */
+    public final function getOptions(): array 
+    {
+        return self::$options;
+    }
+
+    /**
+     * Get the template filename.
+     * 
+     * By default, returns the resolved template name (which may differ from the original
+     * if a fallback like `404` was used).  
+     * Pass `false` to get the original template name exactly as specified in the controller.
+     *
+     * @param bool $resolved Whether to return the resolved filename (true) or the original (false).
+     * 
+     * @return string Return the current view template file basename.
+     */
+    public final function getTemplate(bool $resolved = true): string 
+    {
+        return $resolved ? $this->filename : $this->template;
+    }
+
+    /**
+     * Get the current HTTP status code used in rendering template.
+     *
+     * Useful when you need to access the same status code that was used 
+     * to render the template directly from inside the template itself.
+     *
+     * @return int Return the HTTP status code (e.g., 200, 404, 500).
+     */
+    public final function getStatusCode(): int 
+    {
+        return $this->status;
+    }
+
+    /**
+     * Sets the view subfolder used to locate view files within the application template view directory.
+     * 
+     * Valid base locations include:
+     * - `resources/Views/` - MVC View directory.
+     * - `app/Modules/Views/` - HMVC root view directory.
+     * - `app/Modules/<Module>/Views/` - HMVC custom module view directory.
+     *
+     * @param string $path Subfolder name to look for views.
+     * 
+     * @return self Return instance of template view class.
+     *
+     * > **Notes:**
+     * > - When used in a controller's `onCreate` or `__construct`, all views for that controller will be searched in this folder.
+     * > - When used in the application's `onCreate` or `__construct`, it sets the default folder for all views.
+     * > - When used in a controller method before rendering, only that method's view lookup is affected.
      */
     public final function setFolder(string $path): self
     {
@@ -295,173 +623,282 @@ trait View
     }
 
     /**
-     * Manually set how many parent directories (`../`) should prefix asset or view paths.
+     * Sets the HMVC module name for the current controller class.
      *
-     * By default, Luminova auto-detects how many `../` to prepend based on the URI segments.
-     * This method overrides that behavior by explicitly setting the number of parent directory levels
-     * (e.g., `1` adds `../`, `2` adds `../../`, and so on).
+     * This identifies the module that the controller belongs to, typically matching
+     * the folder name under `app/Modules/<Module>`. For example, a controller located at
+     * `app/Modules/Blog/Controllers/PostController.php` should use `'Blog'` as the module name.
      *
-     * Useful when custom routing or nested views affect the correct relative path for assets.
+     * Use an empty string if the controller is not part of root module (i.e., global scope).
      *
-     * @param int $depth Number of `../` segments to prepend.
+     * @param string $module The module name (e.g., 'Blog'). Must not contain slashes or backslashes.
      *
-     * @return self Returns the current view instance.
+     * @return self Return instance of template view class.
+     * @throws RuntimeException If the module name contains invalid characters (e.g., slashes).
+     *
+     * > **Note:** 
+     * > This method is intended for HMVC usage only, and should be called once in the
+     *       controller’s `__construct` or `onCreate` method—before rendering any views.
      */
-    public final function setAssetDepth(int $depth): self
-    {
-        self::$assetDepth = $depth;
-
-        return $this;
-    }
-
-    /** 
-     * Set the HMVC module name for current controller class.
-     * 
-     * The module name is typically the directory name (e.g, `app/Modules/<CustomModuleName>`), that contains the controller class. This is essential for identifying each HMVC module.
-     *
-     * @param string $module The module name or directory name (e.g., `Blog`).
-     *                    Use a blank string for global controller without a specific module name prefix.
-     *
-     * @return self Returns the instance of the `View` class or `CoreApplication`, depending on the context.
-     * @throws RuntimeException Throws if an invalid module name is specified.
-     * 
-     * > **Note:** This method is HMVC specify feature and should only be called once in the controller's `onCreate` or `__construct` method, before rendering any views.
-     */
-    public final function setModule(string $module): self
+    public final function setModule(string $module = ''): self
     {
         $module = trim($module);
 
         if ($module !== '' && strpbrk($module, '/\\') !== false) {
             throw new RuntimeException(
                 sprintf('Invalid module name: %s. Only alphanumeric characters and underscores are allowed.', $module),
-                RuntimeException::INVALID_ARGUMENTS
+                ErrorCode::INVALID_ARGUMENTS
             );
         }
 
-        $this->moduleName = $module;
+        $this->module = $module;
         return $this;
     }
 
-    /** 
-     * Adds a view to the list of views that should not be cached.
-     *
-     * @param string|string[] $viewName A single view name or an array of view names to exclude from caching.
-     *
-     * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
+    /**
+     * Set URI relative parent directories depth.
      * 
-     * > It is recommended to use this method within the `onCreate` or `__construct` methods of your application.
+     * This method allows you to manually set how many parent directories (`../`) to prepend to asset and link paths.
+     *
+     * It overrides Luminova's default auto-detection based on the current URI depth.
+     * Use it when working with nested views or custom routes that require explicit relative path control.
+     *
+     * Example depth values:
+     * - `1` → `../`
+     * - `2` → `../../`
+     *
+     * @param int $depth Number of `../` segments to prepend.
+     * @return self Return instance of template view class.
+     *
+     * @example Usage:
+     * ```php
+     * // Global functions
+     * asset('images/logo.png'); // → ../images/logo.png
+     * href('about');            // → ../about
+     *
+     * // In template (non-isolated)
+     * $this->_asset . 'images/logo.png';
+     * $this->_href  . 'about';
+     * $this->link('about');
+     *
+     * // In template (isolated)
+     * $self->_asset . 'images/logo.png';
+     * $self->_href  . 'about';
+     * $self->link('about');
+     * ```
      */
-    public final function noCaching(array|string $viewName): self
+    public final function setUriPathDepth(int $depth): self
     {
-        if(is_string($viewName)){
-            $this->cacheOption['ignore'][] = $viewName;
-            return $this;
-        }
-
-        $this->cacheOption['ignore'] = $viewName;
+        self::$uriPathDepth = $depth;
         return $this;
     }
 
-    /** 
-     * Specifies views that should exclusively be cached.
-     *
-     * @param string|string[] $viewName A single view name or an array of view names to cache.
-     *
-     * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
+    /**
+     * Set link parent level.
      * 
-     * > It is recommended to invoke this method within the `onCreate` or `__construct` methods of your application.
+     * @param int $level Number of `../` segments to prepend.
+     * 
+     * @return self Return instance of template view class.
+     * @deprecated This method has been deprecated since 3.6.8, use `setUriPathDepth` instead.
      */
-    public final function cacheOnly(array|string $viewName): self
+    public final function setAssetDepth(int $depth): self
     {
-        if(is_string($viewName)){
-            $this->cacheOption['only'][] = $viewName;
-            return $this;
-        }
-
-        $this->cacheOption['only'] = $viewName;
-        return $this;
+        return $this->setAssetPathDepth($depth);
     }
 
-    /** 
-     * Set if view base context should be cached.
-     * Useful in api context to manually handle caching.
-     *
-     * @param bool $allow Whether to allow caching of views.
-     *
-     * @return self Return instance of View or CoreApplication depending on where its called,
+    /**
+     * HTML codeblock minification behavior.
      * 
-     * - If set in controller `onCreate` or `__construct`, the entire views within the controller will not be cached.
-     * - If set in application class, the entire application views will not be cached.
+     * This method allows you to configure whether HTML `<code>` blocks should be excluded from minification 
+     * and optionally display a copy button.
+     *
+     * @param bool $minify Whether to skip minifying `<code>` blocks.
+     * @param bool $button Whether to show a "copy" button inside code blocks (default: false).
+     *
+     * @return self Return instance of template view class.
      */
-    public final function cacheable(bool $allow): self
+    public final function codeblock(bool $minify, bool $button = false): self 
     {
-        $this->cacheView = $allow;
+        $this->minifyCodeblocks = $minify;
+        $this->minifyCodeCopyable = $button;
 
         return $this;
     }
 
     /**
-     * Export / Register a class instance to make it accessible within the view template.
-     *
-     * @param class-string<\T>|class-object<\T> $class The class name or instance of a class to register.
-     * @param string|null $alias Optional class alias to use in accessing class object (default: null).
-     * @param bool $initialize Whether to initialize class-string or leave it as static class (default: true).
+     * Exclude specific templates from being cached.
      * 
-     * @return true Return true on success, false on failure.
-     * @throws RuntimeException If the class does not exist, failed or an error during registration.
+     * This method allows you to exclude one or more templates name from caching it rendered content.
+     *
+     * @param string|string[] $template A single template name or an array of template names to ignore from caching.
+     *
+     * @return self Return instance of template view class.
+     * 
+     * @see cacheOnly()
+     * @see cacheable()
+     *
+     * > Recommended to call in `onCreate()` or `__construct()` of the controller or application.
      */
-    public final function export(string|object $class, ?string $alias = null, bool $initialize = true): bool 
+    public final function noCaching(array|string $template): self
     {
-        if ($class === '' || $alias === '') {
-            throw new RuntimeException(
-                'Invalid arguments provided, arguments "$class or $alias" expected a non-blank string.',
-                RuntimeException::INVALID_ARGUMENTS
+        if(is_string($template)){
+            $this->cacheConfig['ignore'][] = $template;
+            return $this;
+        }
+
+        $this->cacheConfig['ignore'] = $template;
+        return $this;
+    }
+
+    /**
+     * Specify templates that should be cached exclusively.
+     * 
+     * This method allows you to explicitly add one or more templates that should be cached.
+     * When this is used instead of `noCaching` all other templates will not be cached except the listed templates here.
+     *
+     * @param string|string[] $template A single template name or an array of template names to allow for caching.
+     *
+     * @return self Return instance of template view class.
+     * 
+     * @see noCaching()
+     * @see cacheable()
+     *
+     * > Recommended to call in `onCreate()` or `__construct()` of the controller or application.
+     */
+    public final function cacheOnly(array|string $template): self
+    {
+        if(is_string($template)){
+            $this->cacheConfig['only'][] = $template;
+            return $this;
+        }
+
+        $this->cacheConfig['only'] = $template;
+        return $this;
+    }
+
+    /**
+     * Enable or disable view caching globally at the controller or application level.
+     *
+     * @param bool $allow Whether to allow view caching.
+     *
+     * @return self Return instance of template view class.
+     * 
+     * @see noCaching()
+     * @see cacheOnly()
+     *
+     * - If used in a controller’s `onCreate()` or `__construct()`, all views under that controller will follow this rule.
+     * - If used in the application class, applies to all views globally.
+     * 
+     * >  Useful in api context to manually handle caching.
+     */
+    public final function cacheable(bool $cacheable = true): self
+    {
+        $this->cacheable = $cacheable;
+
+        return $this;
+    }
+
+    /**
+     * Export a class instance or fully qualified name for later access in templates.
+     * 
+     * This allows registering services, classes, or any custom object 
+     * so that it can be accessed in the template via its alias.
+     *
+     * @param object|string $target  The class name, object instance to expose.
+     * @param string|null $alias Optional alias for reference (Defaults to class class/object name).
+     * @param bool $shared If true and `$target` is class name, the same instance will be reused.
+     *
+     * @return true Returns `true` if imported, otherwise throw error.
+     * @throws RuntimeException If arguments are invalid or alias already exists.
+     * 
+     * @see getExports()
+     * @see getExport(...)
+     * 
+     * > **Note:** If `$target` is not an object, it treated as a class name to be instantiated later.
+     * 
+     * @example - Usages:
+     * ```php
+     * class Application extends \Luminova\Foundation\Core\Application
+     * {
+     *      protected ?Session $session = null;
+     *      protected function onCreate(): void 
+     *      {
+     *          $this->session = new Session();
+     *          $this->session->setStorage('users');
+     *          $this->session->start();
+     * 
+     *          $this->view->export($this->session, 'session');
+     *      }
+     * } 
+     * ```
+     */
+    public final function export(object|string $target, ?string $alias = null, bool $shared = false): bool
+    {
+        if ($target === '' || $alias === '') {
+            throw new InvalidArgumentException(
+                'Invalid export arguments: "$target" and "$alias" must be non-empty.'
             );
         }
 
-        $alias ??= get_class_name($class);
+        $alias ??= get_class_name($target);
 
-        if (isset(self::$weak[self::$reference][$alias])) {
-            throw new RuntimeException("Exported class with the same name or alias: '{$alias}' already exists.");
+        if (isset(self::$exports[$alias])) {
+            throw new RuntimeException("Export alias '{$alias}' already exists.");
         }
 
-        if ($initialize && is_string($class)) {
-            self::$weak[self::$reference][$alias] = new $class();
-            return true;
-        }
-        
-        self::$weak[self::$reference][$alias] = $class;
+        $lazy = is_string($target);
+
+        self::$exports[$alias] = [
+            'target'    => $target,
+            'lazy'      => $lazy,
+            'shared'    => $lazy && $shared,
+            'instance'  => null,
+            'exists'    => null
+        ];
+
         return true;
     }
 
-    /** 
-     * Cache and store response to reuse on next request to same content.
+    /**
+     * Enables view response caching for reuse on future requests.
+     *
+     * When called, this method marks the response to be cached. You can optionally 
+     * specify a custom expiration time; otherwise, the default from the `.env` config will be used.
+     *
+     * @param DateTimeInterface|int|null $expiry Optional cache expiration. Accepts:
+     *        - `DateTimeInterface` for specific expiration date/time,
+     *        - `int` for duration in seconds,
+     *        - `null` to use the default expiration from configuration.
+     *
+     * @return self Return instance of template view class.
      * 
-     * @param DateTimeInterface|int|null $expiry Cache expiration default, set to null to use default expiration from .env file.
-     * 
-     * @return self Returns the instance of the View class or CoreApplication, depending on where it's called.
-     * 
-     * @example - Usage example with cache.
+     * @see expired()
+     * @see reuse()
+     * @see onExpired()
+     * @see delete()
+     * @see clear()
+     *
+     * @example Basic usage with conditional caching:
      * ```php
      * public function fooView(): int 
      * {
-     *      $cache = $this-app->cache(60); 
-     * 
-     *      //Check if already cached before caching again.
-     *      if($cache->expired()){
-     *          $heavy = $model->doHeavyProcess();
-     *          return $cache->view('foo')->render(['data' => $heavy]);
-     *      }
-     *      return $cache->reuse();
+     *     $cache = $this->app->view->cache(60); // Cache for 60 seconds
+     *
+     *     if ($cache->expired()) {
+     *         $heavy = $model->doHeavyProcess();
+     *         return $cache->view('foo')->render(['data' => $heavy]);
+     *     }
+     *
+     *     return $cache->reuse(); // Reuse the previously cached response
      * }
      * ```
      */
-    public final function cache(DateTimeInterface|int|null $expiry = null): self 
+    public final function cache(DateTimeInterface|int|null $expiry = null): self
     {
         $this->forceCache = true;
 
-        if($expiry !== null){
-            $this->cacheExpiry = $expiry;
+        if ($expiry !== null) {
+            $this->expiration = $expiry;
         }
 
         return $this;
@@ -474,9 +911,9 @@ trait View
      * 
      * @return bool Return true if the cache entry was deleted; false otherwise.
      */
-    public function delete(?string $version = null): bool 
+    public final function delete(?string $version = null): bool 
     {
-        return self::__getCache()->delete($version);
+        return self::getCache()->delete($version);
     }
 
     /**
@@ -486,65 +923,110 @@ trait View
      * 
      * @return int Return the number of deleted cache entries.
      */
-    public function clear(?string $version = null): int 
+    public final function clear(?string $version = null): int 
     {
-        return self::__getCache()->clear($version);
+        return self::getCache()->clear($version);
     }
 
     /**
      * Check if page cache has expired.
-     * Note: the expiration check we use the time used while saving cache.
      * 
-     * @param string|null $viewType The view content extension type (default: `html`).
+     * @param string|null $type The view content extension type (default: `self::HTML`).
      * 
      * @return bool Returns true if cache doesn't exist or expired.
      * @throws RuntimeException Throw if the cached version doesn't match with the current view type.
+     * 
+     * @see reuse()
+     * @see onExpired()
+     * @see cache()
+     * 
+     * > **Note:**
+     * > The expiration check we use the time used while saving cache.
      */
-    public final function expired(?string $viewType = 'html'): bool
+    public final function expired(?string $type = self::HTML): bool
     {
-        $expired = self::__getCache()->expired($viewType);
+        $expired = self::getCache()->expired($type);
 
         if($expired === 404){
-            throw new RuntimeException('Invalid mismatch view type: ' . $viewType);
+            throw new RuntimeException(
+                sprintf('Invalid mismatch template view type: %s', $type)
+            );
         }
 
         return $expired;
     }
 
     /**
-     * Reuse a cached view content if exist in cache.
+     * Reuse previously cached view content if available.
+     *
+     * @return int Returns one of the following status codes:
+     * - `STATUS_SUCCESS` if cache was found and successfully reused,
+     * - `STATUS_SILENCE` if no valid cache was found — silent exit, allowing manual fallback logic.
+     *
+     * @throws RuntimeException If called without first calling `cache()` method.
      * 
-     * @return int Return one of the following status codes:  
-     * - `STATUS_SUCCESS` if the cache exist and handled successfully,  
-     * - `STATUS_SILENCE` if failed, silently terminate without error page allowing you to manually handle the state.
-     * @throws RuntimeException Throws if called without calling `cache` method.
+     * @see expired()
+     * @see onExpired()
+     * @see cache()
+     *
+     * @example - Usage:
+     * ```php
+     * public function homepage(): int
+     * {
+     *     $this->app->view->cache(120); // Enable caching for 2 minutes
+     *     
+     *     if ($this->app->view->reuse() === STATUS_SUCCESS) {
+     *         return STATUS_SUCCESS; // Cache hit, response already sent
+     *     }
+     *     
+     *     $data = $model->getHomepageData();
+     *     return $this->app->view->view('home')->render(['data' => $data]);
+     * }
+     * ```
      */
     public final function reuse(): int
     {
         if (!$this->forceCache) {
-            throw new RuntimeException('Cannot call reuse method with first calling cache() method');
+            throw new RuntimeException('Cannot call View::reuse() without first calling View::cache().');
         }
 
         $this->forceCache = false;
-        $cache = self::__getCache($this->cacheExpiry);
+        $cache = self::getCache($this->expiration);
 
         return $cache->read() ? STATUS_SUCCESS : STATUS_SILENCE;
     }
 
     /**
-     * Handle cache expiration and renewal.
+     * Conditionally renew cached view if expired, otherwise reuse it.
      *
-     * @param string $viewType The type of view content to check, such as 'html' or 'json'.
-     * @param Closure $renew A callback function that will be executed if the cached 
-     *                            content has expired. This function should return in (`0` or `1`).
-     * @param mixed ...$arguments Optional arguments to pass to the callback function, none dependency injection supported.
+     * @param string  $type  Type of content to check cache for, (e.g. `View::HTML`, `View::JSON`).
+     * @param Closure $renew Callback to execute if cache has expired. 
+     *          Should return `STATUS_SUCCESS` or `STATUS_SILENCE`.
+     * @param mixed ...$arguments Optional arguments to pass to the `$renew` callback. DI not supported.
      *
-     * @return int Return the status code of the cache renewal callback if the cache has expired, 
-     *             otherwise the status code from reusing the existing cache.
+     * @return int Return the status code:
+     *      - Status code from the callback if cache is expired or bypassed,
+     *      - Otherwise, status code from `reuse()` if valid cache is used.
+     * 
+     * @see reuse()
+     * @see cache()
+     * @see expired()
+     *
+     * @example - Example:
+     * ```php
+     * public function profile(): int
+     * {
+     *      return $this->app->view->cache(300)->onExpired(View::HTML, function (int $id) {
+     *          $data = $model->getProfileData($id);
+     * 
+     *          return $this->view('user/profile')->render(['user' => $data]);
+     *      }, 100);
+     * }
+     * ```
      */
-    public final function onExpired(string $viewType, Closure $renew, mixed ...$arguments): int
+    public final function onExpired(string $type, Closure $renew, mixed ...$arguments): int
     {
-        if ($this->__shouldCache() && !$this->expired($viewType)) {
+        if ($this->isCacheable() && !$this->expired($type)) {
             $this->forceCache = true;
             return $this->reuse();
         }
@@ -553,14 +1035,14 @@ trait View
     }
 
     /**
-     * Set response header.
+     * Set a single response header.
      *
      * @param string $key The header key.
      * @param mixed $value The header value for key.
      * 
-     * @return self Return instance of View or CoreApplication depending on where its called.
+     * @return self Return instance of template view class.
      */
-    public function header(string $key, mixed $value): self 
+    public final function header(string $key, mixed $value): self 
     {
         $this->headers[$key] = $value;
 
@@ -568,82 +1050,130 @@ trait View
     }
 
     /**
-     * Set response header.
+     * Set multiple response headers at once.
      *
-     * @param array<string,mixed> $headers The headers key-pair.
+     * @param array<string,mixed> $headers Associative array of headers key-pair.
      * 
-     * @return self Return instance of View or CoreApplication depending on where its called.
+     * @return self Return instance of template view class.
      */
-    public function headers(array $headers): self 
+    public final function headers(array $headers): self 
     {
         $this->headers = $headers;
 
         return $this;
     }
 
-    /** 
-     * Sets the template view name and content type before invoking methods like `render`, `response`, or `promise`. 
-     * 
-     * This method allows you to specify a view file within the `resources/Views` directory and the content type for rendering. 
-     * The view name should exclude the file extension (e.g., `.php`, `.tpl`, `.twg`), only the base file name is allowed.
+    /**
+     * Sets the view template and its content type for rendering.
      *
-     * @param string $viewName The view file name (without extension, e.g., `index`).
-     * @param string $viewType The content type for the view (default: `html`).
+     * It resolves the template path and prepares it for rendering or later access.
      * 
-     * Supported View Types:
-     * - `html`  : HTML content.
-     * - `json`  : JSON content.
-     * - `text|txt`: Plain text content.
-     * - `xml`   : XML content.
-     * - `js`    : JavaScript content.
-     * - `css`   : CSS content.
-     * - `rdf`   : RDF content.
-     * - `atom`  : Atom content.
-     * - `rss`   : RSS feed content.
+     * Call this method to specify which view file to use, before any of these 
+     * methods (`render()`, `respond()`, `promise()`, `exists()` or `info()`) are called. 
      *
-     * @return self Returns the instance of CoreApplication.
-     * @throws RuntimeException If an unsupported view type is specified.
+     * **Search Paths:**
+     * - `/resources/Views/` — MVC view directory.
+     * - `/app/Modules/Views/` — HMVC root view directory.
+     * - `/app/Modules/<Module>/Views/` — HMVC module-specific views.
+     *
+     * **Supported Content Types:**
+     * - `html`, `json`, `text|txt`, `xml`, `js`, `css`, `rdf`, `atom`, `rss`
+     *
+     * > The `$template` must exclude file extensions (`.php`, `.tpl`, `.twg`, etc).
+     * > For unsupported types, use `response(...)->render(...)` for manual handling.
+     *
+     * @param string $template View filename without extension (e.g., `dashboard/index`).
+     * @param string $type Content type to render (default: `View::HTML`).
+     *
+     * @return self Return instance of template view class.
+     *
+     * @throws InvalidArgumentException If `$type` is not a supported view type.
+     *
+     * @see render()
+     * @see respond()
+     * @see promise()
+     * @see exists()
+     * @see info()
      * 
-     * @example - Usage:
+     * @see header()
+     * @see headers()
+     *
+     * @example - Direct Usage:
      * 
      * ```php
-     * $this->app->view('name', 'html')->render([...]);  // Render and return status int.
-     * $this->app->view('name', 'html')->response([...]);  // Render and return content.
-     * $this->app->view('name', 'html')->promise([...]);  // Render and return a promise object.
+     * $view = new View(application);
+     * 
+     * // Render the view and return the HTTP status code
+     * $status = $view->view('profile', View::HTML)->render(['name' => 'John']);
+     * 
+     * // Render the view and return the content as string
+     * $html = $view->view('dashboard', View::HTML)->response(['user' => $user]);
+     * 
+     * // Render the view and return a promise object for async handling
+     * $promise = $view->view('report', View::HTML)->promise(['data' => $data]);
+     * ```
+     * 
+     * @example - Usage in Controller:
+     * 
+     * ```php
+     * // Render view and return status
+     * $status = $this->app->view->view('profile', View::HTML)->render(['id' => 1]);
+     * 
+     * // Render view and return content
+     * $content = $this->app->view->view('settings', View::HTML)->response(['tab' => 'privacy']);
+     * 
+     * // Render view and return promise object
+     * $promise = $this->app->view->view('invoice', View::HTML)->promise(['orderId' => 101]);
      * ```
      */
-    public final function view(string $viewName, string $viewType = 'html'): self 
+    public final function view(string $template, string $type = self::HTML): self 
     {
-        $viewName = trim($viewName, '/');
-        $viewType = strtolower($viewType);
-    
-        if(!in_array($viewType, self::$SUPPORTED_TYPES, true)){
-            throw new RuntimeException(sprintf(
-                'Invalid argument, unsupported view type: "%s" for view: "%s", supported types (%s). To render other formats use helper function `Luminova\Funcs\response()->render()`', 
-                $viewType, 
-                $viewName,
-                implode(', ', self::$SUPPORTED_TYPES)
-            ), RuntimeException::INVALID_ARGUMENTS);
+        $template = trim($template, TRIM_DS);
+        $type = strtolower($type);
+
+        if (!in_array($type, self::SUPPORTED_TYPES, true)) {
+            self::__throw(new InvalidArgumentException(sprintf(
+                'Unsupported template view type "%s" for template "%s". Supported: [%s]. For custom types, use response()->render(...).',
+                $type, 
+                $template, 
+                implode(', ', self::SUPPORTED_TYPES)
+            )), 2, true);
         }
 
-        $this->viewsDirectory = $this->__getViewPath();
-        $this->filepath = $this->viewsDirectory . $viewName . self::__templateExtension();
-
-        if (PRODUCTION && !file_exists($this->filepath)) {
-            $viewName = '404';
-            $this->filepath = $this->viewsDirectory . $viewName . self::__templateExtension();
-        }
-
-        $this->viewType = $viewType;
-        $this->activeView = $viewName;
+        $this->template = $template;
+        $this->type = $type;
+        $this->resolve($template);
 
         return $this;
     }
 
     /**
-     * Render view content with additional options available as globals within the template view.
+     * Check if a template view file exists (without rendering).
      *
-     * @param array<string,mixed> $options Additional parameters to pass in the template file.
+     * @return bool Return true if the template view file exists, false otherwise.
+     *
+     * @example - Example:
+     * 
+     * ```php
+     * $this->app->view->view('admin')->exists();
+     * ```
+     */
+    public final function exists(): bool
+    {
+        if($this->template !== $this->filename){
+            return false;
+        }
+        
+        return is_file($this->filepath);
+    }
+
+    /**
+     * Render and immediately send the view output.
+     * 
+     * This method renders view content with an optional parameters to make globally available 
+     * within the template view file.
+     *
+     * @param array<string,mixed> $options Additional parameters to pass in the template (available inside view).
      * @param int $status The HTTP status code (default: 200 OK).
      * 
      * @return int Return one of the following status codes:  
@@ -651,60 +1181,76 @@ trait View
      *      - `STATUS_SILENCE` if failed, silently terminate without error page allowing you to manually handle the state.
      * @throws RuntimeException If the view rendering fails.
      * 
+     * @see respond()
+     * @see promise()
+     * 
      * @example - Display template view with options:
      * 
      * ```php
      * public function fooView(): int 
      * {
-     *      return $this->app->view('name')->render([...], 200);
+     *      return $this->app->view->view('name')->render([...], 200);
      * }
      * ```
      */
     public final function render(array $options = [], int $status = 200): int 
     {
-        return $this->__renderTemplate($options, $status) 
+        return $this->send($options, $status) 
             ? STATUS_SUCCESS 
             : STATUS_SILENCE;
     }
 
     /**
-     * Get the rendered contents of a view.
+     * Render the view and return the output as a string.
+     * 
+     * This method renders selected template view and return the rendered contents string.
      *
-     * @param array<string,mixed> $options Additional parameters to pass in the template file.
+     * @param array<string,mixed> $options Additional parameters to pass in the template (available inside view).
      * @param int $status HTTP status code (default: 200 OK).
      * 
-     * @return string Return the compiled view contents.
+     * @return string|null Return the compiled view contents or null if no content.
      * @throws RuntimeException If the view rendering fails.
+     * 
+     * @see render()
+     * @see promise()
      * 
      * @example - Display your template view or send as an email:
      * 
      * ```php
      * public function fooView(): int 
      * {
-     *      $content = $this->app->view('name', 'html')
+     *      $content = $this->app->view->view('name', View::HTML)
      *          ->respond(['foo' => 'bar'], 200);
+     * 
+     *      Mailer::to('peter@example.com')->send($content);
      * }
      * ```
      */
-    public final function respond(array $options = [], int $status = 200): string
+    public final function respond(array $options = [], int $status = 200): ?string
     {
-        return $this->__renderTemplate($options, $status, true);
+        return $this->send($options, $status, true) ?: null;
     }
 
     /**
-     * Return promise that resolved to rendered contents of a view.
+     * Return a promise that resolves with rendered view contents.
+     * 
+     * Renders the template view file and returns a promise that resolves with
+     * the rendered contents, or rejects if the template is missing or rendering fails.
      *
-     * @param array<string,mixed> $options Additional parameters to pass in the template file.
+     * @param array<string,mixed> $options Additional parameters to pass in the template (available inside view).
      * @param int $status HTTP status code (default: 200 OK).
      * 
-     * @return PromiseInterface Return promise that resolved compiled view contents or rejection.
+     * @return PromiseInterface Return a promise that resolves with rendered view contents or rejects with an error.
+     * 
+     * @see render()
+     * @see respond()
      * 
      * @example - Display your template view or send as an email:
      * 
      * ```php
      * public function fooView(): int 
      * {
-     *      $content = $this->app->view('name', 'html')
+     *      $content = $this->app->view->view('name', View::HTML)
      *          ->promise(['foo' => 'bar'])
      *          ->then(function(string $content) {
      *              echo $content;
@@ -718,103 +1264,185 @@ trait View
     {
         return new Promise(function ($resolve, $reject) use($options, $status){
             try{
-                $content = $this->__renderTemplate($options, $status, true);
-                $content ? $resolve($content) : $reject(new ViewNotFoundException('Not content'));
+                $content = $this->send($options, $status, true, true);
+                if($content === false){
+                    $reject(new ResponseException(
+                        sprintf('View "%s" failed to render.', $this->template)
+                    ));
+                    return;
+                }
+
+                $resolve($content);
             }catch(Throwable $e){
                 $reject($e);
             }
         });
     }
 
-    /** 
-     * Redirect to another view URI.
+    /**
+     * Returns metadata about the specified template file without rendering.
      *
-     * @param string $uri The view URI to redirect to.
-     * @param int $responseCode The redirect response status code (default: 0).
+     * Provides useful diagnostic and contextual information about a template file without rendering.
+     * 
+     * @param string|null $key Optional key to retrieve a specific value.
+     *
+     * @return array<string,mixed>|mixed Return the value for that key (null if not found), 
+     *    Otherwise return metadata array: {
+     *     @type string  $location   Full path to the view file.
+     *     @type string  $type       Content type (e.g., html, json).
+     *     @type string  $template   The view filename (without extension).
+     *     @type string  $engine     Template engine in use (e.g., default(PHP), twig, smarty).
+     *     @type string|null $module     HMVC module name (or `root` if not in custom context).
+     *     @type int     $size       File size in bytes (0 if missing).
+     *     @type int     $timestamp  Last modified time (UNIX timestamp).
+     *     @type string  $modified   Last modified datetime (`Y-m-d H:i:s`).
+     *     @type string|null $dirname    Directory containing the file.
+     *     @type string|null $extension  File extension (e.g., php, twig).
+     *     @type string|null $filename   Filename without extension.
+     * }
+     *
+     * @example - Example:
+     * ```php
+     * $info = $this->app->view->view('dashboard')->info();
+     * 
+     * // Get the modified
+     * $modified = $this->app->view->view('dashboard')->info('modified');
+     * ```
+     */
+    public final function info(?string $key = null): mixed
+    {
+        clearstatcache(true, $this->filepath);
+
+        $metadata = [
+            'location'  => $this->filepath,
+            'type'      => $this->type,
+            'template'  => $this->template,
+            'engine'    => self::getTemplateEngine(),
+            'size'      => 0,
+            'timestamp' => 0,
+            'modified'  => '',
+            'module'    => null,
+            'dirname'   => null,
+            'extension' => self::getTemplateExtension(),
+            'filename'  => null,
+        ];
+
+        if ($this->template !== $this->filename || !is_file($this->filepath)) {
+            return ($key === null) ? $metadata : ($metadata[$key] ?? null);
+        }
+
+        $metadata['module'] = self::$isHmvcModule ? ($this->module ?: 'root') : null;
+
+        if ($key !== null && in_array($key, ['location', 'module', 'type', 'template', 'engine', 'extension'], true)) {
+            return $metadata[$key];
+        }
+
+        if ($key === null || in_array($key, ['size', 'timestamp', 'modified'], true)) {
+            $metadata['size'] = filesize($this->filepath);
+            $metadata['timestamp'] = $timestamp = filemtime($this->filepath);
+            $metadata['modified']  = Time::fromTimestamp($timestamp)->format('Y-m-d H:i:s');
+
+            if($key !== null){
+                return $metadata[$key];
+            }
+        }
+
+        $info = pathinfo($this->filepath);
+        $metadata['dirname']   = $info['dirname'] ?? null;
+        $metadata['extension'] = $info['extension'] ?? null;
+        $metadata['filename']  = $info['filename'] ?? null;
+
+       return ($key === null) ? $metadata : ($metadata[$key] ?? null);
+    }
+
+    /** 
+     * Redirect to a different URI or route.
+     *
+     * @param string $uri The target URI or route.
+     * @param int $status The HTTP redirect status code (default: 302).
      *
      * @return void
+     * @see \Luminova\Funcs\redirect()
+     * 
+     * @example - Usage:
+     * ```php
+     * $this->app->view->redirect('/dashboard');   // absolute path
+     * $this->app->view->redirect('user/profile'); // relative path
+     * ```
      */
-    public final function redirect(string $uri, int $responseCode = 0): void 
+    public final function redirect(string $uri, int $status = 302): void 
     {
-        header('Location: ' . start_url($uri), true, $responseCode);
+        (new Response($status))->redirect($uri);
         exit(STATUS_SUCCESS);
     }
 
     /**
-     * Retrieves information about a view file.
-     *
-     * @return array<string,mixed> Return an associative array containing information about the view file.
+     * Generate a relative URI from the public root directory.
      * 
-     * Return Keys:
+     * This method creates a relative path for routes or public assets (e.g., CSS, JS, images)
+     * starting from the controller’s public directory. In production, it returns a root-relative path.
+     * In development, it calculates the relative path based on URI segments.
      * 
-     *    -  'location': The full path to the view file.
-     *    -  'engine': The template engine.
-     *    -  'size': The size of the view file in bytes.
-     *    -  'timestamp': The last modified timestamp of the view file.
-     *    -  'modified': The last modified date and time of the view file (formatted as 'Y-m-d H:i:s').
-     *    -  'dirname': The directory name of the view file.
-     *    -  'extension': The extension of the view file.
-     *    -  'filename': The filename (without extension) of the view file.
+     * @param string $route Optional route or file path to append after the base path.
+     * @param int|null $depth Optional depth to parent directory (used in development mode only).
+     *                         If null, the method auto-detects the depth.
+     * 
+     * @return string Return a relative or root-based URL to the file or route.
+     * 
+     * @see \Luminova\Funcs\href()
+     * @see \Luminova\Funcs\asset()
+     * 
+     * @example Usage:
+     * ```php
+     * <link href="<?= $this->link('assets/css/main.css') ?>" rel="stylesheet">
+     * <a href="<?= $this->link('about') ?>">About Us</a>
+     * ```
      */
-    public final function viewInfo(): array 
+    public static final function link(string $route = '', ?int $depth = null): string 
     {
-        $viewPath = root($this->__getViewPath(), $this->activeView . self::__templateExtension());
-        $info = [
-            'location' => $viewPath,
-            'engine' => self::__templateEngine(),
-            'size' => 0,
-            'timestamp' => 0,
-            'modified' => '',
-            'dirname' => null,
-            'extension' => null,
-            'filename' => null,
-        ];
+        $base = (PRODUCTION ? '/' : self::toRelativeLevel($depth));
 
-        clearstatcache(true, $viewPath);
-        if (file_exists($viewPath)) {
-
-            $info['size'] = filesize($viewPath);
-
-            $timestamp = filemtime($viewPath);
-            $info['timestamp'] = $timestamp;
-            $info['modified'] = Time::fromTimestamp((int) $timestamp)->format('Y-m-d H:i:s');
-
-            $pathInfo = pathinfo($viewPath);
-            $info['dirname'] = $pathInfo['dirname'] ?? null;
-            $info['extension'] = $pathInfo['extension'] ?? null;
-            $info['filename'] = $pathInfo['filename'] ?? null;
+        if($route === '' || $route === '/'){
+            return $base;
         }
 
-        return $info;
+        return $base . ltrim($route, '/');
     }
 
     /**
-     * Create a relative URL to view or file ensuring the url starts from public root directory.
+     * Converts a view template name to a formatted page title.
+     *
+     * Replaces underscores, dashes, hyphens, and commas with spaces, capitalizes words,
+     * and optionally appends the application name as a suffix.
      * 
-     * @param string $filename Optional view, path or file to prepend to root URL.
-     * 
-     * @return string Return full URL to view or file.
+     * @param bool $suffix Whether to append the app name as a suffix (default: false).
+     *
+     * @return string Return the formatted page title.
      */
-    public static final function link(string $filename = ''): string 
+    public final function toTitle(bool $suffix = false): string 
     {
-        $base = (PRODUCTION ? '/' : self::__toRelativeLevel());
+        $template = ucwords(strtr($this->filename, ['_' => ' ', '-' => ' ', ',' => '']));
 
-        return ($filename === '') ? $base : $base . ltrim($filename, '/');
+        if ($suffix && !str_contains($template, ' - ' . APP_NAME)) {
+            $template .= ' - ' . APP_NAME;
+        }
+
+        return $template;
     }
 
-    /** 
-     * Get error file from directory.
+    /**
+     * Get the full path to a system error file.
      *
-     * @param string $filename file name.
+     * @param string $filename The error file name without extension.
      *
-     * @return string Return error directory.
-     * @internal
+     * @return string Return the absolute path to the system error file.
+     * @internal Used internally to locate default error views.
      */
     public static final function getSystemError(string $filename): string 
     {
         return sprintf(
             '%s%s%s%s%s%s%s%s',
-            self::__getSystemRoot(), 'app',
+            self::getSystemRoot(), 'app',
             DIRECTORY_SEPARATOR, 'Errors',
             DIRECTORY_SEPARATOR, 'Defaults',
             DIRECTORY_SEPARATOR, "{$filename}.php"
@@ -822,422 +1450,734 @@ trait View
     }
 
     /**
-     * Convert view name to title and add suffix if specified.
+     * Retrieves a value from view options or from exported application properties.
+     * 
+     * Resolves exported classes if requested.
      *
-     * @param string $view  The view name.
-     * @param bool $suffix Whether to add suffix.
-     *
-     * @return string Return view page title.
+     * @param string $name The property name.
+     * @param bool $any Whether to also check public view options.
+     * @param bool $resolve Whether to resolve exports or return the raw target.
+     * 
+     * @return mixed Return the value from options or exports, or `KEY_NOT_FOUND` if not found.
+     * @internal Used in core application and scope class to resolve exports.
      */
-    public static final function toTitle(string $view, bool $suffix = false): string 
+    public final function getProperty(string $name, bool $any = true, bool $resolve = true): mixed 
     {
-        $view = ucwords(strtr($view, ['_' => ' ', '-' => ' ', ',' => '']));
-
-        if ($suffix && !str_contains($view, ' - ' . APP_NAME)) {
-            $view .= ' - ' . APP_NAME;
+        if ($any && array_key_exists($name, self::$options)) {
+            if($this->isIsolationObject && self::$config->variablePrefixing === null){
+                return null;
+            }
+            
+            return self::$options[$name];
         }
 
-        return $view;
-    }
-
-    /** 
-     * Get template engine file extension.
-     *
-     * @return string Returns extension type.
-     */
-    private static function __templateExtension(): string
-    {
-        $engine = self::__templateEngine();
-
-        if($engine === 'smarty'){
-            return '.tpl';
+        if((self::$exports[$name] ?? null) === null){
+            return self::KEY_NOT_FOUND;
         }
 
-        return ($engine === 'twig') ? '.twig' : '.php';
+        if(!$resolve){
+            return self::$exports[$name]['target'];
+        }
+
+        $export = &self::$exports[$name];
+
+        return self::__exportResolver($export);
     }
 
-    /** 
-     * Get template engine type.
+    /**
+     * Resolve an exported alias into its actual value.
      *
-     * @return string Return template engine name.
+     * @param array $export The exported class by reference.
+     * @return mixed
+     *
+     * @throws RuntimeException If target class does not exist.
      */
-    private static function __templateEngine(): string 
+    private static function __exportResolver(array &$export): mixed
+    {
+        if(!$export){
+            return null;
+        }
+
+        if (!$export['lazy']) {
+            return $export['target'];
+        }
+
+        if ($export['shared'] && $export['instance']) {
+            return $export['instance'];
+        }
+
+        $export['exists'] ??= class_exists($export['target']);
+
+        if(!$export['exists']){
+            throw new RuntimeException("Class '{$export['target']}' does not exist.");
+        }
+
+        if ($export['shared']) {
+            $export['instance'] = new $export['target']();
+        }
+
+        return new $export['target']();
+    }
+
+     /**
+     * Calls an exported method from the internal weak reference map.
+     *
+     * @param string  $method    The name of the exported method to call.
+     * @param array   $arguments The arguments to pass to the method.
+     * @param bool    $isStatic  Whether the call is for a static method (used in the error message).
+     *
+     * @return mixed Return the result of the method call.
+     *
+     * @throws BadMethodCallException If the method is not defined or not callable.
+     * @internal Used in view and isolation self keyword class.
+     */
+    public static final function __fromExport(string $method, array $arguments, bool $isStatic = false): mixed 
+    {
+        if((self::$exports[$method] ?? null) !== null){
+            $export = &self::$exports[$method];
+
+            $callable = self::__exportResolver($export);
+
+            if ($callable && is_callable($callable)) {
+                return $callable(...$arguments);
+            }
+        }
+
+        self::__throw(new BadMethodCallException(sprintf(
+            '%s "%s" does not exist in "%s" or is not exported.', 
+            $isStatic ? 'Static method' : 'Method', 
+            $method, 
+            self::class
+        )), 2);
+
+        return null;
+    }
+
+    /**
+     * Get the template file extension based on the configured engine.
+     *
+     * @return string File extension (.php, .twig, .tpl).
+     */
+    private static function getTemplateExtension(): string
+    {
+        return match (self::getTemplateEngine()) {
+            'smarty' => '.tpl',
+            'twig'   => '.twig',
+            default  => '.php',
+        };
+    }
+
+    /**
+     * Get the template engine name in lowercase.
+     *
+     * @return string Template engine name or "default".
+     */
+    private static function getTemplateEngine(): string 
     {
         return strtolower(self::$config->templateEngine ?? 'default');
     }
 
     /** 
-     * Creates and Render template by including the accessible global variable within the template file.
+     * Render template and send output.
+     * 
+     * Handles accessible global variable within the template file.
      *
      * @param array $options additional parameters to pass in the template file.
      * @param int $status HTTP status code (default: 200 OK).
-     * @param bool $return Whether to return content instead.
+     * @param bool $returnable Whether to return content instead.
+     * @param bool $async Whether is promise async.
      *
      * @return string|bool  Return true on success, false on failure.
      * @throws ViewNotFoundException Throw if view file is not found.
      */
-    private function __renderTemplate(array $options = [], int $status = 200, bool $return = false): string|bool
+    private function send(
+        array $options = [], 
+        int $status = 200, 
+        bool $returnable = false,
+        bool $async = false
+    ): string|bool
     {
+        $this->status = $status;
+        $options = $this->parseOptions($options);
+
         try {
-            $cacheable = $this->__shouldCache();
-            $engine = self::__templateEngine();
+            $cacheable = $this->isCacheable();
+            $engine = self::getTemplateEngine();
             $cache = null;
 
             if ($cacheable && $engine === 'default') {
-                $cache = self::__getCache($this->cacheExpiry);
+                $cache = self::getCache($this->expiration);
         
-                if ($cache->expired($this->viewType) === false) {
-                    return $return ? $cache->get() : $cache->read();
+                if ($cache->expired($this->type) === false) {
+                    return $returnable ? $cache->get() : $cache->read();
                 }
             }
             
-            if($this->__initializeSetup($status)){
-                if ($engine === 'smarty' || $engine === 'twig') {
-                    return self::{'__' . $engine . 'Template'}(
-                        $this->activeView . self::__templateExtension(), 
-                        $this->viewsDirectory, 
-                        $this->__viewOptions($options), 
-                        $cacheable,
-                        (($this->cacheExpiry instanceof DateTimeInterface) 
-                            ? Timestamp::ttlToSeconds($this->cacheExpiry) 
-                            : $this->cacheExpiry
-                        ),
-                        $this->minifyCodeblocks, 
-                        $this->codeblockButton,
-                        $return,
-                        $this->headers
-                    );
-                }
+            if(!$this->isSetupComplete($async)){
+                return false;
+            }
 
-                if(self::$config->templateIsolation){
-                    return self::__isolateTemplate(
-                        $this->filepath, 
-                        $this->__viewOptions($options),
-                        $cache,
-                        $this->minifyCodeblocks, 
-                        $this->codeblockButton,
-                        $return,
-                        $this->headers
-                    );
-                }
+            if($this->filename === '4xx' || $this->filename === '5xx'){
+                $options['error'] ??= ['code' => $status];
+            }
 
-                return $this->__defaultTemplate(
-                    $this->__viewOptions($options), 
-                    $cache, 
-                    $return, 
-                    $this->headers
+            if ($engine === 'default') {
+                return self::onCompleteRendering(
+                    $this->defaultTemplate($options),
+                    $status,
+                    $this->type, 
+                    $this->filepath, 
+                    $this->minifyCodeblocks, 
+                    $this->minifyCodeCopyable,
+                    $returnable,
+                    $this->headers,
+                    $cache,
                 );
             }
+
+            return self::thirdPartyTemplate(
+                $options,
+                $engine,
+                $status,
+                $this->filename . self::getTemplateExtension(), 
+                $this->pathname, 
+                $cacheable,
+                (($this->expiration instanceof DateTimeInterface) 
+                    ? Timestamp::ttlToSeconds($this->expiration) 
+                    : $this->expiration
+                ),
+                $this->minifyCodeblocks, 
+                $this->minifyCodeCopyable,
+                $returnable,
+                $this->headers
+            );
         } catch (Throwable $e) {
-            self::__throwException($e, $this->__viewOptions($options));
+            if (self::$config->templateIsolation) {
+                $msg = $e->getMessage();
+                $selfAccess = str_contains($msg, 'access "self" when no class');
+
+                if ($selfAccess || str_contains($msg, 'Using $this when not in')) {
+                    $e = new ErrorException(
+                        sprintf(
+                            "%s. Use '\$self'%s.",
+                            $msg,
+                            $selfAccess
+                                ? " as a dedicated keyword for isolation rendering."
+                                : " or disable 'templateIsolation' in template configuration to access '\$this'."
+                        ),
+                        file: $e->getFile(),
+                        line: $e->getLine(),
+                        previous: $e->getPrevious()
+                    );
+                }
+            }
+
+            if ($returnable) {
+                throw $e;
+            }
+
+            self::__exception($e, $options, $this->status);
         }
+
         return false;
+    }
+
+    /**
+     * Creates and returns the guard object used when template isolation is disabled.
+     *
+     * The exception includes the file and line where `$self` was accessed, making it
+     * easier to spot improper usage during development.
+     *
+     * @return object Guard instance that traps all `$self` interactions.
+     *
+     * @throws RuntimeException When `$self` is accessed in non-isolation mode.
+     */
+    private static function newSelfGuard(): object
+    {
+        return new class {
+            public function __construct(private int $id = 0) {$this->id = spl_object_id($this);}
+            public function __id():int { return $this->id; }
+            public function __is(int $id):bool { return $this->id === $id; }
+            public function __get(string $p) { $this->e(); }
+            public function __call(string $p, array $args) { $this->e(); }
+            public function __set(string $p, mixed $v){ $this->e(); }
+            public function __toString() { $this->e(); }
+
+            private function e(): void
+            {
+                [$file, $line] = RuntimeException::trace(2);
+                $e = new RuntimeException(
+                    'Using "$self" is not available in non-isolation mode. ' .
+                    'Enable "templateIsolation" in template configuration to use "$self" keyword.'
+                );
+
+                if($file){
+                    $e->setLine($line)->setFile($file);
+                }
+
+                throw $e;
+            }
+        };
     }
 
     /**
      * Initialize rendering setup.
      * 
-     * @param int $status HTTP status code (default: 200 OK).
+     * @param bool $async Whether is promise async.
      * 
      * @return bool Return true if setup is ready.
      * @throws ViewNotFoundException Throw if view file is not found.
      * @throws RuntimeException Throw of error occurred during rendering.
      */
-    private function __initializeSetup(int $status = 200): bool
+    private function isSetupComplete(bool $async = false): bool
     {
-        if (!file_exists($this->filepath)) {
+        if (!is_file($this->filepath)) {
             Header::headerNoCache(404);
-            throw new ViewNotFoundException(sprintf(
-                'The view "%s" could not be found in the view directory "%s".', 
-                $this->activeView . self::__templateExtension(), 
-                filter_paths($this->viewsDirectory)
-            ));
+            self::__throw(
+                new ViewNotFoundException(sprintf(
+                    'Template "%s" could not be found in the view directory "%s".', 
+                    $this->template . self::getTemplateExtension(), 
+                    filter_paths($this->pathname)
+                )), 
+                $async ? 6 : 3
+            );
         } 
 
         FileManager::permission('rw');
-        Header::sendStatus($status);
         defined('ALLOW_ACCESS') || define('ALLOW_ACCESS', true);
 
         return true;
     }
 
     /**
-     * Render with smarty engine.
-     * 
-     * @param string $view View file name.
-     * @param string $viewsDirectory View template directory.
-     * @param array $options View options.
-     * @param bool $caching Should cache page contents.
-     * @param int|null $cacheExpiry Cache expiration.
-     * @param bool $minify Should minify.
-     * @param bool $copy Should include code copy button.
-     * @param bool $return Should return content instead of render.
-     * @param array $_headers Additional custom headers.
-     * 
-     * @return string|bool Return true on success, false on failure.
+     * Returns an instance of the Smarty or Twig template engine.
+     *
+     * @param string $engine Template engine name ('smarty' or 'twig').
+     * @param string $filepath View template directory (used only for Twig).
+     * @param bool $cacheable Whether to enable template caching (applies to Twig only).
+     *
+     * @return Smarty|Twig Return instance of the selected template engine.
+     *
+     * @throws RuntimeException If an unsupported engine is specified.
      */
-    private static function __smartyTemplate(
-        string $view, 
-        string $viewsDirectory, 
-        array $options = [], 
-        bool $caching = false,
-        int|null $cacheExpiry = 3600,
-        bool $minify = false,
-        bool $copy = false,
-        bool $return = false,
-        array $_headers = []
-    ): string|bool
+    private static function getTemplateEngineInstance(string $engine, string $filepath, bool $cacheable): Smarty|Twig
     {
-        static $instance = null;
+        $root = self::getSystemRoot();
 
-        try{
-            if(!$instance instanceof Smarty){
-                $instance = Smarty::getInstance(self::$config, self::__getSystemRoot());
-            }
-
-            $instance->headers($_headers)
-                ->setPath($viewsDirectory)
-                ->minify(self::$minifyContent, [
-                    'codeblock' => $minify,
-                    'copyable' => $copy,
-                    'encode' => false,
-                ])
-                ->caching($caching, $cacheExpiry);
-
-            if (!$instance->isCached($view)) {
-                $instance->assignOptions($options);
-                $instance->assignClasses(self::$weak[self::$reference]);
-            }
-
-            return $instance->display($view, $return);
-        }catch(Throwable $e){
-            self::__throwException($e);
-        }
-
-        return false;
-    }
-
-    /**
-     * Render with twig engine.
-     * 
-     * @param string $view View file name.
-     * @param string $viewsDirectory View template directory.
-     * @param array $options View options.
-     * @param bool $shouldCache Should cache page contents.
-     * @param int|null $cacheExpiry Cache expiration.
-     * @param bool $minify Should minify.
-     * @param bool $copy Should include code copy button.
-     * @param bool $return Should return content instead of render.
-     * @param array $_headers Additional headers.
-     * 
-     * @return string|bool Return true on success, false on failure.
-     */
-    private static function __twigTemplate(
-        string $view, 
-        string $viewsDirectory, 
-        array $options = [], 
-        bool $shouldCache = false,
-        int|null $cacheExpiry = 3600,
-        bool $minify = false,
-        bool $copy = false,
-        bool $return = false,
-        array $_headers = []
-    ): string|bool
-    {
-        static $instance = null;
-
-        try{
-            if(!$instance instanceof Twig){
-                $instance = Twig::getInstance(self::$config, self::__getSystemRoot(), $viewsDirectory, [
-                    'caching' => $shouldCache,
-                    'charset' => env('app.charset', 'utf-8'),
-                    'strict_variables' => true,
-                    'autoescape' => 'html'
-                ]);
-            }
-
-            return $instance->headers($_headers)
-                ->setPath($viewsDirectory)
-                ->minify(self::$minifyContent, [
-                    'codeblock' => $minify,
-                    'copyable' => $copy,
-                    'encode' => false,
-                ])
-                ->assignClasses(self::$weak[self::$reference])
-                ->display($view, $options, $return);
-        }catch(Throwable $e){
-            self::__throwException($e);
-        }
-
-        return false;
-    }
-
-    /**
-     * Render without smarty using default .php template engine.
-     * 
-     * @param array $options View options.
-     * @param TemplateCache|null $_lmvCache Cache instance if should cache page contents.
-     * @param bool $_lmvReturn Should return view contents.
-     * @param array $_headers Additional headers.
-     * 
-     * @return string|bool Return true on success, false on failure.
-     */
-    private function __defaultTemplate(
-        array $options, 
-        ?TemplateCache $_lmvCache = null, 
-        bool $_lmvReturn = false,
-        array $_headers = []
-    ): string|bool
-    {
-        $_lmvViewType = $options['viewType'] ?? 'html';
-
-        if(self::$config->variablePrefixing !== null){
-            self::__extractOptions($options);
-        }
-
-        include_once $this->filepath;
-        $_lmvContents = ob_get_clean();   
-
-        self::__inlineErrors($_lmvContents);
-
-        [$_lmvHeaders, $_lmvContents, $_lmvIsCacheable] = self::__contentMinification(
-            $_lmvContents,
-            $_lmvViewType,
-            $this->minifyCodeblocks, 
-            $this->codeblockButton,
-            $_headers
-        );
-
-        if($_lmvReturn){
-            return $_lmvContents;
-        }
-
-        $_lmvHeaders['default_headers'] = true;
-        Header::validate($_lmvHeaders);
-
-        echo $_lmvContents;
-
-        if($_lmvIsCacheable && $_lmvCache instanceof TemplateCache){
-            $_lmvCache->setFile($this->filepath)
-                ->saveCache($_lmvContents, $_lmvHeaders, $_lmvViewType);
-        }
-
-        return true;
-    }
-
-    /**
-     * Render without in isolation mode.
-     * 
-     * @param string $_lmvViewFile View template file.
-     * @param array $options View options.
-     * @param TemplateCache|null $_lmvCache Cache instance if should cache page contents.
-     * @param bool $_lmvIgnore Ignore html codeblock during minimizing.
-     * @param bool $_lmvCopy Allow copy on html code tag or not.
-     * @param bool $_lmvReturn Should return view contents.
-     * @param array $_headers Additional headers.
-     * 
-     * @return string|bool Return true on success, false on failure.
-     * @throws RuntimeException Throw if error occurred.
-     */
-    private static function __isolateTemplate(
-        string $_lmvViewFile, 
-        array $options,
-        ?TemplateCache $_lmvCache = null,
-        bool $_lmvIgnore = true, 
-        bool $_lmvCopy = false,
-        bool $_lmvReturn = false,
-        array $_headers = []
-    ): string|bool
-    {
-        $self = self::__isolationSelfObject();
-        self::$weak[$self] = $self;
-        self::$weak->offsetUnset(self::$reference);
-
-        $_lmvViewType = $options['viewType'] ?? 'html';
-
-        if(($_lmvPrefix = self::$config->variablePrefixing) !== null){
-            if($_lmvPrefix && isset($options['self'])){
-                throw new RuntimeException('Reserved Error: The "self" keyword is not allowed in your view options without variable prefixing.', E_ERROR);
-            }
-            extract($options, ($_lmvPrefix ? EXTR_PREFIX_ALL : EXTR_OVERWRITE), '');
-        }
-
-        include_once $_lmvViewFile;
-        $_lmvContents = ob_get_clean();
-
-        self::__inlineErrors($_lmvContents);
-
-        [$_lmvHeaders, $_lmvContents, $_lmvIsCacheable] = self::__contentMinification(
-            $_lmvContents,
-            $_lmvViewType,
-            $_lmvIgnore, 
-            $_lmvCopy,
-            $_headers
-        );
-
-        if($_lmvReturn){
-            return $_lmvContents;
-        }
-
-        $_lmvHeaders['default_headers'] = true;
-        Header::validate($_lmvHeaders);
-
-        echo $_lmvContents;
-        
-        if($_lmvIsCacheable && $_lmvCache instanceof TemplateCache){
-            $_lmvCache->setFile($_lmvViewFile)
-                ->saveCache($_lmvContents, $_lmvHeaders, $_lmvViewType);
-        }
-
-        return true;
-    }
-
-    /**
-     * Initialize self class keyword.
-     * 
-     * @return class-object Return new instance of anonymous classes.
-     */
-    private static function __isolationSelfObject(): object 
-    {
-        return new class(self::$weak[self::$reference]) {
-            /**
-             * @var array<string,mixed> $classes
-             */
-            private static array $classes = [];
-
-            /**
-             * @var array<string,mixed> $classes
-             */
-            public function __construct(array $classes = [])
-            {
-                self::$classes = $classes;
-            }
-
-            /**
-             * @var string $class
-             * 
-             * @return object|string|null
-             */
-            public function __get(string $class): mixed 
-            {
-                return self::$classes[$class] ?? null;
-            }
+        return match ($engine) {
+            'twig' => Twig::getInstance(self::$config, $root, $filepath, [
+                'caching' => $cacheable,
+                'charset' => env('app.charset', 'utf-8'),
+                'strict_variables' => true,
+                'autoescape' => 'html',
+            ]),
+            'smarty' => Smarty::getInstance(self::$config, $root),
+            default => throw new RuntimeException(sprintf(
+                "Template engine '%s' is not supported. Use 'default' (PHP), 'twig' or 'smarty'.",
+                $engine
+            )),
         };
     }
 
     /**
-     * Minify content if possible and store cache if cacheable.
+     * Render with twig or smarty engine.
      * 
-     * @param string|false $content View contents.
-     * @param string $type The view content type.
-     * @param bool $ignore Ignore codeblocks.
-     * @param bool $copy Add copy button to codeblocks.
-     * @param TemplateCache|null $cache Cache instance.
-     * @param array $_headers Additional custom headers.
+     * @param array $options View options.
+     * @param string $engine The third-party template engine.
+     * @param int $status Http status code.
+     * @param string $view View file name.
+     * @param string $filepath View template directory.
+     * @param bool $cacheable Should cache page contents.
+     * @param int|null $expiration Cache expiration.
+     * @param bool $minify Should minify.
+     * @param bool $copyable Should include code copy button.
+     * @param bool $returnable Should return content instead of render.
+     * @param array $headers Additional headers.
      * 
-     * @return array<int,mixed> Return array of contents and headers.
+     * @return string|bool Return true on success, false on failure.
      */
-    private function __contentMinification(
+    private static function thirdPartyTemplate(
+        array $options,
+        string $engine,
+        int $status,
+        string $view, 
+        string $filepath,  
+        bool $cacheable = false,
+        ?int $expiration = 3600,
+        bool $minify = false,
+        bool $copyable = false,
+        bool $returnable = false,
+        array $headers = []
+    ): string|bool
+    {
+        $instance = self::getTemplateEngineInstance($engine, $filepath, $cacheable);
+
+        try{
+            $instance->headers($headers)
+                ->setPath($filepath)
+                ->minify(self::$minifyContent, [
+                    'codeblock' => $minify,
+                    'copyable' => $copyable,
+                    'encode' => false,
+                ])
+                ->caching($cacheable, $expiration);
+
+            if ($instance instanceof Smarty) {
+                if (!$instance->isCached($view)) {
+                    $instance->assignOptions($options);
+                    $instance->assignClasses(self::$exports);
+                }
+            }else{
+                $instance->assignClasses(self::$exports);
+            }
+            
+            Header::sendStatus($status);
+            return $instance->display($view, $options, $returnable);
+        }catch(Throwable $e){
+            self::__exception($e);
+        }
+
+        return false;
+    }
+
+    /**
+     * Render view template in isolation mode or directly with full context.
+     *
+     * When in isolation, `$this` is not accessible in the view file, but `$self` and global
+     * options (prefixed or unprefixed) are still available. Isolation mode also
+     * disables reference to internal class members from within templates.
+     * 
+     * @param array|null $options View options to pass to template.
+     * 
+     * @return mixed Return rendered contents.
+     * @throws RuntimeException On error during template processing.
+     * 
+     * @example Non-Isolation Mode
+     * ```php
+     * // $this is available, $self is guarded
+     * echo $this->_title;
+     * $self->_active; // Throws RuntimeException
+     * ```
+     *
+     * @example Isolation Mode
+     * ```php
+     * // $self is available, $this is not
+     * echo $self->_title;
+     * $self->app->session->isOnline();
+     * ```
+     */
+    private function defaultTemplate(?array $options): mixed
+    {
+        self::extractOptions($options);
+        self::startOutput();
+        $tpl = function(object $self, ?array $options, string $_VIEW_TYPE, string $_VIEW_FILEPATH): mixed {
+            $___fingerprint___ = $self->__id();
+
+            /** 
+             * @var \Luminova\Template\View $this None isolation mode.
+             * @var \Luminova\Template\Engines\Scope<\Luminova\Template\View> $self Isolation mode.
+             */
+            $returned = include_once $_VIEW_FILEPATH;
+
+            if(!PRODUCTION){
+                $isError = false;
+                try{
+                    $isError = !$self->__is($___fingerprint___);
+                }catch(Throwable){ $isError = true; }
+
+                if($isError){
+                    throw new RuntimeException(sprintf(
+                        'Template "%s" attempted to override "$self". The "$self" variable is reserved and cannot be changed',
+                        filter_paths($_VIEW_FILEPATH)
+                    ));
+                }
+            }
+
+            return ob_get_clean() ?: $returned;
+        };
+
+        if(!self::$config->templateIsolation){
+            return $tpl->bindTo($this, null)(
+                self::newSelfGuard(),
+                $options, 
+                $this->type, 
+                $this->filepath
+            );
+        }
+
+        return $tpl->bindTo(null, null)(
+            new Scope($this), 
+            $options, 
+            $this->type, 
+            $this->filepath
+        );
+    }
+
+    /**
+     * Converts mixed content into a string suitable for output.
+     *
+     * - Strings and scalar values are cast directly.
+     * - Objects implementing __toString() are converted to string.
+     * - Arrays and other objects are JSON-encoded (with pretty print).
+     * - If JSON encoding fails, a descriptive marker ([object], [array], [unprintable content]) is returned.
+     * - Automatically sets Content-Type header to application/json when JSON is used.
+     *
+     * @param mixed $contents The content to convert.
+     * @param array $headers Reference to response headers array (Content-Type may be modified).
+     * 
+     * @return string The converted string output.
+     */
+    private static function toOutput(mixed $contents, array &$headers): string
+    {
+        if ($contents === '' || $contents === null) {
+            return '';
+        }
+
+        if (is_scalar($contents)) {
+            return (string) $contents;
+        }
+
+        if ($contents instanceof \SimpleXMLElement) {
+            $headers['Content-Type'] ??= 'application/xml';
+
+            return (string) $contents->asXML();
+        }
+
+        if ($contents instanceof \DOMDocument) {
+            $headers['Content-Type'] ??= 'application/xml';
+
+            return (string) $contents->saveXML();
+        }
+
+        if ($contents instanceof \Stringable) {
+            return (string) $contents;
+        }
+
+        if (is_callable($contents)) {
+            return (string) self::toOutput($contents(), $headers);
+        }
+
+        $isObject = is_object($contents);
+
+        if ($isObject) {
+            if(method_exists($contents, '__toString')){
+                return $contents->__toString();
+            }
+            
+            if(method_exists($contents, 'toString')){
+                return (string) $contents->toString();
+            }
+        }
+
+        if ($isObject || is_array($contents)) {
+            $headers['Content-Type'] ??= 'application/json';
+
+            try {
+                return (string) json_encode(
+                    $contents,
+                    JSON_THROW_ON_ERROR|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE
+                );
+            } catch (Throwable $e) {
+                unset($headers['Content-Type']);
+
+                throw new RuntimeException(
+                    sprintf('Failed to encode output to JSON: %s', $e->getMessage()),
+                    previous: $e
+                );
+            }
+        }
+
+        unset($headers['Content-Type']);
+
+        throw new RuntimeException(
+            sprintf('Unsupported content type for output: %s', 
+            get_debug_type($contents))
+        );
+    }
+
+    /**
+     * Determines if the content is empty or only contains placeholder markers.
+     *
+     * @param mixed $contents The content to check.
+     * 
+     * @return bool Return true if the content is empty or not meaningful for HTML output.
+     */
+    private static function isEmpty(mixed $contents): bool
+    {
+        if (!$contents) {
+            return true;
+        }
+
+        return is_string($contents) 
+            && in_array($contents, ['[object]', '[array]', '[unprintable content]'], true);
+    }
+
+    /**
+     * Start output buffer.
+     * 
+     * @return void
+     */
+    private static function startOutput(): void
+    {
+        $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+
+        if($method === 'HEAD'){
+            Header::clearOutputBuffers();
+            ob_start();
+            return;
+        }
+
+        Header::setOutputHandler(true);
+    }
+
+    /**
+     * Finalizes the rendering of a view by processing output, applying headers, 
+     * and optionally caching the result.
+     *
+     * This method handles inline error rendering, content minification (based on output type and flags), 
+     * response headers, and caching of the rendered content using a `TemplateCache` instance if provided.
+     *
+     * @param mixed $contents    The final rendered content.
+     * @param int $status        The HTTP status code.
+     * @param string $type       The response content type (e.g., `View::HTML`, `View::JSON`).
+     * @param string $filepath   The path to the view file used for caching reference.
+     * @param bool $ignorable    Whether to ignore minification of codeblock in content.
+     * @param bool $copyable     Whether the view can be copied or duplicated in cache.
+     * @param bool $returnable   If true, return the content as a string instead of outputting.
+     * @param array $headers     Optional headers to send along with the output.
+     * @param TemplateCache|null $cache Template cache object.
+     *
+     * @return string|bool Returns the content as a string 
+     *      if `$returnable` is true, or `true` on successful rendering.
+     */
+    private static function onCompleteRendering(
+        mixed $contents,
+        int $status,
+        string $type,
+        string $filepath, 
+        bool $ignorable = true, 
+        bool $copyable = false,
+        bool $returnable = false,
+        array $headers = [],
+        ?TemplateCache $cache = null
+    ): string|bool
+    {
+        $isEmptyContent = empty($contents);
+
+        if(!$returnable && ($isEmptyContent || $status === 204 || $status === 304)){
+            $_headers['X-System-Default-Headers'] = true;
+            Header::validate($_headers, $isEmptyContent ? 204 : $status);
+            
+            return true;
+        }
+
+        $contents = self::toOutput($contents, $headers);
+
+        [$_headers, $_contents, $cacheable] = self::minify(
+            $contents, $type, $ignorable, $copyable, $headers
+        );
+
+        // if(!PRODUCTION && $contents){
+        //    self::__catchInlineErrors($contents);
+        // }
+
+        if($returnable){
+            return $_contents;
+        }
+
+        $_headers['X-System-Default-Headers'] = true;
+        Header::validate($_headers, $isEmptyContent ? 204 : $status);
+
+        if($isEmptyContent){
+            return true;
+        }
+
+        echo $_contents;
+        
+        if($contents && $cacheable && ($cache instanceof TemplateCache)){
+            $cache->setFile($filepath)
+                ->saveCache($_contents, $_headers, $type);
+        }
+
+        $cache = null;
+        return true;
+    }
+
+    /**
+     * Extracts and registers template options for use within the view.
+     * 
+     * Behavior depends on config:
+     * - true: Keys are prefixed with `_` and validated.
+     * - false: Keys used as-is, but 'self' is restricted in isolation mode.
+     * - null: Raw options passed without any transformation.
+     *
+     * @param array<string,mixed> $options Options to extract and expose to the view.
+     *
+     * @return void
+     * 
+     * @throws RuntimeException If 'self' is used without prefixing in isolation mode.
+     */
+    private static function extractOptions(array &$options): void
+    {
+        $prefixing = self::$config->variablePrefixing;
+
+        if($prefixing === null){
+            self::$options = $options;
+            return;
+        }
+
+        if ($prefixing === false) {
+            self::assertSelf($options);
+            
+            self::$options = $options;
+            $options = null;
+            return;
+        }
+
+        foreach ($options as $name => $value) {
+            $key = str_starts_with($name, '_') ? $name : '_' . $name;
+
+            self::assertOptionKey($key);
+            self::$options[$key] = $value;
+        }
+
+        $options = null;
+    }
+
+    /**
+     * Resolves the full file path of a given view template and sets internal properties.
+     *
+     * If the specified template does not exist in production mode, it falls back to a default `404` template.
+     *
+     * @param string $template The view template name without extension.
+     */
+    private function resolve(string $template): void 
+    {
+        $this->pathname = $this->getTemplatePath();
+        $extension = self::getTemplateExtension();
+        $filepath = $this->pathname . $template . $extension;
+
+        if (PRODUCTION && !is_file($filepath)) {
+            $template = '4xx';
+            $filepath = $this->pathname . $template . $extension;
+        }
+
+        $this->filepath = $filepath;
+        $this->filename = $template;
+    }
+
+    /**
+     * Minifies and prepares template output content for delivery.
+     *
+     * @param string|bool $content The rendered content, or false if none.
+     * @param string $type The content type (e.g. HTML, JSON).
+     * @param bool $ignore Whether to skip minification for codeblocks in content.
+     * @param bool $copy Whether to add copy button to codeblocks during minification.
+     * @param array $_headers Additional headers to merge into the response.
+     *
+     * @return array{array,string,bool}  Return array of contents and headers
+     */
+    private static function minify(
         string|bool $content, 
         string $type, 
         bool $ignore, 
@@ -1245,33 +2185,25 @@ trait View
         array $_headers = []
     ): array 
     {
-        $canCacheContent = false;
+        $cacheable = false;
         $headers = null;
 
-        if ($content !== false && $content !== '') {
-            if (self::$minifyContent && $type === 'html') {
-                $minify = self::__getMinification(
-                    $content, 
-                    $type, 
-                    $ignore, 
-                    $copy
-                );
+        if (!self::isEmpty($content)) {
+            if (self::$minifyContent && $type === self::HTML) {
+                $minify = self::getMinifier($content, $type, $ignore, $copy);
+
                 $content = $minify->getContent();
                 $headers = $minify->getHeaders();
             }else{
                 $headers = ['Content-Type' => Header::getContentTypes($type)];
             }
 
-            $canCacheContent = $content !== '';
+            $cacheable = ($content !== '');
         }
 
         $headers ??= Header::getSentHeaders();
 
-        return [
-            $_headers + $headers, 
-            $content,
-            $canCacheContent,
-        ];
+        return [$_headers + $headers, $content, $cacheable];
     }
     
     /** 
@@ -1280,25 +2212,33 @@ trait View
      * @return bool Return true if view should be cached, otherwise false.
      * > Keep the validation order its important.
      */
-    private function __shouldCache(): bool
+    private function isCacheable(): bool
     {
         if ($this->forceCache) {
             return true;
         }
 
-        if (!$this->cacheView || $this->__isTtlExpired()) {
+        if (
+            !$this->cacheable || 
+            ($this->template === '4xx' || $this->template === '5xx') ||
+            ($this->filename === '4xx' || $this->filename === '5xx') || 
+            $this->isTtlExpired()
+        ) {
             return false;
         }
 
-        if($this->cacheOption === []){
+        if($this->cacheConfig === []){
             return true;
         }
 
-        // Check if the view is in the 'only' list
-        return isset($this->cacheOption['only']) 
-            ? in_array($this->activeView, $this->cacheOption['only'], true)
-            : !in_array($this->activeView, $this->cacheOption['ignore'] ?? [], true);
-            // Check if the view is in the 'ignore' list
+        // Check if the template is in the 'only' list
+        // Always check only first
+        if(!empty($this->cacheConfig['only'])){
+            return in_array($this->template, $this->cacheConfig['only'], true);
+        }
+
+        // Check if the template is in the 'ignore' list
+        return !in_array($this->template, $this->cacheConfig['ignore'] ?? [], true);
     }
 
     /**
@@ -1306,14 +2246,14 @@ trait View
      *
      * @return bool Returns true if no cache expiration is found or if the TTL has expired.
      */
-    private function __isTtlExpired(): bool 
+    private function isTtlExpired(): bool 
     {
-        if ($this->cacheExpiry === null) {
+        if ($this->expiration === null) {
             return true;
         }
 
-        if ($this->cacheExpiry instanceof DateTimeInterface) {
-            return $this->cacheExpiry < new DateTimeImmutable(
+        if ($this->expiration instanceof DateTimeInterface) {
+            return $this->expiration < new DateTimeImmutable(
                 'now', new DateTimeZone(date_default_timezone_get())
             );
         }
@@ -1321,26 +2261,26 @@ trait View
         return false;
     }
 
-    /** 
-     * Handle exceptions.
+    /**
+     * Logs a critical error when trying to access an undefined property in a view.
      *
-     * @param ExceptionInterface $exception The exception interface thrown.
-     * @param array<string,mixed> $options The view options.
+     * @param string $property The name of the property being accessed.
      *
-     * @return void 
+     * @return null Always returns null after logging the error.
+     * @internal Also used in Scope class.
      */
-    private static function __handleException(ExceptionInterface $exception, array $options = []): void 
+    public final function __log(string $property) 
     {
-        extract($options);
-        unset($options);
+        [$file, $line] = AppException::trace(2);
 
-        include_once PRODUCTION ? self::getSystemError('404') : self::getSystemError('view.error');
+        Logger::critical(sprintf(
+            'Access to undefined property $%s. In view: %s%s.',
+            $property, 
+            ($file !== null) ? $file : '',
+            " on line {$line}"
+        ));
 
-        if(PRODUCTION){
-            $exception->log();
-        }
-
-        exit(STATUS_SUCCESS);
+        return null;
     }
 
     /** 
@@ -1352,74 +2292,161 @@ trait View
      * @return void 
      * @throws RuntimeException
      */
-    private static function __throwException(Throwable $e, ?array $options = null): void 
+    private static function __exception(Throwable $e, ?array $options = null, ?int $status = null): void 
     {
         if($e instanceof ExceptionInterface){
-            if($options !== null){
-                self::__handleException($e, $options);
-                return;
+            if($options === null){
+                throw $e;
+            }
+        
+            self::__error($e, $options, $status);
+            return;
+        }
+
+        if($options === null){
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+        }
+
+        RuntimeException::throwException($e->getMessage(), $e->getCode(), $e);
+    }
+
+    /**
+     * Handle exceptions by loading the appropriate system error view.
+     *
+     * In production, a 404 page is shown and the error is logged.
+     * In development, a detailed error view is shown instead.
+     *
+     * @param ExceptionInterface $error The thrown exception.
+     * @param array<string,mixed> $options View options to extract as local variables.
+     *
+     * @return void
+     */
+    private static function __error(Throwable $error, array $options = [], ?int $status = null): void 
+    {
+        Header::clearOutputBuffers();
+        $e = function(
+            array $options, 
+            string $fullPath, 
+            bool $isNotFound,
+            ?int $status, 
+            Throwable $error
+        ): void 
+        {
+            if ($options !== []) {
+                extract($options);
             }
 
+            $status ??= 500;
+            $title ??= APP_NAME;
+            $status = $isNotFound ? 404 : (($status === 200) ? 500 : $status);
+
+            $message = $error->getMessage();
+            $description = "{$status} " . HttpCode::phrase($status);
+
+            if(PRODUCTION){
+                $message = $isNotFound 
+                    ? 'The template file you requested could not be found.' 
+                    : 'Something went wrong.';
+            }
+
+            Header::sendStatus($status);
+
+            /** 
+             * @internal $message
+             * @internal $description 
+             */
+            include_once $fullPath;
+        };
+
+        $isNotFound = ($error instanceof ViewNotFoundException);
+        $fullPath = self::getSystemError(PRODUCTION  
+            ? 'xxx' 
+            : ($isNotFound ? 'view.error' : 'errors')
+        );
+        $e->bindTo(null, null)($options, $fullPath, $isNotFound, $status, $error);
+
+        if(PRODUCTION && $error instanceof ExceptionInterface){
+            $error->log();
+        }
+
+        exit(STATUS_ERROR);
+    }
+
+    /**
+     * Throws the given exception after updating its file and line number from the call trace.
+     *
+     * @param ExceptionInterface $e The exception to throw.
+     * @param int $trace The number of stack frames to skip to locate the caller.
+     * @param bool $render If true present error details view. 
+     *
+     * @throws Throwable<ExceptionInterface> Always throw an exception.
+     */
+    private static function __throw(ExceptionInterface $e, int $trace, bool $render = false): void 
+    {
+        [$file, $line] = AppException::trace($trace + 1);
+
+        if($file){
+            $e->setLine($line)->setFile($file);
+        }
+
+        if(!$render){
             throw $e;
         }
 
-        if($options !== null){
-            RuntimeException::throwException($e->getMessage(), $e->getCode(), $e);
-            return;
-        }
-
-        throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+        self::__error($e, []);
     }
 
     /**
-     * Sets project template options.
-     * 
-     * @param array<string,mixed> $attributes The attributes to set.
-     * 
-     * @return void
-     * @throws RuntimeException If there is an error setting the attributes.
+     * Ensures the "self" key is not used in the options array when template isolation is enabled
+     * and variable prefixing is disabled.
+     *
+     * @param array $options The array of options passed to the view renderer.
+     *
+     * @throws RuntimeException If the key "self" is present in the options while templateIsolation is enabled.
      */
-    private static function __extractOptions(array $attributes): void
+    private static function assertSelf(array $options): void 
     {
-        if (self::$config->variablePrefixing === null) {
-            return;
-        }
-
-        $prefix = (self::$config->variablePrefixing ? '_' : '');
-
-        foreach ($attributes as $name => $value) {
-            $key = (is_int($name) ? '_' . $name : $prefix . $name);
-
-            self::__assertValidOptions($key);           
-            self::$publicOptions[$key] = $value;
+        if (self::$config->templateIsolation && array_key_exists('self', $options)) {
+            self::__throw(
+                new RuntimeException(
+                    'The template option key "self" is reserved. Enable variable prefixing to use it.'
+                ), 
+                5
+            );
         }
     }
 
     /**
-     * Check if option keys is a valid PHP variable key.
-     * 
-     * @param string $key key name to check.
-     * @throws RuntimeException Throws if key is not a valid PHP variable key.
-     * 
+     * Validates that a view option key is a proper PHP variable name.
+     *
+     * @param string $key The option key to validate.
+     * @throws RuntimeException If the key is invalid or already used.
+     *
      * @return void
      */
-    private static function __assertValidOptions(string $key): void 
+    private static function assertOptionKey(string $key): void 
     {
-        if ($key === '_' || $key === '') {
-            throw new RuntimeException(
-                sprintf('Invalid option key: "%s".  View option key must be non-empty strings.', $key)
+        if ($key === '') {
+            self::__throw(new RuntimeException('Template option key cannot be an empty string.'), 5);
+        }
+
+        if (array_key_exists($key, self::$exports)) {
+            self::__throw(
+                new RuntimeException(sprintf(
+                   'Duplicate template option key "%s". Already defined in object exports. Use a unique name or a prefix.',
+                    $key
+                )), 
+                5
             );
         }
 
-        if (preg_match('/[^a-zA-Z0-9_]/', $key)) {
-            throw new RuntimeException(
-                sprintf('Invalid option key: "%s". Only letters, numbers, and underscores are allowed in variable names.', $key)
-            );
-        }
-
-        if (isset(self::$weak[self::$reference][$key])) {
-            throw new RuntimeException(
-                sprintf('Key Error: Option name: "%s". already exists. Use a different name or enable variable prefixing to retain the name.', $key)
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $key)) {
+            self::__throw(
+                new RuntimeException(sprintf(
+                    'Invalid template option key "%s". Must start with a letter or underscore and contain only letters, digits, and underscores.',
+                    $key
+                )), 
+                5
             );
         }
     }
@@ -1431,24 +2458,38 @@ trait View
      * and throws a RuntimeException if an error is detected. Error detection
      * is disabled in production or if 'debug.catch.inline.errors' is set to false.
      *
-     * @param string|false $contents The content to check for inline PHP errors.
+     * @param string $contents The content to check for inline PHP errors.
      * @throws RuntimeException if an inline PHP error is detected.
      */
-    private static function __inlineErrors(string|bool $contents): void
-    {
-        if (!$contents || PRODUCTION || !env('debug.catch.inline.errors', false)) {
-            return;
-        }
+    // private static function __catchInlineErrors(string $contents): void
+    // {
+    //    if (!env('debug.display.errors', false) || !env('debug.catch.inline.errors', false)) {
+    //        return;
+    //    }
 
-        if (preg_match('/error<\/b>:(.+?) in <b>(.+?)<\/b> on line <b>(\d+)<\/b>/', $contents, $matches)) {
-            throw new RuntimeException(sprintf(
-                'DocumentInlineError: %s in %s on line %d',
-                trim($matches[1]),
-                filter_paths($matches[2]),
-                $matches[3]
-            ), E_PARSE);
-        }
-    }
+    //   $pattern = '/
+    //       ^.*?<b>(?<type>Fatal\serror|Parse\serror|Uncaught\sError|Warning|Notice|Deprecated|Strict\sstandards|Error|Exception)<\/b>:\s*
+    //       (?<message>.*?)
+    //       \s+in\s+<b>(?<file>.*?)<\/b>\s+
+    //        on\s+line\s+<b>(?<line>\d+)<\/b>
+    //   /isx';
+
+    //   $matches = [];
+
+    //   if (preg_match($pattern, $contents, $matches)) {
+    //        $e = new RuntimeException(sprintf(
+    //            'Hidden error detected: %s: %s in %s on line %d',
+    //            $matches['type'],
+    //            trim($matches['message']),
+    //            filter_paths($matches['file']),
+    //            $matches['line']
+    //        ), E_USER_WARNING);
+    //        $e->setLine((int) $matches['line']);
+    //        $e->setFile($matches['file']);
+
+    //        throw $e;
+    //    }
+    // }
 
     /**
      * Parse user template options.
@@ -1457,38 +2498,27 @@ trait View
      * 
      * @return array<string,mixed> Return the parsed options.
      */
-    private function __viewOptions(array $options = []): array 
+    private function parseOptions(array $options = []): array 
     {
-        $options['viewType'] = $this->viewType;
+        $options['viewType'] = $this->type;
         $options['href'] = self::link();
         $options['asset'] = $options['href'] . 'assets/';
-        $options['active'] = $this->activeView;
+        $options['active'] = $this->filename;
+        $options['noCache'] = (bool) ($options['noCache'] ?? false);
         
-        if(isset($options['nocache']) && !$options['nocache']){
-            $this->cacheOption['ignore'][] = $this->activeView;
+        if($options['noCache']){
+            $this->cacheConfig['ignore'][] = $this->template;
         }
 
         if(!isset($options['title'])){
-            $options['title'] = self::toTitle($options['active'], true);
+            $options['title'] = $this->toTitle($options['active'], true);
         }
 
         if(!isset($options['subtitle'])){
-            $options['subtitle'] = self::toTitle($options['active']);
+            $options['subtitle'] = $this->toTitle($options['active']);
         }
 
         return $options;
-    }
-
-    /** 
-     * Trim base directory path.
-     *
-     * @param string Path to trim.
-     *
-     * @return string Return trimmed directory path.
-     */
-    private static function __trimRight(string $path): string 
-    {
-        return rtrim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
     }
 
     /** 
@@ -1498,9 +2528,9 @@ trait View
      *
      * @return string Return view file directory.
      */
-    private static function __getSystemPath(string $path): string 
+    private static function getSystemPath(string $path): string 
     {
-        return self::__getSystemRoot() . trim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
+        return self::getSystemRoot() . trim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
     }
 
     /** 
@@ -1508,13 +2538,13 @@ trait View
      * 
      * @return string Return view file directory for default or HMVC module.
      */
-    private function __getViewPath(): string 
+    private function getTemplatePath(): string 
     {
-        $module = self::$useHmvcModule 
-            ? '/app/Modules/' . ($this->moduleName === ''? '' : $this->moduleName . '/') . 'Views/'
-            : self::$viewFolder . '/';
+        $module = self::$isHmvcModule 
+            ? '/app/Modules/' . ($this->module === ''? '' : $this->module . '/') . 'Views/'
+            : self::$folder . '/';
     
-        return self::__getSystemPath($module . $this->subfolder);
+        return self::getSystemPath($module . $this->subfolder);
     }
 
     /** 
@@ -1522,7 +2552,7 @@ trait View
      *
      * @return string Return the application root directory.
      */
-    private static function __getSystemRoot(): string
+    private static function getSystemRoot(): string
     {
         if(self::$root === null){
             self::$root = APP_ROOT;
@@ -1532,14 +2562,16 @@ trait View
     }
 
     /** 
-     * Fixes the broken css,image & links when added additional slash(/) at the router link
-     * The function will add the appropriate relative base based on how many invalid link detected.
+     * Convert route segments to relative parent directory level.
+     * 
+     * This method fixes the broken assets and links when added additional slash(/) at the route URI. 
+     * By adding the appropriate parent level to URIs.
      *
      * @return string Return relative path.
      */
-    private static function __toRelativeLevel(): string 
+    private static function toRelativeLevel(?int $level = null): string 
     {
-        $level = self::$assetDepth;
+        $level ??= self::$uriPathDepth;
         
         if($level === 0 && !empty($_SERVER['REQUEST_URI'])){
             $url = substr(rawurldecode($_SERVER['REQUEST_URI']), strlen(Luminova::getBase()));
@@ -1564,18 +2596,18 @@ trait View
      * @param bool $ignore Whether to ignore code blocks minification.
      * @param bool $copy Whether to include code block copy button.
      *
-     * @return Minification Return minified instance.
+     * @return Minifier Return minified instance.
      * @throws RuntimeException If array or object content and json error occurs.
      */
-    private static function __getMinification(
+    private static function getMinifier(
         mixed $contents, 
-        string $type = 'html', 
+        string $type = self::HTML, 
         bool $ignore = true, 
         bool $copy = false,
-    ): Minification
+    ): Minifier
     {
-        return self::$weak[new stdClass()] ??= (new Minification())
-            ->isHtml($type === 'html')
+        return (new Minifier())
+            ->isHtml($type === self::HTML)
             ->codeblocks($ignore)
             ->copyable($copy)
             ->compress($contents, $type);
@@ -1588,11 +2620,11 @@ trait View
      *
      * @return TemplateCache Return page view cache instance.
      */
-    private static function __getCache(DateTimeInterface|int|null $expiry = 0): TemplateCache
+    private static function getCache(DateTimeInterface|int|null $expiry = 0): TemplateCache
     {
-        return self::$weak[new stdClass()] ??= (new TemplateCache())
+        return (new TemplateCache())
             ->setExpiry($expiry)
-            ->setDirectory(self::$cacheFolder)
+            ->setDirectory(self::$cachePath)
             ->setKey(Luminova::getCacheId())
             ->setUri(Luminova::getUriSegments());
     }

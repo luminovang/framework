@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class NotFoundException extends AppException
 {
@@ -19,12 +20,12 @@ class NotFoundException extends AppException
      * Constructor for NotFoundException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code  The exception code (default: 4040).
+     * @param string|int $code  The exception code (default: `ErrorCode::NOT_FOUND`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::NOT_FOUND, 
+        string|int $code = ErrorCode::NOT_FOUND, 
         ?Throwable $previous = null
     )
     {

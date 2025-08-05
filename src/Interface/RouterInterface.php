@@ -11,10 +11,12 @@
 namespace Luminova\Interface;
 
 use \App\Application;
-use \Luminova\Core\CoreApplication;
+use \Psr\Http\Message\ResponseInterface;
 use \Luminova\Routing\{Prefix, Segments};
 use \Luminova\Exceptions\RouterException;
-use \Luminova\Interface\ErrorHandlerInterface;
+use \Luminova\Interface\ViewResponseInterface;
+use \Luminova\Foundation\Core\Application as CoreApplication;
+
 use \Closure;
 
 interface RouterInterface 
@@ -29,8 +31,8 @@ interface RouterInterface
     /**
      * Route to handle HTTP GET requests.
      *
-     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
+     * @param string $pattern The URI segment patterns or view path to match (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string $callback The callback handler or controller handler to execute (e.g, `MyController::methodName`, `fn() => handle()`).
      * 
      * @return void
      */
@@ -39,8 +41,8 @@ interface RouterInterface
     /**
      * Route to handle HTTP POST requests.
      *
-     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
+     * @param string $pattern The URI segment patterns or view path to match (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string $callback The callback handler or controller handler to execute (e.g, `MyController::methodName`, `fn() => handle()`).
      * 
      * @return void
      */
@@ -49,8 +51,8 @@ interface RouterInterface
     /**
      * Route to handle HTTP PATCH requests.
      *
-     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
+     * @param string $pattern The URI segment patterns or view path to match (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string $callback The callback handler or controller handler to execute (e.g, `MyController::methodName`, `fn() => handle()`).
      * 
      * @return void
      */
@@ -59,8 +61,8 @@ interface RouterInterface
     /**
      * Route to handle HTTP DELETE requests.
      *
-     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
+     * @param string $pattern The URI segment patterns or view path to match (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string $callback The callback handler or controller handler to execute (e.g, `MyController::methodName`, `fn() => handle()`).
      * 
      * @return void
      */
@@ -69,8 +71,8 @@ interface RouterInterface
     /**
      * Route to handle HTTP PUT requests.
      *
-     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
+     * @param string $pattern The URI segment patterns or view path to match (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string $callback The callback handler or controller handler to execute (e.g, `MyController::methodName`, `fn() => handle()`).
      * 
      * @return void
      */
@@ -79,8 +81,8 @@ interface RouterInterface
     /**
      * Route to handle HTTP OPTIONS requests.
      *
-     * @param string $pattern The route URI pattern or template view name (e.g, `/`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback The route callback handler (e.g, `MyController::methodName`, `fn() => handle()`).
+     * @param string $pattern The URI segment patterns or view path to match (e.g, `/`, `/home`, `/user/([0-9])`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string $callback The callback handler or controller handler to execute (e.g, `MyController::methodName`, `fn() => handle()`).
      * 
      * @return void
      */
@@ -95,7 +97,7 @@ interface RouterInterface
      * @param Prefix|array<string,mixed> ...$contexts [, Prefix $... ] URI prefixes for non-attribute routing 
      *                  containing prefix object or array of prefix.
      * 
-     * @return static<RouterInterface> Returns the router instance.
+     * @return static Returns the router instance.
      * @throws RouterException Throws if not context arguments was passed and route attribute is disabled.
      */
     public function context(Prefix|array ...$contexts): self;
@@ -107,8 +109,8 @@ interface RouterInterface
      * If the middleware callback returns `STATUS_ERROR`, the routing process will terminate, preventing further execution.
      * 
      * @param string $methods The allowed HTTP methods, separated by a `|` pipe symbol (e.g., `GET|POST`).
-     * @param string $pattern The route URL pattern or template (e.g., `{segment}`, `(:type)`, `/.*`, `/home`, `/user/([0-9])`).
-     * @param Closure|string $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
+     * @param string $pattern The URI segment patterns or view path to match (e.g., `{segment}`, `(:type)`, `/.*`, `/home`, `/user/([0-9])`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string $callback The callback handler or controller handler to execute (e.g., `ControllerClass::methodName`).
      * 
      * @return void
      * @throws RouterException Thrown if the method is called in an invalid context or the `$methods` parameter is empty.
@@ -122,8 +124,8 @@ interface RouterInterface
      * It is typically used for tasks such as cleanup or additional post-processing.
      * 
      * @param string $methods The allowed HTTP methods, separated by a `|` pipe symbol (e.g., `GET|POST`).
-     * @param string $pattern The route URL pattern or template (e.g., `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
-     * @param Closure|string $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
+     * @param string $pattern The URI segment patterns or view path to match (e.g., `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string $callback The callback handler or controller handler to execute (e.g., `ControllerClass::methodName`).
      * 
      * @return void
      * @throws RouterException Thrown if the `$methods` parameter is empty.
@@ -138,7 +140,7 @@ interface RouterInterface
      * terminate, preventing further commands from executing.
      * 
      * @param string $group The command group name or default `global` for middleware that applies to all commands.
-     * @param Closure|string|null $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string|null $callback The callback handler or controller handler to execute (e.g., `ControllerClass::methodName`).
      * 
      * @return void
      * @throws RouterException Thrown if the method is called outside a CLI context.
@@ -153,8 +155,8 @@ interface RouterInterface
      * Multiple HTTP methods can be specified using the pipe (`|`) symbol.
      * 
      * @param string $methods The allowed HTTP methods, separated by the pipe symbol (e.g., `GET|POST|PUT` or `ANY`).
-     * @param string $pattern The route URL pattern or template name (e.g., `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9]+)`).
-     * @param Closure|string $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
+     * @param string $pattern The URI segment patterns or view path to match name (e.g., `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9]+)`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string $callback The callback handler or controller handler to execute (e.g., `ControllerClass::methodName`).
      * 
      * @return void
      * 
@@ -170,7 +172,7 @@ interface RouterInterface
      * Unlike HTTP routes, CLI commands are defined using this method specifically within the `group` method.
      * 
      * @param string $command The name of the command or a command pattern with filters (e.g., `foo`, `foo/(:int)/bar/(:string)`).
-     * @param Closure|string $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string $callback The callback handler or controller handler to execute (e.g., `ControllerClass::methodName`).
      * 
      * @return void
      */
@@ -179,11 +181,13 @@ interface RouterInterface
     /**
      * Capture and handle requests for any HTTP method.
      * 
-     * This method leverages `Router::ANY_METHODS` to match and handle requests for any HTTP method.
+     * This method leverages `Router::ANY_METHOD` to match and handle requests for any HTTP method.
      * It is a convenient way to define routes that respond to all HTTP methods without explicitly specifying them.
      *
-     * @param string $pattern The route URL pattern or template name (e.g., `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
-     * @param Closure|string $callback The callback function or controller method to execute (e.g., `ControllerClass::methodName`).
+     * @param string $pattern The URI segment patterns or view path to match 
+     *          (e.g., `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|string $callback The callback handler or controller handler to execute 
+     *                  (e.g., `ControllerClass::methodName`).
      * 
      * @return void
      */
@@ -196,7 +200,7 @@ interface RouterInterface
      * It simplifies route management by associating multiple nested `URI` patterns with a shared prefix.
      * 
      * @param string $prefix The base path or URI pattern (e.g., `/blog`, `{segment}`, `(:type)`, `/account/([a-z])`).
-     * @param Closure $callback The closure containing the route definitions for the group.
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int) $callback The closure containing the route definitions for the group.
      * 
      * @return void
      * 
@@ -217,7 +221,7 @@ interface RouterInterface
      * making it easier to manage commands related to the same functionality or controller class.
      * 
      * @param string $group The name of the command group (e.g., `blog`, `user`).
-     * @param Closure $callback A callback function that defines the commands for the group.
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int) $callback A callback function that defines the commands for the group.
      * 
      * @return void
      * 
@@ -237,6 +241,89 @@ interface RouterInterface
     public function group(string $group, Closure $callback): void;
 
     /**
+     * Trigger an HTTP error response and immediately halt route processing.
+     *
+     * This method is called when no matching route is found, or when a request 
+     * must return a specific HTTP status code (e.g., 404, 500). It attempts to 
+     * delegate error handling in the following order:
+     * 
+     * 1. If `ErrorController::onTrigger()` exists, it is called directly.
+     * 2. If a matching route-specific error handler is registered, that handler is executed.
+     * 3. If a global (`'/'`) error handler is registered, that handler is executed.
+     * 4. If no handler is found, a default error page is displayed.
+     *
+     * @param int $status HTTP status code to trigger (default: 404).
+     *
+     * @return void
+     */
+    public static function trigger(int $status = 404): void;
+
+    /**
+     * Register a custom route placeholder with an optional grouping mode.
+     *
+     * Allows you to replace placeholders like `(:slug)` with your own regex.
+     * You may choose whether the pattern should be raw, non-capturing, or capturing.
+     * 
+     * This method makes your routing clean, by providing alias to a long pattern or repeatable patterns.
+     *
+     * @param string $name Placeholder name (e.g. "slug").
+     * @param string $pattern Regular expression pattern.
+     * @param int|null $group Grouping mode:
+     *                        - null: use pattern as-is
+     *                        - 0: wrap as non-capturing group (?:pattern)
+     *                        - 1: wrap as capturing group (pattern)
+     *                        If the pattern already starts with '(', no extra wrapping is applied.
+     *
+     * @return void
+     * @throws RouterException If empty placeholder name was provided or reserved names (e.g, `root`, `(:root)`, `base`, `(:base)`) was used as placeholder name.
+     * 
+     * @see toPatterns() - To convert placeholder to valid pattern.
+     * @see https://luminova.ng/docs/0.0.0/routing/dynamic-uri-placeholder
+     * @since 3.6.8.
+     * 
+     * @example - Examples:
+     * 
+     * ```php
+     * Router::pattern('slug', '[a-z0-9-]+');         // raw pattern
+     * Router::pattern('slug', '[a-z0-9-]+', 0);      // non-capturing (?:[a-z0-9-]+)
+     * Router::pattern('slug', '[a-z0-9-]+', 1);      // capturing ([a-z0-9-]+)
+     * Router::pattern('slug', '([a-z]+)-(\d+)', 1);  // stays unchanged
+     * ```
+     * 
+     * **Attribute Usage:**
+     * 
+     * ```php
+     * #[Luminova\Attributes\Route('/blog/(:slug)', methods: ['GET'])]
+     * public function blog(string $slug): int {
+     *      // Implement
+     * }
+     * ```
+     * 
+     * **Method Usage:**
+     * ```
+     * $router->get('/blog/(:slug)', 'BlogController::view');
+     * ```
+     * > **Important:** 
+     * > Do not manually include outer start, ending or modifier delimiter characters (e.g, `^`, `$`, `#`, `/`, `~`, etc.) 
+     * > the engine appends them as needed when building the final route regex.
+     */
+    public static function pattern(string $name, string $pattern, ?int $group = null): void;
+
+    /**
+     * Execute application routes and handle incoming requests.
+     *
+     * This method processes all defined routes and dispatches incoming HTTP or CLI requests to the appropriate 
+     * controller methods. It also finalize application profiling, ensuring computed profiling data is sent to the 
+     * UI for debugging and triggers the `onFinish` application event before termination.
+     *
+     * @return void
+     * @throws RouterException Thrown if an error occurs during request processing or route resolution.
+     * 
+     * **Note:** This method is typically invoked once in the `/public/index.php` file, which serves as the application front controller.
+     */
+    public function run(): void;
+
+    /**
      * Registers MVC controllers or HMVC module controller class namespace group for use in application routing.
      *
      * This method allows you to register new routable namespaces for both HMVC and MVC applications.
@@ -248,49 +335,45 @@ interface RouterInterface
      *
      * @param string $namespace The namespace to register (e.g., `\App\Controllers\`, `\App\Modules\FooModule\Controllers\`).
      *
-     * @return static<RouterInterface> Returns the instance of the router class.
+     * @return static Returns the instance of the router class.
      * @throws RouterException If the namespace is empty or contains invalid characters.
      * 
-     * **Note:** The base controllers for MVC and HMVC applications are predefined in the `Luminova\Core\CoreApplication` class.
+     * **Note:** The base controllers for MVC and HMVC applications are predefined in the `Luminova\Foundation\CoreApplication` class.
      */
     public function addNamespace(string $namespace): self;
 
     /**
-     * Execute application routes and handle incoming requests.
-     *
-     * This method processes all defined routes and dispatches incoming HTTP or CLI requests to the appropriate 
-     * controller methods. It also manages application profiling, ensuring computed profiling data is sent to the UI for rendering. 
-     * Additionally, it triggers the `onFinish` application event before termination.
-     *
-     * @return void
-     * @throws RouterException Thrown if an error occurs during request processing or route resolution.
+     * Set a custom error handler for a specific route or globally.
      * 
-     * **Note:** This method is typically invoked once in the `/public/index.php` file, which serves as the application front controller.
-     */
-    public function run(): void;
-
-    /**
-     * Set an error listener callback function.
+     * You can assign either a callable array handler, controller handler or a closure as the error handler.
+     * 
+     * **$pattern**
+     * 
+     * - `$pattern` If specifying a URI, provide a string pattern or a controller callback `[ControllerClass::class, 'method']`.
+     * - `$pattern` If no URI is needed (global), provide only a closure or controller callback.
      *
-     * @param Closure|array{0:class-string<ErrorHandlerInterface>,1:string}|string $match Matching route callback or segment pattern for error handling.
-     * @param Closure|array{0:class-string<ErrorHandlerInterface>,1:string}|string|null $callback Optional error callback handler function.
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|array<int,string>|string $pattern A global error handler or URI patterns to register with `$handler`.
+     *           For global error handler set callback or controller for error handler.
+     * @param (Closure(mixed ...$args):ViewResponseInterface|ResponseInterface|int)|array<int,string>|string|null $handler An error callback handler or controller handler.
      *  
      * @return void
-     * @throws RouterException Throws if callback is specified and `$match` is not a segment pattern.
-     */
-    public function setErrorListener(
-        Closure|array|string $match, 
-        Closure|array|string|null $callback = null
-    ): void;
-
-    /**
-     * Cause triggers an error response.
-     *
-     * @param int $status HTTP response status code (default: 404).
+     * @throws RouterException if $handler is provided but $pattern is not a valid segment pattern.
      * 
-     * @return void
+     * @example - Examples:
+     * ```php
+     * // Global error handler
+     * $router->onError([ErrorController::class, 'onWeError']);
+     * 
+     * // Specific URI error handler
+     * $router->onError('/users/', [ErrorController::class, 'onWeError']);
+     * 
+     * // Using a closure
+     * $router->onError('/admin', function($request) {
+     *     // handle error
+     * });
+     * ```
      */
-    public static function triggerError(int $status = 404): void;
+    public function onError(Closure|array|string $pattern, Closure|array|string|null $handler = null): void;
 
     /**
      * Get list of registered controller namespaces.

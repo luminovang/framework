@@ -12,8 +12,9 @@
 namespace Luminova\Http;
 
 use \Luminova\Http\Request;
-use \Luminova\Http\HttpServerTrait;
+use \Luminova\Http\Helper\HttpServerTrait;
 use \Luminova\Exceptions\RuntimeException;
+use function \Luminova\Funcs\array_last;
 use \Closure;
 
 class HttpServer 
@@ -518,7 +519,11 @@ class HttpServer
      */
     public function on(?string $address = null): void
     {
-        $address ??= end(self::$connections)[1] ?? '';
+        if($address === null){
+            $address = array_last(self::$connections);
+            $address = ($address === null) ? '' : ($address[1] ?? '');
+        }
+
         $this->_echo("Connecting client: {$address}.");
         
         self::$clients[$address]['connected'] = true;
@@ -535,7 +540,11 @@ class HttpServer
      */
     public function off(?string $address = null): void
     {
-        $address ??= end(self::$connections)[1] ?? '';
+        if($address === null){
+            $address = array_last(self::$connections);
+            $address = ($address === null) ? '' : ($address[1] ?? '');
+        }
+
         $this->_echo("Disconnecting client: {$address}.");
         
         self::$isConnected = false;
@@ -621,7 +630,8 @@ class HttpServer
     public function connect(?Closure $response = null): void
     {
         $this->route('GET', '/connect(?:/.*)?', function() use ($response) {
-            $address = end(self::$connections)[1] ?? '';
+            $address = array_last(self::$connections);
+            $address = ($address === null) ? '' : ($address[1] ?? '');
             $client = self::$clients[$address] ?? [];
 
             if($response instanceof Closure){
@@ -644,7 +654,9 @@ class HttpServer
     public function disconnect(?Closure $response = null): void
     {
         $this->route('GET', '/disconnect(?:/.*)?', function() use ($response) {
-            $address = end(self::$connections)[1] ?? '';
+            $address = array_last(self::$connections);
+            $address = ($address === null) ? '' : ($address[1] ?? '');
+
             $client = self::$clients[$address] ?? [];
             $client['connected'] = false;
 
