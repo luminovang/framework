@@ -3,7 +3,7 @@
     "description": "Reusable and core component for the Luminova PHP framework.",
     "keywords": [
         "luminova", "php luminova", "php luminova framework", "luminova ng", "novakit",
-        "php", "php framework", "framework", "mvc", "hmvc",
+        "php", "cli", "php framework", "framework", "mvc", "hmvc",
         "component", "module", "php routing"
     ],
     "license": "MIT",
