@@ -11,39 +11,38 @@
  */
 namespace Luminova\Http\Message;
 
-use \Luminova\Storages\Stream;
+use \Throwable;
+use \Stringable;
 use \Luminova\Http\HttpCode;
-use \Luminova\Functions\Normalizer;
+use \Luminova\Http\Message\Stream;
+use \Luminova\Http\Helper\Normalizer;
 use \Luminova\Interface\CookieJarInterface;
 use \Luminova\Interface\ResponseInterface;
 use \Psr\Http\Message\StreamInterface;
 use \Psr\Http\Message\MessageInterface;
 use \Luminova\Exceptions\InvalidArgumentException;
 use \Luminova\Exceptions\RuntimeException;
-use \Stringable;
 
 class Response implements ResponseInterface, Stringable
 {
     /**
-     * Initialize a new network request response object.
+     * Creates a new HTTP response object.
      *
-     * @param int $statusCode The HTTP status code of the response (default: 200).
-     * @param array $headers An array of response headers.
-     * @param string $contents The extracted content from the response.
-     * @param array $info Additional response information from cURL (optional).
-     * @param string $reasonPhrase The reason phrase associated with the status code (default: 'OK').
-     * @param string $protocolVersion The HTTP protocol version (default: '1.1').
-     * @param StreamInterface|null $stream Optionally passed s stream object.
-     * @param CookieJarInterface|null $cookie Optionally HTTP cookie jar object.
+     * @param StreamInterface|string $body Response body as a PSR-7 stream or string.
+     * @param int $statusCode HTTP status code (default: 200).
+     * @param array $headers Response headers.
+     * @param array $info Optional response info (Novio).
+     * @param string $reasonPhrase Reason phrase for the status code (default: 'OK').
+     * @param string $protocolVersion HTTP protocol version (default: '1.1').
+     * @param CookieJarInterface|null $cookie Optional cookie jar instance.
      */
     public function __construct(
+        private StreamInterface|string $body = '',
         private int $statusCode = 200, 
         private array $headers = [], 
-        private string $contents = '', 
         private array $info = [],
         private string $reasonPhrase = 'OK',
         private string $protocolVersion = '1.1',
-        private ?StreamInterface $stream = null,
         public ?CookieJarInterface $cookie = null
     ) {}
 
@@ -60,12 +59,12 @@ class Response implements ResponseInterface, Stringable
         $response .= $headers;
 
         if (!str_contains($headers, 'Content-Length')) {
-            $response .= "Content-Length: " . strlen($this->contents) . "\r\n";
+            $response .= "Content-Length: " . $this->getLength() . "\r\n";
         }
 
         $response .= "\r\n";
  
-        return $response . $this->contents;
+        return $response . $this->getContents();
     }
 
     /**
@@ -82,7 +81,7 @@ class Response implements ResponseInterface, Stringable
     public function getReasonPhrase(): string
     {
         if($this->reasonPhrase === ''){
-            $this->reasonPhrase = HttpCode::get($this->statusCode);
+            $this->reasonPhrase = HttpCode::phrase($this->statusCode);
         }
 
         return $this->reasonPhrase;
@@ -128,7 +127,40 @@ class Response implements ResponseInterface, Stringable
      */
     public function getContents(): string
     {
-        return $this->contents;
+        if (is_string($this->body) || ($this->body instanceof Stringable)) {
+            return (string) $this->body;
+        }
+
+        if (!$this->body instanceof StreamInterface) {
+            return '';
+        }
+
+        if($this->body instanceof Stream){
+            return $this->body->toString();
+        }
+
+        try {
+            if ($this->body->isSeekable()) {
+                $this->body->seek(0);
+            }
+
+            return $this->body->getContents();
+        } catch (Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getLength(?string $encoding = null): int
+    {
+        if($this->body === ''){
+            return 0;
+        }
+
+        return $this->getBody()->getSize() 
+            ?? strlen($this->getContents(), $encoding);
     }
 
     /**
@@ -144,8 +176,8 @@ class Response implements ResponseInterface, Stringable
      */
     public function getBody(): StreamInterface
     {
-        if($this->stream instanceof StreamInterface){
-            return $this->stream;
+        if($this->body instanceof StreamInterface){
+            return $this->body;
         }
 
         $resource = fopen('php://temp', 'r+');
@@ -154,12 +186,12 @@ class Response implements ResponseInterface, Stringable
             throw new RuntimeException('Failed to open temporary stream ("php://temp").');
         }
 
-        if ($this->contents !== '') {
-            fwrite($resource, $this->contents);
+        if ($this->body !== '') {
+            fwrite($resource, $this->body);
             fseek($resource, 0);
         }
 
-        return new Stream($resource);
+        return $this->body = new Stream($resource);
     }
 
     /**
@@ -173,17 +205,23 @@ class Response implements ResponseInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function getProtocolVersion(): string 
+    public function getProtocolVersion(): string
     {
-        if($this->protocolVersion === ''){
-            $status = $this->getHeader('X-Response-Protocol-Status-Phrase')[0] ?? null;
+        if ($this->protocolVersion !== '') {
+            return $this->protocolVersion;
+        }
 
-            if ($status && preg_match('/^HTTP\/(\d+\.\d+)/', $status, $matches)) {
-                $this->protocolVersion = $matches[1] ?? '';
+        $phrase = $this->getHeader('X-Response-Protocol-Status-Phrase');
+
+        if($phrase !== []){
+            $status = $phrase[0] ?? null;
+
+            if ($phrase && is_string($status) && preg_match('/^HTTP\/(\d+\.\d+)/', $status, $matches)) {
+                return $this->protocolVersion = $matches[1];
             }
         }
 
-        return $this->protocolVersion; 
+        return $this->protocolVersion = '1.1';
     }
 
     /**
@@ -207,7 +245,13 @@ class Response implements ResponseInterface, Stringable
      */
     public function hasHeader(string $name): bool 
     {
-        return isset($this->headers[strtolower($name)]);
+        if($this->headers === []){
+            return false;
+        }
+
+        $headers = array_change_key_case($this->headers, CASE_LOWER);
+
+        return isset($headers[strtolower($name)]);
     }
 
     /**
@@ -224,7 +268,7 @@ class Response implements ResponseInterface, Stringable
 
         $new = clone $this;
         $new->statusCode = $code;
-        $new->reasonPhrase = $reasonPhrase ?: HttpCode::get($code);
+        $new->reasonPhrase = $reasonPhrase ?: HttpCode::phrase($code);
         return $new;
     }
 
@@ -304,7 +348,7 @@ class Response implements ResponseInterface, Stringable
     public function withBody(StreamInterface $body): MessageInterface
     {
         $new = clone $this;
-        $new->stream = $body;
+        $new->body = $body;
 
         return $new;
     }

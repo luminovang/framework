@@ -13,12 +13,13 @@ namespace Luminova\Security;
 use \Luminova\Sessions\Session;
 use \App\Config\Session as CookieConfig;
 
-final class Csrf 
+final class CSRF 
 {
     /**
      * Token session input name.
      *
      * @var string $tokenName
+     * @internal Used in {@see Luminova\Http\Request::getCsrfToken())
      */
     private static $tokenName = "csrf_token";
 
@@ -48,7 +49,7 @@ final class Csrf
      * Retrieves a previously generated CSRF token or generates a new token 
      * if none was found, then stores it.
      *
-     * @return string Return the CSRF token.
+     * @return string Return the generated CSRF token.
      */
     public static function getToken(): string 
     {
@@ -58,9 +59,7 @@ final class Csrf
                 : $_SESSION[self::$token];
         }
 
-        $token = self::generateToken();
-        self::saveToken($token);
-        return $token;
+        return self::refresh();
     }
 
     /**
@@ -118,11 +117,11 @@ final class Csrf
      * Validates a submitted CSRF token.
      *
      * @param string $token The token submitted by the user.
-     * @param bool $reuse Whether to retain or delete the token after successful verification (default: true).
+     * @param bool $reusable Whether to retain or delete the token after successful verification (default: true).
      * 
      * @return bool Return true if the submitted token is valid, false otherwise.
      */
-    public static function validate(string $token, bool $reuse = false): bool 
+    public static function validate(string $token, bool $reusable = false): bool 
     {
         self::intConfig();
         $storage = self::tokenStorage();
@@ -135,7 +134,7 @@ final class Csrf
         }
 
         if ($tokenHash && hash_equals($tokenHash, $token)) {
-            if(!$reuse) {
+            if(!$reusable) {
                 self::delete();
             }
 

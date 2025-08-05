@@ -13,9 +13,10 @@ namespace Luminova\Http;
 use \Closure;
 use \JsonException;
 use \Luminova\Http\Request;
-use \Luminova\Http\Client\Curl;
-use \Luminova\Interface\{ResponseInterface, LazyInterface};
+use \Luminova\Http\Client\Novio;
+use \Luminova\Interface\{ResponseInterface, LazyObjectInterface};
 use \Luminova\Exceptions\{
+    ErrorCode,
     LogicException, 
     RuntimeException, 
     EncryptionException,
@@ -31,7 +32,7 @@ use \Luminova\Exceptions\{
  * - HMAC signature generation for verification
  * - Listening for incoming requests and validating signatures
  */
-class Webhook implements LazyInterface
+class Webhook implements LazyObjectInterface
 {
     /**
      * Configuration key used to define the webhook event name in the payload.
@@ -440,7 +441,7 @@ class Webhook implements LazyInterface
             if (!$this->decoded) {
                 throw new RuntimeException(
                     'No request data to unpack.',
-                    EncryptionException::NOT_ALLOWED
+                    ErrorCode::NOT_ALLOWED
                 );
             }
 
@@ -556,7 +557,7 @@ class Webhook implements LazyInterface
             $options[$field] = $this->payload;
         }
 
-        return (new Curl())->request($this->method, $this->url, $options);
+        return (new Novio())->request($this->method, $this->url, $options);
     }
 
     /**
@@ -664,7 +665,7 @@ class Webhook implements LazyInterface
         $method = null;
 
         if($payload === [] && $capture){
-            $request ??= new Request();
+            $request = Request::getInstance();
 
             $payload = $request->getBody();
             $method = $request->getMethod();

@@ -12,31 +12,58 @@ namespace Luminova\Interface;
 
 use \Generator;
 use \Luminova\Http\{File, Server, Header, UserAgent};
-use \Luminova\Interface\{LazyInterface, CookieJarInterface};
+use \Luminova\Interface\{LazyObjectInterface, CookieJarInterface};
 use \Luminova\Exceptions\{SecurityException, InvalidArgumentException};
 
 /**
  * Anonymous methods to retrieve values from HTTP request fields. 
  * 
- * @method mixed getPut(string|null $field, mixed $default = null) Get a field value from HTTP PUT request or entire fields if `$field` param is null.
- * @method mixed getOptions(string|null $field, mixed $default = null) Get a field value from HTTP OPTIONS request  or entire fields if `$field` param is null.
- * @method mixed getPatch(string|null $field, mixed $default = null) Get a field value from HTTP PATCH request or entire fields if `$field` param is null.
- * @method mixed getHead(string|null $field, mixed $default = null) Get a field value from HTTP HEAD request or entire fields if `$field` param is null.
- * @method mixed getConnect(string|null $field, mixed $default = null) Get a field value from HTTP CONNECT request or entire fields if `$field` param is null.
- * @method mixed getTrace(string|null $field, mixed $default = null) Get a field value from HTTP TRACE request or entire fields if `$field` param is null.
- * @method mixed getPropfind(string|null $field, mixed $default = null)  Get a field value from HTTP PROPFIND request or entire fields if `$field` param is null.
- * @method mixed getMkcol(string|null $field, mixed $default = null) Get a field value from HTTP MKCOL request or entire fields if `$field` param is null.
- * @method mixed getCopy(string|null $field, mixed $default = null) Get a field value from HTTP COPY request or entire fields if `$field` param is null.
- * @method mixed getMove(string|null $field, mixed $default = null) Get a field value from HTTP MOVE request or entire fields if `$field` param is null.
- * @method mixed getLock(string|null $field, mixed $default = null) Get a field value from HTTP LOCK request or entire fields if `$field` param is null.
- * @method mixed getUnlock(string|null $field, mixed $default = null) Get a field value from HTTP UNLOCK request or entire fields if `$field` param is null.
+ * @method mixed getPut(string $field, mixed $default = null) Get a field value from HTTP PUT request or entire fields if `$field` param is null.
+ * @method mixed getOptions(string $field, mixed $default = null) Get a field value from HTTP OPTIONS request  or entire fields if `$field` param is null.
+ * @method mixed getPatch(string $field, mixed $default = null) Get a field value from HTTP PATCH request or entire fields if `$field` param is null.
+ * @method mixed getHead(string $field, mixed $default = null) Get a field value from HTTP HEAD request or entire fields if `$field` param is null.
+ * @method mixed getConnect(string $field, mixed $default = null) Get a field value from HTTP CONNECT request or entire fields if `$field` param is null.
+ * @method mixed getTrace(string $field, mixed $default = null) Get a field value from HTTP TRACE request or entire fields if `$field` param is null.
+ * @method mixed getPropfind(string $field, mixed $default = null)  Get a field value from HTTP PROPFIND request or entire fields if `$field` param is null.
+ * @method mixed getMkcol(string $field, mixed $default = null) Get a field value from HTTP MKCOL request or entire fields if `$field` param is null.
+ * @method mixed getCopy(string $field, mixed $default = null) Get a field value from HTTP COPY request or entire fields if `$field` param is null.
+ * @method mixed getMove(string $field, mixed $default = null) Get a field value from HTTP MOVE request or entire fields if `$field` param is null.
+ * @method mixed getLock(string $field, mixed $default = null) Get a field value from HTTP LOCK request or entire fields if `$field` param is null.
+ * @method mixed getUnlock(string $field, mixed $default = null) Get a field value from HTTP UNLOCK request or entire fields if `$field` param is null.
+ * @method mixed getAny(string $field, mixed $default = null) Get a input field value from any HTTP request method.
  * 
- * @property Server<LazyInterface>|null $server The server instance representing HTTP server parameters and configurations.
- * @property Header<LazyInterface>|null $header The header instance providing HTTP request headers information.
- * @property UserAgent<LazyInterface>|null $agent The user-agent instance containing client browser details.
+ * @property Server<LazyObjectInterface>|null $server The object representing request HTTP server properties.
+ * @property Header<LazyObjectInterface>|null $header The object providing HTTP request headers information.
+ * @property UserAgent<LazyObjectInterface>|null $agent The object containing client user-agent and browser details.
  */
 interface HttpRequestInterface
 {
+    /**
+     * Create a shared instance request object.
+     * 
+     * @param string|null $method The HTTP method used for the request (e.g., `Method::GET`, `Method::POST`).
+     * @param string|null $uri The request URI, typically the path and query string.
+     * @param array<string,mixed> $body The request body, provided as an associative array 
+     *                                  (e.g., `['field' => 'value']`). This may include form data, JSON, etc.
+     * @param array<string,array> $files The request files, provided as an associative array (e.g., `['image' => [...]]`). 
+     * @param array<string,mixed>|null $cookies Optional. An associative array of Cookies (e.g, $_COOKIE).
+     * @param string|null $raw Optional request raw-body. 
+     * @param array<string,mixed>|null $server Optional. Server variables (e.g., `$_SERVER`). 
+     * @param array<string,mixed>|null $headers Optional. An associative array of HTTP headers.
+     * 
+     * @return HttpRequestInterface Return new or shared instance of request object.
+     */
+    public static function getInstance(
+        ?string $method = null,
+        ?string $uri = null,
+        array $body = [],
+        array $files = [],
+        ?array $cookies = null,
+        ?string $raw = null,
+        ?array $server = null,
+        ?array $headers = null
+    ): self;
+
     /**
      * Get a value from any HTTP request method.
      *
@@ -82,7 +109,7 @@ interface HttpRequestInterface
      * @param mixed $value The value to assign to the field.
      * @param string|null $method Optional HTTP method, if null the current request method will be used (e.g, `GET`, `POST`).
      * 
-     * @return static<HttpRequestInterface> Returns the instance request class.
+     * @return static Returns the instance request class.
      */
     public function setField(string $field, mixed $value, ?string $method = null): self;
 
@@ -92,29 +119,45 @@ interface HttpRequestInterface
      * @param string $field The name of the field to remove.
      * @param string|null $method Optional HTTP method, if null the current request method will be used (e.g, `GET`, `POST`).
      * 
-     * @return static<HttpRequestInterface> Returns the instance request class.
+     * @return static Returns the instance request class.
      */
     public function removeField(string $field, ?string $method = null): self;
 
     /**
      * Get a field value from HTTP GET request or entire fields if `$field` param is null.
      *
-     * @param string|null $field The field key to retrieve the value value from.
+     * @param string $field The input field name to retrieve the value value from.
      * @param mixed $default An optional default value to return if the key is not found (default: null).
      * 
      * @return mixed Return the value from HTTP request method body based on key.
      */
-    public function getGet(string|null $field, mixed $default = null): mixed;
+    public function getGet(string $field, mixed $default = null): mixed;
 
     /**
      * Get a field value from HTTP POST request or entire fields if `$field` param is null.
      *
-     * @param string|null $field The field key to retrieve the value value from.
+     * @param string $field The input field name to retrieve the value value from.
      * @param mixed $default An optional default value to return if the key is not found (default: null).
      * 
      * @return mixed Return the value from HTTP request method body based on key.
      */
-    public function getPost(string|null $field, mixed $default = null): mixed;
+    public function getPost(string $field, mixed $default = null): mixed;
+
+    /**
+     * Get a field value from any valid HTTP request method.
+     * 
+     * If `$method` is provided, it checks field in the specified HTTP method, 
+     * otherwise it use the current request method.
+     * 
+     * Alias {@see getAny()}
+     *
+     * @param string $field The input field name to retrieve the value value from.
+     * @param mixed $default An optional default value to return if the field is not found (default: null).
+     * @param string|null $method Optional HTTP method to retrieve valid from (default: `null` as `ANY`).
+     * 
+     * @return mixed Return the value from HTTP request method body based on field name or default value.
+     */
+    public function input(string $field, mixed $default = null, ?string $method = null): mixed;
 
     /**
      * Get a field value from HTTP request body as an array.
@@ -131,10 +174,30 @@ interface HttpRequestInterface
      * Get the entire request body as an array or JSON object.
      * 
      * @param bool $object Whether to return an array or a JSON object (default: false).
+     * @param string|null $method Optional HTTP request method, if null current request method (default: null).
      * 
      * @return array<string,mixed>|object Return the request body as an array or JSON object.
      */
-    public function getBody(bool $object = false): array|object;
+    public function getBody(bool $object = false, ?string $method = null): array|object;
+
+    /**
+     * Retrieve the CSRF token from the current request.
+     *
+     * This method checks incoming request data (POST, PUT, DELETE, or GET)
+     * for a field named `csrf_token` or `csrf-token` and returns its value if present.
+     *
+     * @return string|null Returns the CSRF token string if found, otherwise null.
+     */
+    public function getCsrfToken(): ?string;
+
+    /**
+     * Retrieve an array of request body fields.
+     * 
+     * This method extract all keys from request body.
+     * 
+     * @return array<int,string> Return an array list request fields.
+     */
+    public function getFields(): array;
 
     /**
      * Get an uploaded file instance or a generator yielding file instances for multiple files.
@@ -163,7 +226,7 @@ interface HttpRequestInterface
      * 
      * @param string|null $name An optional cookie name to pre-initialize.
      *
-     * @return \T<CookieJarInterface> Return the cookie jar instance populated with parsed cookies.
+     * @return CookieJarInterface Return the cookie jar instance populated with parsed cookies.
      * @link https://luminova.ng/docs/0.0.0/cookies/cookie-file-jar
      */
     public function getCookie(?string $name = null): CookieJarInterface;
@@ -358,7 +421,7 @@ interface HttpRequestInterface
      * 
      * @param string|null $useragent The User Agent string, if not provided, it defaults to (`HTTP_USER_AGENT`).
      * 
-     * @return \T<UserAgent> Return instance user-agent class containing browser information.
+     * @return UserAgent Return instance user-agent class containing browser information.
      * @link https://luminova.ng/docs/0.0.0/http/user-agent
      */
     public function getUserAgent(?string $useragent = null): UserAgent;

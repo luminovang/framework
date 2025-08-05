@@ -10,9 +10,9 @@
  */
 namespace Luminova\Interface;
 
+use \Luminova\Base\Configuration;
 use \Luminova\Exceptions\JsonException;
 use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Base\BaseConfig;
 
 interface SessionManagerInterface 
 {
@@ -26,16 +26,16 @@ interface SessionManagerInterface
     /**
      * Set session configuration object.
      *
-     * @param BaseConfig<App\Config\Session> $config Session configuration.
+     * @param Configuration<App\Config\Session> $config Session configuration.
      */
-    public function setConfig(BaseConfig $config): void;
+    public function setConfig(Configuration $config): void;
 
     /**
      * Sets the session storage instance name where all session items will be stored.
      *
      * @param string $storage The session storage key.
      * 
-     * @return static<SessionManagerInterface> Return instance of session manager class.
+     * @return static Return instance of session manager class.
      */
     public function setStorage(string $storage): self;
 
@@ -44,7 +44,7 @@ interface SessionManagerInterface
      *
      * @param string $table The session storage table index.
      * 
-     * @return static<SessionManagerInterface> Return instance of session manager class.
+     * @return static Return instance of session manager class.
      */
     public function setTable(string $table): self;
 
@@ -91,7 +91,11 @@ interface SessionManagerInterface
     public function status():int;
 
     /**
-     * Regenerate session or cookie identifier and delete the old ID associated session file or ID.
+     * Regenerate session or cookie identifier.
+     * 
+     * This method delete the old ID associated to the current session, to retain data set to false.
+     * 
+     * @param bool $clearData Whether to delete the old associated session or not (default: `true`).
      * 
      * @return string|false Return the new generated session Id on success, otherwise false.
      */
@@ -149,7 +153,7 @@ interface SessionManagerInterface
      * @param mixed $data The data to store.
      * @param string|null $storage Optional storage name.
      * 
-     * @return static<SessionManagerInterface> Return instance of session manager class.
+     * @return static Return instance of session manager class.
      */
     public function setItem(string $index, mixed $data, ?string $storage = null): self;
 
@@ -159,7 +163,7 @@ interface SessionManagerInterface
      * @param array<string,mixed> $data The date to store where the key is the identifier.
      * @param string|null $storage Optional storage name.
      * 
-     * @return static<SessionManagerInterface> Return instance of session manager class.
+     * @return static Return instance of session manager class.
      */
     public function setItems(array $data, ?string $storage = null): self;
 
@@ -170,7 +174,7 @@ interface SessionManagerInterface
      * @param string|null $index The key index to remove.
      * @param string|null $storage Optionally specify the storage name to clear or remove an item.
      * 
-     * @return static<SessionManagerInterface> Return instance of session manager class.
+     * @return static Return instance of session manager class.
      */
     public function deleteItem(?string $index = null, ?string $storage = null): self;
 

@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class InvalidArgumentException extends AppException
 {
@@ -19,12 +20,12 @@ class InvalidArgumentException extends AppException
      * Constructor for InvalidArgumentException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code The exception code (default: 1001).
+     * @param string|int $code The exception code (default: `ErrorCode::INVALID_ARGUMENTS`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::INVALID_ARGUMENTS, 
+        string|int $code = ErrorCode::INVALID_ARGUMENTS, 
         ?Throwable $previous = null
     )
     {

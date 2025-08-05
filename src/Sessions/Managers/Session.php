@@ -10,21 +10,20 @@
  */
 namespace Luminova\Sessions\Managers;
 
-use \Luminova\Logger\Logger;
-use \Luminova\Base\BaseConfig;
-use \Luminova\Exceptions\JsonException;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Interface\SessionManagerInterface;
 use \Throwable;
+use \Luminova\Logger\Logger;
+use \Luminova\Base\Configuration;
+use \Luminova\Interface\SessionManagerInterface;
+use \Luminova\Exceptions\{ErrorCode, JsonException, RuntimeException};
 
 final class Session implements SessionManagerInterface 
 {
     /**
      * Session configuration. 
      * 
-     * @var BaseConfig $config
+     * @var Configuration $config
      */
-    private ?BaseConfig $config = null;
+    private ?Configuration $config = null;
 
     /**
      * The session storage index name.
@@ -34,6 +33,13 @@ final class Session implements SessionManagerInterface
     private static string $table = 'default';
 
     /**
+     * The session id
+     * 
+     * @var string|null $sid
+     */
+    private static ?string $sid = null;
+
+    /**
      * {@inheritdoc}
      */
     public function __construct(private string $storage = 'global') {}
@@ -41,7 +47,7 @@ final class Session implements SessionManagerInterface
     /**
      * {@inheritdoc}
      */
-    public function setConfig(BaseConfig $config): void
+    public function setConfig(Configuration $config): void
     {
         $this->config = $config;
     }
@@ -144,9 +150,14 @@ final class Session implements SessionManagerInterface
         }
 
         if(self::isValidId($sessionId)){
-            return session_id($sessionId) 
-                ? session_start() 
-                : (PRODUCTION ? session_start() : false);
+            session_id($sessionId);
+            
+            if(session_start()){
+                self::$sid = $sessionId;
+                return true;
+            }
+
+            return false;
         }
 
         $error = "Session Error: The provided session ID '{$sessionId}' is invalid.";
@@ -170,9 +181,11 @@ final class Session implements SessionManagerInterface
     /** 
      * {@inheritdoc}
      */
-    public function regenerateId(): string|bool
+    public function regenerateId(bool $clearData = true): string|bool
     {
-        return session_regenerate_id(true) ? session_id() : false;
+        return session_regenerate_id($clearData) 
+            ? session_id() 
+            : false;
     }
 
     /** 
@@ -180,7 +193,7 @@ final class Session implements SessionManagerInterface
      */
     public function getId(): ?string
     {
-        return (session_id()?:null);
+        return (session_id() ?: self::$sid);
     }
 
     /** 
@@ -188,21 +201,20 @@ final class Session implements SessionManagerInterface
      */
     public static function isValidId(string $sessionId): bool
     {
-
-        $bitsPerCharacter = filter_var(ini_get('session.sid_bits_per_character'), FILTER_VALIDATE_INT);
-        $sidLength = filter_var(ini_get('session.sid_length'), FILTER_VALIDATE_INT);
+        $bitsPerCharacter = (int) ini_get('session.sid_bits_per_character');
+        $sidLength = (int) ini_get('session.sid_length');
     
-        if ($bitsPerCharacter === false || $sidLength === false) {
+        if ($sidLength <= 0) {
             return false;
         }
 
         $pattern = match ($bitsPerCharacter) {
-            4 => '[0-9a-f]',
+            4, 0 => '[0-9a-f]',
             5 => '[0-9a-v]',
             6 => '[0-9a-zA-Z,-]',
             default => throw new RuntimeException(
                 sprintf("Unsupported session.sid_bits_per_character value: '%d'.", $bitsPerCharacter),
-                RuntimeException::NOT_SUPPORTED
+                ErrorCode::NOT_SUPPORTED
             )
         };
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 /**
- * Luminova Framework NovaKit Command Line Tool.
+ * Luminova Framework Novakit Command Line Tool.
  * 
  * ██╗     ██╗   ██╗███╗   ███╗██╗███╗   ██╗ ██████╗ ██╗   ██╗ █████╗ 
  * ██║     ██║   ██║████╗ ████║██║████╗  ██║██╔═══██╗██║   ██║██╔══██╗

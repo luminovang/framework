@@ -11,11 +11,11 @@
 namespace Luminova\Command\Consoles;
 
 use \Throwable;
+use \Luminova\Base\Queue;
+use \Luminova\Base\Console;
 use \Luminova\Logger\Logger;
 use \Luminova\Logger\LogLevel;
-use \Luminova\Base\BaseConsole;
 use \Luminova\Command\Utils\Text;
-use \Luminova\Base\BaseTaskQueue;
 use \Luminova\Command\Utils\Color;
 use function \Luminova\Funcs\{
     root,
@@ -23,7 +23,7 @@ use function \Luminova\Funcs\{
     make_dir
 };
 
-class TaskWorker extends BaseConsole 
+class TaskWorker extends Console 
 {
     /**
      * {@inheritdoc}
@@ -94,7 +94,7 @@ class TaskWorker extends BaseConsole
 
             $task = $this->getTaskInstance();
 
-            if($task instanceof BaseTaskQueue){
+            if($task instanceof Queue){
                 try{
                     if(!$task->isInitialized()){
                         echo sprintf(
@@ -136,12 +136,16 @@ class TaskWorker extends BaseConsole
         return STATUS_ERROR;
     }
 
-    private function getTaskInstance(bool $isRunner = false): ?BaseTaskQueue 
+    private function getTaskInstance(bool $isRunner = false): ?Queue 
     {
         $class = $this->term->getAnyOption('class', 'c', '\\App\\Tasks\\TaskQueue');
 
-        if (!$class || !class_exists($class)) {
-            $error = 'Invalid task class. Cannot proceed.';
+        if (!str_starts_with($class, '\\App\\Tasks\\') && !class_exists($class)) {
+            $class = '\\App\\Tasks\\' . ltrim($class, '\\');
+        }
+
+        if (!class_exists($class)) {
+            $error = sprintf('Invalid or missing task class: [%s]. Cannot proceed.', $class);
 
             if($isRunner){
                 echo $error ."\n";
@@ -154,12 +158,12 @@ class TaskWorker extends BaseConsole
         }
 
         /**
-         * @var \T<BaseTaskQueue> $task
+         * @var \T<Queue> $task
          */
         $task = new $class();
 
-        if(!$task instanceof BaseTaskQueue){
-            $error = sprintf('Class [%s] must extend %s to manage tasks.', $class, BaseTaskQueue::class);
+        if(!$task instanceof Queue){
+            $error = sprintf('Class [%s] must extend %s to manage tasks.', $class, Queue::class);
 
             if($isRunner){
                 echo $error ."\n";
@@ -173,6 +177,7 @@ class TaskWorker extends BaseConsole
 
         $task->mode = 'cli';
         $task->returnAsTaskModel = false;
+        $task->setTerminal($this->term);
 
         return $task;
     }
@@ -186,7 +191,7 @@ class TaskWorker extends BaseConsole
     {
         $task = $this->getTaskInstance();
 
-        if(!$task instanceof BaseTaskQueue){
+        if(!$task instanceof Queue){
             return STATUS_ERROR;
         }
 
@@ -227,7 +232,7 @@ class TaskWorker extends BaseConsole
     {
         $task = $this->getTaskInstance();
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             return STATUS_ERROR;
         }
 
@@ -311,13 +316,13 @@ class TaskWorker extends BaseConsole
     {
         $task = $this->getTaskInstance();
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             return STATUS_ERROR;
         }
 
         $offset = (int) $this->term->getAnyOption('offset', 'o', 0);
         $limit  = $this->term->getAnyOption('limit', 'l', null);
-        $status = $this->term->getAnyOption('status', 's', BaseTaskQueue::ALL);
+        $status = $this->term->getAnyOption('status', 's', Queue::ALL);
 
         $result = $task->list(
             $status, 
@@ -386,7 +391,7 @@ class TaskWorker extends BaseConsole
 
         $task = $this->getTaskInstance();
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             return STATUS_ERROR;
         }
 
@@ -419,7 +424,7 @@ class TaskWorker extends BaseConsole
 
         $task = $this->getTaskInstance();
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             return STATUS_ERROR;
         }
 
@@ -484,7 +489,7 @@ class TaskWorker extends BaseConsole
 
         $task = $this->getTaskInstance();
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             return STATUS_ERROR;
         }
 
@@ -509,11 +514,11 @@ class TaskWorker extends BaseConsole
     {
         $task = $this->getTaskInstance();
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             return STATUS_ERROR;
         }
 
-        $status = $this->term->getAnyOption('status', 's', BaseTaskQueue::ALL);
+        $status = $this->term->getAnyOption('status', 's', Queue::ALL);
         $count = $task->purge($status);
 
         if ($count === 0) {
@@ -542,7 +547,7 @@ class TaskWorker extends BaseConsole
 
         $task = $this->getTaskInstance();
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             return STATUS_ERROR;
         }
 
@@ -572,7 +577,7 @@ class TaskWorker extends BaseConsole
 
         $task = $this->getTaskInstance();
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             $this->term->error('Invalid task class.');
             return STATUS_ERROR;
         }
@@ -603,7 +608,7 @@ class TaskWorker extends BaseConsole
 
         $task = $this->getTaskInstance();
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             $this->term->error('Invalid task class.');
             return STATUS_ERROR;
         }
@@ -632,7 +637,7 @@ class TaskWorker extends BaseConsole
     {
         $task = $this->getTaskInstance(true);
 
-        if ($task instanceof BaseTaskQueue) {
+        if ($task instanceof Queue) {
             $flock = $this->term->getAnyOption('flock-worker', 'f');
 
             if($flock){
@@ -675,7 +680,7 @@ class TaskWorker extends BaseConsole
     {
         $task = $this->getTaskInstance(true);
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             return STATUS_ERROR;
         }
 
@@ -751,7 +756,7 @@ class TaskWorker extends BaseConsole
     {
         $task = $this->getTaskInstance(true);
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             return STATUS_ERROR;
         }
 
@@ -797,7 +802,7 @@ class TaskWorker extends BaseConsole
     {
         $task = $this->getTaskInstance(true);
 
-        if (!$task instanceof BaseTaskQueue) {
+        if (!$task instanceof Queue) {
             return STATUS_ERROR;
         }
 
@@ -808,7 +813,7 @@ class TaskWorker extends BaseConsole
             return STATUS_ERROR;
         }
 
-        $status = $this->term->getAnyOption('status', 's', BaseTaskQueue::ALL);
+        $status = $this->term->getAnyOption('status', 's', Queue::ALL);
         $metadata = '';
 
         if ($task->export($status, $dir, $metadata)) {
@@ -828,7 +833,7 @@ class TaskWorker extends BaseConsole
     /**
      * Get signal file path from class or create custom.
      */
-    private function getSignalPath(BaseTaskQueue $task): array
+    private function getSignalPath(Queue $task): array
     {
         $info = $task->getPathInfo('signal');
 

@@ -134,6 +134,15 @@ interface ResponseInterface extends \Psr\Http\Message\ResponseInterface
     public function getContents(): string;
 
     /**
+     * Retrieves the request response contents length.
+     * 
+     * @param string|int $encoding Optional string encoding (default: `null` or `env(app.mb.encoding)`).
+     * 
+     * @return int Returns the content length.
+     */
+    public function getLength(?string $encoding = null): int;
+
+    /**
      * Retrieves additional information about the response.
      *
      * @return array<string,mixed> Return an associative array of response metadata.

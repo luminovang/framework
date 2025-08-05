@@ -16,14 +16,14 @@ use \ReflectionClass;
 use \App\Config\Cron;
 use \Luminova\Time\Time;
 use \Luminova\Logger\Logger;
-use \Luminova\Base\BaseCommand;
-use \Luminova\Base\BaseConsole;
-use \Luminova\Http\Client\Curl;
+use \Luminova\Base\Command;
+use \Luminova\Base\Console;
+use \Luminova\Http\Client\Novio;
 use \Luminova\Command\Utils\Text;
 use \Psr\Http\Message\ResponseInterface;
 use function \Luminova\Funcs\{write_content, make_dir};
 
-class CronWorker extends BaseConsole 
+class CronWorker extends Console 
 {
     /**
      * {@inheritdoc}
@@ -46,9 +46,9 @@ class CronWorker extends BaseConsole
     /**
      * Network instance.
      * 
-     * @var Curl|null $network
+     * @var Novio|null $network
      */
-    private static ?Curl $network = null;
+    private static ?Novio $network = null;
 
     /**
      * Application cron instance.
@@ -228,7 +228,7 @@ class CronWorker extends BaseConsole
         }
 
         if($task['pingOn' . $event] && isset($instance['pingOn' . $event])){
-            self::$network ??= new Curl();
+            self::$network ??= new Novio();
             $output .= ($event === 'Failure') ? "Failure ping " : "Completed ping ";
             
             self::$network->requestAsync('POST', $instance['pingOn' . $event], [
@@ -258,9 +258,9 @@ class CronWorker extends BaseConsole
     {
         [$namespace, $method] = explode('::', $task['controller']);
         $reflector = new ReflectionClass($namespace);
-        $isConsole = $reflector->isSubclassOf(BaseConsole::class);
+        $isConsole = $reflector->isSubclassOf(Console::class);
 
-        if ($reflector->isSubclassOf(BaseCommand::class) || $isConsole) {
+        if ($reflector->isSubclassOf(Command::class) || $isConsole) {
             if ($reflector->hasMethod($method)) {
                 $caller = $reflector->getMethod($method);
                 if($caller->isPublic() && !$caller->isAbstract() && !$caller->isStatic()){
@@ -280,7 +280,7 @@ class CronWorker extends BaseConsole
             return false;
         }
 
-        $output .= "Class {$namespace} is not a subclass of " . BaseCommand::class . " or " .  BaseConsole::class . ".\n";
+        $output .= "Class {$namespace} is not a subclass of " . Command::class . " or " .  Console::class . ".\n";
         return false;
     }
 

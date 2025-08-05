@@ -12,7 +12,7 @@ namespace Luminova\Command\Utils;
 
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Color;
-use \Luminova\Utils\WeakReference;
+use \Luminova\Utility\Reference\WeakReference;
 use \GdImage;
 use \WeakMap;
 
@@ -128,10 +128,10 @@ class Image
      *                      (default: `Image::ASCII_CLASSIC`).
      * @param int|null $width Optional target width to resize the image (default: null).
      * @param int|null $height Optional target height to resize the image (default: null).
-     * @param bool $ascii_grayscale Whether to use a weighted grayscale for enhanced contrast based on the ASCII character representation (default: false).
+     * @param bool $grayscale Whether to use a weighted grayscale for enhanced contrast based on the ASCII character representation (default: false).
      * @param array<string|int,string> $colors Optional mapping of ASCII characters to foreground colors.
      *                      Example: `[' ' => 'red', '@' => 'blue', '#' => 'green']`. Leave empty for no color.
-     * @param array{pixel:int,pixels:int}|int|null $lazy_print Optional lazy printing configuration:
+     * @param array{pixel:int,pixels:int}|int|null $lazyPrint Optional lazy printing configuration:
      *                      - If an integer is provided, it defines the delay (in microseconds) between 
      *                        each row of ASCII output (lazy row printing).
      *                      - If an array is provided, it can define both pixel and row delays.
@@ -167,9 +167,9 @@ class Image
         string $ascii = self::ASCII_CLASSIC,
         ?int $width = null, 
         ?int $height = null,
-        bool $ascii_grayscale = false,
+        bool $grayscale = false,
         array $colors = [],
-        array|int|null $lazy_print = null,
+        array|int|null $lazyPrint = null,
     ): ?string 
     {
         self::$weak ??= new WeakMap();
@@ -179,14 +179,14 @@ class Image
         if (self::$weak[self::$img] === false) {
             return self::error(
                 'Could not load image.', 
-                ($lazy_print !== null && $lazy_print !== [])
+                ($lazyPrint !== null && $lazyPrint !== [])
             );
         }
 
         if (self::$weak[self::$img] === -1) {
             return self::error(
                 'Image is not supported, allowed image types: (jp?eg, png, gif and webp).', 
-                ($lazy_print !== null && $lazy_print !== [])
+                ($lazyPrint !== null && $lazyPrint !== [])
             );
         }
 
@@ -207,8 +207,8 @@ class Image
             $height, $width, 
             $ascii, $resized,
             $img_width, $img_height,
-            $ascii_grayscale, $colors,
-            $lazy_print
+            $grayscale, $colors,
+            $lazyPrint
         );
     }
 
@@ -251,9 +251,9 @@ class Image
      *                      uses the resized dimensions. If false, the original image dimensions are used.
      * @param int $new_width The actual width of the image, used for scaling when not resized.
      * @param int $new_height The actual height of the image, used for scaling when not resized.
-     * @param bool $ascii_grayscale Whether to use a weighted grayscale for enhanced contrast based on the ASCII character representation (default: false).
+     * @param bool $grayscale Whether to use a weighted grayscale for enhanced contrast based on the ASCII character representation (default: false).
      * @param array<string|int,string> $colors Optional foreground color mapping for ASCII characters.
-     * @param array{pixel:int,pixels:int}|int|null $lazy_print Optional lazy printing configuration.
+     * @param array{pixel:int,pixels:int}|int|null $lazyPrint Optional lazy printing configuration.
      *
      * @return string Return the ASCII art generated from the image, represented as a string or null on lazy printing.
      * @ignore
@@ -265,9 +265,9 @@ class Image
         bool $resized,
         int $new_width,
         int $new_height,
-        bool $ascii_grayscale = false,
+        bool $grayscale = false,
         array $colors = [],
-        array|int|null $lazy_print = null
+        array|int|null $lazyPrint = null
     ): ?string
     {
         $draw = '';
@@ -278,10 +278,10 @@ class Image
             : $colors;
     
         // Lazy Printing config checks
-        $isLazyOption = $lazy_print && is_array($lazy_print);
-        $lazyPixel = $isLazyOption ? ($lazy_print['pixel'] ?? null) : null;
-        $lazyPixels = $lazy_print ? ($isLazyOption ? ($lazy_print['pixels'] ?? 0) : $lazy_print) : null;
-        $lazy_print = ($lazyPixel || $lazyPixels);
+        $isLazyOption = $lazyPrint && is_array($lazyPrint);
+        $lazyPixel = $isLazyOption ? ($lazyPrint['pixel'] ?? null) : null;
+        $lazyPixels = $lazyPrint ? ($isLazyOption ? ($lazyPrint['pixels'] ?? 0) : $lazyPrint) : null;
+        $lazyPrint = ($lazyPixel || $lazyPixels);
     
         for ($y = 0; $y < $height; $y++) {
             for ($x = 0; $x < $horizontal; $x++) {
@@ -290,14 +290,14 @@ class Image
                     : imagecolorat(self::$weak[self::$img], intval($x * $new_width / $width), intval($y * $new_height / $height));
     
                 if ($lazyPixel !== null) {
-                    echo self::grayscale($rgb, $ascii, $ascii_grayscale, $colors);
+                    echo self::grayscale($rgb, $ascii, $grayscale, $colors);
                     usleep($lazyPixel);
                 } else {
-                    $draw .= self::grayscale($rgb, $ascii, $ascii_grayscale, $colors);
+                    $draw .= self::grayscale($rgb, $ascii, $grayscale, $colors);
                 }
             }
     
-            if (!$lazy_print) {
+            if (!$lazyPrint) {
                 $draw .= "\n";
             } else {
                 if ($lazyPixels && !$lazyPixel) {
@@ -320,7 +320,7 @@ class Image
      *
      * @param int|false $rgb The RGB color value of the pixel. If false, an error occurred.
      * @param string $ascii The set of ASCII characters to use for generating grayscale values.
-     * @param bool $ascii_grayscale Whether to use a weighted grayscale for enhanced contrast based on the ASCII character representation (default: false).
+     * @param bool $grayscale Whether to use a weighted grayscale for enhanced contrast based on the ASCII character representation (default: false).
      * @param array<string,string> $colors Optional foreground color mapping for ASCII characters.
      *
      * @return string Returns the ASCII character that represents the grayscale value of the pixel.
@@ -329,7 +329,7 @@ class Image
     protected static function grayscale(
         int|bool $rgb, 
         string $ascii,
-        bool $ascii_grayscale = false,
+        bool $grayscale = false,
         array $colors = []
     ): string 
     {
@@ -337,7 +337,7 @@ class Image
         $g = ($rgb >> 8) & 0xFF;
         $b = $rgb & 0xFF;
 
-        if ($ascii_grayscale) {
+        if ($grayscale) {
             $gray = 0.299 * $r + 0.587 * $g + 0.114 * $b;
             $index = intval(pow($gray / 255, 1.2) * (strlen($ascii) - 1));
         } else {

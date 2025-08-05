@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class ValidationException extends AppException
 {
@@ -19,12 +20,12 @@ class ValidationException extends AppException
      * Constructor for ValidationException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code  The exception code (default: 4070).
+     * @param string|int $code  The exception code (default: `ErrorCode::INPUT_VALIDATION_ERROR`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::INPUT_VALIDATION_ERROR, 
+        string|int $code = ErrorCode::INPUT_VALIDATION_ERROR, 
         ?Throwable $previous = null
     )
     {

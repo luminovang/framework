@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework Method Class Route Prefix Attribute
+ * Luminova Framework Class-Scope Route Prefix Attribute.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -9,6 +9,7 @@
  * @link https://luminova.ng
  */
 namespace Luminova\Attributes;
+
 use \Attribute;
 use \Luminova\Exceptions\RouterException;
 
@@ -16,37 +17,81 @@ use \Luminova\Exceptions\RouterException;
 final class Prefix
 {
     /**
-     * Defines a non-repeatable routing prefix for HTTP controller classes, 
-     * specifying URI prefix pattern and HTTP error handling.
+     * Defines a non-repeatable routing prefix for HTTP controller classes.
      *
-     * This attribute assigns a URI prefix and an optional error handler to a controller class, enabling centralized 
-     * routing and error management. Only one prefix can be assigned to a controller.
-     *
-     * @param string $pattern The URI prefix or pattern that the controller should handle (e.g., `/user/account`, `/user/?.*`, `/user/(:root)`).
-     * @param string|array|null $onError An optional error handler, either as a callable or a [class, method] array, for handling routing errors.
-     * @throws RouterException If the provided error handler is not a valid callable.
+     * This attribute assigns a URI prefix to a controller and optionally sets an error handler. 
+     * It helps centralize error management and organize controllers when compiling attributes to routes for performance. 
      * 
+     * **Predefined Route Placeholders:**
+     *
+     * - (:root)         → matches everything (catch-all)
+     * - (:base)         → matches everything with or without `/` (catch-all)
+     * - (:any)          → matches any characters, including slashes
+     * - (:int)          → matches integers (digits only)
+     * - (:integer)      → alias for :int
+     * - (:mixed)        → matches any characters except slash (lazy)
+     * - (:string)       → matches a non-empty segment without slashes
+     * - (:optional)     → optional segment (may be empty)
+     * - (:alphabet)     → letters only (A-Z, a-z)
+     * - (:alphanumeric) → letters and digits only
+     * - (:username)     → letters, digits, dots, underscores, hyphens
+     * - (:version)      → version numbers like: 1.0, 2.3.4, 10.0.1.2, etc.
+     * - (:number)       → integer or decimal with optional sign
+     * - (:double)       → floating-point number with optional sign
+     * - (:float)        → decimal numbers only
+     * - (:path)         → multiple segments separated by slashes
+     * - (:uuid)         → standard UUID (8-4-4-4-12 hex digits)
+     *
+     * @param string $pattern The base prefix or patterns this controller class should handle
+     *                   (e.g., `/user/(:root)`, `/user` or `/user/?.*`).
+     * @param string|array|null $onError Optional error handler for routing errors. 
+     *                                   Can be a callable or a (e.g, `[class, method]`) array.
+     * @param array<int,string> $exclude An optional list of URI prefixes to exclude from class matching.
+     *                          This is used internally when parsing attributes routing performance.
+     * @param bool $mergeExcluders Wether to merge the exclude list with based prefix or pattern (default: false).
+     *          If true `pattern+exclude` are combined as (e.g, `/(?!api(?:/|$)|blog(?:/|$)|admin(?:/|$)).*'`).
+     *
+     * @throws RouterException If the provided error handler is not a valid callable.
+     * @see https://luminova.ng/docs/0.0.0/routing/dynamic-uri-pattern
+     * @see https://luminova.ng/docs/0.0.0/attributes/uri-prefix
+     *
      * @example Usage:
      * ```php
-     * // /app/Controllers/Http/RestController.php
      * namespace App\Controllers\Http;
      * 
-     * use Luminova\Base\BaseController;
+     * use Luminova\Base\Controller;
      * use Luminova\Attributes\Prefix;
      * use App\Errors\Controllers\ErrorController;
-     * 
-     * #[Prefix(pattern: '/api/(:root)', onError: [Views::class, 'onWebError'])]
-     * class RestController extends BaseController {
-     *      // Class implementation
+     *
+     * #[Prefix(pattern: '/api/(:base)', onError: [ErrorController::class, 'onWebError'])]
+     * class RestController extends Controller {
+     *      // Controller implementation
      * }
      * ```
+     * 
+     * @example Excluding Prefixes:
+     * ```php
+     * namespace App\Controllers\Http;
+     * 
+     * use Luminova\Base\Controller;
+     * use Luminova\Attributes\Prefix;
+     *
+     * #[Prefix('/', exclude: ['api', 'blog', 'admin'])]
+     * class MainController extends Controller {
+     *      // Controller implementation
+     * }
+     * ```
+     * > Each controller can have **only one prefix**.
+     * > And can optionally define error handler without needing `Error` attribute class.
      */
     public function __construct(
-        public string $pattern,
-        public string|array|null $onError = null
+        public string $pattern, 
+        public string|array|null $onError = null,
+        public array $exclude = [],
+        public bool $mergeExcluders = false
     ) 
     {
-        if ($this->onError === null) {
+        if (!$this->onError) {
             return;
         }
 

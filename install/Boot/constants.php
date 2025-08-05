@@ -78,6 +78,38 @@ if (!function_exists('array_is_list')) {
     }
 }
 
+if (!function_exists('array_first')) {
+    /**
+     * Get the first element of an array.
+     *
+     * Returns null if the array is empty. Works for both indexed and associative arrays.
+     *
+     * @param array $array The array to get the first element from.
+     * 
+     * @return mixed|null Return the first element of the array, or null if empty.
+     */
+    function array_first(array $array): mixed
+    {
+        return ($array === []) ? null : $array[array_key_first($array)];
+    }
+}
+
+if (!function_exists('array_last')) {
+    /**
+     * Get the last element of an array.
+     *
+     * Returns null if the array is empty. Works for both indexed and associative arrays.
+     *
+     * @param array $array The array to get the last element from.
+     * 
+     * @return mixed|null Return the last element of the array, or null if empty.
+     */
+    function array_last(array $array): mixed
+    {
+        return ($array === []) ? null : $array[array_key_last($array)];
+    }
+}
+
 /**
  * Executes a PHP function dynamically, checking if it's disabled before execution.
  *
@@ -160,6 +192,45 @@ function __cache_env(array $entries, string $path): bool
 }
 
 /**
+ * Convert a numeric string into its appropriate numeric type.
+ * 
+ * This method detects whether the given string represents
+ * a floating-point number or an integer. If the string
+ * contains a decimal point (.) or scientific notation (e),
+ * it is converted to a float; otherwise, it is converted to an int.
+ * 
+ * @param string $value The numeric string to convert.
+ * @param bool $toLowercase Whether to convert the string to lowercase before processing.
+ *                    Useful when checking for scientific notation (e.g., "1E3").
+ * 
+ * @return float|int Returns the numeric value as int or float depending on the input.
+ */
+function to_numeric(string $value, bool $toLowercase = false): float|int
+{
+    $value = trim($value);
+
+    if ($value === '') {
+        return 0;
+    }
+
+    if ($toLowercase) {
+        $value = strtolower($value);
+    }
+
+    if (ctype_digit($value)) {
+        return (int) $value;
+    }
+
+    if (!is_numeric($value)) {
+        return 0;
+    }
+
+    return (str_contains($value, '.') || str_contains($value, 'e'))
+        ? (float) $value
+        : (int) $value;
+}
+
+/**
  * Sets an environment variable, optionally saving it to the `.env` file.
  *
  * @param string $key The environment variable key.
@@ -236,7 +307,7 @@ function setenv(string $key, string $value, bool $updateToEnv = false): bool
 
         $saved = (new SplFileObject($path, 'w'))->fwrite($lines) !== false;
 
-        if($saved && !IS_LOCALHOST && file_exists($envCache)){
+        if($saved && !IS_LOCALHOST && is_file($envCache)){
             $entry = include $envCache;
             $entry[$key] = $value;
     
@@ -280,7 +351,7 @@ function env(string $key, mixed $default = null): mixed
     $value = trim($value);
 
     if (is_numeric($value)) {
-        return $_ENV[$key] = $_SERVER[$key] = $value + 0;
+        return $_ENV[$key] = $_SERVER[$key] = to_numeric($value, true);
     }
 
     if($value === '[]'){
@@ -310,7 +381,7 @@ function env(string $key, mixed $default = null): mixed
                 'true'  => true,
                 'false' => false,
                 'null'  => null,
-                is_numeric($item) => $item + 0,
+                is_numeric($item) => to_numeric($item, true),
                 default => $item
             };
         }, explode(',', trim($value, '[] ')));
@@ -331,7 +402,7 @@ function env(string $key, mixed $default = null): mixed
 (static function (string $path) {
     $envCache = APP_ROOT . 'writeable/.env-cache.php';
 
-    if(!IS_LOCALHOST && file_exists($envCache)){
+    if(!IS_LOCALHOST && is_file($envCache)){
         $entries = include $envCache;
 
         $_SERVER += $entries;
@@ -340,7 +411,7 @@ function env(string $key, mixed $default = null): mixed
         return;
     }
 
-    if (file_exists($path)) {
+    if (is_file($path)) {
         try {
             $entry = [];
             $file = new SplFileObject($path, 'r');
@@ -440,11 +511,34 @@ defined('APP_NAME') || define('APP_NAME', env('app.name', 'Example'));
 defined('ENVIRONMENT') || define('ENVIRONMENT', env('app.environment.mood', 'development'));
 
 /**
+ * Application staging mode boolean flag.
+ * 
+ * @var bool STAGING
+ */
+defined('STAGING') || define('STAGING', ENVIRONMENT === 'staging');
+
+/**
  * Application production mode boolean flag.
  * 
  * @var bool PRODUCTION
+ * @example - Example:
+ * ```php
+ * // Strictly check production only
+ * if(!STAGING && PRODUCTION){
+ * 
+ * }
+ * 
+ * // Or
+ * if(PRODUCTION){
+ *      if(!STAGING){
+ * 
+ *      }
+ * }
+ * ```
+ * > **Note:**
+ * > If `STAGING` is enabled, production will always return true.
  */
-defined('PRODUCTION') || define('PRODUCTION', ENVIRONMENT === 'production');
+defined('PRODUCTION') || define('PRODUCTION', (STAGING || ENVIRONMENT === 'production'));
 
 /**
  * Application maintenance mode boolean flag.
@@ -682,11 +776,16 @@ defined('PARAM_FLOAT') || define('PARAM_FLOAT', 192);
 /**
  * Set error reporting.
  */
-error_reporting(PRODUCTION ? 
+error_reporting((PRODUCTION && !STAGING) ? 
     E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_USER_NOTICE & ~E_USER_DEPRECATED :
     E_ALL
 );
-ini_set('display_errors', (!PRODUCTION && env('debug.display.errors', false)) ? '1' : '0');
+ini_set('display_errors', ((STAGING || !PRODUCTION) && env('debug.display.errors', false)) ? '1' : '0');
+
+/**
+ * Set exception tracing arguments reporting.
+ */
+ini_set('zend.exception_ignore_args', (!STAGING && PRODUCTION) ? '1' : '0');
 
 /**
  * Limits the maximum execution time
@@ -697,6 +796,11 @@ set_max_execution_time((int) env('script.execution.limit', 30));
  * Set default timezone
  */
 set_function('date_default_timezone_set', env('app.timezone', 'UTC'));
+
+/**
+ * Set internal encoding
+ */
+set_function('mb_internal_encoding', env('app.mb.encoding', null));
 
 /**
  * Set whether a client disconnect should abort script execution

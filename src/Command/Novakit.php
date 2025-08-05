@@ -14,14 +14,17 @@ use \Throwable;
 use \ReflectionClass;
 use \Luminova\Luminova;
 use \Luminova\Command\Terminal;
-use \Luminova\Base\BaseConsole;
+use \Luminova\Base\Console;
+use \Luminova\Command\Utils\Text;
+use \Luminova\Command\Utils\Color;
+use \Luminova\Exceptions\AppException;
 use \Luminova\Command\Consoles\{
     Help, Logs, Lists, Server, System,
-    Builder, Context, Commands, Database,
+    Builder, Context, Commands, Database, Sitemaps,
     CronWorker, Generators, TaskWorker, Authenticate, ClearWritable
 };
-use \Luminova\Interface\LazyInterface;
-use function \Luminova\Funcs\root;
+use \Luminova\Interface\LazyObjectInterface;
+use function \Luminova\Funcs\{root, import};
 
 final class Novakit 
 {
@@ -35,9 +38,9 @@ final class Novakit
     /**
      * Static instance of called command.
      * 
-     * @var BaseConsole|null $newConsole 
+     * @var Console|null $newConsole 
      */
-    private static ?BaseConsole $newConsole = null;
+    private static ?Console $newConsole = null;
 
     /**
      * Is novakit system commands.
@@ -116,7 +119,7 @@ final class Novakit
      * This method resolves and runs the specified command based on the provided terminal input,
      * handling help output, validation, and execution within the defined mode.
      * 
-     * @param Terminal<LazyInterface> $instance The terminal instance containing parsed command and arguments.
+     * @param Terminal<LazyObjectInterface> $instance The terminal instance containing parsed command and arguments.
      * @param array<string,mixed>|null $options The parsed command arguments and options 
      *                      or null to read from terminal object.
      * @param string $mode The command execution mode (`system` for core commands, `global` for user-defined).
@@ -138,7 +141,11 @@ final class Novakit
      * ));
      * ```
      */
-    public static function execute(LazyInterface $instance, ?array $options = null, string $mode = 'global'): int
+    public static function execute(
+        LazyObjectInterface $instance, 
+        ?array $options = null,
+        string $mode = 'global'
+    ): int
     {
         self::$isSystem = true;
         $options = ($options === null) 
@@ -187,7 +194,28 @@ final class Novakit
             }
         }
 
-        return (int) self::$newConsole->run($options);
+        try{
+            return (int) self::$newConsole->run($options);
+        }catch(Throwable $e){
+            if($e instanceof AppException){
+                $e->handle();
+                return STATUS_ERROR;
+            }
+
+            if (env('throw.cli.exceptions', false)) {
+                throw $e;
+            }
+
+            import(
+                'app:Errors/Defaults/cli.php', 
+                throw: false, 
+                once: true, 
+                require: false,
+                scope: ['error' => $e]
+            );
+        }
+
+        return STATUS_ERROR;
     }
 
     /**
@@ -200,7 +228,7 @@ final class Novakit
      * @param string $group The command group string (e.g., `create:controller`, `db:migrate`, `foo`).
      * @param string $mode The lookup mode: `system` for internal commands, or `global` for custom/console commands.
      *
-     * @return class-string<BaseConsole>|null Returns the fully qualified class name if found, or `null` if not.
+     * @return class-string<Console>|null Returns the fully qualified class name if found, or `null` if not.
      */
     public static function find(string $group, string $mode = 'global'): ?string 
     {
@@ -213,6 +241,7 @@ final class Novakit
             'db', => Database::class,
             'server', 'serve' => Server::class,
             'generate', 'env' => System::class,
+            'sitemap' => Sitemaps::class,
             'build' => Builder::class,
             'context' => Context::class,
             'log' => Logs::class,
@@ -248,7 +277,7 @@ final class Novakit
      * command metadata such as group, description, usage examples, options, and more.
      * 
      * @param string $group The command group name (e.g., 'foo').
-     * @param class-string<BaseConsole> $class The fully qualified class name that handles the command.
+     * @param class-string<Console> $class The fully qualified class name that handles the command.
      * @param array $properties (optional) Additional metadata for the command based on protected properties.
      * 
      * @return bool Returns true if the command was successfully registered; false if it already exists.
@@ -436,20 +465,20 @@ final class Novakit
     /**
      * Instantiate a new console command class and validate it.
      * 
-     * @param class-string<BaseConsole> $className The fully qualified class name of the console command.
+     * @param class-string<Console> $className The fully qualified class name of the console command.
      * 
      * @return bool Returns `true` if the class was successfully instantiated and is valid, `false` otherwise.
      */
     private static function newObject(string $className): bool 
     {
-        if(self::$newConsole instanceof BaseConsole){
+        if(self::$newConsole instanceof Console){
             return true;
         }
 
         $object = new $className();
 
-        if(!$object instanceof BaseConsole){
-            Terminal::error(sprintf('Class does not extend BaseConsole: %s', $className));
+        if(!$object instanceof Console){
+            Terminal::error(sprintf('Class %s does not extend : %s', $className, Console::class));
             return false;
         }
 
@@ -468,7 +497,7 @@ final class Novakit
         return new class(self::$newConsole) {
             private ?ReflectionClass $ref  = null;
 
-            public function __construct(private BaseConsole $instance) 
+            public function __construct(private Console $instance) 
             {
                 $this->ref = new ReflectionClass($this->instance);
             }
@@ -509,7 +538,7 @@ final class Novakit
 
         $bin = root('/bin/', '.novakit-console.php');
 
-        if(!file_exists($bin)){
+        if(!is_file($bin)){
             return;
         }
 
@@ -527,12 +556,12 @@ final class Novakit
     /**
      * Show group helps command.
      * 
-     * @param Terminal<LazyInterface> $instance The terminal instance containing parsed command and arguments.
+     * @param Terminal<LazyObjectInterface> $instance The terminal instance containing parsed command and arguments.
      * @param string $command The executed command.
      * 
      * @return int Return status error.
      */
-    private static function tryGroupHelps(LazyInterface $instance, string $command): int 
+    private static function tryGroupHelps(LazyObjectInterface $instance, string $command): int 
     {
         $max = 0;
         $info = Commands::getGlobalHelps(strstr($command, ':', true) ?: $command, $max);
@@ -557,12 +586,12 @@ final class Novakit
     /**
      * Oops and suggest command.
      * 
-     * @param Terminal<LazyInterface> $instance The terminal instance containing parsed command and arguments.
+     * @param Terminal<LazyObjectInterface> $instance The terminal instance containing parsed command and arguments.
      * @param string $command The executed command.
      * 
      * @return int Return status error.
      */
-    private static function failed(LazyInterface $instance, string $command): int 
+    private static function failed(LazyObjectInterface $instance, string $command): int 
     {
         $instance::oops($command);
 

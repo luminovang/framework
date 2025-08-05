@@ -12,12 +12,13 @@ namespace Luminova\Database;
 
 use \Closure;
 use \Throwable;
+use \Luminova\Boot;
+use \Luminova\Luminova;
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Color;
-use \Luminova\Interface\DatabaseInterface;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Database\{Table, Alter, Connection};
-use function \Luminova\Funcs\{shared, is_command};
+use \Luminova\Interface\DatabaseInterface;
+use \Luminova\Database\{Table, Helpers\Alter, Connection};
 
 final class Schema
 {
@@ -43,13 +44,6 @@ final class Schema
     private static ?DatabaseInterface $db = null;
 
     /**
-     * Command line instance.
-     * 
-     * @var Terminal|null $cli 
-     */
-    private static ?Terminal $cli = null;
-
-    /**
      * Get table execution reports.
      * 
      * @return array<int,array> Return result reports.
@@ -66,25 +60,11 @@ final class Schema
      */
     protected static function db(): DatabaseInterface
     {
-        if (!self::$db instanceof DatabaseInterface) {
+        if (!(self::$db instanceof DatabaseInterface) || !self::$db->isConnected()) {
             self::$db = (new Connection())->database();
         }
 
         return self::$db;
-    }
-
-    /**
-     * Gets command line class instance.
-     *
-     * @return Terminal The Terminal instance.
-     */
-    protected static function cli(): Terminal
-    {
-        if (!self::$cli instanceof Terminal) {
-            self::$cli = new Terminal();
-        }
-
-        return self::$cli;
     }
 
     /**
@@ -106,12 +86,14 @@ final class Schema
      */
     public static function create(string $tableName, Closure $tableCallback): void
     {
+        Terminal::init();
+
         if ($tableName === '') {
             self::report('Create table name cannot be an empty string.', $tableName);
             return;
         }
 
-        shared('MIGRATION_SUCCESS', false);
+        Boot::set('MIGRATION_SUCCESS', false);
         try {
             $table = $tableCallback(new Table($tableName));
 
@@ -120,16 +102,16 @@ final class Schema
                 return;
             }            
 
-            if(shared('SHOW_QUERY_DEBUG') === true){
+            if(Boot::get('SHOW_QUERY_DEBUG') === true){
                 self::$columns = $table->getColumns();
-                self::cli()->writeln("Table Creation SQL query string.", 'green');
-                self::cli()->newLine();
-                self::cli()->writeln($table->getCreateQuery());
-                self::cli()->newLine();
+                Terminal::writeln("Table Creation SQL query string.", 'green');
+                Terminal::newLine();
+                Terminal::writeln($table->getCreateQuery());
+                Terminal::newLine();
                 return;
             }
 
-            if(shared('CHECK_ALTER_TABLE') === true){
+            if(Boot::get('CHECK_ALTER_TABLE') === true){
                 self::$columns = $table->getColumns();
                 return;
             }
@@ -137,7 +119,7 @@ final class Schema
             $query = $table->getCreateQuery();
 
             if (self::db()->exec($query) > 0) {
-                shared('MIGRATION_SUCCESS', true);
+                Boot::set('MIGRATION_SUCCESS', true);
                 self::report("Table was created successfully.", $tableName, true);
             } else {
                 self::report("Unable to create table or table already exists.\nRun migration command with `--drop` flag to drop table before running migration.", $tableName);
@@ -166,12 +148,14 @@ final class Schema
      */
     public static function modify(string $tableName, Closure $tableCallback): void
     {
+        Terminal::init();
+
         if ($tableName === '') {
             self::report('Alter table name cannot be an empty string.', $tableName);
             return;
         }
 
-        shared('ALTER_SUCCESS', false);
+        Boot::set('ALTER_SUCCESS', false);
         $db = self::db();
         try {
             $table = $tableCallback(new Table($tableName));
@@ -181,12 +165,12 @@ final class Schema
                 return;
             } 
 
-            $query = $table->getAlterQuery(self::$columns, shared('ALTER_DROP_COLUMNS') ?? false);
+            $query = $table->getAlterQuery(self::$columns, Boot::get('ALTER_DROP_COLUMNS') ?? false);
 
-            if(shared('SHOW_QUERY_DEBUG') === true){
-                self::cli()->writeln("Table Alteration SQL query string.", 'green');
-                self::cli()->newLine();
-                self::cli()->writeln(($query === '') ? 'No SQL column to print' : $query);
+            if(Boot::get('SHOW_QUERY_DEBUG') === true){
+                Terminal::writeln("Table Alteration SQL query string.", 'green');
+                Terminal::newLine();
+                Terminal::writeln(($query === '') ? 'No SQL column to print' : $query);
                 return;
             }
 
@@ -197,7 +181,7 @@ final class Schema
             $db->beginTransaction();
 
             if ($db->exec($query) > 0) {
-                shared('ALTER_SUCCESS', true);
+                Boot::set('ALTER_SUCCESS', true);
                 $db->commit();
                 self::report("Table was altered successfully.", $tableName, true);
             } else {
@@ -224,12 +208,14 @@ final class Schema
      */
     public static function rename(string $from, string $to, string $database = 'mysql'): void 
     {
+        Terminal::init();
+
         if ($from === '' || $to === '') {
             self::report('Rename table "from" or "to" name cannot be an empty string.', $from);
             return;
         }
 
-        shared('ALTER_SUCCESS', false);
+        Boot::set('ALTER_SUCCESS', false);
         $db = self::db();
         try {
             $query = Alter::renameTable(
@@ -238,10 +224,10 @@ final class Schema
                 $to
             );
 
-            if(shared('SHOW_QUERY_DEBUG') === true){
-                self::cli()->writeln("Table Rename SQL query string.", 'green');
-                self::cli()->newLine();
-                self::cli()->writeln(($query === '') ? 'No SQL column to print' : $query);
+            if(Boot::get('SHOW_QUERY_DEBUG') === true){
+                Terminal::writeln("Table Rename SQL query string.", 'green');
+                Terminal::newLine();
+                Terminal::writeln(($query === '') ? 'No SQL column to print' : $query);
                 return;
             }
 
@@ -252,7 +238,7 @@ final class Schema
             $db->beginTransaction();
             if (self::db()->exec($query) > 0) {
                 $db->commit();
-                shared('ALTER_SUCCESS', true);
+                Boot::set('ALTER_SUCCESS', true);
                 self::report("Table was successfully renamed to {$to}.", $from, true);
             } else {
                 $db->rollback();
@@ -299,6 +285,8 @@ final class Schema
      */
     private static function dropTable(string $tableName, bool $ifExists): void
     {
+        Terminal::init();
+
         if ($tableName === '') {
             self::report('Table name cannot be an empty string.', $tableName);
             return;
@@ -307,19 +295,19 @@ final class Schema
         /**
          * Hold database object which maybe required to rollback transaction.
          */
-        shared('DROP_TRANSACTION', null);
+        Boot::set('DROP_TRANSACTION', null);
 
         /**
          * Hold migration drop static.
          */
-        shared('MIGRATION_SUCCESS', false);
+        Boot::set('MIGRATION_SUCCESS', false);
 
         try {
             $query = "DROP TABLE " . ($ifExists ? "IF EXISTS " : "") . $tableName;
             $db->beginTransaction();
             if (self::db()->exec($query) > 0) {
-                shared('DROP_TRANSACTION', $db);
-                shared('MIGRATION_SUCCESS', true);
+                Boot::set('DROP_TRANSACTION', $db);
+                Boot::set('MIGRATION_SUCCESS', true);
                 self::report("Table has been dropped", $tableName, true);
             } else {
                 self::report("Unable to create table or table already exists.\nRun migration command with `--drop` flag to drop table before running migration.", $tableName);
@@ -340,13 +328,16 @@ final class Schema
      */
     private static function report(string $message, ?string $tableName = null, bool $passed = false): void
     {
-        if(is_command()){
+        if(Luminova::isCommand()){
             $message = "[" .  Color::style("$tableName", $passed ? 'green' : 'red') . "] {$message}";
 
-            self::cli()->writeln($message);
+            Terminal::writeln($message);
 
-            if($passed){return;}
-            self::cli()->beeps();
+            if($passed){
+                return;
+            }
+
+            Terminal::beeps();
             exit(STATUS_ERROR);
         }
 

@@ -10,10 +10,10 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\BaseConsole;
+use \Luminova\Base\Console;
 use \Luminova\Composer\Builder as AppBuilder;
 
-class Builder extends BaseConsole 
+class Builder extends Console 
 {
     /**
      * {@inheritdoc}

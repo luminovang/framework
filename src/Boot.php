@@ -11,9 +11,18 @@
 namespace Luminova;
 
 use \Throwable;
-use \App\Application;
-use \Luminova\Luminova;
+use \Luminova\Http\Header;
+use \Luminova\Logger\Logger;
+use \Luminova\Routing\Router;
+use \Luminova\Command\Terminal;
+use \Luminova\Cache\StaticCache;
+use \Luminova\Foundation\Error\Guard;
+use \Luminova\Foundation\Module\Factory;
 use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Foundation\Core\Application;
+use \Luminova\Foundation\Module\Autoloader;
+use function \Luminova\Funcs\{root, import};
+use \Luminova\Interface\{KernelInterface, RouterInterface, LazyObjectInterface};
 
 /**
  * Luminova framework autoloader helper class.
@@ -26,15 +35,59 @@ use \Luminova\Exceptions\RuntimeException;
  * static method based on your environment (`http()`, `cli()`, or `autoload()`).
  * 
  * @see https://luminova.ng/docs/0.0.0/boot/autoload
+ * 
+ * Boot Shared Memory
+ *
+ * Lightweight in-memory storage for application key/value data.
+ * Works as a static runtime registry. Comparable in concept to Swift's
+ * `UserDefaults` or Android/Java `SharedPreferences`, but not persistent.
+ *
+ * @see \Luminova\Funcs\shared() Global helper for quick access.
+ *
+ * @example - Usages:
+ * ```php
+ * use Luminova\Boot;
+ *
+ * Boot::set('THEME', true);
+ *
+ * $context = Boot::get('THEME', false);
+ *
+ * if (Boot::has('THEME')) {
+ *     // Key exists...
+ * }
+ *
+ * Boot::remove('THEME');
+ * Boot::clear();
+ * ```
+ *
+ * > **Note**
+ * > This storage is runtime-only:
+ * > - Data is lost at the end of each request.
+ * > - Values are not shared across processes or workers.
+ * > - Nothing is written to disk.
  */
-final class Boot 
+final class Boot
 {
+    /**
+     * Storage for shared keys and values.
+     *
+     * @var array<string,mixed> $storage
+     */
+    private static array $storage = [];
+
     /**
      * Indicates whether warmup initialization has already been performed.
      *
      * @var bool $isWarmed
      */
     private static bool $isWarmed = false;
+
+    /**
+     * If all features are registered.
+     * 
+     * @var bool $registered 
+     */
+    private static bool $registered = false;
 
     /**
      * Initializes the HTTP environment for web and API applications.
@@ -57,7 +110,7 @@ final class Boot
     public static function init(): void
     {
         self::warmup();
-        Luminova::initialize();
+        Guard::register();
         self::finish();
     }
 
@@ -94,7 +147,7 @@ final class Boot
      * registers error handlers, and loads required core modules before returning 
      * the application instance.
      *
-     * @return Application<CoreApplication,LazyInterface> Return the application instance.
+     * @return Application|\App\Application<Application> Return the application instance.
      * @example - Usage (public/index.php)
      * 
      * ```php
@@ -109,8 +162,47 @@ final class Boot
     public static function http(): Application
     {
         self::init();
-        return Application::getInstance();
+
+        if(!PRODUCTION && !IS_LOCALHOST){
+           exit('Invalid environment mode for production. Set "app.environment.mood=production" or "staging".');
+        }
+
+        return self::application();
     }
+
+    /**
+     * Get the shared application instance.
+     *
+     * Returns the current CoreApplication singleton.  
+     * This provides a single, global access point to the running application.
+     *
+     * @return Application|\App\Application<Application> Returns the application instance.
+     * > **Note:**
+     * > Future versions may introduce parameters so the method can return
+     * > context-specific or module-specific application instances.
+     */
+    public static function application(): Application
+    {
+        return \App\Application::getInstance();
+    }
+
+    /**
+     * Return the kernel instance for this application.
+     *
+     * @return KernelInterface|\App\Config\Kernel The kernel instance, or null to use the default.
+     */
+   /* public static function kernel(): KernelInterface
+    {
+        if(!Kernel::shouldShareObject()){
+            return Kernel::create();
+        }
+
+        if(!self::$kernel instanceof KernelInterface){
+            self::$kernel = Kernel::create();
+        }
+
+        return self::$kernel;
+    }*/
 
     /**
      * Prepares the CLI environment.
@@ -171,7 +263,8 @@ final class Boot
         self::override();
 
         require_once __DIR__ . '/../bootstrap/functions.php';
-        require_once __DIR__ . '/Errors/ErrorHandler.php';
+        require_once __DIR__ . '/Foundation/Error/Guard.php';
+        require_once __DIR__ . '/Foundation/Error/Message.php';
         require_once __DIR__ . '/Luminova.php';
 
         self::$isWarmed = true;
@@ -199,13 +292,13 @@ final class Boot
             $error = $e;
         }
 
-        if (!is_resource($handle)) {
+        if ($handle === false || !is_resource($handle)) {
             throw new RuntimeException(sprintf(
-                'BootError: Failed to open file "%s" with mode "%s"%s',
+                'Failed to open file "%s" with mode "%s"%s',
                 $filename,
                 $mode,
                 $error ? ': ' . $error->getMessage() : ''
-            ), RuntimeException::ERROR, $error);
+            ), previous: $error);
         }
 
         return $handle;
@@ -227,6 +320,253 @@ final class Boot
     }
 
     /**
+     * Set a shared value.
+     *
+     * Stores the given value under the specified key.
+     *
+     * @param string $key The key to store the value under.
+     * @param mixed  $value The value to store.
+     *
+     * @return mixed Returns the stored value.
+     *
+     * @example - Example:
+     * ```php
+     * use Luminova\Boot;
+     * 
+     * Boot::set('theme', 'dark');
+     * ```
+     */
+    public static function set(string $key, mixed $value): mixed
+    {
+        return self::$storage[$key] = $value;
+    }
+
+    /**
+     * Get a shared value.
+     *
+     * Retrieves a value stored under the specified key.
+     * Returns `null` if the key does not exist.
+     *
+     * @param string $key The key to retrieve.
+     *
+     * @return mixed Returns the stored value or `null` if not found.
+     *
+     * @example - Example:
+     * ```php
+     * use Luminova\Boot;
+     * 
+     * $theme = Boot::get('theme') ?? 'light';
+     * ```
+     */
+    public static function get(string $key): mixed
+    {
+        return self::$storage[$key] ?? null;
+    }
+
+    /**
+     * Check if a key exists in the shared storage.
+     *
+     * @param string $key The key to check.
+     *
+     * @return bool Return true if the key exists, false otherwise.
+     *
+     * @example - Example:
+     * ```php
+     * use Luminova\Boot;
+     * 
+     * if (Boot::has('theme')) { ... }
+     * ```
+     */
+    public static function has(string $key): bool
+    {
+        return array_key_exists($key, self::$storage);
+    }
+
+    /**
+     * Remove a key from the shared storage.
+     *
+     * @param string $key The key to remove.
+     *
+     * @return void
+     * @example - Example:
+     * ```php
+     * use Luminova\Boot;
+     * 
+     * Boot::remove('theme');
+     * ```
+     */
+    public static function remove(string $key): void
+    {
+        unset(self::$storage[$key]);
+    }
+
+    /**
+     * Clear all keys from the shared storage.
+     *
+     * @return void 
+     * 
+     * @example - Example:
+     * ```php
+     * use Luminova\Boot;
+     * 
+     * Boot::clear();
+     * ```
+     */
+    public static function clear(): void
+    {
+        self::$storage = [];
+    }
+
+    /**
+     * Count the number of keys currently stored.
+     *
+     * @return int Return the number of stored keys.
+     *
+     * @example - Example:
+     * ```php
+     * use Luminova\Boot;
+     * 
+     * $count = Boot::count();
+     * ```
+     */
+    public static function count(): int
+    {
+        return count(self::$storage);
+    }
+
+    /**
+     * Display performance-related warnings during production.
+     *
+     * This method checks for common configuration issues that slow the
+     * framework down and logs a warning when something important is not
+     * enabled. 
+     *
+     * Warnings are only shown when:
+     * - The application is running in production, and
+     * - The "debug.alert.performance.tips" feature is turned on.
+     *
+     * This feature does **not** disable any PHP setting. It only reports
+     * problems so developers can fix them. Nothing is modified.
+     *
+     * Current checks:
+     * - OPcache is installed but not enabled.
+     * - Route attribute scanning is active but attribute caching is off.
+     *
+     * @return void
+     */
+    public static function tips(): void
+    {
+        $entry = '';
+
+        if (PRODUCTION && env('debug.alert.performance.tips', false)) {
+            $off = 'Disable this warning by setting "debug.alert.performance.tips=false" in your .env file.';
+
+            if (function_exists('opcache_get_status') && !ini_get('opcache.enable')) {
+                $entry .= Logger::entry(
+                    'warning',
+                    "OPcache is installed but disabled. Enable it to improve performance. {$off}"
+                );
+            }
+
+            if (env('feature.route.attributes') && !env('feature.route.cache.attributes', false)) {
+                $entry .= Logger::entry(
+                    'warning',
+                    "Route attribute caching is disabled. Turn it on to avoid repeated reflection scans. {$off}"
+                );
+            }
+        }
+
+        if($entry !== ''){
+            Logger::warning($entry);
+        }
+    }
+
+    /**
+     * Load application is undergoing maintenance.
+     * 
+     * @return bool Return true.
+     */
+    private static function maintenance(bool $isCommand): bool 
+    {
+        $err = 'Error: (503) System undergoing maintenance!';
+
+        if($isCommand){
+            Terminal::error($err);
+            return true;
+        }
+
+        Header::headerNoCache(503, null, env('app.maintenance.retry', '3600'));
+        
+        try{
+            import(path: 'app:Errors/Defaults/maintenance.php', once: true, throw: true);
+        }catch(Throwable){
+            echo $err;
+        }
+
+        return true;
+    }
+
+    /**
+     * Serve static cached pages.
+     * 
+     * If cache is enabled and the request is not in CLI mode, check if the cache is still valid.
+     * If valid, render the cache and terminate further router execution.
+     *
+     * @return bool Return true if cache is rendered, otherwise false.
+     */
+    private static function cache(bool $isCommand): bool
+    {
+        if ($isCommand || !env('page.caching', false)) {
+            return false;
+        }
+
+        // Supported extension types to match.
+        $types = env('page.caching.statics', null);
+
+        if(!$types){
+           return false;
+        }
+
+        $uri =  Luminova::getUriSegments();
+
+        if (preg_match('/\.(' . $types . ')$/iu', $uri, $matches)) {
+            $cache = new StaticCache(
+                directory: root('/writeable/caches/templates/')
+            );
+
+            $rendered = false;
+            $expired = $cache->setKey(Luminova::getCacheId())
+                ->setUri($uri)
+                ->expired($matches[1]);
+
+            if ($expired === false) {
+                $rendered = $cache->read(
+                    $matches[1],
+                    onBeforeRender: fn() => Luminova::profiling('start'),
+                    onRendered: function() {
+                        Luminova::setClassMetadata([
+                            'staticCache' => true, 
+                            'cache' => true
+                        ]);
+                        Luminova::profiling('stop');
+                    }
+                );
+            }
+
+            $cache = null;
+
+            if($rendered === true){
+                return true;
+            }
+
+            // Remove the matched file extension to render the request normally
+            Router::$staticCacheUri = substr($uri, 0, -strlen($matches[0]));
+        }
+        
+        return false;
+    }
+
+    /**
      * Finalizes the bootstrapping process.
      *
      * Loads plugin autoloaders and custom framework feature. Sets `IS_UP` constant if not defined.
@@ -236,8 +576,20 @@ final class Boot
     private static function finish(): void
     {
         require_once __DIR__ . '/plugins/autoload.php';
-        require_once __DIR__ . '/../bootstrap/features.php';
+
+        self::features();
         defined('IS_UP') || define('IS_UP', true);
+        $isCommand = Luminova::isCommand();
+
+        // If application is undergoing maintenance.
+        if(MAINTENANCE && self::maintenance($isCommand)){
+            exit(STATUS_SUCCESS);
+        }
+
+        // If the view uri ends with `.extension`, then try serving the cached static version.
+        if(self::cache($isCommand)){
+            exit(STATUS_SUCCESS);
+        }
     }
 
     /**
@@ -270,5 +622,85 @@ final class Boot
             }
         }
     }
+
+    /**
+     * Initialize and register optional application features.
+     *
+     * This method checks the `.env` or environment configuration for enabled features and performs
+     * the following actions:
+     * 1. Registers the PSR-4 autoloader if `feature.app.autoload.psr4` is enabled.
+     * 2. Registers application service classes if `feature.app.services` is enabled.
+     * 3. Initializes class aliases from `app/Config/Modules.php` if `feature.app.class.alias` is enabled.
+     *    - Logs a warning if an alias cannot be created.
+     *    - Prevents re-initialization using the `__INIT_DEV_MODULES__` flag.
+     * 4. Loads and initializes developer global functions from `app/Utils/Global.php` if
+     *    `feature.app.dev.functions` is enabled.
+     *    - Prevents re-initialization using the `__INIT_DEV_FUNCTIONS__` flag.
+     *
+     * @return void
+     */
+    private static function features(): void 
+    {
+        if(self::$registered){
+            return;
+        }
+
+        /**
+         * Autoload register PSR-4 classes.
+         */
+        if (env('feature.app.autoload.psr4', false)) {
+            Autoloader::register();
+        }
+
+        /**
+         * Register application services.
+         */
+        if (env('feature.app.services', false)) {
+            Factory::register();
+        }
+
+        /**
+         * Initialize and register class modules and aliases.
+         */
+        if (env('feature.app.class.alias', false) && !defined('__INIT_DEV_MODULES__')) {
+            $config = import('app:Config/Modules.php', true, true);
+
+            if($config && $config !== []){
+                if (is_array($config['alias'] ?? null)) {
+                    $entry = '';
+                    foreach ($config['alias'] as $alias => $namespace) {
+                        if (!class_alias($namespace, $alias)) {
+                            $entry = Logger::entry(
+                                'warning', 
+                                "Failed to create alias [{$alias}] for class [{$namespace}]"
+                            );
+                        }
+                    }
+
+                    if($entry !== ''){
+                        Logger::warning($entry);
+                    }
+                }
+
+                define('__INIT_DEV_MODULES__', true);
+                $config = null;
+            }
+        }
+
+        /**
+         * Load and initialize dev global functions.
+         */
+        if (env('feature.app.dev.functions', false) && !defined('__INIT_DEV_FUNCTIONS__')) {
+            import('app:Utils/Global.php', true, true);
+            define('__INIT_DEV_FUNCTIONS__', true);
+        }
+
+        self::$registered = true;
+    }
+
+    // Prevent instantiation, cloning, and unserialization
+    private function __construct() {}
+    private function __clone() {}
+    public function __wakeup() {}
 }
 Boot::warmup();

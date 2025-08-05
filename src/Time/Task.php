@@ -28,7 +28,11 @@ class Task
      * 
      * > This utility function is useful for checking business opening and closing hours.
      */
-    public static function isOpen(string $openDatetime, string $closeDatetime, DateTimeZone|string|null $timezone = 'UTC'): bool
+    public static function isOpen(
+        string $openDatetime, 
+        string $closeDatetime, 
+        DateTimeZone|string|null $timezone = 'UTC'
+    ): bool
     {
         $opening = self::format($openDatetime, $timezone);
         $closing = self::format($closeDatetime, $timezone);
@@ -60,20 +64,47 @@ class Task
     }
 
     /**
-     * Check if a given datetime string has reached or passed. 
+     * Check if a given datetime has started, or if it should be treated as
+     * started earlier using a "before" offset.
      *
-     * @param string $datetime The starting date and time (e.g., '2023-09-25 08:00AM').
-     * @param DateTimeZone|string|null $timezone Optional timezone string.
+     * This method compares the current time with the target datetime.
+     * If `$before` is greater than zero, the event is treated as started
+     * that many seconds earlier.
      *
-     * @return bool Returns true if the date has passed, expired or is the current day, false otherwise if still in future.
+     * @param string $datetime The target date and time (e.g. "2025-01-10 10:00").
+     * @param int $before Optional time in seconds to start earlier none negative integer (e.g, `3600`).
+     * @param DateTimeZone|string|null $timezone Timezone to use for both values.
+     *
+     * @return bool Returns true if the event has started, or the early-start threshold has passed.
+     * 
+     * @example - Examples:
+     * 
+     * ```php
+     *  // Event starts at 10:00, current time is 09:30
+     *  Task::started('2025-01-10 10:00');        // false
+     *
+     *  // Treat the event as started 1 hour earlier
+     *  Task::started('2025-01-10 10:00', 3600);     // true
+     *
+     *  // Negative or zero values do nothing special
+     *  Task::started('2025-01-10 10:00', -3600);    // behaves the same as "0"
+     * ```
      * 
      * > Useful for checking if a deal or promo code has started.
      */
-    public static function started(string $datetime, DateTimeZone|string|null $timezone = 'UTC'): bool
+    public static function started(
+        string $datetime, 
+        int $before = 0, 
+        DateTimeZone|string|null $timezone = 'UTC'
+    ): bool 
     {
-        $now = Time::now($timezone);
-        $starting = Time::parse($datetime, $timezone);
-        
+        $now = Time::now($timezone)->getTimestamp();
+        $starting = Time::parse($datetime, $timezone)->getTimestamp();
+
+        if ($before > 0) {
+            $starting -= $before;
+        }
+
         return $now >= $starting;
     }
 

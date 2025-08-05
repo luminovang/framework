@@ -10,24 +10,23 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Exception;
-use \Luminova\Base\BaseConsole;
-use \Luminova\Application\Caller;
+use \Throwable;
+use \Luminova\Boot;
+use \Luminova\Base\Console;
 use \Luminova\Command\Utils\Color;
-use \Luminova\Storages\FileManager;
-use \Luminova\Exceptions\AppException;
+use \Luminova\Foundation\Module\Caller;
 use \Luminova\Interface\DatabaseInterface;
+use \Luminova\Utility\Storage\FileManager;
 use \Luminova\Database\{Seeder, Builder, Migration};
 use function \Luminova\Funcs\{
     root,
-    write_content,
-    get_content,
     make_dir,
-    get_class_name,
-    shared,
+    get_content,
+    write_content,
+    get_class_name
 };
 
-class Database extends BaseConsole 
+class Database extends Console 
 {
     /**
      * {@inheritdoc}
@@ -71,13 +70,13 @@ class Database extends BaseConsole
         setenv('throw.cli.exceptions', 'true');
         try{
             self::$builder ??= Builder::getInstance();
-        }catch(AppException|Exception $e){
-            $this->writeln("Database Connection Error: " . $e->getMessage(), 'white', 'red');
+        }catch(Throwable $e){
+            $this->term->writeln("Database Connection Error: " . $e->getMessage(), 'white', 'red');
             return STATUS_ERROR;
         }
 
         self::$isDebug = (bool) $this->term->getAnyOption('debug', 'b', false);
-        shared('SHOW_QUERY_DEBUG', self::$isDebug);
+        Boot::set('SHOW_QUERY_DEBUG', self::$isDebug);
 
         return match(trim($this->term->getCommand())){
             'db:clear' => $this->clearLocks(),
@@ -171,7 +170,7 @@ class Database extends BaseConsole
         } else {
             $lock = [];
         
-            if (file_exists($filename)) {
+            if (is_file($filename)) {
                 $lock = get_content($filename);
                 $lock = ($lock !== false && $lock !== '') ? json_decode($lock, true) : [];
             }
@@ -190,7 +189,7 @@ class Database extends BaseConsole
             }
 
             foreach ($metadata as $ver => $line) {
-                if (file_exists($backup . $line['backup'])) {
+                if (is_file($backup . $line['backup'])) {
                     if (unlink($backup . $line['backup'])) {
                         $deleted++;
                         unset($lock[$class]['metadata'][$ver]);
@@ -205,7 +204,7 @@ class Database extends BaseConsole
                 if (empty($lock[$class]['metadata'])) {
                     unset($lock[$class]);
                 } else {
-                    $last = end($metadata);
+                    $last = array_last($metadata);
                     $lock[$class]['latestVersion'] = $last['version'];
                 }
 
@@ -235,8 +234,8 @@ class Database extends BaseConsole
         }
 
         $noBackup = (bool) $this->term->getAnyOption('no-backup', 'n', false);
-        shared('ALTER_DROP_COLUMNS', (bool) $this->term->getAnyOption('drop-columns', 'd', false));
-        shared('CHECK_ALTER_TABLE', true);
+        Boot::set('ALTER_DROP_COLUMNS', (bool) $this->term->getAnyOption('drop-columns', 'd', false));
+        Boot::set('CHECK_ALTER_TABLE', true);
 
         $lock = [];
         $backup = null; 
@@ -245,7 +244,7 @@ class Database extends BaseConsole
 
         if(!$noBackup && !self::$isDebug){
             $backup = root('/writeable/database/Migrations/');
-            if(file_exists($lockfile = $backup . 'migrations.lock')){
+            if(is_file($lockfile = $backup . 'migrations.lock')){
                 $lock = get_content($lockfile);
                 $lock = ($lock !== false && $lock !== '') ? json_decode($lock, true) : [];
             }
@@ -265,7 +264,7 @@ class Database extends BaseConsole
                 return STATUS_SUCCESS;
             }
 
-            if(shared('ALTER_SUCCESS') === true){
+            if(Boot::get('ALTER_SUCCESS') === true){
                 $executed++;
 
                 if(!$noBackup && ($lock === [] || !$this->guardVersion($migrateClass, $lock, $path, $backup, null, true))){
@@ -281,7 +280,7 @@ class Database extends BaseConsole
             }
 
             $this->term->writeln("No pending migration table to alter.", 'black', 'yellow');
-        } catch (AppException|Exception $e) {
+        } catch (Throwable $e) {
             $this->term->writeln("Migration alter execution failed: " . $e->getMessage(), 'white', 'red');
         }
 
@@ -325,7 +324,7 @@ class Database extends BaseConsole
         if(!$noBackup){
             $backup = root('/writeable/database/Seeders/');
             
-            if(file_exists($lockfile = $backup . 'seeders.lock')){
+            if(is_file($lockfile = $backup . 'seeders.lock')){
                 $lock = get_content($lockfile);
                 $lock = ($lock !== false && $lock !== '') ? json_decode($lock, true) : [];
             }
@@ -412,7 +411,7 @@ class Database extends BaseConsole
             }
 
             $this->term->writeln("Failed: No seeder was execution.", 'red');
-        } catch (AppException|Exception $e) {
+        } catch (Throwable $e) {
             $this->term->writeln("Seeder execution failed: " . $e->getMessage(), 'white', 'red');
         }
 
@@ -459,7 +458,8 @@ class Database extends BaseConsole
 
         if(!self::$isDebug && $noBackup === false){
             $backup = root('/writeable/database/Migrations/');
-            if(file_exists($lockfile = $backup . 'migrations.lock')){
+
+            if(is_file($lockfile = $backup . 'migrations.lock')){
                 $lock = get_content($lockfile);
                 $lock = ($lock !== false && $lock !== '') ? json_decode($lock, true) : [];
             }
@@ -534,12 +534,13 @@ class Database extends BaseConsole
             }
 
             $this->term->writeln("Failed: no migration execution", 'red');
-        } catch (AppException|Exception $e) {
-            $db = shared('DROP_TRANSACTION');
+        } catch (Throwable $e) {
+            $db = Boot::get('DROP_TRANSACTION');
 
             if($db instanceof DatabaseInterface && $db->inTransaction()){
                 $db->rollback();
             }
+
             $this->term->writeln("Migration execution failed: " . $e->getMessage(), 'white', 'red');
         }
 
@@ -587,10 +588,10 @@ class Database extends BaseConsole
             /**
              * @var DatabaseInterface $db
              */
-            $db = shared('DROP_TRANSACTION');
+            $db = Boot::get('DROP_TRANSACTION');
             $hasTnx = ($db instanceof DatabaseInterface && $db->inTransaction());
 
-            if(shared('MIGRATION_SUCCESS') === true){
+            if(Boot::get('MIGRATION_SUCCESS') === true){
                 if($hasTnx){
                     return $db->commit();
                 }
@@ -602,8 +603,8 @@ class Database extends BaseConsole
                 $db->rollback();
             }
             
-        } catch (Exception|AppException $e) {
-            $db = shared('DROP_TRANSACTION');
+        } catch (Throwable $e) {
+            $db = Boot::get('DROP_TRANSACTION');
             if ($db instanceof DatabaseInterface && $db->inTransaction()) {
                 $db->rollback();
             }
@@ -627,7 +628,7 @@ class Database extends BaseConsole
             $seeder->run(self::$builder);
             $this->term->writeln("[" . Color::style(get_class_name($seeder), 'green') . "] Execution completed.");
             return true;
-        } catch (Exception|AppException $e) {
+        } catch (Throwable $e) {
             $this->term->writeln("Error: " . $e->getMessage(), 'white', 'red');
         }
         return false;
@@ -657,7 +658,7 @@ class Database extends BaseConsole
 
         $backupPath = root('/writeable/database/Migrations/');
 
-        if (file_exists($lockFile = $backupPath . 'migrations.lock')) {
+        if (is_file($lockFile = $backupPath . 'migrations.lock')) {
             $lock = get_content($lockFile);
 
             if ($lock === false || $lock === '') {
@@ -726,8 +727,8 @@ class Database extends BaseConsole
                         }
 
                         $this->term->writeln("Failed: No migrations were rolled back to version '{$input}'.", 'red');
-                    } catch (Exception|AppException $e) {
-                        $db = shared('DROP_TRANSACTION');
+                    } catch (Throwable $e) {
+                        $db = Boot::get('DROP_TRANSACTION');
                         
                         if ($db instanceof DatabaseInterface && $db->inTransaction()) {
                             $db->rollback();
@@ -763,12 +764,12 @@ class Database extends BaseConsole
             return STATUS_ERROR;
         }
 
-        shared('SHOW_QUERY_DEBUG', (bool) $this->term->getAnyOption('debug', 'b', false));
+        Boot::set('SHOW_QUERY_DEBUG', (bool) $this->term->getAnyOption('debug', 'b', false));
         $table = $this->term->getAnyOption('table', 't', false);
         $backupPath = root('/writeable/database/Seeders/');
         $truncated = false;
 
-        if (file_exists($lockFile = $backupPath . 'seeders.lock')) {
+        if (is_file($lockFile = $backupPath . 'seeders.lock')) {
             $lock = get_content($lockFile);
 
             if($lock === false || $lock === ''){
@@ -842,7 +843,7 @@ class Database extends BaseConsole
                         }
 
                         $this->term->writeln("Failed: No seeder was rolled back to version '{$input}'.", 'red');
-                    } catch (Exception|AppException $e) {
+                    } catch (Throwable $e) {
                         $this->term->writeln("Error: {$e->getMessage()}", 'red');
                     }
                 }else{
@@ -1009,7 +1010,7 @@ class Database extends BaseConsole
             return false;
         }
 
-        if(file_exists($oldBackup) && unlink($oldBackup)){
+        if(is_file($oldBackup) && unlink($oldBackup)){
             unset($lock[$className]['metadata'][$version]);
         }
        
@@ -1027,7 +1028,7 @@ class Database extends BaseConsole
      */
     private static function versionChanged(string $source, string $destination): bool
     {
-        if(file_exists($source) && file_exists($destination)){
+        if(is_file($source) && is_file($destination)){
             return md5_file($source) !== md5_file($destination);
         }
 

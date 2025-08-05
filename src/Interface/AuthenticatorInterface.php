@@ -10,7 +10,7 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Base\BaseCache;
+use \Luminova\Base\Cache;
 use \Psr\Cache\CacheItemPoolInterface;
 use \Psr\SimpleCache\CacheInterface;
 use \Luminova\Exceptions\EncryptionException;
@@ -71,11 +71,11 @@ interface AuthenticatorInterface
     /**
      * Set the cache instance for code reuse prevention.
      *
-     * @param CacheItemPoolInterface<\T>|CacheInterface<\T>|BaseCache<\T> $cache The instance of PSR cache or Luminova base-cache.
+     * @param CacheItemPoolInterface<\T>|CacheInterface<\T>|Cache<\T> $cache The instance of PSR cache or Luminova base-cache.
      * 
      * @return static Return the authenticator client instance.
      */
-    public function setCache(CacheItemPoolInterface|CacheInterface|BaseCache $cache): self;
+    public function setCache(CacheItemPoolInterface|CacheInterface|Cache $cache): self;
 
     /**
      * Generate a new Base32-encoded secret key.

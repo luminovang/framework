@@ -15,16 +15,17 @@ use \Countable;
 class Segments implements Countable
 {
     /**
-     * Initializes URL segments class.
+     * Initializes URI segments class.
      * 
-     * @param array<int,string> A list array of URL segments.
+     * @param array<int,string> A list array of URI segments.
+     * @see Router::getSegment()
      */
     public function __construct(private array $segments = []) {}
 
     /**
      * Retrieve the number of segments.
      * 
-     * @return int Return the number of URL segments
+     * @return int Return the number of URI segments
      */
     public function count(): int 
     {
@@ -32,7 +33,7 @@ class Segments implements Countable
     }
 
     /**
-     * Get the current view uri segment by index position.
+     * Get the current view URI segment by index position.
      * 
      * @param int $index Position index to return segment
      * 
@@ -44,14 +45,21 @@ class Segments implements Countable
     }
 
     /**
-     * Get first segment of current view uri.
+     * Get request URI prefix from current view URIs.
      * 
-     * @return string Return the first URL segment.
+     * @return string Return the URI prefix.
+     */
+    public function prefix(): string
+    {
+        return array_first($this->segments);
+    }
+
+    /**
+     * @deprecated Since 3.6.6, Use prefix() instead.
      */
     public function first(): string
     {
-        $segments = $this->segments;
-        return reset($segments);
+        return $this->prefix();
     }
     
     /**
@@ -61,8 +69,7 @@ class Segments implements Countable
      */
     public function current(): string 
     {
-        $segments = $this->segments;
-        return end($segments);
+        return array_last($this->segments);
     }
 
     /**

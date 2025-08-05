@@ -29,7 +29,7 @@ interface MailerInterface
     /**
      * Retrieve the mailer client instance.
      * 
-     * @return Luminova\Email\Clients\NovaMailer|\PHPMailer\PHPMailer\PHPMailer|\Swift_Mailer Return instance of mailer client in use.
+     * @return Luminova\Utility\Email\Clients\NovaMailer|\PHPMailer\PHPMailer\PHPMailer|\Swift_Mailer Return instance of mailer client in use.
      */
     public function getMailer(): mixed;
 

@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class BadMethodCallException extends AppException
 {
@@ -19,12 +20,12 @@ class BadMethodCallException extends AppException
      * Constructor for BadMethodCallException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code The exception code (default: 4051).
+     * @param string|int $code The exception code (default: `ErrorCode::BAD_METHOD_CALL`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::BAD_METHOD_CALL, 
+        string|int $code = ErrorCode::BAD_METHOD_CALL, 
         ?Throwable $previous = null
     )
     {

@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class SecurityException extends AppException
 {
@@ -19,12 +20,12 @@ class SecurityException extends AppException
      * Constructor for SecurityException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code  The exception code (default: 4973).
+     * @param string|int $code  The exception code (default: `ErrorCode::SECURITY_ISSUE`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::SECURITY_ISSUE, 
+        string|int $code = ErrorCode::SECURITY_ISSUE, 
         ?Throwable $previous = null
     )
     {

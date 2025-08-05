@@ -11,7 +11,7 @@
 namespace Luminova\Models;
 
 use \App\Tasks\TaskQueue;
-use \Luminova\Base\BaseTaskQueue;
+use \Luminova\Base\Queue;
 use \Luminova\Exceptions\{DatabaseException, InvalidArgumentException};
 use function \Luminova\Funcs\camel_case;
 
@@ -123,12 +123,19 @@ class Task
     public ?string $updated_at = null;
 
     /**
+     * Automatically delete task on completion.
+     * 
+     * @var int $auto_delete
+     */
+    public int $auto_delete = 0;
+
+    /**
      * Initialize task with optional array and system queue.
      *
      * @param array<string,mixed>|null $task An optional array to initialize task with.
-     * @param BaseTaskQueue<\T>|null $system An optional task queue system for managing task (default: `App\Tasks\TaskQueue`).
+     * @param Queue<\T>|null $system An optional task queue system for managing task (default: `App\Tasks\TaskQueue`).
      */
-    public function __construct(?array $task = null, private ?BaseTaskQueue $system = null) 
+    public function __construct(?array $task = null, private ?Queue $system = null) 
     {
         if ($task) {
             $this->fromArray($task);
@@ -157,11 +164,11 @@ class Task
     /**
      * Set internal task queue system handler.
      * 
-     * @param BaseTaskQueue<\T> $system A task queue system for managing task.
+     * @param Queue<\T> $system A task queue system for managing task.
      * 
      * @return self Return instance of this task model.
      */
-    public function setSystem(BaseTaskQueue $system): self
+    public function setSystem(Queue $system): self
     {
         $this->system = $system;
         return $this;
@@ -209,7 +216,7 @@ class Task
 
         $this->ensureSystem();
         if($this->system->retry($this->id)){
-            $this->status = BaseTaskQueue::PENDING;
+            $this->status = Queue::PENDING;
             return true;
         }
 
@@ -230,7 +237,7 @@ class Task
 
         $this->ensureSystem();
         if($this->system->pause($this->id)){
-            $this->status = BaseTaskQueue::PAUSED;
+            $this->status = Queue::PAUSED;
             return true;
         }
 
@@ -251,7 +258,7 @@ class Task
 
         $this->ensureSystem();
         if($this->system->delete($this->id)){
-            $this->status = BaseTaskQueue::PENDING;
+            $this->status = Queue::PENDING;
             return true;
         }
 
@@ -335,13 +342,23 @@ class Task
     }
 
     /**
+     * Checks if the task will be deleted automatically when completed.
+     * 
+     * @return bool Return true if task auto delete is enabled, otherwise false.
+     */
+    public function isAutoDelete(): bool
+    {
+        return $this->auto_delete === 1;
+    }
+
+    /**
      * Checks if the task handler is a serialized Opis\Closure.
      * 
      * @return bool Return true if the handler appears to be an Opis closure, false otherwise.
      */
     public function isOpisClosure(): bool
     {
-        return $this->handler && BaseTaskQueue::isClosure($this->handler);
+        return $this->handler && Queue::isClosure($this->handler);
     }
 
     /**
@@ -386,13 +403,13 @@ class Task
         $now = time();
         $scheduled = $this->scheduled_at ? strtotime($this->scheduled_at) : null;
 
-        if ($this->status === BaseTaskQueue::PENDING) {
+        if ($this->status === Queue::PENDING) {
             return $scheduled === null || $scheduled <= $now;
         }
 
         if (
             $this->forever !== null &&
-            in_array($this->status, [BaseTaskQueue::PENDING, BaseTaskQueue::FAILED, BaseTaskQueue::COMPLETED], true)
+            in_array($this->status, [Queue::PENDING, Queue::FAILED, Queue::COMPLETED], true)
         ) {
             $updated = $this->updated_at ? strtotime($this->updated_at) : null;
             $timeOk = $updated === null || (
@@ -403,7 +420,7 @@ class Task
         }
 
         if (
-            $this->status === BaseTaskQueue::FAILED &&
+            $this->status === Queue::FAILED &&
             ($this->retries > 0 && $this->retries >= $this->attempts)
         ) {
             return $scheduled === null || $scheduled <= $now;
@@ -538,7 +555,7 @@ class Task
      */
     private function ensureSystem(): void
     {
-        if (!$this->system instanceof BaseTaskQueue) {
+        if (!$this->system instanceof Queue) {
             $this->system = new TaskQueue();
         }
     }

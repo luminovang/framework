@@ -10,20 +10,20 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\BaseConsole;
-use \Luminova\Seo\Sitemap;
-use \Luminova\Http\Client\Curl;
-use \Luminova\Command\Utils\Text;
-use \Luminova\Security\Crypter;
-use \SplFileObject;
 use \Throwable;
+use \SplFileObject;
+use \Luminova\Base\Console;
+use \Luminova\Http\Client\Novio;
+use \Luminova\Command\Utils\Text;
+use \Luminova\Command\Utils\Color;
+use \Luminova\Security\Encryption\Key;
 use function \Luminova\Funcs\{
     root,
     write_content,
     get_content
 };
 
-class System extends BaseConsole 
+class System extends Console 
 {
     /**
      * {@inheritdoc}
@@ -40,7 +40,6 @@ class System extends BaseConsole
      */
     protected string|array $usages  = [
         'php novakit generate:key --help',
-        'php novakit generate:sitemap --help',
         'php novakit env:add --help',
         'php novakit env:setup --help',
         'php novakit env:cache --help',
@@ -54,13 +53,12 @@ class System extends BaseConsole
     {
         $this->term->perse($options);
         $command = trim($this->term->getCommand());
-        $noSave = (bool) $this->term->getOption('no-save', false);
         $key = $this->term->getAnyOption('key', 'k');
         $value = $this->term->getAnyOption('value', 'v');
 
         $runCommand = match($command){
-            'generate:key' => $this->generateKey($noSave),
-            'generate:sitemap' => $this->generateSitemap(),
+            'generate:key' => $this->generateKey(),
+            'generate:sitemap' => $this->deprecatedSitemap(),
             'env:add' => $this->addEnv($key, $value),
             'env:cache' => $this->cacheEnv(),
             'env:setup' => $this->setupEnv($this->term->getAnyOption('target', 't')),
@@ -118,7 +116,7 @@ class System extends BaseConsole
         $path = root(null, '.env');
         $envCache = root('/writeable/', '.env-cache.php');
 
-        if (!file_exists($path)) {
+        if (!is_file($path)) {
             $this->term->beeps();
             $this->term->error('Environment variable file not found at the application root.');
 
@@ -283,11 +281,11 @@ class System extends BaseConsole
         ) === 'yes';
         setenv('database.persistent.connection', $persistentConnection ? 'true' : 'false', true);
 
-        $emulatePreparse = $this->term->prompt(
+        $emulatePrepares = $this->term->prompt(
             'Enable query pre-parsing emulation?', 
             ['yes', 'no'], 'required|in_array(yes,no)'
         ) === 'yes';
-        setenv('database.emulate.preparse', $emulatePreparse ? 'true' : 'false', true);
+        setenv('database.emulate.prepares', $emulatePrepares ? 'true' : 'false', true);
 
         $prodUsername = $this->term->input('Enter production database username: ');
         setenv('database.username', $prodUsername, true);
@@ -412,7 +410,7 @@ class System extends BaseConsole
 
         if (!$chatId) {
             try {
-                $response = (new Curl())->request('GET', "https://api.telegram.org/bot{$token}/getUpdates");
+                $response = (new Novio())->request('GET', "https://api.telegram.org/bot{$token}/getUpdates");
 
                 if ($response->getStatusCode() === 200) {
                     $data = json_decode($response->getBody()->getContents(), true);
@@ -491,13 +489,14 @@ class System extends BaseConsole
         
         if (str_contains($envContents, "$key=") && str_contains($envContents, "$key =")) {
             $newContents = preg_replace("/\b$key\b.*\n?/", '', $envContents);
+            
             if (write_content($envFile, $newContents) !== false) {
-                $wasCached = file_exists($envCache);
-                $entries = $wasCached ? include_once $envCache : [];
+                $isCached = is_file($envCache);
+                $entries = $isCached ? include_once $envCache : [];
 
                 unset($_ENV[$key], $_SERVER[$key], $entries[$key]);
 
-                if($wasCached){
+                if($isCached){
                     __cache_env($entries, $envCache);
                 }
 
@@ -519,46 +518,51 @@ class System extends BaseConsole
      * 
      * @return int Status code 
      */
-    private function generateSitemap(): int 
+    private function deprecatedSitemap(): int 
     {
-        if(Sitemap::generate(null, $this->term)){
-            return STATUS_SUCCESS;
-        }
-
-        $this->term->beeps();
-        $this->term->newLine();
-        $this->term->error('Sitemap creation failed');
-    
+        $this->term->error('This command is deprecated. Use "php novakit sitemap" instead.');
         return STATUS_ERROR;
     }
 
     /**
      * Generates encryption sitekey.
      * 
-     * @param bool $noSave Save key to env or just print.
-     * 
      * @return int Status code 
      */
-    private function generateKey(bool $noSave): int 
+    private function generateKey(): int 
     {
-        $key = Crypter::generateKey(); 
+        $noSave = (bool) $this->term->getAnyOption('no-save', 'n', false);
+        $prefix = $this->term->getAnyOption('prefix', 'p', '');
+        $length = $this->term->getAnyOption('length', 'l', null);
+        $length = ($length !== null) ? (int) $length : null;
 
-        if($key === false){
+        $key = Key::newRandom(length: $length);
+
+        if (!$key) {
             $this->term->beeps();
-            $this->term->error('Failed to generate application encryption key');
-
+            $this->term->error('Failed to generate application encryption key.');
             return STATUS_ERROR;
         }
 
-        $this->term->success('Application key generated successfully.');
+        $fullKey = $prefix . $key;
+        $this->term->success($noSave 
+            ? 'Application key generated successfully.'
+            : 'Generated key was saved to environment variables successfully.'
+        );
 
-        if($noSave){
-            $this->term->newLine();
-            $this->term->print($key . PHP_EOL);
-        }else{
-            setenv('app.key', $key, true);
-        }
-    
+        $this->term->newLine();
+
+        if ($noSave) {
+            $this->term->print("Key: {$fullKey}" . PHP_EOL);
+            return STATUS_SUCCESS;
+        } 
+
+        setenv('app.key', $fullKey, true);
+        $this->term->writeln(
+            Text::padding('Output File:', 15, Text::LEFT) 
+            . Color::style(root(filename: '.env'), 'cyan')
+        );
+
         return STATUS_SUCCESS;
     }
 }

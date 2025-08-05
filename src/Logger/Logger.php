@@ -12,9 +12,9 @@ namespace Luminova\Logger;
 
 use \Throwable;
 use \Luminova\Http\Request;
-use \Luminova\Functions\Func;
+use \Luminova\Common\Helpers;
 use \Psr\Log\LoggerInterface;
-use \App\Config\Logger as LoggerConfig;
+use \App\Config\Logger as Config;
 use \Luminova\Logger\{NovaLogger, LogLevel};
 use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
 
@@ -40,13 +40,6 @@ final class Logger
      * @var LoggerInterface|null $logger
      */
     private static ?LoggerInterface $logger = null;
-
-    /**
-     * HTTP request object.
-     * 
-     * @var Request|null $request
-     */
-    private static ?Request $request = null;
 
     /**
      * Telegram bot token.
@@ -100,7 +93,7 @@ final class Logger
     public static function getLogger(): LoggerInterface
     {
         if(!self::$logger instanceof LoggerInterface){
-            self::$logger = (new LoggerConfig())->getLogger() ?? new NovaLogger();
+            self::$logger = (new Config())->getLogger() ?? new NovaLogger();
         }
 
         return self::$logger;
@@ -226,10 +219,10 @@ final class Logger
         $valid = true;
         $context += self::getAutoContext();
 
-        if ($to && Func::isEmail($to)) {
+        if ($to && Helpers::isEmail($to)) {
             self::assertInterface('Email dispatch');
             self::getLogger()->setLevel($level)->mail($to, $message, $context); 
-        } elseif($to && Func::isUrl($to)) {
+        } elseif($to && Helpers::isUrl($to)) {
             self::assertInterface('Remote dispatch');
             self::getLogger()->setLevel($level)->remote($to, $message, $context);
         } elseif($to && self::isTelegramChatId($to)) {
@@ -274,7 +267,7 @@ final class Logger
         }
 
         self::assertInterface('Remote');
-        if(!Func::isUrl($url)) {
+        if(!Helpers::isUrl($url)) {
             throw new InvalidArgumentException(sprintf(
                 'Invalid logger destination: "%s" was provided. A valid URL is required.', 
                 $url
@@ -307,7 +300,7 @@ final class Logger
 
         self::assertInterface('Email');
 
-        if (!Func::isEmail($email)) {
+        if (!Helpers::isEmail($email)) {
             throw new InvalidArgumentException(sprintf(
                 'Invalid logger destination: "%s" was provided. A valid email address is required.', 
                 $email
@@ -373,7 +366,7 @@ final class Logger
 
     /**
      * Automatically builds a context array from the request, based on configured
-     * header and body field names in LoggerConfig.
+     * header and body field names in Config.
      *
      * This method helps enrich log entries by extracting an identifier (e.g., user ID,
      * API key, or username) from either a request header or body field, if configured.
@@ -382,22 +375,19 @@ final class Logger
      */
     private static function getAutoContext(): array
     {
-        $header = LoggerConfig::$contextHeaderName ?? null;
-        $field = LoggerConfig::$contextFieldName ?? null;
+        $header = Config::$contextHeaderName ?? null;
+        $field = Config::$contextFieldName ?? null;
         $context = [];
         
         if ($header || $field) {
-
-            if (!self::$request instanceof Request) {
-                self::$request = new Request();
-            }
+            $request = Request::getInstance();
 
             if ($field) {
-                $context["__{$field}"] = self::$request->getAny($field);
+                $context["__{$field}"] = $request->input($field);
             }
 
             if ($header) {
-                $context["__{$header}"] = self::$request->header->get($header) ?? self::$request->server->get($header);
+                $context["__{$header}"] = $request->header->get($header) ?? $request->server->get($header);
             }
         }
 
@@ -474,7 +464,7 @@ final class Logger
         throw new RuntimeException(sprintf(
             'Invalid Logger Interface: "%s", Your logger class in configuration: "%s", must implement "%s".', 
             self::$logger::class,
-            LoggerConfig::class,
+            Config::class,
             LoggerInterface::class,
         ), RuntimeException::NOT_SUPPORTED);
     }

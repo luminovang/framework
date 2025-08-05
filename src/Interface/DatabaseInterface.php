@@ -10,20 +10,20 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Core\CoreDatabase;
 use \Luminova\Interface\ConnInterface;
+use \Luminova\Foundation\Core\Database;
 use \Luminova\Exceptions\DatabaseException;
 use \PDOStatement;
 use \mysqli_stmt;
 
-interface DatabaseInterface  
+interface DatabaseInterface
 {
     /**
      * Initialize database driver constructor for configurations.
      *
-     * @param CoreDatabase $config The database connection configuration.
+     * @param Database $config The core database connection configuration.
      */
-    public function __construct(CoreDatabase $config);
+    public function __construct(Database $config);
 
     /**
      * Establish a database connection.
@@ -140,7 +140,10 @@ interface DatabaseInterface
      * @example - To get the query execution in any application scope. 
      * 
      * ```php
-     * $time = shared('__DB_QUERY_EXECUTION_TIME__', null, 0);
+     * $time = luminova\Funcs\shared('__DB_QUERY_EXECUTION_TIME__', default: 0);
+     * 
+     * // Or
+     * $time = Luminova\Boot::get('__DB_QUERY_EXECUTION_TIME__') ?? 0;
      * ```
      */
     public function profiling(bool $start = true, bool $finishedTransaction = false): void;

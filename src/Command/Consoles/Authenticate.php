@@ -10,12 +10,13 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\BaseConsole;
-use \Luminova\Security\Crypter;
+use \Luminova\Base\Console;
 use \Luminova\Database\Builder;
+use \Luminova\Security\Password;
+use \Luminova\Security\Encryption\Key;
 use function \Luminova\Funcs\{root, get_content};
 
-class Authenticate extends BaseConsole 
+class Authenticate extends Console 
 {
     /**
      * {@inheritdoc}
@@ -100,7 +101,7 @@ class Authenticate extends BaseConsole
     {
         $input = root('/writeable/.cli_users/', "{$systemId}.php");
         
-        if(file_exists($input)){
+        if(is_file($input)){
             if(unlink($input)){
                 return STATUS_SUCCESS;
             }
@@ -114,7 +115,7 @@ class Authenticate extends BaseConsole
     public function isOnline(string $systemId): int 
     {
         $input = root('/writeable/.cli_users/', "{$systemId}.php");
-        return file_exists($input) ? STATUS_SUCCESS : STATUS_ERROR;
+        return is_file($input) ? STATUS_SUCCESS : STATUS_ERROR;
     }
 
     public function authenticate(object $user): int
@@ -134,12 +135,12 @@ class Authenticate extends BaseConsole
             if(!$input && !PRODUCTION){
                 $input = root('/writeable/keys/', 'cli-auth-private.key');
 
-                if (!file_exists($input)) {
+                if (!is_file($input)) {
                     $input = '';
                 }
             }
 
-            $value = ($input && file_exists($input)) ? get_content($input) : (string) $input;
+            $value = ($input && is_file($input)) ? get_content($input) : (string) $input;
         }
 
         if (!$value && !$skipPass) {
@@ -150,16 +151,16 @@ class Authenticate extends BaseConsole
         $isValid = false;
 
         if($user->auth === 'password'){
-            $isValid = ($skipPass && $value === '') || Crypter::isPassword($value, $user->content);
+            $isValid = ($skipPass && $value === '') || Password::verify($value, $user->content);
         }elseif($user->auth === 'key'){
             $key = $user->content;
 
             if(is_file($key)){
                 $path = root(dirname($key), basename($key));
-                $key = file_exists($path) ? get_content($path) : '';
+                $key = is_file($path) ? get_content($path) : '';
             }
 
-            $isValid = $key && Crypter::isKeyMatch($value, $key);
+            $isValid = $key && Key::isMatch($value, $key);
         }
 
         if ($isValid) {

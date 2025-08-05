@@ -11,12 +11,12 @@
 namespace Luminova\Command\Consoles;
 
 use \Luminova\Command\Terminal;
-use \Luminova\Base\BaseConsole;
+use \Luminova\Base\Console;
 use \Luminova\Command\Utils\Text;
 use \Luminova\Command\Utils\Color;
 use \Luminova\Command\Consoles\Commands;
 
-class Lists extends BaseConsole 
+class Lists extends Console 
 {
     /**
      * {@inheritdoc}

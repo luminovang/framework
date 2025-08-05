@@ -15,15 +15,16 @@ use \Throwable;
 use \JsonException;
 use \App\Config\Logger;
 use \Luminova\Time\Time;
-use \Luminova\Email\Mailer;
+use \Luminova\Utility\IP;
 use \Luminova\Http\Request;
 use \Psr\Log\AbstractLogger;
+use \Luminova\Common\Helpers;
 use \Luminova\Logger\LogLevel;
-use \Luminova\Http\Client\Curl;
-use \Luminova\Functions\{IP, Func};
-use \Luminova\Storages\{Archive, FileManager};
-use \Luminova\Exceptions\{AppException, FileException, InvalidArgumentException};
+use \Luminova\Http\Client\Novio;
+use \Luminova\Utility\Email\Mailer;
 use function \Luminova\Funcs\{root, make_dir};
+use \Luminova\Utility\Storage\{Archive, FileManager};
+use \Luminova\Exceptions\{AppException, FileException, InvalidArgumentException};
 
 class NovaLogger extends AbstractLogger
 {
@@ -47,13 +48,6 @@ class NovaLogger extends AbstractLogger
      * @var bool $autoBackup
      */
     protected bool $autoBackup = false;
-
-    /**
-     * HTTP Request class.
-     * 
-     * @var Request $request
-     */
-    private static ?Request $request = null;
 
     /**
      * Original log level before dispatching.
@@ -247,7 +241,7 @@ class NovaLogger extends AbstractLogger
      */
     public function mail(string $email, string $message, array $context = []): void 
     {
-        if(!$email || !Func::isEmail($email)){
+        if(!$email || !Helpers::isEmail($email)){
             $this->log(LogLevel::CRITICAL, sprintf('Invalid mail logger email address: %s', $email), [
                 'originalMessage' => $message,
                 'originalContext' => $context,
@@ -302,7 +296,7 @@ class NovaLogger extends AbstractLogger
      */
     public function remote(string $url, string $message, array $context = []): void 
     {
-        if(!$url || !Func::isUrl($url)){
+        if(!$url || !Helpers::isUrl($url)){
             $this->log(LogLevel::CRITICAL, sprintf('Invalid network logger URL endpoint: %s', $url), [
                 'originalMessage' => $message,
                 'originalContext' => $context,
@@ -311,7 +305,7 @@ class NovaLogger extends AbstractLogger
             return;
         }
 
-        self::$request ??= new Request();
+        $request = Request::getInstance();
         $payload = [
             'app'        => APP_NAME,
             'host'       => APP_HOSTNAME,
@@ -321,9 +315,9 @@ class NovaLogger extends AbstractLogger
             'level'      => $this->level,
             'name'       => $this->name,
             'version'    => APP_VERSION,
-            'url'        => self::$request->getUrl(),
-            'method'     => self::$request->getMethod(),
-            'userAgent'  => self::$request->getUserAgent()->toString(),
+            'url'        => $request->getUrl(),
+            'method'     => $request->getMethod(),
+            'userAgent'  => $request->getUserAgent()->toString(),
         ];
 
         $this->sendHttpRequest('Remote Server', $url, $payload, $message, $context);
@@ -349,7 +343,7 @@ class NovaLogger extends AbstractLogger
             return;
         }
 
-        self::$request ??= new Request();
+        $request = Request::getInstance();
         $this->sendHttpRequest(
             'Telegram',
             "https://api.telegram.org/bot{$token}/sendMessage",
@@ -364,9 +358,9 @@ class NovaLogger extends AbstractLogger
                     $this->name,
                     $this->level,
                     Time::now()->format('Y-m-d\TH:i:s.uP'),
-                    self::$request->getUrl(),
-                    self::$request->getMethod(),
-                    self::$request->getUserAgent()->toString(),
+                    $request->getUrl(),
+                    $request->getMethod(),
+                    $request->getUserAgent()->toString(),
                     $message,
                     (self::$sendContext && $context !==[]) ? self::toJsonContext($context, true, false) : ''
                 ),
@@ -470,9 +464,8 @@ class NovaLogger extends AbstractLogger
      */
     protected function getEmailTemplate(string $level, string $message, array $context = []): string 
     {
-        self::$request ??= new Request();
         return Logger::getEmailLogTemplate(
-            self::$request,
+            Request::getInstance(),
             $this,
             $message,
             $level,
@@ -760,7 +753,7 @@ class NovaLogger extends AbstractLogger
         $fiber = new Fiber(function () use ($from, $url, $body, $message, $context) {
             $error = null;
             try {
-                $response = (new Curl())->request('POST', $url, ['body' => $body]);
+                $response = (new Novio())->request('POST', $url, ['body' => $body]);
                 if ($response->getStatusCode() !== 200) {
                     $this->write($this->level, 
                         sprintf(

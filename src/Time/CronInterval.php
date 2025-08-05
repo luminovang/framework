@@ -200,6 +200,7 @@ class CronInterval
         } 
         
         $weekday = strtoupper($weekday);
+        
         if (isset(self::$dayNames[$weekday])) {
             return self::$dayNames[$weekday];
         }
@@ -227,6 +228,7 @@ class CronInterval
 
         $values = explode(',', $component);
         $validValues = [];
+
         foreach ($values as $value) {
             $value = (int) $value; 
             if ($value >= 0 && $value <= ($component === 'M' ? 12 : 59)) { 
@@ -236,6 +238,8 @@ class CronInterval
             }
         }
 
-        return ($validValues === []) ? count($values) : max($validValues); 
+        return ($validValues === []) 
+            ? count($values) 
+            : max($validValues); 
     }
 }

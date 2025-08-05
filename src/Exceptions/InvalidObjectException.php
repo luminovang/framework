@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class InvalidObjectException extends AppException
 {
@@ -20,12 +21,12 @@ class InvalidObjectException extends AppException
      * >>>
      * 
      * @param string     $key   The exception key as message
-     * @param string|int        $code      The exception code (default: 500).
+     * @param string|int        $code      The exception code (default: `ErrorCode::INVALID`).
      * @param Throwable|null $previous  The previous exception if applicable (default: null).
      */
     public function __construct(
         string $key, 
-        string|int $code = 500, 
+        string|int $code = ErrorCode::INVALID, 
         ?Throwable $previous = null
     )
     {

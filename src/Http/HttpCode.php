@@ -107,38 +107,55 @@ final class HttpCode
     /**
      * Prevent instantiation.
      */
-    private function __construct() {}
+    public function __construct() {}
 
     /**
-     * Return a status code message using a fancy method call.
+     * Determine if a HTTP status code is valid.
      * 
-     * @param string $name The status code method name (e.g, $status->status404).
+     * @param int $code The HTTP status code to check.
      * 
-     * @return string|null Return the http status code message, otherwise null.
-     * 
-     * @example - Returning status code message.
-     * 
-     * ```php
-     * echo $status->status200;
-     * ```
+     * @return bool Return true if valid, otherwise false.
      */
-    public function __get(string $name): ?string
+    public static function isValid(int $code): bool 
     {
-        return self::{$name}();
+        return $code >= 100 && $code <= 599;
     }
 
     /**
-     * Return an http status code message or the entire status codes.
+     * Check if status code is in the error range.
+     *
+     * @param int $code HTTP status code.
      * 
-     * @param int|null $code The http status code (e.g, 200, 404 etc) (default: null).
-     * 
-     * @return array<int,string>string|null Return the status code message, null if code not found or array of status codes if null is passed.
+     * @return bool Return true if client (4xx) or server (5xx) error.
      */
-    public static function get(?int $code = null): array|string|null
+    public static function isError(int $code): bool
     {
-        return ($code === null) 
-            ? self::$codes
-            : (self::$codes[$code] ?? null);
+        return $code >= 400 && $code < 600;
+    }
+
+    /**
+     * Return all http status codes and it message phrase.
+     * 
+     * @return array<int,string> Return the status codes and message phrase.
+     */
+    public static function get(): array
+    {
+        return self::$codes;
+    }
+
+    /**
+     * Get HTTP status code message phrase.
+     * 
+     * If fallback is null an empty string will be return if code is not found.
+     * 
+     * @param int $code The HTTP status code (e.g., 200, 404, etc.).
+     * @param string|null $fallback Optional fallback string if code not found (default: 'Invalid').
+     * 
+     * @return string Return the status code message phrase or fallback if code not found.
+     */
+    public static function phrase(int $code, ?string $fallback = 'Invalid'): string
+    {
+        return self::$codes[$code] ?? $fallback ?? '';
     }
 
     /**

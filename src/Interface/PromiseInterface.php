@@ -1,6 +1,6 @@
 <?php
 /**
- * Luminova Framework
+ * Luminova Framework, Promise class interface.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -10,112 +10,113 @@
  */
 namespace Luminova\Interface;
 
+use \Throwable;
 use \Luminova\Exceptions\RuntimeException;
 
 /**
  * Interface representing a promise that resolves or rejects asynchronously
  *
- * @see https://luminova.ng/docs/0.0.0/utils/promise for more details on promises.
- * 
- * @property string PENDING  The promise is still in progress.
- * @property string FULFILLED The promise has been resolved.
- * @property string REJECTED The promise has been rejected.
+ * @see https://luminova.ng/docs/0.0.0/utilities/promise-object - for more details on promises.
  */
 interface PromiseInterface
 {
     /**
-     * Attaches fulfillment and rejection handlers to the promise.
+     * Run code after the promise finishes, whether it succeeds or fails.
      *
-     * @param callable|null $onResolve Invoked when the promise fulfills.
-     *                                    Receives the resolved value.
-     * @param callable|null $onReject  Invoked when the promise is rejected.
-     *                                    Receives the rejection reason.
+     * @param (callable(mixed $value):mixed)|null $onResolve Called if the promise is successful 
+     *                                                  to receive the resolved value.
+     * @param (callable(mixed $reason):mixed)|null $onReject Called if the promise fails, 
+     *                                                  to receive the reject error reason.
      *
-     * @return static<PromiseInterface> Return a new promise resolved with the handler's return value.
-     * 
+     * @return PromiseInterface Return a new promise that contains whatever your handler returns.
+     *
      * @example - Example:
-     * ```
+     * ```php
      * $promise->then(
      *     function ($value) {
-     *         echo "Fulfilled with: " . $value;
+     *         echo "Success: " . $value;
      *     },
      *     function ($reason) {
-     *         echo "Rejected with: " . $reason;
+     *         echo "Failed: " . $reason;
      *     }
      * );
      * ```
      */
-    public function then(
-        ?callable $onResolve = null,
-        ?callable $onReject = null
-    ): PromiseInterface;
+    public function then(?callable $onResolve = null, ?callable $onReject = null): PromiseInterface;
 
     /**
-     * Appends a handler to be executed regardless of the promise's outcome.
+     * Run handler when the promise finishes, no matter if it succeeded or failed.
      *
-     * @param callable $onAlways Invoked when the promise is either fulfilled or rejected.
-     *                            Receives the fulfillment or rejection value.
+     * @param (callable():void) $onAlways Called once the promise is done (settled).
      *
-     * @return static<PromiseInterface> Return a new promise resolved with the handler's return value.
+     * @return PromiseInterface Return a new promise that passes through the original result.
      *
-     * @example - Example Usage:
-     * 
+     * @example - Example:
      * ```php
-     * $promise->finally(function ($result) {
-     *     echo "Promise has settled with: " . $result;
+     * $promise->finally(function () {
+     *     echo "Promise is finished.";
      * });
      * ```
+     * > **Note:**
+     * > This method does not change the result, unless it throws an error.
      */
     public function finally(callable $onAlways): PromiseInterface;
 
     /**
-     * Registers an error handler that will be called to handle promise rejection.
-     *
-     * @param callable $onCatch Invoked when the promise is rejected.
-     *                             Receives the rejection reason.
-     *
-     * @return static<PromiseInterface> Return a new promise resolved with either the rejection handler's value 
-     *                          or the original value if the promise was fulfilled.
-     *
-     * @example - Example Usage:
+     * Handle promise errors in one place.
      * 
+     * This method registers an error handler that will be called when promise is rejected.
+     * The handler receives an error object (Throwable).
+     *
+     * @param (callable(Throwable $reason):mixed) $onCatch Called if the promise fails.
+     *
+     * @return PromiseInterface Return a new promise with your error handler’s result,
+     *                          or the original value if no error occurred.
+     *
+     * @example - Example:
      * ```php
-     * $promise->catch(function (\Throwable $reason) {
-     *     echo "Error occurred: " . $reason->getMessage();
-     * });
+     * $promise->then(...)
+     *      ->catch(function (\Throwable $reason) {
+     *          echo "Something went wrong: " . $reason->getMessage();
+     *      });
      * ```
      */
     public function catch(callable $onCatch): PromiseInterface;
 
     /**
-     * Registers an cancellation handler that will be called when promise `cancel` is invoked.
-     *
-     * @param callable $onCanceled Invoked when the promise is `cancel` method is trigged.
-     *
-     * @return static<PromiseInterface> Return a instance of the promise.
-     *
-     * @example - Example Usage:
+     * Run handler if the promise is cancelled.
      * 
+     * This method registers a cancellation handler that get called when promise `cancel` is invoked.
+     *
+     * @param (callable(Throwable $reason):void) $onCancelled Called when `cancel()` is triggered.
+     *
+     * @return self Return an instance of the promise.
+     *
+     * @example - Example:
      * ```php
-     * $promise->canceled(function (\Throwable $reason) {
-     *     echo "Error occurred: " . $reason->getMessage();
+     * $promise->canceled(function (\Throwable $reason) 
+     * {
+     *     echo "Promise was cancelled: " . $reason->getMessage();
      * });
      * ```
      */
     public function canceled(callable $onCancelled): self;
 
     /**
-     * Registers a global error handler that will be called if an exception occurs within the promise due to logic error.
-     *
-     * @param callable $onError Invoked when the an error is encountered.
-     *
-     * @return static<PromiseInterface> Return a instance of the promise.
-     *
-     * @example - Example Usage:
+     * Run handler to capture errors if there’s an unexpected error inside the promise.
      * 
+     * This method registers a global error handler that will be called if an exception occurs 
+     * within the promise due to logic error.
+     *
+     * @param (callable(Throwable $e):void) $onError Called if the promise logic itself throws an error.
+     *
+     * @return self The same promise instance.
+     *
+     * @example - Example:
      * ```php
-     * $promise->error(function (\Throwable $reason) {
-     *     echo "Error occurred: " . $reason->getMessage();
+     * $promise->error(function (\Throwable $e) 
+     * {
+     *     echo "Unexpected error: " . $e->getMessage();
      * });
      * ```
      */
@@ -124,87 +125,158 @@ interface PromiseInterface
     /**
      * Retrieves the current state of the promise.
      *
-     * @return string The current state of the promise.
+     * @return string Return the current state of the promise.
+     * @see is() - To check the current promise lifecycle state.
      *
      * @example - Example:
      * 
      * ```php
-     * $state = $promise->getState();
+     * $state = $promise->state();
+     * 
      * echo "Current state: " . $state;
      * ```
      */
-    public function getState(): string;
+    public function state(): string;
 
     /**
-     * Check if promise state has fulfilled rejected or pending state.
+     * Get the promise reject or fulfilled value.
      * 
-     * @param string $state The state to check against promise state.
+     * @return mixed Return the promise value, otherwise null.
+     */
+    public function value(): mixed;
+
+    /**
+     * Check the current state of the promise.
+     *
+     * A promise can be in one of three states:
+     * - `pending`   → still running (`Promise::PENDING`)
+     * - `fulfilled` → finished successfully (`Promise::FULFILLED`)
+     * - `rejected`  → finished with an error (`Promise::REJECTED`)
+     *
+     * @param string $state The state to compare with.
      * 
-     * @return bool Return true if promise current state is same as passed state, otherwise false.
+     * @return bool Return true if the promise is in the given state, false otherwise.
+     * @see state() - To return the current promise lifecycle state.
+     *
+     * @example _ Example:
+     * ```php
+     * if ($promise->is(Promise::PENDING)) {
+     *     echo "Still running...";
+     * }
+     * ```
      */
     public function is(string $state): bool;
 
     /**
-     * Resolves the promise with a given value.
+     * Mark the promise as successful with a value.
      *
-     * @param mixed $value The value to resolve the promise with.
+     * Once resolved, the promise cannot be changed again.
      *
-     * @throws RuntimeException if the promise has already been resolved.
+     * @param mixed $value The value to pass to `then()` callbacks.
      *
-     * @example - Example:
-     * 
+     * @return void
+     * @throws RuntimeException If the promise was already settled.
+     *
+     * @example _ Example:
      * ```php
      * $promise->resolve('Success');
+     * 
+     * $promise->then(function ($value) {
+     *     echo $value; // "Success"
+     * });
      * ```
      */
     public function resolve(mixed $value): void;
 
     /**
-     * Rejects the promise with a given reason.
-     * 
-     * @param mixed $reason The reason for rejection.
+     * Mark the promise as failed with a reason (error).
      *
-     * @throws RuntimeException if the promise has already been resolved.
+     * Once rejected, the promise cannot be changed again.
+     *
+     * @param mixed $reason Why the promise failed (can be an Exception or string).
+     *
+     * @return void
+     * @throws RuntimeException If the promise was already settled.
      *
      * @example - Example:
-     * 
      * ```php
-     * $promise->reject('Failure');
+     * $promise->reject('Something went wrong');
+     * 
+     * $promise->catch(function (Throwable $e) {
+     *     echo $e->getMessage(); // "Something went wrong"
+     * });
      * ```
+     * > **Note:**
+     * > Rejection reason are converted to throwable object if not already.
      */
     public function reject(mixed $reason): void;
 
     /**
-     * Cancels running promise.
-     * 
-     * @param mixed $reason An optional value to pass to the canceled callback handler.
+     * Cancel a running promise.
+     *
+     * This stops the promise from continuing. 
+     * Useful if the task is no longer needed (e.g., user left the page).
+     *
+     * @param mixed $reason Optional reason for canceling.
+     *
+     * @return void
      * @example - Example:
-     * 
      * ```php
-     * $promise->cancel();
+     * $promise->cancel('No longer needed');
      * ```
      */
     public function cancel(mixed $reason = null): void;
 
     /**
-     * Waits for the promise to complete and returns the result or throws an error.
+     * Block and wait until the promise finishes.
      *
-     * @param int $timeout The timeout in milliseconds to wait for the promise to fulfill or reject (default: `1000`).
+     * Returns the result if fulfilled, or throws an error if rejected.
+     * This is mostly used in synchronous code or testing.
      *
-     * @return mixed Return the resolved value or the rejection reason.
+     * @param int $timeout How long to wait in milliseconds (default: 1000).
      *
-     * @throws RuntimeException if the promise cannot settle after waiting or lacks a `wait` function.
+     * @return mixed Return the resolved value or rejection reason.
+     * @throws RuntimeException If the promise does not finish within the time window.
      *
      * @example - Example:
-     * 
      * ```php
      * try {
-     *     $result = $promise->wait(true);
-     *     echo "Promise resolved with: " . $result;
+     *     $promise = new Promise();
+     *     $promise->then(fn($num) => $num + 10);
+     * 
+     *     $promise->resolve(10);
+     *     $result = $promise->wait(); 
+     *     echo "Got: $result"; // 20
      * } catch (RuntimeException $e) {
-     *     echo "Promise rejected with: " . $e->getMessage();
+     *     echo "Error: " . $e->getMessage();
      * }
      * ```
+     * 
+     * @example - Example (Handle Exceptions):
+     * ```php
+     * $promise = new Promise();
+     * $promise->then(fn($num) => $num + 10)
+     * $promise->error(function(Throwable $e){
+     *      echo $e->getMessage();
+     * });
+     * 
+     * $promise->resolve(10);
+     * $result = $promise->wait(); 
+     * echo "Got: $result"; // 20
+     * ```
+     *
+     * > **Note:** 
+     * > Use `cancel()` if you want to stop the promise before it finishes.
+     * > Use `error()` method to handle exceptions that may throw.
      */
     public function wait(int $timeout = 1000): mixed;
+
+    /**
+     * Retrieves the current state of the promise.
+     * 
+     * Alias {@see state()}
+     *
+     * @return string Return the current state of the promise.
+     */
+    public function getState(): string;
 }

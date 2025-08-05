@@ -14,31 +14,34 @@ use \Generator;
 use \Stringable;
 use \JsonException;
 use \Luminova\Luminova;
-use \Luminova\Utils\LazyObject;
-use \Luminova\Cookies\CookieFileJar;
-use \Luminova\Functions\{IP, Func};
+use \Luminova\Utility\IP;
+use \Luminova\Common\Helpers;
+use \Luminova\Cookies\FileJar;
+use \Luminova\Utility\Object\LazyObject;
 use \App\Config\{Security, Files, Session};
 use \Luminova\Http\{Header, Server, File, UserAgent};
-use \Luminova\Interface\{HttpRequestInterface, LazyInterface, CookieJarInterface};
+use \Luminova\Interface\{HttpRequestInterface, LazyObjectInterface, CookieJarInterface};
 use \Luminova\Exceptions\{InvalidArgumentException, SecurityException};
 use function \Luminova\Funcs\get_mime;
 
 /**
- * @method mixed getPut(string|null $field, mixed $default = null)
- * @method mixed getOptions(string|null $field, mixed $default = null) 
- * @method mixed getPatch(string|null $field, mixed $default = null)
- * @method mixed getHead(string|null $field, mixed $default = null) 
- * @method mixed getConnect(string|null $field, mixed $default = null)
- * @method mixed getTrace(string|null $field, mixed $default = null)
- * @method mixed getPropfind(string|null $field, mixed $default = null)
- * @method mixed getMkcol(string|null $field, mixed $default = null)
- * @method mixed getCopy(string|null $field, mixed $default = null)
- * @method mixed getMove(string|null $field, mixed $default = null)
- * @method mixed getLock(string|null $field, mixed $default = null)
- * @method mixed getUnlock(string|null $field, mixed $default = null)
- * @method mixed getAny(string $field, mixed $default = null)
+ * Request Input Helpers.
+ * 
+ * @method mixed getPut(string $field, mixed $default = null)      @inheritdoc.
+ * @method mixed getOptions(string $field, mixed $default = null)  @inheritdoc.
+ * @method mixed getPatch(string $field, mixed $default = null)    @inheritdoc.
+ * @method mixed getHead(string $field, mixed $default = null)     @inheritdoc.
+ * @method mixed getConnect(string $field, mixed $default = null)  @inheritdoc.
+ * @method mixed getTrace(string $field, mixed $default = null)    @inheritdoc.
+ * @method mixed getPropfind(string $field, mixed $default = null) @inheritdoc.
+ * @method mixed getMkcol(string $field, mixed $default = null)    @inheritdoc.
+ * @method mixed getCopy(string $field, mixed $default = null)     @inheritdoc.
+ * @method mixed getMove(string $field, mixed $default = null)     @inheritdoc.
+ * @method mixed getLock(string $field, mixed $default = null)     @inheritdoc.
+ * @method mixed getUnlock(string $field, mixed $default = null)   @inheritdoc.
+ * @method mixed getAny(string $field, mixed $default = null)      @inheritdoc.
  */
-final class Request implements HttpRequestInterface, LazyInterface, Stringable
+final class Request implements HttpRequestInterface, LazyObjectInterface, Stringable
 {
     /**
      * URL query parameters.
@@ -50,23 +53,23 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * Server object representing HTTP server parameters and configurations.
      * 
-     * @var Server<LazyInterface|null $server
+     * @var Server<LazyObjectInterface|null $server
      */
-    public ?LazyInterface $server = null;
+    public ?LazyObjectInterface $server = null;
 
     /**
      * Header object providing HTTP request headers information.
      * 
-     * @var Header<LazyInterface|null $header
+     * @var Header<LazyObjectInterface|null $header
      */
-    public ?LazyInterface $header = null;
+    public ?LazyObjectInterface $header = null;
 
     /**
      * UserAgent object containing client browser details.
      * 
-     * @var UserAgent<LazyInterface>|null $agent
+     * @var UserAgent<LazyObjectInterface>|null $agent
      */
-    public ?LazyInterface $agent = null;
+    public ?LazyObjectInterface $agent = null;
 
     /**
      * Request security configuration.
@@ -83,13 +86,20 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     private ?CookieJarInterface $cookie = null;
 
     /**
+     * Shared object.
+     * 
+     * @var HttpRequestInterface|null $instance
+     */
+    private static ?HttpRequestInterface $instance = null;
+
+    /**
      * Initializes a new Request object, representing an HTTP request.
      * 
      * @param string|null $method The HTTP method used for the request (e.g., `Method::GET`, `Method::POST`).
      * @param string|null $uri The request URI, typically the path and query string.
      * @param array<string,mixed> $body The request body, provided as an associative array 
      *                                  (e.g., `['field' => 'value']`). This may include form data, JSON, etc.
-     * @param array<string,mixed> $files The request files, provided as an associative array (e.g., `['field' => array|string]`). 
+     * @param array<string,array> $files The request files, provided as an associative array (e.g., `['image' => [...]]`). 
      * @param array<string,mixed>|null $cookies Optional. An associative array of Cookies (e.g, $_COOKIE).
      * @param string|null $raw Optional request raw-body. 
      * @param array<string,mixed>|null $server Optional. Server variables (e.g., `$_SERVER`). 
@@ -116,21 +126,58 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * {@inheritdoc}
      */
+    public static function getInstance(
+        ?string $method = null,
+        ?string $uri = null,
+        array $body = [],
+        array $files = [],
+        ?array $cookies = null,
+        ?string $raw = null,
+        ?array $server = null,
+        ?array $headers = null
+    ): self 
+    {
+        if(!self::$instance instanceof HttpRequestInterface){
+            self::$instance = new self(
+                $method,
+                $uri,
+                $body,
+                $files,
+                $cookies,
+                $raw,
+                $server,
+                $headers
+            );
+        }
+
+        return self::$instance;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function __call(string $method, array $arguments): mixed 
     {
         $field = $arguments[0] ?? null;
+        $default = $arguments[1] ?? null;
         $httpMethod = strtoupper(substr($method, 3));
 
-        if($httpMethod === 'ANY' && !$field){
-            throw new InvalidArgumentException('The method: "getAny()" requires a valid field name.');
+        if(!$field){
+            throw new InvalidArgumentException(
+                sprintf('The method: "%s()" requires a valid input field name. 
+                Use "getBody()" to return full request input body.', $method)
+            );
         }
-        
-        $httpMethod = ($httpMethod === 'ANY') ? $this->getAnyMethod() : $httpMethod;
-        $body = $this->body[$httpMethod] ?? [];
 
-        return ($field === null) 
-            ? $body 
-            : ($body[$field] ?? $arguments[1] ?? null);
+        if($httpMethod === 'ANY'){
+            return $this->input($field, $default);
+        }
+
+        if($field === null){
+            return $this->body[$httpMethod] ?? [];
+        }
+
+        return $this->body[$httpMethod][$field] ?? $default;
     }
 
     /**
@@ -235,7 +282,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function getGet(string|null $field, mixed $default = null): mixed
+    public function getGet(string $field, mixed $default = null): mixed
     {
         return ($field === null)
             ? ($this->body['GET'] ?? []) 
@@ -245,7 +292,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function getPost(string|null $field, mixed $default = null): mixed
+    public function getPost(string $field, mixed $default = null): mixed
     {
         return ($field === null)
             ? ($this->body['POST'] ?? []) 
@@ -255,23 +302,55 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function getBody(bool $object = false): array|object
+    public function input(string $field, mixed $default = null, ?string $method = null): mixed 
+    {
+        if(!$field){
+            return null;
+        }
+        
+       $method = ($method === null) ? $this->getAnyMethod() : strtoupper($method);
+
+        return $this->body[$method][$field] ?? $default;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getCsrfToken(): ?string
+    {
+        $body = $this->body[$this->getAnyMethod()] ?? [];
+
+        return $body['csrf_token'] ?? $body['csrf-token'] ?? null;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getBody(bool $object = false, ?string $method = null): array|object
     {
         if($this->body === []){
             $this->parseRequestBody();
         }
 
-        if($object){
-            return (object) array_merge(
-                $this->body[$this->getAnyMethod()] ?? $this->body,
-                $this->files ?: $_FILES
-            );
-        }
-        
-        return array_merge(
-            $this->body[$this->getAnyMethod()] ?? $this->body,
+        $method = ($method === null) ? $this->getAnyMethod() : strtoupper($method);
+        $result = array_merge(
+            $this->body[$method] ?? $this->body,
             $this->files ?: $_FILES
         );
+
+        if(!$object){
+            return $result;
+        }
+        
+        return (object) $result;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getFields(): array
+    {
+        return array_keys($this->getBody());
     }
 
     /**
@@ -279,22 +358,32 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function getArray(string $field, array $default = [], ?string $method = null): array
     {
-        $method = ($method === null) ? $this->getAnyMethod() : strtoupper($method);
+        $body = $this->getBody(method: $method);
 
-        if ($field && isset($this->body[$method][$field])) {
-            $result = $this->getBody()[$field];
-
-            if(json_validate($result)) {
-                try{
-                    return (json_decode($result, true, 512, JSON_THROW_ON_ERROR) ?: $default);
-                }catch(JsonException){
-                    return $default;
-                }
-            }
-            
-            return (array) $result;
+        if(!$field || $body === []){
+            return $default;
         }
-        
+
+        $result = $body[$field] ?? null;
+
+        if ($result === null || $result === '') {
+            return $default;
+        }
+
+        if(is_array($result)){
+            return $result;
+        }
+
+        if(!json_validate((string) $result)) {
+            return [$result];
+        }
+
+        try{
+            return json_decode($result, true, 512, JSON_THROW_ON_ERROR) ?: $default;
+        }catch(JsonException){
+            return [$result];
+        }
+
         return $default;
     }
 
@@ -518,8 +607,13 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         $values = [];
 
         foreach ($queries as $value) {
+            if(!str_contains($value, '=')){
+                $values[$value] = '';
+                continue;
+            }
+
             [$key, $value] = explode('=', $value, 2);
-            $values[$key] = urldecode($value);
+            $values[$key] = urldecode((string) $value);
         }
 
         ksort($values);
@@ -707,7 +801,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         
         $method = $method ? strtoupper($method) : $this->getAnyMethod();
 
-        return ($this->body === [] || ($this->body[$method]??null) === null) 
+        return ($this->body === [] || ($this->body[$method] ?? null) === null) 
             ? false 
             : array_key_exists($field, $this->body[$method] ?? []);
     }
@@ -725,7 +819,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function isPost(): bool
     {
-        return $this->getAnyMethod() === 'POST';
+        return $this->getMethod() === 'POST';
     }
 
     /**
@@ -733,7 +827,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     public function isMethod(string $method = 'GET'): bool
     {
-        return $this->getAnyMethod() === strtoupper($method);
+        return $this->getMethod() === strtoupper($method);
     }
 
     /**
@@ -812,7 +906,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
         }
 
         if($subdomains){
-            return $origin === APP_HOSTNAME_ALIAS || Func::mainDomain($origin) === APP_HOSTNAME;
+            return $origin === APP_HOSTNAME_ALIAS || Helpers::mainDomain($origin) === APP_HOSTNAME;
         }
 
         return $origin === APP_HOSTNAME;
@@ -935,7 +1029,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     protected function parseRequestCookies(): CookieJarInterface
     {
-        $cookie = new CookieFileJar([], ['readOnly' => true]);
+        $cookie = new FileJar([], ['readOnly' => true]);
         $cookies = $this->cookies 
             ?? $this->header->get('Cookie') 
             ?? $this->server->get('HTTP_COOKIE');
@@ -946,7 +1040,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
 
         $config = new Session();
         $options = [
-            ...CookieFileJar::DEFAULT_OPTIONS,
+            ...FileJar::DEFAULT_OPTIONS,
             'domain' => '.' . $this->getHost()
         ];
 
@@ -1061,7 +1155,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      */
     protected function parseRequestBody(): void
     {
-        $method = $this->getAnyMethod();
+        $method = $this->getMethod();
     
         if($this->body !== []){
             if(!isset($this->body[$method])){
@@ -1113,7 +1207,7 @@ final class Request implements HttpRequestInterface, LazyInterface, Stringable
      * 
      * @return Generator<int,File,void,void>|File|null Return the parsed file information or null if the file array is empty.
      */
-    protected function parseRequestFile(array|null $file, ?int $index = null): Generator|File|null
+    protected function parseRequestFile(?array $file, ?int $index = null): Generator|File|null
     {
         if($file === [] || $file === null){
             return null;

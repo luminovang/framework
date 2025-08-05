@@ -10,13 +10,13 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\BaseConsole;
+use \Luminova\Base\Console;
 use \Luminova\Command\Utils\Color;
 use \SplFileObject;
 use \Exception;
 use function \Luminova\Funcs\root;
 
-class Logs extends BaseConsole 
+class Logs extends Console 
 {
     /**
      * {@inheritdoc}
@@ -87,7 +87,7 @@ class Logs extends BaseConsole
     {
         $filePath = root('/writeable/logs/', $level . '.log');
 
-        if (!file_exists($filePath) || !is_readable($filePath)) {
+        if (!is_file($filePath) || !is_readable($filePath)) {
             $this->term->writeln(sprintf('Log: "%s" not found or not readable', $level), 'red');
             return false;
         }

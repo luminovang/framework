@@ -12,9 +12,8 @@ namespace Luminova\Notifications\Firebase;
 
 use \Exception;
 use \Kreait\Firebase\Factory;
-use \Luminova\Interface\LazyInterface;
+use \Luminova\Interface\LazyObjectInterface;
 use \Kreait\Firebase\Contract\Messaging;
-use \Luminova\Exceptions\ErrorException;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Notifications\Models\Message;
 use \Kreait\Firebase\Messaging\Notification as Notifier;
@@ -31,7 +30,7 @@ use \Kreait\Firebase\Messaging\{
 };
 use function \Luminova\Funcs\root;
 
-class Notification implements LazyInterface
+class Notification implements LazyObjectInterface
 {
     /**
      * Notification factory.
@@ -97,7 +96,8 @@ class Notification implements LazyInterface
     }
 
     /**
-     * Get a shared instance of the Kreait Firebase Factory class, or create new factory instance from service account.
+     * Get a shared instance of the Kreait Firebase Factory class, 
+     * or create new factory instance from service account.
      *
      * @param string|array $account The service account (e.g, filename, JSON string, an array):
      *               - Filename (string): The service account file must be stored in `/writeable/credentials/`.
@@ -173,44 +173,54 @@ class Notification implements LazyInterface
      * Create a CloudMessage based on the given type, target, and configuration.
      *
      * @param string $type The type of target (e.g., 'token', 'topic', etc.).
-     * @param string|array $to The target value (e.g., token, tokens or topic name).
      * @param Message $config The configuration for the push message.
+     * @param string|null $to The target value (e.g., token, tokens or topic name).
      *
      * @return MessageCaster|null The constructed CloudMessage instance, or null on failure.
-     * @throws ErrorException If an exception occurs during message construction.
+     * @throws RuntimeException If an exception occurs during message construction.
      */
-    private function message(string $type, string|array $to, Message $config): ?MessageCaster
+    private function message(string $type, Message $config, ?string $to = null): ?MessageCaster
     {
         try {
-            $message = ($type === 'instance') ? CloudMessage::new() : CloudMessage::withTarget($type, $to);
-            $message = $message->withNotification(
+            $target = match($type){
+                MessageTarget::TOKEN     => CloudMessage::new()->toToken($to),
+                MessageTarget::TOPIC     => CloudMessage::new()->toTopic($to),
+                MessageTarget::CONDITION => CloudMessage::new()->toCondition($to),
+                default => CloudMessage::new()
+            };
+
+            $message = $target->withNotification(
                 self::create($config->getTitle(), $config->getBody(), $config->getImageUrl())
             )->withDefaultSounds();
 
-            $platform = $config->getPlatform();
             $sound = $config->get('sound');
             $priority = $config->getPriority();
 
-            switch ($platform) {
+            switch ($config->getPlatform()) {
                 case Message::ANDROID:
                     $pConfig = AndroidConfig::fromArray($config->fromArray());
                     if ($sound !== null) {
                         $pConfig = $pConfig->withSound($sound);
                     }
+
                     if ($priority !== '') {
                         $pConfig = $pConfig->withMessagePriority($priority);
                     }
+
                     $message = $message->withAndroidConfig($pConfig);
                     break;
 
                 case Message::APN:
                     $pConfig = ApnsConfig::fromArray($config->fromArray());
+
                     if ($sound !== null) {
                         $pConfig = $pConfig->withSound($sound);
                     }
+
                     if ($priority !== '') {
                         $pConfig = $pConfig->withPriority($priority);
                     }
+
                     $message = $message->withApnsConfig($pConfig);
                     break;
 
@@ -219,6 +229,7 @@ class Notification implements LazyInterface
                     if ($priority !== '') {
                         $pConfig = $pConfig->withUrgency($priority);
                     }
+
                     $message = $message->withWebPushConfig($pConfig);
                     break;
                 case Message::DEFAULT;
@@ -237,7 +248,7 @@ class Notification implements LazyInterface
             return $message;
 
         } catch (Exception $e) {
-            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
         return null;
@@ -269,7 +280,7 @@ class Notification implements LazyInterface
      * @param bool $validateOnly Optional. If set to true, the message will only be validated without sending.
      *
      * @return self Return instance of luminova firebase notification class.
-     * @throws ErrorException If token is not valid or an error occurred while sending notification.
+     * @throws RuntimeException If token is not valid or an error occurred while sending notification.
      */
     public function send(Message|array $config, bool $validateOnly = false): self
     {
@@ -287,7 +298,7 @@ class Notification implements LazyInterface
                 if($config->isRaw()){
                     $message = $this->rawMessage($config);
                 }elseif($config->getToken() !== ''){
-                    $message = $this->message(MessageTarget::TOKEN, $config->getToken(), $config);
+                    $message = $this->message(MessageTarget::TOKEN, $config, $config->getToken());
                 }
 
                 if($message instanceof MessageCaster){
@@ -297,10 +308,10 @@ class Notification implements LazyInterface
             }
 
         } catch (Exception $e) {
-            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
-        throw new ErrorException("Invalid input: Expected a Message instance and must call method setToken or an array with a 'topic' key token.");
+        throw new RuntimeException("Invalid input: Expected a Message instance and must call method setToken or an array with a 'topic' key token.");
     }
 
     /**
@@ -310,7 +321,7 @@ class Notification implements LazyInterface
      * @param bool $validateOnly Optional. If set to true, the message will only be validated without sending.
      *
      * @return self Return instance of luminova firebase notification class.
-     * @throws ErrorException If the topic is not provided correctly.
+     * @throws RuntimeException If the topic is not provided correctly.
      */
     public function channel(Message|array $config, bool $validateOnly = false): self
     {
@@ -328,7 +339,7 @@ class Notification implements LazyInterface
                 if($config->isRaw()){
                     $message = $this->rawMessage($config);
                 }elseif($config->getTopic() !== ''){
-                    $message = $this->message(MessageTarget::TOPIC, $config->getTopic(), $config);
+                    $message = $this->message(MessageTarget::TOPIC, $config, $config->getTopic());
                 }
 
                 if($message instanceof MessageCaster){
@@ -338,10 +349,10 @@ class Notification implements LazyInterface
             }
 
         } catch (Exception $e) {
-            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
-        throw new ErrorException("Invalid input: Expected a Message instance and must call method setTopic or an array with a 'topic' key included.");
+        throw new RuntimeException("Invalid input: Expected a Message instance and must call method setTopic or an array with a 'topic' key included.");
     }
 
     /**
@@ -351,7 +362,7 @@ class Notification implements LazyInterface
      * @param bool $validateOnly Optional. If set to true, the message will only be validated without sending.
      *
      * @return self Return instance of luminova firebase notification class.
-     * @throws ErrorException If the topic is not provided correctly.
+     * @throws RuntimeException If the topic is not provided correctly.
      * 
      * @example "'TopicA' in topics && ('TopicB' in topics || 'TopicC' in topics)".
      */
@@ -371,7 +382,7 @@ class Notification implements LazyInterface
                 if($config->isRaw()){
                     $message = $this->rawMessage($config);
                 }elseif($config->getConditions() !== ''){
-                    $message = $this->message(MessageTarget::CONDITION, $config->getConditions(), $config);
+                    $message = $this->message(MessageTarget::CONDITION, $config, $config->getConditions());
                 }
 
                 if($message instanceof MessageCaster){
@@ -381,10 +392,10 @@ class Notification implements LazyInterface
             }
 
         } catch (Exception $e) {
-            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
-        throw new ErrorException("Invalid input: Expected a Message instance and must call method setCondition or an array with a 'conditions' key included.");
+        throw new RuntimeException("Invalid input: Expected a Message instance and must call method setCondition or an array with a 'conditions' key included.");
     }
 
     /**
@@ -394,7 +405,7 @@ class Notification implements LazyInterface
      * @param bool $validateOnly Optional. If set to true, the message will only be validated without sending.
      *
      * @return self Return instance of luminova firebase notification class.
-     * @throws ErrorException If tokens are not provided or if an error occurs during message construction.
+     * @throws RuntimeException If tokens are not provided or if an error occurs during message construction.
      */
     public function broadcast(Message|array $config, bool $validateOnly = false): self
     {
@@ -417,7 +428,7 @@ class Notification implements LazyInterface
                         return $this;
                     }
                 }elseif($config->getTokens() !== []){
-                    $message = $this->message('instance', [], $config);
+                    $message = $this->message('tokens', $config);
 
                     if($message instanceof MessageCaster){
                         $this->report = $this->messaging()->sendMulticast($message, $config->getTokens(), $validateOnly);
@@ -426,10 +437,10 @@ class Notification implements LazyInterface
                 }
             }
         } catch (Exception $e) {
-            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
-        throw new ErrorException("Invalid input: Expected a Message instance or an array with a 'tokens' key.");
+        throw new RuntimeException("Invalid input: Expected a Message instance or an array with a 'tokens' key.");
     }
 
     /**
@@ -439,6 +450,7 @@ class Notification implements LazyInterface
      * @param string $topic The topic to subscribe to.
      *
      * @return self Return instance of luminova firebase notification class.
+     * @throws RuntimeException
      */
     public function subscribe(string $token, string $topic): self
     {
@@ -448,7 +460,7 @@ class Notification implements LazyInterface
 
             return $this;
         } catch (Exception $e) {
-            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -459,6 +471,7 @@ class Notification implements LazyInterface
      * @param array<int,string> $tokens The topics to subscribe.
      *
      * @return self Return instance of luminova firebase notification class.
+     * @throws RuntimeException
      */
     public function subscribers(array $topics, array $tokens): self
     {
@@ -468,7 +481,7 @@ class Notification implements LazyInterface
 
             return $this;
         } catch (Exception $e) {
-            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -479,6 +492,7 @@ class Notification implements LazyInterface
      * @param string $topic The topic to unsubscribe from.
      *
      * @return self Return instance of luminova firebase notification class.
+     * @throws RuntimeException
      */
     public function unsubscribe(string $token, string $topic): self
     {
@@ -488,7 +502,7 @@ class Notification implements LazyInterface
 
             return $this;
         } catch (Exception $e) {
-            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -499,6 +513,7 @@ class Notification implements LazyInterface
      * @param array<int,string> $tokens The tokens to unsubscribe from list of topics.
      *
      * @return self Return instance of luminova firebase notification class.
+     * @throws RuntimeException
      */
     public function unsubscribers(array $topics, array $tokens): self
     {
@@ -508,7 +523,7 @@ class Notification implements LazyInterface
 
             return $this;
         } catch (Exception $e) {
-            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -518,6 +533,7 @@ class Notification implements LazyInterface
      * @param array<int,string> $tokens The device tokens to unsubscribe from all topics.
      *
      * @return self Return instance of luminova firebase notification class.
+     * @throws RuntimeException
      */
     public function desubscribe(array $tokens): self
     {
@@ -527,7 +543,7 @@ class Notification implements LazyInterface
 
             return $this;
         } catch (Exception $e) {
-            throw new ErrorException($e->getMessage(), $e->getCode(), $e);
+            throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
     }
 

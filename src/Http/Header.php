@@ -12,11 +12,11 @@ namespace Luminova\Http;
 
 use \App\Config\Apis;
 use \Luminova\Luminova;
-use \Luminova\Functions\Func;
-use \Luminova\Interface\LazyInterface;
+use \Luminova\Common\Helpers;
+use \Luminova\Interface\LazyObjectInterface;
 use \Countable;
 
-class Header implements LazyInterface, Countable
+class Header implements LazyObjectInterface, Countable
 {
     /**
      * Content types for view rendering.
@@ -229,7 +229,7 @@ class Header implements LazyInterface, Countable
             if (!str_starts_with($header, 'Content-')) {
                 continue;
             }
-
+            
             [$name, $value] = explode(':', $header, 2);
             $key = trim($name);
 
@@ -299,31 +299,61 @@ class Header implements LazyInterface, Countable
     }
 
     /**
-     * Validate, modifies and send HTTP headers to client, ensuring necessary headers are set.
+     * Validates and sends HTTP headers to the client.
      *
-     * @param array $headers An associative array of headers to send.
-     * @param int|null $status HTTP response code (default: NULL)
+     * - Replaces headers with defaults if `X-System-Default-Headers` key is present.
+     * - Sends status code if provided.
+     * - Ensures required RESTful headers are present before sending.
+     * - Always append charset if missing.
+     *
+     * @param array<string,mixed> $headers Associative array of headers to send.
+     * @param int|null $status Optional HTTP response code to send.
+     * @param bool $ifNotSent Only send headers if no headers have been sent yet (default: true).
      * 
      * @return void
      * @internal
      */
-    public static function validate(array $headers, ?int $status = null): void
+    public static function validate(array $headers, ?int $status = null, bool $ifNotSent = true): void
     {
-        if (headers_sent()) {
+        if ($ifNotSent && headers_sent()) {
             return;
         }
 
-        if (isset($headers['default_headers'])) {
-            $headers = array_replace(self::getDefault(), $headers);
+        if (!self::isValidRestFullHeaders($headers)) {
+            return;
         }
 
-        if(self::isValidRestFullHeaders($headers)){
-            if ($status !== null) {
-                self::sendStatus($status);
+        if ($status !== null) {
+            if ($status === 204 || $status === 304) {
+                unset($headers['Content-Type'], $headers['Content-Length']);
             }
 
-            self::send($headers, false, true);
+            self::sendStatus($status);
         }
+
+        self::send($headers, false, true);
+    }
+
+    /**
+     * Processes response headers and returns them normalized (without sending).
+     *
+     * - Replaces headers with defaults if `X-System-Default-Headers` key is present.
+     * - Ensures required RESTful headers are present.
+     * - Returns an empty array if headers are already complete/valid.
+     * - Always append charset if missing.
+     *
+     * @param array<string,mixed> $headers Associative array of headers to process.
+     * 
+     * @return array<string,mixed>|null Normalized headers ready to send, or an empty array if no changes needed.
+     * @internal Response class
+     */
+    public static function response(array $headers): ?array
+    {
+        if (!self::isValidRestFullHeaders($headers)) {
+            return [];
+        }
+
+        return self::parse($headers, true, false);
     }
 
     /**
@@ -394,10 +424,10 @@ class Header implements LazyInterface, Countable
     /**
      * Sends HTTP headers to the client.
      *
-     * @param array<string,mixed> $headers An associative array of headers to send.
-     * @param bool $ifNotSent Whether to send headers if headers is not already sent (default: true).
-     * @param bool $charset Whether to append default charset from env to `Content-Type` 
-     *              if it doesn't contain it (default: false).
+     * @param array<string,mixed> $headers Associative array of headers to send.
+     * @param bool $ifNotSent Only send headers if no headers have been sent yet (default: true).
+     * @param bool $charset Append the default charset from env to `Content-Type` 
+     *                      if missing (default: false).
      * 
      * @return void
      */
@@ -407,29 +437,65 @@ class Header implements LazyInterface, Countable
             return;
         }
 
+        self::parse($headers, $charset);
+    }
+
+    /**
+     * Normalize and optionally send HTTP headers to the client.
+     *
+     * - Removes invalid or empty headers.
+     * - Conditionally appends charset to `Content-Type`.
+     * - Can either send headers immediately or return them as an array.
+     *
+     * @param array<string,mixed> $headers Associative array of headers to process.
+     * @param bool $withCharset Append the default charset from env to `Content-Type` if missing (default: false).
+     * @param bool $isSend If true, headers are sent using `header()`. 
+     *                     If false, an array of normalized headers is returned. (default: true)
+     * 
+     * @return array<string,mixed> Processed headers when `$isSend` is false, otherwise an empty array.
+     */
+    private static function parse(array $headers, bool $withCharset = false, bool $isSend = true): array 
+    {
+        $normalized = [];
         $xPowered = env('x.powered', true);
+        $charset = env('app.charset', 'utf-8');
+
+        if (isset($headers['X-System-Default-Headers'])) {
+            $headers = array_replace(self::getDefault(), $headers);
+        }elseif($xPowered){
+            $headers['X-Powered-By'] = Luminova::copyright();
+        }
 
         foreach ($headers as $header => $value) {
             if (
-                !$header || 
+                !$header ||
                 $value === '' ||
                 ($header === 'X-Powered-By' && !$xPowered) ||
-                ($header === 'default_headers' || ($header === 'Content-Encoding' && $value === false))
+                ($header === 'X-System-Default-Headers') ||
+                ($header === 'Content-Encoding' && $value === false)
             ) {
                 continue;
             }
 
-            if (is_array($value)) {
-                foreach ($value as $val) {
-                    header("{$header}: {$val}");
+            $values = [];
+            foreach ((array) $value as $val) {
+                $finalVal = ($withCharset && $header === 'Content-Type' && !str_contains($val, 'charset'))
+                    ? "{$val}; charset={$charset}"
+                    : $val;
+
+                if ($isSend) {
+                    header("{$header}: {$finalVal}");
+                } else {
+                    $values[] = $finalVal;
                 }
-            }else{
-                $value = ($charset && $header === 'Content-Type' && !str_contains($value, 'charset')) 
-                    ? "{$value}; charset=" . env('app.charset', 'utf-8') 
-                    : $value;
-                header("{$header}: {$value}");
+            }
+
+            if (!$isSend && $values !== []) {
+                $normalized[$header] = implode(', ', $values);
             }
         }
+
+        return $normalized;
     }
 
     /**
@@ -537,18 +603,20 @@ class Header implements LazyInterface, Countable
     }
 
     /**
-     * Clears output buffers based on the selected action.
+     * Clear PHP output buffers using one of three modes.
      *
-     * Supported actions:
-     * - 'auto' (default): Clears all buffers if more than one is active; otherwise, clears only the top buffer.
-     * - 'all': Clears all active output buffers.
-     * - 'top': Clears only the top buffer.
+     * **Modes:**
+     * - auto (default): If multiple buffers exist, clear all except the base buffer.
+     *                   If only one exists, clear only the top buffer.
+     * - all:  Clear every active buffer down to level 0 or a specified limit.
+     * - top:  Clear only the top-most buffer.
      *
-     * @param string $action Determines how buffers are cleared: 'auto', 'all', or 'top'.
-     * 
-     * @return bool Returns true if at least one buffer was cleared successfully, false otherwise.
+     * @param string $mode Determines how buffers are cleared, (e.g, `auto`, `all`, or `top`).
+     * @param int $limit Minimum buffer level to stop at (use 0 to clear everything).
+     *
+     * @return bool Returns true if any buffer was cleared, otherwise false.
      */
-    public static function clearOutputBuffers(string $action = 'auto'): bool
+    public static function clearOutputBuffers(string $mode = 'auto', int $limit = 0): bool
     {
         $level = ob_get_level();
 
@@ -556,12 +624,17 @@ class Header implements LazyInterface, Countable
             return false;
         }
 
-        if (($action === 'auto' || $action === 'all') && $level > 1) {
+        if ($mode === 'top') {
+            return ob_end_clean();
+        }
+
+        if ($mode === 'all' || ($mode === 'auto' && $level > 1)) {
             $cleared = false;
 
-            while (ob_get_level() > 0) {
+            while (ob_get_level() > $limit) {
                 $cleared = ob_end_clean() || $cleared;
             }
+            
             return $cleared;
         }
 
@@ -587,7 +660,7 @@ class Header implements LazyInterface, Countable
             return $origin;
         }
 
-        foreach ([$origin, Func::mainDomain($origin)] as $from) {
+        foreach ([$origin, Helpers::mainDomain($origin)] as $from) {
             if ($accept === $from || in_array($from, (array) $accept)) {
                 return $from;
             }

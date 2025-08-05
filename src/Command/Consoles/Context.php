@@ -10,9 +10,9 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\BaseConsole;
-use \Luminova\Attributes\Compiler;
-use \Luminova\Storages\FileManager;
+use \Luminova\Base\Console;
+use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Attributes\Internal\Compiler;
 use function \Luminova\Funcs\{
     root,
     camel_case,
@@ -22,7 +22,7 @@ use function \Luminova\Funcs\{
     has_uppercase
 };
 
-class Context extends BaseConsole 
+class Context extends Console 
 {
     /**
      * {@inheritdoc}
@@ -101,10 +101,10 @@ class Context extends BaseConsole
 
         $handler = <<<PHP
         <?php 
-        /** @var \Luminova\Routing\Router \$router */
+        use \Luminova\Routing\Router;
         /** @var \App\Application \$app */
         
-        \$router->get('/', '$controller');
+        Router::get('/', '$controller');
         PHP;
 
         $newPrefix = <<<PHP
@@ -182,6 +182,7 @@ class Context extends BaseConsole
     private function buildAttributes(): int
     {
         $hmvc = env('feature.app.hmvc', false);
+        $apiPrefix = env('app.api.prefix', 'api');
         $collector = (new Compiler('', false, $hmvc))->export($hmvc ? 'app/Modules' : 'app/Controllers');
 
         $head = "<?php\nuse \Luminova\Routing\Router;\n/** @var \Luminova\Routing\Router \$router */\n/** @var \App\Application \$app */\n\n";
@@ -206,12 +207,12 @@ class Context extends BaseConsole
                     if($hasGroup){
                         $hasGroup = true;
                         if($ctx === 'http'){
-                            $httpContents .= "\n\$router->bind('/{$group}', static function(Router \$router){\n";
-                        }elseif($ctx === 'api'){
-                            $apiContents .= "\n\$router->bind('/{$group}', static function(Router \$router){\n";
+                            $httpContents .= "\nRouter::bind('/{$group}', static function(Router \$router){\n";
+                        }elseif($ctx === 'api' || $ctx === $apiPrefix){
+                            $apiContents .= "\nRouter::bind('/{$group}', static function(Router \$router){\n";
                         }
                     }elseif($ctx === 'cli'){
-                        $cliContents .= "\n\$router->group('{$group}', static function(Router \$router){\n";
+                        $cliContents .= "\nRouter::group('{$group}', static function(Router \$router){\n";
                     }
 
                     foreach($values as $line){
@@ -223,32 +224,34 @@ class Context extends BaseConsole
 
                             if($line['middleware'] !== null){
                                 $methods = implode('|', $line['methods']);
-                                $httpContents .= "\$router->middleware('{$methods}', '{$pattern}', '{$line['callback']}');\n";
+                                $httpContents .= "Router::middleware('{$methods}', '{$pattern}', '{$line['callback']}');\n";
                             }else{
                                 $method = $this->getMethodType($line['methods']);
-                                $httpContents .= "\$router->{$method}'{$pattern}', '{$line['callback']}');\n";
+                                $httpContents .= "Router::{$method}'{$pattern}', '{$line['callback']}');\n";
                             }
-                        }elseif($ctx === 'api'){
-                            $pattern = $hasGroup ? substr($line['pattern'], strlen('/api/' . $group)) : ltrim($line['pattern'], 'api/');
+                        }elseif($ctx === 'api' || $ctx === $apiPrefix){
+                            $pattern = $hasGroup 
+                                ? substr($line['pattern'], strlen("/$apiPrefix/" . $group)) 
+                                : ltrim($line['pattern'], "$apiPrefix/");
                             $pattern = '/' . trim($pattern, '/');
                             $apiContents .= ($hasGroup ? '   ' : '');
 
                             if($line['middleware'] !== null){
                                 $methods = implode('|', $line['methods']);
-                                $apiContents .= "\$router->middleware('{$methods}', '{$pattern}', '{$line['callback']}');\n";
+                                $apiContents .= "Router::middleware('{$methods}', '{$pattern}', '{$line['callback']}');\n";
                             }else{
                                 $method = $this->getMethodType($line['methods']);
-                                $apiContents .= "\$router->{$method}'{$pattern}', '{$line['callback']}');\n";
+                                $apiContents .= "Router::{$method}'{$pattern}', '{$line['callback']}');\n";
                             }
                         }elseif($ctx === 'cli'){
                             if($line['middleware'] !== null){
                                 if($line['middleware'] === 'global'){
-                                    $cliHeader .= "\$router->before('global', '{$line['callback']}');\n";
+                                    $cliHeader .= "Router::before('global', '{$line['callback']}');\n";
                                 }else{
-                                    $cliContents .= "   \$router->before('{$group}', '{$line['callback']}');\n";
+                                    $cliContents .= "   Router::before('{$group}', '{$line['callback']}');\n";
                                 }
                             }else{
-                                $cliContents .= "   \$router->command('{$line['pattern']}', '{$line['callback']}');\n";
+                                $cliContents .= "   Router::command('{$line['pattern']}', '{$line['callback']}');\n";
                             }
                         }
                     }
@@ -257,7 +260,7 @@ class Context extends BaseConsole
                         if($ctx === 'http'){
                             $httpContents .= "});\n\n";
                             
-                        }elseif($ctx === 'api'){
+                        }elseif($ctx === 'api' || $ctx === $apiPrefix){
                             $apiContents .= "});\n\n";
                         }
                     }elseif($ctx === 'cli'){

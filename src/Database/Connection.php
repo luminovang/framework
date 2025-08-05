@@ -15,12 +15,12 @@ use \Throwable;
 use \Exception;
 use \App\Config\Database;
 use \Luminova\Logger\Logger;
-use \Luminova\Core\CoreDatabase;
-use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Database\Drivers\{PdoDriver, MysqliDriver};
-use \Luminova\Interface\{LazyInterface, DatabaseInterface};
+use \Luminova\Foundation\Core\Database as CoreDatabase;
+use \Luminova\Exceptions\{ErrorCode, DatabaseException};
+use \Luminova\Database\Driver\{PdoDatabase, MysqliDatabase};
+use \Luminova\Interface\{LazyObjectInterface, DatabaseInterface};
 
-class Connection implements LazyInterface, Countable
+class Connection implements LazyObjectInterface, Countable
 {
     /**
      * Database connection driver instance.
@@ -46,9 +46,9 @@ class Connection implements LazyInterface, Countable
     /**
      * Accumulate critical log messages
      * 
-     * @var string $logEntry
+     * @var string $err
      */
-    private static string $logEntry = '';
+    private static string $err = '';
 
     /**
      * The identifier of the target shard server (e.g., region or server key).
@@ -268,13 +268,13 @@ class Connection implements LazyInterface, Countable
         if (!($config instanceof CoreDatabase)) {
             throw new DatabaseException(
                 'Invalid connection: no configuration defined. Set connection info in the .env file or App\\Config\\Database class.',
-                DatabaseException::RUNTIME_ERROR
+                ErrorCode::RUNTIME_ERROR
             );
         }        
 
         $drivers = [
-            'mysqli' => MysqliDriver::class,
-            'pdo' => PdoDriver::class
+            'mysqli' => MysqliDatabase::class,
+            'pdo' => PdoDatabase::class
         ];
 
         $driver = $drivers[$config->getValue('connection')] ?? null;
@@ -282,7 +282,7 @@ class Connection implements LazyInterface, Countable
         if ($driver === null) {
             throw new DatabaseException(
                 sprintf('Invalid database connection driver: "%s", use (mysql or pdo).', $config->getValue('connection')),
-                DatabaseException::INVALID_DATABASE_DRIVER
+                ErrorCode::INVALID_DATABASE_DRIVER
             );
         }
 
@@ -291,7 +291,7 @@ class Connection implements LazyInterface, Countable
         if (!$connection instanceof DatabaseInterface) {
             throw new DatabaseException(
                 sprintf('The selected driver class: "%s" does not implement: %s.', $driver, DatabaseInterface::class), 
-                DatabaseException::DATABASE_DRIVER_NOT_AVAILABLE
+                ErrorCode::DATABASE_DRIVER_NOT_AVAILABLE
             );
         }
         
@@ -314,7 +314,7 @@ class Connection implements LazyInterface, Countable
      *
      * @param int|null $retry Number of retry attempts (default: 1).
      *
-     * @return DatabaseInterface|null Return the database driver instance (either MysqliDriver or PdoDriver), or null if connection fails.
+     * @return DatabaseInterface|null Return the database driver instance (either MysqliDatabase or PdoDatabase), or null if connection fails.
      * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
      */
     public function connect(): ?DatabaseInterface
@@ -324,7 +324,7 @@ class Connection implements LazyInterface, Countable
             $this->isShardFallbackOnError = Database::$shardFallbackOnError;
         }
 
-        self::$logEntry = '';
+        self::$err = '';
         $connection = $this->retry((int) env('database.connection.retry', 1)) ?: $this->retry(null);
 
         if ($connection instanceof DatabaseInterface) {
@@ -335,17 +335,17 @@ class Connection implements LazyInterface, Countable
         $err = 'Failed all attempts to establish a database connection.';
 
         if(PRODUCTION){
-            if(!self::$logEntry){
+            if(!self::$err){
                 Logger::dispatch('critical', $err);
                 return null;
             }
 
-            self::$logEntry .= Logger::entry('critical', $err);
+            self::$err .= Logger::entry('critical', $err);
             self::eCritical();
             return null;
         }
 
-        throw new DatabaseException($err, DatabaseException::FAILED_ALL_CONNECTION_ATTEMPTS);
+        throw new DatabaseException($err, ErrorCode::FAILED_ALL_CONNECTION_ATTEMPTS);
     }
 
     /**
@@ -378,7 +378,7 @@ class Connection implements LazyInterface, Countable
      * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, or an error occurs during connection.
      * @throws Exception If any unexpected error occurs during the connection attempts.
      */
-    public function retry(int|null $retry = 1): ?DatabaseInterface
+    public function retry(?int $retry = 1): ?DatabaseInterface
     {
         if ($this->isReady($this->db)) {
             return $this->db;
@@ -419,7 +419,7 @@ class Connection implements LazyInterface, Countable
                 throw new DatabaseException(sprintf(
                     'Shard server location "%s" not found in backup list. Check your configuration or shard mapping.',
                     $this->shardServerLocation
-                ), DatabaseException::RUNTIME_ERROR);
+                ), ErrorCode::RUNTIME_ERROR);
             }
 
             $connection = $this->retryWithServerConfig($server); 
@@ -457,7 +457,7 @@ class Connection implements LazyInterface, Countable
 
             throw new DatabaseException(
                 'Database connection limit has reached it limit per user.',
-                DatabaseException::CONNECTION_LIMIT_EXCEEDED
+                ErrorCode::CONNECTION_LIMIT_EXCEEDED
             );
         }
 
@@ -565,7 +565,7 @@ class Connection implements LazyInterface, Countable
                     return $connection;
                 }
 
-                self::$logEntry .= Logger::entry(
+                self::$err .= Logger::entry(
                     'critical', 
                     'Database connection attempt (' . $attempt . ') failed.'
                 );
@@ -574,7 +574,7 @@ class Connection implements LazyInterface, Countable
                     throw $e;
                 }
 
-                self::$logEntry .= Logger::entry(
+                self::$err .= Logger::entry(
                     'critical', 
                     'Attempt (' . $attempt . ') failed with error: ' . $e->getMessage()
                 );
@@ -613,7 +613,7 @@ class Connection implements LazyInterface, Countable
                 return $connection;
             }
 
-            self::$logEntry .= Logger::entry('critical', sprintf(
+            self::$err .= Logger::entry('critical', sprintf(
                 'Backup database connection attempt failed (%s@%s).',  
                 $config['database'],
                 $config['host']
@@ -623,7 +623,7 @@ class Connection implements LazyInterface, Countable
                 throw $e;
             }
 
-            self::$logEntry .= Logger::entry('critical', sprintf(
+            self::$err .= Logger::entry('critical', sprintf(
                 'Failed to connect to backup database (%s@%s) with error: %s',
                 $config['database'],
                 $config['host'],
@@ -685,12 +685,12 @@ class Connection implements LazyInterface, Countable
      */
     private static function eCritical(): void
     {
-        if(!self::$logEntry){
+        if(!self::$err){
             return;
         }
 
-        Logger::dispatch('critical', self::$logEntry);
-        self::$logEntry = '';
+        Logger::dispatch('critical', self::$err);
+        self::$err = '';
     }
 
     /**
@@ -703,9 +703,9 @@ class Connection implements LazyInterface, Countable
     private function shouldThrow(string|int $code): bool 
     {
         return in_array($code, [
-            DatabaseException::DATABASE_DRIVER_NOT_AVAILABLE,
-            DatabaseException::INVALID_DATABASE_DRIVER,
-            DatabaseException::RUNTIME_ERROR
+            ErrorCode::DATABASE_DRIVER_NOT_AVAILABLE,
+            ErrorCode::INVALID_DATABASE_DRIVER,
+            ErrorCode::RUNTIME_ERROR
         ]);
     }
 

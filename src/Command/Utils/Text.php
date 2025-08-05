@@ -196,6 +196,7 @@ final class Text
      * @param int $borders The layout border style, supports combining using bitwise operator (e.g, `Text::BORDER_RADIUS`, `Text::BORDER_THICKER`).
      * @param string|null $borderColor Optional layout border color (e.g, `white`, `cyan`).
      * @param string|null $shadow Optional layout border shadow color (e.g, `white`, `cyan`).
+     * @param int|null $width Optional layout width (default, `null` auto).
      * 
      * @return string Return rendered block layout. with text.
      */
@@ -208,17 +209,19 @@ final class Text
         int $fonts = self::NO_FONT,
         int $borders = self::NO_BORDER,
         ?string $borderColor = null,
-        ?string $shadow = null
+        ?string $shadow = null,
+        ?int $width = null
     ): string 
     {
         $text = trim($text, PHP_EOL);
         [$border, $radius, $thicker] = self::borders($borders);
+        Terminal::init();
 
         $padding = max(0, $padding);
         $offset = ($border || $shadow ? 2 : 0);
         $layout = ($padding * 2);
         $window = Terminal::getWidth() - ($layout - $offset);
-        $width = self::largest($text)[1];
+        $width ??= self::largest($text)[1];
         $shadows = [];
 
         if($width >= $window){
@@ -293,6 +296,7 @@ final class Text
      * @param string|null $background Optional background color for the text (e.g, `red`, `green`).
      * @param int $fonts Optional font style(s) to apply, which can be combined using bitwise operators (e.g., Text::FONT_ITALIC).
      * @param int $borders Optional layout border style, supports combining using bitwise operator (e.g, `Text::BORDER_RADIUS`, `Text::BORDER_THICKER`).
+     * @param int|null $width Optional layout width (default, `null` auto).
      * 
      * @return string Return rendered card block with text.
      */
@@ -303,7 +307,8 @@ final class Text
         ?string $foreground = null,
         ?string $background = null,
         int $fonts = self::NO_FONT,
-        int $borders = self::BORDER
+        int $borders = self::BORDER,
+        ?int $width = null
     ): string 
     {
         return self::block(
@@ -315,7 +320,8 @@ final class Text
             $fonts,
             $borders,
             $foreground,
-            $background
+            $background,
+            $width
         );
     }
 

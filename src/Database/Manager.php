@@ -10,12 +10,12 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Storages\FileManager;
-use \Luminova\Interface\{LazyInterface, DatabaseInterface};
+use \Luminova\Utility\Storage\FileManager;
 use \Luminova\Exceptions\DatabaseException;
+use \Luminova\Interface\{LazyObjectInterface, DatabaseInterface};
 use function \Luminova\Funcs\{root, make_dir};
 
-final class Manager implements LazyInterface
+final class Manager implements LazyObjectInterface
 {
     /**
      * Initializes the Manager class.

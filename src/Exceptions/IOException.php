@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class IOException extends AppException
 {
@@ -19,12 +20,12 @@ class IOException extends AppException
      * Constructor for IOException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code  The exception code (default: self::IO_ERROR).
+     * @param string|int $code  The exception code (default: `ErrorCode::IO_ERROR`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
         string $message, 
-        string|int $code = self::IO_ERROR, 
+        string|int $code = ErrorCode::IO_ERROR, 
         ?Throwable $previous = null
     )
     {

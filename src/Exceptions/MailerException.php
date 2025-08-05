@@ -10,8 +10,9 @@
  */
 namespace Luminova\Exceptions;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
 
 class MailerException extends AppException
 {
@@ -29,14 +30,10 @@ class MailerException extends AppException
      * Constructor for MailerException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code  The exception code (default: 4499).
+     * @param string|int $code  The exception code (default: `ErrorCode::MAILER_ERROR`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
-    public function __construct(
-        string $message, 
-        string|int $code = self::MAILER_ERROR, 
-        ?Throwable $previous = null
-    )
+    public function __construct(string $message, string|int $code = ErrorCode::MAILER_ERROR, ?Throwable $previous = null)
     {
         parent::__construct($message, $code, $previous);
     }
@@ -46,17 +43,17 @@ class MailerException extends AppException
      *
      * @param string $type The type of error.
      * @param mixed|null $name The cookie name associated with the error (if applicable).
-     * @param string|int $code The exception code (default: 4499).
+     * @param string|int $code The exception code (default: `ErrorCode::MAILER_ERROR`).
      * 
      * @return static Return new static exception class.
      */
-    public static function throwWith(
-        string $type, 
-        mixed $name = null, 
-        string|int $code = self::MAILER_ERROR
-    ): static
+    public static function rethrow(string $type, mixed $name = null, string|int $code = ErrorCode::MAILER_ERROR): static
     {
         $message = self::$types[$type] ?? 'Unknown error occurred while creating email';
-        return new self($name === null ? $message : sprintf($message, $name), $code);
+        return new self(($name === null) 
+            ? $message 
+            : sprintf($message, $name), 
+            $code
+        );
     }
 }

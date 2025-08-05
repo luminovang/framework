@@ -10,14 +10,14 @@
  */
 namespace Luminova\Security\Authenticator;
 
-use \Luminova\Interface\AuthenticatorInterface;
-use \Luminova\Time\Time;
-use \Luminova\Base\BaseCache;
-use \Psr\Cache\CacheItemPoolInterface;
-use \Psr\SimpleCache\CacheInterface;
-use \Luminova\Exceptions\EncryptionException;
-use \Luminova\Exceptions\InvalidArgumentException;
 use \DateTimeZone;
+use \Luminova\Time\Time;
+use \Luminova\Base\Cache;
+use \Psr\SimpleCache\CacheInterface;
+use \Psr\Cache\CacheItemPoolInterface;
+use \Luminova\Exceptions\EncryptionException;
+use \Luminova\Interface\AuthenticatorInterface;
+use \Luminova\Exceptions\InvalidArgumentException;
 
 class Google implements AuthenticatorInterface
 {
@@ -34,7 +34,7 @@ class Google implements AuthenticatorInterface
      * @param string $accountName The account name (e.g., user email or username).
      * @param string $issuer The issuer's name (e.g., your app or website name).
      * @param DateTimeZone|string|null $timezone The timezone for time-based calculations (optional).
-     * @param CacheItemPoolInterface|CacheInterface|BaseCache|null $cache The instance of PSR cache or Luminova base-cache for preventing code reuse (optional).
+     * @param CacheItemPoolInterface|CacheInterface|Cache|null $cache The instance of PSR cache or Luminova base-cache for preventing code reuse (optional).
      * 
      * @throws EncryptionException If the issuer or account name contains invalid characters (colon `:`).
      */
@@ -42,7 +42,7 @@ class Google implements AuthenticatorInterface
         private string $accountName,
         private string $issuer,
         private DateTimeZone|string|null $timezone = null,
-        private CacheItemPoolInterface|CacheInterface|BaseCache|null $cache = null
+        private CacheItemPoolInterface|CacheInterface|Cache|null $cache = null
     ) 
     {
         if (str_contains($this->issuer . $this->accountName, ':')) {
@@ -113,7 +113,7 @@ class Google implements AuthenticatorInterface
     /**
      * {@inheritdoc}
      */
-    public function setCache(CacheItemPoolInterface|CacheInterface|BaseCache $cache): self
+    public function setCache(CacheItemPoolInterface|CacheInterface|Cache $cache): self
     {
         $this->cache = $cache;
         return $this;

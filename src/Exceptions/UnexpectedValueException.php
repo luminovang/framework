@@ -1,0 +1,34 @@
+<?php
+/**
+ * Luminova Framework
+ *
+ * @package Luminova
+ * @author Ujah Chigozie Peter
+ * @copyright (c) Nanoblock Technology Ltd
+ * @license See LICENSE file
+ * @link https://luminova.ng
+ */
+namespace Luminova\Exceptions;
+
+use \Throwable;
+use \Luminova\Exceptions\ErrorCode;
+use \Luminova\Exceptions\AppException;
+
+class UnexpectedValueException extends AppException
+{
+    /**
+     * Constructor for UnexpectedValueException.
+     *
+     * @param string  $message The exception message.
+     * @param string|int $code  The exception code (default: `ErrorCode::INPUT_VALIDATION_ERROR`).
+     * @param Throwable|null $previous The previous exception if applicable (default: null).
+     */
+    public function __construct(
+        string $message, 
+        string|int $code = ErrorCode::VALUE_FORBIDDEN, 
+        ?Throwable $previous = null
+    )
+    {
+        parent::__construct($message, $code, $previous);
+    }
+}

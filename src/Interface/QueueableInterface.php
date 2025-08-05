@@ -17,19 +17,8 @@ namespace Luminova\Interface;
  * and executed asynchronously. The class must be invokable and may define
  * whether it should be automatically removed after successful completion.
  */
-interface QueueableInterface
+interface QueueableInterface extends InvokableInterface
 {
-    /**
-     * Invoke the task with optional arguments.
-     *
-     * This makes the task callable like a function: (new Task)(...),
-     * allowing flexible execution with parameters.
-     *
-     * @param mixed ...$arguments Optional arguments to pass during execution.
-     * @return mixed Result of the executed task.
-     */
-    public function __invoke(mixed ...$arguments): mixed;
-
     /**
      * Determine whether the task should be deleted after completion.
      *

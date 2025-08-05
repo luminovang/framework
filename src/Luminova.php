@@ -19,11 +19,10 @@ namespace Luminova;
 
 use \Throwable;
 use \ReflectionClass;
-use \App\Application;
-use \Luminova\Http\Header;
 use \Luminova\Logger\Logger;
-use \Luminova\Errors\ErrorHandler;
 use \Luminova\Debugger\Performance;
+use \Luminova\Exceptions\{ErrorCode, FileException};
+use function \Luminova\Funcs\root;
 
 final class Luminova 
 {
@@ -32,7 +31,7 @@ final class Luminova
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.6.7';
+    public const VERSION = '3.6.9';
 
     /**
      * Framework version name.
@@ -91,14 +90,14 @@ final class Luminova
     /**
      * Controller class information.
      * 
-     * @var array<string,string> $classMetadata
+     * @var array<string,string> $routedClassMetadata
      */
-    private static array $classMetadata = [
+    private static array $routedClassMetadata = [
         'filename'    => null,
         'uri'         => null,
         'namespace'   => null,
         'method'      => null,
-        'attrFiles'   => 0,
+        'controllers' => 0,
         'cache'       => false,
         'staticCache' => false,
     ];
@@ -135,7 +134,9 @@ final class Luminova
      */
     public static final function version(bool $integer = false): string|int
     {
-        return $integer ? (int) \Luminova\Funcs\strict(self::VERSION, 'int') : self::VERSION;
+        return $integer 
+            ? (int) \Luminova\Common\Helpers::toStrictInput(self::VERSION, 'int') 
+            : self::VERSION;
     }
 
     /**
@@ -148,78 +149,11 @@ final class Luminova
      */
     public static final function profiling(string $action, ?array $context = null): void
     {
-        if(!PRODUCTION && env('debug.show.performance.profiling', false)){
+        if((!PRODUCTION || STAGING) && env('debug.show.performance.profiling', false)){
             ($action === 'start')
                 ? Performance::start() 
                 : Performance::stop(null, $context);
         }
-    }
-
-    /**
-     * Registers the global error and shutdown handlers.
-     * 
-     * Sets up the application's error handling system to catch PHP errors and 
-     * handle fatal shutdown events via `shutdown()` for graceful fallback.
-     * 
-     * @return void
-     */
-    public static function initialize(): void 
-    {
-        set_error_handler([self::class, 'handle']);
-        register_shutdown_function([self::class, 'shutdown']);
-    }
-
-    /**
-     * Get error logging level.
-     * 
-     * @param string|int $errno The error code.
-     * 
-     * @return string Return error log level by error code.
-     */
-    public static function getLevel(string|int $errno): string 
-    {
-        return match ($errno) {
-            E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR => 'critical',
-            E_WARNING, E_CORE_WARNING, E_COMPILE_WARNING, E_USER_WARNING => 'warning',
-            E_PARSE => 'emergency',
-            E_NOTICE, E_USER_NOTICE => 'notice',
-            E_DEPRECATED, E_USER_DEPRECATED => 'info',
-            E_RECOVERABLE_ERROR => 'error',
-            E_ALL, 0 => 'exception',
-            default => 'php_error'
-        };
-    }
-
-    /**
-     * Display system errors based on the given error.
-     *
-     * This method includes an appropriate error view based on the environment and request type.
-     *
-     * @param ErrorHandler|null $stack The error stack containing errors to display.
-     * 
-     * @return void
-     */
-    private static function display(?ErrorHandler $stack = null): void 
-    {
-        [$isTraceable, $view, $path] = self::errRoute($stack);
-        $isCommand = $view === 'cli.php';
-
-        // Get tracer for php error if not available
-        if($isTraceable || SHOW_DEBUG_BACKTRACE){
-            ErrorHandler::setBacktrace(debug_backtrace(), true);
-        }
-        
-        if (!$isCommand) {
-            Header::clearOutputBuffers();
-        }
-
-        if(file_exists($path . $view)){
-            include_once $path . $view;
-            return;
-        }
-
-        // Give up and output basic issue message
-        ErrorHandler::notify($isCommand);
     }
 
     /**
@@ -245,7 +179,9 @@ final class Luminova
         $script = str_replace('\\', '/', $script);
         $lastSlash = strrpos($script, '/');
         
-        return self::$base = ($lastSlash > 0) ? substr($script, 0, $lastSlash) . '/' : '/';
+        return self::$base = ($lastSlash > 0) 
+            ? substr($script, 0, $lastSlash) . '/' 
+            : '/';
     }
 
     /**
@@ -275,17 +211,7 @@ final class Luminova
             $path = ltrim($path, 'public/');
         }
 
-        if (PRODUCTION) {
-            return rtrim(APP_URL, '/') . '/' . $path;
-        }
-
-        $host = $_SERVER['HTTP_HOST']
-            ?? $_SERVER['HOST']
-            ?? $_SERVER['SERVER_NAME']
-            ?? $_SERVER['SERVER_ADDR']
-            ?? 'localhost';
-
-        return URL_SCHEME . '://' . $host . '/' . $path;
+        return \Luminova\Funcs\start_url($path);
     }
 
     /**
@@ -315,11 +241,18 @@ final class Luminova
     }
 
     /**
-     * Get the current view segments as array.
+     * Get the URI segments as an array.
      * 
-     * Breaks the request URI into an array of individual segments.
+     * Splits the request URI into individual segments. 
+     * Automatically removes the "public" prefix if it appears at the start of the URI.
      *
-     * @return array<int,string> Return URI segments (e.g., `['products', 'view', '10']`)
+     * Examples:
+     * - `/public/foo/bar` → `['foo', 'bar']`
+     * - `/public` → `['']`
+     * - `/products/view/10` → `['products', 'view', '10']`
+     * - `/` → `['']`
+     *
+     * @return array<int,string> Return an array of URI segments.
      */
     public static function getSegments(): array
     {
@@ -329,32 +262,57 @@ final class Luminova
             return [''];
         }
 
-        $parts = explode('/', trim($segments, '/'));
+        $segments = trim($segments, '/');
 
-        // Remove "public" segment if present
-        $index = array_search('public', $parts);
-
-        if ($index !== false) {
-            array_splice($parts, $index, 1);
+        if($segments === 'public'){
+            return [''];
         }
 
-        return $parts;
+        if (str_starts_with($segments, 'public/')) {
+            $segments = substr($segments, 7);
+        }
+
+        if ($segments === '') {
+            return [''];
+        }
+
+        return explode('/', $segments);
     }
 
     /**
-     * Generate a unique cache identifier for the current request URL.
+     * Generate a unique URL based cache key for the current request.
      *
-     * Normalizes the request method and URI, strips extensions if configured,
-     * and converts into a hashed string safe for storage and retrieval.
+     * This method creates a normalized identifier for caching based on:
+     * - The HTTP request method (`GET`, `POST`, etc.).
+     * - The request URI (path and optionally query parameters).
+     * - Stripping file extensions for static cache formats if configured.
+     * - Replacing special URL characters with dashes for safe storage.
+     *
+     * The resulting string is hashed with MD5 to produce a fixed-length cache ID.
+     *
+     * @param string|null $salt Optional cache salt to include in key hashing (default: null).
+     * @param bool|null $uriQueryParams Whether to include query parameters in the cache ID (default: false).
+     *                  If set to null, it uses default from `env(page.cache.query.params)`
+     *                  If explicitly set, it overrides the default env.
+     *
+     * @return string Return a unique MD5 hash representing the cache ID for this request.
+     *
+     * @example - Example:
+     * ```php
+     * $cacheId = Luminova::getCacheId(); // e.g., "d41d8cd98f00b204e9800998ecf8427e"
      * 
-     * @return string Return a Unique MD5 cache ID.
+     * $cacheIdWithoutQuery = Luminova::getCacheId(uriQuery: false); // ignores query string
+     * ```
      */
-    public static function getCacheId(): string 
+    public static function getCacheId(?string $salt = null, ?bool $uriQuery = null): string 
     {
-        $method = $_SERVER['REQUEST_METHOD'] ?? 'CLI';
-        $uri = $_SERVER['REQUEST_URI'] ?? 'index';
+        $salt ??= '';
+        $uriQuery ??= (bool) env('page.cache.query.params', false);
+        $uri = ($_SERVER['REQUEST_URI'] ?? 'index');
+        $id = ($_SERVER['REQUEST_METHOD'] ?? 'CLI');
+        $id .= ($uriQuery ? $uri : (parse_url($uri, PHP_URL_PATH) ?: ''));
 
-        $url = strtr($method . $uri, [
+        $id = strtr($id, [
             '/' => '-', 
             '?' => '-', 
             '&' => '-', 
@@ -365,12 +323,11 @@ final class Luminova
         // Remove file extension for static cache formats
         // To avoid creating 2 versions of same cache
         // While serving static content (e.g, .html).
-
-        if (($types = env('page.caching.statics', false)) !== false) {
-            $url = preg_replace('/\.(' . $types . ')$/i', '', $url);
+        if (($types = env('page.caching.statics', null)) !== null) {
+            $id = preg_replace('/\.(' . $types . ')$/i', '', $id);
         }
 
-        return md5($url);
+        return md5($salt . $id);
     }
 
     /**
@@ -428,6 +385,32 @@ final class Luminova
     }
 
     /**
+     * Check if the given input can be called as a function or method.
+     * 
+     * This method detects standard callables, closures, function names, 
+     * and array-style class/method pairs. If `$strict` is true, 
+     * it will also verify that the class in an array callable exists.
+     *
+     * @param mixed $input The value to check (string, array, closure, object, etc.).
+     * @param bool $strict If true, array callables are valid only if the class exists.
+     *
+     * @return bool Return true if the input is callable, false otherwise.
+     */
+    public static function isCallable(mixed $input, bool $strict = false): bool
+    {
+        if (is_callable($input)) {
+            return true;
+        }
+
+        if (is_array($input) && count($input) === 2) {
+            [$class, $method] = $input;
+            return $strict ? class_exists($class) && method_exists($class, $method) : true;
+        }
+
+        return false;
+    }
+
+    /**
      * Filters a full file path by removing everything before the first known system directory.
      * 
      * Useful for hiding sensitive server paths when displaying errors or logs. The resulting path
@@ -454,6 +437,45 @@ final class Luminova
     }
 
     /**
+     * Check if file has read or write permission is granted.
+     * 
+     * @param string $permission File access permission.
+     * @param string|null $file File name or file path to check permissions (default: writeable dir).
+     * @param bool $throw Indicate whether to throws an exception if permission is not granted.
+     * 
+     * @return bool Returns true if permission is granted otherwise false.
+     * @throws FileException If permission is not granted and quiet is not passed true.
+     */
+    public static function permission(string $permission = 'rw', ?string $file = null, bool $throw = false): bool
+    {
+        $file ??= root('writeable');
+        
+        if ($permission === 'rw' && (!is_readable($file) || !is_writable($file))) {
+            $error = "Read and Write permission denied for '%s, please grant 'read' and 'write' permission.";
+            $code = ErrorCode::READ_WRITE_PERMISSION_DENIED;
+        } elseif ($permission === 'r' && !is_readable($file)) {
+            $error = "Read permission denied for '%s', please grant 'read' permission.";
+            $code = ErrorCode::READ_PERMISSION_DENIED;
+        } elseif ($permission === 'w' && !is_writable($file)) {
+            $error = "Write permission denied for '%s', please grant 'write' permission.";
+            $code = ErrorCode::WRITE_PERMISSION_DENIED;
+        } else {
+            return true;
+        }
+
+        if(!$throw){
+            return false;
+        }
+
+        if (PRODUCTION) {
+            Logger::dispatch('critical', sprintf($error, $file));
+            return false;
+        }
+
+        throw new FileException(sprintf($error, $file), $code);
+    }
+
+    /**
      * Check whether a class or object has a property, with optional static-only filtering.
      *
      * Uses `ReflectionClass` when `$staticOnly` is true to determine if a property is declared as `static`.
@@ -463,7 +485,7 @@ final class Luminova
      * @param string $property The property name to check for.
      * @param bool $staticOnly If true, only returns true for static properties (default: false).
      *
-     * @return bool True if the property exists (and is static if required), false otherwise.
+     * @return bool Returns true if the property exists (and is static if required), false otherwise.
      *
      * @example - Usages:
      * ```php
@@ -477,16 +499,27 @@ final class Luminova
         bool $staticOnly = false
     ): bool 
     {
-        if (!$staticOnly) {
-            return property_exists($objectOrClass, $property);
+        if (property_exists($objectOrClass, $property)) {
+            return true;
         }
 
-        try {
-            $ref = new ReflectionClass($objectOrClass);
-            return $ref->hasProperty($property) && $ref->getProperty($property)->isStatic();
-        } catch (Throwable) {
-            return false;
+        if($staticOnly){
+            try {
+                $ref = new ReflectionClass($objectOrClass);
+
+                if(!$ref->hasProperty($property)){
+                    return false;
+                }
+
+                $prop = $ref->getProperty($property);
+
+                return $prop->isStatic() && ($prop->isPublic() || $prop->isProtected());
+            } catch (Throwable) {
+                return false;
+            }
         }
+
+        return false;
     }
 
     /**
@@ -514,123 +547,12 @@ final class Luminova
 
         if (str_contains($class, ',')) {
             return implode(', ', array_map(function (string $ns): string {
-                $ns = trim($ns, " \t\n\r\0\x0B\\");
-                return basename(str_replace('\\', '/', $ns));
+                return basename(str_replace('\\', '/', trim($ns, " \t\n\r\0\x0B\\")));
             }, explode(',', $class)));
         }
 
         $class = ltrim($class, '\\');
         return basename(str_replace('\\', '/', $class));
-    }
-
-    /**
-     * Handles standard PHP runtime errors.
-     * 
-     * This method is registered as the global error handler and is called automatically
-     * whenever a recoverable PHP error occurs (e.g. warnings, notices, deprecations).
-     * 
-     * It checks the current error reporting level to determine if the error should be handled.
-     * If so, it logs the error message using a structured format and marks it as handled.
-     *
-     * @param int    $errno    The level/severity of the error raised.
-     * @param string $errstr   The error message.
-     * @param string $errFile  The full path to the file where the error occurred.
-     * @param int    $errLine  The line number in the file where the error occurred.
-     * 
-     * @return bool Returns true if the error was handled (i.e. not suppressed), false otherwise.
-     */
-    public static function handle(int $errno, string $errstr, string $errFile, int $errLine): bool 
-    {
-        if (error_reporting() === 0) {
-            return false;
-        }
-
-        $errorCode = ErrorHandler::getErrorCode($errstr, $errno);
-        self::log(self::getLevel($errno), sprintf(
-            "[%s (%s)] %s File: %s Line: %s.", 
-            ErrorHandler::getErrorName($errorCode),
-            (string) $errorCode,
-            $errstr,
-            self::filterPath($errFile),
-            (string) $errLine
-        ));
-
-        return true;
-    }
-
-    /**
-     * Final shutdown handler for fatal or last-minute errors.
-     * 
-     * This method is called when the script terminates and an error has occurred.
-     * It handles fatal errors gracefully by:
-     * - Determining if the error is fatal.
-     * - Displaying a custom error page if needed.
-     * - Logging the error details if in production or not fatal.
-     * - Forwarding the error data to `Application::onShutdown()`.
-     *
-     * @return void
-     */
-    public static function shutdown(): void 
-    {
-        if (($error = error_get_last()) === null || !isset($error['type'])) {
-            return;
-        }
-
-        // If handled by developer in application
-        // Then terminate handling here.
-        if(!Application::onShutdown($error)){
-            return;
-        }
-
-        $isFatal = self::isFatal($error['type']);
-        $isDisplay = ini_get('display_errors');
-        $errorCode = ErrorHandler::getErrorCode($error['message'], $error['type']);
-        $errName = ErrorHandler::getErrorName($errorCode);
-
-        // If error display is not enabled or error occurred on production
-        // Display custom error page.
-        if(!$isDisplay || PRODUCTION){
-            $stack = $isFatal ? new ErrorHandler(
-                $error['message'], 
-                $errorCode,
-                null,
-                $error['file'],
-                $error['line'],
-                $errName
-            ) : null;
-
-            self::display($stack);
-        }
-
-        // If message is not empty and is not fatal error or on projection
-        // Log the error message.
-        if(!$isFatal || PRODUCTION){
-            self::log(self::getLevel($error['type']), sprintf(
-                "[%s (%s)] %s File: %s Line: %s.", 
-                $errName,
-                (string) $errorCode,
-                $error['message'],
-                $error['file'],
-                (string) $error['line']
-            ));
-        }
-    }
-
-    /**
-     * Check if error is fatal.
-     * 
-     * @param string|int $errno The error code.
-     * 
-     * @return bool Return true if is fatal, otherwise false.
-     * 
-     * - Fatal run-time errors.
-     * - Fatal errors that occur during PHP's initial startup.
-     * - Fatal compile-time errors.
-     * - Compile-time parse errors.
-     */
-    public static function isFatal(string|int $errno): bool 
-    {
-        return in_array($errno, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true);
     }
 
     /**
@@ -644,7 +566,7 @@ final class Luminova
      * - `uri`:         (string|null) The matched route URI.
      * - `namespace`:   (string|null) The fully qualified controller class name.
      * - `method`:      (string|null) The controller class method that was executed.
-     * - `attrFiles`:   (int) The number of controllers was discovered via attribute routing.
+     * - `controllers`:   (int) The number of controllers was discovered via attribute routing.
      * - `cache`:       (bool) Whether this route was cached.
      * - `staticCache`: (bool) Whether this route was serve from static cache.
      *
@@ -654,14 +576,14 @@ final class Luminova
      */
     public static function getClassMetadata(): array
     {
-        return self::$classMetadata;
+        return self::$routedClassMetadata;
     }
 
     /**
      * Sets or updates a single metadata entry for the routed controller class.
      *
      * Common keys include:
-     * - `filename`, `uri`, `namespace`, `method`, `attrFiles`, `cache`, `staticCache`
+     * - `filename`, `uri`, `namespace`, `method`, `controllers`, `cache`, `staticCache`
      * 
      * @param string $key Metadata key (e.g., 'namespace', 'method').
      * @param mixed  $value Corresponding value to assign.
@@ -672,7 +594,7 @@ final class Luminova
      */
     public static function addClassMetadata(string $key, mixed $value): void
     {
-        self::$classMetadata[$key] = $value;
+        self::$routedClassMetadata[$key] = $value;
     }
 
     /**
@@ -681,7 +603,7 @@ final class Luminova
      * This method replaces existing keys with the provided ones.
      * 
      * All expected keys are:
-     * - `filename`, `uri`, `namespace`, `method`, `attrFiles`, `cache`, `staticCache`
+     * - `filename`, `uri`, `namespace`, `method`, `controllers`, `cache`, `staticCache`
      *
      * @param array<string,mixed> $metadata An associative array Key-value pairs of controller routing metadata.
      *
@@ -691,94 +613,9 @@ final class Luminova
      */
     public static function setClassMetadata(array $metadata): void
     {
-        self::$classMetadata = array_replace(
-            self::$classMetadata, 
+        self::$routedClassMetadata = array_replace(
+            self::$routedClassMetadata, 
             $metadata
         );
-    }
-
-    /**
-     * Resolves the appropriate error view based on application state and context.
-     *
-     * @param ErrorHandler|null $stack The current error handler stack, if available.
-     * 
-     * @return array{0:bool,1:string,2:string} 
-     *         Returns an array containing:
-     *         [0] bool   - Whether a tracer-specific view was selected.
-     *         [1] string - The view file name to render.
-     *         [2] string - The absolute path to the error views directory.
-     */
-    private static function errRoute(?ErrorHandler $stack): array
-    {
-        $path = APP_ROOT . 'app/Errors/Defaults/';
-
-        if (defined('IS_UP') && PRODUCTION) {
-            if (env('logger.mail.logs')) {
-                return [true, 'mailer.php', $path];
-            } 
-            
-            if (env('logger.remote.logs')) {
-                return [true, 'remote.php', $path];
-            }
-        }
-
-        $view = match (true) {
-            self::isCommand() => 'cli.php',
-            self::isApiPrefix(true) => defined('IS_UP')
-                ? env('app.api.prefix', 'api') . '.php'
-                : 'api.php',
-            default => ($stack instanceof ErrorHandler) ? 'errors.php' : 'info.php',
-        };
-
-        return [false, $view, $path];
-    }
-
-    /**
-     * Gracefully log error messages.
-     * 
-     * Logs messages using the internal logger if the application is marked as up (IS_UP),
-     * or writes to a file-based fallback log if not.
-     *
-     * @param string $level   The log level (e.g. error, warning, info).
-     * @param string $message The log message to write.
-     * 
-     * @return void
-     */
-    private static function log(string $level, string $message): void 
-    {
-        if (defined('IS_UP')) {
-            Logger::dispatch($level, $message);
-            return;
-        }
-
-        $path = __DIR__ . '/../writeable/logs/';
-        $filename = "{$path}{$level}.log";
-
-        if (!is_dir($path) && !@mkdir($path, 0777, true) && !is_dir($path)) {
-            return;
-        }
-
-        $formatted = sprintf('[%s] [%s] [Boot::Fallback] %s', 
-            strtoupper($level),
-            date('Y-m-d\TH:i:sP'),
-            $message
-        );
-
-        if (@file_put_contents($filename, $formatted . PHP_EOL, FILE_APPEND | LOCK_EX) === false) {
-            @chmod($filename, 0666);
-        }
-    }
-
-    /** 
-     * Trim file directory both sides.
-     *
-     * @param string $path The path to trim.
-     *
-     * @return string Return trimmed path (e.g, `foo/bar/`).
-     * @internal
-     */
-    public static function bothTrim(string $path): string 
-    {
-        return trim($path, TRIM_DS) . DIRECTORY_SEPARATOR;
     }
 }
