@@ -11,7 +11,7 @@
 
 # Luminova PHP Framework
 
-Luminova is a modern, lightweight, and modular PHP 8+ framework that brings simplicity and power together. Designed with **MVC** and **HMVC** architecture in mind, Luminova offers native PHP templating, support for external engines like Twig and Smarty, and a pragmatic development experience without unnecessary complexity.
+Luminova is a modern, lightweight, and modular PHP 8+ framework that brings simplicity and power together. Designed with **MVC** and **HMVC** architecture in mind, Luminova offers native PHP templating, support for external engines like Twig and Smarty, and a pragmatic development experience without unnecessary complexity. 
 
 ---
 
