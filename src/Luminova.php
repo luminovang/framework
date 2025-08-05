@@ -275,17 +275,7 @@ final class Luminova
             $path = ltrim($path, 'public/');
         }
 
-        if (PRODUCTION) {
-            return rtrim(APP_URL, '/') . '/' . $path;
-        }
-
-        $host = $_SERVER['HTTP_HOST']
-            ?? $_SERVER['HOST']
-            ?? $_SERVER['SERVER_NAME']
-            ?? $_SERVER['SERVER_ADDR']
-            ?? 'localhost';
-
-        return URL_SCHEME . '://' . $host . '/' . $path;
+        return \Luminova\Funcs\start_url($path);
     }
 
     /**

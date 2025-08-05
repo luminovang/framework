@@ -457,12 +457,17 @@ function locale(?string $locale = null): string|bool
 /**
  * Get the start URL with an optional route path.
  * 
- * This function will include hostname port (e.g, `example.com:8080`) if port available.
+ * Automatically builds a full or relative URL depending on environment and the `$relative` flag.
+ * Includes host and port for development servers when needed.
  * 
  * @param string $route Optional route URI path to append to the start URL (default: null).
+ * @param bool $relative If true, returns a relative URL instead of absolute.
  * 
- * @return string Return the generated start URL of your project pointing to optional route or path.
+ * @return string Return the constructed URL (absolute or relative), with optionally pointing to a route or path.
  * 
+ * > This function will include hostname port (e.g, `example.com:8080`) if port available.
+ * > And ensure URL always start from front controller.
+ *
  * @example - Example:
  * 
  * Assuming your application path is like: `/Some/Path/To/htdocs/my-project-path/public/`.
@@ -481,10 +486,22 @@ function locale(?string $locale = null): string|bool
  * **In Production:**
  * - http://example.com:8080/about
  * - http://example.com/about
+ * 
+ * @example - Relative URL Example:
+ * 
+ * ```php
+ * echo start_url('about', true); 
+ * // /my-project-path/public/about
+ * // /about
+ * ```
  */
-function start_url(?string $route = null): string
+function start_url(?string $route = null, bool $relative = false): string
 {
-    $route = ($route === null) ? '/' : '/' . \ltrim($route, '/');
+    $route = (!$route ? '/' : '/' . \ltrim($route, '/'));
+
+    if ($relative) {
+        return PRODUCTION ? $route : '/' . CONTROLLER_SCRIPT_PATH . $route;
+    }
 
     if(PRODUCTION){
         return APP_URL . $route;
@@ -502,25 +519,28 @@ function start_url(?string $route = null): string
 /**
  * Convert an application-relative path to an absolute URL.
  * 
- * @param string $path The relative path to convert to an absolute URL.
+ * @param string $path The path to create absolute URL from.
  * 
  * @return string Return the absolute URL of the specified path.
+ * @see start_url()
  * 
  * @example - Example:
  * 
- * Assuming your project path is: `/Applications/XAMPP/htdocs/project-path/public/` and `asset/files/foo.text`.
+ * Assuming your project path is: `/Path/To/htdocs/project-path/public/`.
+ * And assets path like: `assets/files/foo.text`.
  * 
  * ```php
- * echo absolute_url('asset/files/foo.text');
+ * echo absolute_url('/Path/To/htdocs/project-path/public/assets/files/foo.text');
  * ```
  * 
  * It returns: 
  * 
  * **On Development:**
- * http://localhost/project-path/public/asset/files/foo.text
+ * http://localhost/project-path/public/assets/files/foo.text
  * 
  * **In Production:**
- * http://example.com/asset/files/foo.text
+ * http://example.com/assets/files/foo.text
+ * 
  */
 function absolute_url(string $path): string
 {
