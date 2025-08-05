@@ -13,6 +13,7 @@ parameters:
 		- vendor/*
 		- builds/*
 		- dump/*
+		- tests/*
 	checkMissingIterableValueType: false
 	checkGenericClassInNonGenericObjectType: false
 	checkMissingCallableSignature: true

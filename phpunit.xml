@@ -18,11 +18,9 @@
         <include>
             <directory suffix=".php">src</directory>
         </include>
-
         <exclude>
             <directory>vendor</directory>
         </exclude>
-
         <report>
             <clover outputFile="builds/logs/clover.xml"/>
         </report>
