@@ -24,7 +24,7 @@ use \Luminova\Http\{Request, Network};
 use \Luminova\Foundation\Module\Caller;
 use \Luminova\Foundation\Module\Service;
 use \Luminova\Foundation\Core\Functions;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Luminova\Component\Languages\Translator;
 use \Luminova\Notifications\Firebase\Notification;
 use \Luminova\Exceptions\{AppException, RuntimeException};
@@ -39,7 +39,7 @@ use \Luminova\Exceptions\{AppException, RuntimeException};
  * @method static Modules             modules(bool $shared = true)                               PSR-4 Module autoloader and file importer class.
  * @method static Translator          language(?string $locale = null, bool $shared = true)      Application translation class.
  * @method static Logger              logger(bool $shared = true)                                PSR logger class.
- * @method static FileManager         fileManager(bool $shared = true)                           File manager class.
+ * @method static Filesystem         filesystem(bool $shared = true)                           File manager class.
  * @method static Validation          validate(bool $shared = true)                              Input validation class.
  * @method static Response            response(int $status = 200, array $headers = [], bool $shared = true)           Render response class.
  * @method static Request             request(bool $shared = true)                               HTTP Request class.
@@ -71,7 +71,8 @@ final class Factory
         'modules'       => Modules::class,
         'language'      => Translator::class,
         'logger'        => Logger::class,
-        'fileManager'   => FileManager::class,
+        'fileManager'   => Filesystem::class,
+        'filesystem'    => Filesystem::class,
         'validate'      => Validation::class,
         'response'      => Response::class,
         'request'       => Request::class,

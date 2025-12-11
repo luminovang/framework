@@ -16,7 +16,7 @@ use \Luminova\Exceptions\JsonException;
 use \Luminova\Http\{Header, Helper\Encoder};
 use \Luminova\Interface\ViewResponseInterface;
 use \Luminova\Exceptions\Http\ResponseException;
-use \Luminova\Utility\Storage\{FileManager, FileDelivery};
+use \Luminova\Utility\Storage\{Filesystem, FileDelivery};
 use function \Luminova\Funcs\{string_length, http_status_header};
 
 class Response implements ViewResponseInterface
@@ -178,13 +178,15 @@ class Response implements ViewResponseInterface
      */
     public function send(bool $validate = false): void 
     {
+        Header::clearOutputBuffers('all');
+        Header::setOutputHandler(withHandler: false);
+
         if($validate){
             Header::validate($this->headers, $this->status);
         }else{
             Header::sendStatus($this->status);
             Header::send(array_replace(Header::getDefault(), $this->headers));
         }
-
         Header::clearOutputBuffers('all');
     }
 
@@ -429,7 +431,7 @@ class Response implements ViewResponseInterface
         int $delay = 0
     ): bool 
     {
-        return FileManager::download(
+        return Filesystem::download(
             $fileOrContent, 
             $name, 
             $headers,

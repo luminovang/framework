@@ -16,7 +16,7 @@ use \Luminova\Base\Console;
 use \Luminova\Command\Utils\Color;
 use \Luminova\Foundation\Module\Caller;
 use \Luminova\Interface\DatabaseInterface;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Luminova\Database\{Seeder, Builder, Migration};
 use function \Luminova\Funcs\{
     root,
@@ -161,7 +161,7 @@ class Database extends Console
         }
         
         if ($class === false || empty($class)) {
-            FileManager::remove($backup, false, $deleted);
+            Filesystem::remove($backup, false, $deleted);
             
             if ($deleted > 0) {
                 $this->term->writeln("Success: '{$deleted}' {$context} lock file(s) deleted.", 'white', 'green');

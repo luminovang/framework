@@ -13,7 +13,7 @@ namespace Luminova\Utility\Ai\Models;
 use \CurlFile;
 use \Throwable;
 use \Luminova\Http\Client\Novio;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Luminova\Interface\{AIModelInterface, LazyObjectInterface};
 use function \Luminova\Funcs\{root, absolute_url, write_content};
 use \Luminova\Exceptions\{AppException, JsonException, RuntimeException};
@@ -359,7 +359,7 @@ class OpenAI implements AIModelInterface, LazyObjectInterface
             if(write_content($destination, $content)){
                 if(isset($options['symlink'])){
                     $symlink = rtrim($options['symlink'], TRIM_DS) . DIRECTORY_SEPARATOR . $filename;
-                    FileManager::symbolic($destination, $symlink);
+                    Filesystem::symbolic($destination, $symlink);
 
                     return absolute_url($symlink);
                 }

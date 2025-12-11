@@ -15,7 +15,7 @@ use \Luminova\Luminova;
 use \Luminova\Http\Header;
 use \Peterujah\NanoBlock\NanoImage;
 use \Luminova\Security\Encryption\Crypter;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Luminova\Exceptions\RuntimeException;
 use function \Luminova\Funcs\{root, get_mime};
 
@@ -99,7 +99,7 @@ final class FileDelivery
         }
 
         $filesize = self::cacheHeaders($headers, $basename, $filename, $expiry);
-        $read = FileManager::read(
+        $read = Filesystem::read(
             $handler, 
             $filesize, 
             $headers['Content-Type'],

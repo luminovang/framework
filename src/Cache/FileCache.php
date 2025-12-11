@@ -16,7 +16,7 @@ use \DateTimeInterface;
 use \Luminova\Base\Cache;
 use \Luminova\Logger\Logger;
 use \Luminova\Time\Timestamp;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Luminova\Exceptions\{AppException, CacheException, InvalidArgumentException};
 use function \Luminova\Funcs\{root, make_dir};
 
@@ -352,7 +352,7 @@ final class FileCache extends Cache
      */
     public function flush(): bool
     {
-        if(FileManager::remove($this->getRoot())){
+        if(Filesystem::remove($this->getRoot())){
             $this->items = [];
             return true;
         }
@@ -395,7 +395,7 @@ final class FileCache extends Cache
                 return false;
             }
 
-            $content = FileManager::getContent($filepath);
+            $content = Filesystem::getContent($filepath);
             if($content === false){
                 return false;
             }
@@ -416,7 +416,7 @@ final class FileCache extends Cache
                 }
 
                 if(is_writable($filepath)){
-                    return FileManager::write(
+                    return Filesystem::write(
                         $filepath, 
                         json_encode($items, JSON_THROW_ON_ERROR), 
                         LOCK_EX
@@ -475,7 +475,7 @@ final class FileCache extends Cache
                 return false;
             }
 
-            $content = FileManager::getContent($filepath);
+            $content = Filesystem::getContent($filepath);
 
             if($content === false){
                 return false;
@@ -518,7 +518,7 @@ final class FileCache extends Cache
                 return unlink($this->getPath());
             }
 
-            return FileManager::write(
+            return Filesystem::write(
                 $this->getPath(), 
                 json_encode($this->items[$this->storage], JSON_THROW_ON_ERROR), 
                 LOCK_EX

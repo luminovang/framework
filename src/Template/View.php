@@ -1846,7 +1846,7 @@ final class View implements LazyObjectInterface
         bool $async = false
     ): string|bool
     {
-        ob_start();
+        Header::setOutputHandler(true, false);
         $this->status = $status;
         $options = $this->parseOptions($options);
 
@@ -2026,7 +2026,7 @@ final class View implements LazyObjectInterface
              * @var \Luminova\Template\View $this None isolation mode.
              * @var \Luminova\Template\Engines\Scope<\Luminova\Template\View> $self Isolation mode.
              */
-            ob_start();
+            Header::setOutputHandler(true, false);
             $returned = include $_VIEW_FILEPATH;
 
             if(!PRODUCTION){

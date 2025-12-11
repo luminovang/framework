@@ -10,7 +10,7 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Luminova\Exceptions\DatabaseException;
 use \Luminova\Interface\{LazyObjectInterface, DatabaseInterface};
 use function \Luminova\Funcs\{root, make_dir};
@@ -95,7 +95,7 @@ final class Manager implements LazyObjectInterface
                 }
             }
 
-            if($count > 0 && FileManager::download($filepath, $filename, [], true)){
+            if($count > 0 && Filesystem::download($filepath, $filename, [], true)){
                 $count++;
             }
         }

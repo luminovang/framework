@@ -14,8 +14,8 @@ use \Exception;
 use \Luminova\Http\File;
 use \Luminova\Time\Time;
 use function \Luminova\Funcs\configs;
-use \Luminova\Utility\Storage\FileManager;
 use \Luminova\Exceptions\StorageException;
+use \Luminova\Utility\Storage\Filesystem as FS;
 use \Luminova\Utility\Storage\Adapters\Adapters;
 use \League\Flysystem\{Filesystem, FileAttributes, DirectoryAttributes};
 
@@ -24,9 +24,9 @@ class Storage extends Adapters
     /**
      * The filesystem instance.
      * 
-     * @var FileSystem|null $filesystem
+     * @var Filesystem|null $filesystem
      */
-    private ?FileSystem $filesystem = null;
+    private ?Filesystem $filesystem = null;
 
     /**
      * The configurations for different storage contexts.
@@ -226,7 +226,7 @@ class Storage extends Adapters
         $target = $this->config['base'] . ltrim($this->getDisk($target), TRIM_DS);
         $link = rtrim($this->config['assets'], TRIM_DS) . DIRECTORY_SEPARATOR . ltrim($link, TRIM_DS);
 
-        return FileManager::symbolic($target, $link);
+        return FS::symbolic($target, $link);
     }
 
     /**
@@ -384,7 +384,7 @@ class Storage extends Adapters
         try {
             $name ??= basename($filename);
 
-            return FileManager::download($this->read($filename, $steam), $name, $headers);
+            return FS::download($this->read($filename, $steam), $name, $headers);
             
         } catch (Exception $e) {
             StorageException::throwException($e->getMessage(), $e->getCode(), $e);
@@ -515,7 +515,9 @@ class Storage extends Adapters
             return self::dirExist($filename);
         }
 
-        throw new StorageException('Invalid argument type "' . $type . '" was specified, allowed types are "file" or "dir');
+        throw new StorageException(
+            sprintf('Invalid argument type "%s" was specified, allowed types are "file" or "dir', $type)
+        );
     }
 
     /**
@@ -713,7 +715,7 @@ class Storage extends Adapters
      * 
      * @param string $file The name file to prepend.
      * 
-     * @return string Full file location.
+     * @return string Returns the full file location.
      */
     private function getDisk(string $file): string 
     {

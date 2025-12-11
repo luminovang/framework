@@ -13,7 +13,7 @@ namespace Luminova\Utility\Storage;
 use \Throwable;
 use \SplFileObject;
 use \Luminova\Http\File;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Luminova\Exceptions\StorageException;
 use function \Luminova\Funcs\make_dir;
 
@@ -67,7 +67,7 @@ final class Uploader
         if ($uploaded) {
             $file->free();
             if($symlink !== null){
-                FileManager::symbolic($destination, $symlink);
+                Filesystem::symbolic($destination, $symlink);
             }
 
             $file->setMessage("File uploaded successfully to: {$destination}", UPLOAD_ERR_OK);
@@ -111,7 +111,7 @@ final class Uploader
             $file->free();
 
             if($symlink !== null){
-                FileManager::symbolic($destination, $symlink);
+                Filesystem::symbolic($destination, $symlink);
             }
 
             $file->setMessage("File successfully moved to: {$destination}", UPLOAD_ERR_OK);
@@ -236,7 +236,7 @@ final class Uploader
         if (!$totalChunks || $chunkIndex === $totalChunks - 1) {
             if (rename($temp, $destination)) {
                 if ($symlink !== null) {
-                    FileManager::symbolic($destination, $symlink);
+                    Filesystem::symbolic($destination, $symlink);
                 }
     
                 $file->setMessage("File successfully uploaded to: {$destination}", UPLOAD_ERR_OK);
@@ -363,7 +363,7 @@ final class Uploader
             );
         }
 
-        if (!FileManager::isPath($path)) {
+        if (!Filesystem::isPath($path)) {
             throw new StorageException("Expected a directory path, but got: {$path}");
         }
 

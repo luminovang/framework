@@ -15,7 +15,7 @@ use \DateTimeInterface;
 use \Luminova\Luminova;
 use \Luminova\Http\Header;
 use \Luminova\Time\Timestamp;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use function \Luminova\Funcs\{make_dir, string_length};
 
 final class StaticCache
@@ -286,7 +286,7 @@ final class StaticCache
      */
     public function clear(?string $version = null): int 
     {
-        return FileManager::remove(
+        return Filesystem::remove(
             $this->getLocation() . 
             ($version ?? APP_VERSION) . 
             DIRECTORY_SEPARATOR
@@ -360,11 +360,11 @@ final class StaticCache
             }
         }
 
-        Header::clearOutputBuffers('all');
         Header::validate($this->getHeaders(true), $status);
-        Header::setOutputHandler(true);
 
         if($status === null){
+            Header::clearOutputBuffers('all');
+            Header::setOutputHandler(true);
             self::$cache['Func']();
         }
 
@@ -396,8 +396,7 @@ final class StaticCache
             return 404;
         }
 
-        Header::setOutputHandler(true);
-        ob_start();
+        Header::setOutputHandler(true, false);
         self::$cache['Func']();
         return ob_get_clean();
     }
@@ -438,7 +437,7 @@ final class StaticCache
         $headers['Content-Type'] = Header::getContentTypes($type);
         $headers['Content-Length'] = $length;
 
-        return FileManager::write(
+        return Filesystem::write(
             $path . $this->key . '.lmv.php', 
             "<?php function {$this->lockFunc}(string \$key): array|bool {\n"
             . " \$lock = " . var_export([$this->key => [

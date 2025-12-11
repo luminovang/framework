@@ -13,7 +13,7 @@ namespace Luminova\Base;
 use \DateTimeInterface;
 use \Luminova\Database\Builder;
 use \Luminova\Security\Validation;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Peterujah\NanoBlock\SearchController as SearchInstance;
 use \Luminova\Interface\{DatabaseInterface, LazyObjectInterface};
 use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
@@ -458,7 +458,7 @@ abstract class Model implements LazyObjectInterface
         }
 
         $path = root("/writeable/caches/filesystem/database/{$folder}/");
-        return FileManager::remove($path) > 0;
+        return Filesystem::remove($path) > 0;
     }
 
     /**

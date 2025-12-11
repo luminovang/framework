@@ -11,7 +11,7 @@
 namespace Luminova\Common;
 
 use \Luminova\Base\Configuration;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
 use function \Luminova\Funcs\{root, get_mime};
 
@@ -674,20 +674,20 @@ class Helpers
 		if (str_ends_with($destination, DIRECTORY_SEPARATOR) || !preg_match('/\.\w+$/', $destination)) {
 			$destination = root($destination);
 			
-			FileManager::mkdir($destination);
+			Filesystem::mkdir($destination);
 
 			do {
 				$filename = uniqid('bin_', true);
 				$filePath = "{$destination}{$filename}";
 			} while (file_exists($filePath));
 
-			return FileManager::write(
+			return Filesystem::write(
 				"{$filePath}." . self::getBinaryExtension($binary, $filePath), 
 				$binary
 			);
 		}
 
-		return FileManager::write($destination, $binary);
+		return Filesystem::write($destination, $binary);
 	}
 
 	/**
@@ -910,7 +910,7 @@ class Helpers
 		$destination = "{$destination}-hex";
 		$mime = get_mime($binaryData);
 
-		if($mime === false && FileManager::write($destination, $binaryData)){
+		if($mime === false && Filesystem::write($destination, $binaryData)){
 			$mime = get_mime($destination);
 			unlink($destination);
 		}

@@ -18,7 +18,6 @@ use \DateTimeImmutable;
 use \Luminova\Luminova;
 use \Luminova\Utility\IP;
 use \Luminova\Base\Cache;
-use \Luminova\Http\Header;
 use \Luminova\Cache\FileCache;
 use \Predis\Client as PredisClient;
 use \Psr\SimpleCache\CacheInterface;
@@ -625,10 +624,7 @@ class RateLimiter implements LazyObjectInterface
         $headers += $this->getHeaders();
 
         if(strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD'){
-            ob_start();
             response(429, $headers)->send();
-
-            Header::clearOutputBuffers();
             return STATUS_SUCCESS;
         }
 
@@ -639,8 +635,6 @@ class RateLimiter implements LazyObjectInterface
                 $message
             );
         }
-
-        Header::setOutputHandler(true);
 
         return match ($type) {
             'custom' => response(429, $headers)->render($message),
@@ -681,6 +675,7 @@ class RateLimiter implements LazyObjectInterface
             return;
         }
 
+        flush();
         usleep((int)($interval * 1_000_000));
     }
 

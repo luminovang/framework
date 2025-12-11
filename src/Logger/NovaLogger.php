@@ -23,7 +23,7 @@ use \Luminova\Logger\LogLevel;
 use \Luminova\Http\Client\Novio;
 use \Luminova\Utility\Email\Mailer;
 use function \Luminova\Funcs\{root, make_dir};
-use \Luminova\Utility\Storage\{Archive, FileManager};
+use \Luminova\Utility\Storage\{Archive, Filesystem};
 use \Luminova\Exceptions\{AppException, FileException, InvalidArgumentException};
 
 class NovaLogger extends AbstractLogger
@@ -384,7 +384,7 @@ class NovaLogger extends AbstractLogger
             ? '.json' 
             : $this->extension;
             
-        return FileManager::write(self::$path . "{$level}{$extension}", '', LOCK_EX);
+        return Filesystem::write(self::$path . "{$level}{$extension}", '', LOCK_EX);
     }
 
     /**
@@ -420,7 +420,7 @@ class NovaLogger extends AbstractLogger
     {
         $filepath = self::$path . "{$level}{$this->extension}";
 
-        if($this->maxSize && FileManager::size($filepath) >= (int) $this->maxSize){
+        if($this->maxSize && Filesystem::size($filepath) >= (int) $this->maxSize){
 
             if(!$this->autoBackup){
                 return $this->clear($level);
@@ -437,7 +437,7 @@ class NovaLogger extends AbstractLogger
                         return $this->clear($level);
                     }
                 }catch(FileException $e){
-                    FileManager::write(
+                    Filesystem::write(
                         $filepath, 
                         self::formatMessage(
                             $level, 
@@ -496,7 +496,7 @@ class NovaLogger extends AbstractLogger
                 ? trim($message, PHP_EOL)
                 : self::formatMessage($level, $message, $this->name, $context);
 
-            if(FileManager::write($path, $message . PHP_EOL, FILE_APPEND|LOCK_EX)){
+            if(Filesystem::write($path, $message . PHP_EOL, FILE_APPEND|LOCK_EX)){
                 return ($this->autoBackup && $this->maxSize) 
                     ? $this->backup($level) 
                     : true;
@@ -540,7 +540,7 @@ class NovaLogger extends AbstractLogger
             return false;
         }
 
-        return FileManager::write($path, $updated, LOCK_EX);
+        return Filesystem::write($path, $updated, LOCK_EX);
     }
 
     /**

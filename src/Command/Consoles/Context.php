@@ -11,7 +11,7 @@
 namespace Luminova\Command\Consoles;
 
 use \Luminova\Base\Console;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Luminova\Attributes\Internal\Compiler;
 use function \Luminova\Funcs\{
     root,
@@ -163,7 +163,7 @@ class Context extends Console
         $backup = root('/writeable/caches/routes/');
         $deleted = 0;
         
-        FileManager::remove($backup, false, $deleted);
+        Filesystem::remove($backup, false, $deleted);
         
         if ($deleted > 0) {
             $this->term->writeln("Success: '{$deleted}' cached attribute(s) was cleared.", 'white', 'green');

@@ -12,7 +12,7 @@ namespace Luminova\Foundation\Core;
 
 use \Luminova\Utility\IP;
 use \Luminova\Common\{Helpers, Maths};
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 
 /**
  * @deprecated 3.6.8 This class has been deprecated will be removed in future
@@ -39,11 +39,11 @@ abstract class Functions extends Helpers
     /**
      * Initialize or return a shared an instance of the Files class.
      *
-     * @return FileManager Returns a file class instance.
+     * @return Filesystem Returns a file class instance.
      */
-    public static final function files(): FileManager
+    public static final function files(): Filesystem
     {
-        return self::$instances['files'] ??= new FileManager();
+        return self::$instances['files'] ??= new Filesystem();
     }
 
     /**

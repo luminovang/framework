@@ -549,20 +549,22 @@ class Header implements LazyObjectInterface, Countable
     }
 
     /**
-     * Initializes the output buffer with the appropriate content encoding handler.
+     * Initializes the output buffer with the appropriate content-encoding handler.
      *
-     * This method detects supported content encodings (such as `gzip` or `deflate`)
-     * from client headers and applies the corresponding output handler for compression,
-     * if enabled and supported. Falls back to a custom or default handler when no match is found.
-     * 
+     * This method is a wrapper around `ob_start()`. It detects supported encodings
+     * (such as `gzip` or `deflate`) from the client’s request headers and applies
+     * the proper output handler when compression is enabled and supported. If no
+     * matching encoding is found, it falls back to a custom or default handler.
+     *
      * If output buffering is already active, it will not be restarted.
-     * 
-     * @param bool $clearIfSet Whether to clear output buffers if already set (default: false).
      *
-     * @return bool Returns true if output buffering is successfully started; false otherwise.
-     * @internal This method is intended for internal framework use only.
+     * @param bool $clearIfSet Whether to clear existing output buffers when one is already active (default: false).
+     * @param bool $withHandler Whether to apply an output handler (default: true).
+     *
+     * @return bool Returns true if a new output buffer is started, false otherwise.
+     * @internal For internal framework use only.
      */
-    public static function setOutputHandler(bool $clearIfSet = false): bool
+    public static function setOutputHandler(bool $clearIfSet = false, bool $withHandler = true): bool
     {
         if(!$clearIfSet && ob_get_level() > 0){
             return false;
@@ -572,13 +574,11 @@ class Header implements LazyObjectInterface, Countable
             self::clearOutputBuffers();
         }
 
-        if (!env('enable.encoding', true)) {
+        if (!$withHandler || !env('enable.encoding', true)) {
             return ob_start();
         }
 
-        $handler = $_SERVER['HTTP_ACCEPT_ENCODING'] 
-            ?? $_SERVER['HTTP_CONTENT_ENCODING'] 
-            ?? null;
+        $handler = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? null;
 
         if ($handler) {
             if (str_contains($handler, 'gzip')) {
@@ -592,7 +592,7 @@ class Header implements LazyObjectInterface, Countable
             if (str_contains($handler, 'deflate')) {
                 if (function_exists('ini_set')) {
                     ini_set('zlib.output_compression', 'On');
-                    ini_set('zlib.output_handler', 'deflate');
+                    //ini_set('zlib.output_handler', 'deflate');
                 }
 
                 return ob_start();

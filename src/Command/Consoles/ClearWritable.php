@@ -11,7 +11,7 @@
 namespace Luminova\Command\Consoles;
 
 use \Luminova\Base\Console;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use function \Luminova\Funcs\root;
 
 class ClearWritable extends Console
@@ -96,7 +96,7 @@ class ClearWritable extends Console
             return STATUS_ERROR;
         }
 
-        $file = trim(FileManager::toCompatible($file), TRIM_DS);
+        $file = trim(Filesystem::toCompatible($file), TRIM_DS);
         $path = root("/writeable/{$file}/");
         $name = basename($path);
 
@@ -136,7 +136,7 @@ class ClearWritable extends Console
         }        
 
         $deleted = 0;
-        @FileManager::remove($path, $removeParent, $deleted);
+        @Filesystem::remove($path, $removeParent, $deleted);
 
         if ($deleted > 0) {
             $this->term->success(sprintf('Successfully deleted %d items in "%s".', $deleted, $name));

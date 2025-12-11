@@ -25,7 +25,7 @@ use \Luminova\Security\Escaper;
 use \Luminova\Sessions\Session;
 use \Luminova\Foundation\Error\Guard;
 use \Luminova\Utility\String\Listifier;
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Luminova\Cache\{FileCache, MemoryCache};
 use \Luminova\Http\{Request, HttpCode, UserAgent};
 use \Luminova\Template\{Engines\Layout, Response};
@@ -1174,7 +1174,7 @@ function cookie(string $name, string $value = '', array $options = [], bool $sha
  * -   'logger'         `\Luminova\Logger\Logger`
  * -   'escaper'        `\Luminova\Security\Escaper`
  * -   'network'        `\Luminova\Http\Network`
- * -   'fileManager'    `\Luminova\Utility\Storage\FileManager`
+ * -   'Filesystem'    `\Luminova\Utility\Storage\Filesystem`
  * -   'validate'       `\Luminova\Security\Validation`
  * -   'response'       `\Luminova\Template\Response`
  * -   'request'        `\Luminova\Http\Request`
@@ -1502,7 +1502,7 @@ function lang(string $lookup, ?string $default = null, ?string $locale = null, a
  */
 function path(string $name): string
 {
-    return FileManager::path($name);
+    return Filesystem::path($name);
 }
 
 /**
@@ -1854,7 +1854,7 @@ function is_list(string $input): bool
  */
 function write_content(string $filename, mixed $content, int $flag = 0, $context = null): bool 
 {
-    return FileManager::write($filename, $content, $flag, $context);
+    return Filesystem::write($filename, $content, $flag, $context);
 }
 
 /**
@@ -1881,7 +1881,7 @@ function get_content(
     int $delay = 0
 ): string|bool 
 {
-    return FileManager::getContent($filename, $length, $offset, $useInclude, $context, $delay);
+    return Filesystem::getContent($filename, $length, $offset, $useInclude, $context, $delay);
 }
 
 /**
@@ -1897,7 +1897,7 @@ function get_content(
  */
 function make_dir(string $path, ?int $permissions = null, bool $recursive = true): bool 
 {
-    return FileManager::mkdir($path, $permissions ?? Files::$dirPermissions, $recursive);
+    return Filesystem::mkdir($path, $permissions ?? Files::$dirPermissions, $recursive);
 }
 
 /**
@@ -2055,7 +2055,7 @@ function is_dev_server(): bool
  */
 function is_blob(mixed $value): bool 
 {
-    return FileManager::isResource($value, 'stream');
+    return Filesystem::isResource($value, 'stream');
 }
 
 /**

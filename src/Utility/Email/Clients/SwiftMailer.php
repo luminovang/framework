@@ -10,7 +10,7 @@
  */
 namespace Luminova\Utility\Email\Clients;
 
-use \Luminova\Utility\Storage\FileManager;
+use \Luminova\Utility\Storage\Filesystem;
 use \Luminova\Interface\MailerInterface;
 use \Luminova\Exceptions\MailerException;
 use \Luminova\Utility\Email\Mailer;
@@ -272,7 +272,7 @@ class SwiftMailer implements MailerInterface
         string $disposition = 'attachment'
     ): bool {
         try {
-            if (!FileManager::isAccessible($path)) {
+            if (!Filesystem::isAccessible($path)) {
                 throw MailerException::rethrow('file_access', $path);
             }
 
