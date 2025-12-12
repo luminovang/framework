@@ -57,13 +57,6 @@ final class Encoder
     private static array $encoding = [];
 
 	/**
-	 * Output compression enable.
-	 *
-	 * @var bool|null $obCompression
-	 */
-	private static ?bool $obCompression = null;
-
-	/**
 	 * Save last response compression details.
 	 *
 	 * @var bool $withLastCompression

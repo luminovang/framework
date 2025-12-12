@@ -275,7 +275,7 @@ final class Schema implements LazyObjectInterface
             return $value;
         }
 
-        return rtrim($this->addQueryParams($value, $key), '/');
+        return rtrim($this->addQueryParams((string) $value, $key), '/');
     }
 
     /**
@@ -346,12 +346,12 @@ final class Schema implements LazyObjectInterface
      */
     public function getHeadTags(): string 
     {
-        $meta = '<meta name="keywords" content="' . $this->escape(implode(', ', (array) $this->getObject('keywords', []))) . '" />'
-            . '<meta name="description" content="' . $this->escape($this->getObject('description', '')) . '" />';
+        $meta = '<meta name="keywords" content="' . self::escape(implode(', ', (array) $this->getObject('keywords', []))) . '" />'
+            . '<meta name="description" content="' . self::escape($this->getObject('description', '')) . '" />';
 
         foreach ((array) $this->getObject('canonicals', []) as $canonical) {
-            $meta .= '<link rel="canonical" href="' . $this->escape(
-                $this->addQueryParams($canonical, 'canonicals')
+            $meta .= '<link rel="canonical" href="' . self::escape(
+                $this->addQueryParams((string) $canonical, 'canonicals')
             ) . '" />';
         }
 
@@ -367,11 +367,11 @@ final class Schema implements LazyObjectInterface
             $readingTime = $article['reading_time'] ?? null;
 
             if($publisher){
-                $meta .= '<meta property="article:publisher" content="' . $this->escape($publisher) . '" />';
+                $meta .= '<meta property="article:publisher" content="' . self::escape($publisher) . '" />';
             }
 
             if($readingTime){
-                $meta .= '<meta name="reading-time" content="' . $this->escape($readingTime) . '" />';
+                $meta .= '<meta name="reading-time" content="' . self::escape($readingTime) . '" />';
             }
 
             $meta .= '<meta property="article:published_time" content="' . $this->toDate($article['published_date'] ?? '') . '" />'
@@ -407,8 +407,8 @@ final class Schema implements LazyObjectInterface
         $image = $this->getObject('image', []);
         $organization = $this->getObject('organization', []);
         $webpage = $this->getObject('webpage.entities', []) ?? [];
-        $description = $this->escape($this->getObject('description', ''));
-        $orgDescription = $this->escape($organization['description'] ?? '');
+        $description = self::escape($this->getObject('description', ''));
+        $orgDescription = self::escape($organization['description'] ?? '');
         $defaultImage = $this->toImageUrl(
             $image['url'] ?? $image['thumbnail'] ?? ''
         );
@@ -667,7 +667,7 @@ final class Schema implements LazyObjectInterface
     ): array
     {
         $article = $this->getObject('article', []);
-        $description = $this->escape($article['description'] ?? $description);
+        $description = self::escape($article['description'] ?? $description);
         $keywords = $this->addKeywords($article['keywords'] ?? []);
         $author = $article['author'] ?? [];
         $thumbnail = $article['thumbnail'] 
@@ -779,7 +779,7 @@ final class Schema implements LazyObjectInterface
     ): array
     {
         $product = $this->getObject('product', []);
-        $description = $this->escape($product['description'] ?? $description);
+        $description = self::escape($product['description'] ?? $description);
         $keywords = $this->addKeywords($product['keywords'] ?? []);
         $offers = $product['offers'] ?? [];
         $thumbnail = $product['thumbnail'] ?? $imageUrl ?? null;
@@ -1054,7 +1054,10 @@ final class Schema implements LazyObjectInterface
                 continue;
             }
 
-            $clean = array_filter($item, fn(mixed $v) => !in_array($v, $this->filterValues, true));
+            $clean = array_filter(
+                $item, 
+                fn(mixed $v) => !in_array($v, $this->filterValues, true)
+            );
 
             if ($clean !== []) {
                 $graph[] = $clean;
@@ -1070,13 +1073,13 @@ final class Schema implements LazyObjectInterface
      * Converts special characters to HTML entities to prevent XSS attacks
      * when rendering dynamic content in HTML.
      *
-     * @param string $input The raw input string.
+     * @param string|float|int|bool|null $input The raw input string.
      * 
      * @return string Return the escaped string safe for HTML output.
      */
-    private function escape(?string $input): string 
+    private static function escape(string|float|int|bool|null $input): string 
     {
-        return $input 
+        return ($input && is_string($input))
             ? htmlspecialchars($input, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8', false)
             : (string) $input;
     }
@@ -1222,12 +1225,12 @@ final class Schema implements LazyObjectInterface
                     continue;
                 }
 
-                $attr .= $this->escape($key) . '="';
+                $attr .= self::escape($key) . '="';
 
                 if ($value === true) {
-                    $attr .=  $this->escape($key) . '" ';
+                    $attr .=  self::escape($key) . '" ';
                 } else {
-                    $attr .= $this->escape((string) $value) . '" ';
+                    $attr .= self::escape((string) $value) . '" ';
                 }
             }
 
@@ -1271,7 +1274,11 @@ final class Schema implements LazyObjectInterface
 
             if($property === 'image' && $isArray){
                 foreach($content as $key => $value){
-                    $value = $this->escape(is_array($value) ? implode(', ', $value) : $value);
+                    $value = self::escape(is_array($value) 
+                        ? implode(', ', $value) 
+                        : $value
+                    );
+
                     $idx = ":$key" ;
 
                     if($key === 'url'){
@@ -1295,7 +1302,7 @@ final class Schema implements LazyObjectInterface
                 $key = "fb:pages";
             }
 
-            $value = $this->escape($isArray ? implode(', ', $content) : $content);
+            $value = self::escape($isArray ? implode(', ', $content) : $content);
 
             $tag .= '<meta property="' . $key .'" content="'. $value .'" />';
         }
@@ -1409,7 +1416,7 @@ final class Schema implements LazyObjectInterface
                 '@type' => 'WebPage',
                 '@id' => rtrim($page['url'] ?? '', '/') . '/#webpage',
                 'name' => $page['name'] ?? '',
-                'description' => $this->escape($page['description'] ?? $orgDescription ?? ''),
+                'description' => self::escape($page['description'] ?? $orgDescription ?? ''),
                 'url' => $page['url'] ?? ''
             ];
 

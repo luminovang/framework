@@ -125,7 +125,7 @@ final class Converter
     ];
 
     /**
-     * Radius of the Earth in different units
+     * Radius of the Earth in different units.
      * 
      * @var array<string,float> EARTH_RADIUS
     */
@@ -953,7 +953,10 @@ final class Converter
 				$hex = trim(preg_replace('/[^0-9A-Fa-f]/', '', $matches[1]));
 
 				if (!ctype_xdigit($hex)) {
-					throw new RuntimeException("Invalid hexadecimal string: {$hex}", ErrorCode::INVALID);
+					throw new RuntimeException(
+                        "Invalid hexadecimal string: {$hex}", 
+                        ErrorCode::INVALID
+                    );
 				}				
 
 				if (strlen($hex) % 2 !== 0) {
@@ -961,8 +964,11 @@ final class Converter
 				}
 
 				$bin = hex2bin($hex);
+
 				if ($binary === false) {
-					throw new RuntimeException('hexadecimal to binary conversion failed.');
+					throw new RuntimeException(
+                        'hexadecimal to binary conversion failed.'
+                    );
 				}
 
 				$binary .= $bin;

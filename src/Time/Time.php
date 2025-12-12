@@ -509,10 +509,10 @@ class Time extends DateTimeImmutable implements Stringable
      *
      * @param DateTimeInterface|string|null $datetime Source datetime object, string, or null for now.
      *
-     * @return self Return a new instance normalized to UTC.
+     * @return Time|DateTimeImmutable Return a new instance normalized to UTC.
      * @throws DateTimeException If failed to create date.
      */
-    public static function UTC(DateTimeInterface|string|null $datetime = null): self
+    public static function UTC(DateTimeInterface|string|null $datetime = null): DateTimeImmutable
     {
         $utc = new DateTimeZone(self::UTC_TIMEZONE);
         $datetime ??= 'now';

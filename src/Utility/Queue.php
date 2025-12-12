@@ -201,7 +201,7 @@ final class Queue implements Countable
     /**
      * Push a new job queue, either closure, any callable or string to be executed.
      *
-     * @param callable|string $item The item to enqueue.
+     * @param (callable(mixed $result):void)|string $item The item to enqueue.
      * @param string|int|null $id Optional job identifier (default: null).
      *
      * @return void
@@ -219,7 +219,7 @@ final class Queue implements Countable
      * If Fibers are not available, it attempts process forking (if supported) 
      * or executes jobs directly in a blocking manner.
      *
-     * @param callable|null $callback Optional callback function executed after the queue finishes processing.
+     * @param (callable(mixed $result): void)|null $callback Optional callback function executed after the queue finishes processing.
      * @param int $timeout Maximum time to wait for execution in seconds (default: 0 for no timeout).
      * 
      * @return void
@@ -292,9 +292,10 @@ final class Queue implements Countable
      * Registers a callback to handle the response of each executed task.
      * This method allows you to specify a callback function that will be called whenever a task completes.
      *
-     * @param callable $callback The callback function to be invoked on task completion.
+     * @param (callable(mixed $result, mixed $previous, self $queue): void) $callback The callback function to be invoked on task completion.
      *
      * @return void
+     * 
      * @example - Example Signature for Callback:
      * 
      * ```php
@@ -588,7 +589,7 @@ final class Queue implements Countable
      /**
      * Return a new Queue instance.
      * 
-     * @param array<int,callable|string> $job Jobs to initialize the new Queue instance.
+     * @param int $index Jobs to initialize the new Queue instance.
      * 
      * @return self Return new Queue instance.
      */

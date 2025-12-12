@@ -400,8 +400,10 @@ final class Sitemap
         }
 
         [$report, $failLabel] = match (self::$options['mode']) {
-            self::GENERATE_LINK_TREE      => ['Link Tree Generation Completed', 'Invalid Links Found:'],
-            self::GENERATE_BROKEN_LINKS   => ['Broken Link Scan Completed', 'Broken Links Found:'],
+            self::GENERATE_LINK_TREE     
+                => ['Link Tree Generation Completed', 'Invalid Links Found:'],
+            self::GENERATE_BROKEN_LINKS  
+                => ['Broken Link Scan Completed', 'Broken Links Found:'],
             default  => ['Sitemap Generation Completed', 'Failures Detected:'],
         };
 
@@ -539,7 +541,12 @@ final class Sitemap
         bool $label = false
     ): void 
     {
-        if (self::$verbose < 3 && $message !== 'flush' && $method !== 'flush' && $verbose !== 'NORMAL') {
+        if (
+            self::$verbose < 3 
+            && $message !== 'flush' 
+            && $method !== 'flush' 
+            && $verbose !== 'NORMAL'
+        ) {
             if (self::$verbose === 0) {
                 return;
             }
@@ -602,7 +609,7 @@ final class Sitemap
      * 
      * @return bool Return true if root.
      */
-    private static function isRoot(string $url): string
+    private static function isRoot(string $url): bool
     {
         $main = APP_HOSTNAME . '/public';
         $www = APP_HOSTNAME_ALIAS . '/public';
@@ -628,21 +635,21 @@ final class Sitemap
      * Trim url and add slash.
      * 
      * @param string $url The url to trim.
+     * @param string $suffix
      * 
      * @return string Return trimmed url.
      */
-    private static function toUrl(string $url, string $siffix = '/'): string
+    private static function toUrl(string $url, string $suffix = '/'): string
     {
         $url = rtrim(preg_replace('#(?<!:)//+#', '/', $url), '/');
 
-        return $url . $siffix;
+        return $url . $suffix;
     }
 
     /**
      * Check if url is acceptable and not a hash nor in ignore list.
      * 
      * @param string $href The URL to check.
-     * @param string $startUrl The start url.
      * 
      * @return bool Return true if url is acceptable and not in ignore list, otherwise false.
      */
@@ -717,7 +724,10 @@ final class Sitemap
      */
     private static function isPrefix(string $href): bool 
     {
-        return str_starts_with($href, self::startUrl() . trim(self::$config->scanUrlPrefix, '/'));
+        return str_starts_with(
+            $href, 
+            self::startUrl() . trim(self::$config->scanUrlPrefix, '/')
+        );
     }
 
     /**
@@ -1084,9 +1094,11 @@ final class Sitemap
             ]))->request('GET', $url));
             
             self::_print('flush', output: true);
+
             $status = $response->getStatusCode();
             $isSuccessCode = ($status === 200 || ($status >= 300 && $status < 400));
             $isError = false;
+            $label = '';
             
             if (!$isSuccessCode) {
                 $isError = true;

@@ -20,7 +20,7 @@ use \DOMDocument;
 final class Text
 {
 	/**
-	 * Strict HTML block tags
+	 * Strict HTML block tags.
 	 *
 	 * @var array $blockTags
 	 */

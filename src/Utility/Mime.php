@@ -144,7 +144,6 @@ final class Mime
         'php8'  => 'application/x-php',
         'js'    => 'application/javascript',
         'ts'    => 'application/typescript',
-        'sh'    => 'application/x-sh',
         'bash'  => 'application/x-sh',
         'sql'   => 'application/sql',
         'toml'  => 'application/toml',

@@ -24,7 +24,6 @@ use Rector\CodeQuality\Rector\FuncCall\SimplifyRegexPatternRector;
 use Rector\CodeQuality\Rector\Expression\InlineIfToExplicitIfRector;
 use Rector\CodeQuality\Rector\Class_\CompleteDynamicPropertiesRector;
 use Rector\Php55\Rector\String_\StringClassNameToClassConstantRector;
-use Rector\PHPUnit\CodeQuality\Rector\Class_\YieldDataProviderRector;
 use Rector\CodeQuality\Rector\BooleanAnd\SimplifyEmptyArrayCheckRector;
 use Rector\EarlyReturn\Rector\Return_\PreparedValueToEarlyReturnRector;
 use Rector\DeadCode\Rector\If_\UnwrapFutureCompatibleIfPhpVersionRector;
@@ -62,7 +61,6 @@ return static function (RectorConfig $config): void {
         __DIR__ . '/vendor',
         __DIR__ . '/builds',
         JsonThrowOnErrorRector::class,
-        YieldDataProviderRector::class,
         CountOnNullRector::class,
         RandomFunctionRector::class,
         SimplifyRegexPatternRector::class
