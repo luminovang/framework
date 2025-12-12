@@ -10,7 +10,7 @@
  */
 namespace Luminova\Logger;
 
-use \Luminova\Exceptions\InvalidArgumentException;
+use Luminova\Exceptions\InvalidArgumentException;
 
 /**
  * Defines various logging levels used for categorizing log messages.
@@ -85,7 +85,7 @@ final class LogLevel
      * 
      * @var string PHP
      */
-    public const PHP       = 'php_error';
+    public const PHP       = 'php-errors';
 
     /**
      * PHP level: Performance metrics, specifically for api or production level.
@@ -109,57 +109,167 @@ final class LogLevel
         'info'          => self::INFO,
         'debug'         => self::DEBUG,
         'exception'     => self::EXCEPTION,
+        'php-errors'    => self::PHP,
         'php_error'     => self::PHP,
+        'php_errors'    => self::PHP,
         'php'           => self::PHP,
         'metrics'       => self::METRICS,
     ];
 
     /**
-     * List of critical log levels.
-     * 
-     * @var array<string,true> $critical
+     * Maps RFC 5424 numeric levels to corresponding string log levels.
+     *
+     * @var array<int,string> RFC_5424_LEVELS
      */
-    private static array $critical = [
-        self::EMERGENCY => true,
-        self::ALERT     => true,
-        self::EXCEPTION  => true,
-        self::CRITICAL  => true,
+    private const RFC_5424_LEVELS = [
+        7 => self::DEBUG,
+        6 => self::INFO,
+        5 => self::NOTICE,
+        4 => self::WARNING,
+        3 => self::ERROR,
+        2 => self::CRITICAL,
+        1 => self::ALERT,
+        0 => self::EMERGENCY,
     ];
 
     /**
-     * Checks if the specified log level is valid and exists.
-     *
-     * @param string $level The log level to check (e.g., 'error', 'info', 'debug').
+     * PHP error code levels.
      * 
-     * @return bool Return true if the log level exists, false otherwise.
+     * @var array<int,string> PHP_ERROR_LEVELS
      */
-    public static function has(string $level): bool
+    private const PHP_ERROR_LEVELS = [
+        E_ERROR             => self::ERROR,
+        E_WARNING           => self::WARNING,
+        E_PARSE             => self::ERROR,
+        E_NOTICE            => self::NOTICE,
+        E_CORE_ERROR        => self::CRITICAL,
+        E_CORE_WARNING      => self::WARNING,
+        E_COMPILE_ERROR     => self::ERROR,
+        E_COMPILE_WARNING   => self::WARNING,
+        E_USER_ERROR        => self::ERROR,
+        E_USER_WARNING      => self::WARNING,
+        E_USER_NOTICE       => self::NOTICE,
+        E_RECOVERABLE_ERROR => self::ERROR,
+        E_DEPRECATED        => self::WARNING,
+        E_USER_DEPRECATED   => self::WARNING,
+    ];
+
+    /**
+     * List of critical log levels.
+     * 
+     * @var array<string,true> CRITICAL_LEVELS
+     */
+    private const CRITICAL_LEVELS = [
+        self::EMERGENCY  => true,
+        self::ALERT      => true,
+        self::EXCEPTION  => true,
+        self::CRITICAL   => true,
+    ];
+
+    /**
+     * Checks if the given log level is valid.
+     *
+     * Supports both PSR-style string levels (e.g., 'error', 'info') 
+     * and RFC 5424 numeric levels (0–7).
+     *
+     * @param string|int $level The log level to validate.
+     * 
+     * @return bool Returns true if the level exists, false otherwise.
+     */
+    public static function has(string|int $level): bool
     {
-        return isset(self::LEVELS[$level]);
+        return isset(self::LEVELS[$level]) 
+            || isset(self::RFC_5424_LEVELS[$level])
+            || isset(self::PHP_ERROR_LEVELS[$level]);
     }
 
     /**
-     * Asserts that the given log level is valid.
+     * Resolves the canonical value for a given log level.
      *
-     * This function checks if the provided log level exists in the predefined set of log levels.
-     * If the level is invalid, it throws an InvalidArgumentException with a detailed error message.
+     * Maps a PSR-style string level or RFC 5424 numeric level to its internal representation.
      *
-     * @param string $level The log level to validate.
-     * @param string|null $function Optional. The name of the calling function for context in the error message.
+     * @param string|int $level The log level to parse.
+     * 
+     * @return string|null Return the canonical log level, or null if invalid.
+     */
+    public static function resolve(string|int $level): ?string
+    {
+        return self::LEVELS[$level] 
+            ?? self::RFC_5424_LEVELS[$level] 
+            ?? self::PHP_ERROR_LEVELS[$level]
+            ?? null;
+    }
+
+    /**
+     * Asserts that a log level is valid.
+     *
+     * Supports predefined log levels, PHP error codes, RFC 5424 severity levels,
+     * and optionally custom levels.
+     *
+     * Custom levels must:
+     * - Be 1–64 characters long.
+     * - Start with a letter.
+     * - Contain only letters, digits, underscores, or hyphens.
+     * - Include at least one digit.
+     *
+     * Examples:
+     * - Valid: foo8383, a1, log123, foo_bar1
+     * - Invalid: 2883, 737foo, foo, foo_123 (if underscores are not allowed)
+     *
+     * @param string|int $level The log level to validate.
+     * @param bool $allowCustom Whether to allow custom log levels.
+     * @param string|null $method Optional calling method name for error reporting.
      *
      * @return void
-     * @throws InvalidArgumentException If the provided log level is not valid.
+     * @throws InvalidArgumentException If the log level is invalid.
      */
-    public static function assert(string $level, ?string $function = null): void
+    public static function assert(
+        string|int $level,
+        bool $allowCustom = false,
+        ?string $method = null
+    ): void 
     {
-        if (!isset(self::LEVELS[$level])) {
-            throw new InvalidArgumentException(sprintf(
-                'Invalid log level "%s" in %s. Supported levels: %s. See https://luminova.ng/docs/0.0.0/logging/levels',
-                $level,
-                $function ? "\"$function\"(...)" : 'the given context',
-                implode(', ', self::LEVELS)
-            ));
+        if (self::has($level) || ($allowCustom && self::isValid($level))) {
+            return;
         }
+
+        throw new InvalidArgumentException(sprintf(
+            'Invalid log level "%s" in %s.',
+            $level,
+            $method ? "\"$method\"(...)" : 'the given context'
+        ));
+    }
+
+    /**
+     * Determine whether a log level identifier is valid.
+     *
+     * A valid log level may be one of the predefined RFC 5424 numeric levels or
+     * a custom level name that starts with a letter and contains only letters,
+     * numbers, underscores (`_`), or hyphens (`-`). Custom level names must be
+     * between 1 and 64 characters in length.
+     *
+     * @param string|int $level The log level name or RFC 5424 numeric level.
+     *
+     * @return bool Returns `true` if the log level is valid; otherwise, `false`.
+     */
+    public static function isValid(string|int $level): bool 
+    {
+        if(is_int($level) && isset(self::RFC_5424_LEVELS[$level])){
+            return true;
+        }
+
+        $level = (string) $level;
+        $len = strlen($level);
+
+        if (
+            $len >= 1 &&
+            $len <= 64 &&
+            preg_match('/^[a-zA-Z][a-zA-Z0-9_-]*$/', $level)
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -175,12 +285,12 @@ final class LogLevel
      * - `critical`
      * - `exception`
      *
-     * @param string $level The log level to check.
+     * @param string|int $level The log level to check.
      * 
      * @return bool Returns true if the level is critical, otherwise false.
      */
-    public static function isCritical(string $level): bool
+    public static function isCritical(string|int $level): bool
     {
-        return isset(self::$critical[$level]);
+        return isset(self::CRITICAL_LEVELS[self::resolve($level) ?? '']);
     }
 }

@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -11,14 +12,14 @@
 namespace Luminova\Http\Client;
 
 use \Throwable;
-use \Luminova\Luminova;
+use Luminova\Luminova;
 use \GuzzleHttp\Client;
-use \Luminova\Utility\Promise\Promise;
+use Luminova\Promise\Promise;
 use \Psr\Http\Client\ClientInterface;
-use \Luminova\Interface\PromiseInterface;
+use Luminova\Interface\PromiseInterface;
 use \GuzzleHttp\Exception\GuzzleException;
-use \Luminova\Exceptions\Http\RequestException;
-use \Luminova\Exceptions\Http\ConnectException;
+use Luminova\Exceptions\Http\RequestException;
+use Luminova\Exceptions\Http\ConnectException;
 use \Psr\Http\Message\{UriInterface, RequestInterface, ResponseInterface};
 
 class Guzzle implements \Luminova\Interface\ClientInterface
@@ -154,18 +155,26 @@ class Guzzle implements \Luminova\Interface\ClientInterface
             return $this->client->{$method}(...$arguments);
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             $response = $e->getResponse();
+
             if ($response instanceof ResponseInterface) {
                 return $response;
             }
 
-            $previous = $e->getPrevious();
-            if ($previous instanceof GuzzleException) {
-                throw new RequestException($previous->getMessage(), $previous->getCode(), $previous);
-            }
+            $e = ($e->getPrevious() instanceof GuzzleException) 
+                ? $e->getPrevious() 
+                : $e;
 
-            throw new RequestException($e->getMessage(), $e->getCode(), $e);
+            throw new RequestException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e->getPrevious()
+            );
         } catch (Throwable $e) {
-            throw new ConnectException($e->getMessage(), $e->getCode(), $e);
+            throw new ConnectException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e->getPrevious()
+            );
         }
     }
 
@@ -192,7 +201,10 @@ class Guzzle implements \Luminova\Interface\ClientInterface
                 if ($response instanceof \GuzzleHttp\Promise\PromiseInterface) {
                     $response->then(
                         fn($result) => $resolve($result),
-                        fn($error) => $reject($error instanceof Throwable ? $error : new RequestException($error))
+                        fn($error) => $reject($error instanceof Throwable 
+                            ? $error 
+                            : new RequestException($error)
+                        )
                     );
                     $response->wait();
                     return;
@@ -231,10 +243,18 @@ class Guzzle implements \Luminova\Interface\ClientInterface
             : $e;
 
         if ($previous instanceof GuzzleException) {
-            $reject(new ConnectException($previous->getMessage(), $previous->getCode(), $previous));
+            $reject(new ConnectException(
+                $previous->getMessage(), 
+                $previous->getCode(), 
+                $previous->getPrevious()
+            ));
             return;
         }
 
-        $reject(new RequestException($e->getMessage(), $e->getCode(), $e));
+        $reject(new RequestException(
+            $e->getMessage(), 
+            $e->getCode(), 
+            $e->getPrevious()
+        ));
     }
 }

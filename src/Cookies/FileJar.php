@@ -13,20 +13,17 @@ namespace Luminova\Cookies;
 use \Countable;
 use \Stringable;
 use \JsonException;
-use \Luminova\Time\Time;
-use \Luminova\Exceptions\FileException;
+use Luminova\Luminova;
+use Luminova\Time\Time;
+use Luminova\Storage\Filesystem;
+use Luminova\Exceptions\FileException;
 use \App\Config\Cookie as CookieConfig;
-use \Luminova\Base\Cookie as BaseCookie;
-use \Luminova\Exceptions\CookieException;
-use \Luminova\Interface\CookieJarInterface;
-use function \Luminova\Funcs\{
-    root,
-    write_content,
-    get_content,
-    make_dir
-};
+use Luminova\Base\Cookie as BaseCookie;
+use Luminova\Exceptions\CookieException;
+use Luminova\Interface\{Arrayable, CookieJarInterface};
+use function Luminova\Funcs\make_dir;
 
-class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Countable
+class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Countable, Arrayable
 {
     /**
      * Cookies. 
@@ -72,9 +69,13 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      *
      * @param string|array<string,array<string,mixed>> $from The source of cookies, either a file path (string) or an array of cookies.
      * @param array<string,mixed> $config Optional settings or configurations for cookies.
+     * @param bool $autoSave If true cookie data will automatically save to file (default: true).
+     *                      {@see commit()} to save cookie.
      * 
      * @throws CookieException If invalid source file location is provided.
-     * @throws FileException If the `$from` is provided as an array, the cookie jar is not in read-only mode, and writing the cookies to the file fails.
+     * @throws FileException If the `$from` is provided as an array, the cookie 
+     *              jar is not in read-only mode, and writing the cookies to the file fails.
+     * 
      * @example - Array Structure:
      *  ```php
      * $from = [
@@ -94,7 +95,11 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      * ];
      * ```
      */
-    public function __construct(string|array $from, array $config = [])
+    public function __construct(
+        string|array $from, 
+        array $config = [],
+        private bool $autoSave = true
+    )
     {
         $this->config = [...$this->config, ...$config];
         $this->initCookies($from);
@@ -105,10 +110,11 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public static function newCookie(
         array $cookies, 
-        array $config = []
+        array $config = [],
+        bool $autoSave = true,
     ): CookieJarInterface
     {
-        return new self($cookies, $config);
+        return new static($cookies, $config, $autoSave);
     }
 
     /**
@@ -116,7 +122,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function __get(string $property): mixed 
     {
-        $options = $this->toArray();
+        $options = $this->__toArray();
         if(array_key_exists($property, $options)){
             return $options[$property];
         }
@@ -137,7 +143,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function toString(bool $metadata = false): string
     {
-        $options = $this->toArray();
+        $options = $this->__toArray();
         return $metadata 
             ? self::parseToString(
                 $options['value'] ?? '', 
@@ -155,10 +161,26 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function toArray(): array
     {
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->__toArray();
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function __toArray(): array
+    {
         return [
             ...$this->getOptions(),
             'value'  => $this->getValue(),
-            'name' => $this->config['name']
+            'name'   => $this->config['name']
         ];
     }
 
@@ -203,14 +225,19 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
     {
         $finalValue = $this->toValue($value);
         if($finalValue === false){
-            throw CookieException::rethrow('invalid_value', __FUNCTION__ . '->(..., $value)" ');
+            CookieException::rethrow(
+                'invalid_value', 
+                __METHOD__ . '(..., $value)" '
+            );
         }
 
         $this->cookies[$name] = [
-            'value' => $finalValue,
-            'options' => array_change_key_case($options, CASE_LOWER),
+            'value'     => $finalValue,
+            'options'   => array_change_key_case($options, CASE_LOWER),
         ];
-        $this->cookies[$name]['options']['flag'] = ($this->cookies[$name]['options']['domain'][0] === '.');
+        $this->cookies[$name]['options']['flag'] = (
+            $this->cookies[$name]['options']['domain'][0] === '.'
+        );
 
         $this->save();
         return $this;
@@ -221,11 +248,11 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function setValue(mixed $value): self
     {
-        $this->assertName(__FUNCTION__);
+        $this->assertName(__METHOD__);
         $finalValue = $this->toValue($value);
 
         if($finalValue === false){
-            throw CookieException::rethrow('invalid_value', __FUNCTION__ . '->($value)" ');
+            CookieException::rethrow('invalid_value', __METHOD__ . '($value)" ');
         }
 
         $this->cookies[$this->config['name']]['value'] = $finalValue;
@@ -253,7 +280,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function setOptions(CookieConfig|array $options): self
     {
-        $this->assertName(__FUNCTION__);
+        $this->assertName(__METHOD__);
         $this->cookies[$this->config['name']]['options'] = self::parseOptions(
             $options, 
             $this->getOptions()
@@ -292,7 +319,20 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
     /** 
      * {@inheritdoc}
      */
-    public function getCookie(string $name): self 
+    public function getCookie(): CookieJarInterface
+    {
+        $name = $this->config['name'];
+
+        return new static(
+            [$name => $this->cookies[$name] ?? []], 
+            autoSave: false
+        );
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function setCookie(string $name): self 
     {
         $this->config['name'] = $name;
         return $this;
@@ -311,7 +351,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function getOptions(): array
     {
-        $this->assertName(__FUNCTION__);
+        $this->assertName(__METHOD__);
         return $this->cookies[$this->config['name']]['options'] ?? [];
     }
 
@@ -328,7 +368,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function getValue(bool $asArray = false): mixed
     {
-        $this->assertName(__FUNCTION__);
+        $this->assertName(__METHOD__);
         $value = $this->cookies[$this->config['name']]['value'] ?? null;
 
         if(!$value || !$asArray){
@@ -337,7 +377,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
 
         try{
             return json_validate($value) 
-                ? json_decode($value, true) 
+                ? json_decode($value, true, flags: JSON_BIGINT_AS_STRING) 
                 : $value;
         }catch(JsonException){
             return $value;
@@ -426,12 +466,12 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
             return $this->cookies;
         }
 
-        if ($this->filePath && file_exists($this->filePath)) {
+        if ($this->filePath && is_file($this->filePath)) {
             try{
                 return $this->isNetscapeCookie() 
                     ? $this->fromNetscapeCookies()
                     : json_decode(
-                        get_content($this->filePath)?:'',
+                        Filesystem::contents($this->filePath) ?: '',
                         true,
                         512,
                         JSON_THROW_ON_ERROR
@@ -459,7 +499,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
     /** 
      * {@inheritdoc}
      */
-    public static function getFromHeader(
+    public static function parseFromHeader(
         array $headers, 
         bool $raw = false, 
         array $default = []
@@ -474,7 +514,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
             $options['flag'] = ($options['domain'][0] === '.');
 
             $cookies[$name] = [
-                'value' => $value,
+                'value'   => $value,
                 'options' => $options,
             ];
         }
@@ -485,7 +525,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
     /** 
      * {@inheritdoc}
      */
-    public static function getFromGlobal(
+    public static function parseFromGlobal(
         array $cookies, 
         bool $raw = false, 
         array $default = []
@@ -782,18 +822,21 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
             $this->cookies = $this->getCookies();
         }else{
             $this->cookies = $from;
-            $this->filePath ??= root('/writeable/temp/', 'cookies.txt');
+            $this->filePath ??= Luminova::root(
+                '/writeable/tmp/', 
+                'cookies.txt'
+            );
 
-            if($this->cookies !== []){
+            if($this->cookies !== [] && $this->autoSave){
                 $this->save();
             }
         }
 
         if(
-            $this->cookies !== [] && 
-            empty($this->config['name']) && 
-            $this->count() < 2 && 
-            ($name = array_key_first($this->cookies)) !== null
+            $this->cookies !== []
+            && empty($this->config['name'])
+            && $this->count() < 2
+            && ($name = array_key_first($this->cookies)) !== null
         ){
             $this->config['name'] = $name;
         }
@@ -894,6 +937,20 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      * Saves the current cookie data to a file.
      * 
      * @return bool Returns true if the save operation was successful, false otherwise.
+     */
+    public function commit(): bool
+    {
+        try{
+            return $this->save();
+        } catch(\Throwable){
+            return false;
+        }
+    }
+
+    /**
+     * Saves the current cookie data to a file.
+     * 
+     * @return bool Returns true if the save operation was successful, false otherwise.
      * @throws FileException If writing the cookies to the file fails.
      */
     protected function save(): bool
@@ -911,7 +968,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
             return false;
         }
 
-        return write_content(
+        return Filesystem::write(
             $this->filePath, 
             $this->isNetscapeCookie() 
                 ? $this->toNetscapeCookies() 
@@ -965,13 +1022,13 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     private function assertName(string $fn): void
     {
-        if ($this->config['name']) {
+        if (isset($this->config['name'])) {
             return;
         }
 
         throw new CookieException(sprintf(
-            'Cookie name is not set. To set the name, call "$cookieJar->getCookie(\'cookie-name\')->%s(...)" or set the name in cookie config "new FileJar(\'cookie-array-or-file\', [\'name\' => \'Name\'])->%s(...)".',
-            $fn, $fn
+            'Cookie name is not set for "%s". Call "$fileJar->setCookie(\'cookie-name\')" or initialize with cookie config "new FileJar(\'cookie-array-or-file\', [\'name\' => \'cookie-name\'])".',
+            $fn,
         ));
     }
 }

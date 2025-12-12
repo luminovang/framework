@@ -15,7 +15,7 @@ declare(strict_types=1);
  * @see https://luminova.ng/docs/0.0.0/commands/novakit
  * @see https://luminova.ng/docs/0.0.0/base/console
  */
-use \Luminova\Command\Novakit;
+use Luminova\Command\Novakit;
 use \App\Console\ConsoleHelloCommand;
 
 // Format 1 – Register command directly, line by line.

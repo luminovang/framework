@@ -1,3 +1,13 @@
+<p align="center">
+  <img src="https://github.com/luminovang/luminova/raw/main/docs/logo.svg" alt="Luminova PHP Framework" width="100%">
+</p>
+
+<p align="center">
+  <strong>PHP Luminova</strong>
+  <br>
+  A fast and lightweight PHP Framework.
+</p>
+
 [![Author](https://img.shields.io/badge/author-@peterchig-blue.svg)](https://instagram.com/peterchig)
 ![PHP 8.0+](https://img.shields.io/badge/php-min%208.0.0-red.svg)
 [![Source Code](https://img.shields.io/badge/source-luminovang/framework-blue.svg)](https://github.com/luminovang/framework)
@@ -7,9 +17,7 @@
 ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fluminova.ng%2Fdownloads)
 
 
-![Local Image](https://github.com/luminovang/luminova/raw/main/docs/logo.svg)
-
-# Luminova PHP Framework
+# PHP Luminova Framework
 
 Luminova is a modern, lightweight, and modular PHP 8+ framework that brings simplicity and power together. Designed with **MVC** and **HMVC** architecture in mind, Luminova offers native PHP templating, support for external engines like Twig and Smarty, and a pragmatic development experience without unnecessary complexity. 
 
@@ -58,17 +66,7 @@ Luminova is minimal where it should be and powerful where it matters:
 * Promise resolver
 * Background task queue system
 * Developer-friendly utilities and helper functions
-* ...and growing with every release
-
----
-
-## Why Choose Luminova?
-
-* **No bloat. No boilerplate.** Just core tools that work.
-* **Straightforward and readable syntax**
-* **Modern PHP 8+ support** — take full advantage of attributes, union types, constructor property promotion, etc.
-* **Works your way** — customize as little or as much as you need.
-* **Actively maintained** and used in production.
+* ...and growing with every new release
 
 ---
 

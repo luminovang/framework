@@ -11,7 +11,7 @@
 namespace Luminova\Attributes;
 
 use \Attribute;
-use \Luminova\Exceptions\RouterException;
+use Luminova\Exceptions\RouterException;
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final class Group

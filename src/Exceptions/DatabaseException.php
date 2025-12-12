@@ -11,10 +11,10 @@
 namespace Luminova\Exceptions;
 
 use \Throwable;
-use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Exceptions\LuminovaException;
 
-class DatabaseException extends AppException
+class DatabaseException extends LuminovaException
 {
     /**
      * Constructor for DatabaseException.

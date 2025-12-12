@@ -11,11 +11,18 @@
 namespace Luminova\Interface;
 
 use \App\Config\Cookie as CookieConfig;
-use \Luminova\Exceptions\CookieException;
-use \Luminova\Exceptions\FileException;
+use Luminova\Exceptions\CookieException;
+use Luminova\Exceptions\FileException;
 
 interface CookieJarInterface
 {
+    /**
+     * Saves the current cookie data to a file.
+     * 
+     * @return bool Returns true if the save operation was successful, false otherwise.
+     */
+    public function commit(): bool;
+
     /**
      * Create a new cookie instance.
      *
@@ -24,9 +31,12 @@ interface CookieJarInterface
      * @param array<string,mixed> $config Optional configurations or settings to apply to the 
      *        new or updated cookie.
      * 
-     * @return static Returns the created or updated cookie jar instance.
+     * @return self Returns the created or updated cookie jar instance.
      * @throws CookieException If invalid source file location is provided.
-     * @throws FileException If the `$from` is provided as an array, the cookie jar is not in read-only mode, and writing the cookies to the file fails.
+     * @throws FileException If the `$from` is provided as an array, the cookie jar is not in read-only mode, 
+     *              and writing the cookies to the file fails.
+     * 
+     * @see self::commit()
      */
     public static function newCookie(array $cookies, array $config = []): CookieJarInterface;
 
@@ -37,7 +47,7 @@ interface CookieJarInterface
      * @param mixed $value The value of the cookie.
      * @param array $options An array of cookie options.
      * 
-     * @return static Return instance of Cookie Jar.
+     * @return self Return instance of Cookie Jar.
      * @throws FileException If writing the cookies to the file fails.
      */
     public function set(mixed $name, mixed $value, array $options = []): CookieJarInterface;
@@ -47,7 +57,7 @@ interface CookieJarInterface
      * 
      * @param mixed $value The value to set.
      * 
-     * @return static Return instance of Cookie Jar.
+     * @return self Return instance of Cookie Jar.
      * @throws CookieException Throws if called without cookie name specified.
      * @throws FileException If writing the cookies to the file fails.
      */
@@ -58,7 +68,7 @@ interface CookieJarInterface
      * 
      * @param CookieConfig|array $options An array of cookie options or cookie config class object.
      * 
-     * @return static Return instance of Cookie Jar.
+     * @return self Return instance of Cookie Jar.
      * @throws CookieException Throws if called without cookie name specified.
      * @throws FileException If writing the cookies to the file fails.
      */
@@ -70,8 +80,9 @@ interface CookieJarInterface
      *
      * @param string $path The custom path to set.
      * 
-     * @return static Returns the current instance for method chaining.
-     * > **Note:** If set a custom cookie request path, you must also set domain `setCookieDomain`.
+     * @return self Returns the current instance for method chaining.
+     * > **Note:** 
+     * > If set a custom cookie request path, you must also set domain `setCookieDomain`.
      */
     public function setCookiePath(string $path): self;
 
@@ -81,8 +92,9 @@ interface CookieJarInterface
      *
      * @param string $domain The custom domain to set.
      * 
-     * @return static Returns the current instance for method chaining.
-     * > **Note:** If set a custom cookie request domain, you must also set path `setCookiePath`.
+     * @return self Returns the current instance for method chaining.
+     * > **Note:** 
+     * > If set a custom cookie request domain, you must also set path `setCookiePath`.
      */
     public function setCookieDomain(string $domain): self;
 
@@ -91,7 +103,7 @@ interface CookieJarInterface
      * 
      * @param array<string,array<string,mixed>> $cookies The array of cookies to set.
      * 
-     * @return static Return instance of Cookie Jar.
+     * @return self Return instance of Cookie Jar.
      * @throws FileException If writing the cookies to the file fails.
      */
     public function setCookies(array $cookies): self;
@@ -121,18 +133,35 @@ interface CookieJarInterface
      * 
      * @param string $name The name of cookie to access.
      * 
-     * @return static Return instance of cookie class.
-     * 
+     * @return self Return instance of cookie class.
      * @example - Manage Cookie By Name:
      * 
      * ```php
-     * $cookie = $cookieJar->getCookie('my-cookie');
+     * $cookie = $fileJar->setCookie('my-cookie');
      * echo $cookie->getPrefix();
      * echo $cookie->getDomain();
      * echo $cookie->toString();
      * ```
      */
-    public function getCookie(string $name): self;
+    public function setCookie(string $name): self;
+
+    /** 
+     * Get the current cookie name object.
+     * 
+     * @return CookieJarInterface Return new instance of cookie.
+     * 
+     * @see self::commit()
+     * @example - Manage Cookie By Name:
+     * 
+     * ```php
+     * $cookie = $fileJar->setCookie('my-cookie')->getCookie();
+     * 
+     * echo $cookie->getPrefix();
+     * echo $cookie->getDomain();
+     * echo $cookie->toString();
+     * ```
+     */
+    public function getCookie(): CookieJarInterface;
 
     /**
      * Retrieves the entire cookies from the source.
@@ -171,7 +200,7 @@ interface CookieJarInterface
      * Only unexpired cookies are returned.
      *
      * @param string $domain The domain to filter cookies.
-     * @param string $path   The path to filter cookies. Defaults to '/'.
+     * @param string $path The path to filter cookies. Defaults to '/'.
      * 
      * @return array<string,array> Return an array of cookies for the specified domain and path.
      * @throws CookieException If the domain is empty.
@@ -208,7 +237,7 @@ interface CookieJarInterface
      * @example - Specify Name:
      * 
      * ```php
-     * $cookieJar->getCookie('cookie-name')->getOptions();
+     * $fileJar->setCookie('cookie-name')->getOptions();
      * ```
      */
     public function getOptions(): array;
@@ -224,7 +253,7 @@ interface CookieJarInterface
      * @example - Specify Name:
      * 
      * ```php
-     * $cookieJar->getCookie('cookie-name')->getOption('expires');
+     * $fileJar->setCookie('cookie-name')->getOption('expires');
      * ```
      */
     public function getOption(string $key): mixed;
@@ -322,14 +351,14 @@ interface CookieJarInterface
     * ];
     * 
     * // Parse cookies from headers
-    * $cookies = $cookieHandler->getFromHeader($headers, false, $defaultOptions);
+    * $cookies = FileJar::parseFromHeader($headers, false, $defaultOptions);
     * 
     * foreach ($cookies as $name => $cookie) {
     *     echo "Cookie: $name, Value: {$cookie['value']}" . PHP_EOL;
     * }
     * ```
     */
-    public static function getFromHeader(
+    public static function parseFromHeader(
         array $headers, 
         bool $raw = false, 
         array $default = []
@@ -351,14 +380,18 @@ interface CookieJarInterface
     * @example - Parse cookies from global:
     
     * ```php
-    * $cookies = $cookieHandler->getFromGlobal($_COOKIE, false, $defaultOptions);
+    * $cookies = FileJar::parseFromGlobal($_COOKIE, false, $defaultOptions);
     * 
     * foreach ($cookies as $name => $cookie) {
     *     echo "Cookie: $name, Value: {$cookie['value']}" . PHP_EOL;
     * }
     * ```
     */
-    public static function getFromGlobal(array $cookies, bool $raw = false, array $default = []): array;
+    public static function parseFromGlobal(
+        array $cookies, 
+        bool $raw = false, 
+        array $default = []
+    ): array;
 
     /** 
      * Count the number of cookies in storage.
@@ -387,7 +420,7 @@ interface CookieJarInterface
      * Check if a cookie name has a prefix.
      * 
      * @param string|null $name An optional cookie name to check for prefix, 
-     *              if null will use name from `getCookie()` method or from config name key.
+     *              if null will use name from `setCookie()` method or from config name key.
      * 
      * @return bool Return true if the cookie name has a prefix, false otherwise.
      * @throws CookieException Throws if called without cookie name specified.
@@ -406,7 +439,7 @@ interface CookieJarInterface
      * Remove a cookie by name.
      * 
      * @param string|null $name An optional cookie name to remove, 
-     *              if null will use name from `getCookie()` method or from config name key.
+     *              if null will use name from `setCookie()` method or from config name key.
      * 
      * @return bool Return true if the cookie was removed, false otherwise.
      * @throws FileException If writing the cookies to the file fails.
@@ -417,7 +450,7 @@ interface CookieJarInterface
      * Force mark a cookie as expired.
      * 
      * @param string|null $name An optional cookie name to expire, 
-     *              if null will use name from `getCookie()` method or from config name key.
+     *              if null will use name from `setCookie()` method or from config name key.
      * 
      * @return bool Return true if cookie has expired, otherwise false.
      * @throws FileException If writing the cookies to the file fails.
@@ -539,7 +572,8 @@ interface CookieJarInterface
      * @param array|null $cookies An optional array of cookies to convert. If null, uses the instance's cookies.
      *                            Each cookie should be an associative array with 'value' and 'options' keys.
      *
-     * @return string Return a string containing the Netscape-formatted cookies, or an empty string if no cookies are available.
+     * @return string Return a string containing the Netscape-formatted cookies, 
+     *              or an empty string if no cookies are available.
      */
     public function toNetscapeCookies(?array $cookies = null): string;
 }

@@ -11,8 +11,8 @@
 namespace Luminova\Template\Extensions;
 
 use \Smarty\Template;
-use \Luminova\Luminova;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Runtime;
+use Luminova\Exceptions\RuntimeException;
 
 /**
  * Wrapper for registering callable Smarty functions.
@@ -166,7 +166,7 @@ final class SmartyFunction
                 ));
             }
         }else{
-             if (!Luminova::isCallable($this->handler)) {
+             if (!Runtime::isCallable($this->handler)) {
                 throw new RuntimeException(sprintf(
                     'Type "%s" expects a callable or function name. Got: %s.',
                     $this->type,

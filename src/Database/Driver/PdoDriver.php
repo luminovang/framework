@@ -1,0 +1,1147 @@
+<?php
+declare(strict_types=1);
+/**
+ * Luminova Framework PDO database driver extension.
+ *
+ * @package Luminova
+ * @author Ujah Chigozie Peter
+ * @copyright (c) Nanoblock Technology Ltd
+ * @license See LICENSE file
+ * @link https://luminova.ng
+ */
+namespace Luminova\Database\Driver;
+
+use \PDO;
+use \stdClass;
+use \Throwable;
+use \PDOException;
+use \PDOStatement;
+use Luminova\Runtime;
+use Luminova\Luminova;
+use Luminova\Database\Helpers\Util;
+use Luminova\Config\DatabaseConfig;
+use Luminova\Interface\DatabaseDriverInterface;
+use Luminova\Exceptions\{ErrorCode, DatabaseException};
+use Luminova\Database\Driver\Helpers\AbstractBaseDriver;
+
+/**
+ * @implements DatabaseDriverInterface<PDO>
+ */
+final class PdoDriver extends AbstractBaseDriver implements DatabaseDriverInterface 
+{
+    /**
+     * PDO Database connection instance.
+     * 
+     * @var PDO $connection 
+     */
+    private ?PDO $connection = null; 
+
+    /**
+     * PDO statement object.
+     * 
+     * @var PDOStatement|null $stmt
+     */
+    private ?PDOStatement $stmt = null;
+
+    /**
+     * Result mode.
+     * 
+     * @var bool $isResult
+     */
+    private bool $isResult = false;
+
+    /**
+     * {@inheritDoc}
+     */
+    protected string $driver = 'mysql';
+
+    /**
+     * Database driver version.
+     * 
+     * @var string|null $version
+     */
+    private ?string $version = null;
+
+    /**
+     * Result fetch modes.
+     * 
+     * @var array<int,int> FETCH_MODES
+     */
+    private const FETCH_MODES = [
+        FETCH_ASSOC     => PDO::FETCH_ASSOC,
+        FETCH_BOTH      => PDO::FETCH_BOTH,
+        FETCH_OBJ       => PDO::FETCH_OBJ, 
+        FETCH_COLUMN    => PDO::FETCH_COLUMN,
+        FETCH_KEY_PAIR  => PDO::FETCH_KEY_PAIR,
+        FETCH_NUM       => PDO::FETCH_NUM,
+        FETCH_CLASS     => PDO::FETCH_CLASS
+    ];
+
+    /**
+     * {@inheritdoc}
+     */
+    public function __construct(DatabaseConfig $config) 
+    {
+        $this->config = $config;
+        $this->driver = strtolower($this->config->getValue('pdo_driver'));
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getDriver(): ?string 
+    {
+        return $this->isConnected() 
+            ? ($this->connection->getAttribute(PDO::ATTR_DRIVER_NAME) ?? $this->driver)
+            : null;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getVersion(): ?string
+    {
+        if($this->version !== null){
+            return $this->version;
+        }
+
+        try{
+            $stmt = match($this->getDriver()) {
+                'mysql'   => $this->connection->getAttribute(PDO::ATTR_SERVER_VERSION),
+                'cubrid'  => $this->query("SELECT version()"),
+                'dblib', 'sqlsrv'  => $this->query("SELECT @@VERSION"),
+                'sqlite'  => $this->query("SELECT sqlite_version()"),
+                'pgsql'   => $this->query("SHOW server_version"),
+                'oci'     => $this->query("SELECT * FROM v\$version"),
+                default   => null,
+            };
+
+            if($stmt->ok() && $stmt instanceof PdoDriver){
+                $version = $stmt->getStatement()->fetchColumn();
+            }
+        } catch(Throwable){
+            return null;
+        }
+
+        return $this->version = is_string($version) ? $version : null;
+    }
+    
+    /**
+     * {@inheritdoc}
+     */
+    public function isConnected(): bool 
+    {
+        return ($this->connected && $this->connection instanceof PDO);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isStatement(): bool 
+    {
+        return ($this->stmt instanceof PDOStatement);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function isResult(): bool 
+    {
+        return $this->isResult;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function hasActiveCursor(): bool 
+    {
+        return $this->isStatement() 
+            && $this->stmt->columnCount() > 0;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function error(): string 
+    {
+        if(!$this->isConnected()){
+            return 'Connection not established';
+        }
+
+        return $this->isStatement() 
+            ? $this->stmt->errorInfo()[2] ?? '' 
+            : $this->connection->errorInfo()[2] ?? '';
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function errors(): array
+    {
+        $hasStatement = $this->isStatement();
+        $hasConnection = $this->isConnected();
+
+        $statementError = $hasStatement
+            ? $this->stmt->errorInfo()
+            : null;
+
+        $connectionError = $hasConnection
+            ? $this->connection->errorInfo()
+            : null;
+
+        return [
+            'statement' => [
+                'errno'    => $hasStatement ? ($statementError[0] ?? -1) : -1,
+                'error'    => $hasStatement ? ($statementError[2] ?? null) : null,
+                'num_rows' => $hasStatement ? $this->rowCount() : null,
+            ],
+            'connection' => [
+                'errno' => $hasConnection
+                    ? ($connectionError[0] ?? -1)
+                    : -1,
+                'error' => $hasConnection
+                    ? ($connectionError[2] ?? null)
+                    : 'Connection not established',
+            ],
+        ];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function info(): array 
+    {
+        if(!$this->isConnected()){
+            return ['status' => 'disconnected'];
+        }
+
+        $info = $this->connection->getAttribute(PDO::ATTR_CONNECTION_STATUS);
+        
+        if(!$info){
+            return ['status' => 'idle'];
+        }
+
+        preg_match_all('/(\S[^:]+): (\S+)/', $info, $matches);
+        return array_combine($matches[1], $matches[2]) ?: [];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function setDebug(bool $debug): self 
+    {
+        $this->onDebug = $debug;
+
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function dumpDebug(): bool
+    {
+        return (!$this->onDebug || !$this->isStatement()) 
+            ? false 
+            : (bool) $this->stmt->debugDumpParams();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function prepare(string $query): self 
+    {
+        $this->assertConnection();
+        $this->profiling(true);
+
+        $this->query = ['query' => '', 'params' => []];
+        $this->isResult = false;
+        $this->executed = false;
+        $this->stmt = $this->connection->prepare($query);
+        $this->addQueryInfo('query', $query);
+
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function query(string $query): self
+    {
+        $this->assertConnection();
+        $this->profiling(true);
+
+        $this->query = ['query' => '', 'params' => []];
+        $this->isResult = true;
+        $this->executed = false;
+
+        $this->stmt = $this->connection->query($query) ?: null;
+
+        if($this->stmt instanceof PDOStatement){
+            $this->executed = true;
+        }
+
+        $this->addQueryInfo('query', $query);
+        $this->profiling(false, fn: __METHOD__);
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function exec(string $query): int 
+    {
+        $this->assertConnection();
+        $this->profiling(true);
+
+        $this->query = ['query' => '', 'params' => []];
+        $this->isResult = true;
+        $this->executed = false;
+
+        try {
+            $result = $this->connection->exec($query);
+        } finally {
+            $this->addQueryInfo('query', $query);
+            $this->profiling(false, fn: __METHOD__);
+        }
+
+        if($result === false){
+            return 0;
+        }
+
+        $this->executed = true;
+
+        if ($result === -1 && Util::isDDLQuery($query)) {
+            return 1;
+        }
+
+        return max(1, $result);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function setTransactionIsolation(int $level = self::TRANSACTION_READ_COMMITTED): bool
+    {
+        if($level === self::TRANSACTION_MODE_NONE){
+            return true;
+        }
+
+        $mode = $this->parseTransactionLevel($level);
+
+        try{
+            return $this->connection->exec(sprintf(
+                'SET TRANSACTION ISOLATION LEVEL %s', 
+                $mode
+            )) !== false;
+        }catch(Throwable $e){
+            $this->profiling(false, true, __METHOD__);
+
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function beginTransaction(int $flags = self::TRANSACTION_MODE_NONE, ?string $name = null): bool
+    {
+        $this->assertConnection();
+        $inTransaction = $this->connection->inTransaction();
+
+        if($inTransaction && $name === null){
+            throw new DatabaseException(
+                'Nested transaction requires a savepoint name',
+                ErrorCode::TRANSACTION_SAVEPOINT_FAILED
+            );
+        }
+
+        $startedTransaction = false;
+
+        try{
+            if (!$inTransaction && $flags !== self::TRANSACTION_MODE_NONE) {
+                if($this->startTransactionWithFlags($flags)){
+                    $inTransaction = $this->connection->inTransaction();
+                    $startedTransaction = $inTransaction;
+                }
+            }
+            
+            if (!$inTransaction) {
+                if (!$this->connection->beginTransaction()) {
+                    return false;
+                }
+                
+                $startedTransaction = true;
+            }
+
+            if ($name === null) {
+                return true;
+            }
+
+            return $this->savepoint($name);
+        }catch(Throwable $e){
+            $this->profiling(false, true, __METHOD__);
+
+            if ($startedTransaction && $this->connection->inTransaction()) {
+                try{
+                    $this->connection->rollBack();
+                }catch(Throwable){}
+            }
+
+            if($e instanceof DatabaseException){
+                throw $e;
+            }
+
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function savepoint(string $name): bool
+    {
+        $this->assertConnection();
+
+        if (!$this->connection->inTransaction()) {
+            throw new DatabaseException(
+                'Cannot create savepoint outside transaction'
+            );
+        }
+
+        $name = $this->parseSavepoint($name, __METHOD__, 1);
+
+        try{
+            if($this->connection->exec("SAVEPOINT {$name}") !== false){
+                $this->savepoint[$name] = true;
+                return true;
+            }
+        }catch(Throwable $e){
+            $this->profiling(false, true, __METHOD__);
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function commit(int $flags = 0, ?string $name = null): bool 
+    {
+        $this->assertConnection();
+
+        if (!$this->inTransaction()) {
+            return true;
+        }
+
+        $name = $this->parseSavepoint($name, __METHOD__, 2);
+
+        try{
+            if ($name === null) {
+                if($this->connection->commit()){
+                    $this->savepoint = [];
+                    return true;
+                }
+
+                return false;
+            }
+
+            if($this->connection->exec("RELEASE SAVEPOINT {$name}") !== false){
+                unset($this->savepoint[$name]);
+                return true;
+            }
+        }catch(Throwable $e){
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        } finally {
+            if(!$name){
+                $this->profiling(false, true, __METHOD__);
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function rollback(int $flags = 0, ?string $name = null): bool 
+    {
+        $this->assertConnection();
+
+        if (!$this->inTransaction()) {
+            return true;
+        }
+
+        $name = $this->parseSavepoint($name, __METHOD__, 2);
+        
+        try{
+            if ($name === null) {
+                if($this->connection->rollBack()){
+                    $this->savepoint = [];
+                    return true;
+                }
+
+                return false;
+            }
+
+            if($this->connection->exec("ROLLBACK TO SAVEPOINT {$name}") !== false){
+                unset($this->savepoint[$name]);
+                return true;
+            }
+        }catch(Throwable $e){
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        } finally {
+            if(!$name){
+                $this->profiling(false, true, __METHOD__);
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function release(string $name): bool 
+    {
+        $this->assertConnection();
+
+        if (!$this->inTransaction()) {
+            return false;
+        }
+
+        $name = $this->parseSavepoint($name, __METHOD__, 2);
+
+        try{
+            if($this->connection->exec("RELEASE SAVEPOINT {$name}") !== false){
+                unset($this->savepoint[$name]);
+                return true;
+            }
+        }catch(Throwable $e){
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function inTransaction(): bool 
+    {
+        return $this->isConnected() && $this->connection->inTransaction();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function getType(mixed $value): int
+    {
+        return match (true) {
+            is_null($value) => PDO::PARAM_NULL,
+            is_bool($value) => PDO::PARAM_BOOL,
+            is_int($value)  => PDO::PARAM_INT,
+            is_resource($value), 
+            (is_string($value) && (bool) preg_match('~[^\x09\x0A\x0D\x20-\x7E]~', $value)) => PDO::PARAM_LOB,
+            default  => PDO::PARAM_STR
+        };
+    }
+    
+    /**
+     * {@inheritdoc}
+     */
+    public function bind(string $param, mixed $value, ?int $type = null): self 
+    {
+        $this->assertStatement();
+        $type = ($type === null) ? self::getType($value) : self::fromTypes($type);
+
+        $this->stmt->bindValue($param, $value, $type);
+        $this->addQueryInfo('params', [$param => $value]);
+
+        $this->isResult = false;
+
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function value(string $param, mixed $value, ?int $type = null): self 
+    {
+        return $this->bind($param, $value, $type);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function param(string $param, mixed &$value, ?int $type = null): self 
+    {
+        $this->assertStatement();
+        $type = ($type === null) ? self::getType($value) : self::fromTypes($type);
+
+        $this->stmt->bindParam($param, $value, $type);
+        $this->addQueryInfo('params', [$param => $value]);
+
+        $this->isResult = false;
+        
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function execute(?array $params = null): bool 
+    {
+        $this->assertStatement();
+
+        try {
+           $this->executed = $this->stmt->execute($params);
+        } catch (Throwable $e) {
+            $this->free();
+
+            if(!$e instanceof DatabaseException){
+                throw new DatabaseException(
+                    $e->getMessage(), 
+                    $e->getCode(), 
+                    $e->getPrevious()
+                );
+            }
+
+            throw $e;
+        } finally{
+            if($params){
+                $this->addQueryInfo('params', $params);
+            }
+
+            $this->profiling(false, fn: __METHOD__);
+        }
+
+        return $this->executed;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function rowCount(): int 
+    {
+        return $this->isStatement() ? $this->stmt->rowCount() : 0;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function columnCount(): int 
+    {
+        return $this->isStatement() ? $this->stmt->columnCount() : 0;
+    }
+
+    /**
+     * Get result.
+     * 
+     * @return PDOStatement|bool 
+     */
+    private function getCursorResult(): ?PDOStatement 
+    {
+        return $this->getStatement();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getInt(): array
+    {
+        return $this->fetch(RETURN_ALL, FETCH_NUM) ?: [];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getStatement(): ?PDOStatement
+    {
+        return ($this->stmt instanceof PDOStatement) ? $this->stmt : null;
+    }
+
+    /**
+     * {@inheritdoc}
+     */ 
+    public function fetch(int $returnMode = RETURN_ALL, int $fetchAS = FETCH_OBJ): mixed  
+    {
+        $this->assertStatement();
+        $fetchMode = self::FETCH_MODES[$fetchAS] ?? PDO::FETCH_OBJ;
+
+        if ($fetchMode === null) {
+            throw new DatabaseException(
+                sprintf('Unsupported database fetch mode: %d. Use FETCH_*', $fetchAS),
+                ErrorCode::NOT_SUPPORTED
+            );
+        }
+
+        if($returnMode === RETURN_NEXT || $returnMode === RETURN_STREAM){
+            return ($fetchAS === FETCH_CLASS) 
+                ? $this->stmt->fetchObject(stdClass::class)
+                : $this->stmt->fetch($fetchMode);
+        }
+       
+        return $this->stmt->fetchAll($fetchMode);
+    }
+
+    /**
+     * {@inheritdoc}
+     */ 
+    public function fetchObject(?string $class = null, mixed ...$arguments): ?object 
+    {
+        return $this->fetchClassObject($class, RETURN_NEXT, $arguments);
+    }
+
+    /**
+     * {@inheritdoc}
+     */ 
+    public function fetchAllObject(?string $class = null, mixed ...$arguments): array 
+    {
+        return $this->fetchClassObject($class, RETURN_ALL, $arguments) ?? [];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getLastInsertId(?string $name = null): mixed
+    {
+        return $this->isConnected() 
+            ? ($this->connection->lastInsertId($name) ?: null)
+            : null;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function free(): void 
+    {
+        if($this->stmt === null){
+            return;
+        }
+
+        try{
+            $this->stmt->closeCursor();
+        }catch(Throwable){}
+
+        $this->stmt = null;
+        $this->isResult = false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function close(): void 
+    {
+        $this->free();
+        $this->connection = null;
+        $this->connected = false;
+        self::$openConnections--;
+    }
+
+    /**
+     * Fetch query results as instances of a specified class.
+     *
+     * @param class-string|null $class Class name used for result hydration..
+     * @param int $returnMode Result fetch mode.
+     * @param array $arguments Constructor arguments passed to the class constructor.
+     *
+     * @return object|array|null Returns a hydrated object, an array of objects,
+     *                           or null when no result exists.
+     *
+     * @throws DatabaseException If an unsupported return mode is provided.
+     */
+    private function fetchClassObject(
+        ?string $class, 
+        int $returnMode, 
+        array $arguments = []
+    ): object|array|null 
+    {
+        if(!$this->isStatement()){
+            return null;
+        }
+
+        $class ??= \stdClass::class;
+
+        $result = match ($returnMode) {
+            RETURN_STREAM,
+            RETURN_NEXT => $this->stmt->fetchObject($class, $arguments),
+            RETURN_ALL  => $this->stmt->fetchAll(PDO::FETCH_CLASS, $class, ...$arguments),
+            default => throw new DatabaseException('Invalid return mode.')
+        };
+
+        if($result === false || $result === null){
+            return null;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Convert custom parameter types to PDO parameter types.
+     * 
+     * @param int $type Custom parameter type.
+     * 
+     * @return int Corresponding PDO parameter type.
+     */
+    private static function fromTypes(int $type): int  
+    {
+        return match ($type) {
+            PARAM_INT   => PDO::PARAM_INT,
+            PARAM_BOOL  => PDO::PARAM_BOOL,
+            PARAM_NULL  => PDO::PARAM_NULL,
+            PARAM_LOB   => PDO::PARAM_LOB,
+            PARAM_STR,
+            PARAM_FLOAT, 6 => PDO::PARAM_STR,
+            default     => $type
+        };
+    }
+
+    /**
+     * Normalize transaction savepoint name.
+     * 
+     * @param string|null $name Savepoint name.
+     * @param string $fn called method name.
+     * @param int $check 1 if already exist, 2 if not exist.
+     * 
+     * @return string|null Return normalized name or null if invalid.
+     * @throws DatabaseException
+     */
+    private function parseSavepoint(?string $name, string $fn, int $check = 0): ?string 
+    {
+        if ($name === null) {
+            return null;
+        }
+
+        $name = preg_replace('/[^a-zA-Z0-9_]/', '', trim($name));
+
+        if ($name === '') {
+            $this->profiling(false, true, $fn);
+
+            throw new DatabaseException(
+                'Invalid savepoint name.', 
+                ErrorCode::TRANSACTION_SAVEPOINT_FAILED
+            );
+        }
+
+        $prefix = is_numeric($name) ? 'tnx_' : '';
+        $name = substr($prefix . $name, 0, 64);
+
+        if($check > 0){
+            $isExist = isset($this->savepoint[$name]);
+            $err = null;
+
+            if($check === 1 && $isExist){
+                $err = 'Savepoint %s already exist';
+            }elseif($check === 2 && !$isExist){
+                $err = 'Savepoint %s does not exist.';
+            }
+
+            if($err !== null){
+                $this->profiling(false, true, $fn);
+                throw new DatabaseException(sprintf(
+                    $err,
+                    $name
+                ));
+            }
+        }
+
+        return $name;
+    }
+
+    /**
+     * Start a transaction using optional transaction flags.
+     *
+     * Converts transaction bitmask flags into a MySQL-compatible `START TRANSACTION`
+     * statement. Flags can be combined using the bitwise OR (`|`) operator.
+     * 
+     * @param int $flags Transaction flags to apply.
+     *
+     * @return bool Returns `true` when flags are applied and the transaction starts,
+     *              or `false` when no supported flags are provided.
+     *
+     * @throws DatabaseException If the transaction cannot be started.
+     */
+    private function startTransactionWithFlags(int $flags): bool
+    {
+        $clauses = [];
+
+        if ($flags & self::TRANSACTION_WITH_CONSISTENT_SNAPSHOT) {
+            $clauses[] = 'WITH CONSISTENT SNAPSHOT';
+        }
+
+        if ($flags & self::TRANSACTION_READ_WRITE) {
+            $clauses[] = 'READ WRITE';
+        }
+
+        if ($flags & self::TRANSACTION_READ_ONLY) {
+            $clauses[] = 'READ ONLY';
+        }
+
+        if ($clauses === []) {
+            return false;
+        }
+
+        $sql = 'START TRANSACTION ' . implode(', ', $clauses);
+
+        if ($this->connection->exec($sql) === false) {
+            throw new DatabaseException(
+                'Failed to start transaction with the specified flags.',
+                ErrorCode::DATABASE_TRANSACTION_FAILED
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Ensures that a valid SQL statement is available before execution.
+     * 
+     * @throws DatabaseException If no prepared or valid statement exists.
+     */
+    private function assertStatement(): void 
+    {
+        if(!$this->isStatement()){
+            throw new DatabaseException(
+                'No valid SQL statement to execute. Ensure a query is prepared or available.',
+                ErrorCode::NO_STATEMENT_TO_EXECUTE
+            );
+        }
+    }
+
+    /**
+     * Initializes the database connection.
+     * This method is called internally and should not be called directly.
+     * 
+     * @return void 
+     * @throws DatabaseException If no driver is specified.
+     * @throws PDOException Throws if pdo error occurs.
+     */
+    protected function newConnection(): void
+    {
+        if ($this->connection instanceof PDO) {
+            return;
+        }
+
+        $username = $password = null;
+        $charset = $this->config->getValue('charset');
+
+        if ($charset) {
+            $charset = strtolower($charset);
+            $charset = ($charset === 'utf8' || $charset === 'utf-8') ? 'utf8mb4' : $charset;
+        }
+
+        $dsn = $this->dsnConnection($charset);
+
+        if ($dsn === null) {
+            throw new DatabaseException(
+                sprintf('Unsupported PDO driver: "%s"', $this->driver),
+                ErrorCode::DATABASE_DRIVER_NOT_AVAILABLE
+            );
+        }
+
+        if ($this->driver !== 'sqlite') {
+            $username = $this->config->getValue('username');
+            $password = $this->config->getValue('password');
+        }
+
+        $options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ,
+            PDO::ATTR_EMULATE_PREPARES   => (bool) $this->config->getValue('emulate_prepares'),
+            PDO::ATTR_PERSISTENT         => Runtime::isCommand() 
+                || (bool) $this->config->getValue('persistent', false),
+        ];
+        
+
+        if ($this->driver === 'mysql') {
+            $options[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = (bool) $this->config->getValue(
+                'buffered_query', 
+                false
+            );
+            $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = Runtime::isProduction();
+            $this->setInitCommands($charset, $options);
+
+            if ($timeout = $this->config->getValue('timeout')) {
+                $options[PDO::ATTR_TIMEOUT] = (int) $timeout;
+            }
+        }
+
+        $this->connection = new PDO($dsn, $username, $password, $options);
+        self::$openConnections++;
+    }
+
+    /**
+     * Apply developers defined command.
+     * 
+     * @param string|null $charset
+     * @param array &$options
+     * 
+     * @return void 
+     */
+    private function setInitCommands(?string $charset, array &$options): void 
+    {
+        $commands = (array) $this->config->getValue('commands', []);
+        $statements = [];
+        $hasSetNames = false;
+
+        if($commands){
+            foreach ($commands as $command) {
+                $command = trim($command);
+
+                if ($command === '') {
+                    continue;
+                }
+
+                if (!str_starts_with(strtoupper($command), 'SET ')) {
+                    throw new DatabaseException(
+                        sprintf(
+                            'Invalid command: %s. Only SET statements are allowed.',
+                            $command
+                        ),
+                        ErrorCode::VALUE_FORBIDDEN
+                    );
+                }
+
+                if (preg_match('/^SET\s+NAMES\b/i', $command)) {
+                    if (!preg_match(
+                        '/^SET\s+NAMES\s+[a-z0-9_]+(\s+COLLATE\s+[a-z0-9_]+)?$/i',
+                        $command
+                    )) {
+                        throw new DatabaseException(
+                            "Invalid SET NAMES statement: {$command}",
+                            ErrorCode::VALUE_FORBIDDEN
+                        );
+                    }
+
+                    $hasSetNames = true;
+                }
+
+                $statements[] = rtrim($command, ';');
+            }
+        }
+
+        if ($charset && !$hasSetNames) {
+            if (!preg_match('/^[a-z0-9_]+$/i', $charset)) {
+                throw new DatabaseException(
+                    "Invalid MySQL charset: {$charset}", 
+                    ErrorCode::VALUE_FORBIDDEN
+                );
+            }
+
+            $statements[] = "SET NAMES {$charset}";
+        }
+
+        if($statements){
+            $options[PDO::MYSQL_ATTR_INIT_COMMAND] = implode('; ', $statements);
+        }
+    }
+
+    /**
+     * Get driver connection Data Source Name (DSN).
+     *
+     * @param string|null $charset
+     * 
+     * @return string|null
+     */
+    private function dsnConnection(?string $charset = null): ?string
+    {
+        if($this->driver === 'sqlite'){
+            $sqlitePath = $this->config->getValue('sqlite_path');
+            if(!$sqlitePath){
+                return null;
+            }
+
+            return "sqlite:{$sqlitePath}";
+        }
+
+        $database = $this->config->getValue('database');
+        $host = $this->config->getValue('host');
+        $port = $this->config->getValue('port');
+        $options = ($charset && $this->driver === 'pgsql') 
+            ? ";options='--client_encoding={$charset}'" 
+            : '';
+
+        return match($this->driver){
+            'mysql' => $this->withMysqlDsn($database, $host, $port, $charset),
+            'cubrid' => "cubrid:host={$host};port={$port};dbname={$database}",
+            'dblib' => "dblib:host={$host}:{$port};dbname={$database}",
+            'pgsql' => "pgsql:host={$host};port={$port};dbname={$database}{$options}",
+            'sqlsrv' => "sqlsrv:Server={$host};Database={$database}",
+            'oci' => "oci:dbname=" . (
+                (str_contains($database, '/') || str_contains($database, ':')) 
+                    ? "//{$database}" 
+                    : $database
+            ),
+            default => null
+        };
+    }
+
+    /**
+     * Get mysql connection dsn based on environment.
+     * Cli or Force: Use Unix socket connection
+     * Http: Use TCP/IP connection
+     *
+     * @param string $database
+     * @param string $host
+     * @param int $port
+     * @param string|null $charset
+     * 
+     * @return string Return database connection dsn string.
+     */
+    private function withMysqlDsn(
+        string $database, 
+        string $host, 
+        int $port, 
+        ?string $charset = null
+    ): string
+    {
+        $options = $charset ? ";charset={$charset}" : '';
+
+        if (
+            Runtime::isCommand()
+            || $this->config->getValue('socket') 
+            || Runtime::isContainer('novakit')
+        ) {
+            $socketPath = $this->config->getValue('socket_path') 
+                ?: Runtime::tryGetIniValue('pdo_mysql.default_socket');
+
+            if(empty($socketPath)){
+                throw new DatabaseException(sprintf(
+                    'PDO MySQL socket path not set. Define it in the environment as "%s", ' . 
+                    'or configure "%s" in your php.ini.',
+                    'database.socket.path',
+                    'pdo_mysql.default_socket'
+                ));
+            }
+  
+            return "mysql:unix_socket={$socketPath};dbname={$database}{$options}";
+        }
+
+        return "mysql:host={$host};port={$port};dbname={$database}{$options}";
+    }
+}

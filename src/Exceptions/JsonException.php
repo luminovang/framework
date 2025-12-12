@@ -11,10 +11,10 @@
 namespace Luminova\Exceptions;
 
 use \Throwable;
-use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Exceptions\LuminovaException;
 
-class JsonException extends AppException
+class JsonException extends LuminovaException
 {
     /**
      * Constructor for JsonException.

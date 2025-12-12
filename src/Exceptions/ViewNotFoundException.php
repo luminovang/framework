@@ -11,10 +11,10 @@
 namespace Luminova\Exceptions;
 
 use \Throwable;
-use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Exceptions\LuminovaException;
 
-class ViewNotFoundException extends AppException
+class ViewNotFoundException extends LuminovaException
 {
     /**
      * Constructor for ViewNotFoundException.

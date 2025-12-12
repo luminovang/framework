@@ -10,21 +10,24 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Utility\Storage\Filesystem;
-use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Interface\{LazyObjectInterface, DatabaseInterface};
-use function \Luminova\Funcs\{root, make_dir};
+use Luminova\Runtime;
+use Luminova\Luminova;
+use Luminova\Config\Env;
+use Luminova\Http\Downloader;
+use function Luminova\Funcs\make_dir;
+use Luminova\Exceptions\DatabaseException;
+use Luminova\Interface\{LazyObjectInterface, DatabaseDriverInterface};
 
 final class Manager implements LazyObjectInterface
 {
     /**
      * Initializes the Manager class.
      * 
-     * @param DatabaseInterface $db The database connection driver instance.
+     * @param DatabaseDriverInterface $db The database connection driver instance.
      * @param string|null $table The name of the database table to export (default: null).
      */
     public function __construct(
-        private DatabaseInterface $db, 
+        private DatabaseDriverInterface $db, 
         private ?string $table = null
     ){}
 
@@ -59,7 +62,7 @@ final class Manager implements LazyObjectInterface
             throw new DatabaseException("Unsupported export format: {$as}. Allowed formats: [csv, json]");
         }
 
-        $directory = root('writeable/temps');
+        $directory = Luminova::root('writeable/tmp/');
 
         if (!make_dir($directory)) {
             return false;
@@ -95,8 +98,15 @@ final class Manager implements LazyObjectInterface
                 }
             }
 
-            if($count > 0 && Filesystem::download($filepath, $filename, [], true)){
-                $count++;
+            if($count > 0){
+                $dl = new Downloader($filepath, $filename);
+
+                if($dl->download()){
+                    $count++;
+                }
+
+                $dl->deleteSourceFile();
+                $dl->close();
             }
         }
 
@@ -117,8 +127,8 @@ final class Manager implements LazyObjectInterface
      */
     public function backup(?string $filename = null, bool $forTable = false): bool 
     {
-        $filename ??= ($forTable  ? $this->table : uniqid());
-        $directory = root('writeable/backups');
+        $filename ??= ($forTable  ? $this->table : bin2hex(random_bytes(4)));
+        $directory = Luminova::root('writeable/backups');
 
         if (!make_dir($directory)) {
             return false;
@@ -136,7 +146,7 @@ final class Manager implements LazyObjectInterface
      * @param string $directory The backup directory.
      * 
      * @return bool Return true if the backup was created successfully, false otherwise.
-    */
+     */
     private function backupDatabaseTable(string $filename, string $directory): bool
     {
         $filepath = $directory . $filename . '-' . date('d-m-Y-h-i-sa') . '-tbl.sql';
@@ -148,7 +158,15 @@ final class Manager implements LazyObjectInterface
 
         $this->writeTableStructure($handle, $this->table);
 
+        fflush($handle);
+        fsync($handle);
         fclose($handle);
+
+        if ($dir = @fopen($directory, 'r')) {
+            fsync($dir);
+            fclose($dir);
+        }
+        
         return true;
     }
 
@@ -162,13 +180,15 @@ final class Manager implements LazyObjectInterface
      */
     private function backupDatabase(string $filename, string $directory): bool
     {
-        $var = (PRODUCTION ? 'database' : 'database.development');
-        $database = env("{$var}.name");
+        $var = (Runtime::isProduction() ? 'database' : 'database.development');
+        $database = Env::get("{$var}.name");
         $filepath = $directory . $filename . '-' . date('d-m-Y-h-i-sa') . '-db.sql';
         $handle = fopen($filepath, 'w');
 
         if (!$handle) {
-            throw new DatabaseException("Failed to open file for writing backup: $filepath");
+            throw new DatabaseException(
+                "Failed to open file for writing backup: {$filepath}"
+            );
         }
 
         $structure = $this->db->query("SHOW CREATE DATABASE {$database}")
@@ -185,7 +205,15 @@ final class Manager implements LazyObjectInterface
         }
 
         $this->writeTriggers($handle);
+
+        fflush($handle);
+        fsync($handle);
         fclose($handle);
+
+        if ($dir = @fopen($directory, 'r')) {
+            fsync($dir);
+            fclose($dir);
+        }
 
         return true;
     }
@@ -199,7 +227,7 @@ final class Manager implements LazyObjectInterface
      */
     private function writeTriggers($handle): void
     {
-        if ($handle && $this->db instanceof DatabaseInterface) {
+        if ($handle && $this->db instanceof DatabaseDriverInterface) {
             $triggers = $this->db->query("SHOW TRIGGERS")
                 ->fetch(RETURN_ALL, FETCH_ASSOC);
 
@@ -225,7 +253,7 @@ final class Manager implements LazyObjectInterface
      */
     private function writeTableStructure($handle, string $table): void
     {
-        if ($handle && $this->db instanceof DatabaseInterface) {
+        if ($handle && $this->db instanceof DatabaseDriverInterface) {
             $tableStructure = $this->db->query("SHOW CREATE TABLE {$table}")
                 ->fetch(RETURN_NEXT, FETCH_ASSOC)['Create Table'];
 
@@ -238,9 +266,17 @@ final class Manager implements LazyObjectInterface
             if ($rows) {
                 fwrite($handle, "-- Data for {$table}\n\n");
                 foreach ($rows as $row) {
-                    $escapedRow = array_map(fn($value) => is_string($value) ? addslashes($value) : $value, $row);
-                    $rowValues = implode("', '", $escapedRow);
-                    fwrite($handle, "INSERT INTO $table VALUES ('$rowValues');\n");
+                    $escaped = array_map(
+                        fn($v) => is_null($v)
+                            ? 'NULL'
+                            : (is_string($v) ? "'" . addslashes($v) . "'" : $v),
+                        $row
+                    );
+
+                    fwrite(
+                        $handle,
+                        "INSERT INTO {$table} VALUES (" . implode(', ', $escaped) . ");\n"
+                    );
                 }
                 fwrite($handle, "\n");
             }

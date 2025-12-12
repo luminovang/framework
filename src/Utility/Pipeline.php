@@ -12,8 +12,8 @@ namespace Luminova\Utility;
 
 use \Fiber;
 use \Throwable;
-use \Luminova\Interface\LazyObjectInterface;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Interface\LazyObjectInterface;
+use Luminova\Exceptions\RuntimeException;
 
 final class Pipeline implements LazyObjectInterface
 {

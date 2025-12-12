@@ -12,14 +12,13 @@ namespace Luminova\Utility;
 
 use \Fiber;
 use \Closure;
-use \Exception;
+use \Throwable;
 use \Generator;
-use \FiberError;
-use \Luminova\Command\Terminal;
-use \Luminova\Http\Message\Stream;
+use Luminova\Command\Terminal;
+use Luminova\Http\Message\Stream;
 use \Psr\Http\Message\StreamInterface;
-use \Luminova\Exceptions\{ErrorCode, RuntimeException, BadMethodCallException, InvalidArgumentException};
-use function \Luminova\Funcs\array_merge_result;
+use Luminova\Exceptions\{ErrorCode, RuntimeException, BadMethodCallException, InvalidArgumentException};
+use function Luminova\Funcs\array_merge_result;
 
 class Process
 {
@@ -126,42 +125,42 @@ class Process
      * 
      * @var string EXECUTOR_POPEN
      */
-    public const EXECUTOR_POPEN = 'popen';
+    public final const EXECUTOR_POPEN = 'popen';
 
     /**
      * Command execution with exec.
      * 
      * @var string EXECUTOR_EXEC
      */
-    public const EXECUTOR_EXEC = 'exec';
+    public final const EXECUTOR_EXEC = 'exec';
 
     /**
      * Command execution with shell_exec.
      * 
      * @var string EXECUTOR_SHELL
      */
-    public const EXECUTOR_SHELL = 'shell_exec';
+    public final const EXECUTOR_SHELL = 'shell_exec';
 
     /**
      * Command execution with proc_open.
      * 
      * @var string EXECUTOR_PROC_OPEN
      */
-    public const EXECUTOR_PROC_OPEN = 'proc_open';
+    public final const EXECUTOR_PROC_OPEN = 'proc_open';
 
     /**
      * Callback execution flag.
      * 
      * @var string EXECUTOR_CALLBACK
      */
-    public const EXECUTOR_CALLBACK = 'callback';
+    public final const EXECUTOR_CALLBACK = 'callback';
 
     /**
      * Stream execution flag.
      * 
      * @var string EXECUTOR_STREAM
      */
-    public const EXECUTOR_STREAM = 'stream';
+    public final const EXECUTOR_STREAM = 'stream';
 
     /**
      * Process constructor.
@@ -238,7 +237,7 @@ class Process
      */
     public function run(): void
     {
-        $this->assertStarted(__FUNCTION__);
+        $this->assertStarted(__METHOD__);
         $this->isComplete = false;
 
         if(self::$isFiberSupported){
@@ -252,7 +251,7 @@ class Process
                     $this->fiber = null;
                 }
                 return;
-            }catch(Exception|FiberError){
+            }catch(Throwable){
                 self::$isFiberSupported = false;
             }
         }
@@ -455,7 +454,7 @@ class Process
      */
     public function setWorkingDirectory(string $cwd): self
     {
-        $this->assertStarted(__FUNCTION__);
+        $this->assertStarted(__METHOD__);
         $this->cwd = $cwd;
         if(
             self::EXECUTOR_PROC_OPEN !== $this->executor &&
@@ -477,7 +476,7 @@ class Process
      */
     public function setEnvironment(array $envs): self
     {
-        $this->assertStarted(__FUNCTION__);
+        $this->assertStarted(__METHOD__);
         $this->env = $envs;
 
         return $this;
@@ -493,7 +492,7 @@ class Process
      */
     public function setMode(string $mode): self
     {
-        $this->assertStarted(__FUNCTION__);
+        $this->assertStarted(__METHOD__);
         $this->mode = $mode;
 
         return $this;
@@ -509,7 +508,7 @@ class Process
      */
     public function setDescriptors(array $descriptors): self
     {
-        $this->assertStarted(__FUNCTION__);
+        $this->assertStarted(__METHOD__);
         $this->descriptors = $descriptors;
 
         return $this;
@@ -541,7 +540,7 @@ class Process
      */
     public function setOptions(array $options): self
     {
-        $this->assertStarted(__FUNCTION__);
+        $this->assertStarted(__METHOD__);
         $defaultOptions = $this->options;
 
         foreach ($options as $key => $value) {
@@ -644,8 +643,12 @@ class Process
             if ($this->fiber->isSuspended()) {
                 try{
                     $this->fiber->resume();
-                }catch(Exception|FiberError $e){
-                    throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+                }catch(Throwable $e){
+                    throw new RuntimeException(
+                        $e->getMessage(), 
+                        $e->getCode(), 
+                        $e->getPrevious()
+                    );
                 }
             }
 

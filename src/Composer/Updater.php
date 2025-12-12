@@ -10,20 +10,21 @@
  */
 namespace Luminova\Composer;
 
-include_once __DIR__ . '/../../bootstrap/constants.php';
-include_once __DIR__ . '/../../bootstrap/functions.php';
+use Luminova\Boot;
+use Luminova\Runtime;
+use Luminova\Luminova;
+use \DirectoryIterator;
+use Luminova\Command\Terminal;
+use Luminova\Command\Utils\Color;
 
-use \Luminova\Luminova;
-use \Luminova\Command\Terminal;
-
-class Updater
+final class Updater
 {
     /**
      * Path to the framework directory.
      * 
-     * @var string $frameworkPath
+     * @var string FRAMEWORK_PATH
      */
-    private static string $frameworkPath = 'system/plugins/luminovang/framework/';
+    public const FRAMEWORK_PATH = 'system/plugins/luminovang/framework/';
 
     /**
      * List of files to be replaced during updates.
@@ -33,18 +34,46 @@ class Updater
     private static array $toReplace = [];
 
     /**
-     * Check if self has new update.
-     * 
-     * @var bool selfHasUpdate
-     */
-    private static bool $selfHasUpdate = false;
-
-    /**
      * Self update into.
      * 
      * @var array selfInfo
      */
-    private static array $selfInfo = [];
+    private static array $selfInfo = [false, null, null];
+
+    /**
+     * List of depreciated modules to remove.
+     * 
+     * @var array depreciated
+     */
+    private static array $depreciated = [];
+
+    /**
+     * Number of updated files.
+     * 
+     * @var int $updates
+     */
+    private static int $updates = 0;
+
+    /**
+     * Number of updated files.
+     * 
+     * @var int $added
+     */
+    private static int $added = 0;
+
+    /**
+     * Number of updated files.
+     * 
+     * @var int $added
+     */
+    private static ?string $composer = null;
+
+    /**
+     * Undocumented variable
+     *
+     * @var boolean
+     */
+    private static bool $isPhpVciAutoload = false;
 
     /**
      * Updates the framework by copying necessary files and configurations.
@@ -60,12 +89,37 @@ class Updater
      */
     public static function update(): void 
     {
-        if(self::onInstallAndUpdate('bootstrap/', self::$frameworkPath, 'install/Boot/')){
-            self::doCopy(self::$frameworkPath . 'novakit', 'novakit');
-            self::updateConfigurations(self::$frameworkPath . 'install/App/', 'app/');
-            self::updateConfigurations(self::$frameworkPath . 'install/Bin/', 'bin/');
-            self::updateConfigurations(self::$frameworkPath . 'install/Main/', 'samples/Main/', true);
-            self::onInstallAndUpdate('system/', self::$frameworkPath, 'src/', true);
+        defined('IS_COMPOSER_UPDATE') || define('IS_COMPOSER_UPDATE', true);
+        self::bootstrap();
+        
+        self::$isPhpVciAutoload = Boot::isPhpVciAutoload();
+
+        if (self::$isPhpVciAutoload ) {
+            self::writeln(
+                'Luminova core modules are managed by PHPVCI. Composer updates did not affect the active core modules.',
+                'cyan'
+            );
+
+            if(defined('APP_BASE_PATH')){
+                self::cleanup(
+                    APP_BASE_PATH . '/' . self::FRAMEWORK_PATH, 
+                    'framework'
+                );
+            }
+
+            return;
+        }
+
+        if(self::onInstallAndUpdate(self::FRAMEWORK_PATH, 'bootstrap/', 'install/Boot/')){
+            self::doRename(self::FRAMEWORK_PATH . 'novakit', 'novakit');
+            self::updateConfigurations(self::FRAMEWORK_PATH . 'install/App/', 'app/');
+            self::updateConfigurations(self::FRAMEWORK_PATH . 'install/Bin/', 'bin/');
+            self::updateConfigurations(
+                self::FRAMEWORK_PATH . 'install/Main/', 
+                'samples/Main/', 
+                true
+            );
+            self::onInstallAndUpdate(self::FRAMEWORK_PATH, 'system/', 'src/', true);
         }
     }
 
@@ -79,7 +133,135 @@ class Updater
      */
     public static function install(): void 
     {
-        self::onInstallAndUpdate('system/', self::$frameworkPath, 'src/', true);
+        self::onInstallAndUpdate(self::FRAMEWORK_PATH, 'system/', 'src/', true);
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @return void
+     */
+    private static function bootstrap(): void
+    {
+        if (!defined('BOOT_WARMUP_STARTED') && !class_exists(Boot::class)) {
+            $cwd = getcwd();
+            $paths = [];
+
+            if($cwd !== false && self::isForUpdate()){
+                $paths[] = match(basename($cwd)){
+                    'public',
+                    'system' => dirname($cwd) . '/system',
+                    default  => "{$cwd}/system"
+                };
+                $paths[] = $cwd;
+            } 
+
+            $paths[] = dirname(__DIR__);
+
+            foreach ($paths as $path) {
+                $file = "{$path}/Boot.php";
+
+                if (is_file($file)) {
+                    require_once $file;
+                    break;
+                }
+            }
+        }
+
+        if (!class_exists(Boot::class, false)) {
+            return;
+        }
+
+        Boot::cli();
+    }
+
+    /**
+     * Get application root.
+     *
+     * @return string
+     */
+    private static function appRoot(): string 
+    {
+        return defined('APP_BASE_PATH') 
+            ? APP_BASE_PATH 
+            : dirname(__DIR__, 2);
+    }
+
+    /**
+     * Get the Composer executable command.
+     *
+     * Attempts to locate Composer from:
+     * - System PATH
+     * - Common global installation paths
+     * - Local project composer.phar
+     *
+     * @return string Return the Composer command or executable path.
+     */
+    public static function whichComposer(): string
+    {
+        if (self::$composer !== null) {
+            return self::$composer;
+        }
+
+        $script = $_SERVER['SCRIPT_FILENAME'] ?? $_SERVER['argv'][0] ?? null;
+        $phar = self::appRoot() . '/composer.phar';
+        $phar = realpath($phar) ?: $phar;
+
+        if(
+            !is_string($script) 
+            || !str_ends_with($script, '/composer')
+            || !Runtime::isCommand()
+        ){
+            $script = null;
+        }
+
+        if(!class_exists(Terminal::class)){
+            if(is_file($phar)){
+                return self::$composer = escapeshellarg($phar);
+            }
+
+            return self::$composer = ($script !== null)
+                ? escapeshellarg($script)
+                : 'composer';
+        }
+
+        $composer = Terminal::which('composer');
+
+        if ($composer) {
+            return self::$composer = $composer;
+        }
+
+        $php = Terminal::whichPhp() ?? PHP_BINARY;
+        $isWindows = (DIRECTORY_SEPARATOR === '\\' || PHP_OS_FAMILY === 'Windows');
+
+        $paths = [
+            $script,
+            $phar
+        ];
+
+        if(!$isWindows){
+            $home = Terminal::userHome();
+
+            if($home){
+                $paths[] = $home . '/composer.phar';
+                $paths[] = $home . '/.composer/composer.phar';
+            }
+        }
+
+        foreach ($paths as $path) {
+            if (!is_string($path) || !is_file($path)) {
+                continue;
+            }
+
+            if (Terminal::isBinary($path, $php)) {
+                return self::$composer = escapeshellarg($php) 
+                    . ' ' . escapeshellarg($path);
+            }
+        }
+
+        return self::$composer = ($script !== null)
+            ? escapeshellarg($script)
+            : 'composer';
     }
 
     /**
@@ -91,7 +273,17 @@ class Updater
      */
     private static function isUpdater(string $dest): bool 
     {
-        return str_ends_with(self::normalizePath($dest), 'system/Composer/Updater.php');
+        return str_ends_with(self::toPath($dest), 'system/Composer/Updater.php');
+    }
+
+    /**
+     * Checks if the current context is for a composer update.
+     * 
+     * @return bool True if the context is for a composer update, otherwise false.
+     */
+    private static function isForUpdate(): bool 
+    {
+        return defined('IS_COMPOSER_UPDATE') && IS_COMPOSER_UPDATE === true;
     }
 
     /**
@@ -101,47 +293,9 @@ class Updater
      * 
      * @return string Return string.
      */
-    private static function normalizePath(string $path): string 
+    private static function toPath(string $path): string 
     {
         return str_replace(['\\', '//'], '/', rtrim($path, '/'));
-    }
-
-    /**
-     * Recursively moves files and directories to the specified destination.
-     * 
-     * @param string $destination Target directory.
-     * @param string $source Source directory.
-     * 
-     * @return void
-     */
-    private static function checkAndMoveFolderRecursive(string $destination, string $source): void
-    {
-        if(!file_exists($source)){
-            return;
-        }
-
-        self::makeDirectoryIfNotExist($destination);
-        $files = scandir($source);
-        foreach ($files as $file) {
-            if ($file !== '.' && $file !== '..') {
-                $srcFile = rtrim($source, TRIM_DS) . DIRECTORY_SEPARATOR . $file;
-                $dstFile = rtrim($destination, TRIM_DS) . DIRECTORY_SEPARATOR . $file;
-
-                if(self::isUpdater(self::displayPath($dstFile))){
-                    self::$selfHasUpdate = self::fileChanged($srcFile, $dstFile);
-                    self::$selfInfo = [$srcFile, $dstFile];
-                    continue;
-                }
-                
-                if (!is_dir($srcFile)) {
-                    if (!file_exists($dstFile) || self::fileChanged($srcFile, $dstFile)) {
-                        rename($srcFile, $dstFile);
-                    }
-                } else {
-                    self::checkAndMoveFolderRecursive($dstFile, $srcFile); 
-                }
-            }
-        }
     }
 
     /**
@@ -152,21 +306,34 @@ class Updater
      * 
      * @return void
      */
-    private static function removeRecursive(string $dir, ?string $main = null): void
+    public static function cleanup(string $dir, ?string $main = null): void
     {
-        $files = array_diff(scandir($dir), ['.', '..']);
-        foreach ($files as $file) {
-            $path = rtrim($dir, TRIM_DS) . DIRECTORY_SEPARATOR . $file;
-            if (is_dir($path)) {
-                self::removeRecursive($path, $main);
-            } else {
-                self::delete($path);
-            }
+        if(!is_dir($dir)){
+            return;
         }
 
-        if ($main === null || (basename($dir) !== $main && is_dir($dir))) {
-            rmdir($dir); 
-        }
+        try{
+            $iterator = new DirectoryIterator($dir);
+
+            foreach ($iterator as $item) {
+                if ($item->isDot()) {
+                    continue;
+                }
+
+                $path = $item->getPathname();
+
+                if ($item->isDir()) {
+                    self::cleanup($path, $main);
+                    continue;
+                }
+
+                self::delete($path);
+            }
+
+            if ($main === null || (basename($dir) !== $main && is_dir($dir))) {
+                rmdir($dir); 
+            }
+        } catch(\Throwable){}
     }
     
     /**
@@ -178,24 +345,31 @@ class Updater
      */
     private static function delete(string $file): bool 
     {
-        if(!file_exists($file)){
+        if(!is_file($file) || !@unlink($file)){
             return false;
         }
 
-        return unlink($file);
+        // if(str_contains($file, 'system/plugins/luminovang/')){
+        //    return true;
+        // }
+        //
+        // $name = Luminova::toDisplayPath($file);
+        // self::writeln("  Deleting: {$name}");
+
+        return true;
     }
 
-    /**
-     * Returns a formatted version of the given file path.
-     * 
-     * @param string $path Full file path.
-     * 
-     * @return string Relative or formatted file path.
-     */
-    private static function displayPath(string $path): string 
-    {
-        return dirname($path) . DIRECTORY_SEPARATOR . basename($path);
-    }
+    // /**
+    //  * Returns a formatted version of the given file path.
+    //  * 
+    //  * @param string $path Full file path.
+    //  * 
+    //  * @return string Relative or formatted file path.
+    //  */
+    // private static function displayPath(string $path): string 
+    // {
+    //     return dirname($path) . '/' . basename($path);
+    // }
 
     /**
      * Creates a directory if it does not already exist.
@@ -224,11 +398,15 @@ class Updater
         $isSource = file_exists($source);
         $isDestination = file_exists($destination);
 
-        if(!$isSource && !$isDestination){
+        if(!$isSource || (!$isSource && !$isDestination)){
             return false;
         }
 
         if (!$isDestination) {
+            if($isSource){
+                self::$added++;
+            }
+
             return $isSource;
         }
 
@@ -239,80 +417,52 @@ class Updater
 
     /**
      * Updates configuration files by copying and organizing them appropriately.
-     * 
-     * @param string $source Source directory.
-     * @param string $destination Target directory.
-     * @param bool $main Whether the directory is the main config directory.
-     * 
-     * @return void
-     */
-    private static function updateConfigurations(string $source, string $destination, bool $main = false): void
-    {
-        if(!file_exists($source)){
-            return;
-        }
-        $sampleFolder = 'samples' . DIRECTORY_SEPARATOR . $destination;
-
-        self::makeDirectoryIfNotExist($destination);
-        if(!$main){
-            self::makeDirectoryIfNotExist($sampleFolder);
-        }
-        $files = scandir($source);
-
-        foreach ($files as $file) {
-            if ($file !== '.' && $file !== '..') {
-                $srcFile = rtrim($source, TRIM_DS) . DIRECTORY_SEPARATOR . $file;
-                $dstFile = rtrim($destination, TRIM_DS) . DIRECTORY_SEPARATOR . $file;
-                $sampleFile = rtrim($sampleFolder, TRIM_DS) . DIRECTORY_SEPARATOR . $file;
-
-                if (!is_dir($srcFile)) {
-                    self::doConfigCopy($srcFile, $dstFile, $sampleFile, $main);
-                } else if (is_dir($srcFile)) {
-                    self::updateDevConfigs($dstFile, $sampleFile, $srcFile, $main);
-                }
-            }
-        }
-    }
-
-    /**
      * Moves application configuration files to the appropriate directories.
      * 
-     * @param string $destination Target directory.
-     * @param string $sampleFolder Sample directory.
      * @param string $source Source directory.
+     * @param string $destination Target directory.
      * @param bool $main Whether it's a main configuration.
+     * @param string $samples Sample directory.
      * 
      * @return void
      */
-    private static function updateDevConfigs(
-        string $destination, 
-        string $sampleFolder, 
+    private static function updateConfigurations(
         string $source, 
-        bool $main = false
-    ): void
+        string $destination, 
+        bool $main = false,
+        ?string $samples = null
+    ): void 
     {
-        if(!file_exists($source)){
+        if (!file_exists($source)) {
             return;
         }
 
         self::makeDirectoryIfNotExist($destination);
-        if(!$main){
-            self::makeDirectoryIfNotExist($sampleFolder);
-        }
-        
-        $files = scandir($source);
-        foreach ($files as $file) {
-            if ($file !== '.' && $file !== '..') {
-                $srcFile = rtrim($source, TRIM_DS) . DIRECTORY_SEPARATOR . $file;
-                $dstFile = rtrim($destination, TRIM_DS) . DIRECTORY_SEPARATOR . $file;
-                $sampleFile = rtrim($sampleFolder, TRIM_DS) . DIRECTORY_SEPARATOR . $file;
+        $samples ??= 'samples/' . trim($destination, '/\\');
 
-                if (!is_dir($srcFile)) {
-                    self::doConfigCopy($srcFile, $dstFile, $sampleFile, $main);
-                } else {
-                    self::updateDevConfigs($dstFile, $sampleFile, $srcFile, $main); 
-                }
+        if (!$main) {
+            self::makeDirectoryIfNotExist(self::toPath($samples));
+        }
+
+        $iterator = new DirectoryIterator($source);
+
+        foreach ($iterator as $item) {
+            if ($item->isDot()) {
+                continue;
             }
+
+            $srcPath = $item->getPathname();
+            $name  = '/' . $item->getFilename();
+
+            $dstPath  = self::toPath(rtrim($destination, '/\\') . $name);
+            $samplePath = self::toPath(rtrim($samples, '/\\') . $name);
+
+            if ($item->isDir()) {
+                self::updateConfigurations($srcPath, $dstPath, $main, $samplePath);
+                continue;
+            }
+
+            self::doConfigCopy($srcPath, $dstPath, $samplePath, $main);
         }
     }
 
@@ -326,20 +476,26 @@ class Updater
      * 
      * @return bool True if moved successfully, false otherwise.
      */
-    private static function doConfigCopy(string $from, string $to, string $sample, bool $main = false): bool
+    private static function doConfigCopy(
+        string $from, 
+        string $to, 
+        string $sample, 
+        bool $main = false
+    ): bool
     {
         if (!$main && file_exists($to)) {
-            if (file_exists($sample)) {
-                if(self::fileChanged($from, $sample)){
-                    self::delete($sample);
-                    self::$toReplace[] = $sample;
-                    return rename($from, $sample);
-                }
-
-                return true;
+            if (!file_exists($sample)) {
+                return rename($from, $sample);
             }
 
-            return rename($from, $sample);
+            if(self::fileChanged($from, $sample)){
+                self::delete($sample);
+                self::$toReplace[] = $sample;
+                
+                return rename($from, $sample);
+            }
+
+            return true;
         }
 
         if($main){
@@ -357,115 +513,294 @@ class Updater
      * 
      * @return bool True if moved successfully, false otherwise.
      */
-    private static function doCopy(string $from, string $to): bool
+    private static function doRename(string $from, string $to): bool
     {
-        if (file_exists($to)) {
-            if(self::fileChanged($from, $to)){
-                if(file_exists($to)){
-                    self::delete($to);
-                }
+        $isDesExist = file_exists($to);
+        $isSourceExist = file_exists($from);
 
-                return rename($from, $to);
-            }
-
-            return false;
+        if(!self::isForUpdate() && !$isDesExist && $isSourceExist){
+            return rename($from, $to);
         }
 
-        return rename($from, $to);
+        if (self::isForUpdate() && self::fileChanged($from, $to)) {
+            if ($isDesExist) {
+                self::makeDirectoryIfNotExist(dirname($to));
+                self::delete($to);
+            }
+
+            return rename($from, $to);
+        }
+
+        return false;
+    }
+
+     /**
+     * Recursively moves files and directories to the specified destination.
+     * 
+     * @param string $source Source directory.
+     * @param string $destination Target directory.
+     * 
+     * @return void
+     */
+    private static function checkAndMoveFolderRecursive(string $source, string $destination): void
+    {
+        if (!is_dir($source)) {
+            return;
+        }
+
+        self::makeDirectoryIfNotExist($destination);
+        $iterator = new DirectoryIterator($source);
+        $destination = self::toPath(rtrim($destination, '/\\')) . '/';
+
+        foreach ($iterator as $item) {
+            if ($item->isDot()) {
+                continue;
+            }
+
+            $srcPath = $item->getPathname();
+            $dstPath = $destination . self::toPath($item->getFilename());
+
+            if ($item->isDir()) {
+                self::checkAndMoveFolderRecursive($srcPath, $dstPath);
+                continue;
+            }
+
+            if (self::isUpdater($dstPath)) {
+                self::$selfInfo = [
+                    self::fileChanged($srcPath, $dstPath),
+                    $srcPath, 
+                    $dstPath
+                ];
+                continue;
+            }
+
+            if(self::doRename($srcPath, $dstPath) && self::isForUpdate()){
+                self::$updates++;
+                $sysName = Luminova::toDisplayPath($dstPath);
+
+                self::writeln('  - Updating  ' . Color::style($sysName, 'green'));
+            }
+        }
     }
 
     /**
      * Handles the installation and update of framework components.
      * 
-     * @param string $destination Target directory.
      * @param string $source Source directory.
-     * @param string $codes Subdirectory to process.
+     * @param string $destination Target directory.
+     * @param string $subdir Subdirectory to process.
      * @param bool $complete Whether to perform a full installation.
      * 
      * @return bool True if successful, false otherwise.
      */
     private static function onInstallAndUpdate(
-        string $destination, 
-        string $source, 
-        string $codes, 
+        string $source,
+        string $destination,
+        string $subdir,
         bool $complete = false
-    ): bool
+    ): bool 
     {
-        $fullSource = $source . $codes;
-        if(file_exists($fullSource)){
-            self::makeDirectoryIfNotExist($destination);
-            $files = scandir($fullSource);
+        $fullSource = self::toPath(
+            rtrim($source, '/\\') 
+            . '/' 
+            . ltrim($subdir, '/\\')
+        );
 
-            foreach ($files as $file) {
-                if ($file !== '.' && $file !== '..') {
-                    $srcFile = rtrim($fullSource, TRIM_DS) . DIRECTORY_SEPARATOR . $file;
-                    $dstFile = rtrim($destination, TRIM_DS) . DIRECTORY_SEPARATOR . $file;
+        if (!is_dir($fullSource)) {
+            return false;
+        }
+
+        self::makeDirectoryIfNotExist($destination);
+
+        $iterator = new DirectoryIterator($fullSource);
+        $destination = self::toPath(rtrim($destination, '/\\')) . '/';
+
+        $isForUpdate = self::isForUpdate();
   
-                    if(self::isUpdater(self::displayPath($dstFile))){
-                        self::$selfHasUpdate = self::fileChanged($srcFile, $dstFile);
-                        self::$selfInfo = [$srcFile, $dstFile];
-                        continue;
-                    }
-
-                    if (!is_dir($srcFile)) {
-                        if (!file_exists($dstFile) || self::fileChanged($srcFile, $dstFile)) {
-                            if(file_exists($dstFile)){
-                                self::delete($dstFile);
-                            }
-                            
-                            rename($srcFile, $dstFile);
-                        }
-                    } else if (is_dir($srcFile)) {
-                        self::checkAndMoveFolderRecursive($dstFile, $srcFile);
-                    }
-                }
+        foreach ($iterator as $item) {
+            if ($item->isDot()) {
+                continue;
             }
 
-            if($complete){
-                Terminal::init();
-                $base = APP_ROOT . DIRECTORY_SEPARATOR;
-                $toDos = $base . rtrim($source, TRIM_DS) . 'TODO.md';
-                $currentTodo = rtrim($base, TRIM_DS) . 'TODO.md';
-                $hasTodo = false;
+            $srcPath = $item->getPathname();
+            $name    = $item->getFilename();
+            $dstPath = $destination . self::toPath($name);
 
-                if(file_exists($toDos) && self::fileChanged($toDos, $currentTodo)){
-                    $hasTodo = true;
-                    if (copy($toDos, $currentTodo)) {
-                        self::delete($toDos);
-                    }
+            if(
+                $isForUpdate 
+                && self::$isPhpVciAutoload 
+                && !str_ends_with($dstPath, 'system/Boot.php')
+            ){
+                continue;
+            }
+
+            if ($item->isDir()) {
+                self::checkAndMoveFolderRecursive($srcPath, $dstPath);
+                continue;
+            }
+
+            if (self::isUpdater($dstPath)) {
+                if(!$isForUpdate){
+                    continue;
                 }
 
-                if(self::$selfHasUpdate){
-                    [$srcFile, $dstFile] = self::$selfInfo;
-                    @rename($srcFile, $dstFile);
-                }
-                
-                self::removeRecursive($base . $source, 'framework');
-                exec('composer dumpautoload', $output, $returnCode);
-                foreach ($output as $line) {
-                    Terminal::writeln('Dumping:   ' . $line);
-                }
+                self::$selfInfo = [
+                    self::fileChanged($srcPath, $dstPath),
+                    $srcPath, 
+                    $dstPath
+                ];
+                continue;
+            }
 
-                if ($returnCode === 0) {
-                    Terminal::writeln('Update was completed version [' . (Luminova::VERSION??'1.5.0') . ']', 'white', 'green');
-                    Terminal::newLine();
+            if($isForUpdate && self::doRename($srcPath, $dstPath)){
+                self::$updates++;
+                $sysName = Luminova::toDisplayPath($dstPath);
 
-                    if($hasTodo || self::$toReplace !== []){
-                        Terminal::beeps(2);
-                        Terminal::writeln('TODO ATTENTION!', 'yellow');
-
-                        if(self::$toReplace !== []){
-                            Terminal::writeln('See "/samples/*" to manually replace your configuration files accordingly.');
-                        }
-
-                        if($hasTodo){
-                            Terminal::writeln('See "/TODO.md" to follow a few manual steps associated with the current version update.');
-                        }
-                    }
-                }
+                self::writeln('  - Updating  ' . Color::style($sysName, 'green'));
             }
         }
 
+        if ($complete) {
+            self::bootstrap();
+            self::finalizeInstall($source, $isForUpdate);
+        }
+
         return true;
+    }
+
+    /**
+     * Finish installation.
+     *
+     * @param string $source
+     * 
+     * @return void
+     */
+    private static function finalizeInstall(string $source, bool $isForUpdate): void
+    {
+        $base = self::appRoot() . '/';
+        $sourcePath = $base . rtrim($source, '/\\') . '/';
+
+        $todoSource = $sourcePath . 'TODO.md';
+        $todoTarget = $base . 'TODO.md';
+
+        $hasTodo = false;
+
+        if (is_file($todoSource) && self::fileChanged($todoSource, $todoTarget)) {
+            if (copy($todoSource, $todoTarget)) {
+                self::delete($todoSource);
+                $hasTodo = true;
+            }
+        }
+
+        [$isSelf, $srcFile, $dstFile] = self::$selfInfo;
+
+        self::cleanup($sourcePath, 'framework');
+
+        if($isForUpdate)
+        self::writeln();
+        self::writeln('Optimizing Composer autoload files...', 'cyan');
+
+        exec(
+            self::whichComposer() 
+            . ' dump-autoload --optimize --no-dev  2>&1', 
+            $output, 
+            $code
+        );
+
+        foreach ($output as $line) {
+            self::writeln('  ' . $line);
+        }
+
+        if ($code !== 0) {
+            self::writeln();
+            self::writeln(
+                'Composer autoload optimization failed.',
+                'yellow'
+            );
+        }
+
+        $isForUpdate = self::isForUpdate();
+        $action = $isForUpdate ? 'updated to' : 'installed';
+
+        self::writeln();
+        self::writeln(sprintf(
+            'Luminova was successfully %s%s.',
+            $action,
+            $isForUpdate ? 'version: ' . Luminova::VERSION : ''
+        ), mode: 'success');
+
+        if ($isForUpdate  && ($hasTodo || self::$toReplace !== [])) {
+            self::writeln();
+            self::writeln('2', mode: 'beep');
+            self::writeln('Action required:', 'yellow');
+
+            if (self::$toReplace !== []) {
+                self::writeln(
+                    '- Review files in "/samples/" and manually merge any required configuration changes.'
+                );
+            }
+
+            if ($hasTodo) {
+                self::writeln(
+                    '- Open "/TODO.md" and complete the remaining upgrade steps for this version.'
+                );
+            }
+        }
+
+        if ($isSelf && @rename($srcFile, $dstFile)) {
+            self::$updates++;
+        }
+
+        if ($isForUpdate && (self::$updates > 0 || self::$added > 0)) {
+            self::writeln();
+            self::writeln(sprintf(
+                'Updated: %d, Added: %d modules',
+                self::$updates,
+                self::$added
+            ), 'cyan');
+        }
+
+        $novakit = "{$base}novakit";
+        
+        if(is_file($novakit)){
+            @chmod($novakit, 0755);
+        }
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @param string $text
+     * @param string|null $foreground
+     * @param string|null $background
+     * @param string|null $mode
+     * @return void
+     */
+    private static function writeln(
+        string $text = '',
+        ?string $foreground = null,
+        ?string $background = null,
+        ?string $mode = null
+    ): void 
+    {
+        static $isClass;
+
+        $isClass ??= class_exists(Terminal::class);
+
+        if($isClass){
+            Terminal::init();
+
+            match(true) {
+                $text === '' => Terminal::newLine(),
+                $mode === 'success'   
+                    => Terminal::success($text),
+                $mode === 'beep'
+                    => Terminal::beeps((int) $text),
+                default      => Terminal::writeln($text, $foreground, $background)
+            };
+            return;
+        }
+
+        fwrite(STDOUT, $text . PHP_EOL);
     }
 }

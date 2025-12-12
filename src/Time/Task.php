@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -12,8 +13,8 @@ namespace Luminova\Time;
 
 use \DateTimeZone;
 use \DateInterval;
-use \Luminova\Time\Time;
-use \Luminova\Exceptions\InvalidArgumentException;
+use Luminova\Time\Time;
+use Luminova\Exceptions\InvalidArgumentException;
 
 class Task
 {
@@ -39,7 +40,7 @@ class Task
         $nowTime = Time::now($timezone);
 
         if ($closing <= $opening) {
-            $closing->add(new DateInterval('P1D'));
+            $closing = $closing->add(new DateInterval('P1D'));
         }
 
         return ($nowTime > $opening && $nowTime >= $closing);

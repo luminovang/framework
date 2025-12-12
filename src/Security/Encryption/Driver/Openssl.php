@@ -10,15 +10,25 @@
  */
 namespace Luminova\Security\Encryption\Driver;
 
+use \Throwable;
+use \JsonException;
 use \App\Config\Encryption;
-use \Luminova\Interface\EncryptionInterface;
-use \Luminova\Exceptions\EncryptionException;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Interface\EncryptionInterface;
+use Luminova\Exceptions\EncryptionException;
 
 /**
  * Crypt Openssl encryption class.
  */
 class Openssl implements EncryptionInterface
 {
+    /**
+     * Cryptography driver version.
+     * 
+     * @var string VERSION
+     */ 
+    private const VERSION = 'v1';
+
     /**
      * @var string $key
      */
@@ -40,6 +50,13 @@ class Openssl implements EncryptionInterface
     private string $nonce = '';
 
     /**
+     * Additional authentication data.
+     * 
+     * @var string $aad
+     */
+    private string $aad = '';
+
+    /**
      * @var int $size
      */
     private int $size = 16;
@@ -59,18 +76,35 @@ class Openssl implements EncryptionInterface
     private static ?Encryption $config = null;
 
     /**
-     * {@inheritdoc}
+     * Initializes a new OpenSSL encryption driver.
+     *
+     * A key and cipher method may be provided at construction time,
+     * or configured later using `setKey()` and `setMethod()` before
+     * performing encryption or decryption.
+     *
+     * @param string|null $key Encryption key. If omitted, it must be set later.
+     * @param string|null $method OpenSSL cipher method. If omitted, it must be set later.
+     * @param int $size Fallback key size used when the cipher method
+     *        does not expose a block size (default: 16).
+     *
+     * @throws EncryptionException When an invalid cipher method or block size is used.
+     * @see  Luminova\Security\Encryption\Crypter
+     *       Helper class that applies application-level encryption configuration.
+     * @link https://luminova.ng/docs/0.0.0/encryption/driver Documentation.
      */
     public function __construct(?string $key = null, ?string $method = null, int $size = 16)
     {
-        self::$config ??= new Encryption();
-        $this->digest = self::$config->digest;
-        
-        if($method !== null){
+        if (!function_exists('openssl_encrypt')) {
+            throw new EncryptionException(
+                'The OpenSSL extension is not available.'
+            );
+        }
+
+        if ($method !== null && $method !== '') {
             $this->setMethod($method, $size);
         }
 
-        if ($key !== null) {
+        if ($key !== null && $key !== '') {
             $this->setKey($key);
         }
     }
@@ -87,31 +121,79 @@ class Openssl implements EncryptionInterface
     /**
      * {@inheritdoc}
      */
-    public function setKey(string $key): self
+    public function setAssociatedData(array|string $aad): self
     {
-        $this->key = hash_hkdf($this->digest, $key, 0, self::$config->keyInfo);
+        if (is_array($aad)) {
+            try {
+                $aad = json_encode($aad, JSON_THROW_ON_ERROR);
+            } catch (JsonException $e) {
+                throw new EncryptionException(
+                    'Failed to encode associated data.',
+                    ErrorCode::JSON_ERROR,
+                    $e
+                );
+            }
+        }
+
+        $this->aad = $aad;
         return $this;
     }
 
     /**
      * {@inheritdoc}
+     */
+    public function setKey(string $key, int $length = 0, ?string $salt = null): self
+    {
+        self::$config ??= new Encryption();
+        $this->digest = self::$config->digest;
+        
+        $key = hash_hkdf(
+            $this->digest, 
+            $key, 
+            $length, 
+            self::$config->keyInfo,
+            $salt ?? ''
+        );
+
+        if($key === false){
+            throw new EncryptionException('Failed to generate openssl hkdf key.');
+        }
+
+        $this->key = $key;
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     * 
+     * > **Recommendation:**
+     * > Set method first before nonce, if you are passing null as nonce for auto generate.
+     * > This allows the generate nonce length to be droved from method IV size.
      */
     public function setNonce(?string $nonce = null): self
     {
-        $this->nonce = $nonce ?? $this->nonce();
+        $this->nonce = $nonce 
+            ?? self::nonce($this->size);
+
         return $this;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function nonce(?string $string = null): string
+    public static function nonce(int $length, ?string $string = null): string
     {
-        if($string === null){
-            return openssl_random_pseudo_bytes($this->size);
+        try{
+            return ($string === null) 
+                ? openssl_random_pseudo_bytes($length) 
+                : mb_substr($string, 0, $length, '8bit');
+        }catch(Throwable $e){
+            throw new EncryptionException(
+                $e->getMessage(), 
+                $e->getCode(),
+                $e->getPrevious()
+            );
         }
-
-        return mb_substr($string, 0, $this->size, '8bit');
     }
 
     /**
@@ -119,12 +201,29 @@ class Openssl implements EncryptionInterface
      */
     public function setMethod(string $method, int $size = 16): self
     {
-        $this->method = $method;
-        $this->size = openssl_cipher_iv_length($method);
+        static $methods = null;
 
-        if($this->size === false){
-            $this->size = $size;
+        $method = strtolower($method);
+        $methods ??= array_flip(openssl_get_cipher_methods());
+
+        if (!isset($methods[$method])) {
+            throw new EncryptionException(sprintf(
+                'Unsupported OpenSSL cipher method: %s.',
+                $method
+            ));
         }
+
+        $ivSize = openssl_cipher_iv_length($method);
+
+        if ($ivSize === false && $size < 6) {
+            throw new EncryptionException(sprintf(
+                'Unable to determine IV length for cipher method: %s.',
+                $method
+            ));
+        }
+
+        $this->method = strtoupper($method);
+        $this->size = $ivSize ?: $size;
 
         return $this;
     }
@@ -132,81 +231,288 @@ class Openssl implements EncryptionInterface
     /**
      * {@inheritdoc}
      */
-    public function encrypt(): string|bool
+    public function encrypt(): string
     {
         if (!$this->valid()) {
             throw new EncryptionException('Invalid contraption params!');
         }
 
-        $crypt = openssl_encrypt($this->message, $this->method, $this->key, OPENSSL_RAW_DATA, $this->nonce);
-        
-
-        if ($crypt === false) {
-            return false;
+        if ($this->isEcb()) {
+            $this->nonce = '';
         }
 
-        $message = trim($crypt);
-        $hash = hash_hmac($this->digest, $message . $this->nonce, $this->key, true);
+        try{
+            $tag = '';
+            $crypt = openssl_encrypt(
+                $this->message, 
+                $this->method, 
+                $this->key, 
+                OPENSSL_RAW_DATA, 
+                $this->nonce,
+                $tag,
+                $this->aad
+            );
 
-        $cypher = base64_encode(json_encode([
-            'nonce' => base64_encode($this->nonce),
-            'hash' => base64_encode($hash),
-            'encrypted' => base64_encode($message),
-        ]));
+            if ($crypt === false) {
+                throw new EncryptionException('Encryption failed.');
+            }
 
+            $payload = [
+                'v' => self::VERSION,
+                'd' => 'openssl',
+                'm' => $this->method,
+                'n' => ($this->nonce !== '') ? base64_encode($this->nonce) : '',
+                'c' => base64_encode($crypt)
+            ];
 
-        $this->free();
+            if ($this->isAead()) {
+                $payload['t'] = base64_encode($tag);
+            }
 
-        return $cypher;
+            if ($this->isMac()) {
+                $digest = $this->macAlgo();
+
+                $hash = hash_hmac($digest, $crypt . $this->nonce, $this->key, true);
+                $payload['h'] = base64_encode($hash);
+            }
+
+            return base64_encode(
+                json_encode($payload, JSON_THROW_ON_ERROR)
+            );
+        } catch (JsonException $e) {
+            throw new EncryptionException(
+                'Failed to encode encryption payload.',
+                ErrorCode::JSON_ERROR,
+                $e
+            );
+        } catch (Throwable $e) {
+            throw new EncryptionException(
+                $e->getMessage(),
+                $e->getCode(),
+                $e
+            );
+        }
     }
 
     /**
      * {@inheritdoc}
      */
-    public function decrypt(): string|bool
+    public function decrypt(): string
     {
         if (!$this->valid()) {
             throw new EncryptionException('Invalid decryption parameters!');
         }
 
-        $data = json_decode(base64_decode($this->message), true);
+        $data = $this->decode();
 
-        if (!is_array($data) || !isset($data['nonce'], $data['hash'], $data['encrypted'])) {
-            return false;
+        $isLegacy = $data['isLegacy'] ?? false;
+
+        if ($isLegacy && mb_strlen($data['cipher'], '8bit') < $this->size) {
+            throw new EncryptionException(
+                'Decryption error, message was truncated or tampered with.',
+                ErrorCode::SECURITY_ISSUE
+            );
         }
 
-        $nonce = base64_decode($data['nonce']);
-        $hash = base64_decode($data['hash']);
-        $encrypted = base64_decode($data['encrypted']);
+        if ($this->isMac($data['method'])) {
+            $digest = $this->macAlgo($data['method']);
 
-        if (mb_strlen($encrypted, '8bit') < $this->size) {
-            throw new EncryptionException('Decryption error, message was truncated or tampered with.');
+            $expected = hash_hmac(
+                $digest,
+                $data['cipher'] . $data['nonce'], 
+                $this->key, 
+                true
+            );
+
+            if (!hash_equals($data['mac'], $expected)) {
+                throw new EncryptionException(
+                    'Data integrity check failed',
+                    ErrorCode::SECURITY_ISSUE
+                );
+            }
         }
 
-        $expected = hash_hmac($this->digest, $encrypted . $nonce, $this->key, true);
+        $tag = null;
 
-        if (!hash_equals($hash, $expected)) {
-            return false;
+        if (!$isLegacy && $this->isAead($data['method'])) {
+            $tag = $data['tag'];
         }
 
-        $decrypted = openssl_decrypt($encrypted, $this->method, $this->key, OPENSSL_RAW_DATA, $nonce);
+        $decrypted = false;
+
+        try{
+            $decrypted = openssl_decrypt(
+                $data['cipher'], 
+                $data['method'], 
+                $this->key, 
+                OPENSSL_RAW_DATA, 
+                $data['nonce'],
+                $tag,
+                $this->aad
+            );
+        }catch(Throwable $e){
+            throw new EncryptionException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e->getPrevious()
+            );
+        }
 
         if ($decrypted === false) {
-            return false;
+           throw new EncryptionException('Decryption failed');
         }
 
-        $this->free();
-
-        return trim($decrypted);
+        return $decrypted;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function free(): void 
+    public function free(): bool 
     {
+        $this->aad = '';
         $this->key = '';
         $this->nonce = '';
+        $this->message = '';
+        self::$config = null;
+
+        return true;
+    }
+
+    /**
+     * Determine whether the cipher method uses an AEAD mode.
+     *
+     * @param string|null $method Optional cipher method to check.
+     *
+     * @return bool Returns true if the cipher method uses a supported AEAD mode,
+     * false otherwise.
+     */
+    private function isAead(?string $method = null): bool
+    {
+        $method = strtoupper($method ?? $this->method);
+
+        return str_ends_with($method, '-GCM')
+            || str_ends_with($method, '-CCM');
+    }
+
+    /**
+     * Determine whether the cipher method uses HMAC.
+     *
+     * @param string|null $method Optional cipher method to check.
+     *
+     * @return bool Returns true if the cipher method contains HMAC, false otherwise.
+     */
+    private function isMac(?string $method = null): bool
+    {
+        return stripos($method ?? $this->method, 'HMAC') !== false;
+    }
+
+    /**
+     * Determine whether the cipher method uses ECB mode.
+     *
+     * @param string|null $method Optional cipher method to check.
+     *
+     * @return bool Returns true if the cipher method uses ECB, false otherwise.
+     */
+    private function isEcb(?string $method = null): bool
+    {
+        return stripos($method ?? $this->method, 'ECB') !== false;
+    }
+
+    /**
+     * Resolve the hash algorithm used for MAC generation.
+     *
+     * @param string|null $method Optional cipher method to inspect.
+     *
+     * @return string|null The hash algorithm name (e.g., "sha256"),
+     *                     or null if no suitable algorithm is found.
+     */
+    private function macAlgo(?string $method = null): ?string
+    {
+        $method ??= $this->method;
+
+        $algo = match (true) {
+            str_contains($method, 'SHA256') => 'sha256',
+            str_contains($method, 'SHA1')   => 'sha1',
+            default => null,
+        };
+
+        if($algo === null){
+            self::$config ??= new Encryption();
+            $this->digest = self::$config->digest;
+
+            return $this->digest;
+        }
+
+        return $algo;
+    }
+
+    /**
+     * Decode cypher message.
+     * 
+     * @return array|null Return cypher payload.
+     * @throws EncryptionException
+     */
+    private function decode(): array
+    {
+        $json = base64_decode($this->message, true);
+        
+        if ($json === false) {
+           throw new EncryptionException('Invalid base64 encoded cipher message.');
+        }
+
+        try{
+            $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            $data = false;
+        }
+
+        if (!$data || !is_array($data)) {
+            throw new EncryptionException(
+                'Invalid cipher payload.',
+                ErrorCode::JSON_ERROR
+            );
+        }
+
+        $isLegacy = isset($data['encrypted']);
+
+        $cipher = $data['c'] ?? $data['encrypted'] ?? null;
+        $method = $data['m'] ?? null;
+        $mac    = $data['h'] ?? $data['hash'] ?? null;
+        $nonce  = $this->isEcb((string) $method) ? true : ($data['n'] ?? $data['nonce'] ?? null);
+
+        if ((!$nonce || !$cipher) || ($isLegacy && !$mac) || (!$isLegacy && !$method)) {
+            throw new EncryptionException('Cipher payload is incomplete.');
+        }
+
+        if (!$isLegacy) {
+            $driver = $data['d'] ?? null;
+
+            if ($driver !== 'openssl') {
+                throw new EncryptionException(
+                    'Unsupported encryption driver: ' . ($driver ?? 'missing'),
+                    ErrorCode::NOT_SUPPORTED
+                );
+            }
+        }
+
+        $nonce  = ($nonce === true) ? '' : base64_decode($nonce, true);
+        $cipher = base64_decode($cipher, true);
+        $tag    = isset($data['t']) ? base64_decode($data['t'], true) : null;
+        $mac    = $mac ? base64_decode($data['h'], true) : null;
+
+        if ($nonce === false || $cipher === false) {
+            throw new EncryptionException('Invalid cipher encoding.');
+        }
+
+        return [
+            'isLegacy'   => $isLegacy,
+            'method'     => $method ?? $this->method,
+            'nonce'      => $nonce,
+            'cipher'     => $cipher,
+            'tag'        => $tag,
+            'mac'        => $mac
+        ];
     }
 
     /**
@@ -214,8 +520,12 @@ class Openssl implements EncryptionInterface
      *
      * @return bool True if parameters are valid, false otherwise.
      */
-    private function valid(): bool
+    private function valid(?string $method = null): bool
     {
-        return $this->message !== '' && $this->method !== '' && $this->key !== '';
+        $method ??= $this->method;
+
+        return $this->message
+            && $method
+            && $this->key;
     }
 }

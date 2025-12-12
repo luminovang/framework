@@ -10,63 +10,51 @@
  */
 namespace Luminova\Notifications\Models;
 
-use \Luminova\Exceptions\InvalidArgumentException;
+use Luminova\Exceptions\InvalidArgumentException;
 
 final class Message
 {
     /**
      * Default no specific platform.
      * 
-     * @var int DEFAULT
+     * @var string DEFAULT
      */
-    public const DEFAULT = 1;
+    public const DEFAULT = 'default';
 
     /**
      * Android specific platform.
      * 
-     * @var int ANDROID
+     * @var string ANDROID
      */
-    public const ANDROID = 2;
+    public const ANDROID = 'android';
 
     /**
      * IOS, APNs specific platform.
      * 
-     * @var int APN
+     * @var string APN
      */
-    public const APN = 3;
+    public const APN = 'apns';
 
     /**
      * Website, WebPush specific platform.
      * 
-     * @var int WEBPUSH
+     * @var string WEBPUSH
      */
-    public const WEBPUSH = 4;
+    public const WEBPUSH = 'webpush';
 
     /**
      * Indicate that payload is handled by notification class
      * 
-     * @var bool $isInternal
+     * @var string $platform
      */
-    private bool $isInternal = false;
+    private string $platform = self::DEFAULT;
 
     /**
-     * @var array<string,mixed> $basic
-     */
-    private array $basic = [
-        'data'          => [],
-        'notification'  => [
-            'title'     => '',
-            'body'      => '',
-            'image'     => ''
-        ]
-    ];
-
-     /**
      * @var array<string,mixed> $payload
      */
     private array $payload = [
         'android'       => [],
-        'apn'           => [],
+        'apns'          => [],
         'data'          => [],
         'webpush'       => [],
         'headers'       => [],
@@ -78,10 +66,10 @@ final class Message
     ];
 
     /**
-     * @var array<string,mixed> $default
+     * @var array<string,mixed> $metadata
      */
-    private array $default = [
-        'platform'      => self::DEFAULT,
+    private array $metadata = [
+        'platforms'     => [self::DEFAULT],
         'raw'           => false,
         'topic'         => '',
         'token'         => '',
@@ -92,25 +80,27 @@ final class Message
     /**
      *  Map additional fields directly if they exist in $setter.
      * 
-     * @var array<string,bool> $fields
+     * @var array<string,string> FIELD_TYPES
      */ 
-    private static array $fields = [
-        'priority'        => false, 
-        'ttl'             => false, 
-        'analytics_label' => false, 
-        'headers'         => true, 
-        'link'            => false, 
-        'webpush'         => true, 
-        'android'         => true, 
-        'apns'            => true,  
-        'fcm_options'     => true,
+    private const FIELD_TYPES = [
+        'priority'        => 'mixed', 
+        'ttl'             => 'mixed',  
+        'link'            => 'mixed',
+        'analytics_label' => 'mixed', 
+        'headers'         => 'array', 
+        'webpush'         => 'array', 
+        'android'         => 'array', 
+        'apns'            => 'array',  
+        'data'            => 'array',  
+        'ntification'     => 'array',  
+        'fcm_options'     => 'array',
     ];
 
     /**
-     * Initialize new message model.
+     * Create a new message payload.
      *
-     * @param array|null $setter An optional array to initialize model from.
-     *      - platform (int) Notification specific platform (default: 1).
+     * @param array|null $options An optional array of notification configurations to initialize model from.
+     *      - platform (string) Notification specific platform (default: `default`).
      *      - raw (bool) Send custom notification payload.
      *      - token (string) Optional single notification token.
      *      - topic (string) Optional single notification topic.
@@ -130,22 +120,130 @@ final class Message
      * @see https://firebase.google.com/docs/cloud-messaging/admin/send-messages#android_specific_fields
      * @see https://firebase.google.com/docs/cloud-messaging/admin/send-messages#webpush_specific_fields
      */
-    public function __construct(?array $setter = null)
+    public function __construct(?array $options = null)
     {
-        $this->default['raw'] = $setter['raw'] ?? false;
+        $isRaw = (bool) ($options['raw'] ?? false);
 
-        if($this->default['raw']){
-            $this->payload = $setter;
+        $this->metadata['raw'] = $isRaw;
+
+        if($isRaw){
+            $this->payload = $options;
             return;
         }
 
-        $this->payload = $this->basic;
-        $this->default['platform'] = $setter['platform'] ?? self::DEFAULT;
-        $this->default['topic'] = $setter['topic'] ?? '';
-        $this->default['token'] = $setter['token'] ?? '';
-        $this->default['conditions'] = $setter['conditions'] ?? '';
-        $this->default['tokens'] = $setter['tokens'] ?? [];
-        $this->setFromArray($setter);
+        $this->metadata['platforms']  = array_values(
+            $options['platforms'] 
+            ?? [$options['platform'] ?? self::DEFAULT]
+        );
+        $this->metadata['topic']      = $options['topic'] ?? '';
+        $this->metadata['token']      = $options['token'] ?? '';
+        $this->metadata['conditions'] = $options['conditions'] ?? '';
+        $this->metadata['tokens']     = $options['tokens'] ?? [];
+        $this->metadata['headers']    = $options['headers'] ?? [];
+
+        $this->createFromArray($options);
+    }
+
+    /**
+     * Create a new message payload from array.
+     *
+     * @param array<string,mixed> $configs An array to notification configurations.
+     *      - platform (int) Notification specific platform (default: 1).
+     *      - raw (bool) Send custom notification payload.
+     *      - token (string) Optional single notification token.
+     *      - topic (string) Optional single notification topic.
+     *      - tokens (array<int,string>) Optional multiple notification tokens.
+     *      - data (array<string,mixed>) Optional data to send with the notification.
+     *      - android (array<string,mixed>) Android specific configuration.
+     *      - apns (array<string,mixed>) APNs specific configuration.
+     *      - webpush (array<string,mixed>) WebPush specific configuration.
+     *      - headers (array<string,mixed>) Payload headers configuration.
+     *      - fcm_options (array<string,mixed>) Optional firebase configurations.
+     *      - notification (array<string,mixed>) Notification payload information:
+     *         -  - title (string) Notification title.
+     *         - - body (string) Notification message body.
+     *         - - image (string) Notification image URL.
+     * 
+     * @return self Returns instance of notification payload model.
+     */
+    public static function fromArray(array $configs): self 
+    {
+        return new self($configs);
+    }
+
+    /**
+     * Determine whether the configuration name is present.
+     *
+     * @param string|'apns'|'android'|'webpush'|'data'|'notification'|'headers'|'fcm_options'|'analytics_label' $name
+     * @return bool True if the config option configuration exists.
+     */
+    public function has(string $name): bool
+    {
+        $value = $this->payload[$name] 
+            ?? $this->metadata[$name] 
+            ?? null;
+
+        return !empty($value);
+    }
+
+    /**
+     * Determine whether the Android configuration is present.
+     *
+     * @return bool True if the Android configuration exists.
+     */
+    public function hasAndroid(): bool
+    {
+        return $this->has('android');
+    }
+
+    /**
+     * Determine whether the Web Push configuration is present.
+     *
+     * @return bool True if the Web Push configuration exists.
+     */
+    public function hasWebpush(): bool
+    {
+        return $this->has('webpush');
+    }
+
+    /**
+     * Determine whether the APNs configuration is present.
+     *
+     * @return bool True if the APNs configuration exists.
+     */
+    public function hasApn(): bool
+    {
+        return $this->has('apns');
+    }
+
+    /**
+     * Determine whether custom data is present.
+     *
+     * @return bool True if the data payload exists.
+     */
+    public function hasData(): bool
+    {
+        return $this->has('data');
+    }
+
+    /**
+     * Determine whether a notification payload is present.
+     *
+     * @return bool True if the notification payload exists.
+     */
+    public function hasNotification(): bool
+    {
+        return $this->has('notification');
+    }
+
+    /**
+     * Determine whether FCM options are present.
+     *
+     * @return bool True if the FCM options exist.
+     */
+    public function hasFcmOption(): bool
+    {
+        return $this->has('fcm_options');
     }
 
     /**
@@ -176,7 +274,7 @@ final class Message
             return $this;
         }
 
-        if((self::$fields[$root] ?? false) === true && !is_array($value)){
+        if((self::FIELD_TYPES[$root] ?? 'mixed') === 'array' && !is_array($value)){
             $this->payload[$root] = [];
         }
 
@@ -190,7 +288,7 @@ final class Message
      * @param string $keys The dot-separated keys representing the nested structure.
      * @param mixed $value The value to associate with the nested keys.
      * 
-     * @return self Return notification message model instance. Returns the updated instance of the class, allowing method chaining.
+     * @return self Returns the updated instance of the class, allowing method chaining.
      */
     public function addNested(string $keys, mixed $value): self
     {
@@ -205,6 +303,7 @@ final class Message
             if (!isset($cloneArray[$key])) {
                 $tempArray[$key] = [];
             }
+
             $cloneArray = &$cloneArray[$key]; 
         }
 
@@ -223,7 +322,7 @@ final class Message
      */
     public function addApns(string $key, mixed $value): self
     {
-        return $this->add($key, $value, 'apns');
+        return $this->add($key, $value, self::APN);
     }
 
     /**
@@ -236,7 +335,7 @@ final class Message
      */
     public function addWebpush(string $key, mixed $value): self
     {
-        return $this->add($key, $value, 'webpush');
+        return $this->add($key, $value, self::WEBPUSH);
     }
 
     /**
@@ -249,7 +348,7 @@ final class Message
      */
     public function addAndroid(string $key, mixed $value): self
     {
-        return $this->add($key, $value, 'android');
+        return $this->add($key, $value, self::ANDROID);
     }
 
     /**
@@ -276,9 +375,11 @@ final class Message
      */
     public function addNotification(string $key, mixed $value): self
     {
-        if($value !== ''){
-            $this->payload['notification'][$key] = $value;
+        if($value === ''){
+            return $this;
         }
+        
+        $this->payload['notification'][$key] = $value;
         
         return $this;
     }
@@ -324,8 +425,8 @@ final class Message
      */
     public function setHeaders(array $headers): self
     {
-        $this->payload['headers'] = array_merge(
-            $this->payload['headers'] ?? [],
+        $this->metadata['headers'] = array_merge(
+            $this->metadata['headers'] ?? [],
             $headers
         );
         return $this;
@@ -402,8 +503,7 @@ final class Message
      */
     public function setVibration(array $vibrate): self
     {
-        $this->payload['notification']['vibrate'] = $vibrate;
-        return $this;
+        return $this->addNotification('vibrate', $vibrate);
     }
 
     /**
@@ -438,7 +538,7 @@ final class Message
      */
     public function setAnalytic(string $analytic): self
     {
-        $this->payload['analytics_label'] = $analytic;
+        $this->metadata['analytics_label'] = $analytic;
         return $this;
     }
 
@@ -451,7 +551,7 @@ final class Message
      */
     public function setPriority(string $priority): self
     {
-        $this->payload['priority'] = $priority;
+        $this->metadata['priority'] = $priority;
         return $this;
     }
 
@@ -464,7 +564,7 @@ final class Message
      */
     public function setTtl(string $ttl): self
     {
-        $this->payload['ttl'] = $ttl;
+        $this->metadata['ttl'] = $ttl;
         return $this;
     }
 
@@ -477,7 +577,17 @@ final class Message
      */
     public function setLink(string $url): self
     {
-        $this->payload['link'] = $url;
+        $fcmOptions = $this->payload[self::WEBPUSH]['fcm_options'] ?? [];
+
+        if($fcmOptions === []){
+            $this->payload[self::WEBPUSH]['fcm_options'] = [
+                'link' =>  $url
+            ];
+
+            return $this;
+        }
+ 
+        $this->payload[self::WEBPUSH]['fcm_options']['link'] = $url;
         return $this;
     }
 
@@ -503,8 +613,7 @@ final class Message
      */
     public function setBadgeCount(int $count): self
     {
-        $this->payload['notification']['notification_count'] = $count;
-        return $this;
+        return $this->addNotification('notification_count', $count);
     }
 
     /**
@@ -516,7 +625,7 @@ final class Message
      */
     public function setPackage(string $package): self
     {
-        $this->payload['restricted_package_name'] = $package;
+        $this->payload[self::ANDROID]['restricted_package_name'] = $package;
         return $this;
     }
 
@@ -527,7 +636,7 @@ final class Message
      */
     public function isRaw(): bool
     {
-        return $this->default['raw'] ?? false;
+        return $this->metadata['raw'] ?? false;
     }
 
     /**
@@ -539,7 +648,7 @@ final class Message
      */
     public function setRaw(bool $raw = true): self
     {
-        $this->default['raw'] = $raw;
+        $this->metadata['raw'] = $raw;
         
         return $this;
     }
@@ -553,7 +662,7 @@ final class Message
      */
     public function setTopic(string $topic): self
     {
-        $this->default['topic'] = $topic;
+        $this->metadata['topic'] = $topic;
         return $this;
     }
 
@@ -566,7 +675,7 @@ final class Message
      */
     public function setConditions(string $conditions): self
     {
-        $this->default['conditions'] = $conditions;
+        $this->metadata['conditions'] = $conditions;
         return $this;
     }
 
@@ -579,7 +688,7 @@ final class Message
      */
     public function setTokens(array $tokens): self
     {
-        $this->default['tokens'] = $tokens;
+        $this->metadata['tokens'] = $tokens;
         return $this;
     }
 
@@ -592,25 +701,28 @@ final class Message
      */
     public function setToken(string $token): self
     {
-        $this->default['token'] = $token;
+        $this->metadata['token'] = $token;
         return $this;
     }
 
     /**
      * Set the notification platform type.
      * 
-     * @param int $platform The notification platform.
-     *      - Message::DEFAULT) (1) - Default notification without platform specific. 
-     *      - Message::ANDROID (2) - Android platform. 
-     *      - Message::APN (3) - APNs platform. 
-     *      - Message::WEBPUSH (4) - WebPush platform.  
+     * @param string $platform The notification platform.
+     *      - Message::DEFAULT) - Default notification without platform specific. 
+     *      - Message::ANDROID  - Android platform. 
+     *      - Message::APN      - APNs platform. 
+     *      - Message::WEBPUSH  - WebPush platform.  
      *      
      * 
      * @return self Return notification message model instance.
      */
-    public function setPlatform(int $platform): self
+    public function setPlatform(string $platform): self
     {
-        $this->default['platform'] = $platform;
+        $platforms = $this->metadata['platforms'] ?? [];
+        $platforms[] = $platform;
+
+        $this->metadata['platforms'] = array_unique($platforms);
         return $this;
     }
 
@@ -621,7 +733,7 @@ final class Message
      */
     public function getTokens(): array
     {
-        return $this->default['tokens'] ?? [];
+        return $this->metadata['tokens'] ?? [];
     }
 
     /**
@@ -631,7 +743,7 @@ final class Message
      */
     public function getConditions(): string
     {
-        return $this->default['conditions'] ?? '';
+        return $this->metadata['conditions'] ?? '';
     }
 
     /**
@@ -641,17 +753,18 @@ final class Message
      */
     public function getToken(): string
     {
-        return $this->default['token'] ?? '';
+        return $this->metadata['token'] ?? '';
     }
 
     /**
      * Get notification platform id.
      *
-     * @return int Returns the notification platform id.
+     * @return array Returns the notification platform id.
      */
-    public function getPlatform(): int
+    public function getPlatforms(): array
     {
-        return $this->default['platform'] ?? self::DEFAULT;
+        return $this->metadata['platforms'] 
+            ?? [self::DEFAULT];
     }
 
     /**
@@ -661,7 +774,7 @@ final class Message
      */
     public function getPriority(): string
     {
-        return $this->payload['priority'] ?? '';
+        return $this->metadata['priority'] ?? '';
     }
 
     /**
@@ -711,7 +824,7 @@ final class Message
      */
     public function getTopic(): string
     {
-        return $this->default['topic'] ?? 'test';
+        return $this->metadata['topic'] ?? 'test';
     }
 
     /**
@@ -721,7 +834,7 @@ final class Message
      */
     public function getAnalytic(): string
     {
-        return $this->payload['analytics_label'] ?? '';
+        return $this->metadata['analytics_label'] ?? '';
     }
 
     /**
@@ -754,165 +867,282 @@ final class Message
     }
 
     /**
-     * Retrieve notification platform name.
-     * 
-     * @return string Return platform name.
-     */
-    public function getPlatformName(): string 
-    {
-        return match($this->getPlatform()){
-            self::WEBPUSH => 'webpush',
-            self::ANDROID => 'android',
-            self::APN => 'apns',
-            default => 'default'
-        };
-    }
-
-    /**
      * Set the payload from an array of configuration settings.
      *
-     * @param array|null $setter The array of configuration settings.
+     * @param array|null $options The array of configuration settings.
      * 
      * @return void
      * @throws InvalidArgumentException Throws if $setter field value has an invalid value.
      */
-    private function setFromArray(?array $setter = null): void 
+    private function createFromArray(?array $options = null): void 
     {
-        if ($setter === null || $setter === []) {
+        if ($options === null || $options === []) {
             return;
         }
-        
-        $this->payload = array_merge(
-            $this->basic,
-            $setter['data'] ?? [],
-            $setter['notification'] ?? [
-                'notification' => [
-                    'title' => $setter['title'] ?? '',
-                    'body' => $setter['body'] ?? '',
-                    'image' => $setter['image'] ?? ''
-                ]
-            ],
-            $setter['apns'] ?? [],
-            $setter['android'] ?? [],
-            $setter['webpush'] ?? [],
-            $setter['headers'] ?? [],
-        );
-        
-        foreach (self::$fields as $field => $requireArray) {
-            if (isset($setter[$field])) {
-                if($requireArray && !is_array($setter[$field])){
-                    throw new InvalidArgumentException(sprintf('Invalid field "%s" value, array value is required.', $field));
-                }
-                $this->payload[$field] = $setter[$field];
+
+        static $attributes = [
+            'platforms'     => true,
+            'raw'           => true,
+            'topic'         => true,
+            'token'         => true,
+            'conditions'    => true,
+            'tokens'        => true,
+            'headers'       => true
+        ];
+
+        static $payload = [
+            self::WEBPUSH   => true,
+            self::ANDROID   => true,
+            self::APN       => true,
+            'data'          => true,
+            'notification'  => true
+        ];
+
+        foreach($options as $name => $option){
+            if(isset($attributes[$name])){
+                continue;
             }
+
+            if(!isset($payload[$name])){
+                $this->metadata['attributes'][$name] = $option;
+                continue;
+            }
+
+            if(!isset(self::FIELD_TYPES[$name])){
+                $this->payload[$name] = $option;
+                continue;
+            }
+
+            $isArrayRequired = self::FIELD_TYPES[$name] === 'array';
+
+            if($isArrayRequired && !is_array($option)){
+                throw new InvalidArgumentException(sprintf(
+                    'Invalid field "%s" value, array value is required.', $name
+                ));
+            }
+
+            $this->payload[$name] = $option;
         }
     }
 
     /**
      * Determine if building payload for internal notification class.
      * 
-     * @param bool $builder Whether notification payload is handled internally by notification class.
+     * @param string $platform Whether notification payload is handled internally by notification class.
      * 
      * @return self Return instance of notification class.
      * @internal Handled internally for notification class.
      */
-    public function isInternal(bool $internal = true): self 
+    public function forPlatform(string $platform): self 
     {
-        $this->isInternal = $internal;
+        $this->platform = $platform;
         return $this;
     }
 
     /**
-     * Process notification payload and return an array representing full notification configurations.
+     * Convert message payload to array.
+     * 
+     * This method process notification payload and return 
+     * an array representing full notification configurations.
      * 
      * @return array<string,mixed> Return notification payload.
      */
-    public function fromArray(): array
+    public function toArray(): array
     {
         if($this->isRaw()){
-            return $this->payload;
-        }
+            $data = $this->payload;
 
-        $data = [];
-        $platform = $this->getPlatform();
-
-        switch ($platform) {
-            case self::WEBPUSH:
-                $data['webpush'] = [
-                    'notification' => $this->payload['notification'] ?? [],
-                    'headers' => $this->payload['headers'] ?? [],
-                    'fcm_options' => []
-                ];
-
-                if (isset($this->payload['link'])) {
-                    $data['webpush']['fcm_options']['link'] = $this->payload['link'];
-                }
-                
-                if (isset($this->payload['ttl'])) {
-                    $data['webpush']['headers']['ttl'] = $this->payload['ttl'];
-                }
-                break;
-
-            case self::ANDROID:
-                $data['android'] = [
-                    'notification' => $this->payload['notification'] ?? [],
-                ];
-
-                foreach (['ttl', 'priority', 'restricted_package_name'] as $key) {
-                    if (isset($this->payload[$key])) {
-                        $data['android'][$key] = $this->payload[$key];
-                    }
-                }
-                break;
-
-            case self::APN:
-                $data['apns'] = [
-                    'payload' => [
-                        'aps' => [
-                            'alert' => [
-                                'title' => $this->payload['notification']['title'] ?? '',
-                                'body' => $this->payload['notification']['body'] ?? '',
-                            ]
-                        ]
-                    ],
-                    'headers' => [],
-                    'fcm_options' => [],
-                ];
-
-                $image = $this->getImageUrl();
-                if($image){
-                    $data['apns']['fcm_options']['image'] = ($data['apns']['fcm_options']['image'] ?? $image);
-                }
-             
-                break;
-        }
-
-        $platformName = $this->getPlatformName();
-
-        if($this->isInternal && $platformName !== 'default'){
-
-            if (isset($this->payload['analytics_label'])) {
-                $data[$platformName]['fcm_options']['analytics_label'] = $this->payload['analytics_label'];
-            }
-
-            $clone = $this->payload;
-            $specific = $clone[$platformName] ?? [];
-            unset($clone[$platformName]);
-
-            return array_merge_recursive(
-                $specific, 
-                $data[$platformName],
-                $clone
+            $data['headers'] = array_merge(
+                $data['headers'] ?? [], 
+                $this->metadata['headers'] ?? []
             );
+
+            return self::cleanArray(array_merge(
+                $data,
+                $this->metadata['attributes'] ?? []
+            ));
         }
 
-        if (isset($this->payload['analytics_label'])) {
-            $data['fcm_options']['analytics_label'] = $this->payload['analytics_label'];
+        static $data = [];
+
+        if(isset($data[$this->platform])){
+            return $data[$this->platform];
         }
 
-        return array_merge_recursive(
-            $this->payload, 
-            $data
+        foreach($this->getPlatforms() as $platform){
+            $data[$platform] = match ($platform) {
+                self::WEBPUSH => $this->fromWebpush(),
+                self::ANDROID => $this->fromAndroid(),
+                self::APN     => $this->fromApns(),
+                self::DEFAULT => self::cleanArray(array_merge([
+                    'notification'  => $this->fromNotification(),
+                    'data'          => $this->getData(),
+                    self::WEBPUSH   => $this->fromWebpush(),
+                    self::ANDROID   => $this->fromAndroid(),
+                    self::APN       => $this->fromApns(),
+                    //'fcm_options'   => $this->payload['fcm_options'],
+                ], $this->metadata['attributes'] ?? [])),
+                default      => []
+            };
+        }
+
+        return $data[$this->platform] 
+            ?? $data[self::DEFAULT][$this->platform] 
+            ?? [];
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @return array
+     */
+    private function fromNotification(): array 
+    {
+        $data = $this->payload['notification'] ?? [];
+
+        $data['title'] ??= $this->payload['notification']['title'] ?? '';
+        $data['body']  ??= $this->payload['notification']['body'] ?? '';
+        $data['image'] ??= $this->payload['notification']['image'] ?? '';
+        $data['icon']  ??= $this->payload['notification']['icon'] ?? '';
+
+        return self::cleanArray($data);
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @return array
+     */
+    private function fromAndroid(): array 
+    {
+        $data = $this->payload[self::ANDROID] ?? [
+            'notification' => [],
+            'fcm_options'  => []
+        ];
+
+        $data['ttl'] ??= $this->metadata['ttl'] ?? null;
+        $data['priority'] ??= $this->metadata['priority'] ?? null;
+
+        $data['notification'] = array_merge(
+            $data['notification'] ?? [],
+            $this->fromNotification()
         );
+
+        $data['fcm_options']['analytics_label'] ??= ($this->metadata['analytics_label'] ?? '');
+
+        return self::cleanArray($data, true);
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @return array
+     */
+    private function fromApns(): array 
+    {
+        $data = $this->payload[self::APN] ?? [
+            'payload' => [
+                'aps' => [
+                    'alert' => []
+                ]
+            ],
+            'headers'     => [],
+            'fcm_options' => [],
+        ];
+
+        $data['headers'] = array_merge(
+            $data['headers'] ?? [], 
+            $this->metadata['headers'] ?? []
+        );
+
+        $data['headers']['apns-priority'] ??= $this->metadata['priority'] ?? null;
+
+        $data['fcm_options'] ??= $this->payload['fcm_options'] ?? [];
+
+        $data['payload']['aps'] ??= [];
+        $data['payload']['aps']['alert'] ??= [];
+
+        $data['fcm_options']['image'] ??= $this->getImageUrl();
+        $data['fcm_options']['analytics_label'] ??= ($this->metadata['analytics_label'] ?? '');
+
+
+        $data['payload']['aps']['alert']['title'] 
+            ??= $this->payload['notification']['title'] ?? '';
+
+        $data['payload']['aps']['alert']['body']  
+            ??= $this->payload['notification']['body'] ?? '';
+
+        return self::cleanArray($data, true);
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @return array
+     */
+    private function fromWebpush(): array
+    {
+        $data = $this->payload[self::WEBPUSH] ?? [
+            'notification'  => [
+                'requireInteraction' => true,
+                'silent'             => false,
+                'renotify'           => true,
+                'dir'                => 'auto',
+            ],
+            'headers'       => [],
+            'options'       => [],
+            'actions'       => [],
+            'fcm_options'   => []
+        ];
+
+        $data['headers'] = array_merge(
+            $data['headers'] ?? [], 
+            $this->metadata['headers'] ?? []
+        );
+
+        $data['notification'] = array_merge(
+            $data['notification'] ?? [],
+            $this->fromNotification()
+        );
+
+        $data['headers']['ttl'] ??= (string) ($this->metadata['ttl'] ?? '');
+        $data['fcm_options']['analytics_label'] ??= ($this->metadata['analytics_label'] ?? '');
+
+        unset($data['headers']['apns-priority']);
+
+        return self::cleanArray($data, true);
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @param array $data
+     * @param boolean $deep
+     * @return array
+     */
+    private static function cleanArray(array $data, bool $deep = false): array
+    {
+        foreach ($data as $key => &$value) {
+            if (is_array($value)) {
+                if ($value === []) {
+                    unset($data[$key]);
+                    continue;
+                }
+
+                if(!$deep){
+                    continue;
+                }
+
+                $value = self::cleanArray($value, $deep);
+
+                if ($value === []) {
+                    unset($data[$key]);
+                }
+            } elseif ($value === null || $value === '') {
+                unset($data[$key]);
+            }
+        }
+
+        return $data;
     }
 }
