@@ -10,9 +10,10 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\Console;
-use \Luminova\Utility\Storage\Filesystem;
-use function \Luminova\Funcs\root;
+use Luminova\Luminova;
+use Luminova\Base\Console;
+use Luminova\Command\Terminal;
+use Luminova\Storage\Filesystem;
 
 class ClearWritable extends Console
 {
@@ -42,24 +43,20 @@ class ClearWritable extends Console
      */
     public function run(?array $options = []): int
     {
-        $this->term->perse($options);
-        $command = trim($this->term->getCommand());
+        $name = trim($this->input->getName());
 
-        $runCommand = match ($command) {
-            'clear:caches' => $this->clearCaches($this->term->getAnyOption('dir', 'd')),
+        return (int) match ($name) {
+            'clear:caches' => $this->clearCaches($this->input->getAnyOption('dir', 'd')),
             'clear:routes' => $this->clearFromWritable('/caches/routes/'),
             'clear:storage' => $this->clearFromWritable('/storages/'),
+            'clear:dir',
             'clear:writable' => $this->clearFromWritable(
-                $this->term->getAnyOption('dir', 'd'),
-                (bool)$this->term->getAnyOption('parent', 'p', false)
+                $this->input->getAnyOption('dir', 'd'),
+                $this->input->hasOption('remove-parent', 'rp')
             ),
             'clear:temp' => $this->clearFromWritable('/temp/'),
-            default => null,
+            default => Terminal::oops($name),
         };
-
-        return ($runCommand === null) 
-            ? $this->term->oops($command) 
-            : (int) $runCommand;
     }
 
     /**
@@ -78,71 +75,125 @@ class ClearWritable extends Console
      */
     private function clearCaches(?string $file): int
     {
-        $file = $file ? "{$file}/" : '';
+        $file = self::isFile($file) 
+            ? "{$file}/" 
+            : '';
+
         return $this->clearFromWritable("/caches/{$file}");
     }
 
     /**
-     * Clear files and directories in the writeable directory.
+     * Check if filename is value.
      *
-     * @param string|null $file The directory path to clear.
-     * @param bool $removeParent Whether to remove the parent directory itself.
-     * @return int Status code.
+     * @param string|null $file
+     * @return bool
+     */
+    private static function isFile(?string $file): bool 
+    {
+        if($file === null || $file === ''){
+            return false;
+        }
+
+        $file = trim($file);
+
+        return $file !== '' && $file !== '/';
+    }
+
+    /**
+     * Clear files and directories within the writeable directory.
+     *
+     * @param string|null $file The directory path relative to the writeable directory.
+     * @param bool $removeParent Whether to remove the target directory after clearing its contents.
+     *
+     * @return int The command status code.
      */
     private function clearFromWritable(?string $file, bool $removeParent = false): int
     {
-        if (empty($file)) {
-            $this->term->error('Please specify the directory name or path using --dir=<name>.');
+        if (!self::isFile($file)) {
+            Terminal::error('Specify a valid directory using --dir=<pathname>.');
             return STATUS_ERROR;
         }
 
-        $file = trim(Filesystem::toCompatible($file), TRIM_DS);
-        $path = root("/writeable/{$file}/");
-        $name = basename($path);
+        $file = trim(Filesystem::normalizePath($file), TRIM_DS);
+        $path = Luminova::root("/writeable/{$file}/");
+        $name = basename(rtrim($path, TRIM_DS));
 
-        if (!file_exists($path)) {
-            $this->term->error(sprintf('The folder "%s" does not exist in the writeable directory.', $name));
+        if (!is_dir($path)) {
+            Terminal::error(sprintf(
+                'Directory "%s" does not exist in the writeable directory.',
+                $name
+            ));
+
             return STATUS_ERROR;
         }
 
-        if (str_ends_with(rtrim($path, TRIM_DS), 'writeable')) {
-            $this->term->error('The "writeable" directory cannot be deleted directly.');
+        $writeable = rtrim(Luminova::root('/writeable/'), TRIM_DS);
+
+        if (rtrim($path, TRIM_DS) === $writeable) {
+            Terminal::error('The writeable directory cannot be cleared or removed directly.');
             return STATUS_ERROR;
         }
 
         if (!is_writable($path)) {
-            $owner = posix_getpwuid((int) fileowner($path));
-            $owner = $owner ? ' ' . $owner['name'] : '';
-            $changeable = $this->term->prompt(
-                sprintf("The folder '%s' is not writable. Would you like to change its owner{$owner}?", $name),
-                ['yes', 'no'], 
+            $owner = function_exists('posix_getpwuid')
+                ? posix_getpwuid((int) fileowner($path))
+                : false;
+
+            $owner = $owner ? sprintf(' (current owner: %s)', $owner['name']) : '';
+
+            $changeable = Terminal::prompt(
+                sprintf(
+                    'Directory "%s" is not writable%s. Do you want to change its owner?',
+                    $name,
+                    $owner
+                ),
+                ['yes', 'no'],
                 'required|in_array(yes,no)'
             );
-        
-            if ($changeable === 'no') {
+
+            if ($changeable !== 'yes') {
+                Terminal::error('Operation cancelled. Directory permissions were not changed.');
                 return STATUS_ERROR;
             }
 
-            $newOwner = $this->term->input('Please enter the username for the new owner:');
-    
-            if (!chown($path, $newOwner)) {
-                $this->term->error(sprintf(
-                    "Unable to change the owner of '%s' to '%s'. Please verify the username and permissions.", 
-                    $path, 
-                    $newOwner
+            $newOwner = Terminal::input('Enter the username of the new owner:');
+
+            if ($newOwner === '' || !chown($path, $newOwner)) {
+                Terminal::error(sprintf(
+                    'Unable to change the owner of "%s". Verify the username and your permissions.',
+                    $name
                 ));
+
                 return STATUS_ERROR;
             }
-        }        
 
-        $deleted = 0;
-        @Filesystem::remove($path, $removeParent, $deleted);
+            if (!is_writable($path)) {
+                Terminal::error(sprintf(
+                    'Directory "%s" is still not writable after changing its owner.',
+                    $name
+                ));
+
+                return STATUS_ERROR;
+            }
+        }
+
+        $removeParent = $removeParent
+            && rtrim(dirname($path), TRIM_DS) !== $writeable;
+
+        $deleted = Filesystem::delete($path, $removeParent);
 
         if ($deleted > 0) {
-            $this->term->success(sprintf('Successfully deleted %d items in "%s".', $deleted, $name));
-            $this->term->beeps();
+            Terminal::success(sprintf(
+                'Successfully deleted %d item(s) from "%s".',
+                $deleted,
+                $name
+            ));
+            Terminal::beeps();
         } else {
-            $this->term->writeln(sprintf('No files were deleted in "%s".', $name));
+            Terminal::writeln(sprintf(
+                'No files or directories were deleted from "%s".',
+                $name
+            ));
         }
 
         return STATUS_SUCCESS;

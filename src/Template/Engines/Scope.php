@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -11,8 +12,8 @@
 namespace Luminova\Template\Engines;
 
 use \Throwable;
-use \Luminova\Template\View;
-use \Luminova\Exceptions\BadMethodCallException;
+use Luminova\Template\View;
+use Luminova\Exceptions\BadMethodCallException;
 
 /**
  * Simulates a language keyword for isolated template rendering.
@@ -20,7 +21,7 @@ use \Luminova\Exceptions\BadMethodCallException;
  * Grants scoped access to the application object, exported services, and view options,
  * while preventing direct access to `$this` inside templates.
  * 
- * @mixin Luminova\Template\View
+ * @mixin \Luminova\Template\View
  * 
  * @category View
  * @property \Luminova\Foundation\Core\Application|null $app

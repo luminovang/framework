@@ -10,14 +10,16 @@
  */
 namespace Luminova\Security\Authenticator;
 
+use \Throwable;
 use \DateTimeZone;
-use \Luminova\Time\Time;
-use \Luminova\Base\Cache;
+use Luminova\Time\Time;
+use Luminova\Base\Cache;
+use Luminova\Utility\Encoder;
 use \Psr\SimpleCache\CacheInterface;
 use \Psr\Cache\CacheItemPoolInterface;
-use \Luminova\Exceptions\EncryptionException;
-use \Luminova\Interface\AuthenticatorInterface;
-use \Luminova\Exceptions\InvalidArgumentException;
+use Luminova\Exceptions\EncryptionException;
+use Luminova\Interface\AuthenticatorInterface;
+use Luminova\Exceptions\InvalidArgumentException;
 
 class Google implements AuthenticatorInterface
 {
@@ -34,7 +36,8 @@ class Google implements AuthenticatorInterface
      * @param string $accountName The account name (e.g., user email or username).
      * @param string $issuer The issuer's name (e.g., your app or website name).
      * @param DateTimeZone|string|null $timezone The timezone for time-based calculations (optional).
-     * @param CacheItemPoolInterface|CacheInterface|Cache|null $cache The instance of PSR cache or Luminova base-cache for preventing code reuse (optional).
+     * @param CacheItemPoolInterface|CacheInterface|Cache|null $cache The instance of PSR cache 
+     *              or Luminova base-cache for preventing code reuse (optional).
      * 
      * @throws EncryptionException If the issuer or account name contains invalid characters (colon `:`).
      */
@@ -130,7 +133,7 @@ class Google implements AuthenticatorInterface
             );
         }
 
-        $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+        $alphabet = Encoder::BASE32_RFC4648;
         $secret = '';
 
         for ($i = 0; $i < $length; $i++) {
@@ -181,7 +184,10 @@ class Google implements AuthenticatorInterface
      */
     protected function isValid(string $calculated, string $code): bool 
     {
-        return hash_equals(str_pad($calculated, 6, '0', STR_PAD_LEFT), str_pad($code, 6, '0', STR_PAD_LEFT));
+        return hash_equals(
+            str_pad($calculated, 6, '0', STR_PAD_LEFT), 
+            str_pad($code, 6, '0', STR_PAD_LEFT)
+        );
     }
 
     /**
@@ -248,8 +254,14 @@ class Google implements AuthenticatorInterface
      */
     protected function generateCode(string $secret, int $timeWindow): string
     {
+        try{
+            $secret = Encoder::base32Decode($secret);
+        } catch(Throwable $e){
+            throw new EncryptionException($e->getMessage(), $e->getCode(), $e);
+        }
+
         $timeWindowBytes = pack('N*', 0) . pack('N*', $timeWindow);
-        $hash = hash_hmac('SHA1', $timeWindowBytes, $this->base32Decode($secret), true);
+        $hash = hash_hmac('SHA1', $timeWindowBytes, $secret, true);
 
         $offset = ord(substr($hash, -1)) & 0x0F;
         $binaryCode = (ord($hash[$offset]) & 0x7F) << 24
@@ -258,35 +270,6 @@ class Google implements AuthenticatorInterface
             | (ord($hash[$offset + 3]) & 0xFF);
 
         return str_pad((string) ($binaryCode % 10 ** 6), 6, '0', STR_PAD_LEFT);
-    }
-
-    /**
-     * Decode a Base32-encoded string.
-     *
-     * @param string $data The Base32-encoded string.
-     * 
-     * @return string The decoded binary string.
-     * @throws EncryptionException If invalid base32 character is found in secret.
-     */
-    protected function base32Decode(string $data): string
-    {
-        $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-        $binaryString = '';
-
-        foreach (str_split($data) as $char) {
-            $charIndex = strpos($alphabet, $char);
-            if ($charIndex === false) {
-                throw new EncryptionException('Invalid Base32 character in secret.');
-            }
-            $binaryString .= str_pad(decbin($charIndex), 5, '0', STR_PAD_LEFT);
-        }
-
-        $binaryData = '';
-        foreach (str_split($binaryString, 8) as $byte) {
-            $binaryData .= chr(bindec($byte));
-        }
-
-        return $binaryData;
     }
 
     /**

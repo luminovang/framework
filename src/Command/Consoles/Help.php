@@ -10,8 +10,9 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\Console;
-use \Luminova\Command\Consoles\Commands;
+use Luminova\Base\Console;
+use Luminova\Command\Terminal;
+use Luminova\Command\Consoles\Commands;
 
 class Help extends Console 
 {
@@ -37,16 +38,15 @@ class Help extends Console
      */
     public function run(?array $options = []): int
     {
-        $this->term->perse($options);
+        $command = $this->input->getArgument(0);
+        $all = $this->input->getOption('all', false);
 
-        $command = $this->term->getArgument(1);
-        $all = $this->term->getOption('all', false);
         $helps = $all 
             ? Commands::getCommands() 
             : Commands::get($command ?? 'help');
 
         if($helps === []){
-            return $this->term->oops($command);
+            return Terminal::oops($command);
         }
 
         if($all){
@@ -55,7 +55,7 @@ class Help extends Console
             $helps['examples'] = Commands::getGlobalHelps();
         }
 
-        $this->term->helper($helps, $all);
+        Terminal::helper($helps, $all);
         return STATUS_SUCCESS;
     }
 

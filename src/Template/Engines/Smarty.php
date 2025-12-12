@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -11,14 +12,16 @@
 namespace Luminova\Template\Engines;
 
 use \Closure;
-use \Luminova\Luminova;
+use App\Kernel;
+use Luminova\Runtime;
+use Luminova\Config\Env;
 use \Smarty\Extension\Base;
 use \Smarty\Smarty as SmartyTemplate;
-use function \Luminova\Funcs\make_dir;
-use \Luminova\Exceptions\RuntimeException;
+use function Luminova\Funcs\make_dir;
+use Luminova\Exceptions\RuntimeException;
 use \App\Config\Template as TemplateConfig;
-use \Luminova\Template\Extensions\SmartyFunction;
-use \Luminova\Template\Extensions\SmartyExtension;
+use Luminova\Template\Extensions\SmartyFunction;
+use Luminova\Template\Extensions\SmartyExtension;
 
 final class Smarty 
 {
@@ -57,7 +60,7 @@ final class Smarty
             $config->configFolder
         ]);
 
-        SmartyTemplate::$_CHARSET = strtoupper(env('app.charset', 'UTF-8'));
+        SmartyTemplate::$_CHARSET = strtoupper(Env::get('app.charset', 'UTF-8'));
         $this->smarty = new SmartyTemplate();
 
         $this->smarty->setCompileCheck(
@@ -181,7 +184,7 @@ final class Smarty
                 continue;
             }
 
-            if(($class instanceof Closure) || Luminova::isCallable($class, true)){
+            if(($class instanceof Closure) || Runtime::isCallable($class, true)){
                 $this->smarty->registerPlugin('function', $aliases, $class);
                 continue;
             }
@@ -210,7 +213,7 @@ final class Smarty
                 continue;
             }
 
-            if(($class instanceof Closure) || Luminova::isCallable($class)){
+            if(($class instanceof Closure) || Runtime::isCallable($class)){
                 $this->smarty->registerPlugin('function', $aliases, $class);
                 continue;
             }
@@ -288,7 +291,7 @@ final class Smarty
      */
     public function isCached(string $view): bool
     {
-        return $this->smarty->isCached($view, Luminova::getCacheId());
+        return $this->smarty->isCached($view, Kernel::getCacheId());
     }
 
     /**
@@ -325,7 +328,7 @@ final class Smarty
      */
     public function display(string $view, ?Proxy $proxy = null): ?string
     {
-        return $this->smarty->fetch($view, Luminova::getCacheId()) ?: null;
+        return $this->smarty->fetch($view, Kernel::getCacheId()) ?: null;
     }
 
     /**

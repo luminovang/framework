@@ -11,10 +11,10 @@
 namespace Luminova\Exceptions;
 
 use \Throwable;
-use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Exceptions\LuminovaException;
 
-class ErrorException extends AppException
+class ErrorException extends LuminovaException
 {
     /**
      * Constructor for ErrorException.
@@ -22,7 +22,7 @@ class ErrorException extends AppException
      * @param string $message The exception message.
      * @param string|int $code  The exception code (default: `ErrorCode::ERROR`).
      * @param int $severity The error type/code (e.g., `ErrorCode::ERROR`).
-     * @param string $file The file where the error occurred.
+     * @param string $filename The file where the error occurred.
      * @param int|null $line The line number where the error occurred.
      * @param Throwable|null $previous Optional The previous exception if applicable (default: null).
      */
@@ -30,15 +30,15 @@ class ErrorException extends AppException
         string $message, 
         string|int $code = ErrorCode::ERROR, 
         protected int $severity = 1,
-        ?string $file = null,
+        ?string $filename = null,
         ?int $line = null,
         ?Throwable $previous = null
     ) 
     {
         parent::__construct($message, $code, $previous);
 
-        if($file !== null){
-            $this->setFile($file);
+        if($filename !== null){
+            $this->setFile($filename);
         }
 
         if($line !== null){

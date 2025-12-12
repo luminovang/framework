@@ -11,14 +11,15 @@
 namespace Luminova\Template\Extensions;
 
 use \Throwable;
-use \Luminova\Boot;
+use Luminova\Boot;
 use \Smarty\Template;
-use \Luminova\Luminova;
-use \Luminova\Time\Time;
-use \Luminova\Exceptions\ClassException;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Runtime;
+use Luminova\Luminova;
+use Luminova\Time\Time;
+use Luminova\Exceptions\ClassException;
+use Luminova\Exceptions\RuntimeException;
 use \App\Config\Templates\Smarty\Extensions;
-use \Luminova\Exceptions\BadMethodCallException;
+use Luminova\Exceptions\BadMethodCallException;
 use \Smarty\FunctionHandler\FunctionHandlerInterface;
 
 final class SmartyExtension
@@ -26,17 +27,18 @@ final class SmartyExtension
     /**
      * Default classes.
      * 
-     * @var array<string,class-string<\T>> $defaults.
+     * @var array<string,class-string> $defaults.
      */
     private static array $defaults = [
         'Luminova' => Luminova::class,
         'Boot'     => Boot::class,
+        'Runtime'  => Runtime::class
     ];
 
-     /**
-     * Customer registered classes via `Extensions::registerClasses`
+    /**
+     * Customer registered classes via `Extensions::registerClasses`.
      * 
-     * @var array<string,array<string,class-string<\T>> $classes.
+     * @var array<string,array<string,class-string>> $classes.
      */
     private static array $classes = [];
 
@@ -74,12 +76,12 @@ final class SmartyExtension
         }
 
         $function =  match ($name) {
-            'now'                  => [Time::class, 'now'],
-            'new'                  => [self::class, '___call'],
-            'const'                => [self::class, '___callConstant'],
+            'now'                    => [Time::class, 'now'],
+            'new'                    => [self::class, '___call'],
+            'const'                  => [self::class, '___callConstant'],
             'fn', 'func', 'function' => [self::class, '___callFunction'],
-            'static'               => [self::class, '___callStatic'],
-            default                => null
+            'static'                 => [self::class, '___callStatic'],
+            default                  => null
         };
 
         if($function !== null){

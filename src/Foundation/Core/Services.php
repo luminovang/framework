@@ -10,10 +10,10 @@
  */
 namespace Luminova\Foundation\Core;
 
-use \Luminova\Interface\LazyObjectInterface;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Interface\ServicesInterface;
-use function \Luminova\Funcs\get_class_name;
+use Luminova\Interface\LazyObjectInterface;
+use Luminova\Exceptions\RuntimeException;
+use Luminova\Interface\ServicesInterface;
+use function Luminova\Funcs\get_class_name;
 
 abstract class Services implements ServicesInterface, LazyObjectInterface
 {
