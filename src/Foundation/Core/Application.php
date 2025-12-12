@@ -12,13 +12,12 @@ declare(strict_types=1);
 namespace Luminova\Foundation\Core;
 
 use \Closure;
-use \Luminova\Boot;
+use \Throwable;
 use \Luminova\Luminova;
-use \Luminova\Template\View;
 use \Luminova\Routing\{Router, DI};
-use \Luminova\Utility\Object\LazyObject;
+use \Luminova\Foundation\Error\Guard;
+use \Luminova\Exceptions\BadMethodCallException;
 use \Luminova\Interface\{RouterInterface, LazyObjectInterface};
-use \Luminova\Exceptions\{RuntimeException, BadMethodCallException};
 
 /**
  * Base class for the application.
@@ -53,17 +52,9 @@ abstract class Application implements LazyObjectInterface
     /**
      * Instance of the Router class.
      *
-     * @var RouterInterface|null $router
+     * @var RouterInterface $router
      */
     public ?RouterInterface $router = null;
-
-    /**
-     * Lazy loaded template view object.
-     * 
-     * @var View|LazyObjectInterface|null $view
-     * @see https://luminova.ng/docs/0.0.0/templates/views
-     */
-    public ?LazyObjectInterface $view = null;
 
     /**
      * Singleton instance of Application.
@@ -73,7 +64,7 @@ abstract class Application implements LazyObjectInterface
     private static ?self $instance = null;
 
     /**
-     * Application is lifecycle state counter.
+     * Application is state lifecycle.
      *
      * @var int $lifecycle
      */
@@ -94,17 +85,10 @@ abstract class Application implements LazyObjectInterface
     public static ?bool $isHmvcModule = null;
 
     /**
-     * Flag indicating when application class is cloned.
-     * 
-     * @var bool $isCloneCircularLocked
-     */
-    private bool $isCloneCircularLocked = false;
-
-    /**
      * Core application constructor.
      * 
      * Builds the application only once. The first construction runs the full
-     * lifecycle: onPreCreate, router setup, view setup, and onCreate. Any later
+     * lifecycle: onPreCreate, router setup, and onCreate. Any later
      * construction will skip all lifecycle work unless `$recreate` is true.
      * 
      * The `$recreate` flag forces a full rebuild, allowing the application to
@@ -120,32 +104,47 @@ abstract class Application implements LazyObjectInterface
         self::$isHmvcModule ??= env('feature.app.hmvc', false);
 
         if(!$this->recreate && self::$lifecycle > self::IDLE){
-            if((self::$instance instanceof static)){
-                $this->router ??= self::$instance->router;
-                $this->view ??= self::$instance->view;
+            // This is intentional, to prevent routing system initializing again 
+            // in new application object if app class ic initialized again after boot
+            return;
+        }
+
+        try{
+            if($this->termination['isTerminated']){
+                $this->__doTermination();
+                return;
             }
 
-            return;
+            $this->onPreCreate();
+
+            Luminova::permission('rw', throw: true);
+
+            if(!$this->router instanceof RouterInterface){
+                $this->router = Luminova::kernel()->getRoutingSystem() 
+                    ?? new Router($this);
+            }
+
+            $this->router->addNamespace(self::$isHmvcModule
+                ? '\\App\\Modules\\Controllers\\' 
+                : '\\App\\Controllers\\'
+            );
+
+            $this->onCreate();
+            self::$lifecycle = self::CREATED;
+        }catch(Throwable $e){
+            Guard::shutdown([
+                'type' => E_ERROR,
+                'message' => sprintf(
+                    'Application failed to initialize. ' . 
+                    'An exception may have been thrown during onPreCreate or onCreate, ' . 
+                    'or a file permission issue occurred. Code: %s, Error: "%s"', 
+                    $e->getCode(),
+                    $e->getMessage()
+                ),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
         }
-
-        $this->onPreCreate();
-
-        if($this->termination['isTerminated']){
-            $this->__doTermination();
-            return;
-        }
-
-        Luminova::permission('rw', throw: true);
-        $this->router ??= $this->getRouterInstance() ?? new Router($this);
-        $this->router->addNamespace(self::$isHmvcModule
-            ? '\\App\\Modules\\Controllers\\' 
-            : '\\App\\Controllers\\'
-        );
-
-        $this->view ??= LazyObject::newObject(fn() :View => new View($this));
-
-        $this->onCreate();
-        self::$lifecycle = self::CREATED;
     }
 
     /**
@@ -440,14 +439,9 @@ abstract class Application implements LazyObjectInterface
      * 
      * @return static Return the new shared application instance.
      */
-    public static function setInstance(Application $new): static
+    public function setInstance(Application $new): static
     {
-        if(self::$instance instanceof static){
-            $new->router ??= self::$instance->router;
-            $new->view ??= self::$instance->view;
-        }
-
-        return self::$instance = $new;
+        return static::$instance = $new;
     }
 
     /**
@@ -457,7 +451,7 @@ abstract class Application implements LazyObjectInterface
      * will not trigger the normal creation lifecycle, the constructor skips
      * onCreate, onDestroy, and any re-initialization logic for later requests except `$recreate` is set to `true`.
      * 
-     * This guarantees that the router, view engine, and other core services
+     * This guarantees that the router and other core services
      * come from the original Application, while additional instances simply
      * reuse them.
      * 
@@ -467,24 +461,11 @@ abstract class Application implements LazyObjectInterface
      */
     public static function getInstance(bool $recreate = false): static 
     {
-        if(!self::$instance instanceof static){
-            self::$instance = new static($recreate);
+        if(!static::$instance instanceof static){
+            static::$instance = new static($recreate);
         }
        
-        return self::$instance;
-    }
-
-    /**
-     * Returns an instance of the application routing system.
-     *
-     * You may override this method in your application class to return a custom implementation
-     * of the routing system by extending or replacing the default router.
-     *
-     * @return \T<RouterInterface>|null Return instance of the routing system, or null to use default.
-     */
-    protected function getRouterInstance(): ?RouterInterface
-    {
-        return null;
+        return static::$instance;
     }
 
     /**
@@ -501,84 +482,6 @@ abstract class Application implements LazyObjectInterface
         return Luminova::isCommand() 
             ? Router::CLI_URI 
             : Luminova::getUriSegments();
-    }
-
-    /**
-     * Get the current view instance.
-     *
-     * Returns either a `View` object or a lazy-loaded wrapper implementing 
-     * `LazyObjectInterface`. If no view has been initialized, this method creates 
-     * a new `View` instance without assigning it to `$this->view`.
-     *
-     * @return View<LazyObjectInterface>|View Return the current view instance or a newly created one.
-     *
-     * > **Note:** 
-     * > Calling this method does **not** update the `$view` property if it is null. 
-     * > This means `$app->getView()` and `$app->view` may not reference the same object.
-     */
-
-    /**
-     * Get the current view instance.
-     *
-     * Returns the existing `View` instance or a lazy-loaded view object implementing
-     * `LazyObjectInterface`. If the view has not been initialized, a new `View`
-     * instance is created and stored in `$this->view` before being returned.
-     *
-     * @return View|LazyObjectInterface Returns the template view object.
-     * @throws RuntimeException If called within a template view files.
-     * 
-     * @example - In Application Example:
-     * ```php
-     * // /app/Application.php
-     * $this->view;
-     * $this->getView();
-     * ```
-     * @example - In Controllers Example:
-     * ```php
-     * // /app/Controllers/Http/Controller.php
-     * 
-     * $this->app->view;
-     * $this->app->getView();
-     * ```
-     * 
-     * @example - In Global app Function Example:
-     * ```php
-     * use function Luminova\Funcs\app;
-     * 
-     * $app = $app();
-     * 
-     * $app->view;
-     * $app->getView();
-     * ```
-     */
-    public final function getView(): LazyObjectInterface|View
-    {
-        if (
-            ($this->view instanceof View) ||
-            ($this->view instanceof LazyObjectInterface)
-        ) { 
-            return $this->view;
-        }
-
-        if($this->isCloneCircularLocked){
-            if(!Boot::has('__IN_TEMPLATE_CONTEXT__')){
-                return new View($this);
-            }
-
-            [$file, $line] = RuntimeException::trace(1);
-            $e = new RuntimeException(
-                'Accessing "$app->getView()" inside templates is forbidden. ' . 
-                'Use "$this->view()" or "$self->view()" instead.'
-            );
-
-            if($file){
-                $e->setFile($file)->setLine($line);
-            }
-
-            throw $e;
-        }
-
-        return $this->view = new View($this);
     }
 
     /**
@@ -601,19 +504,6 @@ abstract class Application implements LazyObjectInterface
            return static::${$property};
         }
 
-        // Error Will be remove in the future
-        if (
-            ($this->view instanceof View || $this->view instanceof LazyObjectInterface) && 
-            $this->view->getProperty($property, false, false) !== View::KEY_NOT_FOUND
-        ) {
-            throw new BadMethodCallException(sprintf(
-                'Accessing view property "%s" directly from %s is deprecated. ' .
-                'Use "$app->view->%1$s" or "$app->getView()->%1$s" instead.',
-                $property,
-                static::class
-            ));
-        }
-
         return null;
     }
 
@@ -633,18 +523,7 @@ abstract class Application implements LazyObjectInterface
             return $this->{$method}(...$arguments);
         }
 
-        $msg = 'Method "%s" does not exist in %s.';
-
-        // Error Will be remove in the future
-        if (
-            ($this->view instanceof View || $this->view instanceof LazyObjectInterface) && 
-            $this->view->hasMethod($method)
-        ) {
-           $msg = 'Calling view method "%s" directly from %s is deprecated. ' . 
-           ' Use "$app->view->%1$s()" or "$app->getView()->%1$s()" instead.';
-        }
-
-        throw new BadMethodCallException(sprintf($msg, $method, static::class));
+        throw new BadMethodCallException(sprintf('Method "%s" does not exist in %s.', $method, static::class));
     }
 
     /**
@@ -671,30 +550,11 @@ abstract class Application implements LazyObjectInterface
     }
 
     /**
-     * Clear view and router references when the Application instance is cloned.
-     *
-     * A cloned Application must not inherit the original `$view` or `$router`
-     * objects. Leaving them in place creates circular references and exposes
-     * internal services to templates through:
-     *   - $this->app->view
-     *   - $this->app->router
-     *   - $self->app->view
-     *   - $self->app->router
-     *
-     * @reference {
-     *      Luminova\Templates\View,
-     *      Luminova\Templates\Engines\Scope,
-     *      Luminova\Routing\Router
-     * }
+     * Clear references when the Application instance is cloned.
      *
      * @internal Ensures clones start without internal bindings.
      */
-    public function __clone()
-    {
-        $this->view = null;
-        $this->router = null;
-        $this->isCloneCircularLocked = true;
-    }
+    public function __clone() {}
 
     /**
      * Terminates the application if it is marked as terminated.

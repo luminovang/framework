@@ -26,6 +26,13 @@ use \Luminova\Interface\{ConnInterface, DatabaseInterface};
 final class MysqliDatabase implements DatabaseInterface 
 {
     /**
+     * Shared database object.
+     * 
+     * @var DatabaseInterface|null $instance
+     */
+    private static ?DatabaseInterface $instance = null;
+
+    /**
      * Flag for unbound placeholder key.
      * 
      * @var string NO_BIND_KEY
@@ -119,9 +126,9 @@ final class MysqliDatabase implements DatabaseInterface
     /**
      * Total Query Execution time.
      * 
-     * @var float|int $queryTime
+     * @var float|int $queryTotalTime
      */
-    protected float|int $queryTime = 0;
+    protected float|int $queryTotalTime = 0;
 
     /**
      * Last Query Execution time.
@@ -135,7 +142,7 @@ final class MysqliDatabase implements DatabaseInterface
      * 
      * @var float|int $startTime
      */
-    private static float|int $startTime = 0;
+    private float|int $startTime = 0;
 
     /**
      * MYSQLI emulate prepares.
@@ -157,6 +164,13 @@ final class MysqliDatabase implements DatabaseInterface
      * @var string $pattern
      */
     private static string $pattern = '/:([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)/';
+
+    /**
+     * Last executed query.
+     * 
+     * @var array $query
+     */
+    private array $query = ['query' => '', 'params' => []];
 
     /**
      * Result fetch modes.
@@ -192,6 +206,18 @@ final class MysqliDatabase implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
+    public static function getInstance(Database $config) : DatabaseInterface
+    {
+        if (!self::$instance instanceof DatabaseInterface) {
+            self::$instance = new self($config);
+        }
+
+        return self::$instance;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function connect(): bool 
     {
         try{
@@ -199,7 +225,7 @@ final class MysqliDatabase implements DatabaseInterface
             $this->connected = true;
         }catch(Throwable $e){
             if(!$e instanceof DatabaseException){
-                throw new DatabaseException('Connection failed: ' . $e->getMessage(), $e->getCode(), $e);
+                throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
             }
             throw $e;
         }
@@ -356,7 +382,7 @@ final class MysqliDatabase implements DatabaseInterface
      */
     public function getQueryTime(): float|int 
     {
-        return $this->queryTime;
+        return $this->queryTotalTime;
     }
 
     /**
@@ -380,15 +406,13 @@ final class MysqliDatabase implements DatabaseInterface
         $this->metadata = [];
         
         $query = $this->normalizeQuery($query);
-
         $this->stmt = $this->connection->prepare($query);
 
         if($this->stmt instanceof mysqli_stmt){
             $this->isSelect = Database::isSqlQuery($query, 'SELECT');
         }
 
-        $this->profiling(false);
-
+        $this->addQueryInfo('query', $query);
         return $this;
     }
 
@@ -406,15 +430,15 @@ final class MysqliDatabase implements DatabaseInterface
 
         if ($this->stmt) {
             $this->executed = true;
-            $this->rowCount = (int) ($this->stmt instanceof mysqli_result) 
-                ? (Database::isSqlQuery($query, 'SELECT') 
-                    ? $this->stmt->num_rows 
-                    : $this->connection->affected_rows
-                  )
-                : $this->connection->affected_rows;
+            if(($this->stmt instanceof mysqli_result) && Database::isSqlQuery($query, 'SELECT')){
+                $this->rowCount = (int) $this->stmt->num_rows;
+            }else{
+                $this->rowCount = (int) $this->connection->affected_rows;
+            }
         }
 
-        $this->profiling(false);
+        $this->addQueryInfo('query', $query);
+        $this->profiling(false, fn: __METHOD__);
         
         return $this;
     }
@@ -444,7 +468,7 @@ final class MysqliDatabase implements DatabaseInterface
             return true;
         }
 
-        $this->profiling(false, true);
+        $this->profiling(false, true, __METHOD__);
         return false;
     }
 
@@ -457,7 +481,7 @@ final class MysqliDatabase implements DatabaseInterface
         $commit = $this->connection->commit($flags, $name);
         $this->inTransaction = false;
 
-        $this->profiling(false, true);
+        $this->profiling(false, true, __METHOD__);
         return $commit;
     }
 
@@ -470,7 +494,7 @@ final class MysqliDatabase implements DatabaseInterface
         $rollback = $this->connection->rollback($flags, $name);
 
         $this->inTransaction = false;
-        $this->profiling(false, true);
+        $this->profiling(false, true, __METHOD__);
 
         return $rollback;
     }
@@ -526,6 +550,7 @@ final class MysqliDatabase implements DatabaseInterface
             'type' => ($type === null) ? null : self::fromTypes($type),
             'value' => $value
         ];
+        $this->addQueryInfo('params', [$param => $value]);
 
         return $this;
     }
@@ -550,6 +575,7 @@ final class MysqliDatabase implements DatabaseInterface
             'type' => ($type === null) ? null : self::fromTypes($type),
             'value' => &$value
         ];
+        $this->addQueryInfo('params', [$param => $value]);
 
         return $this;
     }
@@ -582,6 +608,12 @@ final class MysqliDatabase implements DatabaseInterface
             }
 
             throw $e;
+        }finally {
+            if($params){
+                $this->addQueryInfo('params', $params);
+            }
+
+            $this->profiling(false, fn: __METHOD__);
         }
         
         $this->bindValues = [];
@@ -621,7 +653,7 @@ final class MysqliDatabase implements DatabaseInterface
             RETURN_COUNT => $this->rowCount(),
             RETURN_COLUMN => $this->getColumns(),
             RETURN_STMT => $this->getStatement(),
-            RETURN_RESULT => ($this->stmt instanceof mysqli_result) ? $this->stmt : null,
+            RETURN_RESULT => $this->getCursorResult(),
             default => false
         };
     }
@@ -855,23 +887,93 @@ final class MysqliDatabase implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function profiling(bool $start = true, bool $finishedTransaction = false): void
+    public function profiling(
+        bool $start = true, 
+        bool $finishedTransaction = false,
+        ?string $fn = null
+    ): void
     {
         if(!self::$showProfiling || (!$start && $this->inTransaction && !$finishedTransaction)){
             return;
         }
          
         if ($start) {
-            self::$startTime = microtime(true);
+            $this->startTime = microtime(true);
+            return;
+        }
+
+        if ($this->startTime <= 0) {
             return;
         }
 
         $end = microtime(true);
-        $this->lastQueryTime = abs($end - self::$startTime);
-        $this->queryTime += ($this->lastQueryTime * 1_000);
+        $this->lastQueryTime = $end - $this->startTime;
+        $this->queryTotalTime += $this->lastQueryTime;
+        $executions = Boot::get('__DB_QUERY_EXEC_PROFILING__') ?? [];
+        $executions['global'] = [
+            'time' => $this->queryTotalTime,
+            'driver'   => 'mysqli',
+        ];
 
-        Boot::set('__DB_QUERY_EXECUTION_TIME__', $this->queryTime);
-        self::$startTime = 0;
+        $executions['queries'][] = [
+            'time' => $this->lastQueryTime,
+            'query'    => $this->query['query'],
+            'method'   => $fn,
+            'params'   => $this->query['params']
+        ];
+
+        Boot::set('__DB_QUERY_EXEC_PROFILING__', $executions);
+
+        $this->startTime = 0;
+    }
+
+    /**
+     * Get result.
+     * 
+     * @return mysqli_result|bool 
+     */
+    private function getCursorResult(): mysqli_result|bool 
+    {
+        if ($this->stmt === true) {
+            return false;
+        }
+
+        $this->assertStatement(true);
+
+        if ($this->isStatement()) {
+            $this->stmt = $this->stmt->get_result();
+        }
+
+        if ($this->stmt instanceof mysqli_result) {
+            return $this->stmt;
+        }
+
+        return false;
+    }
+
+    /**
+     * Add query profiling.
+     * 
+     * @param string $key The query profile key.
+     * @param mixed $value The value.
+     * 
+     * @return void
+     */
+    private function addQueryInfo(string $key, mixed $value): void 
+    {
+        if(!self::$showProfiling){
+            return;
+        }
+
+        if($key === 'query'){
+            $this->query[$key] = $value;
+            return;
+        }
+
+        $this->query[$key] = array_merge(
+            $this->query[$key], 
+            $value
+        );
     }
 
     /**
@@ -906,20 +1008,22 @@ final class MysqliDatabase implements DatabaseInterface
             $instance = $reflection->newInstance(...$arguments);
 
             foreach ((array) $response as $name => $value) {
-                if ($reflection->hasProperty($name)) {
-                    $property = $reflection->getProperty($name);
-                    $isSettable = (PHP_VERSION_ID >= 80100) ? !$property->isReadOnly() : true;
-
-                    if(!$isSettable){
-                        continue;
-                    }
-
-                    if($property->isStatic()){ 
-                        $property->setValue($value);
-                    }else{
-                        $property->setValue($instance, $value);
-                    }
+                if (!$reflection->hasProperty($name)) {
+                    continue;
                 }
+
+                $property = $reflection->getProperty($name);
+         
+                if($property->isReadOnly()){
+                    continue;
+                }
+
+                if($property->isStatic()){ 
+                    $property->setValue($value);
+                    continue;
+                }
+
+                $property->setValue($instance, $value);
             }
 
             return $instance;
@@ -1072,7 +1176,10 @@ final class MysqliDatabase implements DatabaseInterface
             $value = $row['value'];
         }
 
-        return [$row['type'] ?? self::getType($value), $value];
+        return [
+            $row['type'] ?? self::getType($value), 
+            $value
+        ];
     }
 
     /**
@@ -1230,8 +1337,10 @@ final class MysqliDatabase implements DatabaseInterface
             return;
         }
 
+        $isCommand = Luminova::isCommand();
         $socketPath = null;
-        if (NOVAKIT_ENV !== null || $this->config->getValue('socket') || Luminova::isCommand()) {
+        
+        if (NOVAKIT_ENV !== null || $this->config->getValue('socket') || $isCommand) {
             $socketPath = $this->config->getValue('socket_path') ?: ini_get('mysqli.default_socket');
 
             if(!$socketPath){
@@ -1258,19 +1367,111 @@ final class MysqliDatabase implements DatabaseInterface
             $this->connection->options(MYSQLI_OPT_CONNECT_TIMEOUT, (int) $timeout);
         }
 
-        $this->connection->real_connect(
-            $this->config->getValue('host'),
+        $host = $this->config->getValue('host');
+
+        if(
+            $host && 
+            ($isCommand || (bool) $this->config->getValue('persistent', false)) &&
+            !str_starts_with((string) $host, 'p:')
+        ){
+            $host = "p:{$host}";
+        }
+
+        if(!$this->connection->real_connect(
+            $host,
             $this->config->getValue('username'),
             $this->config->getValue('password'),
             $this->config->getValue('database'),
             $this->config->getValue('port'),
             $socketPath
-        );
+        )){
+            $this->connection = null;
+            throw new DatabaseException(
+                'Failed to establish database connection'
+            );
+        }
 
+       $this->setInitCommands();
+    }
+
+
+    /**
+     * Apply developers defined command.
+     * 
+     * @return void 
+     */
+    private function setInitCommands(): void 
+    {
         $charset = $this->config->getValue('charset');
+        $commands = (array) $this->config->getValue('commands', []);
+        $hasSetNames = false;
 
-        if ($charset && !$this->connection->set_charset($charset)) {
-            throw new DatabaseException('Failed to set charset: ' . $this->connection->error, $this->connection->errno);
+        if($commands){
+            foreach ($commands as $command) {
+                $command = trim($command);
+
+                if ($command === '') {
+                    continue;
+                }
+
+                if (!str_starts_with(strtoupper($command), 'SET ')) {
+                    throw new DatabaseException(
+                        sprintf(
+                            'Invalid command: %s. Only SET statements are allowed.',
+                            $command
+                        ),
+                        ErrorCode::VALUE_FORBIDDEN
+                    );
+                }
+
+                if (preg_match('/^SET\s+NAMES\b/i', $command)) {
+                    if (!preg_match(
+                        '/^SET\s+NAMES\s+[a-z0-9_]+(\s+COLLATE\s+[a-z0-9_]+)?$/i',
+                        $command
+                    )) {
+                        throw new DatabaseException(
+                            "Invalid SET NAMES statement: {$command}",
+                            ErrorCode::VALUE_FORBIDDEN
+                        );
+                    }
+
+                    $hasSetNames = true;
+                }
+
+                if (!$this->connection->query(rtrim($command, ';'))) {
+                    throw new DatabaseException(sprintf(
+                            'Failed to execute init command: %s. Error: %s',
+                            $command, 
+                            $this->connection->error,
+                        ), 
+                        $this->connection->errno
+                    );
+                }
+            }
+        }
+
+        if ($charset && !$hasSetNames) {
+            if (!preg_match('/^[a-z0-9_]+$/i', $charset)) {
+                throw new DatabaseException(
+                    "Invalid MySQL charset: {$charset}", 
+                    ErrorCode::VALUE_FORBIDDEN
+                );
+            }
+
+            $charset = strtolower($charset);
+
+            if ($charset === 'utf8' || $charset === 'utf-8') {
+                $charset = 'utf8mb4';
+            }
+
+            if (!$this->connection->set_charset($charset)) {
+                throw new DatabaseException(sprintf(
+                        'Failed to set charset: %s', 
+                        $this->connection->error,
+                    ), 
+                    $this->connection->errno
+                );
+            }
         }
     }
 }

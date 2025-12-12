@@ -12,9 +12,9 @@ namespace Luminova\Attributes\Internal;
 
 use \Throwable;
 use \SplFileInfo;
+use \Luminova\Boot;
 use \ReflectionClass;
 use \ReflectionMethod;
-use \Luminova\Luminova;
 use \Luminova\Routing\Router;
 use \Luminova\Exceptions\RouterException;
 use \Luminova\Interface\RoutableInterface;
@@ -87,7 +87,8 @@ final class Compiler
             $uri
         );
         
-        Luminova::addClassMetadata('controllers', self::$parser->searches);
+        Boot::add('__CLASS_METADATA__', 'controllers', self::$parser->searches);
+
         if($namespace === null){
             return;
         }
@@ -102,7 +103,7 @@ final class Compiler
             return;
         }
 
-        Luminova::addClassMetadata('filename', $fileName);
+        Boot::add('__CLASS_METADATA__', 'filename', $fileName);
 
         /**
          * Handle context attributes and register error handlers.
@@ -195,7 +196,7 @@ final class Compiler
             return;
         }
 
-        Luminova::addClassMetadata('filename', $fileName);
+        Boot::add('__CLASS_METADATA__', 'filename', $fileName);
 
         foreach ($instance->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
             $callback = $fileName . '::' . $method->getName();

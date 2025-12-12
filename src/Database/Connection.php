@@ -129,11 +129,11 @@ class Connection implements LazyObjectInterface, Countable
      * optionally assigning it to a specific shard server identified by `$locationId`.
      * If the selected shard is unreachable, it can fallback to available backup servers.
      *
-     * @param string  $locationId         Shard identifier (e.g., region name or server key).
-     * @param bool    $fallbackOnError    Fallback to a backup server if shard server connection is unavailable.
-     * @param ?bool   $pool               Enable connection pooling (if applicable).
-     * @param ?int    $maxPoolConnections     Maximum number of connections allowed in the pool.
-     * @param bool    $sharedInstance     Reuse a shared static instance if set to true.
+     * @param string $locationId Shard identifier (e.g., region name or server key).
+     * @param bool $fallbackOnError Fallback to a backup server if shard server connection is unavailable.
+     * @param ?bool $pool Enable connection pooling (if applicable).
+     * @param ?int $maxPoolConnections Maximum number of connections allowed in the pool.
+     * @param bool $sharedInstance Reuse a shared static instance if set to true.
      * 
      * @return Connection Returns an initialized database connection instance.
      * @throws DatabaseException If connection retries fail, max connection limit is reached, an invalid driver is detected, or a connection error occurs.
@@ -148,7 +148,7 @@ class Connection implements LazyObjectInterface, Countable
     {
         $instance = $sharedInstance
             ? self::getInstance($pool, $maxPoolConnections, false)
-            : new static($pool, $maxPoolConnections, false);
+            : new self($pool, $maxPoolConnections, false);
 
         $instance->shardServerLocation = $locationId;
         $instance->isShardFallbackOnError = $fallbackOnError;
@@ -183,7 +183,7 @@ class Connection implements LazyObjectInterface, Countable
     ): static
     {
         if (!self::$instance instanceof static) {
-            self::$instance = new static($pool, $maxPoolConnections, $autoConnect);
+            self::$instance = new self($pool, $maxPoolConnections, $autoConnect);
         }
 
         return self::$instance;
@@ -248,6 +248,7 @@ class Connection implements LazyObjectInterface, Countable
 
         $connection = self::$pools[$id]; 
         unset(self::$pools[$id]);
+        
         return $this->isReady($connection) ? $connection : null;
     }
 
@@ -277,6 +278,9 @@ class Connection implements LazyObjectInterface, Countable
             'pdo' => PdoDatabase::class
         ];
 
+        /**
+         * @var DatabaseInterface|null $driver
+         */
         $driver = $drivers[$config->getValue('connection')] ?? null;
 
         if ($driver === null) {
@@ -286,7 +290,7 @@ class Connection implements LazyObjectInterface, Countable
             );
         }
 
-        $connection = new $driver($config);
+        $connection = $driver::getInstance($config);
 
         if (!$connection instanceof DatabaseInterface) {
             throw new DatabaseException(
@@ -499,11 +503,10 @@ class Connection implements LazyObjectInterface, Countable
         $config = self::getEnvDefaultConfig();
 
         if($config === []){
-            $configs = Database::getServers();
-            $config = reset($configs);
+            $config = array_first(Database::getServers());
         }
 
-        return (!$config || $config === []) ? null : self::newConfig($config);
+        return $config ? self::newConfig($config) : null;
     }
 
     /**
@@ -516,13 +519,13 @@ class Connection implements LazyObjectInterface, Countable
         $host = env('database.hostname');
         $socketPath = env('database.mysql.socket.path', '');
 
-        if(!$host && !$socketPath){
+        if(empty($host) && empty($socketPath)){
             return [];
         }
 
-        $var = (PRODUCTION ? 'database' : 'database.development');
-        $sqlite = env("{$var}.sqlite.path", '');
-        $sqlite = ($sqlite !== '') ? APP_ROOT . trim($sqlite, TRIM_DS) : null;
+        $env = (PRODUCTION ? 'database' : 'database.development');
+        $sqlite = env("{$env}.sqlite.path", '');
+        $sqlite = !empty($sqlite) ? APP_ROOT . trim($sqlite, TRIM_DS) : null;
         
         return [
             'port' => env('database.port'),
@@ -530,16 +533,18 @@ class Connection implements LazyObjectInterface, Countable
             'pdo_version' => env('database.pdo.version', 'mysql'),
             'connection' => strtolower(env('database.connection', 'pdo')),
             'charset' => env('database.charset', ''),
-            'persistent' => (bool) env('database.persistent.connection', true),
+            'persistent' => (bool) env('database.persistent.connection', false),
             'emulate_prepares' => (bool) env('database.emulate.prepares', false),
+            'buffered_query' => (bool) env('database.mysql.buffered.query', false),
             'sqlite_path' => $sqlite,
             'socket' => (bool) env('database.mysql.socket', false),
             'timeout' => (int) env('database.timeout', 0),
             'socket_path' => $socketPath,
             'production' => PRODUCTION,
-            'username' => env("{$var}.username"),
-            'password' => env("{$var}.password"),
-            'database' => env("{$var}.name")
+            'username' => env("{$env}.username"),
+            'password' => env("{$env}.password"),
+            'database' => env("{$env}.name"),
+            'commands' => env("{$env}.commands"),
         ];
     }
 
@@ -646,18 +651,18 @@ class Connection implements LazyObjectInterface, Countable
      */
     private function generatePoolId(?array $config = null): string
     {
-        $config ??= self::getEnvDefaultConfig();
-        return md5(sprintf(
-            '%s%s%s%d%s%s%s%s',
-            $config['username'] ?? 'root',
-            $config['connection'] ?? 'pdo',
-            $config['host'] ?? 'localhost',
-            $config['port'] ?? 3306,
-            $config['database'] ?? 'default',
-            $config['socket_path'] ?? '',
-            $config['pdo_version'] ?? 'mysql',
-            $config['sqlite_path'] ?? ''
-        ));
+        $c = $config ?? self::getEnvDefaultConfig();
+
+        return md5(implode('|', [
+            $c['connection']   ?? 'pdo',
+            $c['host']         ?? 'localhost',
+            $c['port']         ?? 3306,
+            $c['username']     ?? 'root',
+            $c['database']     ?? 'default',
+            $c['socket_path']  ?? '',
+            $c['pdo_version']  ?? 'mysql',
+            $c['sqlite_path']  ?? '',
+        ]));
     }
 
     /**
@@ -702,10 +707,11 @@ class Connection implements LazyObjectInterface, Countable
     */
     private function shouldThrow(string|int $code): bool 
     {
-        return in_array($code, [
+        return !PRODUCTION || in_array($code, [
             ErrorCode::DATABASE_DRIVER_NOT_AVAILABLE,
             ErrorCode::INVALID_DATABASE_DRIVER,
-            ErrorCode::RUNTIME_ERROR
+            ErrorCode::RUNTIME_ERROR,
+            ErrorCode::VALUE_FORBIDDEN
         ]);
     }
 

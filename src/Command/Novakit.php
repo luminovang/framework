@@ -13,8 +13,8 @@ namespace Luminova\Command;
 use \Throwable;
 use \ReflectionClass;
 use \Luminova\Luminova;
-use \Luminova\Command\Terminal;
 use \Luminova\Base\Console;
+use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Text;
 use \Luminova\Command\Utils\Color;
 use \Luminova\Exceptions\AppException;
@@ -23,18 +23,10 @@ use \Luminova\Command\Consoles\{
     Builder, Context, Commands, Database, Sitemaps,
     CronWorker, Generators, TaskWorker, Authenticate, ClearWritable
 };
-use \Luminova\Interface\LazyObjectInterface;
 use function \Luminova\Funcs\{root, import};
 
 final class Novakit 
 {
-    /**
-     * Static terminal instance.
-     * 
-     * @var Terminal|null $instance 
-     */
-    private static ?Terminal $instance = null;
-
     /**
      * Static instance of called command.
      * 
@@ -68,49 +60,50 @@ final class Novakit
      */
     public function __construct()
     { 
-        if(!self::$instance instanceof Terminal){
-            self::$instance = new Terminal();
-        }
+        Terminal::init();
     }
 
     /**
      * Entry point for executing Novakit CLI commands.
      * 
-     * @param array<string,mixed> $commands The raw command-line arguments, typically from `$_SERVER['argv']`.
+     * @param Input|array<int,mixed> $input The command input object or command array from `$_SERVER['argv']`.
      * 
      * @return void
      */
-    public function run(array $commands): void
+    public function run(Input|array $input): void
     {
-        $commands = self::$instance::parseCommands($commands);
+        if(!$input instanceof Input){
+            $input = new Input(Terminal::parseCommands($input));
+        }
 
-        self::$instance::perse($commands);
-        $command = self::$instance::getCommand();
-
-        if(!$command){
-            self::$instance::header();
+        if(!$input->getName()){
+            Terminal::header();
             exit(STATUS_ERROR);
         }
 
-        if('--version' === $command || '--v' === $command){
-            self::$instance::writeln('Novakit CLI - Luminova Framework Tool');
-            self::$instance::writeln(sprintf(
-                "Framework Version: %s\nNovakit Version: %s\nApplication Version: %s",
+        if ($input->isVersion()) {
+            Terminal::writeln(sprintf(
+                "PHP Luminova Framework (Novakit CLI Tool)\n\n" .
+                "Framework Version      : %s\n" .
+                "Novakit Version        : %s\n" .
+                "App Version            : %s\n" .
+                "Environment            : PHP %s on %s",
                 Luminova::VERSION,
                 Luminova::NOVAKIT_VERSION,
-                APP_VERSION
+                APP_VERSION,
+                PHP_VERSION,
+                PHP_OS_FAMILY
             ), 'green');
-
             exit(STATUS_SUCCESS);
         }
 
-        if('--system-info' === $command){
-            self::$instance::writeln('System Information', 'green');
-            self::$instance::about();
+        if($input->isSystemInfo()){
+            Terminal::writeln('System Information', 'green');
+            Terminal::about();
             exit(STATUS_SUCCESS);
         }
 
-        exit(self::execute(self::$instance));
+        exit(self::execute($input));
     }
 
     /**
@@ -119,7 +112,7 @@ final class Novakit
      * This method resolves and runs the specified command based on the provided terminal input,
      * handling help output, validation, and execution within the defined mode.
      * 
-     * @param Terminal<LazyObjectInterface> $instance The terminal instance containing parsed command and arguments.
+     * @param Input $input The terminal instance containing parsed command and arguments.
      * @param array<string,mixed>|null $options The parsed command arguments and options 
      *                      or null to read from terminal object.
      * @param string $mode The command execution mode (`system` for core commands, `global` for user-defined).
@@ -131,32 +124,25 @@ final class Novakit
      * @example - Usages:
      * 
      * ```php
-     * $term = new Terminal();
-     * $result = $term->extract(array_slice($_SERVER['argv'], 2));
-     * $term->perse();
+     * $input = new Input(Terminal::extract(array_slice($_SERVER['argv'], 2)));
      * 
-     * Console::execute($term, array_merge(
-     *      $term->getArguments(), 
-     *      $term->getQueries()
-     * ));
+     * Console::execute($input, [...]);
      * ```
      */
     public static function execute(
-        LazyObjectInterface $instance, 
+        Input $input, 
         ?array $options = null,
         string $mode = 'global'
     ): int
     {
         self::$isSystem = true;
-        $options = ($options === null) 
-            ? array_merge($instance::getArguments(), $instance::getQueries())
-            : $options;
-        $command = trim($instance::getCommand() ?? '');
-        $className = self::find($command, $mode);
+            
+        $name = trim($input->getName() ?? '');
+        $className = self::find($name, $mode);
 
         if ($className === null) {
-            return self::failed($instance, $command);
-        } 
+            return self::failed($name);
+        }
        
         if(!self::newObject($className)){
             return STATUS_ERROR;
@@ -164,38 +150,43 @@ final class Novakit
 
         $info = null;
 
-        if($instance::isHelp($options['options'])){
-            $info = self::getCommand($command, $mode);
+        if($input->isHelp()){
+            $info = self::getCommand($name, $mode);
 
             if($info === []){
-                return self::tryGroupHelps($instance, $command);
+                return self::tryGroupHelps($name, $input);
             }
 
-            $instance::header();
+            Terminal::header();
 
             if(self::$newConsole->help($info) === STATUS_ERROR){
-                $instance::helper($info);
+                Terminal::helper($info);
             }
 
             return STATUS_SUCCESS;
         }
 
         if(!self::$isSystem){
-            $info ??= self::getCommand($command, $mode);
+            $info ??= self::getCommand($name, $mode);
             $users = $info['users'] ?? [];
 
             if($users !== []){
-                $user = $instance::whoami();
+                $user = Terminal::whoami();
 
                 if(!in_array($user, $users, true)){
-                    $instance::error("User '{$user}' is not allowed to run this command.");
+                    Terminal::error("User '{$user}' is not allowed to run this command.");
                     return STATUS_ERROR;
                 }
             }
         }
 
         try{
-            return (int) self::$newConsole->run($options);
+            if($options){
+                $options = array_merge($input->getArray(), $options);
+            }
+
+            return (int) self::$newConsole->parse($input)
+                ->run($options ?? $input->getArray());
         }catch(Throwable $e){
             if($e instanceof AppException){
                 $e->handle();
@@ -208,8 +199,7 @@ final class Novakit
 
             import(
                 'app:Errors/Defaults/cli.php', 
-                throw: false, 
-                once: true, 
+                throw: false,
                 require: false,
                 scope: ['error' => $e]
             );
@@ -513,10 +503,8 @@ final class Novakit
             public function get(string $name, mixed $default = null): mixed
             {
                 if ($this->ref->hasProperty($name)) {
-                    $prop = $this->ref->getProperty($name);
-                    $prop->setAccessible(true);
-
-                    return $prop->getValue($this->instance);
+                    return $this->ref->getProperty($name)
+                        ->getValue($this->instance);
                 }
 
                 return $default;
@@ -556,28 +544,33 @@ final class Novakit
     /**
      * Show group helps command.
      * 
-     * @param Terminal<LazyObjectInterface> $instance The terminal instance containing parsed command and arguments.
      * @param string $command The executed command.
+     * @param Input $input Command input
      * 
      * @return int Return status error.
      */
-    private static function tryGroupHelps(LazyObjectInterface $instance, string $command): int 
+    private static function tryGroupHelps(string $command, Input $input): int 
     {
         $max = 0;
         $info = Commands::getGlobalHelps(strstr($command, ':', true) ?: $command, $max);
 
         if($info === []){
-            return self::failed($instance, $command);
+            if($input->isHelp()){
+                Terminal::helper(Commands::get('help'));
+                return STATUS_SUCCESS;
+            }
+
+            return self::failed($command);
         }
 
-        $instance::writeln(Text::style("Available {$command} Commands", Text::FONT_BOLD));
-        $instance::writeln("Run a specific command with '--help' to view its options and examples.");
-        $instance::newLine();
+        Terminal::writeln(Text::style("Available {$command} Commands", Text::FONT_BOLD));
+        Terminal::writeln("Run a specific command with '--help' to view its options and examples.");
+        Terminal::newLine();
 
         foreach ($info as $key => $value) {
             $label = Color::style($key, 'lightYellow');
             $spacing = Text::padding('', ($max + 6) - strlen($key), Text::RIGHT);
-            $instance::writeln("  {$label}{$spacing}{$value}");
+            Terminal::writeln("  {$label}{$spacing}{$value}");
         }
 
         return STATUS_SUCCESS;
@@ -586,17 +579,16 @@ final class Novakit
     /**
      * Oops and suggest command.
      * 
-     * @param Terminal<LazyObjectInterface> $instance The terminal instance containing parsed command and arguments.
      * @param string $command The executed command.
      * 
      * @return int Return status error.
      */
-    private static function failed(LazyObjectInterface $instance, string $command): int 
+    private static function failed(string $command): int 
     {
-        $instance::oops($command);
+        Terminal::oops($command);
 
         if(($suggest = Commands::suggest($command)) !== ''){
-            $instance->fwrite($suggest, Terminal::STD_ERR);
+            Terminal::fwrite($suggest, Terminal::STD_ERR);
         }
 
         return STATUS_ERROR;

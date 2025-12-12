@@ -26,6 +26,20 @@ interface DatabaseInterface
     public function __construct(Database $config);
 
     /**
+     * Returns the singleton instance of the Database wrapper.
+     *
+     * Ensures that only one instance of the database class exists during
+     * the application's lifecycle. If the instance does not exist yet,
+     * it will be created using the provided configuration.
+     *
+     * @param Database $config The configuration object used to initialize
+     *                         the database instance on first creation.
+     *
+     * @return DatabaseInterface Returns the singleton instance of the database wrapper.
+     */
+    public static function getInstance(Database $config) : DatabaseInterface;
+
+    /**
      * Establish a database connection.
      * 
      * @return bool Return true if database connection was established, otherwise false.
@@ -127,7 +141,7 @@ interface DatabaseInterface
     /**
      * Start recording the database query execution time for queries.
      * 
-     * This method records the duration of a query in shared memory under the key `__DB_QUERY_EXECUTION_TIME__`. The stored value can later be retrieved from anywhere in your application.
+     * This method records the duration of a query in shared memory under the key `__DB_QUERY_EXEC_PROFILING__`. The stored value can later be retrieved from anywhere in your application.
      * 
      * Note: To call this method you must first enable `debug.show.performance.profiling` in environment variables file.
      *
@@ -140,10 +154,10 @@ interface DatabaseInterface
      * @example - To get the query execution in any application scope. 
      * 
      * ```php
-     * $time = luminova\Funcs\shared('__DB_QUERY_EXECUTION_TIME__', default: 0);
+     * $profiling = luminova\Funcs\shared('__DB_QUERY_EXEC_PROFILING__', default: []);
      * 
      * // Or
-     * $time = Luminova\Boot::get('__DB_QUERY_EXECUTION_TIME__') ?? 0;
+     * $profiling = Luminova\Boot::get('__DB_QUERY_EXEC_PROFILING__');
      * ```
      */
     public function profiling(bool $start = true, bool $finishedTransaction = false): void;

@@ -16,7 +16,7 @@ use \DateTimeInterface;
 use \Luminova\Base\Cache;
 use \Luminova\Logger\Logger;
 use \Luminova\Time\Timestamp;
-use \Luminova\Utility\Storage\Filesystem;
+use \Luminova\Storage\Filesystem;
 use \Luminova\Exceptions\{AppException, CacheException, InvalidArgumentException};
 use function \Luminova\Funcs\{root, make_dir};
 
@@ -32,7 +32,7 @@ final class FileCache extends Cache
     /**
      * Hold the cache instance Singleton.
      * 
-     * @var ?self $instance
+     * @var ?static $instance
      */
     private static ?self $instance = null;
 
@@ -81,11 +81,11 @@ final class FileCache extends Cache
         ?string $subfolder = null
     ): static 
     {
-        if (static::$instance === null) {
-            static::$instance = new static($storage, $subfolder);
+        if (self::$instance === null) {
+            self::$instance = new self($storage, $subfolder);
         }
 
-        return static::$instance;
+        return self::$instance;
     }
 
     /**
@@ -352,7 +352,7 @@ final class FileCache extends Cache
      */
     public function flush(): bool
     {
-        if(Filesystem::remove($this->getRoot())){
+        if(Filesystem::delete($this->getRoot())){
             $this->items = [];
             return true;
         }
@@ -395,7 +395,7 @@ final class FileCache extends Cache
                 return false;
             }
 
-            $content = Filesystem::getContent($filepath);
+            $content = Filesystem::contents($filepath);
             if($content === false){
                 return false;
             }
@@ -475,7 +475,7 @@ final class FileCache extends Cache
                 return false;
             }
 
-            $content = Filesystem::getContent($filepath);
+            $content = Filesystem::contents($filepath);
 
             if($content === false){
                 return false;

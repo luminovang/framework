@@ -10,6 +10,7 @@
  */
 namespace Luminova\Interface;
 
+use \Luminova\Http\Message\Stream;
 use \Psr\Http\Message\{StreamInterface, MessageInterface};
 use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
 
@@ -116,7 +117,7 @@ interface ResponseInterface extends \Psr\Http\Message\ResponseInterface
      * This method opens a temporary stream, writes the response contents if available, 
      * and rewinds the stream before returning it.
      *
-     * @return \T<StreamInterface> Return the response body as a stream object.
+     * @return Stream<StreamInterface>|StreamInterface Return the response body as a stream object.
      * @throws RuntimeException Throws if the temporary stream cannot be opened.
      * 
      * @link https://luminova.ng/docs/0.0.0/http/stream

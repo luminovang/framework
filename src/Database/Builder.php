@@ -19,9 +19,9 @@ use \Luminova\Luminova;
 use \Luminova\Time\Time;
 use \Luminova\Base\Cache;
 use \Luminova\Logger\Logger;
-use \Luminova\Utility\Promise\Promise;
+use \Luminova\Promise\Promise;
 use \Luminova\Foundation\Core\Database;
-use \Luminova\Utility\Object\LazyObject;
+use \Luminova\Components\Object\LazyObject;
 use \Luminova\Cache\{FileCache, MemoryCache};
 use function \Luminova\Funcs\is_associative;
 use \Luminova\Database\{Connection, Manager, RawExpression, Helpers\Alter};
@@ -1726,7 +1726,6 @@ final class Builder implements LazyObjectInterface
      * @param array $values An array of range boundaries. Must contain an even number of values.
      *                        Each pair (e.g., [0, 100]) represents a range.
      * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
-     * @param bool $not Set to `true` to use `NOT BETWEEN` instead of `BETWEEN`.
      * 
      * @return self Returns the current query builder instance.
      * @throws DatabaseException If less than two values are provided, or an odd number of values is passed.
@@ -1752,8 +1751,8 @@ final class Builder implements LazyObjectInterface
      * // (balance BETWEEN :balance_btw_0_a AND :balance_btw_0_b
      * //  OR balance BETWEEN :balance_btw_2_a AND :balance_btw_2_b)
      * 
-     * // Using NOT BETWEEN
-     * $query->between('balance', [0, 100], 'AND', true);
+     * // Using OR BETWEEN
+     * $query->between('balance', [0, 100], 'OR');
      * ```
      * 
      * > **Note:**
@@ -1763,46 +1762,9 @@ final class Builder implements LazyObjectInterface
      * 
      * @methodGroup QueryCondition Add match between conditions.
      */
-    public function between(string $column, array $values, string $connector = 'AND', bool $not = false): self
+    public function between(string $column, array $values, string $connector = 'AND'): self
     {
-        $count = count($values);
-        $operator = $not ? 'NOT BETWEEN' : 'BETWEEN';
-
-        if ($count < 2) {
-            throw new DatabaseException(
-                "{$operator} requires at least two values for column {$column}.",
-                ErrorCode::VALUE_FORBIDDEN
-            );
-        }
-
-        if ($count % 2 !== 0) {
-            throw new DatabaseException(
-                "Odd number of values passed to {$operator} for column {$column}, last value should be removed.",
-                ErrorCode::USER_WARNING
-            );
-        }
-
-        $segments = [];
-
-        for ($i = 0; $i < $count - 1; $i += 2) {
-            $a = $values[$i];
-            $b = $values[$i + 1];
-
-            $placeholder = $this->trimPlaceholder("{$column}_btw_{$i}");
-            $keyA = "{$placeholder}_a";
-            $keyB = "{$placeholder}_b";
-
-            $segments[] = "({$column} {$operator} {$keyA} AND {$keyB})";
-
-            $this->bind($keyA, $a)
-                ->bind($keyB, $b);
-        }
-
-        if ($segments !== []) {
-            $this->options['whereRaw'][] = trim($connector . ' (' . implode(' OR ', $segments) . ')');
-        }
-
-        return $this;
+        return $this->whereBetween($column, $values, $connector, false);
     }
 
     /**
@@ -1842,7 +1804,7 @@ final class Builder implements LazyObjectInterface
      */
     public function notBetween(string $column, array $values, string $connector = 'AND'): self
     {
-        return $this->between($column, $values, $connector, true);
+        return $this->whereBetween($column, $values, $connector, true);
     }
 
     /**
@@ -4410,28 +4372,6 @@ final class Builder implements LazyObjectInterface
     }
 
     /**
-     * @deprecated Use {@see count()} instead.
-     *
-     * Alias for `count()`. Retained for backward compatibility.
-     *
-     * @param string $column Column to count (default: `*`).
-     *
-     * @return self Returns the current query builder instance.
-     */
-    public function total(string $column = '*'): self 
-    {
-        return $this->count($column);
-    }
-
-    /**
-     * @deprecated Method has been deprecated use {@see onCondition()} instead.
-     */
-    public function onClause(RawExpression|string $sql, string $connector = 'AND'): self
-    {
-        return $this->onCondition($sql, $connector);
-    }
-
-    /**
      * Build query to calculate the total sum of a numeric column in the table.
      * 
      * When `get` method is called, it returns `int|float`, the total sum columns, otherwise 0 if no result.
@@ -5623,6 +5563,71 @@ final class Builder implements LazyObjectInterface
 
         $this->reset();
         return (int) $result;
+    }
+
+    /**
+     * Add a `BETWEEN` condition to the query.
+     * 
+     * This method adds a SQL `BETWEEN` clause for comparing a column's value
+     * within one or more numeric or date ranges. You can pass multiple pairs of
+     * values to create multiple ranges automatically joined by `OR`.
+     * 
+     * The `BETWEEN` operator includes both boundary values.
+     * 
+     * @param string $column The column name to apply the condition on.
+     * @param array $values An array of range boundaries. Must contain an even number of values.
+     *                        Each pair (e.g., [0, 100]) represents a range.
+     * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
+     * @param bool $isNot Set to `true` to use `NOT BETWEEN` instead of `BETWEEN`.
+     * 
+     * @return self Returns the current query builder instance.
+     * @throws DatabaseException If less than two values are provided, or an odd number of values is passed.
+     */
+    private function whereBetween(
+        string $column, 
+        array $values, 
+        string $connector = 'AND', 
+        bool $isNot = false
+    ): self
+    {
+        $count = count($values);
+        $operator = $isNot ? 'NOT BETWEEN' : 'BETWEEN';
+
+        if ($count < 2) {
+            throw new DatabaseException(
+                "{$operator} requires at least two values for column {$column}.",
+                ErrorCode::VALUE_FORBIDDEN
+            );
+        }
+
+        if ($count % 2 !== 0) {
+            throw new DatabaseException(
+                "Odd number of values passed to {$operator} for column {$column}, last value should be removed.",
+                ErrorCode::USER_WARNING
+            );
+        }
+
+        $segments = [];
+
+        for ($i = 0; $i < $count - 1; $i += 2) {
+            $a = $values[$i];
+            $b = $values[$i + 1];
+
+            $placeholder = $this->trimPlaceholder("{$column}_btw_{$i}");
+            $keyA = "{$placeholder}_a";
+            $keyB = "{$placeholder}_b";
+
+            $segments[] = "({$column} {$operator} {$keyA} AND {$keyB})";
+
+            $this->bind($keyA, $a)
+                ->bind($keyB, $b);
+        }
+
+        if ($segments !== []) {
+            $this->options['whereRaw'][] = trim($connector . ' (' . implode(' OR ', $segments) . ')');
+        }
+
+        return $this;
     }
 
     /**

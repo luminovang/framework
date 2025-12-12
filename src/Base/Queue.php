@@ -15,15 +15,14 @@ use \Throwable;
 use \DateTimeInterface;
 use \Luminova\Time\Time;
 use \Luminova\Models\Task;
+use \Luminova\Command\Input;
 use \Luminova\Logger\Logger;
 use \Opis\Closure\Serializer;
-use \Luminova\Command\Terminal;
 use \Luminova\Database\{Connection, Helpers\Alter};
 use \Luminova\Interface\{
     DatabaseInterface, 
     QueueableInterface, 
-    InvokableInterface, 
-    LazyObjectInterface,
+    InvokableInterface,
     TaskWorkerInterface
 };
 use \Luminova\Exceptions\{
@@ -160,18 +159,18 @@ abstract class Queue
     protected ?Closure $onError = null;
 
     /**
-     * Lazy loaded terminal instance.
+     * Terminal command input.
      * 
-     * @var Terminal<LazyObjectInterface>|null $term
+     * @var Input|null $input
      */
-    protected ?LazyObjectInterface $term = null;
+    protected ?Input $input = null;
 
     /**
-     * A static instances by class.
+     * A static instance.
      *
-     * @var array<class-string,static> $instances
+     * @var static|null $instance
      */
-    private static array $instances = [];
+    private static ?self $instance = null;
 
     /**
      * Holds staged tasks.
@@ -343,7 +342,7 @@ abstract class Queue
      */
     public static function __callStatic(string $method, array $arguments): mixed
     {
-        $instance = self::getInstance();
+        $instance = static::getInstance();
 
          if (!method_exists($instance, $method)) {
             throw new BadMethodCallException(sprintf(
@@ -391,13 +390,11 @@ abstract class Queue
     */
     public static function getInstance(): static
     {
-        $class = static::class;
-
-        if (!isset(self::$instances[$class])) {
-            self::$instances[$class] = new static();
+        if (!static::$instance instanceof static) {
+            static::$instance = new static();
         }
 
-        return self::$instances[$class];
+        return static::$instance;
     }
 
     /**
@@ -405,13 +402,13 @@ abstract class Queue
      *
      * This makes command arguments and options available inside the queue class.
      *
-     * @param Terminal|LazyObjectInterface $term Terminal instance that provides command arguments/options.
+     * @param Input $input The instance command input arguments/options.
      *
      * @return static Returns the instance of the class.
      */
-    public function setTerminal(LazyObjectInterface|Terminal $term): self
+    public function setTerminal(Input $input): self
     {
-        $this->term = $term;
+        $this->input = $input;
         return $this;
     }
 
@@ -1716,9 +1713,9 @@ abstract class Queue
             $isQueueable = ($instance instanceof QueueableInterface);
             $isAutoDelete = $isQueueable && $instance->deleteOnCompletion();
 
-            if($this->term && ($instance instanceof TaskWorkerInterface)){
+            if(($this->input instanceof Input) && ($instance instanceof TaskWorkerInterface)){
                 $isWorker = true;
-                $instance = $instance->setTerminal($this->term);
+                $instance = $instance->setTerminal($this->input);
             }
         }
 

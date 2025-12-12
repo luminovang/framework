@@ -13,7 +13,7 @@ namespace Luminova\Foundation\Module;
 use \Throwable;
 use \ReflectionClass;
 use \ReflectionException;
-use \Luminova\Utility\Storage\Filesystem;
+use \Luminova\Storage\Filesystem;
 use \Luminova\Exceptions\RuntimeException;
 use function \Luminova\Funcs\{
     path,
@@ -149,7 +149,7 @@ final class Service
         self::$instances = [];
         self::$services = [];
 
-        return is_dir($path) ? Filesystem::remove($path) : false;
+        return is_dir($path) ? Filesystem::delete($path) : false;
     }
 
     /**
