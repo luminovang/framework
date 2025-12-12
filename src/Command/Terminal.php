@@ -13,16 +13,16 @@ namespace Luminova\Command;
 use \Closure;
 use \Luminova\Boot;
 use \Luminova\Luminova;
-use \Luminova\Utility\IP;
 use \Luminova\Command\Novakit;
+use \Luminova\Http\Network\IP;
 use \Luminova\Security\Validation;
 use \Luminova\Exceptions\IOException;
 use \Luminova\Command\Consoles\Commands;
+use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Command\Utils\{Text, Color};
-use \Luminova\Interface\LazyObjectInterface;
 use function \Luminova\Funcs\{is_platform, list_to_array};
 
-class Terminal implements LazyObjectInterface
+final class Terminal
 {
     /**
      * Represents the standard output stream.
@@ -50,14 +50,14 @@ class Terminal implements LazyObjectInterface
      *
      * @var int|null $windowHeight
      */
-    protected static ?int $windowHeight = null;
+    private static ?int $windowHeight = null;
 
     /**
      * Width of terminal visible window
      *
      * @var int|null $windowWidth
      */
-    protected static ?int $windowWidth = null;
+    private static ?int $windowWidth = null;
 
     /**
      * About system information.
@@ -84,14 +84,7 @@ class Terminal implements LazyObjectInterface
      *
      * @var bool $isNewLine
      */
-    protected static bool $isNewLine = true;
-
-    /**
-     * The parsed command information from (perse).
-     *
-     * @var array $commands
-     */
-    protected static array $commands = [];
+    private static bool $isNewLine = true;
 
     /**
      * Flags to determine if color and ansi are supported 
@@ -99,7 +92,7 @@ class Terminal implements LazyObjectInterface
      *
      * @var array{colors:array{0:?bool,1:?bool},ansi:array{0:?bool,1:?bool}} $isSupported
      */
-    protected static array $isSupported = [
+    private static array $isSupported = [
         'colors' => [
             0 => null, //stdout
             1 => null, //stderr,
@@ -128,58 +121,292 @@ class Terminal implements LazyObjectInterface
      * 
      * @var Validation|null $validation;
      */
-    protected static ?Validation $validation = null;
+    private static ?Validation $validation = null;
 
     /**
      * Command is initialized.
      * 
      * @var bool $isInitialized;
      */
-    protected static bool $isInitialized = false;
+    private static bool $isInitialized = false;
 
     /**
-     * Initialize command line instance before running any commands
-     * or call `Terminal::init()` method.
-     * 
-     * @see init()
+     * Private constructor to prevent direct instantiation.
+     *
+     * Use `Terminal::init()` if manual initialization is needed.
      */
-    public function __construct()
-    {
-        self::init();
-    }
+    private function __construct(){}
 
     /**
-     * Initialize command line instance before running any commands.
-     * 
+     * Initialize the terminal instance for CLI operations.
+     *
+     * - Sets up standard input/output streams.
+     * - Detects whether `readline` extension is available.
+     * - Checks for color support in the terminal output.
+     *
+     * Subsequent calls to this method have no effect once initialization is complete.
+     *
      * @return void
-     * @since 3.5.6
+     *
+     * @example - Manual initialization:
+     * ```php
+     * Terminal::init();
+     * ```
      */
     public static function init(): void
     {
-        self::$commands = [];
-
         if(self::$isInitialized){
             return;
         }
+
         self::$isReadLine = extension_loaded('readline');
 
-        Boot::shouldDefineCommandStreams();
+        Boot::defineCliStreams();
         self::isColorSupported(self::STD_OUT);
+
         self::$isInitialized = true;
     }
 
     /**
-     * Displays a countdown timer in the console, with a custom message pattern, 
-     * or prompts the user to press any key to continue.
+     * Display an error message box in the console.
+     * 
+     * The message is formatted as a block with a default red background and white text.
      *
-     * @param int $seconds The number of seconds to wait before continuing (default: 0 seconds).
-     * @param string $pattern A custom message pattern to display during the waiting countdown (default: `Waiting...(%d seconds)`). 
+     * @param string $text The error message to display.
+     * @param string|null $foreground Optional text color (default: white).
+     * @param string|null $background Optional background color (default: red).
+     * @param int|null $width Optional width of the block (default: auto).
+     *
+     * @return void
+     * 
+     * @example - Example:
+     * ```php
+     * Terminal::error("Something went wrong!");
+     * ```
+     */
+    public static function error(
+        string $text, 
+        ?string $foreground = 'white', 
+        ?string $background = 'red',
+        ?int $width = null
+    ): void
+    {
+        self::card($text, self::STD_ERR, $foreground, $background, $width);
+    }
+
+    /**
+     * Display a success message box in the console.
+     * 
+     * The message is formatted as a block with a default green background and white text.
+     *
+     * @param string $text The success message to display.
+     * @param string|null $foreground Optional text color (default: white).
+     * @param string|null $background Optional background color (default: green).
+     * @param int|null $width Optional width of the block (default: auto).
+     *
+     * @return void
+     * 
+     * @example - Example:
+     * ```php
+     * Terminal::success("Operation completed successfully!");
+     * ```
+     */
+    public static function success(
+        string $text, 
+        ?string $foreground = 'white', 
+        ?string $background = 'green',
+        ?int $width = null
+    ): void
+    {
+        self::card($text, self::STD_OUT, $foreground, $background, $width);
+    }
+
+    /**
+     * Display an informational message in the console.
+     * 
+     * By default, the text is displayed with a blue foreground and no background.
+     *
+     * @param string $text The message to display.
+     * @param string|null $foreground Optional foreground color (default: blue).
+     * @param string|null $background Optional background color (default: none).
+     * @param int|null $width Optional width of the block (default: auto).
+     *
+     * @return void
+     * 
+     * @example - Example:
+     * ```php
+     * Terminal::info("Server is starting...");
+     * ```
+     */
+    public static function info(
+        string $text, 
+        ?string $foreground = 'blue', 
+        ?string $background = null,
+        ?int $width = null
+    ): void
+    {
+        self::card($text, self::STD_OUT, $foreground, $background, $width);
+    }
+
+    /**
+     * Print text followed by a newline to the specified stream (default: STDOUT).
+     * 
+     * Supports optional foreground and background colors.
+     *
+     * @param string $text The text to write.
+     * @param string|null $foreground Optional foreground color.
+     * @param string|null $background Optional background color.
+     * @param int $stream Stream resource to write to 
+     *      (e.g, `Terminal::STD_OUT`, `Terminal::STD_IN`, `Terminal::STD_ERR`).
+     *
+     * @return void
+     *
+     * @example - Example:
+     * ```php
+     * Terminal::writeln("Hello, World!", "green");
+     * ```
+     */
+    public static function writeln(
+        string $text = '', 
+        ?string $foreground = null, 
+        ?string $background = null,
+        int $stream = self::STD_OUT
+    ): void
+    {
+        if(($foreground || $background) && self::isColorSupported($stream)){
+            $text = Color::style($text, $foreground, $background);
+        }
+
+        if (!self::$isNewLine) {
+            $text = PHP_EOL . $text;
+            self::$isNewLine = true;
+        }
+
+        self::fwrite($text . PHP_EOL, $stream);
+    }
+
+    /**
+     * Print text without a newline to the specified stream (default: STDOUT).
+     * 
+     * Supports optional foreground and background colors.
+     *
+     * @param string $text The text to write.
+     * @param string|null $foreground Optional foreground color.
+     * @param string|null $background Optional background color.
+     * @param int $stream Stream resource to write to 
+     *          (e.g, `Terminal::STD_OUT`, `Terminal::STD_IN`, `Terminal::STD_ERR`).
+     *
+     * @return void
+     *
+     * @example - Example:
+     * ```php
+     * Terminal::write("Loading...", "yellow");
+     * ```
+     */
+    public static function write(
+        string $text = '', 
+        ?string $foreground = null, 
+        ?string $background = null,
+        int $stream = self::STD_OUT
+    ): void
+    {
+        self::$isNewLine = false;
+        if(($foreground || $background) && self::isColorSupported($stream)){
+            $text = Color::style($text, $foreground, $background);
+        }
+
+        self::fwrite($text, $stream);
+    }
+
+    /**
+     * Print text directly to the console using echo.
+     * 
+     * Optional colors can be applied for foreground and background.
+     *
+     * @param string $text The text to print.
+     * @param string|null $foreground Optional foreground color.
+     * @param string|null $background Optional background color.
+     *
+     * @return void
+     *
+     * @example - Example:
+     * ```php
+     * Terminal::print("Processing...", "cyan");
+     * ```
+     */
+    public static function print(
+        string $text, 
+        ?string $foreground = null, 
+        ?string $background = null
+    ): void
+    {
+        if (($foreground || $background) && self::isColorSupported()) {
+            $text = Color::style($text, $foreground, $background);
+        }
+
+        self::$isNewLine = false;
+        echo $text;
+    }
+
+    /**
+     * Write text directly to a stream resource without applying colors.
+     * 
+     * Falls back to echo if the environment is non-command-based.
+     *
+     * @param string $text The text to write.
+     * @param resource|int $handler Stream resource (STDOUT, STDERR, STDIN, or custom).
+     *
+     * @return void
+     *
+     * @example - Example:
+     * ```php
+     * Terminal::fwrite("Log message\n", STDERR);
+     * ```
+     */
+    public static function fwrite(string $text, mixed $handler = self::STD_OUT): void
+    {
+        if (!Luminova::isCommand()) {
+            echo $text;
+            return;
+        }
+
+        $handler = self::getStd($handler);
+        fwrite($handler, $text);
+
+        if (
+            is_resource($handler) &&
+            !in_array($handler, [STDOUT, STDERR, STDIN], true) && 
+            !@stream_isatty($handler)
+        ) {
+            @fclose($handler);
+        }
+    }
+
+    /**
+     * Displays a countdown timer in the console.
+     * 
+     * This method shows a countdown with a custom message, 
+     * or prompts the user to press any key to continue if the timer is 0 or negative.
+     *
+     * @param int $seconds Number of seconds to wait before continuing (default: 0).
+     * @param string $pattern Message pattern displayed during the countdown (default: 'Waiting...(%d seconds)'). 
      *                        Use '%d' as a placeholder for the remaining seconds.
      *
      * @return void
+     *
      * > **Note:** 
-     * > During count down, the CLI screen will be wiped out of any output.
-     * > If number of seconds is less than 1, it will prompt message `Press any key to continue...`.
+     * > - The console screen will be cleared during the countdown.
+     * > - If $seconds is less than 1, it displays 'Press any key to continue...' and waits for input.
+     *
+     * @example - Simple countdown:
+     * ```php
+     * Terminal::waiting(5);
+     * ```
+     *
+     * @example - Custom message pattern:
+     * ```php
+     * Terminal::waiting(3, 'Hold on... %d sec remaining');
+     * ```
      */
     public static function waiting(
         int $seconds = 0, 
@@ -201,13 +428,22 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Freeze and pause execution for a specified number of seconds, 
-     * optionally clear the screen and the user input during the freeze.
+     * Pauses execution for a specified number of seconds, optionally clearing the screen during the freeze.
      *
-     * @param int $seconds The number of seconds to freeze execution (default: 10).
-     * @param bool $clear Whether to clear the console screen and input while freezing (default: false).
+     * @param int $seconds Number of seconds to pause execution (default: 10).
+     * @param bool $clear Whether to clear the console screen during the freeze (default: true).
      *
      * @return void
+     *
+     * @example - Pause without clearing screen:
+     * ```php
+     * Terminal::freeze(5, false);
+     * ```
+     *
+     * @example - Pause with screen cleared every second:
+     * ```php
+     * Terminal::freeze(3, true);
+     * ```
      */
     public static function freeze(int $seconds = 10, bool $clear = true): void
     {
@@ -227,51 +463,93 @@ class Terminal implements LazyObjectInterface
     /**
      * Displays a rotating spinner animation in the CLI.
      *
-     * @param array $spinners An array of characters representing each frame of the spinner animation. 
-     *                        Default is ['-', '\\', '|', '/'].
-     * @param int $spins The number of full rotations (i.e., cycles through the spinner array) to display (default: 10).
-     * @param int $sleep The delay in microseconds between each frame of the spinner animation to control animation speed, default is `100,000 (0.1 seconds)`.
-     * @param Closure|bool|null $onComplete A callback or boolean indicating what should happen after the spinner finishes (default: null).
-     *                                  If true, it outputs "Done!\n". If a Closure is provided, it will be executed.
+     * The spinner cycles through a set of characters to create a simple loading animation.
+     * You can customize the spinner frames, the number of rotations, the speed, and
+     * optionally execute a callback or print "Done!" when finished.
+     *
+     * @param array<int,string> $spinners Characters representing each frame of the spinner animation.
+     *                                    Default: ['-', '\', '|', '/'].
+     * @param int $spins Number of full rotations through the spinner array (default: 10).
+     * @param int $sleep Delay in microseconds between frames to control animation speed (default: 100_000 = 0.1s).
+     * @param (Closure():void)|bool|null $onComplete Callback or flag executed after completion.
+     *        - If `true`, prints "Done!\n".
+     *        - If a `Closure`, executes the callback.
+     *        - If `null`, does nothing.
      *
      * @return void
+     *
+     * @example - Basic spinner:
+     * ```php
+     * Terminal::spinner();
+     * ```
+     *
+     * @example - Custom spinner frames and speed:
+     * ```php
+     * Terminal::spinner(
+     *     spinners: ['⠁','⠂','⠄','⡀','⢀','⠠','⠐','⠈'],
+     *     spins: 20,
+     *     sleep: 50000
+     * );
+     * ```
+     *
+     * @example - Spinner with a completion callback:
+     * ```php
+     * Terminal::spinner(onComplete: function() {
+     *     echo "Task completed!\n";
+     * });
+     * ```
      */
     public static function spinner(
         array $spinners = ['-', '\\', '|', '/'], 
         int $spins = 10, 
-        int $sleep = 100000, 
+        int $sleep = 100_000, 
         Closure|bool|null $onComplete = null
-    ): void
+    ): void 
     {
         $count = count($spinners);
         $iterations = $count * $spins;
-    
+
         for ($i = 0; $i < $iterations; $i++) {
             $current = $spinners[$i % $count];
             self::fwrite("\r$current");
             flush();
             usleep($sleep);
         }
-    
+
         self::fwrite("\r"); 
+
         if ($onComplete === true) {
             self::fwrite("Done!\n");
             return;
         }
-        
+
         if ($onComplete instanceof Closure) {
             $onComplete();
         }
     }
 
     /**
-     * Displays a progress bar in the console for a given number of steps.
+     * Displays a progress bar in the console for a given step out of a total.
      *
-     * @param int|false $step The current step in the progress, set to false to indicate completion.
-     * @param int $steps The total number of steps for the progress.
-     * @param bool $beep Whether to beep when the progress is complete (default: true).
-     * 
-     * @return float|int Return the percentage of completion between (0-100) or 100 if completed.
+     * @param int|false $step Current step of the progress (1-based). 
+     *              Set to `false` to mark completion.
+     * @param int $steps Total number of steps for the progress (default: 10).
+     * @param bool $beep Whether to beep when progress completes (default: true).
+     *
+     * @return float|int Returns the completion percentage (0-100). Returns 100 if completed.
+     *
+     * @example - Basic usage:
+     * ```php
+     * for ($i = 1; $i <= 10; $i++) {
+     *     Terminal::progress($i, 10);
+     *     usleep(200000);
+     * }
+     * ```
+     *
+     * @example - Mark as complete manually:
+     * ```php
+     * Terminal::progress(false, 10); // prints 100% completion bar
+     * ```
      */
     public static function progress(
         int|bool $step = 1, 
@@ -286,6 +564,7 @@ class Terminal implements LazyObjectInterface
             $step = max(0, $step);
             $steps = max(1, $steps);
             $percent = min(100, max(0, ($step / $steps) * 100));
+
             $barWidth = (int) round($percent / 10);
             $progressBar = '[' . str_repeat('#', $barWidth) . str_repeat('.', 10 - $barWidth) . ']';
             $progressText = sprintf(' %3d%%', $percent);
@@ -301,24 +580,34 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Displays a progress bar on the console and executes optional callbacks at each step and upon completion.
+     * Displays a progress bar and executes optional callbacks at each step and upon completion.
      *
-     * This method is designed to be called without a loop, as it handles the iteration internally.
-     * It is useful for showing progress while performing a task and executing subsequent actions when complete.
+     * Handles iteration internally and provides hooks for progress and finish events.
+     * Useful for visual feedback during long-running tasks.
      *
-     * @param int $limit The total number of progress steps to display.
-     * @param Closure|null $onFinish A callback to execute when the progress reaches 100% (default: null).
-     * @param Closure|null $onProgress A callback to execute at each progress step (default: null). 
-     * @param bool $beep Indicates whether to emit a beep sound upon completion. Defaults to true.
+     * @param int $limit Total number of progress steps.
+     * @param Closure|null $onFinish Optional callback executed once when progress reaches 100%.
+     * @param Closure|null $onProgress Optional callback executed on each progress step with the current percentage.
+     * @param bool $beep Whether to emit a beep upon completion (default: true).
      *
      * @return void
-     * 
-     * @example - Progress Callback Signature:
-     * 
-     * Receiving the current progress percentage.
+     *
+     * @example - Simple usage:
      * ```php
-     * Terminal::watcher(5, function(float|int $step): void {
-     *    echo "Progress: $step%";
+     * Terminal::watcher(5);
+     * ```
+     *
+     * @example - With progress callback:
+     * ```php
+     * Terminal::watcher(10, onProgress: function(int $percent) {
+     *     echo "Progress: $percent%\n";
+     * });
+     * ```
+     *
+     * @example - With finish callback:
+     * ```php
+     * Terminal::watcher(10, onFinish: function() {
+     *     echo "Task completed!\n";
      * });
      * ```
      */
@@ -348,32 +637,38 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Beep or make a bell sound for a certain number of time.
-     * 
-     * @param int $total The total number of time to beep.
+     * Prompt the user to type input with optional validation and selectable options.
      *
-     * @return void
-     */
-    public static function beeps(int $total = 1): void
-    {
-        self::print(str_repeat("\x07", $total));
-    }
-
-    /**
-     * Prompt user to type something, optionally pass an array of options for user to enter any.
-     * Optionally, you can make a colored options by using the array key for color name (e.g,`['green' => 'YES', 'red' => 'NO']`).
+     * You can optionally pass an array of options to suggest possible values.
+     * Each option can also have a color if supported (e.g., `['green' => 'YES', 'red' => 'NO']`).
+     * Validation rules can restrict allowed values or be disabled entirely.
      *
+     * @param string $message The message to prompt the user with.
+     * @param array<string|int,string|int> $options Optional list of suggested options.
+     * @param string|bool|null $validations Optional validation rules:
+     *      - null (default): automatically uses required|in_array(options)
+     *      - false: disables validation
+     *      - string: custom validation rules
+     * @param bool $silent Whether to suppress validation failure messages (default: false)
      *
-     * @param string $message The message to prompt.
-     * @param array $options  Optional array options to prompt for selection.
-     * @param string|false|null $validations Optional validation rules to ensure only the listed options are allowed.
-     *                      If null the options values will be used for validation `required|in_array(...values)`.
-     *                      To disable validation pass `false` as the value.
-     * @param bool $silent Whether to print validation failure message if wrong option was selected (default: false).
+     * @return string Returns the user's input after validation.
+     * @see self::input()
+     * @see self::read()
      *
-     * @return string Return the client input value.
-     * 
-     * @see https://luminova.ng/docs/0.0.0/security/validation - Read the input validation documentation.
+     * @example - Basic usage:
+     * ```php
+     * $name = Terminal::prompt('Enter your name');
+     * ```
+     *
+     * @example - With options and color:
+     * ```php
+     * $answer = Terminal::prompt(
+     *     'Do you want to continue?', 
+     *     ['green' => 'YES', 'red' => 'NO']
+     * );
+     * ```
+     *
+     * @see https://luminova.ng/docs/0.0.0/security/validation
      */
     public static function prompt(
         string $message, 
@@ -424,18 +719,39 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Prompt user with multiple choice selection.
-     * 
-     * Display array index key as the option identifier to select.
-     * If you use associative array users will still see index key instead.
+     * Display a multiple-choice selection prompt in the terminal.
      *
-     * @param string $text  The chooser description message to prompt.
-     * @param array  $options The list of options to prompt (e.g, ['male' => 'Male', 'female' => 'Female] or ['male', 'female']).
-     * @param bool $required Require user to choose any option else the first array will be return as default (default: false).
-     * @param bool $multiChoice Whether multiple options are allowed (default: true).
+     * Users select options using index numbers. Supports single or multiple selection.
+     * - If `$required` is true, at least one option must be selected.
+     * - `$multiChoice` allows selecting multiple options separated by commas.
      *
-     * @return array<string|int,mixed> Return the client selected array keys and values.
-     * @throws IOException Throw if options is not specified or an empty array.
+     * @param string $text The message describing the choice.
+     * @param array<string|int,mixed> $options The list of selectable options.
+     *      Can be indexed or associative array (keys will still be shown as selection indexes).
+     * @param bool $required Whether the user must select at least one option (default: false).
+     * @param bool $multiChoice Allow multiple selections separated by commas (default: true).
+     *
+     * @return array<string|int,mixed> Returns an array of selected keys and their corresponding values.
+     *
+     * @throws IOException If `$options` is empty or invalid.
+     *
+     * @example - Single choice:
+     * ```php
+     * $gender = Terminal::chooser(
+     *      'Select gender:', 
+     *      [
+     *          'male' => 'Male', 
+     *          'female' => 'Female'
+     *      ], 
+     *      required: true, 
+     *      multiChoice: false
+     * );
+     * ```
+     *
+     * @example - Multiple choices:
+     * ```php
+     * $fruits = Terminal::chooser('Select your favorite fruits:', ['Apple','Banana','Cherry']);
+     * ```
      */
     public static function chooser(
         string $text, 
@@ -488,21 +804,43 @@ class Terminal implements LazyObjectInterface
             }
         } while ($required && ($input === null) ? true : !self::validate($input, ['input' => $rules]));
 
-        return self::getInputValues($multiChoice ? list_to_array($input) : [$input], $optionValues);
+        return self::getInputValues($multiChoice 
+            ? list_to_array($input) 
+            : [$input], 
+            $optionValues
+        );
     }
 
     /**
-     * Prompts the user to enter a password with hidden input. Supports retry attempts and optional timeout.
+     * Prompt the user to enter a password securely (input hidden).
      *
-     * - On Windows, it uses a VBS script or PowerShell to hide the input.
-     * - On Linux/Unix, it uses a bash command to hide the input.
+     * Works cross-platform:
+     * - Windows: uses PowerShell or VBS to hide input.
+     * - Linux/macOS: uses terminal raw input to hide password.
      *
-     * @param string $message Optional message to display when prompting for the password (default: 'Enter Password').
-     * @param int $allowEmptyPassword Whether to permit empty password (default: false).
-     * @param int $retry The number of allowed retry attempts, set to `0` for unlimited retries (default: 3).
-     * @param int $timeout Optional time window for password input in seconds, set to 0 for no timeout (default: 0).
-     * 
-     * @return string Return the entered password or an empty string if the maximum retry attempts are exceeded.
+     * Supports retry attempts, optional empty passwords, and optional timeout.
+     *
+     * @param string $message Optional prompt message (default: 'Enter Password').
+     * @param bool $allowEmptyPassword Whether empty passwords are permitted (default: false).
+     * @param int $retry Number of retry attempts, 0 for unlimited (default: 3).
+     * @param int $timeout Optional timeout in seconds for input, 0 for no timeout (default: 0).
+     *
+     * @return string Returns the entered password, or empty string if max retries exceeded.
+     *
+     * @example - Basic password input:
+     * ```php
+     * $password = Terminal::password();
+     * ```
+     *
+     * @example - With unlimited retries:
+     * ```php
+     * $password = Terminal::password('Enter Admin Password', allowEmptyPassword: false, retry: 0);
+     * ```
+     *
+     * @example - With timeout (10 seconds):
+     * ```php
+     * $password = Terminal::password('Enter your key', timeout: 10);
+     * ```
      */
     public static function password(
         string $message = 'Enter Password', 
@@ -542,276 +880,66 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Terminates the script execution with an optional message and status code.
-     *
-     * @param string|null $message  Optional message to display before termination.
-     * @param int $exitCode  An exit status code to terminate the script with (default: STATUS_SUCCESS).
-     *
-     * @return never
-     */
-    public static function terminate(?string $message = null, int $exitCode = STATUS_SUCCESS): void
-    {
-        if ($message !== null) {
-            self::writeln($message);
-        }
-
-        exit($exitCode);
-    }
-
-    /**
-     * Highlights URL to indicate it clickable in terminal.
-     *
-     * @param string $url The url to be highlighted.
-     * @param string|null $title Optional title to be displayed (default: null).
-     *
-     * @return void
-     */
-    public static function link(string $url, ?string $title = null): void 
-    {
-        $title ??= $url;
-        self::write(self::isAnsiSupported() 
-            ? "\033]8;;{$url}\033\\{$title}\033]8;;\033\\" 
-            : "\033[4m{$url}\033[0m"
-        );
-    }
-
-    /**
-     * Execute a callback function after a specified timeout when no input or output is received.
-     *
-     * @param Closure $callback The callback function to execute on timeout.
-     * @param int $timeout Timeout duration in seconds. If <= 0, callback is invoked immediately (default: 0).
-     * @param resource|string|int $stream Optional stream to monitor for activity (default: STDIN).
-     * 
-     * @return bool Returns true if the timeout occurred and callback was executed, otherwise false.
-     */
-    public static function timeout(Closure $callback, int $timeout = 0, mixed $stream = self::STD_IN): bool
-    {
-        if ($timeout <= 0) {
-            $callback();
-            return true;
-        }
-    
-        $write = null;
-        $except = null;
-        $read = [self::getStd($stream)];
-        $result = stream_select($read, $write, $except, $timeout);
-        
-        if ($result === false || $result === 0) {
-            $callback();
-            return true;
-        }
-    
-        return false;
-    }
-
-    /**
-     * Execute a system command.
-     * 
-     * @param string $command The command to execute.
-     * 
-     * @return array|false Return the output of executed command as an array of lines, or false on failure.
-     */
-    public static function execute(string $command): array|bool
-    {
-        $result_code = STATUS_ERROR;
-        $output = [];
-
-        exec($command, $output, $result_code);
-        
-        if ($result_code === STATUS_SUCCESS) {
-            return $output;
-        }
-
-        return false;
-    }
-
-    /**
-     * Executes a command via `exec` and redirect error output to null based on the platform (Windows or Unix-like).
-     * 
-     * @param string $command The command to execute.
-     * @param array &$output Output lines of the executed command (default: `[]`).
-     * @param int &$result_code The exit status of the executed command, passed by reference (default: `STATUS_ERROR`).
-     * 
-     * @return string|false Return the last line of the command output, or false on failure.
-     */
-    public static function _exec(
-        string $command, 
-        array &$output = [], 
-        int &$result_code = STATUS_ERROR
-    ): string|bool
-    {
-        $devNull = is_platform('windows') ? ' 2>NUL' : ' 2>/dev/null';
-        if(str_contains($command, $devNull)){
-            $devNull = '';
-        }
-
-        return exec("{$command}{$devNull}", $output, $result_code);
-    }
-
-    /**
-     * Executes a shell command via `shell_exec` and return the complete output as a string.
-     * Also it redirects error output to null based on the platform (Windows or Unix-like).
-     * 
-     * @param string $command The command to execute.
-     * 
-     * @return string|null Return the output of the command, or null on error.
-     */
-    public static function _shell(string $command): ?string
-    {
-        $devNull = is_platform('windows') ? ' 2>NUL' : ' 2>/dev/null';
-
-        if(str_contains($command, $devNull)){
-            $devNull = '';
-        }
-
-        $response = shell_exec("{$command}{$devNull}");
-
-        if(!$response){
-            return null;
-        }
-
-        return $response;
-    }
-
-    /**
-     * Toggles the terminal visibility of user input.
-     *
-     * @param bool $visibility True to show input, False to hide input.
-     * 
-     * @return bool Return true if visibility toggling was successful, false otherwise.
-     */
-    public static function visibility(bool $visibility = true): bool
-    {
-        $command = is_platform('windows') 
-            ? ($visibility ? 'echo on' : 'echo off')
-            : ($visibility ? 'stty echo' : 'stty -echo');
-
-        return self::_shell($command) !== null;
-    }
-
-    /**
-     * Get user multiple selected options from input.
-     * 
-     * @param array $input The user input array.
-     * @param array $options The prompted options.
-     * 
-     * @return array<string|int,mixed> $options The selected array keys and values.
-     */
-    private static function getInputValues(array $input, array $options): array
-    {
-        $result = [];
-        foreach ($input as $value) {
-            if (isset($options[$value]['key'], $options[$value]['value'])) {
-                $result[$options[$value]['key']] = $options[$value]['value'];
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Display select options with key index as an identifier.
-     * 
-     * @param array<string,mixed> $options The options to display.
-     * @param int $max The maximum padding end to apply.
-     * 
-     * @return void 
-     */
-    private static function writeOptions(array $options, int $max): void
-    {
-        $isColor = self::isColorSupported();
-
-        foreach ($options as $key => $value) {
-            $name = Text::padding('  [' . $key . ']  ', $max, Text::LEFT);
-            $name = ($isColor ? Color::style($name, 'green') : $name);
-
-            self::writeln($name . Text::wrap($value['value'], 125, $max));
-        }
-    }
-
-    /**
-     * Attempts to determine the width of the viewable CLI window.
-     * 
-     * @param int $default Optional default width (default: 80).
-     * 
-     * @return int Return terminal window width or default.
-     */
-    public static function getWidth(int $default = 80): int
-    {
-        if (self::$windowWidth === null) {
-            self::getVisibleWindow();
-        }
-
-        return self::$windowWidth ?: $default;
-    }
-
-    /**
-     * Attempts to determine the height of the viewable CLI window.
-     * 
-     * @param int $default Optional default height (default: 24).
-     * 
-     * @return int Return terminal window height or default.
-     */
-    public static function getHeight(int $default = 24): int
-    {
-        if (self::$windowHeight === null) {
-            self::getVisibleWindow();
-        }
-
-        return self::$windowHeight ?: $default;
-    }
-
-    /**
      * Read a single line of user input from the terminal or piped input.
      *
-     * This method is suitable for user prompts or single-line piped input. For multi-line input,
-     * use {@see readInput()} instead.
+     * If $default is null, input is required and the prompt repeats until a value is entered.
+     * Supports optional prompts, default values, and a separate STDIN stream handle.
+     * For multi-line input, use {@see self::read()} instead.
      *
-     * @param string|null $prompt Optional message to display before reading input.
-     * @param string $default Optional default value to return if no input is provided (default: empty-string).
-     * @param bool $newStream Whether to `open` a new STDIN stream in read-only binary mode as a separate handle (default: false).
+     * @param string|null $prompt Optional message displayed before reading input.
+     * @param string|null $default Default value returned if input is empty. Null = required input.
+     * @param bool $newStream Open a new STDIN stream as a separate handle (default: false).
      *
-     * @return string Return the input string or the default value if input is empty or reading fails.
+     * @return string Returns the trimmed input string or the default value.
      */
-    public static function input(?string $prompt = null, string $default = '', bool $newStream = false): string
+    public static function input(
+        ?string $prompt = null,
+        ?string $default = '',
+        bool $newStream = false
+    ): string 
     {
-        if (self::$isReadLine && ENVIRONMENT !== 'testing') {
-            return @readline($prompt) ?: $default;
-        }
+        while (true) {
+            $input = null;
 
-        if ($prompt !== null) {
-            self::print($prompt);
-        }
+            if (self::$isReadLine && ENVIRONMENT !== 'testing') {
+                $input = @readline($prompt) ?: null;
+            } elseif ($prompt !== null) {
+                self::print($prompt);
+            }
 
-        if ($newStream) {
-            $handle = fopen(self::STDPATH['STDIN'], 'rb');
+            if ($input === null) {
+                $input = self::readFromInput($newStream);
+            }
 
-            if (!$handle) {
+            if ($input !== null && $input !== '') {
+                return trim($input);
+            }
+
+            if ($default !== null) {
                 return $default;
             }
 
-            $input = fgets($handle);
-            fclose($handle);
-        } else {
-            $input = fgets(STDIN);
+            // Required input: loop until user enters something
         }
-
-        return ($input === false) ? $default : trim($input);
     }
 
     /**
      * Read input from STDIN, supporting single or multi-line input.
      *
-     * This method is suitable for reading from piped data or long content. For simple user prompts
-     * or single-line input, use {@see input()} directly instead.
-     *
-     * @param string $default Default value to return if reading fails or input is empty (default: empty-string).
-     * @param bool $eof If true, reads the entire input until EOF. If false, reads a single line.
-     * @param bool $newStream Whether to `open` a new STDIN stream in read-only binary mode as a separate handle (default: false).
-     *
-     * @return string Return the input string or the default value if input is empty or reading fails.
+     * Suitable for piped data or long content. For interactive prompts or single-line input,
+     * use {@see self::input()} instead.
      * 
-     * @example Read From Pipe Input:
+     * When `$eof` is true, the entire STDIN stream is read until EOF.
+     * When `$eof` is false, a single line is read.
+     * 
+     * Alias {@see self::readInput()}
+     *
+     * @param string $default Default value returned if reading fails or input is empty.
+     * @param bool $eof Read until EOF if true, otherwise single line (delegates to {@see self::input()}).
+     * @param bool $newStream Open a new STDIN stream as a separate handle (default: false).
+     *
+     * @return string Returns trimmed input string or default if empty/failure.
+     * @example - In CLI:
      * 
      * ```bash
      * echo "Log Message From Pipe" | php index.php logger
@@ -820,71 +948,72 @@ class Terminal implements LazyObjectInterface
      * ```bash
      * php index.php list-something | php index.php logger
      * ```
+     * @example - In PHP (Read From Pipe Input):
+     * ```php
+     * $data = Terminal::read();
+     * ```
      */
-    public static function readInput(string $default = '', bool $eof = true, bool $newStream = false): string
+    public static function read(string $default = '', bool $eof = true, bool $newStream = false): string
     {
-        if(!$eof){
-            return self::input(null, $default, $newStream);
+        if (!$eof) {
+            return self::input(default: $default, newStream: $newStream);
         }
 
-        if ($newStream) {
-            $handle = fopen(self::STDPATH['STDIN'], 'rb');
+        $handle = $newStream ? @fopen(self::STDPATH['STDIN'], 'rb') : STDIN;
 
-            if (!$handle) {
-                return $default;
-            }
+        if (!$handle) {
+            return $default;
+        }
 
-            $input = stream_get_contents($handle);
+        $input = stream_get_contents($handle);
+
+        if ($newStream && is_resource($handle)) {
             fclose($handle);
-        }else{
-            $input = stream_get_contents(STDIN);
         }
 
-        return ($input === false) ? $default : trim($input);
+        return ($input === false || trim($input) === '') ? $default : trim($input);
     }
 
     /**
-     * Captures a key press event and returns the corresponding key name.
-     * Supports arrow keys, tab, enter, escape, and Ctrl+C.
+     * Displays a selectable list in the terminal with keyboard navigation.
      *
-     * @param (callable(string $key, string $name):mixed)|null $callback Optional callback function that receives the raw key and its name.
-     * 
-     * @return array<key:ansi,name:string>|mixed Return an array key nnd name or the result of the callback function.
-     */
-    public static function keyEvent(?callable $callback = null): mixed
-    {
-        system("stty -echo raw");
-        $key = fread(STDIN, 3);
-        $name = match($key){
-            "\033[A" => 'up',
-            "\033[B" => 'down',
-            "\033[Z" => 'shift+tab',
-            "\n", "\r"     => 'enter',
-            "\t"     => 'tab',
-            "\x03"   => 'ctrl+c',
-            "\033"   => 'escape',
-            default  => null
-        };
-        system("stty echo cooked");
-
-        if($callback !== null){
-            return $callback($key, $name);
-        }
-     
-        return ['key' => $key, 'name' => $name];
-    }
-
-    /**
-     * Displays a selectable list in the terminal and allows navigation using arrow keys or tab.
+     * Users can navigate the options using:
+     * - Arrow keys (up/down)
+     * - Tab / Shift+Tab
+     * - Enter to select
+     * - Escape to cancel (returns empty string)
+     * - Ctrl+C to exit
      *
-     * @param array<int,string|int> $options The list of options to choose from.
-     * @param int $default The default selected index.
-     * @param string|null $placeholder Optional placeholder text to display.
-     * @param bool $clearOnSelect Whether to clear the screen after selection.
-     * @param string $foreground The foreground color for the highlighted selection.
-     * @param string|null $background The optional background color for the highlighted selection.
+     * The selected option is returned as a string. Supports optional placeholder text,
+     * foreground and background colors for the highlighted selection, and clearing the screen after selection.
+     *
+     * @param array<int,string|int> $options The list of selectable options.
+     * @param int $default The default selected index (0-based).
+     * @param string|null $placeholder Optional placeholder text to display above the list (default: `null`).
+     * @param bool $clearOnSelect Whether to clear the terminal after selection (default: true).
+     * @param string $foreground Foreground color for the highlighted option (default: 'green').
+     * @param string|null $background Optional background color for the highlighted option.
+     *
+     * @return string Returns the selected option as a string, or empty string if cancelled.
+     *
+     * @example - Basic usage:
+     * ```php
+     * $choice = Terminal::tablist(['Apple', 'Banana', 'Cherry']);
      * 
-     * @return string Return the selected option value as a string.
+     * Terminal::writeln("You selected: $choice\n");
+     * ```
+     *
+     * @example With placeholder and colors:
+     * ```php
+     * $choice = Terminal::tablist(
+     *     ['Red', 'Green', 'Blue'], 
+     *     default: 1, 
+     *     placeholder: 'Select a color:', 
+     *     foreground: 'white', 
+     *     background: 'blue'
+     * );
+     * Terminal::writeln("You picked: $choice");
+     * ```
      */
     public static function tablist(
         array $options, 
@@ -905,30 +1034,26 @@ class Terminal implements LazyObjectInterface
         $value = null;
 
         while ($value === null) {
-            if($placeholder){
-                self::writeln($placeholder);
-            }
-
-            self::writeln(self::tablistUpdate($options, $index, $foreground, $background));
-            switch (self::keyEvent()['name']) {
-                case 'up':
-                case 'shift+tab':
+            self::writeln(self::tablistUpdate($options, $index, $foreground, $background, $placeholder));
+            switch (Keyboard::capture()['name']) {
+                case Keyboard::UP:
+                case Keyboard::SHIFT_TAB:
                     $index = ($index - 1 + $totalOptions) % $totalOptions;
                     break;
-                case 'down':
-                case 'tab':
+                case Keyboard::DOWN:
+                case Keyboard::TAB:
                     $index = ($index + 1) % $totalOptions;
                     break;
-                case 'enter':
+                case Keyboard::ENTER:
                     self::cursorVisibility(true);
                     $value = $options[$index] ?? '';
                     break;
-                case 'escape': 
+                case Keyboard::ESCAPE: 
                     self::cursorVisibility(true);
                     $clearOnSelect = true;
                     $value = '';
                     break;
-                case 'ctrl+c':
+                case Keyboard::CTRL_C:
                     self::cursorVisibility(true);
                     self::clear();
                     exit(0);
@@ -943,376 +1068,46 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Command user input validation on prompts.
+     * Generate and print a formatted table structure to the console.
      *
-     * @param string $value The user input value.
-     * @param array $rules The validation rules.
-     * 
-     * @return bool Return true if validation succeeded, false if validation failed.
-     */
-    public static function validate(string $value, array $rules): bool
-    {
-        $field = [
-            'input' => $value
-        ]; 
-        self::$validation ??= new Validation();
-        self::$validation->setRules($rules)->setBody($field);
-       
-        if (!self::$validation->validate()) {
-            self::error(self::$validation->getError('input'));
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Escapes a command argument to ensure safe execution in the shell.
-     * 
-     * @param string $argument The command argument to escape.
-     * 
-     * @return string Return the escaped command string.
-     */
-    public static function escape(?string $argument): string
-    {
-        if ($argument === '' || $argument === null) {
-            return '""';
-        }
-
-        if (DIRECTORY_SEPARATOR !== '\\') {
-            return "'" . str_replace("'", "'\\''", $argument) . "'";
-        }
-
-        if (str_contains($argument, "\0")) {
-            $argument = str_replace("\0", '?', $argument);
-        }
-
-        if (preg_match('/[\/()%!^"<>&|\s]/', $argument)) {
-            return '"' . str_replace(
-                ['"', '^', '%', '!', "\n"], 
-                ['""', '"^^"', '"^%"', '"^!"', '!LF!'], 
-                preg_replace('/(\\\\+)$/', '$1$1', $argument)
-            ) . '"';
-        }
-
-        return $argument;
-    }
-
-    /**
-     * Replace placeholders in a command with environment variable values.
-     * 
-     * Placeholders follow the format `${:VAR_NAME}`, where `VAR_NAME` corresponds to a key in the `$env` array.
-     * Optionally escapes each replacement for safe shell execution.
-     * 
-     * @param string $command The command string with placeholders to replace.
-     * @param array<string,mixed> $env Associative array of environment variables for replacements.
-     * @param bool $escape Whether to escape each replacement after substitution (default: false).
-     * 
-     * @return string Return the command string with placeholders replaced.
-     * @throws IOException Throws if a placeholder variable is not found in `$env` or is set to `false`.
-     */
-    public static function replace(string $command, array $env, bool $escape = false): string
-    {
-        return preg_replace_callback('/\$\{:([_a-zA-Z][\w]*)\}/', function ($matches) use ($command, $env, $escape) {
-            $key = $matches[1];
-
-            if (!array_key_exists($key, $env) || $env[$key] === false) {
-                throw new IOException(sprintf('Missing value for parameter "%s" in command: %s', $key, $command));
-            }
-
-            return $escape ? self::escape($env[$key]) : $env[$key];
-        }, $command);
-    }
-
-    /**
-     * Display an error message box with a default red background and white text.
-     * The message is formatted as a block and written to `STDERR`.
-     * 
-     * @param string $text The error message to display.
-     * @param string|null $foreground The text color (default: white).
-     * @param string|null $background The background color (default: red).
-     * @param int|null $width Optional layout width (default, `null` auto).
+     * Each row is an associative array where the keys match the column headers.
+     * Supports optional text coloring for headers, body, and borders, as well as controlling
+     * whether borders are shown and whether newlines within cells are retained.
      *
-     * @return void
-     */
-    public static function error(
-        string $text, 
-        string|null $foreground = 'white', 
-        string|null $background = 'red',
-        ?int $width = null
-    ): void
-    {
-        if(($foreground || $background) && !self::isColorSupported(self::STD_ERR)){
-            $foreground = $background = null;
-        }
-
-        self::fwrite(Text::block($text, Text::LEFT, 1, $foreground, $background, width: $width), self::STD_ERR);
-    }
-
-    /**
-     * Display a success message with a default green background and white text.
-     * The message is formatted as a block and written to `STDOUT`.
-     * 
-     * @param string $text The success message to display.
-     * @param string|null $foreground The text color (default: white).
-     * @param string|null $background The background color (default: green).
-     * @param int|null $width Optional layout width (default, `null` auto).
+     * @param array<int,string> $headers Column headers for the table.
+     * @param array<int,array<string,string>> $rows Table rows where each row is an associative array 
+     *          with keys matching headers.
+     * @param string|null $foreground Optional text color for table body (default: null).
+     * @param string|null $headerColor Optional text color for table headers (default: null).
+     * @param string|null $borderColor Optional text color for table borders (default: null).
+     * @param bool $border Whether to display borders between rows and columns (default: true).
+     * @param bool $shouldRetainNewlines Whether to keep newlines inside cells (default: false).
      *
-     * @return void
-     */
-    public static function success(
-        string $text, 
-        string|null $foreground = 'white', 
-        string|null $background = 'green',
-        ?int $width = null
-    ): void
-    {
-        if(($foreground || $background) && !self::isColorSupported(self::STD_OUT)){
-            $foreground = $background = null;
-        }
-
-        self::fwrite(Text::block($text, Text::LEFT, 1, $foreground, $background, width: $width));
-    }
-
-    /**
-     * Print text followed by a newline to the specified stream, defaulting to `Terminal::STD_OUT`.
-     * Optionally apply foreground and background colors to the text.
-     * 
-     * @param string $text The text to write (default: blank).
-     * @param string|null $foreground Optional foreground color name.
-     * @param string|null $background Optional background color name.
-     * @param int $stream The stream resource to write to (e.g, `Terminal::STD_OUT`, `Terminal::STD_IN`, `Terminal::STD_ERR`).
+     * @return string Returns the formatted table as a string, ready for console output.
      *
-     * @return void
-     */
-    public static function writeln(
-        string $text = '', 
-        ?string $foreground = null, 
-        ?string $background = null,
-        int $stream = self::STD_OUT
-    ): void
-    {
-        if(($foreground || $background) && self::isColorSupported($stream)){
-            $text = Color::style($text, $foreground, $background);
-        }
-
-        if (!self::$isNewLine) {
-            $text = PHP_EOL . $text;
-            self::$isNewLine = true;
-        }
-
-        self::fwrite($text . PHP_EOL, $stream);
-    }
-
-    /**
-     * Print text without appending a newline to the specified stream, defaulting to `Terminal::STD_OUT`.
-     * Optionally apply foreground and background colors to the text.
-     * 
-     * @param string $text The text to write (default: blank).
-     * @param string|null $foreground Optional foreground color name.
-     * @param string|null $background Optional background color name.
-     * @param int $stream The stream resource to write to (e.g, `Terminal::STD_OUT`, `Terminal::STD_IN`, `Terminal::STD_ERR`).
-     *
-     * @return void
-     */
-    public static function write(
-        string $text = '', 
-        ?string $foreground = null, 
-        ?string $background = null,
-        int $stream = self::STD_OUT
-    ): void
-    {
-        self::$isNewLine = false;
-        if(($foreground || $background) && self::isColorSupported($stream)){
-            $text = Color::style($text, $foreground, $background);
-        }
-
-        self::fwrite($text, $stream);
-    }
-
-    /**
-     * Print text directly using `echo` without any stream handling.
-     * Optionally apply foreground and background colors to the text.
-     * 
-     * @param string $text The text to print.
-     * @param string|null $foreground Optional foreground color name.
-     * @param string|null $background Optional background color name.
-     *
-     * @return void
-     */
-    public static function print(
-        string $text, 
-        ?string $foreground = null, 
-        ?string $background = null
-    ): void
-    {
-        if (($foreground || $background) && self::isColorSupported()) {
-            $text = Color::style($text, $foreground, $background);
-        }
-
-        self::$isNewLine = false;
-        echo $text;
-    }
-
-    /**
-     * Write text to the specified stream resource without applying any colors, defaulting to `STDOUT`.
-     * 
-     * If the environment is non-command-based, the text will be output using `echo` instead of `fwrite`.
-     * 
-     * @param string $text The text to output or write.
-     * @param resource|int $handler The stream resource handler to write to (e.g. `STDOUT`, `STDERR`, `STDIN`).
-     *
-     * @return void
-     */
-    public static function fwrite(string $text, mixed $handler = self::STD_OUT): void
-    {
-        if (!Luminova::isCommand()) {
-            echo $text;
-            return;
-        }
-
-        $handler = self::getStd($handler);
-        fwrite($handler, $text);
-
-        if (
-            is_resource($handler) &&
-            !in_array($handler, [STDOUT, STDERR, STDIN], true) && 
-            !@stream_isatty($handler)
-        ) {
-            @fclose($handler);
-        }
-    }
-
-    /**
-     * Controls the cursor visibility in the terminal.
-     *
-     * @param bool $showCursor Set to true to show the cursor, false to hide it.
-     * @return void
-     */
-    public static function cursorVisibility(bool $showCursor):  void
-    {
-        self::print($showCursor ? "\033[?25h" : "\033[?25l");
-    }
-
-    /**
-     * Clears the console screen with optional clearing modes.
-     *
-     * @param string $mode The clearing mode: 'default', 'partial', or 'full'.
-     *                     - 'default' (default): Clears the entire screen.
-     *                     - 'partial': Clears from the cursor position downward.
-     *                     - 'full': Clears the entire screen and scroll-back buffer.
-     *
-     * @return void
-     */
-    public static function clear(string $mode = 'default'): void
-    {
-        if (is_platform('windows') && !self::isStreamSupports('sapi_windows_vt100_support', self::STD_OUT)) {
-            if(self::_shell('cls')){
-                return;
-            }
-
-            self::newLine(self::getHeight(40));
-            return;
-        }
-
-        $sequences = [
-            'default' => "\033[H\033[2J",
-            'partial' => "\033[J",
-            'full'    => "\033[H\033[2J\033[3J"
-        ];
-        
-        self::fwrite($sequences[$mode] ?? $sequences['default']);
-    }
-
-    /**
-     * Clears the last printed line or lines of text in the terminal output.
-     *
-     * @param string|null $lastOutput An optional string representing the last output printed
-     *                                 to the terminal (default: null). If provided, the method 
-     *                                 clears the specific lines that match this output.
-     * 
-     * @return void
-     */
-    public static function flush(?string $lastOutput = null): void
-    {
-        if (is_platform('windows') && !self::isStreamSupports('sapi_windows_vt100_support', self::STD_OUT)) {
-            self::fwrite("\r"); 
-            return;
-        }
-
-        if(!$lastOutput){
-            self::fwrite("\033[1A\033[2K");
-            return;
-        }
-   
-        $lines = explode(PHP_EOL, wordwrap($lastOutput, self::getWidth(), PHP_EOL, true));
-        $numLines = count($lines);
-
-        for ($i = 0; $i < $numLines; $i++) {
-            self::fwrite("\033[1A\033[2K");
-        }
-    }
-
-    /**
-     * Print new lines based on specified count.
-     *
-     * @param int $count The number of new lines to print.
-     * 
-     * @return void 
-     */
-    public static function newLine(int $count = 1): void
-    {
-        for ($i = 0; $i < $count; $i++) {
-            self::writeln();
-        }
-    }
-
-    /**
-     * Oops! command, show an error message for unknown executed command.
-     *
-     * @param string $command The command that was executed.
-     * @param string|null $color Text color for the command (default: red).
-     * 
-     * @return int Return status code STATUS_ERROR.
-     */
-    public static function oops(string $command, string|null $color = 'red'): int 
-    {
-        $command = "'{$command}'";
-        $command = self::isColorSupported() 
-            ? Color::style($command, $color) 
-            : $command;
-
-       self::fwrite("Unknown command {$command} not found." . PHP_EOL, self::STD_ERR);
-       return STATUS_ERROR;
-    }
-
-    /**
-     * Generate and print a formatted table with headers and rows to the console.
-     *
-     * @param array<int,string> $headers The headers for the table columns, 
-     *                                    where each header is defined by its index.
-     * @param array<int,array<string,string>> $rows The rows of table data to display in the tables body, 
-     *                                                where each row is an associative array with keys 
-     *                                                representing the column headers and values containing 
-     *                                                the corresponding content.
-     * @param string|null $foreground An optional text color for the table's body content (default: null).
-     * @param string|null $headerColor An optional text color for the table header columns (default: null).
-     * @param string|null $borderColor An optional color for the table borders (default: null).
-     * @param bool $border Indicate whether to display borders between each table raw (default: true).
-     * @param bool $shouldRetainNewlines Indicate whether to retain newline or not (default: false).
-     * 
-     * @return string Return the formatted table as a string, ready to be output to the console.
-     * 
-     * @example - Table example:
-     * 
+     * @example - Simple table:
      * ```php
-     * Terminal::table(
-     *     ['Name', 'Email'], 
+     * Terminal::print(Terminal::table(
+     *     ['Name', 'Email'],
      *     [
      *         ['Name' => 'Peter', 'Email' => 'peter@example.com'],
      *         ['Name' => 'Hana', 'Email' => 'hana@example.com']
      *     ]
-     * );
+     * ));
+     * ```
+     *
+     * @example - Colored table with no borders:
+     * ```php
+     * Terminal::print(Terminal::table(
+     *     ['Name', 'Email'],
+     *     [
+     *         ['Name' => 'Alice', 'Email' => 'alice@example.com'],
+     *         ['Name' => 'Bob', 'Email' => 'bob@example.com']
+     *     ],
+     *     foreground: 'cyan',
+     *     headerColor: 'yellow',
+     *     border: false
+     * ));
      * ```
      */
     public static function table(
@@ -1393,35 +1188,681 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Parses and processes command-line arguments and options, making them accessible in console controllers.
-     * 
-     * This method is used to extract and register command arguments, options, and flags passed to the CLI. Once parsed, you can retrieve values using helper methods like `getOption`, `getArgument`, and `getAnyOption`. It serves as an internal setter to store and expose parsed command data within extended controller classes.
-     * 
-     * @param array<string,mixed> $options Command arguments, options, and flags extracted from CLI execution.
-     * 
+     * Prints formatted help information for CLI commands.
+     *
+     * Accepts command metadata and renders descriptions, usages, options,
+     * and examples in a readable CLI layout. When `$all` is enabled, help
+     * output is grouped and labeled per command.
+     *
+     * If `$helps` is null, all registered commands are loaded automatically.
+     *
+     * @param array|null $helps Command metadata, usually controller protected properties.
+     * @param bool $all Whether to print help for all commands or a single command.
+     *
      * @return void
-     * @internal
+     * @internal Used by the router to render controller help output.
+     */
+    public static function helper(?array $helps, bool $all = false): void
+    {
+        $leftPadding = Text::padding('', 3, Text::LEFT);
+        $helps = ($helps === null) 
+            ? Commands::getCommands() 
+            : ($all ? $helps : [$helps]);
+
+        foreach($helps as $name => $properties){
+            if(!$properties){
+                continue;
+            }
+
+            if($all){
+                self::newLine();
+                $head = Color::apply("------[{$name} Help Information]------", Text::FONT_BOLD, 'brightCyan');
+                self::writeln($head);
+            }
+
+            if(!is_array($properties)){
+                continue;
+            }
+
+            $total = count($properties);
+            $index = 0;
+
+            foreach($properties as $key => $value){
+                if($key === 'users' || $key === 'authentication'){
+                    continue;
+                }
+
+                if(is_array($value)){
+                    if(in_array($key, ['usages', 'examples', 'options'], true)){
+                        self::printHelp($value, $key, $leftPadding);
+                    }
+                }elseif($key === 'usages' || $key === 'description'){
+                    self::writeln(ucfirst($key) . ':', 'lightYellow');
+                    self::writeln($leftPadding . trim($value));
+                }
+
+                if($index < $total - 1){
+                    self::newLine();
+                }
+
+                $index++;
+            }
+        }
+    }
+
+    /**
+     * Displays system and environment information in a table format.
+     *
+     * Intended for CLI usage, this method outputs details such as
+     * PHP version, operating system, terminal size, and other
+     * runtime-related information.
+     *
+     * @return void
+     */
+    public static function about(): void 
+    {
+        self::writeln(self::table(
+            ['Name', 'Value'], 
+            self::getSystemInfo()
+        ));
+    }
+
+    /**
+     * Prints the NovaKit CLI header banner.
+     *
+     * Displays framework version, CLI tool version, and current server time.
+     * The header is skipped if the `--no-header` argument is present.
+     *
+     * @return bool Returns true if the header was printed, false if suppressed.
+     */
+    public static function header(): bool
+    {
+        if(self::hasArgument('--no-header')){
+            return false;
+        }
+
+        self::writeln(sprintf(
+            'PHP Luminova v%s NovaKit Command Line Tool v%s - Server Time: %s UTC%s',
+            Luminova::VERSION,
+            Luminova::NOVAKIT_VERSION,
+            date('Y-m-d H:i:s'),
+            date('P')
+        ), 'green');
+        return true;
+    }
+
+    /**
+     * Returns the system user executing the current script.
+     *
+     * Attempts to resolve the actual OS-level user using a shell command.
+     * If unavailable, falls back to PHP's process user.
+     *
+     * @return string The current system username with whitespace removed.
+     */
+    public static function whoami(): string
+    {
+        $user = self::_shell(is_platform('windows') ? 'echo %USERNAME%' : 'whoami');
+    
+        if (!$user) {
+            $user = get_current_user();
+        }
+
+        return trim($user);
+    }
+
+    /**
+     * Detect the PHP CLI executable path.
+     *
+     * This method attempts to locate a working PHP CLI binary using multiple strategies:
+     * 1. The `PHP_BINARY` constant (the currently running PHP binary).
+     * 2. The `which php` shell command (Linux/macOS).
+     * 3. Common default PHP paths for Linux, macOS, and Windows environments.
+     *
+     * When `$test` is `true`, each candidate is verified by running `php -v` to ensure it is functional.
+     *
+     * @param bool $test If true, test each candidate binary to ensure it runs (default: true).
      * 
-     * @example - Usage Example:
-     * 
+     * @return string|null The full path to a usable PHP CLI executable, or null if none could be detected.
+     */
+    public static function whichPhp(bool $test = true): ?string
+    {
+        $candidates = [];
+
+        if (defined('PHP_BINARY') && PHP_BINARY !== '') {
+            $candidates[] = PHP_BINARY;
+        }
+
+        if (PHP_OS_FAMILY !== 'Windows') {
+            $output = null;
+            $returnVar = null;
+            @exec('which php', $output, $returnVar);
+            
+            if ($returnVar === 0 && !empty($output)) {
+                $candidates[] = $output[0];
+            }
+        }
+
+        $candidates += match(true){
+            (PHP_OS_FAMILY === 'Darwin') => [
+                'php',
+                '/usr/bin/php',
+                '/usr/local/bin/php',
+                '/usr/local/php/bin/php',
+                '/opt/homebrew/bin/php',
+                '/Applications/XAMPP/xamppfiles/bin/php',
+            ],
+            (PHP_OS_FAMILY === 'Linux') => [
+                'php',
+                '/usr/bin/php',
+                '/usr/local/bin/php',
+            ],
+            (PHP_OS_FAMILY === 'Windows') => [
+                'C:\\xampp\\php\\php.exe',
+                'C:\\wamp\\bin\\php\\php.exe',
+                'C:\\wamp\\bin\\php\\php8.1.0\\php.exe',
+                'C:\\wamp\\bin\\php\\php8.0.0\\php.exe',
+                'C:\\php\\php.exe',
+            ],
+            default => ['php']
+        };
+
+        foreach ($candidates as $php) {
+            if (!is_file($php) || !is_executable($php)) {
+                continue;
+            }
+
+            if(!$test){
+                return $php;
+            }
+
+            $ret = null;
+            @exec(escapeshellarg($php) . ' -v', $out, $ret);
+            if ($ret === 0) {
+                return $php;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Terminates script execution immediately, optionally displaying a message and providing an exit code.
+     *
+     * @param string|null $message Optional message to display before exiting.
+     * @param int $exitCode Exit status code (default: `STATUS_SUCCESS`).
+     *
+     * @return never
+     *
+     * @example - Terminate with a message and default success code:
      * ```php
-     * class Command extends Luminova\Base\Console 
-     * {
-     *      public function run(?array $options = []): int
-     *      {
-     *          $this->term->perse($options);
-     *          
-     *          // Access the command and options
-     *          $command = $this->term->getCommand();
-     *          $foo = $this->term->getOption('foo');
-     *          $fooAlias = $this->term->getAnyOption('foo', 'f');
-     *      }
+     * Terminal::terminate('Operation completed successfully.');
+     * ```
+     *
+     * @example - Terminate with a custom exit code:
+     * ```php
+     * Terminal::terminate('Fatal error occurred.', 1);
+     * ```
+     */
+    public static function terminate(?string $message = null, int $exitCode = STATUS_SUCCESS): void
+    {
+        if ($message !== null) {
+            self::writeln($message);
+        }
+
+        exit($exitCode);
+    }
+
+    /**
+     * Highlights a URL in the terminal to indicate it is clickable.
+     *
+     * If ANSI hyperlinks are supported, the URL will be clickable. Otherwise, it will be underlined.
+     *
+     * @param string $url The URL to highlight.
+     * @param string|null $title Optional title to display instead of the URL (default: null).
+     *
+     * @return void
+     *
+     * @example - Example:
+     * ```php
+     * Terminal::link('https://luminova.ng');
+     * Terminal::link('https://luminova.ng', 'Luminova Website');
+     * ```
+     */
+    public static function link(string $url, ?string $title = null): void 
+    {
+        $title ??= $url;
+        self::write(self::isAnsiSupported() 
+            ? "\033]8;;{$url}\033\\{$title}\033]8;;\033\\" 
+            : "\033[4m{$url}\033[0m"
+        );
+    }
+
+    /**
+     * Executes a callback function if no activity is detected on the specified stream within a timeout.
+     *
+     * @param Closure $callback Callback function to execute on timeout.
+     * @param int $timeout Timeout in seconds. If <= 0, the callback is executed immediately (default: 0).
+     * @param resource|string|int $stream Optional stream to monitor for activity (default: STDIN).
+     * 
+     * @return bool Returns true if the timeout occurred and the callback was executed, false otherwise.
+     *
+     * @example - Example:
+     * ```php
+     * Terminal::timeout(fn() => echo "No input detected!\n", 5);
+     * ```
+     */
+    public static function timeout(Closure $callback, int $timeout = 0, mixed $stream = self::STD_IN): bool
+    {
+        if ($timeout <= 0) {
+            $callback();
+            return true;
+        }
+
+        $write = null;
+        $except = null;
+        $read = [self::getStd($stream)];
+        $result = stream_select($read, $write, $except, $timeout);
+        
+        if ($result === false || $result === 0) {
+            $callback();
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Execute a system command and return its output as an array of lines.
+     *
+     * @param string $command The command to execute.
+     * 
+     * @return array|false Returns the output lines of the command on success, or false on failure.
+     *
+     * @example - Example:
+     * ```php
+     * $output = Terminal::execute('ls -la');
+     * if ($output !== false) {
+     *     print_r($output);
      * }
      * ```
      */
-    public static final function perse(array $options): void
+    public static function execute(string $command): array|bool
     {
-        self::$commands = $options;
+        $code = STATUS_ERROR;
+        $output = [];
+
+        exec($command, $output, $code);
+        
+        if ($code === STATUS_SUCCESS) {
+            return $output;
+        }
+
+        return false;
+    }
+
+    /**
+     * Emits a beep (bell) sound in the terminal a specified number of times.
+     *
+     * Useful for notifications, alerts, or signaling the user in CLI scripts.
+     *
+     * @param int $total Number of times to beep (default: 1).
+     *
+     * @return void
+     * 
+     * @example - Multiple beeps:
+     * ```php
+     * Terminal::beeps(3);
+     * ```
+     */
+    public static function beeps(int $total = 1): void
+    {
+        self::print(str_repeat("\x07", $total));
+    }
+
+    /**
+     * Display an error message for an unknown command.
+     *
+     * Prints a formatted "command not found" message to STDERR.
+     *
+     * @param string $command The executed command.
+     * @param string|null $color Optional text color for the command name (default: red).
+     *
+     * @return int Always returns STATUS_ERROR.
+     */
+    public static function oops(string $command, ?string $color = 'red'): int 
+    {
+        $command = "'{$command}'";
+        $command = self::isColorSupported() 
+            ? Color::style($command, $color) 
+            : $command;
+
+        self::fwrite("Unknown command {$command} not found." . PHP_EOL, self::STD_ERR);
+        return STATUS_ERROR;
+    }
+
+    /**
+     * Show or hide user input in the terminal.
+     *
+     * Useful for password prompts or sensitive input.
+     *
+     * @param bool $visibility True to show input, false to hide it.
+     *
+     * @return bool Returns true on success, false on failure.
+     */
+    public static function visibility(bool $visibility = true): bool
+    {
+        $command = is_platform('windows') 
+            ? ($visibility ? 'echo on' : 'echo off')
+            : ($visibility ? 'stty echo' : 'stty -echo');
+
+        return self::_shell($command) !== null;
+    }
+
+    /**
+     * Clear the terminal screen.
+     *
+     * Supported modes:
+     * - default: Clear the entire screen.
+     * - partial: Clear from cursor to bottom.
+     * - full: Clear screen and scroll-back buffer.
+     *
+     * @param string $mode Clearing mode (default: "default").
+     *
+     * @return void
+     */
+    public static function clear(string $mode = 'default'): void
+    {
+        if (is_platform('windows') && !self::isStreamSupports('sapi_windows_vt100_support', self::STD_OUT)) {
+            if (self::_shell('cls')) {
+                return;
+            }
+
+            self::newLine(self::getHeight(40));
+            return;
+        }
+
+        $sequences = [
+            'default' => "\033[H\033[2J",
+            'partial' => "\033[J",
+            'full'    => "\033[H\033[2J\033[3J"
+        ];
+            
+        self::fwrite($sequences[$mode] ?? $sequences['default']);
+    }
+
+    /**
+     * Remove the last printed line(s) from the terminal output.
+     *
+     * If no output is provided, clears the previous line.
+     * If output is provided, clears the exact number of wrapped lines.
+     *
+     * @param string|null $lastOutput Previously printed output (optional).
+     *
+     * @return void
+     */
+    public static function flush(?string $lastOutput = null): void
+    {
+        if (is_platform('windows') && !self::isStreamSupports('sapi_windows_vt100_support', self::STD_OUT)) {
+            self::fwrite("\r");
+            return;
+        }
+
+        if ($lastOutput === null) {
+            self::fwrite("\033[1A\033[2K");
+            return;
+        }
+
+        $lines = explode(
+            PHP_EOL,
+            wordwrap($lastOutput, self::getWidth(), PHP_EOL, true)
+        );
+
+        foreach ($lines as $_) {
+            self::fwrite("\033[1A\033[2K");
+        }
+    }
+
+    /**
+     * Validate user input against a set of rules, typically used for prompts.
+     *
+     * @param string $value The input value to validate.
+     * @param array $rules Validation rules to apply (e.g., `required|in_array([yes,no])`).
+     * 
+     * @return bool Returns true if validation passes, false otherwise.
+     *
+     * @example - Example:
+     * ```php
+     * $input = Terminal::prompt('Continue?');
+     * 
+     * if (!Terminal::validate($input, ['input' => 'required|in_array([yes,no])'])) {
+     *     echo "Invalid input!";
+     * }
+     * ```
+     */
+    public static function validate(string $value, array $rules): bool
+    {
+        $field = ['input' => $value]; 
+        self::$validation ??= new Validation();
+        self::$validation->setRules($rules)->setBody($field);
+    
+        if (!self::$validation->validate()) {
+            self::error(self::$validation->getError('input'));
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Escape a command-line argument to ensure it is safely executed in the shell.
+     *
+     * Handles special characters differently for Windows and Unix-like platforms.
+     *
+     * @param string|null $argument The argument to escape.
+     * 
+     * @return string Returns the safely escaped string ready for shell execution.
+     *
+     * @example - Example:
+     * ```php
+     * $safeArg = Terminal::escape('file with spaces.txt');
+     * exec("cat $safeArg");
+     * ```
+     */
+    public static function escape(?string $argument): string
+    {
+        if ($argument === '' || $argument === null) {
+            return '""';
+        }
+
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            return "'" . str_replace("'", "'\\''", $argument) . "'";
+        }
+
+        if (str_contains($argument, "\0")) {
+            $argument = str_replace("\0", '?', $argument);
+        }
+
+        if (preg_match('/[\/()%!^"<>&|\s]/', $argument)) {
+            return '"' . str_replace(
+                ['"', '^', '%', '!', "\n"], 
+                ['""', '"^^"', '"^%"', '"^!"', '!LF!'], 
+                preg_replace('/(\\\\+)$/', '$1$1', $argument)
+            ) . '"';
+        }
+
+        return $argument;
+    }
+
+    /**
+     * Replace placeholders in a command string with values from an environment array.
+     *
+     * Placeholders must follow the format `${:VAR_NAME}`, where `VAR_NAME` corresponds to a key in `$env`.
+     * Optionally, replacements can be escaped for safe shell execution.
+     *
+     * @param string $command The command containing placeholders (e.g., `echo ${:USER}`).
+     * @param array<string,mixed> $env Associative array mapping placeholder names to values.
+     * @param bool $escape Whether to escape each replacement for shell safety (default: false).
+     * 
+     * @return string Returns the command with all placeholders replaced.
+     * @throws IOException If a placeholder is missing in `$env` or its value is `false`.
+     *
+     * @example - Example:
+     * ```php
+     * $cmd = "echo ${:USER} is logged in";
+     * $env = ['USER' => 'Alice'];
+     * 
+     * $safeCommand = Terminal::replace($cmd, $env);
+     * // Output: "echo Alice is logged in"
+     *
+     * $safeCommandEscaped = Terminal::replace($cmd, $env, true);
+     * // Output: "echo 'Alice' is logged in" on Unix
+     * ```
+     */
+    public static function replace(string $command, array $env, bool $escape = false): string
+    {
+        return preg_replace_callback(
+            '/\$\{:([_a-zA-Z][\w]*)\}/', 
+            function ($matches) use ($command, $env, $escape) {
+                $key = $matches[1];
+
+                if (!array_key_exists($key, $env)) {
+                    throw new IOException(sprintf(
+                        'Missing value for parameter "%s" in command: %s',
+                        $key, $command
+                    ));
+                }
+
+                return $escape ? self::escape($env[$key]) : $env[$key];
+            }, 
+            $command
+        );
+    }
+
+    /**
+     * Controls the cursor visibility in the terminal.
+     *
+     * @param bool $showCursor Set to true to show the cursor, false to hide it.
+     * @return void
+     */
+    public static function cursorVisibility(bool $showCursor):  void
+    {
+        self::print($showCursor ? "\033[?25h" : "\033[?25l");
+    }
+
+    /**
+     * Print new lines based on specified count.
+     *
+     * @param int $count The number of new lines to print.
+     * 
+     * @return void 
+     */
+    public static function newLine(int $count = 1): void
+    {
+        for ($i = 0; $i < $count; $i++) {
+            self::writeln();
+        }
+    }
+
+    /**
+     * Attempts to determine the width of the viewable CLI window.
+     * 
+     * @param int $default Optional default width (default: 80).
+     * 
+     * @return int Return terminal window width or default.
+     */
+    public static function getWidth(int $default = 80): int
+    {
+        if (self::$windowWidth === null) {
+            self::getVisibleWindow();
+        }
+
+        return self::$windowWidth ?: $default;
+    }
+
+    /**
+     * Attempts to determine the height of the viewable CLI window.
+     * 
+     * @param int $default Optional default height (default: 24).
+     * 
+     * @return int Return terminal window height or default.
+     */
+    public static function getHeight(int $default = 24): int
+    {
+        if (self::$windowHeight === null) {
+            self::getVisibleWindow();
+        }
+
+        return self::$windowHeight ?: $default;
+    }
+
+    /**
+     * Resolve a Terminal stream identifier to its PHP global stream.
+     *
+     * Maps `Terminal::STD_OUT`, `Terminal::STD_ERR`, and `Terminal::STD_IN`
+     * to their corresponding PHP predefined streams (`STDOUT`, `STDERR`, `STDIN`).
+     * Any other value is returned as-is, allowing custom stream handlers.
+     *
+     * @param resource|int $std A Terminal stream constant or a custom stream value.
+     *
+     * @return resource|mixed Returns the resolved PHP stream resource, or the original value
+     *                        if it is not a recognized Terminal stream constant.
+     */
+    public static function getStd(mixed $std): mixed
+    {
+        return match ($std) {
+            self::STD_OUT => STDOUT,
+            self::STD_ERR => STDERR,
+            self::STD_IN  => STDIN,
+            default       => $std,
+        };
+    }
+
+    /**
+     * Executes a command via `exec` and redirect error output to null based on the platform (Windows or Unix-like).
+     * 
+     * @param string $command The command to execute.
+     * @param array &$output Output lines of the executed command (default: `[]`).
+     * @param int &$result_code The exit status of the executed command, passed by reference (default: `STATUS_ERROR`).
+     * 
+     * @return string|false Return the last line of the command output, or false on failure.
+     */
+    public static function _exec(
+        string $command, 
+        array &$output = [], 
+        int &$result_code = STATUS_ERROR
+    ): string|bool
+    {
+        $devNull = is_platform('windows') ? ' 2>NUL' : ' 2>/dev/null';
+        if(str_contains($command, $devNull)){
+            $devNull = '';
+        }
+
+        return exec("{$command}{$devNull}", $output, $result_code);
+    }
+
+    /**
+     * Executes a shell command via `shell_exec` and return the complete output as a string.
+     * Also it redirects error output to null based on the platform (Windows or Unix-like).
+     * 
+     * @param string $command The command to execute.
+     * 
+     * @return string|null Return the output of the command, or null on error.
+     */
+    public static function _shell(string $command): ?string
+    {
+        $devNull = is_platform('windows') ? ' 2>NUL' : ' 2>/dev/null';
+
+        if(str_contains($command, $devNull)){
+            $devNull = '';
+        }
+
+        $response = shell_exec("{$command}{$devNull}");
+
+        if(!$response){
+            return null;
+        }
+
+        return $response;
     }
 
     /**
@@ -1447,44 +1888,49 @@ class Terminal implements LazyObjectInterface
      * 
      * @internal Pass raw command arguments from $_SERVER['argv'].
      */
-    public static final function parseCommands(array $arguments, bool $controller = false): array
+    public static function parseCommands(array $arguments, bool $controller = false): array
     {
         $caller = $arguments[0] ?? '';
         $result = [
-            'caller' => '',
-            'command' => '',
             'group' => '',
+            'name'  => '',
             'arguments' => [],
             'options' => [],
-            'exe_string' => self::toString($arguments),
+            'command' => '',
+            'input' => self::toString($arguments),
         ];
 
         if ($caller === 'novakit' || $caller === 'php' || preg_match('/^.*\.php$/', $caller)) {
             array_shift($arguments); //Remove the front controller file
-            $result['caller'] = implode(' ', $arguments);
+            $result['command'] = implode(' ', $arguments);
             $command = $arguments[0] ?? '';
 
-            // php index.php group command
+            // php index.php group name
             // php novakit group --foo
 
             if($controller){
                 $result['group'] = $command; 
-                $result['command'] = $arguments[1] ?? '';
+                $result['name'] = $arguments[1] ?? '';
             }else{
                 $pos = strpos($command, ':');
                 $result['group'] = ($pos === false) ? $command : substr($command, 0, $pos); 
-                $result['command'] = $command;
+                $result['name'] = $command;
             }
         }else{
-            $hasSpace = array_reduce($arguments, fn($carry, $item) => $carry || str_contains($item, ' '), false);
+            $hasSpace = array_reduce(
+                $arguments, 
+                fn($carry, $item) => $carry || str_contains($item, ' '), 
+                false
+            );
             $callerCommend = $arguments;
 
             if ($hasSpace) {
                 $callerCommend = implode(' ', $arguments);
                 $callerCommend = $callerCommend[0];
             }
-            $result['caller'] = $callerCommend;
-            $result['command'] = $arguments[1]??'';
+            
+            $result['command'] = $callerCommend;
+            $result['name'] = $arguments[1] ?? '';
         }
 
         // Unset command name 
@@ -1510,7 +1956,7 @@ class Terminal implements LazyObjectInterface
      * @return array<string,array> Return extracted command line arguments and options.
      * @internal
      */
-    public static final function extract(array $arguments, $controller = false): array
+    public static function extract(array $arguments, $controller = false): array
     {
         $optionValue = false;
         $result = [
@@ -1549,200 +1995,6 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Get command argument by index number.
-     * 
-     * @param int $index The index position to get.
-     * 
-     * @return mixed Return command argument by index number.
-     */
-    public static function getArgument(int $index): mixed
-    {
-        return self::$commands['arguments'][$index - 1] ?? null;
-    }
-
-    /**
-     * Get command arguments.
-     * 
-     * @return array Return command arguments.
-     */
-    public static function getArguments(): array
-    {
-        return self::$commands['arguments'] ?? [];
-    }
-
-    /**
-     * Get command group name.
-     * 
-     * @return string|null Return the command group.
-     */
-    public static function getCommand(): ?string
-    {
-        return self::$commands['command'] ?? null;
-    }
-
-    /**
-     * Get command group name.
-     * 
-     * @return string|null Return the command name.
-     */
-    public static function getGroup(): ?string
-    {
-        return self::$commands['group'] ?? null;
-    }
-
-    /**
-     * Get command caller command string.
-     * 
-     * @return string|null Return the full passed command, options and arguments.
-     */
-    public static function getCaller(): ?string
-    {
-        return self::$commands['caller'] ?? null;
-    }
-
-    /**
-     * Get options value from command arguments.
-     * If option key is passed with an empty value true will be return otherwise the default value.
-     * 
-     * @param string $key Option key to retrieve.
-     * @param mixed $default Default value to return (default: false).
-     * 
-     * @return mixed Return option value, true if empty value, otherwise default value.
-     */
-    public static function getOption(string $key, mixed $default = false): mixed
-    {
-        $options = self::getOptions();
-
-        if (array_key_exists($key, $options)) {
-            return $options[$key] ?? true;
-        }
-    
-        return $default;
-    }
-
-    /**
-     * Get options value from command arguments with an alias key to lookup if main key isn't found.
-     * If option key is passed with an empty value true will be return otherwise the default value.
-     * 
-     * @param string $key Option key to retrieve.
-     * @param string $alias Option key alias to retrieve. if main key is not found.
-     * @param mixed $default Default value to return (default: false).
-     * 
-     * @return mixed Return option value, true if empty value, otherwise default value.
-     */
-    public static function getAnyOption(string $key, string $alias, mixed $default = false): mixed
-    {
-        $options = self::getOptions();
-
-        if (array_key_exists($key, $options)) {
-            return $options[$key] ?? true;
-        }
-
-        if (array_key_exists($alias, $options)) {
-            return $options[$alias] ?? true;
-        }
-    
-        return $default;
-    }
-
-    /**
-     * Get the verbosity level from CLI options.
-     *
-     * This method checks for both short (`-v`, `-vv`, `-vvv`) 
-     * and long (`--verbose` or `--verbose=<level>`) flags.  
-     * Returns an integer level between 0 (silent) and `$max` (most verbose).
-     * 
-     * Level meaning:
-     * - 0 = Silent or default mode
-     * - 1 = Verbose
-     * - 2 = More verbose
-     * - 3 = Debug-level verbosity
-     * - n = More-level verbosity
-     *
-     * @param string $short The short flag key (default: `v`).
-     * @param string $long The long flag alias (default: `verbose`).
-     * @param int $maxLevel The maximum verbosity level (default: `3`).
-     * @param int $default Default verbose level (default: 0).
-     *
-     * @return int Returns the verbosity level between 0 and `$max` or default if not specified.
-     * @example - In Code:
-     * 
-     * ```php
-     * $verbose = $this->term->getVerbose(maxLevel: 5, default: 0);
-     * ```
-     * 
-     * @example - In Command:
-     * ```bash
-     *   php novakit script -v           # returns 1
-     *   php novakit script -vv          # returns 2
-     *   php novakit script -vvv         # returns 3
-     *   php novakit script --verbose=2  # returns 2
-     *   php novakit script              # returns default level 0
-     * ```
-     */
-    public static function getVerbose(
-        string $short = 'v', 
-        string $long = 'verbose', 
-        int $maxLevel = 3,
-        int $default = 0
-    ): int 
-    {
-        foreach (self::getOptions() as $opt => $value) {
-            if ($long === $opt) {
-                return min((int) $value, $maxLevel);
-            }
-            
-            if (preg_match('/^(' . preg_quote($short, '/') . '+)$/', $opt, $match)) {
-                return min(strlen($match[1]), $maxLevel);
-            }
-        }
-
-        return $default;
-    }
-
-    /**
-     * Returns the command controller class method name.
-     * 
-     * @return string|null Return the command controller class method or null.
-     */
-    public static function getMethod(): ?string
-    {
-        return self::getQuery('classMethod');
-    }
-
-    /**
-     * Returns the array of options.
-     * 
-     * @return array Return array of executed command options.
-     */
-    public static function getOptions(): array
-    {
-        return self::$commands['options']??[];
-    }
-
-    /**
-     * Gets a single query command-line by name, if it doesn't exists return null.
-     *
-     * @param string $name Option key name.
-     * 
-     * @return mixed Return command option query value.
-    */
-    public static function getQuery(string $name): mixed
-    {
-        return self::$commands[$name] ?? null;
-    }
-
-    /**
-     * Returns the entire command associative that was executed.
-     * 
-     * @return array Return an associative array of the entire command information
-     */
-    public static function getQueries(): array
-    {
-        return self::$commands;
-    }
-
-    /**
      * Force enables color output for all standard streams (STDOUT, STDERR, STDIN)
      * without checking whether the terminal or console supports colors. 
      * 
@@ -1763,24 +2015,6 @@ class Terminal implements LazyObjectInterface
     public static function setAnsiSupportEnabled(): void 
     {
         self::forceEnableSupport('ansi');
-    }
-
-    /**
-     * Resolves the provided stream constant (`Terminal::STD_OUT`, `Terminal::STD_ERR`, or `Terminal::STD_IN`) and 
-     * returns the corresponding PHP predefined stream (`STDOUT`, `STDERR`, or `STDIN`).
-     * If the input does not match any of these constants, it returns the original input.
-     *
-     * @param resource|int $std The stream identifier, which can be one of the predefined 
-     *                   constants `Terminal::STD_*` or another value.
-     * 
-     * @return resource|string Return the corresponding PHP stream resource (`STDOUT`, `STDERR`, `STDIN`) 
-     *               or the original custom stream handler if it doesn't match any standard-global streams.
-     */
-    public static final function getStd(mixed $std): mixed
-    {
-        return ($std === self::STD_OUT) ? STDOUT 
-            : (($std === self::STD_ERR) ? STDERR
-            : (($std === self::STD_IN) ? STDIN : $std));
     }
 
     /**
@@ -1873,7 +2107,7 @@ class Terminal implements LazyObjectInterface
     public static function isColorDisabled(): bool
     {
         return (
-            self::hasFlag('--no-color') || 
+            self::hasArgument('--no-color') || 
             isset($_SERVER['NO_COLOR']) || 
             getenv('NO_COLOR') !== false
         );
@@ -1887,25 +2121,10 @@ class Terminal implements LazyObjectInterface
     public static function isAnsiDisabled(): bool
     {
         return (
-            self::hasFlag('--no-ansi') || 
+            self::hasArgument('--no-ansi') || 
             isset($_SERVER['DISABLE_ANSI']) || 
             getenv('DISABLE_ANSI') !== false
         );
-    }
-    
-    /**
-     * Determines if a specific command-line flag is present.
-     * 
-     * @param string $flag The flag to search for (e.g., `--no-ansi`, `--no-color`, `--no-header`).
-     * 
-     * @return bool Returns true if the flag is present, false otherwise.
-     */
-    public static function hasFlag(string $flag): bool
-    {
-        $options = self::getOptions();
-        return ($options !== [] && array_key_exists($flag, $options)) 
-            ? true 
-            : in_array($flag, $_SERVER['argv']);
     }
 
     /**
@@ -1962,7 +2181,8 @@ class Terminal implements LazyObjectInterface
     /**
      * Checks whether the stream resource on windows is terminal.
      *
-     * @param resource|string|int $resource The resource type to check (e.g. `Terminal::STD_*`, `STDIN`, `STDOUT`).
+     * @param resource|string|int $resource The resource type to check 
+     *      (e.g. `Terminal::STD_*`, `STDIN`, `STDOUT`).
      * 
      * @return bool Return true if is windows terminal, false otherwise.
      */
@@ -1997,15 +2217,111 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Checks whether framework has the requested command.
-     *
-     * @param string $command Command name to check.
+     * Check if a process is still running.
      * 
-     * @return bool Return true if command exist, false otherwise.
+     * @param int $pid Process ID.
+     * 
+     * @return bool Return true if process is running
      */
-    public static final function hasCommand(string $command): bool
+    public static function isProcessRunning(int $pid): bool
     {
-        return Novakit::has($command, 'system');
+        if (is_platform('windows')) {
+            $output = [];
+            exec("tasklist /FI " . escapeshellarg("PID eq $pid") . " 2>NUL", $output);
+
+            return count($output) > 1; 
+        }
+
+        return posix_kill($pid, 0);
+    }
+
+    /**
+     * Check if command is help command.
+     * 
+     * @param string|array|null $command Command name to check or command array options.
+     * 
+     * @return bool Return true if command is help, false otherwise.
+     */
+    public static function isHelp(string|array|null $command = null): bool 
+    {
+        if(!$command){
+            return self::hasArgument('--help') || self::hasArgument('-h');
+        }
+
+        $command = $command['options'] ?? $command;
+
+        if(is_string($command)){
+            return preg_match('/^(-h|--help)$/', $command) === 1;
+        }
+
+        foreach($command as $arg){
+            $help = ltrim($arg, '-');
+
+            if ($help === 'help' || $help === 'h') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+    
+    /**
+     * Terminate a running process
+     * 
+     * @param int $pid Process ID.
+     * @param bool $force Forcefully terminate the process.
+     * 
+     * @return bool Return true if termination was successful
+     */
+    public static function killProcess(int $pid, bool $force = false): bool
+    {
+        if (!self::isProcessRunning($pid)) {
+            return true;
+        }
+        
+        if (is_platform('windows')) {
+            $signal = $force ? '/F' : '';
+            exec("taskkill $signal /PID $pid >NUL 2>&1", $output, $returnCode);
+
+            return $returnCode === 0;
+        }
+        
+        $signal = $force ? SIGKILL : SIGTERM;
+        return posix_kill($pid, $signal);
+    }
+    
+    /**
+     * Wait for a process to complete.
+     * 
+     * @param int $pid Process ID.
+     * @param int $timeout Timeout in seconds (0 for no timeout).
+     * 
+     * @return int|null Return exit code or null if timeout/error
+     */
+    public static function waitForProcess(int $pid, int $timeout = 0): ?int
+    {
+        $start = time();
+
+        while (self::isProcessRunning($pid)) {
+            if ($timeout > 0 && (time() - $start) >= $timeout) {
+                return null; 
+            }
+
+            usleep(100_000);
+        }
+
+
+        if (!is_platform('windows') && function_exists('pcntl_waitpid')) {
+            $status = 0;
+            pcntl_waitpid($pid, $status, WNOHANG);
+
+            if (pcntl_wifexited($status)) {
+                return pcntl_wexitstatus($status);
+            }
+        }
+
+        // Unknown exit code (Windows or fallback)
+        return 0;
     }
 
     /**
@@ -2017,90 +2333,55 @@ class Terminal implements LazyObjectInterface
      * @return bool Return true if command exist, false otherwise.
      * @internal Used in router to execute controller command.
      */
-    public static final function call(string $command, array $options): bool
+    public static function call(string $command, array $options): bool
     {
-        static $terminal = null;
+        static $input = null;
 
         if(Novakit::hasCommand($command, 'system')){
-            $terminal ??= new static();
-            $terminal->perse($options);
+            if(!$input instanceof Input){
+                $input = new Input($options);
+            }else{
+                $input->replace($options);
+            }
 
-            return Novakit::execute($terminal, $options, 'system') === STATUS_SUCCESS;
+            return Novakit::execute($input, $options, 'system') === STATUS_SUCCESS;
         }
 
         return false;
     }
 
     /**
-     * Check if command is help command.
+     * Checks whether framework has the requested command.
+     *
+     * @param string $command Command name to check.
      * 
-     * @param string|array $command Command name to check or command array options.
-     * 
-     * @return bool Return true if command is help, false otherwise.
+     * @return bool Return true if command exist, false otherwise.
      */
-    public static final function isHelp(string|array $command): bool 
+    public static function hasCommand(string $command): bool
     {
-        if(!$command){
-            return false;
-        }
-
-        if(is_array($command)){
-            $command = ($command['options'] ?? $command);
-            return array_key_exists('help', $command) || array_key_exists('h', $command);
-        }
-
-        return preg_match('/^(-h|--help)$/', $command) === 1;
+        return Novakit::has($command, 'system');
     }
 
     /**
-     * Print command help information.
+     * Determines if a specific command argument is present.
      *
-     * @param array|null $helps Pass the command protected properties as an array.
-     * @param bool $all Indicate whether you are printing all help commands or not.
-     * 
-     * @return void
-     * @internal Used in router to print controller help information.
+     * Supports both short (-f) and long (--flag) forms.
+     *
+     * @param string $name The command argument to search for (with or without leading dashes).
+     *
+     * @return bool Returns true if the argument exists, false otherwise.
      */
-    public static final function helper(array|null $helps, bool $all = false): void
+    public static function hasArgument(string $name): bool
     {
-        $helps = ($helps === null) ? Commands::getCommands() : ($all ? $helps : [$helps]);
-        $leftPadding = Text::padding('', 3, Text::LEFT);
+        $normalized = ltrim($name, '-');
 
-        foreach($helps as $name => $properties){
-            if(!$properties){
-                continue;
-            }
-
-            if($all){
-                self::newLine();
-                $head = Color::apply("------[{$name} Help Information]------", Text::FONT_BOLD, 'brightCyan');
-                self::writeln($head);
-            }
-
-            $total = count($properties);
-            $index = 0;
-
-            foreach($properties as $key => $value){
-                if($key === 'users' || $key === 'authentication'){
-                    continue;
-                }
-
-                if(is_array($value)){
-                    if(in_array($key, ['usages', 'examples', 'options'], true)){
-                        self::printHelp($value, $key, $leftPadding);
-                    }
-                }elseif($key === 'usages' || $key === 'description'){
-                    self::writeln(ucfirst($key) . ':', 'lightYellow');
-                    self::writeln($leftPadding . trim($value));
-                }
-
-                if($index < $total - 1){
-                    self::newLine();
-                }
-
-                $index++;
+        foreach ($_SERVER['argv'] ?? [] as $arg) {
+            if ($name === $arg || ltrim($arg, '-') === $normalized) {
+                return true;
             }
         }
+
+        return false;
     }
 
     /**
@@ -2112,7 +2393,7 @@ class Terminal implements LazyObjectInterface
      *
      * @return array<int,array{Name:string,Value:string}> Return an associative array of system information.
      */
-    public static function systemInfo(): array 
+    public static function getSystemInfo(): array 
     {
         if(self::$session['metadata'] !== null){
             return self::$session['metadata'];
@@ -2159,8 +2440,7 @@ class Terminal implements LazyObjectInterface
     public static function getSystemId(
         string $prefix = '', 
         string $algo = 'sha256',  
-        bool $binary = false,
-        bool $forSession = false
+        bool $binary = false
     ): string
     {
         if(self::$session['id'] !== null){
@@ -2185,47 +2465,56 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Retrieves the parent process ID (PPID) of the current CLI session.
+     * Get the current process PID (validated).
      *
-     * On Unix-like systems, this uses the `ps` command to obtain the PPID.
-     * On Windows, it uses `wmic` to extract the parent process ID of the
-     * current process. This can help distinguish different terminal sessions
-     * or shells launched by the same user.
+     * This always returns the PID of the running PHP process
+     * and guarantees a positive integer.
      *
-     * @return string The parent process ID, or '0' if unavailable.
+     * @return int Return current PID or 0 if unavailable.
      */
-    public static function getPid(): string 
+    public static function getPid(): int 
     {
-        if(self::$session['ppid'] !== null){
-            return self::$session['ppid'];
-        }
-
-        $ppid = trim(self::_exec((PHP_OS_FAMILY === 'Windows') 
-            ? 'wmic process where (ProcessId=' . getmypid() . ') get ParentProcessId /value' 
-            : 'ps -o ppid= -p ' . getmypid()
-        ) ?? '0');
-
-        if (PHP_OS_FAMILY === 'Windows' && $ppid && preg_match('/ParentProcessId=(\d+)/', $ppid, $match)) {
-            $ppid = $match[1];
-        }
-
-        return self::$session['ppid'] = $ppid;
+        $pid = (int) getmypid();
+        return $pid > 0 ? $pid : 0;
     }
 
     /**
-     * Outputs a formatted table displaying system and environment information.
+     * Get the parent process ID (PPID) of the current process.
      *
-     * This method is designed for CLI usage. It prints detailed information
-     * such as PHP version, OS details, terminal size, and more.
+     * Uses platform-native tools:
+     * - Unix-like systems: `ps`
+     * - Windows: `wmic`
      *
-     * @return void
+     * The value is cached per session.
+     *
+     * @return int Parent process ID, or 0 if unavailable.
      */
-    public static function about(): void 
+    public static function getParentPid(): int
     {
-        self::writeln(self::table(
-            ['Name', 'Value'], 
-            self::systemInfo()
-        ));
+        if (self::$session['ppid'] !== null) {
+            return self::$session['ppid'];
+        }
+
+        $ppid = 0;
+        $pid  = getmypid();
+
+        if (is_platform('windows')) {
+            $output = self::_exec(
+                "wmic process where (ProcessId={$pid}) get ParentProcessId /value"
+            );
+
+            if ($output && preg_match('/ParentProcessId=(\d+)/', $output, $m)) {
+                $ppid = (int) $m[1];
+            }
+        } else {
+            $output = self::_exec("ps -o ppid= -p {$pid}");
+
+            if ($output !== null) {
+                $ppid = (int) trim($output);
+            }
+        }
+
+        return self::$session['ppid'] = max(0, $ppid);
     }
 
     /**
@@ -2280,44 +2569,49 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Print NovaKit Command line header information.
-     * 
-     * @return bool Return true if header was printed, false otherwise.
+     * Read input from STDIN, supporting single-line or EOF-based input.
+     *
+     * This is a convenience wrapper around {@see read()} for non-interactive use.
+     * It is intended for piped input or bulk data, not user prompts.
+     *
+     * @param string $default Default value returned if input is empty or reading fails.
+     * @param bool $eof Read until EOF if true, otherwise read a single line.
+     * @param bool $newStream Open a new STDIN stream as a separate handle.
+     *
+     * @return string Returns trimmed input string or the default value.
      */
-    public static final function header(): bool
+    public static function readInput(string $default = '', bool $eof = true, bool $newStream = false): string
     {
-        if(self::hasFlag('--no-header')){
-            return false;
-        }
-
-        self::writeln(sprintf(
-            'PHP Luminova v%s NovaKit Command Line Tool v%s - Server Time: %s UTC%s',
-            Luminova::VERSION,
-            Luminova::NOVAKIT_VERSION,
-            date('Y-m-d H:i:s'),
-            date('P')
-        ), 'green');
-        return true;
+        return self::read($default, $eof, $newStream);
     }
 
     /**
-     * Get the current system user executing the script.
+     * Display an card-block message style in the console.
      *
-     * Tries to retrieve the user via the `whoami` shell command first, which provides 
-     * the actual system user executing the script. If that fails, it falls back to 
-     * PHP's `get_current_user()` to retrieve the user under which the PHP process is running.
+     * @param string $text The message to display.
+     * @param int $std The handler.
+     * @param string|null $foreground Optional foreground color (default: blue).
+     * @param string|null $background Optional background color (default: none).
+     * @param int|null $width Optional width of the block (default: auto).
      *
-     * @return string Return the username of the current system user, trimmed of whitespace.
+     * @return void
      */
-    public static function whoami(): string
+    private static function card(
+        string $text, 
+        int $std,
+        ?string $foreground = 'blue', 
+        ?string $background = null,
+        ?int $width = null
+    ): void
     {
-        $user = self::_shell(is_platform('windows') ? 'echo %USERNAME%' : 'whoami');
-    
-        if (!$user) {
-            $user = get_current_user();
+        if(($foreground || $background) && !self::isColorSupported($std)){
+            $foreground = $background = null;
         }
 
-        return trim($user);
+        self::fwrite(
+            Text::block($text, Text::LEFT, 1, $foreground, $background, width: $width),
+            $std
+        );
     }
 
     /**
@@ -2528,6 +2822,46 @@ class Terminal implements LazyObjectInterface
         return $tCell . PHP_EOL;
     }
 
+     /**
+     * Get user multiple selected options from input.
+     * 
+     * @param array $input The user input array.
+     * @param array $options The prompted options.
+     * 
+     * @return array<string|int,mixed> $options The selected array keys and values.
+     */
+    private static function getInputValues(array $input, array $options): array
+    {
+        $result = [];
+        foreach ($input as $value) {
+            if (isset($options[$value]['key'], $options[$value]['value'])) {
+                $result[$options[$value]['key']] = $options[$value]['value'];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Display select options with key index as an identifier.
+     * 
+     * @param array<string,mixed> $options The options to display.
+     * @param int $max The maximum padding end to apply.
+     * 
+     * @return void 
+     */
+    private static function writeOptions(array $options, int $max): void
+    {
+        $isColor = self::isColorSupported();
+
+        foreach ($options as $key => $value) {
+            $name = Text::padding('  [' . $key . ']  ', $max, Text::LEFT);
+            $name = ($isColor ? Color::style($name, 'green') : $name);
+
+            self::writeln($name . Text::wrap($value['value'], 125, $max));
+        }
+    }
+
     /**
      * Generates and returns the formatted menu list with the selected option highlighted.
      *
@@ -2535,6 +2869,7 @@ class Terminal implements LazyObjectInterface
      * @param int $index The current selected index.
      * @param string $foreground The foreground color for the highlighted selection.
      * @param string|null $background The optional background color for the highlighted selection.
+     * @param string|null $placeholder Optional placeholder text to display above the list (default: `null`).
      * 
      * @return string Return the formatted list output.
      */
@@ -2542,18 +2877,21 @@ class Terminal implements LazyObjectInterface
         array $options, 
         int $index,
         string $foreground = 'green', 
-        ?string $background = null
+        ?string $background = null,
+        ?string $placeholder = null
     ): string
     {
         self::clear();
-        self::writeln('Use Arrow keys (↑ ↓) or Tab to navigate, Enter to select:');
+        self::writeln(
+            $placeholder ?: 'Use Arrow(↑/↓) or Tab to navigate, Enter to select:'
+        );
         self::newLine();
         $list = '';
 
         foreach ($options as $i => $option) {
             $list .= ($i === $index) 
                 ? Color::style("> {$option}", $foreground, $background) . "\n"
-                : " {$option}\n"
+                : "  {$option}\n"
             ;
         }
 
@@ -2565,7 +2903,7 @@ class Terminal implements LazyObjectInterface
      *
      * @return bool Return true if terminal is in list of ANSI supported, false otherwise.
      */
-    protected static function isLinuxAnsi(): bool
+    private static function isLinuxAnsi(): bool
     {
         $term = getenv('TERM');
         if ($term !== false) {
@@ -2604,7 +2942,7 @@ class Terminal implements LazyObjectInterface
      *
      * @return string Return the entered password, or an empty string if no password was provided or an error occurred.
     */
-    protected static function getLinuxHiddenPassword(string $message, int $timeout, bool $invisible): string
+    private static function getLinuxHiddenPassword(string $message, int $timeout, bool $invisible): string
     {
         $password = '';
         $command = "/usr/bin/env bash -c 'echo OK'";
@@ -2661,6 +2999,36 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
+     * Read a single line from STDIN.
+     *
+     * Internal helper used by input readers to fetch one line from STDIN,
+     * optionally using a separate stream handle.
+     *
+     * @param bool $newStream Open a new STDIN stream as a separate handle.
+     *
+     * @return string|null Trimmed input line, or null if reading fails or input is empty.
+     */
+    private static function readFromInput(bool $newStream): ?string 
+    {
+        $handle = $newStream ? @fopen(self::STDPATH['STDIN'], 'rb') : STDIN;
+
+        if (!$handle) {
+            return null;
+        }
+
+        $line = fgets($handle);
+        if ($newStream && is_resource($handle)) {
+            fclose($handle);
+        }
+
+        if ($line !== false && $line !== '') {
+            return trim($line);
+        }
+
+        return null;
+    }
+
+    /**
      * Prompts the user to input a hidden password using a Windows dialog box, 
      * which utilizes a temporary VBScript file to create an input box for password entry.
      *
@@ -2671,7 +3039,7 @@ class Terminal implements LazyObjectInterface
      *          if no password was provided or an error occurred.
      * @ignore
      */
-    protected static function getWindowsHiddenPassword(string $message, int $timeout): string
+    private static function getWindowsHiddenPassword(string $message, int $timeout): string
     {
         $vbscript = sys_get_temp_dir() . 'prompt_password.vbs';
         $inputBox = 'wscript.echo(InputBox("'. addslashes($message) . '", "", ""))';
@@ -2705,7 +3073,7 @@ class Terminal implements LazyObjectInterface
      * @return void
      * @ignore
      */
-    protected static function getVisibleWindow(): void
+    private static function getVisibleWindow(): void
     {
         if (self::$windowHeight !== null && self::$windowWidth !== null) {
             return;

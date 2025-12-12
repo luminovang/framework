@@ -12,8 +12,9 @@ namespace Luminova\Base;
 
 use \Luminova\Boot;
 use \App\Application;
+use \Luminova\Command\Input;
 use \Luminova\Command\Terminal;
-use \Luminova\Utility\Object\LazyObject;
+use \Luminova\Components\Object\LazyObject;
 use \Luminova\Interface\LazyObjectInterface;
 use \Luminova\Foundation\Core\Application as CoreApplication;
 
@@ -122,42 +123,44 @@ abstract class Console
     /**
      * Lazy loaded application instance.
      * 
-     * @var CoreApplication|Application<CoreApplication>|null $app
+     * @var CoreApplication|Application<CoreApplication> $app
      */
     protected ?LazyObjectInterface $app = null;
 
     /**
-     * Lazy loaded terminal instance.
+     * Command input. 
      * 
-     * @var Terminal<LazyObjectInterface>|null $term
+     * @var Input $input
      */
-    protected ?LazyObjectInterface $term = null;
-
+    protected ?Input $input = null;
+    
     /**
      * Initialize console command, register lazy objects and onCreate method hook.
      */
     public function __construct()
     {
-        $this->term = LazyObject::newObject(Terminal::class);
-        $this->app = LazyObject::newObject(fn(): CoreApplication => Boot::application());
+        Terminal::init();
 
+        $this->app = LazyObject::newObject(fn(): CoreApplication => Boot::application());
         $this->onCreate();
     }
 
     /**
-     * Allows access to protected static methods.
-     *
-     * @param string $method The method name to call.
-     * @param array<int,mixed> $arguments The arguments to pass to the method.
+     * Parse command input.
      * 
-     * @return mixed Return the value of the method, or null if the method doesn't exist.
-     * @ignore 
+     * This parses and processes command-line arguments and options, making them accessible in console controllers.
+     * 
+     * @param array<string,mixed> $command Command arguments, options, and flags extracted from CLI execution.
+     * 
+     * @return static Returns instance of console.
      */
-    public static function __callStatic(string $method, array $arguments): mixed
+    public final function parse(Input|array $command): self
     {
-        return method_exists(static::class, $method) 
-            ? static::{$method}(...$arguments) 
-            : null;
+        $this->input = ($command instanceof Input) 
+            ? $command 
+            : new Input($command);
+
+        return $this;
     }
 
     /**

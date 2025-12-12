@@ -19,7 +19,7 @@ namespace Luminova\Interface;
  *
  * @example - Usages:
  * ```php
- * use Luminova\Utility\Object\Prototypeable;
+ * use Luminova\Components\Object\Prototypeable;
  * use Luminova\Interface\PrototypeableInterface;
  *
  * class User implements PrototypeableInterface

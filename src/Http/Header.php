@@ -10,70 +10,46 @@
  */
 namespace Luminova\Http;
 
-use \App\Config\Apis;
-use \Luminova\Luminova;
-use \Luminova\Common\Helpers;
-use \Luminova\Interface\LazyObjectInterface;
 use \Countable;
+use \Luminova\Luminova;
+use \App\Config\Security;
+use \Luminova\Logger\Logger;
+use \Luminova\Http\HttpStatus;
+use \Luminova\Utility\Helpers;
+use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Interface\LazyObjectInterface;
+use \Luminova\Exceptions\InvalidArgumentException;
 
 class Header implements LazyObjectInterface, Countable
 {
     /**
-     * Content types for view rendering.
+     * Check apache_request_headers function.
      * 
-     * @var array VIEW_CONTENT_TYPES
+     * @var $isApache
      */
-    private const VIEW_CONTENT_TYPES = [
-        'html'   => ['text/html', 'application/xhtml+xml'],
-        'text'   => ['text/plain'],
-        'js'     => ['application/javascript', 'application/x-javascript', 'text/javascript'],
-        'css'    => ['text/css'],
-        'json'   => ['application/json', 'application/x-json'],
-        'jsonld' => ['application/ld+json'],
-        'xml'    => ['application/xml', 'text/xml', 'application/x-xml'],
-        'rdf'    => ['application/rdf+xml'],
-        'atom'   => ['application/atom+xml'],
-        'rss'    => ['application/rss+xml'],
-        'form'   => ['application/x-www-form-urlencoded', 'multipart/form-data']
-    ];
+    private static ?bool $isApache = null;
 
     /**
-     * Proxy headers.
+     * Request security configuration.
      * 
-     * @var array $proxyHeaders
+     * @var Security $security
      */
-    private static array $proxyHeaders = [
-        'X-Forwarded-For'       => 'HTTP_X_FORWARDED_FOR',
-        'X-Forwarded-For-Ip'    => 'HTTP_FORWARDED_FOR_IP',
-        'X-Real-Ip'             => 'HTTP_X_REAL_IP',
-        'Via'                   => 'HTTP_VIA',
-        'Forwarded'             => 'HTTP_FORWARDED',
-        'Proxy-Connection'      => 'HTTP_PROXY_CONNECTION'
-    ];
-
-    /**
-     * Header variables.
-     * 
-     * @var array<string,mixed> $variables
-     */
-    protected static array $variables = [];
-
-    /**
-     * REST API configuration.
-     * 
-     * @var Apis $config
-     */
-    private static ?Apis $config = null;
+    private static ?Security $security = null;
 
     /**
      * Initializes the header constructor.
      * 
      * @param array<string,mixed>|null $variables The header variables key-pair.
+     * @param Security<Luminova\Base\Configuration>|null $security Optional request security configuration object.
      */
-    public function __construct(?array $variables = null)
+    public function __construct(protected ?array $variables = null, ?Security $security = null)
     {
-        self::$variables = $variables 
-            ? array_replace(self::$variables, self::getFromGlobal($variables))
+        if($security instanceof Security){
+            self::$security = $security;
+        }
+
+        $this->variables = ($this->variables !== null)
+            ? self::getFromGlobal($this->variables) 
             : self::getHeaders();
     }
 
@@ -87,9 +63,9 @@ class Header implements LazyObjectInterface, Countable
      */
     public function get(?string $name = null, mixed $default = null): mixed
     {
-        return ($name === null || $name === '') 
-            ? self::$variables 
-            : ($this->has($name) ? self::$variables[$name] : $default);
+        return !$name
+            ? $this->variables 
+            : ($this->has($name) ? $this->variables[$name] : $default);
     }
 
     /**
@@ -102,7 +78,7 @@ class Header implements LazyObjectInterface, Countable
      */
     public function set(string $key, mixed $value): void
     {
-        self::$variables[$key] = $value;
+        $this->variables[$key] = $value;
     }
 
     /**
@@ -114,7 +90,7 @@ class Header implements LazyObjectInterface, Countable
      */
     public function remove(string $key): void
     {
-        unset(self::$variables[$key]);
+        unset($this->variables[$key]);
     }
 
     /**
@@ -126,24 +102,7 @@ class Header implements LazyObjectInterface, Countable
      */
     public function has(string $key): bool
     {
-        return array_key_exists($key, self::$variables);
-    }
-
-    /**
-     * Check if request header key exist and has a valid value.
-     * 
-     * @param string $key Header key to check.
-     * @param string|null $server Optionally check the PHP global server variable.
-     * 
-     * @return bool Return true if key exists, false otherwise.
-     */
-    public function exist(string $key, ?string $server = null): bool
-    {
-        if(isset(self::$variables[$key])){
-            return true;
-        }
-
-        return $server && isset($_SERVER[$server]);
+        return array_key_exists($key, $this->variables);
     }
 
     /**
@@ -153,23 +112,7 @@ class Header implements LazyObjectInterface, Countable
      */
     public function count(): int
     {
-        return count(self::$variables);
-    }
-
-    /**
-     * Retrieve a server variable by key.
-     *
-     * @param string $key The key to retrieve from internal variables or Apache request headers.
-     * @param string|null $server Optional alternative key to access the PHP server variable.
-     *
-     * @return mixed Return the server variable value, or null if not set.
-     * @internal
-     */
-    public static function server(string $key, ?string $server = null): mixed
-    {
-        return self::$variables[$key] 
-            ?? $_SERVER[$server ?? $key] 
-            ?? null;
+        return count($this->variables);
     }
 
     /**
@@ -179,12 +122,13 @@ class Header implements LazyObjectInterface, Countable
      */
     public static function getHeaders(): array
     {
-        if (function_exists('apache_request_headers') && ($headers = apache_request_headers()) !== false) {
-            return array_replace(self::$variables, $headers);
+        self::$isApache ??= function_exists('apache_request_headers');
+
+        if (!self::$isApache) {
+            return self::getFromGlobal();
         }
 
-        // If PHP function apache_request_headers() is not available or went wrong: manually extract headers
-        return array_replace(self::$variables, self::getFromGlobal());
+        return apache_request_headers() ?: self::getFromGlobal();
     }
 
     /**
@@ -192,12 +136,14 @@ class Header implements LazyObjectInterface, Countable
      *
      * @param array<string,mixed> $server An optional custom server variable.
      * 
-     * @return array<string,string> Return the request headers.
+     * @return array<string,string> Return the parsed headers.
      */
     public static function getFromGlobal(?array $server = null): array
     {
+        $server ??= $_SERVER;
         $headers = [];
-        foreach ($server ?? $_SERVER as $name => $value) {
+        
+        foreach ($server as $name => $value) {
             if (str_starts_with($name, 'HTTP_') || $name == 'CONTENT_TYPE' || $name == 'CONTENT_LENGTH') {
                 $header = str_replace(
                     [' ', 'Http'], 
@@ -212,42 +158,9 @@ class Header implements LazyObjectInterface, Countable
     }
 
     /**
-     * Retrieves specific HTTP `Content-Type`, `Content-Encoding` and `Content-Length` headers from sent headers.
-     * 
-     * @return array Return n associative array containing 'Content-Type', 
-     *              'Content-Length', and 'Content-Encoding' headers.
-     * @internal
-     */
-    public static function getSentHeaders(): array
-    {
-        $headers = headers_list();
-        $info = [];
-
-        foreach ($headers as $header) {
-            $header = trim($header);
-
-            if (!str_starts_with($header, 'Content-')) {
-                continue;
-            }
-            
-            [$name, $value] = explode(':', $header, 2);
-            $key = trim($name);
-
-            if ($key === 'Content-Type' || $key === 'Content-Encoding') {
-                $info[$key] = trim($value);
-            } elseif($key === 'Content-Length') {
-                $info[$key] = (int) trim($value);
-            }
-        }
-
-        return $info;
-    }
-
-    /**
-     * Get default system headers.
+     * Get default response headers.
      *
-     * @return array<string,string> The system headers.
-     * @ignore
+     * @return array<string,string> Return the defined default headers.
      */
     public static function getDefault(): array
     {
@@ -260,32 +173,30 @@ class Header implements LazyObjectInterface, Countable
             'X-XSS-Protection' => '1; mode=block',
             'X-Firefox-Spdy' => 'h2',
             'Vary' => 'Accept-Encoding',
-            'Connection' => ((self::server('Connection', 'HTTP_CONNECTION') ?? 'keep-alive') === 'keep-alive' 
-                ? 'keep-alive' 
-                : 'close'
-            ),
+            'Connection' => 'keep-alive',
             'X-Powered-By' => Luminova::copyright()
         ];
     }
 
     /**
-     * Sends HTTP headers to disable caching and optionally set content type and retry behavior.
+     * Send no-cache HTTP headers.
+     * 
+     * This method sends HTTP headers to disable caching and optionally set content type and retry behavior.
      *
      * @param int $status HTTP status code to send (default: 200).
      * @param string|bool|null $contentType Optional content type (default: 'text/html').
      * @param string|int|null $retry Optional value for Retry-After header.
      *
      * @return void
-     * @internal Used by router and template rendering to prevent caching.
+     * > Used by router and template rendering to prevent caching.
      */
-    public static function headerNoCache(
+    public static function sendNoCacheHeaders(
         int $status = 200, 
         string|bool|null $contentType = null, 
         string|int|null $retry = null
     ): void 
     {
         $headers = [
-            'X-Powered-By' => Luminova::copyright(),
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
             'Expires' => '0',
             'Content-Type' => $contentType ?? 'text/html'
@@ -295,238 +206,113 @@ class Header implements LazyObjectInterface, Countable
             $headers['Retry-After'] = $retry;
         }
 
-        self::validate($headers, $status);
+        self::send($headers, true, false, $status, false);
     }
 
     /**
-     * Validates and sends HTTP headers to the client.
+     * Normalize headers without sending them.
      *
-     * - Replaces headers with defaults if `X-System-Default-Headers` key is present.
-     * - Sends status code if provided.
-     * - Ensures required RESTful headers are present before sending.
-     * - Always append charset if missing.
+     * Behavior:
+     * - Applies system default headers when `X-System-Default-Headers` is present.
+     * - Optionally validates REST / API headers.
+     * - Appends charset to Content-Type when missing.
+     * - Returns an empty array when headers are already valid or unchanged.
      *
-     * @param array<string,mixed> $headers Associative array of headers to send.
-     * @param int|null $status Optional HTTP response code to send.
-     * @param bool $ifNotSent Only send headers if no headers have been sent yet (default: true).
-     * 
-     * @return void
-     * @internal
+     * @param array<string,mixed> $headers Headers to normalize.
+     * @param bool $validateRequestHeaders Enable REST request header validation (default: false).
+     *
+     * @return array<string,mixed> Returns the normalized headers, or empty array if no changes are required.
      */
-    public static function validate(array $headers, ?int $status = null, bool $ifNotSent = true): void
+    public static function parse(array $headers, bool $validateRequestHeaders = false): array
     {
-        if ($ifNotSent && headers_sent()) {
-            return;
+        if ($validateRequestHeaders && !self::isValidHeaders($headers, terminateOnFailure: false)) {
+            return [];
         }
 
-        if (!self::isValidRestFullHeaders($headers)) {
+        return self::parseHeaders($headers, true, false);
+    }
+
+    /**
+     * Send HTTP headers to the client.
+     *
+     * Handles safe header dispatch with optional REST validation and CORS checks.
+     * Prevents duplicate header output and provides clear diagnostics when headers
+     * were already sent.
+     *
+     * Behavior:
+     * - Optionally aborts if headers were already sent.
+     * - Sends HTTP status code when provided.
+     * - Removes entity headers for 204 / 304 responses.
+     * - Appends charset to Content-Type when missing (optional).
+     * - Optionally validates headers for HTTP and API requests.
+     *
+     * @param array<string,string|int|float> $headers Headers to send.
+     * @param bool $ifNotSent Skip sending if headers are already sent (default: true).
+     * @param bool $charset Append charset to Content-Type if missing (default: false).
+     * @param int|null $status HTTP status code to send (default: null).
+     * @param bool|null $validateRequestHeaders Enable REST header validation (auto-detect if null).
+     *
+     * @return void
+     *
+     * @throws RuntimeException When headers are already sent and debugging is enabled.
+     * @see self::parse() For header normalization without sending.
+     */
+    public static function send(
+        array $headers,
+        bool $ifNotSent = true, 
+        bool $charset = false,
+        ?int $status = null,
+        ?bool $validateRequestHeaders = null
+    ): void 
+    {
+        $file = null;
+        $line = null;
+
+        if (headers_sent($file, $line)) {
+            if ($ifNotSent) {
+                return;
+            }
+
+            $message = sprintf(
+                'Headers already sent in %s on line %d. Cannot send additional headers. %s',
+                $file,
+                $line,
+                'Set $ifNotSent to true to prevent this error.'
+            );
+
+            if (PRODUCTION) {
+                Logger::error($message);
+                return;
+            }
+
+            if (!env('debug.display.errors', false)) {
+                throw new RuntimeException($message);
+            }
+
+            echo $message;
+            return;
+        }
+        
+        self::initRequestSecurityConfig();
+        $validateRequestHeaders ??= Luminova::isApiPrefix();
+
+        if (
+            (self::$security->enforceApiSecurityOnHttp || $validateRequestHeaders) && 
+            !self::isValidHeaders($headers)
+        ) {
             return;
         }
 
         if ($status !== null) {
-            if ($status === 204 || $status === 304) {
+            if (in_array($status, [204, 304], true)) {
+                // RFC-compliant: no entity headers for responses without body
                 unset($headers['Content-Type'], $headers['Content-Length']);
             }
 
             self::sendStatus($status);
         }
 
-        self::send($headers, false, true);
-    }
-
-    /**
-     * Processes response headers and returns them normalized (without sending).
-     *
-     * - Replaces headers with defaults if `X-System-Default-Headers` key is present.
-     * - Ensures required RESTful headers are present.
-     * - Returns an empty array if headers are already complete/valid.
-     * - Always append charset if missing.
-     *
-     * @param array<string,mixed> $headers Associative array of headers to process.
-     * 
-     * @return array<string,mixed>|null Normalized headers ready to send, or an empty array if no changes needed.
-     * @internal Response class
-     */
-    public static function response(array $headers): ?array
-    {
-        if (!self::isValidRestFullHeaders($headers)) {
-            return [];
-        }
-
-        return self::parse($headers, true, false);
-    }
-
-    /**
-     * Determine of a request if from proxy. 
-     * 
-     * This method check command headers if present then request is considered likely a proxy.
-     * 
-     * @return bool Return true if found matched header, false otherwise.
-     */
-    public function isProxy(): bool
-    {
-        foreach (self::$proxyHeaders as $head => $server) {
-            if ($this->exist($head, $server)){
-                return true;
-            }
-        }
-        
-        return false;
-    }
-
-    /**
-     * Parse and validate REST API headers.
-     * 
-     * @param array<string,mixed> &$headers Headers passed by reference.
-     * 
-     * @return bool Return true if request origin is valid, false otherwise.
-     */
-    public static function isValidRestFullHeaders(array &$headers): bool 
-    {
-        if (!Luminova::isApiPrefix()) {
-            return true;
-        }
-
-        self::$config ??= new Apis();
-        $origin = self::server('HTTP_ORIGIN');
-
-        if(!$origin && self::$config->forbidEmptyOrigin){
-            self::terminateRequest(400, 'Invalid request: missing origin.', 'forbidEmptyOrigin');
-            return false;
-        }
-
-        if ($origin && self::$config->allowOrigins) {
-            $allowed = self::isAllowedOrigin($origin);
-            
-            if (!$allowed) {
-                self::terminateRequest(403, 'Access denied: origin not allowed.', 'allowOrigins');
-                return false;
-            }
-    
-            $headers['Access-Control-Allow-Origin'] = $allowed;
-        }
-        
-        if (self::$config->allowHeaders !== []) {
-            $allowed = self::isAllowedHeaders();
-
-            if ($allowed !== true) {
-                self::terminateRequest(400, "Invalid header: {$allowed} found in the request.", 'allowHeaders');
-                return false;
-            }
-
-            $headers['Access-Control-Allow-Headers'] = implode(', ', self::$config->allowHeaders);
-        }
-
-        $headers['Access-Control-Allow-Credentials'] = (self::$config->allowCredentials ? 'true' : 'false');
-        return true;
-    }
-
-    /**
-     * Sends HTTP headers to the client.
-     *
-     * @param array<string,mixed> $headers Associative array of headers to send.
-     * @param bool $ifNotSent Only send headers if no headers have been sent yet (default: true).
-     * @param bool $charset Append the default charset from env to `Content-Type` 
-     *                      if missing (default: false).
-     * 
-     * @return void
-     */
-    public static function send(array $headers, bool $ifNotSent = true, bool $charset = false): void 
-    {
-        if ($ifNotSent && headers_sent()) {
-            return;
-        }
-
-        self::parse($headers, $charset);
-    }
-
-    /**
-     * Normalize and optionally send HTTP headers to the client.
-     *
-     * - Removes invalid or empty headers.
-     * - Conditionally appends charset to `Content-Type`.
-     * - Can either send headers immediately or return them as an array.
-     *
-     * @param array<string,mixed> $headers Associative array of headers to process.
-     * @param bool $withCharset Append the default charset from env to `Content-Type` if missing (default: false).
-     * @param bool $isSend If true, headers are sent using `header()`. 
-     *                     If false, an array of normalized headers is returned. (default: true)
-     * 
-     * @return array<string,mixed> Processed headers when `$isSend` is false, otherwise an empty array.
-     */
-    private static function parse(array $headers, bool $withCharset = false, bool $isSend = true): array 
-    {
-        $normalized = [];
-        $xPowered = env('x.powered', true);
-        $charset = env('app.charset', 'utf-8');
-
-        if (isset($headers['X-System-Default-Headers'])) {
-            $headers = array_replace(self::getDefault(), $headers);
-        }elseif($xPowered){
-            $headers['X-Powered-By'] = Luminova::copyright();
-        }
-
-        foreach ($headers as $header => $value) {
-            if (
-                !$header ||
-                $value === '' ||
-                ($header === 'X-Powered-By' && !$xPowered) ||
-                ($header === 'X-System-Default-Headers') ||
-                ($header === 'Content-Encoding' && $value === false)
-            ) {
-                continue;
-            }
-
-            $values = [];
-            foreach ((array) $value as $val) {
-                $finalVal = ($withCharset && $header === 'Content-Type' && !str_contains($val, 'charset'))
-                    ? "{$val}; charset={$charset}"
-                    : $val;
-
-                if ($isSend) {
-                    header("{$header}: {$finalVal}");
-                } else {
-                    $values[] = $finalVal;
-                }
-            }
-
-            if (!$isSend && $values !== []) {
-                $normalized[$header] = implode(', ', $values);
-            }
-        }
-
-        return $normalized;
-    }
-
-    /**
-     * Get the content type based on file extension and charset.
-     *
-     * @param string $extension The file extension.
-     * @param string $charset The character set.
-     *
-     * @return string Return the content type and optional charset.
-     */
-    public static function getContentType(string $extension = 'html', ?string $charset = null): string
-    {
-        $charset ??= env('app.charset', 'utf-8');
-
-        return self::getContentTypes($extension, 0) . (($charset === '') ? '' : '; charset=' . $charset);
-    }
-
-    /**
-     * Get content types by name 
-     * 
-     * @param string $type Type of content types to retrieve.
-     * @param int|null $index The index of content type to return.
-     * 
-     * @return array<int,array>|string|null Return array, string of content types or null if not found.
-     */
-    public static function getContentTypes(string $type, int|null $index = 0): array|string|null
-    {
-        $type = ($type === 'txt') ? 'text' : $type;
-        return ($index === null) 
-            ? (self::VIEW_CONTENT_TYPES[$type] ?? null)
-            : (self::VIEW_CONTENT_TYPES[$type][$index] ?? 'application/octet-stream');
+        self::parseHeaders($headers, $charset);
     }
 
     /**
@@ -538,121 +324,160 @@ class Header implements LazyObjectInterface, Countable
      */
     public static function sendStatus(int $code): bool 
     {
-        if ($code >= 100 && $code < 600) {
-            http_response_code($code);
-            $_SERVER["REDIRECT_STATUS"] = $code;
-            self::$variables['Redirect-Status'] = $code;
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Initializes the output buffer with the appropriate content-encoding handler.
-     *
-     * This method is a wrapper around `ob_start()`. It detects supported encodings
-     * (such as `gzip` or `deflate`) from the client’s request headers and applies
-     * the proper output handler when compression is enabled and supported. If no
-     * matching encoding is found, it falls back to a custom or default handler.
-     *
-     * If output buffering is already active, it will not be restarted.
-     *
-     * @param bool $clearIfSet Whether to clear existing output buffers when one is already active (default: false).
-     * @param bool $withHandler Whether to apply an output handler (default: true).
-     *
-     * @return bool Returns true if a new output buffer is started, false otherwise.
-     * @internal For internal framework use only.
-     */
-    public static function setOutputHandler(bool $clearIfSet = false, bool $withHandler = true): bool
-    {
-        if(!$clearIfSet && ob_get_level() > 0){
+        if ($code < 100 || $code > 599) {
             return false;
         }
 
-        if($clearIfSet){
-            self::clearOutputBuffers();
-        }
-
-        if (!$withHandler || !env('enable.encoding', true)) {
-            return ob_start();
-        }
-
-        $handler = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? null;
-
-        if ($handler) {
-            if (str_contains($handler, 'gzip')) {
-                if (ini_get('zlib.output_compression') !== '1') {
-                    return ob_start('ob_gzhandler');
-                }
-
-                return ob_start();
-            }
-
-            if (str_contains($handler, 'deflate')) {
-                if (function_exists('ini_set')) {
-                    ini_set('zlib.output_compression', 'On');
-                    //ini_set('zlib.output_handler', 'deflate');
-                }
-
-                return ob_start();
-            }
-        }
-
-        return ob_start(env('script.output.handler', null) ?: null);
+        http_response_code($code);
+        $_SERVER['REDIRECT_STATUS'] = $code;
+        return true;
     }
 
     /**
-     * Clear PHP output buffers using one of three modes.
+     * Starts an output buffer with the appropriate content-encoding handler.
      *
-     * **Modes:**
-     * - auto (default): If multiple buffers exist, clear all except the base buffer.
-     *                   If only one exists, clear only the top buffer.
-     * - all:  Clear every active buffer down to level 0 or a specified limit.
-     * - top:  Clear only the top-most buffer.
+     * This method wraps `ob_start()` and chooses the output handler based on configuration:
+     * - If a user-defined handler (`script.output.handler`) is set, it is used.
+     * - If global zlib compression is active, a normal buffer is started.
+     * - Otherwise, `ob_gzhandler` is applied for gzip compression if supported.
      *
-     * @param string $mode Determines how buffers are cleared, (e.g, `auto`, `all`, or `top`).
-     * @param int $limit Minimum buffer level to stop at (use 0 to clear everything).
+     * Existing buffers can optionally be cleared before starting a new one.
      *
-     * @return bool Returns true if any buffer was cleared, otherwise false.
+     * @param bool $clearIfSet Whether to clear existing buffers if one is active (default: false).
+     * @param bool $withHandler Whether to apply a compression/encoding handler (default: true).
+     *
+     * @return bool Return true if a new buffer is started, 
+     *      false if buffering was already active or headers sent.
+     * @throws InvalidArgumentException If a user-defined handler is not callable.
+     */
+    public static function setOutputHandler(bool $clearIfSet = false, bool $withHandler = true): bool
+    {
+        if (headers_sent()) {
+            return false;
+        }
+
+        if(ob_get_level() > 0){
+            if($clearIfSet){
+                return false;
+            }
+
+            self::clearOutputBuffers('all');
+        }
+
+        if (!$withHandler || !env('enable.encoding', false)) {
+            return ob_start();
+        }
+
+        $handler = env('script.output.handler', null);
+
+        if($handler){
+            if (!is_callable($handler)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Invalid output handler "%s". Handler "%s" must be callable.',
+                    $handler,
+                    'script.output.handler'
+                ));
+            }
+
+            return ob_start($handler);
+        }
+
+        if ((int) ini_get('zlib.output_compression') === 1) {
+            return ob_start();
+        }
+
+        return ob_start('ob_gzhandler');
+    }
+
+    /**
+     * Clears or flushes PHP output buffers with flexible modes.
+     *
+     * Modes:
+     * - auto (default): Clears all but the base buffer if multiple exist; otherwise clears the top buffer.
+     * - all: Clears every active buffer down to the specified minimum level (default 0 for all).
+     * - top: Clears only the top-most buffer.
+     * - flush: Flushes the top-most buffer without clearing it.
+     *
+     * This method safely handles CLI environments by doing nothing in CLI or PHPDBG.
+     *
+     * @param string $mode How to handle buffers: 'auto', 'all', 'top', or 'flush'.
+     * @param int $limit Minimum buffer level to preserve (0 clears everything).
+     *
+     * @return bool Return true if any buffer was cleared or flushed; false if no buffers existed.
      */
     public static function clearOutputBuffers(string $mode = 'auto', int $limit = 0): bool
     {
+        if (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg') {
+            return false;
+        }
+
         $level = ob_get_level();
 
         if ($level === 0) {
             return false;
         }
 
-        if ($mode === 'top') {
-            return ob_end_clean();
+        $cleared = false;
+
+        switch ($mode) {
+            case 'top':
+                return (bool) @ob_end_clean();
+
+            case 'flush':
+                $cleared = (bool) @ob_flush();
+                flush();
+                return $cleared;
+
+            case 'all':
+            case 'auto':
+                $stopAt = ($mode === 'all') ? $limit : max($limit, 1);
+
+                while (ob_get_level() > $stopAt) {
+                    $cleared = (bool) @ob_end_clean() || $cleared;
+                }
+
+                return $cleared;
+
+            default:
+                return (bool) @ob_end_clean();
         }
-
-        if ($mode === 'all' || ($mode === 'auto' && $level > 1)) {
-            $cleared = false;
-
-            while (ob_get_level() > $limit) {
-                $cleared = ob_end_clean() || $cleared;
-            }
-            
-            return $cleared;
-        }
-
-        return ob_end_clean();
     }
 
     /**
-     * Get the allowed origin based on the config.
-     * 
-     * @param string $origin The origin to check.
-     * 
-     * @return string|null Return the allowed origin or null if not allowed.
+     * Determine whether a given origin is allowed based on configuration.
+     *
+     * @param string|null $origin Optional origin to check. Defaults to `$_SERVER['HTTP_ORIGIN']`.
+     *
+     * @return bool Returns true if the origin is allowed, false otherwise.
      */
-    private static function isAllowedOrigin(string $origin): ?string
+    public static function isAllowedOrigin(?string $origin = null): bool
     {
-        $accept = self::$config->allowOrigins;
+        return self::getAllowedOrigin($origin) !== null;
+    }
+    
+    /**
+     * Retrieve the allowed origin based on configuration.
+     *
+     * - Returns `*` if all origins are allowed.
+     * - Returns the matching origin if it is explicitly allowed.
+     * - Returns `null` if the origin is forbidden or missing when `forbidEmptyOrigin` is enabled.
+     *
+     * @param string|null $origin Optional origin to check. Defaults to `$_SERVER['HTTP_ORIGIN']`.
+     *
+     * @return string|null Returns the allowed origin, `*` for all, or `null` if forbidden.
+     */
+    public static function getAllowedOrigin(?string $origin = null): ?string
+    {
+        $origin ??= $_SERVER['HTTP_ORIGIN'] ?? '';
+        self::initRequestSecurityConfig();
 
-        if ($accept === '*' || $accept === 'null') {
+        if(!$origin && self::$security->forbidEmptyOrigin){
+            return null;
+        }
+
+        $accept = self::$security->allowOrigins;
+
+        if ($accept === [] || $accept === '*' || $accept === 'null') {
             return '*';
         }
 
@@ -660,9 +485,13 @@ class Header implements LazyObjectInterface, Countable
             return $origin;
         }
 
-        foreach ([$origin, Helpers::mainDomain($origin)] as $from) {
-            if ($accept === $from || in_array($from, (array) $accept)) {
-                return $from;
+        if($origin){
+            $accept = (array) $accept;
+
+            foreach ([$origin, Helpers::mainDomain($origin)] as $from) {
+                if ($accept === $from || in_array($from, $accept, true)) {
+                    return $from;
+                }
             }
         }
 
@@ -671,14 +500,29 @@ class Header implements LazyObjectInterface, Countable
 
     /**
      * Validates request headers against allowed headers.
+     * 
+     * @param array<string,string|int|float>|null $headers The request headers to validate.
+     * @param string|null $match The matched header that is not allowed.
      *
-     * @return string|true Return true if all headers are valid, false otherwise.
+     * @return bool Return true if all headers are valid, false otherwise.
      */
-    private static function isAllowedHeaders(): string|bool
+    public static function isAllowedHeaders(?array $headers = null, ?string &$match = null): bool
     {
-        foreach (self::getHeaders() as $name => $value) {
-            if (!in_array($name, self::$config->allowHeaders)) {
-                return $name;
+        self::initRequestSecurityConfig();
+        static $allows = null;
+
+        if(self::$security->allowHeaders === []){
+            return true;
+        }
+
+        if($allows === null){
+            $allows = array_map('strtolower', self::$security->allowHeaders);
+        }
+
+        foreach ($headers ?? self::getHeaders() as $name => $value) {
+            if (!in_array(strtolower($name), $allows)) {
+                $match = $name;
+                return false;
             }
         }
 
@@ -686,22 +530,311 @@ class Header implements LazyObjectInterface, Countable
     }
 
     /**
-     * Terminates the request by sending the status and exiting.
+     * Terminates the request by sending a status and formatted message.
+     *
+     * Responds according to the `Accept` header:
+     * - `application/json` → JSON response
+     * - `application/xml` / `text/xml` → XML response
+     * - `text/html` → HTML page
+     * - fallback → plain text
      *
      * @param int $status HTTP status code.
      * @param string $message Termination message.
-     * @param string $var The configuration variable.
+     * @param string|null $title Optional error title.
+     * @param int $retry Optional cache retry duration in seconds (default: 3600).
      *
      * @return void
      */
-    private static function terminateRequest(int $status, string $message, string $var): void
+    public static function terminate(
+        int $status, 
+        string $message, 
+        ?string $title = null,
+        int $retry = 3600
+    ): void
     {
-        self::sendStatus($status);
+        $output = '';
+        $accept = $_SERVER['HTTP_ACCEPT'] ?? '*/*';
+        $type = 'text/plain; charset=utf-8';
+        $title ??= HttpStatus::phrase($status, 'Termination Error');
 
-        if (!PRODUCTION) {
-            $message .= "\nCaused by API configuration in '/app/Config/Apis.php' at \App\Config\Apis::\${$var}.";
+        if ($accept === '*/*' || str_contains($accept, 'application/json') || (!$accept && Luminova::isApiPrefix())) {
+            $type = 'application/json; charset=utf-8';
+            $output = json_encode(
+                ['status' => $status, 'error' => $title, 'message' => $message], 
+                JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+            );
+        } elseif ($accept && str_contains($accept, 'text/html')) {
+            $title = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
+            $message = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+            $type = 'text/html; charset=utf-8';
+
+            $output = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>{$title}</title></head><body>";
+            $output .= "<h1>{$status} {$title}</h1><p>{$message}</p>";
+            $output .= "</body></html>";
+        } elseif ($accept && str_contains($accept, 'xml')) {
+            $type = 'application/xml; charset=utf-8';
+            $output = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+            $output .= "<response>\n";
+            $output .= "  <status>{$status}</status>\n";
+            if($title){
+                $output .= "  <error>" . htmlspecialchars($title, ENT_XML1 | ENT_QUOTES, 'UTF-8') . "</error>\n";
+            }
+            $output .= "  <message>" . htmlspecialchars($message, ENT_XML1 | ENT_QUOTES, 'UTF-8') . "</message>\n";
+            $output .= "</response>";
+        } else {
+            $output = sprintf('(%d) [%s] %s', $status, $title, $message);
         }
 
-        exit($message);
+        self::sendNoCacheHeaders($status, $type, $retry);
+        self::clearOutputBuffers('all');
+
+        echo $output;
+        exit(STATUS_ERROR);
+    }
+
+    /**
+     * Normalize and validate multiple HTTP header values.
+     *
+     * - Trims leading and trailing spaces and tabs.
+     * - Validates each value against RFC 7230 rules.
+     *
+     * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.4
+     *
+     * @param array|mixed $values Header values or key-value to process.
+     *
+     * @return array<string,mixed>|string[] Return an array of normalized headers or key-value.
+     * @throws InvalidArgumentException If any value is non-scalar or null.
+     */
+    public static function normalize(mixed $values, bool $withName = false): array
+    {
+        if (!is_array($values)) {
+            $values = [$values];
+        }
+
+        if ($values === []) {
+            throw new InvalidArgumentException('Header value cannot be an empty array.');
+        }
+
+        $normalized = [];
+
+        foreach ($values as $name => $value) {
+            if ($value !== null && !is_scalar($value)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Header value must be scalar or null; %s provided.',
+                    is_object($value) ? get_class($value) : gettype($value)
+                ));
+            }
+
+            $value = trim((string) $value, " \t");
+            self::assert($value, true);
+
+            if($withName){
+                self::assert($name, false);
+            }
+
+            $normalized[$name] = $value;
+        }
+
+        return $withName 
+            ? $normalized
+            : array_values($normalized);
+    }
+
+    /**
+     * Validate an HTTP header name or value.
+     *
+     * Notes:
+     * - Header values do NOT support obs-fold (RFC 7230 §3.2).
+     * - Header names must be non-empty ASCII tokens.
+     *
+     * @param mixed $value Header name or value to validate.
+     * @param bool $isValue True to validate a header value, false for a header name.
+     *
+     * @throws InvalidArgumentException When the header name or value is invalid.
+     * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2
+     */
+    public static function assert(mixed $value, bool $isValue = true): void
+    {
+        if($isValue){
+            if (!preg_match('/^[\x20\x09\x21-\x7E\x80-\xFF]*$/D', (string) $value)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Invalid header value: "%s".',
+                    $value
+                ));
+            }
+            return;
+        }
+
+        if ($value === '' || !is_string($value)) {
+            throw new InvalidArgumentException(sprintf(
+                'Header name must be a non-empty string; %s provided.',
+                is_object($value) ? get_class($value) : gettype($value)
+            ));
+        }
+
+        if (!preg_match('/^[a-zA-Z0-9\'`#$%&*+.^_|~!-]+$/D', $value)) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid header name: "%s".',
+                $value
+            ));
+        }
+    }
+
+    /**
+     * Initializes request security configuration.
+     * 
+     * @return void
+     */
+    private static function initRequestSecurityConfig(): void
+    {
+        if(!self::$security instanceof Security){
+            self::$security = new Security();
+        }
+    }
+
+    /**
+     * Validate and prepare REST API request headers for CORS compliance.
+     * 
+     * This method inspects the incoming request when it targets an API endpoint
+     * and ensures that the request origin, headers, and credentials adhere to
+     * the configured CORS policy.
+     * 
+     * Behavior:
+     * - Checks the `Origin` header:
+     *   - Terminates the request if the origin is missing and `forbidEmptyOrigin` is enabled.
+     *   - Validates the origin against `allowOrigins` and sets `Access-Control-Allow-Origin`.
+     * - Validates request headers against `allowHeaders` and sets `Access-Control-Allow-Headers`.
+     * - Sets `Access-Control-Allow-Credentials` based on configuration.
+     * 
+     * If any validation fails, the request is terminated immediately with
+     * an appropriate HTTP status and message.
+     * 
+     * @param array<string,string|int|float> &$headers Headers array to be modified with CORS response headers.
+     * @param array<string,string|int|float>|null $requestHeaders Optional request headers to validate.
+     * @param bool $terminateOnFailure Whether to terminate the request on validation failure (default: true).
+     * 
+     * @return bool Returns true if the request passes all validations; false if terminated.
+     */
+    private static function isValidHeaders(
+        array &$headers, 
+        ?array $requestHeaders = null,
+        bool $terminateOnFailure = true
+    ): bool 
+    {
+        self::initRequestSecurityConfig();
+        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+
+        if(!$origin && self::$security->forbidEmptyOrigin){
+            if($terminateOnFailure){
+                self::terminate(
+                    400, 
+                    'Invalid request: missing origin.', 
+                    PRODUCTION ? null : '\App\Config\Security::forbidEmptyOrigin'
+                );
+            }
+            return false;
+        }
+
+        if ($origin && self::$security->allowOrigins) {
+            $allowed = self::getAllowedOrigin($origin);
+            
+            if ($allowed === null) {
+                if($terminateOnFailure){
+                    self::terminate(
+                        403, 
+                        'Access denied: request origin not allowed.', 
+                        PRODUCTION ? null : '\App\Config\Security:::allowOrigins'
+                    );
+                }
+                return false;
+            }
+    
+            $headers['Access-Control-Allow-Origin'] = $allowed;
+        }
+        
+        if (self::$security->allowHeaders !== []) {
+            $match = null;
+
+            if (!self::isAllowedHeaders($requestHeaders, $match)) {
+                if($terminateOnFailure){
+                    self::terminate(
+                        400, 
+                        "Invalid header: {$match} found in the request.", 
+                        PRODUCTION ? null : '\App\Config\Security:::allowHeaders'
+                    );
+                }
+                return false;
+            }
+
+            $headers['Access-Control-Allow-Headers'] = implode(', ', self::$security->allowHeaders);
+        }
+
+        $headers['Access-Control-Allow-Credentials'] = self::$security->allowCredentials ? 'true' : 'false';
+
+        return true;
+    }
+
+    /**
+     * Normalize and optionally send HTTP headers to the client.
+     *
+     * - Removes invalid or empty headers.
+     * - Conditionally appends charset to `Content-Type`.
+     * - Can either send headers immediately or return them as an array.
+     *
+     * @param array<string,string|int|float> $headers Associative array of headers to process.
+     * @param bool $withCharset Append the default charset from env to `Content-Type` if missing (default: false).
+     * @param bool $isSend If true, headers are sent using `header()`. 
+     *                     If false, an array of normalized headers is returned. (default: true)
+     * 
+     * @return array<string,mixed> Processed headers when `$isSend` is false, otherwise an empty array.
+     */
+    private static function parseHeaders(array $headers, bool $withCharset = false, bool $isSend = true): array 
+    {
+        $normalized = [];
+        $xPowered = env('x.powered', true);
+        $charset = env('app.charset', 'utf-8');
+
+        if (isset($headers['X-System-Default-Headers'])) {
+            $headers = array_replace(self::getDefault(), $headers);
+        }elseif($xPowered){
+            $headers['X-Powered-By'] = Luminova::copyright();
+        }
+
+        foreach ($headers as $header => $values) {
+            if (
+                !$header ||
+                $values === '' ||
+                $values === [] ||
+                ($header === 'X-Powered-By' && !$xPowered) ||
+                ($header === 'X-System-Default-Headers') ||
+                ($header === 'Content-Encoding' && $values === false)
+            ) {
+                continue;
+            }
+
+            $values = is_array($values) ? array_unique($values) : [$values];
+
+            $parsed = [];
+            foreach ($values as $value) {
+                if($withCharset && $header === 'Content-Type' && !str_contains($value, 'charset')){
+                    $value = "{$value}; charset={$charset}";
+                }
+
+                if (!$isSend) {
+                    $parsed[] = $value;
+                    continue;
+                }
+                
+                header("{$header}: {$value}");
+            }
+
+            if ($isSend || $parsed === []) {
+                continue;
+            }
+
+            $normalized[$header] = implode(', ', $parsed);
+        }
+
+        return $normalized;
     }
 }

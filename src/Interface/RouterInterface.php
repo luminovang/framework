@@ -13,20 +13,12 @@ namespace Luminova\Interface;
 use \Psr\Http\Message\ResponseInterface;
 use \Luminova\Routing\{Prefix, Segments};
 use \Luminova\Exceptions\RouterException;
-use \Luminova\Foundation\Core\Application;
 use \Luminova\Interface\ViewResponseInterface;
 
 use \Closure;
 
 interface RouterInterface 
 {
-    /**
-     * Initializes the Router class and sets up default properties.
-     * 
-     * @param Application $app Instance of core application class.
-     */
-    public function __construct(Application $app);
-
     /**
      * Route to handle HTTP GET requests.
      *

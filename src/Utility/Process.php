@@ -439,7 +439,7 @@ class Process
     public function getCommand(): string 
     {
         if (is_array($this->input)) {
-            return implode(' ', array_map(Terminal::escape(...), $this->input));
+            return implode(' ', array_map(fn ($v) => Terminal::escape($v), $this->input));
         }
 
         return Terminal::replace($this->input, $this->env ?? [], true);

@@ -399,7 +399,7 @@ class Webhook implements LazyObjectInterface
      */
     public static function listen(string $signature, ?string $event = null): static
     {
-        $instance = new static('');
+        $instance = new self('');
         $instance->signature = $signature;
         $instance->incoming = ['onIncoming' => 1, 'event' => $event];
 
@@ -667,7 +667,7 @@ class Webhook implements LazyObjectInterface
         if($payload === [] && $capture){
             $request = Request::getInstance();
 
-            $payload = $request->getBody();
+            $payload = $request->getParsedBody();
             $method = $request->getMethod();
             $contentType = $request->getContentType();
         }

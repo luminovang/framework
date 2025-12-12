@@ -20,13 +20,13 @@ use \CurlHandle;
 use \CurlMultiHandle;
 use \Luminova\Http\Uri;
 use \Luminova\Luminova;
+use \Luminova\Http\Header;
 use \Luminova\Http\Network;
-use Luminova\Http\HttpCode;
-use \Luminova\Utility\Async;
 use \Luminova\Cookies\FileJar;
+use \Luminova\Http\HttpStatus;
+use \Luminova\Components\Async;
 use \Luminova\Http\Message\Stream;
 use \Luminova\Http\Message\Response;
-use \Luminova\Http\Helper\Normalizer;
 use function \Luminova\Funcs\array_extend_default;
 use \Luminova\Exceptions\{ErrorCode, AppException};
 use \Luminova\Interface\ResponseInterface as MsgResponseInterface;
@@ -471,7 +471,7 @@ class Novio implements ClientInterface
         }
 
         $httpVersion = $httpVersion ?: '1.1';
-        $reasonPhrase = $reasonPhrase ?: HttpCode::phrase($statusCode);
+        $reasonPhrase = $reasonPhrase ?: HttpStatus::phrase($statusCode);
 
         return [$httpVersion, $statusCode, $reasonPhrase];
     }
@@ -1524,8 +1524,8 @@ class Novio implements ClientInterface
                 continue;
             }
 
-            Normalizer::assertHeader($key);
-            $value = Normalizer::normalizeHeaderValue($value);
+            Header::assert($key, isValue: false);
+            $value = Header::normalize($value);
 
             $line[] = "{$key}: " . implode(', ', $value);
         }

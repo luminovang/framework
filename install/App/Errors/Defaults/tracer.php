@@ -1,8 +1,9 @@
 <?php 
-use \Luminova\Common\Maths;
-use \Luminova\Debugger\Performance;
 use \Luminova\Http\Request;
-use function \Luminova\Funcs\{ip_address, is_command, shared};
+use \Luminova\Utility\Maths;
+use \Luminova\Http\Network\IP;
+use \Luminova\Debugger\Performance;
+use function \Luminova\Funcs\{is_command, shared};
 include_once __DIR__ . '/tracing.php';
 
 function onErrorShowDebugTracer(array $trace, ?array $timelines = null): void{
@@ -117,7 +118,7 @@ function onErrorShowDebugTracer(array $trace, ?array $timelines = null): void{
                     <tbody>
                         <tr>
                             <td style="width: 10em">URI</td>
-                            <td><?= htmlspecialchars($request->getUri(), ENT_QUOTES) ?></td>
+                            <td><?= htmlspecialchars((string) $request->getUri(), ENT_QUOTES) ?></td>
                         </tr>
                         <tr>
                             <td>HTTP Method</td>
@@ -125,7 +126,7 @@ function onErrorShowDebugTracer(array $trace, ?array $timelines = null): void{
                         </tr>
                         <tr>
                             <td>IP Address</td>
-                            <td><?= htmlspecialchars(ip_address(), ENT_QUOTES) ?></td>
+                            <td><?= htmlspecialchars(IP::get(), ENT_QUOTES) ?></td>
                         </tr>
                         <tr>
                             <td style="width: 10em">Is AJAX Request?</td>
@@ -185,7 +186,7 @@ function onErrorShowDebugTracer(array $trace, ?array $timelines = null): void{
                     </div>
                 <?php endif; ?>
 
-                <?php if(($headers = $request->getHeaders()) !== []): ?>
+                <?php if(($headers = $request->header->getHeaders()) !== []): ?>
                     <h3>Headers</h3>
 
                     <table>
@@ -220,11 +221,11 @@ function onErrorShowDebugTracer(array $trace, ?array $timelines = null): void{
                     <tbody>
                         <tr>
                             <td>Memory Usage</td>
-                            <td><?= htmlspecialchars(Maths::toUnit(memory_get_usage(true), true), ENT_QUOTES) ?></td>
+                            <td><?= htmlspecialchars(Maths::toUnit(memory_get_usage(true), 2, true), ENT_QUOTES) ?></td>
                         </tr>
                         <tr>
                             <td style="width: 12em">Peak Memory Usage:</td>
-                            <td><?= htmlspecialchars(Maths::toUnit(memory_get_peak_usage(true), true), ENT_QUOTES) ?></td>
+                            <td><?= htmlspecialchars(Maths::toUnit(memory_get_peak_usage(true), 2, true), ENT_QUOTES) ?></td>
                         </tr>
                         <tr>
                             <td>Memory Limit:</td>

@@ -10,15 +10,15 @@
  */
 namespace Luminova\Exceptions;
 
-use \Throwable;
 use \Exception;
+use \Throwable;
 use \Stringable;
 use \Luminova\Luminova;
 use \Luminova\Logger\Logger;
 use \Luminova\Exceptions\ErrorCode;
+use function \Luminova\Funcs\import;
 use \Luminova\Foundation\Error\Guard;
 use \Luminova\Interface\ExceptionInterface;
-use function \Luminova\Funcs\import;
 
 abstract class AppException extends Exception implements ExceptionInterface, Stringable
 {
@@ -129,16 +129,6 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     }
 
     /**
-     * Get filtered error message.
-     * 
-     * @deprecated Since 3.6.8, Use getDescription() instead.
-     */
-    public function getFilteredMessage(): string 
-    {
-        return $this->getDescription();
-    }
-
-    /**
      * {@inheritdoc}
      */
     public function getBacktrace(): array 
@@ -181,7 +171,12 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
      */
     public function log(string $dispatch = 'exception'): void
     {
-        self::logging($this->toString(), $dispatch);
+        self::logging(
+            $this->toString(), 
+            $dispatch, 
+            $this->getCode(),
+            static::getLogContextTracer($this)
+        );
     }
 
     /**
@@ -270,64 +265,99 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     /**
      * Handles the exception based on the environment and error severity.
      *
-     * @param Throwable $error The exception to be handled.
+     * @param Throwable $e The exception to be handled.
      * 
      * @return never
      * @throws ExceptionInterface<Throwable> Re-throws the exception if not in production or if the exception is fatal.
      */
-    private static function safeHandler(Throwable $error): void
+    private static function safeHandler(Throwable $e): void
     {
         if (self::$isHandling) {
-            error_log('[Recursive Exception Prevented]: ' . $error->getMessage());
+            error_log('[Recursive Exception Prevented]: ' . $e->getMessage());
             return;
         }
 
         self::$isHandling = true;
 
         try {
-            if (Luminova::isCommand()) {
-                if (env('throw.cli.exceptions', false)) {
-                    throw $error;
-                }
+            $isCommand = Luminova::isCommand();
 
-                import('app:Errors/Defaults/cli.php', throw: false, once: true, scope: ['error' => $error]);
+            if (!PRODUCTION || ($isCommand && env('throw.cli.exceptions', false))) {
+                throw $e;
+            }
+
+            if ($isCommand) {
+                import('app:Errors/Defaults/cli.php', throw: false, once: true, scope: ['error' => $e]);
                 exit(STATUS_ERROR);
             }
 
-            if (PRODUCTION) {
-                if ($error instanceof self) {
-                    $error->log();
-                }else{
-                    self::logging((string) $error);
-                }
+            self::logging(
+                (string) $e, 
+                code: $e->getCode(),
+                trace: static::getLogContextTracer($e)
+            );
 
-                if (!ErrorCode::isFatal($error->getCode())) {
-                    return;
-                }
-
-                import('app:Errors/Defaults/errors.php', throw: false, once: true, scope: ['error' => $error]);
-                exit(STATUS_ERROR);
+            if (!ErrorCode::isFatal($e->getCode())) {
+                return;
             }
 
-            throw $error;
+            import(
+                'app:Errors/Defaults/errors.php', 
+                throw: false, 
+                once: true, 
+                scope: ['error' => $e]
+            );
+            exit(STATUS_ERROR);
         } finally {
             self::$isHandling = false;
         }
     }
 
     /**
+     * Build a normalized log context from a throwable.
+     *
+     * Extracts core exception metadata and resolves the most appropriate
+     * stack trace for logging or remote debugging.
+     *
+     * @param Throwable $e The caught exception or error.
+     *
+     * @return array Structured log context for tracing.
+     */
+    private static function getLogContextTracer(Throwable $e): array
+    {
+        return [
+            'class' => static::class,
+            'file'  => $e->getFile(),
+            'line'  => $e->getLine(),
+            'trace' => $e instanceof self
+                ? $e->getBacktrace()
+                : $e->getTrace(),
+        ];
+    }
+
+    /**
      * Logs an exception message to the application log.
      *
-     * @param string $exception The exception message to be logged.
+     * @param string $message The exception message to be logged.
      * @param string $level The log level at which the exception message should be dispatched.
-     *                       The default log level is 'exception'.
+     * @param string|int $code Exception code.
+     * @param array $trace Exception trade data.
      *
      * @return void 
      */
-    private static function logging(string $exception, string $level = 'exception'): void 
+    private static function logging(
+        string $message, 
+        string $level = 'exception',
+        string|int $code = 0,
+        array $trace = []
+    ): void 
     {
+        if (ErrorCode::isFatal($code)) {
+            Logger::tracer($trace);
+        }
+
         try{
-            Logger::dispatch($level, (string) $exception);
+            Logger::dispatch($level, $message);
         }catch(Throwable $e){
             error_log('[Exception Logging Failed]: ' . $e->getMessage());
         }

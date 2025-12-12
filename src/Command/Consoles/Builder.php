@@ -11,6 +11,7 @@
 namespace Luminova\Command\Consoles;
 
 use \Luminova\Base\Console;
+use \Luminova\Command\Terminal;
 use \Luminova\Composer\Builder as AppBuilder;
 
 class Builder extends Console 
@@ -37,12 +38,11 @@ class Builder extends Console
      */
     public function run(?array $options = []): int
     {
-        $this->term->perse($options);
-        $type = $this->term->getAnyOption('type', 't');
+        $type = $this->input->getAnyOption('type', 't');
 
         if($type === false){ 
             foreach ($this->usages as $line) {
-                $this->term->writeln($line);
+                Terminal::writeln($line);
             }
 
             return STATUS_ERROR;

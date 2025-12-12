@@ -10,7 +10,8 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Interface\{LazyObjectInterface, HttpRequestInterface};
+use \Luminova\Interface\RequestInterface;
+use \Luminova\Interface\LazyObjectInterface;
 
 interface InputValidationInterface 
 {
@@ -22,11 +23,11 @@ interface InputValidationInterface
      * 
      * You must define rules before calling `validate()`, or pass them as the second parameter.
      * 
-     * @param \Luminova\Http\Request<HttpRequestInterface,LazyObjectInterface>|null $request The HTTP request instance containing input data to validate (default: `null`).
+     * @param \Luminova\Http\Request<RequestInterface>|LazyObjectInterface<RequestInterface>|null $request The HTTP request instance containing input data to validate (default: `null`).
      * @param array<string,string>|null $rules Optional validation rules if not previously applied (default `null`).
      * 
      * @return bool Returns true if all validation rules pass, otherwise false.
-     * @throws RuntimeException If passed object of `LazyObjectInterface` that does not contain `HttpRequestInterface` object. When `$request` is null without setting input data from `setBody`.
+     * @throws RuntimeException If passed object of `LazyObjectInterface` that does not contain `RequestInterface` object. When `$request` is null without setting input data from `setBody`.
      * 
      * @see setBody() - To set validate input data from array.
      * 
@@ -51,7 +52,7 @@ interface InputValidationInterface
      * $isValid = $this->input->setBody($body)->validate(rules: [...]);
      * ```
      */
-    public function validate(HttpRequestInterface|LazyObjectInterface|null $request = null, ?array $rules = null): bool;
+    public function validate(RequestInterface|LazyObjectInterface|null $request = null, ?array $rules = null): bool;
 
     /**
      * Check if all validation rules passed.

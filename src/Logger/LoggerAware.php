@@ -115,7 +115,7 @@ class LoggerAware extends AbstractLogger implements LoggerAwareInterface
     }
 
     /**
-     * Log an performance metric.
+     * Log performance metric.
      *
      * @param string $data The profiling data to log.
      * @param array<string|int,mixed> $context Additional context data (optional).

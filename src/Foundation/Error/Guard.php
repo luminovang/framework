@@ -10,14 +10,14 @@
  */
 namespace Luminova\Foundation\Error;
 
-use \App\Application;
+use \Throwable;
 use \Luminova\Boot;
 use \Luminova\Luminova;
 use \Luminova\Http\Header;
 use \Luminova\Logger\Logger;
 use \Luminova\Exceptions\ErrorCode;
 use \Luminova\Foundation\Error\Message;
-use \Luminova\Exceptions\ErrorException;
+use \Luminova\Exceptions\{ErrorException, RuntimeException};
 
 final class Guard
 {
@@ -40,6 +40,7 @@ final class Guard
      * 
      * Hooks PHP's error and shutdown events so that:
      * - All errors are routed through {@see self::handle()}.
+     * - Uncaught exceptions handler with {@see self::exceptions()}.
      * - Fatal errors on shutdown are processed by {@see self::shutdown()}.
      * 
      * @return void
@@ -48,6 +49,7 @@ final class Guard
     public static function register(): void
     {
         set_error_handler([static::class, 'handle']);
+        set_exception_handler([static::class, 'exceptions']);
         register_shutdown_function([static::class, 'shutdown']);
     }
 
@@ -75,10 +77,10 @@ final class Guard
      * - In production or with `display_errors` disabled:  
      *   Logs the error in a structured format.
      *
-     * @param int    $severity The error severity level.
-     * @param string $message  The error message.
-     * @param string $file     The full path to the file where the error occurred.
-     * @param int    $line     The line number of the error.
+     * @param int $severity The error severity level.
+     * @param string $message The error message.
+     * @param string $file The full path to the file where the error occurred.
+     * @param int $line The line number of the error.
      * 
      * @return bool Return true if handled, false if suppressed.
      * @internal
@@ -90,7 +92,7 @@ final class Guard
         }
 
         $code = self::findCode($message, $severity);
-        $file = Luminova::filterPath($file);
+        $file = Luminova::trimSystemPath($file);
         $name = ErrorCode::getName($code);
         
         if((bool) ini_get('display_errors') && !PRODUCTION){
@@ -115,7 +117,9 @@ final class Guard
     /**
      * Shutdown handler for fatal or last-minute errors.
      * 
-     * Executes when the script terminates, checking for a final error from `error_get_last()`.  
+     * Executes when the script terminates, checking for a final error from `error_get_last()`. 
+     * 
+     * @param array<string,mixed>|null $error Optional error to shutdown with. 
      * 
      * Behavior:
      * - Passes error data to Application `onShutdown()`, stopping if handled.
@@ -125,48 +129,83 @@ final class Guard
      * @return void
      * @internal
      */
-    public static function shutdown(): void 
+    public static function shutdown(?array $error = null): void 
     {
-        if (($error = error_get_last()) === null || !isset($error['type'])) {
+        $isCustom = $error !== null;
+        $error ??= error_get_last();
+
+        if ($error === null || !isset($error['type'])) {
             return;
         }
 
-        if(!Boot::application()->onShutdown($error)){
-            return;
-        }
+        try{
+            if(!$isCustom && !Boot::application()->onShutdown($error)){
+                return;
+            }
+        }catch(Throwable){}
 
-        $isFatal = ErrorCode::isFatal($error['type']);
+        $isUp = defined('IS_UP');
         $isDisplay = (bool) ini_get('display_errors');
+        $isFatal = ErrorCode::isFatal($error['type']);
         $code = self::findCode($error['message'], $error['type']);
         $name = ErrorCode::getName($code);
 
-        if($isFatal || ($isFatal && PRODUCTION)){
-            $isFatal = true;
-            self::display(new Message(
-                message: $error['message'], 
-                code: $code,
-                severity: (int) $error['type'],
-                file: $error['file'],
-                line: $error['line'],
-                name: $name
-            ));
-        }elseif($isDisplay){
-            printf(
-                '[%s (%s)] %s File: %s Line: %d.', 
-                $name, (string) $code,
-                $error['message'],
-                Luminova::filterPath($error['file']), 
-                $error['line']
-            );
+        try{
+            if($isFatal || ($isUp && $isFatal && PRODUCTION)){
+                $isFatal = true;
+                self::display(new Message(
+                    message: $error['message'], 
+                    code: $code,
+                    severity: (int) $error['type'],
+                    file: $error['file'],
+                    line: $error['line'],
+                    name: $name
+                ));
+            }elseif(!$isUp || $isDisplay){
+                printf(
+                    '[%s (%s)] %s File: %s Line: %d.', 
+                    $name, (string) $code,
+                    $error['message'],
+                    Luminova::trimSystemPath($error['file']), 
+                    $error['line']
+                );
+            }
+        }catch(Throwable){
+            if($isUp){
+                Header::terminate(500, sprintf(
+                    '[%s (%s)] %s File: %s Line: %d.', 
+                    $name, (string) $code,
+                    $error['message'], $error['file'], $error['line']
+                ));
+            }
+        }finally{
+            if(!$isDisplay || ($isUp && PRODUCTION)){
+                self::log(ErrorCode::getLevel($error['type']), sprintf(
+                    '[%s (%s)] %s File: %s Line: %d.', 
+                    $name, (string) $code,
+                    $error['message'], $error['file'], $error['line']
+                ), $isUp);
+            }
         }
 
-        if(!$isDisplay || PRODUCTION){
-            self::log(ErrorCode::getLevel($error['type']), sprintf(
-                '[%s (%s)] %s File: %s Line: %d.', 
-                $name, (string) $code,
-                $error['message'], $error['file'], $error['line']
-            ));
-        }
+        exit(0);
+    }
+
+    /**
+     * Handle uncaught exceptions.
+     * 
+     * @param Throwable $e The exception object.
+     * 
+     * @return void
+     * @internal
+     */
+    public static function exceptions(Throwable $e): void
+    {
+        RuntimeException::throwException(
+            $e->getMessage(),
+            $e->getCode(), 
+            $e
+        );
     }
 
     /**
@@ -187,7 +226,12 @@ final class Guard
         ?int $line = null
     ): void 
     {
-        throw new ErrorException(message: $message, code: $code, file: $file, line: $line);
+        throw new ErrorException(
+            message: $message, 
+            code: $code, 
+            file: $file, 
+            line: $line
+        );
     }
 
     /**
@@ -309,8 +353,10 @@ final class Guard
     public static function sanitizeMessage(string $message): string
     {
         $message = str_replace(APP_ROOT, '', $message);
-        preg_match('/^(.*?)(?:\s+thrown(?:\s+in)?)/i', $message, $matches);
-   
+ 
+        //preg_match('/^(.*?)(?:\s+thrown(?:\s+in)?)/i', $message, $matches);
+        preg_match('/^(.*?)\s+thrown in\s+.+?\s+on line\s+\d+/i', $message, $matches);
+
         return trim($matches[1] ?? $message);
     }
 
@@ -357,15 +403,11 @@ final class Guard
 
         if (Luminova::isCommand()) {
             echo $error;
-            return;
+            exit(STATUS_ERROR);
         }
 
-        if (!headers_sent()) {
-            header('HTTP/1.1 500 Internal Server Error');
-            header('Retry-After: ' . $retryAfter);
-        }
-
-        printf('<html><head><title>Error Occurred</title></head><body><h1>Error Occurred</h1><p>%s</p></body></html>', $error);
+        Header::terminate(500, $error, retry: $retryAfter);
+        exit(STATUS_ERROR);
     }
     
     /**
@@ -415,11 +457,15 @@ final class Guard
      * 
      * @return void
      */
-    private static function log(string $level, string $message): void 
+    private static function log(string $level, string $message, ?bool $isUp = null): void 
     {
-        if (defined('IS_UP')) {
-            Logger::dispatch($level, $message);
-            return;
+        $isUp ??= defined('IS_UP');
+
+        if ($isUp) {
+            try{
+                Logger::dispatch($level, $message);
+                return;
+            }catch(Throwable){}
         }
 
         $path = __DIR__ . '/../writeable/logs/';
@@ -460,7 +506,7 @@ final class Guard
         }
         
         if (!$isCommand) {
-            Header::clearOutputBuffers();
+            Header::clearOutputBuffers('all');
         }
 
         if(file_exists($path . $view)){

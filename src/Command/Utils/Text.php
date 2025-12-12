@@ -10,8 +10,8 @@
  */
 namespace Luminova\Command\Utils;
 
-use \Luminova\Command\Utils\Color;
 use \Luminova\Command\Terminal;
+use \Luminova\Command\Utils\Color;
 
 /**
  * Text class for managing and applying ANSI styling codes to text dynamically.

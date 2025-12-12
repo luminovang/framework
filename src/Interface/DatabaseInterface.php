@@ -26,6 +26,20 @@ interface DatabaseInterface
     public function __construct(Database $config);
 
     /**
+     * Returns the singleton instance of the Database wrapper.
+     *
+     * Ensures that only one instance of the database class exists during
+     * the application's lifecycle. If the instance does not exist yet,
+     * it will be created using the provided configuration.
+     *
+     * @param Database $config The configuration object used to initialize
+     *                         the database instance on first creation.
+     *
+     * @return DatabaseInterface Returns the singleton instance of the database wrapper.
+     */
+    public static function getInstance(Database $config) : DatabaseInterface;
+
+    /**
      * Establish a database connection.
      * 
      * @return bool Return true if database connection was established, otherwise false.
@@ -127,7 +141,7 @@ interface DatabaseInterface
     /**
      * Start recording the database query execution time for queries.
      * 
-     * This method records the duration of a query in shared memory under the key `__DB_QUERY_EXECUTION_TIME__`. The stored value can later be retrieved from anywhere in your application.
+     * This method records the duration of a query in shared memory under the key `__DB_QUERY_EXEC_PROFILING__`. The stored value can later be retrieved from anywhere in your application.
      * 
      * Note: To call this method you must first enable `debug.show.performance.profiling` in environment variables file.
      *
@@ -140,10 +154,10 @@ interface DatabaseInterface
      * @example - To get the query execution in any application scope. 
      * 
      * ```php
-     * $time = luminova\Funcs\shared('__DB_QUERY_EXECUTION_TIME__', default: 0);
+     * $profiling = luminova\Funcs\shared('__DB_QUERY_EXEC_PROFILING__', default: []);
      * 
      * // Or
-     * $time = Luminova\Boot::get('__DB_QUERY_EXECUTION_TIME__') ?? 0;
+     * $profiling = Luminova\Boot::get('__DB_QUERY_EXEC_PROFILING__');
      * ```
      */
     public function profiling(bool $start = true, bool $finishedTransaction = false): void;
@@ -253,29 +267,103 @@ interface DatabaseInterface
     public function exec(string $query): int;
 
     /**
+     * Set the transaction isolation level for the current connection.
+     *
+     * This determines how transactions interact with other concurrent transactions
+     * in terms of visibility of changes, locking behavior, and consistency.
+     * 
+     * Supported levels (by integer code):
+     *   - 0 => 'NONE'               : Skips setting isolation level.
+     *   - 1 => 'READ UNCOMMITTED'   : Lowest isolation, allows dirty reads.
+     *   - 2 => 'READ COMMITTED'     : Default in most databases, prevents dirty reads.
+     *   - 3 => 'REPEATABLE READ'    : Ensures consistent reads within a transaction.
+     *   - 4 => 'SERIALIZABLE'       : Highest isolation, full serial execution.
+     *   - 5 => 'READ WRITE'         : Transaction can perform reads and writes.
+     *   - 6 => 'READ ONLY'          : Transaction can only read data.
+     *
+     * Rules:
+     *   - Cannot be changed inside an active transaction.
+     *   - Throws DatabaseException if the level is invalid or the query fails.
+     *
+     * @param int $level Numeric code for the isolation level (1–6).
+     * 
+     * @return bool Return true on success otherwise false.
+     * @throws DatabaseException If the level is invalid, or setting the isolation fails, 
+     *                           or called within an active transaction.
+     */
+    public function setTransactionIsolation(int $level = 2): bool;
+
+    /**
      * Begin a transaction with an optional read-only isolation level and savepoint.
      *
-     * @param int $flags Optional flags to set transaction properties.
-     *                   For MySQLi:
-     *                   - MYSQLI_TRANS_START_READ_ONLY: Set transaction as read-only.
-     *                   For PDO:
-     *                   - Specify `4` to create a read-only isolation level.
-     * @param string|null $name Optional name for a savepoint.
-     *                          If provided, a savepoint will be created in PDO.
+     * @param int $flags Optional transaction isolation flags (default: 0).
+     * @param string|null $name Optional transaction savepoint to set if already in transaction.
      * 
      * @return bool Returns true if the transaction and optional savepoint were successfully started.
-     * @throws DatabaseException Throws an exception in PDO if setting the transaction isolation level or creating a savepoint fails.
+     * @throws DatabaseException If an invalid savepoint name or database error during isolation.
+     * 
+     * @see self::beginNestedTransaction() To begin or create a transaction savepoint.
+     *
+     * @note 
+     * > This method does not commit or rollback; it only starts a transaction 
+     * > with the specified isolation/mode options. 
+     * > For nested transactions, use savepoints separately or beginNestedTransaction``.
      */
     public function beginTransaction(int $flags = 0, ?string $name = null): bool;
 
     /**
+     * Start a nested transaction using a savepoint if already in a transaction.
+     *
+     * If a transaction is already active, creates a unique savepoint and returns its name.
+     * If no transaction is active, begins a new transaction. Optionally frees the current
+     * statement cursor before starting.
+     *
+     * @param bool $closeCursor Whether to free the current statement cursor first.
+     * 
+     * @return string|false|null Returns: 
+     *   - string: Name of the savepoint if a nested transaction is created.
+     *   - null: A new transaction was started successfully.
+     *   - false: Failed to start a transaction or create a savepoint.
+     * 
+     * @example - Nested transaction example:
+     * ```php
+     * $name = $db->beginNestedTransaction();
+     * 
+     * if($name === false){
+     *      echo 'Failed';
+     * }
+     * 
+     * if($isSuccess){
+     *      if($name !== null){
+     *          $db->release($name);
+     *      }
+     * 
+     *      $db->commit();
+     * }else{
+     *      $db->rollback();
+     * }
+     * ```
+     */
+    public function beginNestedTransaction(bool $closeCursor = false): string|bool|null;
+
+    /**
+     * Set a named transaction savepoint.
+     * 
+     * @param string $name Optional name for a savepoint.
+     * 
+     * @return bool Returns true on success or false on failure.
+     * @throws DatabaseException If an invalid savepoint name or database error.
+     */
+    public function savepoint(string $name): bool;
+
+    /**
      * Commit a transaction.
      *
-     * @param int $flags Optional flags for custom handling (MySQLi only).
-     * @param string|null $name Optional name for a savepoint (MySQLi only).
+     * @param int $flags Optional flags for custom handling.
+     * @param string|null $name Optional name for a savepoint.
      * 
      * @return bool Returns true if the transaction was successfully committed.
-     * @throws DatabaseException Throw if an called when no connection is established.
+     * @throws DatabaseException If an invalid savepoint name or database error during commit.
      */
     public function commit(int $flags = 0, ?string $name = null): bool;
 
@@ -287,9 +375,19 @@ interface DatabaseInterface
      *                          If provided, rolls back to the savepoint in PDO.
      * 
      * @return bool Returns true if the rollback was successful, otherwise false.
-     * @throws DatabaseException Throws an exception in PDO if rolling back to a savepoint fails.
+     * @throws DatabaseException If an invalid savepoint name or database error during rollback.
      */
     public function rollback(int $flags = 0, ?string $name = null): bool;
+
+    /** 
+     * Removes the named savepoint from the set of savepoints of the current transaction.
+     * 
+     * @param string $name The identifier of the savepoint.
+     * 
+     * @return bool Returns true on success or false on failure.
+     * @throws DatabaseException If an invalid savepoint name or database error.
+     */
+    public function release(string $name): bool;
 
     /**
      * Check if there is an active transaction.

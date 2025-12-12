@@ -10,12 +10,11 @@
 namespace App\Config;
 
 use \Luminova\Time\Time;
-use \Luminova\Utility\IP;
 use \Psr\Log\AbstractLogger;
-use \Psr\Log\LoggerInterface;
+use \Luminova\Http\Network\IP;
 use \Luminova\Logger\NovaLogger;
 use \Luminova\Base\Configuration;
-use \Luminova\Interface\HttpRequestInterface;
+use \Luminova\Interface\RequestInterface;
 
 final class Logger extends Configuration
 {
@@ -26,7 +25,7 @@ final class Logger extends Configuration
      *
      * @var string|null $contextHeaderName
      *
-     * @example
+     * @example - Example:
      * ```php
      * $contextHeaderName = 'X-API-User-Id';
      * ```
@@ -40,7 +39,7 @@ final class Logger extends Configuration
      *
      * @var string|null $contextFieldName
      *
-     * @example
+     * @example - Example:
      * ```php
      * $contextFieldName = 'username';
      * ```
@@ -84,26 +83,10 @@ final class Logger extends Configuration
     public static bool $telegramSendContext = false;
 
     /**
-     * Returns an instance of the preferred logger class, which must 
-     * implement the PSR `LoggerInterface`.
-     * 
-     * @example Return instance of logger class.
-     * 
-     * ```php 
-     * return new MyLogger(config);
-     * ```
-     * @return class-object<LoggerInterface>|null Preferred logger instance, or `null` to use the default logger.
-     */
-    public function getLogger(): ?LoggerInterface 
-    {
-        return null;
-    }
-
-    /**
      * {@inheritdoc}
      */
     public static function getEmailLogTemplate(
-        HttpRequestInterface $request, 
+        RequestInterface $request, 
         AbstractLogger $logger,
         string $message, 
         string $level, 

@@ -24,6 +24,13 @@ use \Luminova\Interface\{ConnInterface, DatabaseInterface};
 final class PdoDatabase implements DatabaseInterface 
 {
     /**
+     * Shared database object.
+     * 
+     * @var DatabaseInterface|null $instance
+     */
+    private static ?DatabaseInterface $instance = null;
+
+    /**
      * PDO Database connection instance.
      * 
      * @var PDO $connection 
@@ -75,9 +82,9 @@ final class PdoDatabase implements DatabaseInterface
     /**
      * Total Query Execution time.
      * 
-     * @var float|int $queryTime
+     * @var float|int $queryTotalTime
      */
-    protected float|int $queryTime = 0;
+    protected float|int $queryTotalTime = 0;
 
     /**
      * Last Query Execution time.
@@ -91,7 +98,7 @@ final class PdoDatabase implements DatabaseInterface
      * 
      * @var float|int $startTime
      */
-    private static float|int $startTime = 0;
+    private float|int $startTime = 0;
 
     /**
      * Result mode.
@@ -99,6 +106,27 @@ final class PdoDatabase implements DatabaseInterface
      * @var bool $isResult
      */
     private bool $isResult = false;
+
+    /**
+     * Database version.
+     * 
+     * @var string $version
+     */
+    private string $version = 'mysql';
+
+    /**
+     * Last executed query.
+     * 
+     * @var array $query
+     */
+    private array $query = ['query' => '', 'params' => []];
+
+    /**
+     * Transaction savepoint mapping.
+     * 
+     * @var array<string,true> $savepoint 
+     */
+    private array $savepoint = [];
 
     /**
      * Result fetch modes.
@@ -122,6 +150,19 @@ final class PdoDatabase implements DatabaseInterface
     public function __construct(Database $config) 
     {
         $this->config = $config;
+        $this->version = strtolower($this->config->getValue('pdo_version'));
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function getInstance(Database $config) : DatabaseInterface
+    {
+        if (!self::$instance instanceof DatabaseInterface) {
+            self::$instance = new self($config);
+        }
+
+        return self::$instance;
     }
 
     /**
@@ -134,7 +175,7 @@ final class PdoDatabase implements DatabaseInterface
             $this->connected = true;
         }catch(Throwable $e){
             if(!$e instanceof DatabaseException){
-                throw new DatabaseException('Connection failed: ' . $e->getMessage(), $e->getCode(), $e);
+                throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
             }
 
             throw $e;
@@ -145,6 +186,7 @@ final class PdoDatabase implements DatabaseInterface
             (!PRODUCTION || STAGING) && 
             env('debug.show.performance.profiling', false)
         );
+
         return $this->connected;
     }
 
@@ -163,7 +205,7 @@ final class PdoDatabase implements DatabaseInterface
     public function getDriver(): ?string 
     {
         return $this->isConnected() 
-            ? ($this->connection->getAttribute(PDO::ATTR_DRIVER_NAME) ?? $this->config->getValue('pdo_version'))
+            ? ($this->connection->getAttribute(PDO::ATTR_DRIVER_NAME) ?? $this->version)
             : null;
     }
 
@@ -214,7 +256,7 @@ final class PdoDatabase implements DatabaseInterface
      */
     public function getQueryTime(): float|int 
     {
-        return $this->queryTime;
+        return $this->queryTotalTime;
     }
 
     /**
@@ -329,11 +371,11 @@ final class PdoDatabase implements DatabaseInterface
         $this->assertConnection();
         $this->profiling(true);
 
+        $this->query = ['query' => '', 'params' => []];
         $this->isResult = false;
         $this->executed = false;
         $this->stmt = $this->connection->prepare($query);
-
-        $this->profiling(false);
+        $this->addQueryInfo('query', $query);
 
         return $this;
     }
@@ -346,15 +388,18 @@ final class PdoDatabase implements DatabaseInterface
         $this->assertConnection();
         $this->profiling(true);
 
+        $this->query = ['query' => '', 'params' => []];
         $this->isResult = false;
         $this->executed = false;
+
         $this->stmt = $this->connection->query($query) ?: null;
 
         if($this->stmt instanceof PDOStatement){
             $this->executed = true;
         }
 
-        $this->profiling(false);
+        $this->addQueryInfo('query', $query);
+        $this->profiling(false, fn: __METHOD__);
         return $this;
     }
 
@@ -366,20 +411,74 @@ final class PdoDatabase implements DatabaseInterface
         $this->assertConnection();
         $this->profiling(true);
 
+        $this->query = ['query' => '', 'params' => []];
         $this->isResult = false;
         $this->executed = false;
 
-        $executed = $this->connection->exec($query);
-        $this->profiling(false);
+        $result = $this->connection->exec($query);
 
-        if($executed === false){
+        $this->addQueryInfo('query', $query);
+        $this->profiling(false, fn: __METHOD__);
+
+        if($result === false){
             return 0;
         }
 
-        $executed = ($executed === 0 && Database::isDDLQuery($query)) ? 1 : $executed;
-        $this->executed = $executed > 0;
+        $this->executed = true;
 
-        return $executed;
+        if ($result === -1 && Database::isDDLQuery($query)) {
+            return 1;
+        }
+
+        return max(1, $result);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function setTransactionIsolation(int $level = 2): bool
+    {
+        if($level === 0){
+            return true;
+        }
+
+        $this->assertConnection();
+        $mode = match($level){
+            1 => 'READ UNCOMMITTED',
+            2 => 'READ COMMITTED',
+            3 => 'REPEATABLE READ',
+            4 => 'SERIALIZABLE',
+            5 => 'READ WRITE',
+            6 => 'READ ONLY',
+            default => throw new DatabaseException(
+                "Invalid transaction isolation level: {$level}. Allowed levels are integers between 1 and 6.",
+                ErrorCode::DATABASE_TRANSACTION_FAILED
+            )
+        };
+
+        if($this->connection->inTransaction()){
+            throw new DatabaseException(
+                "Cannot set transaction isolation level inside an active transaction",
+                ErrorCode::DATABASE_TRANSACTION_FAILED
+            );
+        }
+
+        try{
+            return $this->connection->exec(sprintf(
+                'SET TRANSACTION ISOLATION LEVEL %s', 
+                $mode
+            )) !== false;
+        }catch(Throwable $e){
+            $this->profiling(false, true, __METHOD__);
+
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+
+        return true;
     }
 
     /**
@@ -387,52 +486,173 @@ final class PdoDatabase implements DatabaseInterface
      */
     public function beginTransaction(int $flags = 0, ?string $name = null): bool
     {
-        $readonly = true;
-        $savepoint = true;
         $this->assertConnection();
-        $this->profiling(true);
+        $inTransaction = $this->connection->inTransaction();
 
-        if ($flags === 4) {
-            $readonly = $this->connection->exec('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
-            
-            if ($readonly === false) {
-                $this->profiling(false, true);
-                throw new DatabaseException(
-                    'Failed to set transaction isolation level for read-only.', 
-                    ErrorCode::DATABASE_TRANSACTION_READONLY_FAILED
-                );
-            }
+        if($inTransaction && $name === null){
+            throw new DatabaseException(
+                'Nested transaction requires a savepoint name',
+                ErrorCode::TRANSACTION_SAVEPOINT_FAILED
+            );
         }
 
-        $status = $this->connection->beginTransaction();
-        if ($status === false) {
-            $this->profiling(false, true);
+        $startedTransaction = false;
 
+        try{
+            if ($flags !== 0 && !$inTransaction) {
+                if($this->startTransactionWithFlags($flags)){
+                    $inTransaction = $this->connection->inTransaction();
+                    $startedTransaction = $inTransaction;
+                }
+            }
+            
+            if (!$inTransaction) {
+                if (!$this->connection->beginTransaction()) {
+                    return false;
+                }
+                
+                $startedTransaction = true;
+            }
+
+            if ($name === null) {
+                return true;
+            }
+
+            return $this->savepoint($name);
+        }catch(Throwable $e){
+            $this->profiling(false, true, __METHOD__);
+
+            if ($startedTransaction && $this->connection->inTransaction()) {
+                try{
+                    $this->connection->rollBack();
+                }catch(Throwable){}
+            }
+
+            if($e instanceof DatabaseException){
+                throw $e;
+            }
+
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function beginNestedTransaction(bool $closeCursor = false): string|bool|null
+    {
+        $this->assertConnection();
+
+        if($closeCursor){
+            $this->free();
+        }
+
+        try{
+            if (!$this->inTransaction()) {
+                return $this->beginTransaction() ? null : false;
+            }
+
+            $savepoint = uniqid('nested_savepoint_');
+            return $this->savepoint($savepoint) 
+                ? $savepoint 
+                : false;
+        }catch(Throwable){
+            return false;
+        }
+    }
+
+    /**
+     * Set the transaction isolation level and options for the current PDO connection.
+     *
+     * This method interprets MySQLi-style bitmask flags to construct the appropriate
+     * `START TRANSACTION` statement for PDO. It supports the following flags:
+     *
+     * Bitmask flags:
+     * 1 (MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT) - Starts transaction with a consistent snapshot (InnoDB behavior)
+     * 2 (MYSQLI_TRANS_START_READ_WRITE)              - Starts transaction in read/write mode
+     * 4 (MYSQLI_TRANS_START_READ_ONLY)               - Starts transaction in read-only mode
+     *
+     * Flags can be combined using bitwise OR, e.g. (1 | 4) to start a read-only transaction
+     * with a consistent snapshot.
+     *
+     * @param int $flags Bitmask representing transaction isolation and mode options.
+     *
+     * @return bool Returns rue on success, false if no recognized flags were provided.
+     *
+     * @throws DatabaseException If the SQL execution fails.
+     */
+    private function startTransactionWithFlags(int $flags)
+    {
+        $clauses = [];
+
+        if ($flags & 1) {
+            $clauses[] = 'WITH CONSISTENT SNAPSHOT';
+        }
+
+        if ($flags & 2) {
+            $clauses[] = 'READ WRITE';
+        }
+
+        if ($flags & 4) {
+            $clauses[] = 'READ ONLY';
+        }
+
+        if ($flags & 5) {
+            $clauses[] = 'ISOLATION LEVEL READ COMMITTED';
+        }
+
+        if ($clauses === []) {
             return false;
         }
 
-        if ($name !== null) {
-            $name = $this->connection->quote("tnx_{$name}");
-            if ($name === false) {
-                $this->profiling(false, true);
+        $sql = 'START TRANSACTION ' . implode(', ', $clauses);
 
-                throw new DatabaseException(
-                    'Failed to create savepoint name.', 
-                    ErrorCode::TRANSACTION_SAVEPOINT_FAILED
-                );
-            }
-
-            $savepoint = $this->connection->exec("SAVEPOINT {$name}") !== false;
-            
-            if ($savepoint === false) {
-                $this->connection->rollBack(); 
-                $this->profiling(false, true);
-
-                return false;
-            }
+        if ($this->connection->exec($sql) === false) {
+            throw new DatabaseException(
+                'Failed to start transaction with flags.',
+                ErrorCode::DATABASE_TRANSACTION_FAILED
+            );
         }
 
-        return $status && $readonly && $savepoint;
+        return true;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function savepoint(string $name): bool
+    {
+        $this->assertConnection();
+
+        if (!$this->connection->inTransaction()) {
+            throw new DatabaseException(
+                'Cannot create savepoint outside transaction'
+            );
+        }
+
+        $name = $this->parseSavepoint($name, __METHOD__, 1);
+
+        try{
+            if($this->connection->exec("SAVEPOINT {$name}") !== false){
+                $this->savepoint[$name] = true;
+                return true;
+            }
+        }catch(Throwable $e){
+            $this->profiling(false, true, __METHOD__);
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+
+        return false;
     }
 
     /**
@@ -441,10 +661,40 @@ final class PdoDatabase implements DatabaseInterface
     public function commit(int $flags = 0, ?string $name = null): bool 
     {
         $this->assertConnection();
-        $result = $this->connection->commit();
-        $this->profiling(false, true);
 
-        return $result;
+        if (!$this->inTransaction()) {
+            return false;
+        }
+
+        $name = $this->parseSavepoint($name, __METHOD__, 2);
+
+        try{
+            if ($name === null) {
+                if($this->connection->commit()){
+                    $this->savepoint = [];
+                    return true;
+                }
+
+                return false;
+            }
+
+            if($this->connection->exec("RELEASE SAVEPOINT {$name}") !== false){
+                unset($this->savepoint[$name]);
+                return true;
+            }
+        }catch(Throwable $e){
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        } finally {
+            if(!$name){
+                $this->profiling(false, true, __METHOD__);
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -453,26 +703,69 @@ final class PdoDatabase implements DatabaseInterface
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
         $this->assertConnection();
-        $result = false;
-        if ($name === null) {
-            $result = $this->connection->rollBack();
-        }else{
-            $name = $this->connection->quote("tnx_{$name}");
 
-            if ($name === false) {
-                $this->profiling(false, true);
-
-                throw new DatabaseException(
-                    'Failed to create savepoint name.', 
-                    ErrorCode::TRANSACTION_SAVEPOINT_FAILED
-                );
-            }
-
-            $result = $this->connection->exec("ROLLBACK TO SAVEPOINT {$name}") !== false;
+        if (!$this->inTransaction()) {
+            return true;
         }
 
-        $this->profiling(false, true);
-        return $result;
+        $name = $this->parseSavepoint($name, __METHOD__, 2);
+        
+        try{
+            if ($name === null) {
+                if($this->connection->rollBack()){
+                    $this->savepoint = [];
+                    return true;
+                }
+
+                return false;
+            }
+
+            if($this->connection->exec("ROLLBACK TO SAVEPOINT {$name}") !== false){
+                unset($this->savepoint[$name]);
+                return true;
+            }
+        }catch(Throwable $e){
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        } finally {
+            if(!$name){
+                $this->profiling(false, true, __METHOD__);
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function release(string $name): bool 
+    {
+        $this->assertConnection();
+
+        if (!$this->inTransaction()) {
+            return false;
+        }
+
+        $name = $this->parseSavepoint($name, __METHOD__, 2);
+
+        try{
+            if($this->connection->exec("RELEASE SAVEPOINT {$name}") !== false){
+                unset($this->savepoint[$name]);
+                return true;
+            }
+        }catch(Throwable $e){
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+
+        return false;
     }
 
     /**
@@ -523,6 +816,7 @@ final class PdoDatabase implements DatabaseInterface
         $type = ($type === null) ? self::getType($value) : self::fromTypes($type);
 
         $this->stmt->bindValue($param, $value, $type);
+        $this->addQueryInfo('params', [$param => $value]);
 
         return $this;
     }
@@ -544,6 +838,7 @@ final class PdoDatabase implements DatabaseInterface
         $type = ($type === null) ? self::getType($value) : self::fromTypes($type);
 
         $this->stmt->bindParam($param, $value, $type);
+        $this->addQueryInfo('params', [$param => $value]);
         
         return $this;
     }
@@ -567,6 +862,12 @@ final class PdoDatabase implements DatabaseInterface
             }
 
             throw $e;
+        } finally{
+            if($params){
+                $this->addQueryInfo('params', $params);
+            }
+
+            $this->profiling(false, fn: __METHOD__);
         }
 
         return $this->executed;
@@ -766,24 +1067,123 @@ final class PdoDatabase implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function profiling(bool $start = true, bool $finishedTransaction = false): void
+    public function profiling(
+        bool $start = true, 
+        bool $finishedTransaction = false,
+        ?string $fn = null
+    ): void
     {
         if(!self::$showProfiling || (!$start && $this->inTransaction() && !$finishedTransaction)){
             return;
         }
-         
+
         if ($start) {
-            self::$startTime = microtime(true);
+            $this->startTime = microtime(true);
+            return;
+        }
+
+        if ($this->startTime <= 0) {
             return;
         }
 
         $end = microtime(true);
-        $this->lastQueryTime = abs($end - self::$startTime);
-        $this->queryTime += ($this->lastQueryTime * 1_000);
+        $this->lastQueryTime = $end - $this->startTime;
+        $this->queryTotalTime += $this->lastQueryTime;
+
+        $executions = Boot::get('__DB_QUERY_EXEC_PROFILING__') ?? [];
+        $executions['global'] = [
+            'time' => $this->queryTotalTime,
+            'driver'   => $this->version,
+        ];
+
+        $executions['queries'][] = [
+            'time' => $this->lastQueryTime,
+            'query'    => $this->query['query'],
+            'method'   => $fn,
+            'params'   => $this->query['params']
+        ];
 
         // Store it in a shared memory to retrieve later when needed.
-        Boot::set('__DB_QUERY_EXECUTION_TIME__', $this->queryTime);
-        self::$startTime = 0;
+        Boot::set('__DB_QUERY_EXEC_PROFILING__', $executions);
+
+        $this->startTime = 0;
+    }
+
+    /**
+     * Normalize transaction savepoint name.
+     * 
+     * @param string|null $name Savepoint name.
+     * @param string $fn called method name.
+     * @param int $check 1 if already exist, 2 if not exist.
+     * 
+     * @return string|null Return normalized name or null if invalid.
+     * @throws DatabaseException
+     */
+    private function parseSavepoint(?string $name, string $fn, int $check = 0): ?string 
+    {
+        if ($name === null) {
+            return null;
+        }
+
+        $name = preg_replace('/[^a-zA-Z0-9_]/', '', trim($name));
+
+        if ($name === '') {
+            $this->profiling(false, true, $fn);
+
+            throw new DatabaseException(
+                'Invalid savepoint name.', 
+                ErrorCode::TRANSACTION_SAVEPOINT_FAILED
+            );
+        }
+
+        $prefix = is_numeric($name) ? 'tnx_' : '';
+        $name = substr($prefix . $name, 0, 64);
+
+        if($check > 0){
+            $isExsit = isset($this->savepoint[$name]);
+            $err = null;
+
+            if($check === 1 && $isExsit){
+                $err = 'Savepoint %s already exist';
+            }elseif($check === 2 && !$isExsit){
+                $err = 'Savepoint %s does not exist.';
+            }
+
+            if($err !== null){
+                $this->profiling(false, true, $fn);
+                throw new DatabaseException(sprintf(
+                    $err,
+                    $name
+                ));
+            }
+        }
+
+        return $name;
+    }
+
+    /**
+     * Add query profiling.
+     * 
+     * @param string $key The query profile key.
+     * @param mixed $value The value.
+     * 
+     * @return void
+     */
+    private function addQueryInfo(string $key, mixed $value): void 
+    {
+        if(!self::$showProfiling){
+            return;
+        }
+
+        if($key === 'query'){
+            $this->query[$key] = $value;
+            return;
+        }
+
+        $this->query[$key] = array_merge(
+            $this->query[$key], 
+            $value
+        );
     }
 
     /**
@@ -847,18 +1247,23 @@ final class PdoDatabase implements DatabaseInterface
         }
 
         $username = $password = null;
-        $version = strtolower($this->config->getValue('pdo_version'));
         $charset = $this->config->getValue('charset');
-        $dsn = $this->dsnConnection($version, $charset);
+
+        if ($charset) {
+            $charset = strtolower($charset);
+            $charset = ($charset === 'utf8' || $charset === 'utf-8') ? 'utf8mb4' : $charset;
+        }
+
+        $dsn = $this->dsnConnection($charset);
 
         if ($dsn === null) {
             throw new DatabaseException(
-                sprintf('Unsupported PDO driver: "%s"', $version),
+                sprintf('Unsupported PDO driver: "%s"', $this->version),
                 ErrorCode::DATABASE_DRIVER_NOT_AVAILABLE
             );
         }
 
-        if ($version !== 'sqlite') {
+        if ($this->version !== 'sqlite') {
             $username = $this->config->getValue('username');
             $password = $this->config->getValue('password');
         }
@@ -866,16 +1271,17 @@ final class PdoDatabase implements DatabaseInterface
         $options = [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ,
-            PDO::ATTR_PERSISTENT => (bool) $this->config->getValue('persistent'),
+            PDO::ATTR_PERSISTENT => Luminova::isCommand() || (bool) $this->config->getValue('persistent', false),
             PDO::ATTR_EMULATE_PREPARES => (bool) $this->config->getValue('emulate_prepares'),
         ];
 
-        if ($version === 'mysql') {
-            $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = (bool) PRODUCTION;
-
-            if ($charset) {
-                $options[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES '{$charset}'";
-            }
+        if ($this->version === 'mysql') {
+            $options[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = (bool) $this->config->getValue(
+                'buffered_query', 
+                false
+            );
+            $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = PRODUCTION;
+            $this->setInitCommands($charset, $options);
 
             if ($timeout = $this->config->getValue('timeout')) {
                 $options[PDO::ATTR_TIMEOUT] = (int) $timeout;
@@ -886,16 +1292,81 @@ final class PdoDatabase implements DatabaseInterface
     }
 
     /**
+     * Apply developers defined command.
+     * 
+     * @param string|null $charset
+     * @param array &$options
+     * 
+     * @return void 
+     */
+    private function setInitCommands(?string $charset, array &$options): void 
+    {
+        $commands = (array) $this->config->getValue('commands', []);
+        $statements = [];
+        $hasSetNames = false;
+
+        if($commands){
+            foreach ($commands as $command) {
+                $command = trim($command);
+
+                if ($command === '') {
+                    continue;
+                }
+
+                if (!str_starts_with(strtoupper($command), 'SET ')) {
+                    throw new DatabaseException(
+                        sprintf(
+                            'Invalid command: %s. Only SET statements are allowed.',
+                            $command
+                        ),
+                        ErrorCode::VALUE_FORBIDDEN
+                    );
+                }
+
+                if (preg_match('/^SET\s+NAMES\b/i', $command)) {
+                    if (!preg_match(
+                        '/^SET\s+NAMES\s+[a-z0-9_]+(\s+COLLATE\s+[a-z0-9_]+)?$/i',
+                        $command
+                    )) {
+                        throw new DatabaseException(
+                            "Invalid SET NAMES statement: {$command}",
+                            ErrorCode::VALUE_FORBIDDEN
+                        );
+                    }
+
+                    $hasSetNames = true;
+                }
+
+                $statements[] = rtrim($command, ';');
+            }
+        }
+
+        if ($charset && !$hasSetNames) {
+            if (!preg_match('/^[a-z0-9_]+$/i', $charset)) {
+                throw new DatabaseException(
+                    "Invalid MySQL charset: {$charset}", 
+                    ErrorCode::VALUE_FORBIDDEN
+                );
+            }
+
+            $statements[] = "SET NAMES {$charset}";
+        }
+
+        if($statements){
+            $options[PDO::MYSQL_ATTR_INIT_COMMAND] = implode('; ', $statements);
+        }
+    }
+
+    /**
      * Get driver connection Data Source Name (DSN).
      *
-     * @param string $version Connection driver version name.
      * @param string|null $charset
      * 
      * @return string|null
      */
-    private function dsnConnection(string $version, ?string $charset = null): ?string
+    private function dsnConnection(?string $charset = null): ?string
     {
-        if($version === 'sqlite'){
+        if($this->version === 'sqlite'){
             $sqlitePath = $this->config->getValue('sqlite_path');
             if(!$sqlitePath){
                 return null;
@@ -907,9 +1378,9 @@ final class PdoDatabase implements DatabaseInterface
         $database = $this->config->getValue('database');
         $host = $this->config->getValue('host');
         $port = $this->config->getValue('port');
-        $options = ($charset && $version === 'pgsql') ? ";options='--client_encoding={$charset}'" : '';
+        $options = ($charset && $this->version === 'pgsql') ? ";options='--client_encoding={$charset}'" : '';
 
-        return match($version){
+        return match($this->version){
             'mysql' => $this->withMysqlDsn($database, $host, $port, $charset),
             'cubrid' => "cubrid:host={$host};port={$port};dbname={$database}",
             'dblib' => "dblib:host={$host}:{$port};dbname={$database}",
@@ -940,7 +1411,8 @@ final class PdoDatabase implements DatabaseInterface
 
             if(!$socketPath){
               throw new DatabaseException(sprintf(
-                    'PDO MySQL socket path not set. Define it in the environment as "%s", or configure "%s" in your php.ini.',
+                    'PDO MySQL socket path not set. Define it in the environment as "%s", ' . 
+                    'or configure "%s" in your php.ini.',
                     'database.mysql.socket.path',
                     'pdo_mysql.default_socket'
                 ));

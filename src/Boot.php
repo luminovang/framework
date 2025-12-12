@@ -11,6 +11,7 @@
 namespace Luminova;
 
 use \Throwable;
+use \Luminova\Luminova;
 use \Luminova\Http\Header;
 use \Luminova\Logger\Logger;
 use \Luminova\Routing\Router;
@@ -22,7 +23,6 @@ use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Foundation\Core\Application;
 use \Luminova\Foundation\Module\Autoloader;
 use function \Luminova\Funcs\{root, import};
-use \Luminova\Interface\{KernelInterface, RouterInterface, LazyObjectInterface};
 
 /**
  * Luminova framework autoloader helper class.
@@ -68,6 +68,18 @@ use \Luminova\Interface\{KernelInterface, RouterInterface, LazyObjectInterface};
  */
 final class Boot
 {
+    private const CORE_KEYS = [
+        'SHOW_QUERY_DEBUG',
+        'ALTER_DROP_COLUMNS',
+        'CHECK_ALTER_TABLE',
+        'MIGRATION_SUCCESS',
+        'ALTER_SUCCESS',
+        'DROP_TRANSACTION',
+        '__DB_QUERY_EXEC_PROFILING__',
+        '__CLASS_METADATA__',
+        '__IN_TEMPLATE_CONTEXT__',
+    ];
+
     /**
      * Storage for shared keys and values.
      *
@@ -173,36 +185,13 @@ final class Boot
     /**
      * Get the shared application instance.
      *
-     * Returns the current CoreApplication singleton.  
-     * This provides a single, global access point to the running application.
-     *
      * @return Application|\App\Application<Application> Returns the application instance.
-     * > **Note:**
-     * > Future versions may introduce parameters so the method can return
-     * > context-specific or module-specific application instances.
      */
     public static function application(): Application
     {
-        return \App\Application::getInstance();
+        return Luminova::kernel(false)->getApplication() 
+            ?? \App\Application::getInstance();
     }
-
-    /**
-     * Return the kernel instance for this application.
-     *
-     * @return KernelInterface|\App\Config\Kernel The kernel instance, or null to use the default.
-     */
-   /* public static function kernel(): KernelInterface
-    {
-        if(!Kernel::shouldShareObject()){
-            return Kernel::create();
-        }
-
-        if(!self::$kernel instanceof KernelInterface){
-            self::$kernel = Kernel::create();
-        }
-
-        return self::$kernel;
-    }*/
 
     /**
      * Prepares the CLI environment.
@@ -238,7 +227,7 @@ final class Boot
 
         defined('CLI_ENVIRONMENT') || define('CLI_ENVIRONMENT', env('cli.environment.mood', 'testing'));
 
-        self::shouldDefineCommandStreams();
+        self::defineCliStreams();
         self::finish();
     }
 
@@ -259,13 +248,15 @@ final class Boot
             return;
         }
 
-        require_once __DIR__ . '/../bootstrap/constants.php';
+        require __DIR__ . '/../bootstrap/constants.php';
         self::override();
 
-        require_once __DIR__ . '/../bootstrap/functions.php';
-        require_once __DIR__ . '/Foundation/Error/Guard.php';
-        require_once __DIR__ . '/Foundation/Error/Message.php';
-        require_once __DIR__ . '/Luminova.php';
+
+        require __DIR__ . '/../bootstrap/functions.php';
+        require __DIR__ . '/Exceptions/ErrorCode.php';
+        require __DIR__ . '/Foundation/Error/Guard.php';
+        require __DIR__ . '/Foundation/Error/Message.php';
+        require __DIR__ . '/Luminova.php';
 
         self::$isWarmed = true;
     }
@@ -305,40 +296,81 @@ final class Boot
     }
 
     /**
-     * Ensures CLI standard streams (STDIN, STDOUT, STDERR) are defined.
+     * Ensures CLI standard streams (STDIN, STDOUT, STDERR) are available.
      *
-     * Uses `tryFopen()` to safely define them if not already set.
+     * If the constants are not already defined, this method safely opens the
+     * corresponding PHP streams using `tryFopen()` and defines them.
      *
      * @return void
-     * @throws RuntimeException If any stream cannot be defined.
+     * @throws RuntimeException If any of the streams cannot be opened or defined.
      */
-    public static function shouldDefineCommandStreams(): void 
+    public static function defineCliStreams(): void
     {
-        defined('STDIN') || define('STDIN', self::tryFopen('php://stdin', 'r'));
+        defined('STDIN')  || define('STDIN',  self::tryFopen('php://stdin',  'r'));
         defined('STDOUT') || define('STDOUT', self::tryFopen('php://stdout', 'w'));
         defined('STDERR') || define('STDERR', self::tryFopen('php://stderr', 'w'));
     }
 
     /**
-     * Set a shared value.
+     * Store a shared value by key.
      *
-     * Stores the given value under the specified key.
+     * Saves a value in the shared storage. If both the existing value and
+     * the new value are arrays, they are merged using `array_replace`,
+     * with the new values overriding existing ones.
      *
-     * @param string $key The key to store the value under.
-     * @param mixed  $value The value to store.
+     * @param string $key The storage key.
+     * @param mixed $value The value to store.
+     *
+     * @return mixed Returns the stored value.
+     *
+     * @example - Examples:
+     * ```php
+     * use Luminova\Boot;
+     *
+     * Boot::set('theme', 'dark');
+     * Boot::set('config', ['debug' => true]);
+     * Boot::set('config', ['cache' => false]); // merges with existing array
+     * ```
+     */
+    public static function set(string $key, mixed $value): mixed
+    {
+        if (is_array($value) && is_array(self::$storage[$key] ?? null)) {
+            return self::$storage[$key] = array_replace(
+                self::$storage[$key],
+                $value
+            );
+        }
+
+        return self::$storage[$key] = $value;
+    }
+
+    /**
+     * Add a value to a shared array entry.
+     *
+     * Ensures the storage key exists as an array, then assigns the value
+     * at the given index.
+     *
+     * @param string $key The storage key.
+     * @param string|int $index The array index to add value.
+     * @param mixed $value The value to store.
      *
      * @return mixed Returns the stored value.
      *
      * @example - Example:
      * ```php
      * use Luminova\Boot;
-     * 
-     * Boot::set('theme', 'dark');
+     *
+     * Boot::add('routes', 'home', '/');
+     * Boot::add('routes', 'login', '/login');
      * ```
      */
-    public static function set(string $key, mixed $value): mixed
+    public static function add(string $key, string|int $index, mixed $value): mixed
     {
-        return self::$storage[$key] = $value;
+        if (!isset(self::$storage[$key])) {
+            self::$storage[$key] = [];
+        }
+
+        return self::$storage[$key][$index] = $value;
     }
 
     /**
@@ -383,38 +415,58 @@ final class Boot
     }
 
     /**
-     * Remove a key from the shared storage.
+     * Remove a value from the shared storage.
      *
-     * @param string $key The key to remove.
+     * By default, this method protects Luminova internal keys and will not
+     * remove framework-owned storage entries. To force removal of a core
+     * key, explicitly set `$user` to false.
+     *
+     * @param string $key  The storage key to remove.
+     * @param bool $userDefined Whether to enforce protection for core keys.
      *
      * @return void
+     *
      * @example - Example:
      * ```php
      * use Luminova\Boot;
-     * 
+     *
+     * // Remove a user-defined key
      * Boot::remove('theme');
+     *
+     * // Force removal of a core key (not recommended)
+     * Boot::remove('__CLASS_METADATA__', false);
      * ```
      */
-    public static function remove(string $key): void
+    public static function remove(string $key, bool $userDefined = true): void
     {
+        if ($userDefined && in_array($key, self::CORE_KEYS, true)) {
+            return;
+        }
+
         unset(self::$storage[$key]);
     }
 
     /**
-     * Clear all keys from the shared storage.
+     * Clear all user-defined values from the shared storage.
      *
-     * @return void 
-     * 
-     * @example - Example:
+     * Core Luminova keys are preserved and cannot be removed by this method.
+     * This makes the operation safe to use in long-running processes and
+     * framework-level code.
+     *
+     * @return void
+     *
+     * @example - Example
      * ```php
      * use Luminova\Boot;
-     * 
+     *
      * Boot::clear();
      * ```
      */
     public static function clear(): void
     {
-        self::$storage = [];
+        foreach (array_keys(self::$storage) as $key) {
+            self::remove($key);
+        }
     }
 
     /**
@@ -484,26 +536,25 @@ final class Boot
     /**
      * Load application is undergoing maintenance.
      * 
-     * @return bool Return true.
+     * @return void
      */
-    private static function maintenance(bool $isCommand): bool 
+    private static function maintenance(bool $isCommand): void 
     {
         $err = 'Error: (503) System undergoing maintenance!';
 
         if($isCommand){
             Terminal::error($err);
-            return true;
+            return;
         }
 
-        Header::headerNoCache(503, null, env('app.maintenance.retry', '3600'));
+        $retry = env('app.maintenance.retry', 3600);
         
         try{
+            Header::sendNoCacheHeaders(503, retry: $retry);
             import(path: 'app:Errors/Defaults/maintenance.php', once: true, throw: true);
         }catch(Throwable){
-            echo $err;
+            Header::terminate(503, $err, 'Service Unavailable', $retry);
         }
-
-        return true;
     }
 
     /**
@@ -543,11 +594,9 @@ final class Boot
                 $rendered = $cache->read(
                     $matches[1],
                     onBeforeRender: fn() => Luminova::profiling('start'),
-                    onRendered: function() {
-                        Luminova::setClassMetadata([
-                            'staticCache' => true, 
-                            'cache' => true
-                        ]);
+                    onRendered: function(): void {
+                        self::add('__CLASS_METADATA__', 'staticCache', true);
+                        self::add('__CLASS_METADATA__', 'cache', true);
                         Luminova::profiling('stop');
                     }
                 );
@@ -575,14 +624,15 @@ final class Boot
      */
     private static function finish(): void
     {
-        require_once __DIR__ . '/plugins/autoload.php';
+        require __DIR__ . '/plugins/autoload.php';
 
         self::features();
         defined('IS_UP') || define('IS_UP', true);
         $isCommand = Luminova::isCommand();
 
         // If application is undergoing maintenance.
-        if(MAINTENANCE && self::maintenance($isCommand)){
+        if(MAINTENANCE){
+            self::maintenance($isCommand);
             exit(STATUS_SUCCESS);
         }
 

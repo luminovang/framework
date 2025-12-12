@@ -13,6 +13,7 @@ namespace Luminova\Command\Consoles;
 use \Throwable;
 use \SplFileObject;
 use \Luminova\Base\Console;
+use \Luminova\Command\Terminal;
 use \Luminova\Http\Client\Novio;
 use \Luminova\Command\Utils\Text;
 use \Luminova\Command\Utils\Color;
@@ -51,23 +52,22 @@ class System extends Console
      */
     public function run(?array $options = []): int
     {
-        $this->term->perse($options);
-        $command = trim($this->term->getCommand());
-        $key = $this->term->getAnyOption('key', 'k');
-        $value = $this->term->getAnyOption('value', 'v');
+        $name = trim($this->input->getName());
+        $key = $this->input->getAnyOption('key', 'k');
+        $value = $this->input->getAnyOption('value', 'v');
 
-        $runCommand = match($command){
+        $runCommand = match($name){
             'generate:key' => $this->generateKey(),
             'generate:sitemap' => $this->deprecatedSitemap(),
             'env:add' => $this->addEnv($key, $value),
             'env:cache' => $this->cacheEnv(),
-            'env:setup' => $this->setupEnv($this->term->getAnyOption('target', 't')),
+            'env:setup' => $this->setupEnv($this->input->getAnyOption('target', 't')),
             'env:remove' => $this->removeEnv($key),
             default => null
         };
 
         if ($runCommand === null) {
-            return $this->term->oops($command);
+            return Terminal::oops($name);
         } 
 
         return (int) $runCommand;
@@ -92,16 +92,16 @@ class System extends Console
     private function addEnv(string $key, string $value = ''): int 
     {
         if($key === ''){
-            $this->term->beeps();
-            $this->term->error('Environment variable key cannot be an empty string');
+            Terminal::beeps();
+            Terminal::error('Environment variable key cannot be an empty string');
 
             return STATUS_ERROR;
         }
 
         setenv($key, $value, true);
-        $this->term->header();
-        $this->term->success('Variable "' . $key . '" added successfully');
-        $this->term->writeln('Optionally run "php novakit env:cache" to create updated cache version of environment variables.');
+        Terminal::header();
+        Terminal::success('Variable "' . $key . '" added successfully');
+        Terminal::writeln('Optionally run "php novakit env:cache" to create updated cache version of environment variables.');
 
         return STATUS_SUCCESS;
     }
@@ -117,14 +117,14 @@ class System extends Console
         $envCache = root('/writeable/', '.env-cache.php');
 
         if (!is_file($path)) {
-            $this->term->beeps();
-            $this->term->error('Environment variable file not found at the application root.');
+            Terminal::beeps();
+            Terminal::error('Environment variable file not found at the application root.');
 
             return STATUS_ERROR;
         }
 
         $ignoreKeys = [];
-        $ignore = $this->term->getAnyOption('ignore', 'i');
+        $ignore = $this->input->getAnyOption('ignore', 'i');
 
         if($ignore){
            $ignoreKeys = explode(',', $ignore);
@@ -154,19 +154,19 @@ class System extends Console
             }
 
             if($entry !== [] && __cache_env($entry, $envCache)){
-                $this->term->header();
-                $this->term->success('Environment variable cache was successfully created.');
+                Terminal::header();
+                Terminal::success('Environment variable cache was successfully created.');
 
                 return STATUS_SUCCESS;
             }
         } catch (Throwable $e) {
-            $this->term->beeps();
-            $this->term->error('Failed to create cache for environment variables: ' . $e->getMessage());
+            Terminal::beeps();
+            Terminal::error('Failed to create cache for environment variables: ' . $e->getMessage());
             return STATUS_ERROR;
         }
 
-        $this->term->beeps();
-        $this->term->error('Failed to create cache for environment variables.');
+        Terminal::beeps();
+        Terminal::error('Failed to create cache for environment variables.');
         return STATUS_SUCCESS;
     }
 
@@ -186,8 +186,8 @@ class System extends Console
     private function setupEnv(?string $target): int 
     {
         if (!$target) {
-            $this->term->beeps();
-            $this->term->error('Missing target environment context. Usage: `-t=telegram`.');
+            Terminal::beeps();
+            Terminal::error('Missing target environment context. Usage: `-t=telegram`.');
             return STATUS_ERROR;
         }
 
@@ -198,8 +198,8 @@ class System extends Console
         };
 
         if($contextStatus === null){
-            $this->term->beeps();
-            $this->term->error("Unsupported setup target: '{$target}'.");
+            Terminal::beeps();
+            Terminal::error("Unsupported setup target: '{$target}'.");
             return STATUS_ERROR;
         }
 
@@ -233,7 +233,7 @@ class System extends Console
             'white'
         );
 
-        $this->term->writeln($block);
+        Terminal::writeln($block);
     }
 
     /**
@@ -254,49 +254,49 @@ class System extends Console
     {
         $this->setupHeader($target);
         
-        $hostname = $this->term->input('Enter database hostname (default: localhost): ', 'localhost');
+        $hostname = Terminal::input('Enter database hostname (default: localhost): ', 'localhost');
         setenv('database.hostname', $hostname, true);
 
-        $port = $this->term->input('Enter database port (default: 3306): ', '3306');
+        $port = Terminal::input('Enter database port (default: 3306): ', '3306');
         setenv('database.port', $port, true);
 
-        $charset = $this->term->input('Enter database charset (default: utf8mb4): ', 'utf8mb4');
+        $charset = Terminal::input('Enter database charset (default: utf8mb4): ', 'utf8mb4');
         setenv('database.charset', $charset, true);
 
-        $connectionPool = $this->term->prompt(
+        $connectionPool = Terminal::prompt(
             'Enable connection pooling?', 
             ['yes', 'no'], 'required|in_array(yes,no)'
         ) === 'yes';
         setenv('database.connection.pool', $connectionPool ? 'true' : 'false', true);
 
-        $maxConnections = $this->term->input('Enter max database connections (default: 3): ', '3');
+        $maxConnections = Terminal::input('Enter max database connections (default: 3): ', '3');
         setenv('database.max.connections', $maxConnections, true);
 
-        $connectionRetry = $this->term->input('Enter number of connection retries (default: 1): ', '1');
+        $connectionRetry = Terminal::input('Enter number of connection retries (default: 1): ', '1');
         setenv('database.connection.retry', $connectionRetry, true);
 
-        $persistentConnection = $this->term->prompt(
+        $persistentConnection = Terminal::prompt(
             'Enable persistent connections?', 
             ['yes', 'no'], 'required|in_array(yes,no)'
         ) === 'yes';
         setenv('database.persistent.connection', $persistentConnection ? 'true' : 'false', true);
 
-        $emulatePrepares = $this->term->prompt(
+        $emulatePrepares = Terminal::prompt(
             'Enable query pre-parsing emulation?', 
             ['yes', 'no'], 'required|in_array(yes,no)'
         ) === 'yes';
         setenv('database.emulate.prepares', $emulatePrepares ? 'true' : 'false', true);
 
-        $prodUsername = $this->term->input('Enter production database username: ');
+        $prodUsername = Terminal::input('Enter production database username: ');
         setenv('database.username', $prodUsername, true);
 
-        $prodDatabase = $this->term->input('Enter production database name: ');
+        $prodDatabase = Terminal::input('Enter production database name: ');
         setenv('database.name', $prodDatabase, true);
 
-        $prodPassword = $this->term->input('Enter production database password: ');
+        $prodPassword = Terminal::input('Enter production database password: ');
         setenv('database.password', $prodPassword, true);
 
-        $cachingDriver = array_key_first($this->term->chooser(
+        $cachingDriver = array_key_first(Terminal::chooser(
             'Choose the cache driver for database builder class:',
             ['filesystem' => 'Filesystem', 'memcached' => 'Memcached'],
             false,
@@ -305,7 +305,7 @@ class System extends Console
 
         setenv(($cachingDriver ? '' : '; ') . 'database.caching.driver', $cachingDriver, true);
 
-        $connectionDriver = array_key_first($this->term->chooser(
+        $connectionDriver = array_key_first(Terminal::chooser(
             'Choose the database connection driver:',
             ['PDO' => 'PDO Driver', 'MYSQLI' => 'MySQLi Driver'],
             true,
@@ -323,7 +323,7 @@ class System extends Console
                 'SQL Server' => 'sqlsrv',
                 'PostgreSQL' => 'pgsql'
             ];
-            $pdoEngine = $this->term->tablist(
+            $pdoEngine = Terminal::tablist(
                 ['MySQL', 'SQLite', 'Oracle', 'DBLib', 'CUBRID', 'SQL Server','PostgreSQL'],
                 0,
                 'Specify your PDO database engine:'
@@ -331,7 +331,7 @@ class System extends Console
             setenv('database.pdo.version', $map[$pdoEngine] ?? 'mysql', true);
         }
 
-        $mysqlSocket = $this->term->prompt(
+        $mysqlSocket = Terminal::prompt(
             'Force MySQL/PGSQL connection via socket?', 
             ['yes', 'no'],'required|in_array(yes,no)'
         ) === 'yes';
@@ -340,43 +340,43 @@ class System extends Console
         $isSqlite = ($connectionDriver === 'PDO' && $pdoEngine === 'sqlite');
 
         if ($mysqlSocket) {
-            $socketPath = $this->term->input('Enter MySQL/PGSQL socket path (e.g, /var/mysql/mysql.sock): ');
+            $socketPath = Terminal::input('Enter MySQL/PGSQL socket path (e.g, /var/mysql/mysql.sock): ');
             setenv(($socketPath ? '' : '; ') . 'database.mysql.socket.path', $socketPath, true);
         }
 
         if ($isSqlite) {
-            $sqlitePath = $this->term->input('Enter SQLite database path for production: ');
+            $sqlitePath = Terminal::input('Enter SQLite database path for production: ');
             if ($sqlitePath) {
                 setenv('database.sqlite.path', $sqlitePath, true);
             }
         }
 
         // Development Database Configuration
-        $forLocal = $this->term->prompt(
+        $forLocal = Terminal::prompt(
             'Do you want to setup database for development?',
             ['yes', 'no'],
             'required|in_array(yes,no)'
         ) === 'yes';
 
         if ($forLocal) {
-            $devUsername = $this->term->input('Enter development database username: ');
+            $devUsername = Terminal::input('Enter development database username: ');
             setenv('database.development.username', $devUsername, true);
 
-            $devDatabase = $this->term->input('Enter development database name: ');
+            $devDatabase = Terminal::input('Enter development database name: ');
             setenv('database.development.name', $devDatabase, true);
 
-            $devPassword = $this->term->input('Enter development database password: ');
+            $devPassword = Terminal::input('Enter development database password: ');
             setenv('database.development.password', $devPassword, true);
 
             if ($isSqlite) {
-                $devSqlitePath = $this->term->input('Enter SQLite database path for development: ');
+                $devSqlitePath = Terminal::input('Enter SQLite database path for development: ');
                 if ($devSqlitePath) {
                     setenv('database.development.sqlite.path', $devSqlitePath, true);
                 }
             }
         }
 
-        $this->term->success('Database configuration completed successfully.');
+        Terminal::success('Database configuration completed successfully.');
         return STATUS_SUCCESS;
     }
 
@@ -396,15 +396,15 @@ class System extends Console
     private function setupTelegram(string $target): int 
     {
         $this->setupHeader($target);
-        $token = $this->term->getOption('token', env('telegram.bot.token'));
-        $chatId = $this->term->getOption('chatid');
+        $token = $this->input->getOption('token', env('logger.telegram.bot.token'));
+        $chatId = $this->input->getOption('chatid');
 
         if (!$token) {
-            $token = $this->term->input('Enter your Telegram bot token: ');
+            $token = Terminal::input('Enter your Telegram bot token: ');
         }
 
         if (!$token) {
-            $this->term->error('Telegram setup failed: No bot token provided.');
+            Terminal::error('Telegram setup failed: No bot token provided.');
             return STATUS_ERROR;
         }
 
@@ -427,36 +427,36 @@ class System extends Console
                 }
 
                 if (!$chatId) {
-                    $this->term->writeln("Unable to retrieve the Telegram chat ID.");
-                    $this->term->writeln("If your bot is new, try sending it a message (e.g., 'Hi!').");
-                    $this->term->writeln("Ensure your bot token is valid.");
+                    Terminal::writeln("Unable to retrieve the Telegram chat ID.");
+                    Terminal::writeln("If your bot is new, try sending it a message (e.g., 'Hi!').");
+                    Terminal::writeln("Ensure your bot token is valid.");
                 }
 
             } catch (Throwable $fe) {
-                $this->term->error("Telegram API request failed: {$fe->getMessage()}");
+                Terminal::error("Telegram API request failed: {$fe->getMessage()}");
             }
         }
 
         if (!$chatId) {
-            $manually = $this->term->prompt(
+            $manually = Terminal::prompt(
                 'Would you like to enter the chat ID manually?', 
                 ['yes', 'no'], 
                 'required|in_array(yes,no)'
             );
 
             if ($manually === 'yes') {
-                $chatId = $this->term->input('Enter your Telegram chat ID: ');
+                $chatId = Terminal::input('Enter your Telegram chat ID: ');
             }
         }
 
         if ($chatId) {
-            setenv('telegram.bot.token', $token, true);
-            setenv('telegram.bot.chat.id', $chatId, true);
-            $this->term->success('Telegram environment variables have been successfully updated.');
+            setenv('logger.telegram.bot.token', $token, true);
+            setenv('logger.telegram.bot.chat.id', $chatId, true);
+            Terminal::success('Telegram environment variables have been successfully updated.');
             return STATUS_SUCCESS;
         }
 
-        $this->term->error('Failed to configure Telegram environment variables.');
+        Terminal::error('Failed to configure Telegram environment variables.');
         return STATUS_ERROR;
     }
 
@@ -471,8 +471,8 @@ class System extends Console
     private function removeEnv(string $key): int 
     {
         if($key === ''){
-            $this->term->beeps();
-            $this->term->error('Environment variable key cannot be an empty string');
+            Terminal::beeps();
+            Terminal::error('Environment variable key cannot be an empty string');
 
             return STATUS_ERROR;
         }
@@ -482,8 +482,8 @@ class System extends Console
         $envContents = get_content($envFile);
         
         if($envContents === false){
-            $this->term->beeps();
-            $this->term->error('Failed to read environment file');
+            Terminal::beeps();
+            Terminal::error('Failed to read environment file');
             return STATUS_ERROR;
         }
         
@@ -500,15 +500,15 @@ class System extends Console
                     __cache_env($entries, $envCache);
                 }
 
-                $this->term->header();
-                $this->term->success('Variable "' . $key . '" was deleted successfully');
+                Terminal::header();
+                Terminal::success('Variable "' . $key . '" was deleted successfully');
 
                 return STATUS_SUCCESS;
             }
         }
 
-        $this->term->beeps();
-        $this->term->error('Variable "' . $key . '" not found or may have been deleted');
+        Terminal::beeps();
+        Terminal::error('Variable "' . $key . '" not found or may have been deleted');
 
         return STATUS_ERROR;
     }
@@ -520,7 +520,7 @@ class System extends Console
      */
     private function deprecatedSitemap(): int 
     {
-        $this->term->error('This command is deprecated. Use "php novakit sitemap" instead.');
+        Terminal::error('This command is deprecated. Use "php novakit sitemap" instead.');
         return STATUS_ERROR;
     }
 
@@ -531,34 +531,34 @@ class System extends Console
      */
     private function generateKey(): int 
     {
-        $noSave = (bool) $this->term->getAnyOption('no-save', 'n', false);
-        $prefix = $this->term->getAnyOption('prefix', 'p', '');
-        $length = $this->term->getAnyOption('length', 'l', null);
+        $noSave = (bool) $this->input->getAnyOption('no-save', 'n', false);
+        $prefix = $this->input->getAnyOption('prefix', 'p', '');
+        $length = $this->input->getAnyOption('length', 'l', null);
         $length = ($length !== null) ? (int) $length : null;
 
         $key = Key::newRandom(length: $length);
 
         if (!$key) {
-            $this->term->beeps();
-            $this->term->error('Failed to generate application encryption key.');
+            Terminal::beeps();
+            Terminal::error('Failed to generate application encryption key.');
             return STATUS_ERROR;
         }
 
         $fullKey = $prefix . $key;
-        $this->term->success($noSave 
+        Terminal::success($noSave 
             ? 'Application key generated successfully.'
             : 'Generated key was saved to environment variables successfully.'
         );
 
-        $this->term->newLine();
+        Terminal::newLine();
 
         if ($noSave) {
-            $this->term->print("Key: {$fullKey}" . PHP_EOL);
+            Terminal::print("Key: {$fullKey}" . PHP_EOL);
             return STATUS_SUCCESS;
         } 
 
         setenv('app.key', $fullKey, true);
-        $this->term->writeln(
+        Terminal::writeln(
             Text::padding('Output File:', 15, Text::LEFT) 
             . Color::style(root(filename: '.env'), 'cyan')
         );

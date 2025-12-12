@@ -13,6 +13,7 @@ namespace Luminova\Foundation\Module;
 use \Throwable;
 use \Luminova\Time\Task;
 use \App\Config\Services;
+use \Luminova\Http\Request;
 use \Luminova\Logger\Logger;
 use \Luminova\Cookies\Cookie;
 use \Luminova\Library\Modules;
@@ -20,25 +21,21 @@ use \Luminova\Security\Escaper;
 use \Luminova\Sessions\Session;
 use \Luminova\Template\Response;
 use \Luminova\Security\Validation;
-use \Luminova\Http\{Request, Network};
 use \Luminova\Foundation\Module\Caller;
 use \Luminova\Foundation\Module\Service;
-use \Luminova\Foundation\Core\Functions;
-use \Luminova\Utility\Storage\Filesystem;
-use \Luminova\Component\Languages\Translator;
+use \Luminova\Components\Languages\Translator;
 use \Luminova\Notifications\Firebase\Notification;
+use \Luminova\Storage\{Filesystem, FileResponse};
 use \Luminova\Exceptions\{AppException, RuntimeException};
 
 /**
  * Factory methods classes.
  *
- * @method static Functions        functions(bool $shared = true)                             Utility function helper class.
  * @method static Session             session(?\Luminova\Interface\SessionManagerInterface $manager = null, bool $shared = true)                   Server-side user session class, if manager is null `\Luminova\Sessions\SessionManager` will be used instead.
  * @method static Cookie              cookie(string $name, mixed $value = '', array $options = [], bool $shared = true)                    Client-side cookie class
  * @method static Task                task(bool $shared = true)                      Time task utility class.
  * @method static Modules             modules(bool $shared = true)                               PSR-4 Module autoloader and file importer class.
  * @method static Translator          language(?string $locale = null, bool $shared = true)      Application translation class.
- * @method static Logger              logger(bool $shared = true)                                PSR logger class.
  * @method static Filesystem         filesystem(bool $shared = true)                           File manager class.
  * @method static Validation          validate(bool $shared = true)                              Input validation class.
  * @method static Response            response(int $status = 200, array $headers = [], bool $shared = true)           Render response class.
@@ -66,17 +63,14 @@ final class Factory
         'task'          => Task::class,
         'session'       => Session::class,
         'cookie'        => Cookie::class,
-        'functions'     => 'Functions',
         'escaper'       => Escaper::class,
         'modules'       => Modules::class,
         'language'      => Translator::class,
-        'logger'        => Logger::class,
-        'fileManager'   => Filesystem::class,
+        'fileResponse'  => FileResponse::class,
         'filesystem'    => Filesystem::class,
         'validate'      => Validation::class,
         'response'      => Response::class,
         'request'       => Request::class,
-        'network'       => Network::class,
         'caller'        => Caller::class,
         'notification'  => Notification::class
     ];
@@ -260,9 +254,7 @@ final class Factory
     private static function create(string $class, ?string $alias = null, bool $shared = true, mixed ...$arguments): object
     {
         try {
-            $instance = ($class === 'Functions') 
-                ? new class extends Functions{} 
-                : new $class(...$arguments);
+            $instance = new $class(...$arguments);
             
             if ($shared && $alias) {
                 self::$instances[$alias] = $instance;

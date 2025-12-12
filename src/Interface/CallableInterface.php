@@ -12,5 +12,7 @@ namespace Luminova\Interface;
 
 /**
  * Marker interface for callable parameter.
+ * 
+ * @deprecated
  */
 interface CallableInterface {}

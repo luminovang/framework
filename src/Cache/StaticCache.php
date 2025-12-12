@@ -11,11 +11,12 @@
 namespace Luminova\Cache;
 
 use \Closure;
+use \Luminova\Boot;
 use \DateTimeInterface;
-use \Luminova\Luminova;
 use \Luminova\Http\Header;
+use \Luminova\Utility\MIME;
 use \Luminova\Time\Timestamp;
-use \Luminova\Utility\Storage\Filesystem;
+use \Luminova\Storage\Filesystem;
 use function \Luminova\Funcs\{make_dir, string_length};
 
 final class StaticCache
@@ -286,7 +287,7 @@ final class StaticCache
      */
     public function clear(?string $version = null): int 
     {
-        return Filesystem::remove(
+        return Filesystem::delete(
             $this->getLocation() . 
             ($version ?? APP_VERSION) . 
             DIRECTORY_SEPARATOR
@@ -312,7 +313,7 @@ final class StaticCache
 
         
         if(self::$cache === [] && $this->init() === false){
-            Header::headerNoCache(404);
+            Header::sendNoCacheHeaders(404);
             return false;
         }
 
@@ -326,7 +327,7 @@ final class StaticCache
         $eTag = self::$cache['ETag'] ?? null;
 
         if($onBeforeRender === null){
-            Luminova::addClassMetadata('cache', true);
+            Boot::add('__CLASS_METADATA__', 'cache', true);
         }else{
             $onBeforeRender();
         }
@@ -360,7 +361,7 @@ final class StaticCache
             }
         }
 
-        Header::validate($this->getHeaders(true), $status);
+        Header::send($this->getHeaders(true), status: $status);
 
         if($status === null){
             Header::clearOutputBuffers('all');
@@ -434,7 +435,7 @@ final class StaticCache
         $expiration = ($this->expiration === 0) ? 31536000 * 5 : $this->expiration;
         $length = (int) ($headers['Content-Length'] ?? string_length($content));
 
-        $headers['Content-Type'] = Header::getContentTypes($type);
+        $headers['Content-Type'] ??= MIME::findType($type);
         $headers['Content-Length'] = $length;
 
         return Filesystem::write(

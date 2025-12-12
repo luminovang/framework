@@ -22,5 +22,4 @@ namespace Luminova\Interface;
  */
 interface LazyObjectInterface
 {
-    // This is a marker interface with no methods.
 }

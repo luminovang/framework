@@ -155,6 +155,11 @@ class ErrorCode
      * @var int DATABASE_ERROR 
      */
     public const DATABASE_ERROR = 1500;
+
+    /** 
+     * @var int DATABASE_PERMISSION_DENIED 
+     */
+    public const DATABASE_PERMISSION_DENIED = 13;
     
     /** 
      * @var int FAILED_ALL_CONNECTION_ATTEMPTS 
@@ -561,6 +566,7 @@ class ErrorCode
             // Custom Luminova Error Codes
             self::EXECUTION_FAILED => ['Execution Failed', 'Execution operation failed'],
             self::DATABASE_ERROR => ['Database Error', 'General database error'],
+            self::DATABASE_PERMISSION_DENIED => ['Permission Denied', 'Database Permission Denied'],
             self::FAILED_ALL_CONNECTION_ATTEMPTS => ['Connection Attempts Failed', 'All connection attempts failed'],
             self::CONNECTION_LIMIT_EXCEEDED => ['Connection Limit Exceeded', 'Database connection limit exceeded'],
             self::INVALID_DATABASE_DRIVER => ['Invalid DB Driver', 'Invalid database driver specified'],

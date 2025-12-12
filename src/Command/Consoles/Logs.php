@@ -10,10 +10,11 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Base\Console;
-use \Luminova\Command\Utils\Color;
-use \SplFileObject;
 use \Exception;
+use \SplFileObject;
+use \Luminova\Base\Console;
+use \Luminova\Command\Terminal;
+use \Luminova\Command\Utils\Color;
 use function \Luminova\Funcs\root;
 
 class Logs extends Console 
@@ -40,29 +41,28 @@ class Logs extends Console
      */
     public function run(?array $options = []): int
     {
-        $this->term->perse($options);
-        $level = $this->term->getAnyOption('level', 'l', null);
+        $level = $this->input->getAnyOption('level', 'l', null);
 
         if(!$level){
-            $this->term->beeps(1);
-            $this->term->error('No log level was specified.');
+            Terminal::beeps(1);
+            Terminal::error('No log level was specified.');
             return STATUS_ERROR;
         }
 
         setenv('throw.cli.exceptions', 'true');
-        $start = $this->term->getAnyOption('start', 's', null);
-        $end = $this->term->getAnyOption('end', 'e', 5);
+        $start = $this->input->getAnyOption('start', 's', null);
+        $end = $this->input->getAnyOption('end', 'e', 5);
 
         try{
-            if($this->term->getAnyOption('clear', 'c', false)){
+            if($this->input->getAnyOption('clear', 'c', false)){
                 return $this->clearLogFile($level);
             }
         
             return $this->readLogFile($level, $end, $start);
         }catch(Exception $e){
-            $this->term->beeps(1);
-            $this->term->error('Log operation failed:');
-            $this->term->writeln($e->getMessage());
+            Terminal::beeps(1);
+            Terminal::error('Log operation failed:');
+            Terminal::writeln($e->getMessage());
         }
 
         return STATUS_ERROR;
@@ -88,7 +88,7 @@ class Logs extends Console
         $filePath = root('/writeable/logs/', $level . '.log');
 
         if (!is_file($filePath) || !is_readable($filePath)) {
-            $this->term->writeln(sprintf('Log: "%s" not found or not readable', $level), 'red');
+            Terminal::writeln(sprintf('Log: "%s" not found or not readable', $level), 'red');
             return false;
         }
 
@@ -111,11 +111,11 @@ class Logs extends Console
         }
 
         if (unlink($filePath)) {
-            $this->term->success(sprintf('Log %s was cleared successfully.', $level));
+            Terminal::success(sprintf('Log %s was cleared successfully.', $level));
             return STATUS_SUCCESS;
         }
 
-        $this->term->error(sprintf('Failed to clear log: %s.', $level));
+        Terminal::error(sprintf('Failed to clear log: %s.', $level));
         return STATUS_ERROR;
     }
 
@@ -172,11 +172,11 @@ class Logs extends Console
         }
 
         if ($lines === '') {
-            $this->term->writeln(sprintf('Log: "%s" is empty.', $level), 'yellow');
+            Terminal::writeln(sprintf('Log: "%s" is empty.', $level), 'yellow');
             return STATUS_SUCCESS;
         }
 
-        $this->term->writeln($lines);
+        Terminal::writeln($lines);
         return STATUS_SUCCESS;
     }
 

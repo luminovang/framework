@@ -11,7 +11,8 @@
 namespace Luminova\Command\Consoles;
 
 use \Luminova\Base\Console;
-use \Luminova\Utility\Storage\Filesystem;
+use \Luminova\Command\Terminal;
+use \Luminova\Storage\Filesystem;
 use function \Luminova\Funcs\root;
 
 class ClearWritable extends Console
@@ -42,23 +43,22 @@ class ClearWritable extends Console
      */
     public function run(?array $options = []): int
     {
-        $this->term->perse($options);
-        $command = trim($this->term->getCommand());
+        $name = trim($this->input->getName());
 
-        $runCommand = match ($command) {
-            'clear:caches' => $this->clearCaches($this->term->getAnyOption('dir', 'd')),
+        $runCommand = match ($name) {
+            'clear:caches' => $this->clearCaches($this->input->getAnyOption('dir', 'd')),
             'clear:routes' => $this->clearFromWritable('/caches/routes/'),
             'clear:storage' => $this->clearFromWritable('/storages/'),
             'clear:writable' => $this->clearFromWritable(
-                $this->term->getAnyOption('dir', 'd'),
-                (bool)$this->term->getAnyOption('parent', 'p', false)
+                $this->input->getAnyOption('dir', 'd'),
+                (bool)$this->input->getAnyOption('parent', 'p', false)
             ),
             'clear:temp' => $this->clearFromWritable('/temp/'),
             default => null,
         };
 
         return ($runCommand === null) 
-            ? $this->term->oops($command) 
+            ? Terminal::oops($name) 
             : (int) $runCommand;
     }
 
@@ -92,28 +92,28 @@ class ClearWritable extends Console
     private function clearFromWritable(?string $file, bool $removeParent = false): int
     {
         if (empty($file)) {
-            $this->term->error('Please specify the directory name or path using --dir=<name>.');
+            Terminal::error('Please specify the directory name or path using --dir=<name>.');
             return STATUS_ERROR;
         }
 
-        $file = trim(Filesystem::toCompatible($file), TRIM_DS);
+        $file = trim(Filesystem::normalizePath($file), TRIM_DS);
         $path = root("/writeable/{$file}/");
         $name = basename($path);
 
         if (!file_exists($path)) {
-            $this->term->error(sprintf('The folder "%s" does not exist in the writeable directory.', $name));
+            Terminal::error(sprintf('The folder "%s" does not exist in the writeable directory.', $name));
             return STATUS_ERROR;
         }
 
         if (str_ends_with(rtrim($path, TRIM_DS), 'writeable')) {
-            $this->term->error('The "writeable" directory cannot be deleted directly.');
+            Terminal::error('The "writeable" directory cannot be deleted directly.');
             return STATUS_ERROR;
         }
 
         if (!is_writable($path)) {
             $owner = posix_getpwuid((int) fileowner($path));
             $owner = $owner ? ' ' . $owner['name'] : '';
-            $changeable = $this->term->prompt(
+            $changeable = Terminal::prompt(
                 sprintf("The folder '%s' is not writable. Would you like to change its owner{$owner}?", $name),
                 ['yes', 'no'], 
                 'required|in_array(yes,no)'
@@ -123,10 +123,10 @@ class ClearWritable extends Console
                 return STATUS_ERROR;
             }
 
-            $newOwner = $this->term->input('Please enter the username for the new owner:');
+            $newOwner = Terminal::input('Please enter the username for the new owner:');
     
             if (!chown($path, $newOwner)) {
-                $this->term->error(sprintf(
+                Terminal::error(sprintf(
                     "Unable to change the owner of '%s' to '%s'. Please verify the username and permissions.", 
                     $path, 
                     $newOwner
@@ -136,13 +136,13 @@ class ClearWritable extends Console
         }        
 
         $deleted = 0;
-        @Filesystem::remove($path, $removeParent, $deleted);
+        @Filesystem::delete($path, $removeParent, $deleted);
 
         if ($deleted > 0) {
-            $this->term->success(sprintf('Successfully deleted %d items in "%s".', $deleted, $name));
-            $this->term->beeps();
+            Terminal::success(sprintf('Successfully deleted %d items in "%s".', $deleted, $name));
+            Terminal::beeps();
         } else {
-            $this->term->writeln(sprintf('No files were deleted in "%s".', $name));
+            Terminal::writeln(sprintf('No files were deleted in "%s".', $name));
         }
 
         return STATUS_SUCCESS;

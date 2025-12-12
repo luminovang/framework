@@ -55,14 +55,6 @@ class Segments implements Countable
     }
 
     /**
-     * @deprecated Since 3.6.6, Use prefix() instead.
-     */
-    public function first(): string
-    {
-        return $this->prefix();
-    }
-    
-    /**
      * Get the last segment as the current view URL segment.
      * 
      * @return string Return the current URL segment.

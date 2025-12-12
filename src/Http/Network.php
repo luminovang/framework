@@ -11,14 +11,16 @@
 namespace Luminova\Http;
 
 use \Throwable;
+use \Luminova\Luminova;
 use \Luminova\Http\Client\Novio;
+use \Luminova\Http\Client\Guzzle;
 use \Psr\Http\Client\ClientInterface;
 use \GuzzleHttp\Exception\GuzzleException;
-use \Luminova\Utility\Promise\{Promise, Rejected};
+use \Luminova\Promise\{Promise, Rejected};
+use \Luminova\Interface\{ExceptionInterface, PromiseInterface};
 use \GuzzleHttp\Exception\RequestException as GuzzleRequestException;
 use \Psr\Http\Message\{ResponseInterface, RequestInterface, UriInterface};
-use \Luminova\Interface\{NetworkInterface, LazyObjectInterface, PromiseInterface};
-use \Luminova\Exceptions\{AppException, Http\RequestException, BadMethodCallException};
+use \Luminova\Exceptions\{RuntimeException, Http\RequestException, BadMethodCallException};
 
 /**
  * Network client for making HTTP requests synchronously or asynchronously.
@@ -26,14 +28,17 @@ use \Luminova\Exceptions\{AppException, Http\RequestException, BadMethodCallExce
  * Supports dynamic method resolution for HTTP verbs such as GET, POST, PUT, etc.
  * Use `config()` to set default configuration (e.g., base_uri).
  *
+ * ResponseInterface: 
+ * 
  * @method static ResponseInterface<\T> get(UriInterface<\T>|string $url, array $options = [])
- * @method static ResponseInterface<\T> post(UriInterface<\T>|string $url, array $options = [])
  * @method static ResponseInterface<\T> put(UriInterface<\T>|string $url, array $options = [])
  * @method static ResponseInterface<\T> patch(UriInterface<\T>|string $url, array $options = [])
  * @method static ResponseInterface<\T> delete(UriInterface<\T>|string $url, array $options = [])
  * @method static ResponseInterface<\T> head(UriInterface<\T>|string $url, array $options = [])
  * @method static ResponseInterface<\T> options(UriInterface<\T>|string $url, array $options = [])
  *
+ * PromiseInterface:
+ * 
  * @method static PromiseInterface<\T> getAsync(UriInterface<\T>|string $url, array $options = [])
  * @method static PromiseInterface<\T> postAsync(UriInterface<\T>|string $url, array $options = [])
  * @method static PromiseInterface<\T> putAsync(UriInterface<\T>|string $url, array $options = [])
@@ -42,7 +47,7 @@ use \Luminova\Exceptions\{AppException, Http\RequestException, BadMethodCallExce
  * @method static PromiseInterface<\T> headAsync(UriInterface<\T>|string $url, array $options = [])
  * @method static PromiseInterface<\T> optionsAsync(UriInterface<\T>|string $url, array $options = [])
  */
-class Network implements NetworkInterface, LazyObjectInterface
+final class Network
 {
     /**
      * Custom flag to skip header in request.
@@ -54,16 +59,9 @@ class Network implements NetworkInterface, LazyObjectInterface
     /**
      * The network client interface to use.
      * 
-     * @var \Luminova\Interface\ClientInterface<\T>|ClientInterface<\T>|null $client
+     * @var \Luminova\Interface\ClientInterface<ClientInterface>|ClientInterface|null $http
      */
-    private ?ClientInterface $client = null;
-
-    /**
-     * Static method instance.
-     * 
-     * @var NetworkInterface|null $instance
-     */
-    private static ?NetworkInterface $instance = null;
+    private static ?ClientInterface $http = null;
 
     /**
      * The network client interface to use.
@@ -73,37 +71,67 @@ class Network implements NetworkInterface, LazyObjectInterface
     private static array $config = [];
 
     /**
-     * {@inheritdoc}
+     * Prevent direct instantiation.
      */
-    public function __construct(?ClientInterface $client = null)
-    {
-        $this->client = $client ?? new Novio(self::$config);
-    }
+    private function __construct() {}
 
     /**
-     * {@inheritdoc}
-     */
-    public function __call(string $method, array $arguments): mixed
-    {
-        return $this->resolve($method, $arguments);
-    }
-
-    /**
-     * {@inheritdoc}
-     * @since 3.6.8
+     * Handle dynamic static method calls for HTTP verbs.
+     *
+     * @param string $method The HTTP method name or async variant.
+     * @param array  $arguments First argument should be the URL or URI if base URL was set using `config`, 
+     *                      second is optional options array.
+     *
+     * @return ResponseInterface<\T>|PromiseInterface<\T>|mixed Response object or a Promise for async requests.
+     *
+     * @throws BadMethodCallException Throws if invalid parameters are passed.
+     * @throws RequestException If an error occurs during the request.
+     * @throws ConnectException If a connection to the server cannot be established.
+     * @throws ClientException If the client encounters a 4xx HTTP error.
+     * @throws ServerException If the server encounters a 5xx HTTP error.
+     * 
+     * @example - Enables static calls like:
+     * ```php
+     * Network::get('https://api.example.com/user/100');
+     * Network::postAsync('https://api.example.com', [...]);
+     * ```
+     * @example - Using base URL
+     * 
+     * ```php
+     * Network::config(['base_uri' => 'https://example.com']);
+     * 
+     * Network::get('/user/100');
+     * ```
      */
     public static function __callStatic(string $method, array $arguments): mixed
     {
-        if(!self::$instance instanceof self){
-            self::$instance = new self();
-        }
-
-        return self::$instance->resolve($method, $arguments, true);
+        return self::resolve($method, $arguments, true);
     }
 
     /**
-     * {@inheritdoc}
-     * @since 3.6.8
+     * Define immutable global configurations for HTTP requests.
+     *
+     * This method sets global options such as `base_uri`, headers, or timeouts.
+     * It must be called **before** making any network request (especially when using static methods),
+     * as the configuration becomes locked after the first usage.
+     *
+     * @param array<string,mixed> $config Key-value pairs of request configuration options.
+     * @return void
+     *
+     * @example - Setting a base URL for all static requests:
+     *
+     * ```php
+     * Network::config([
+     *     'base_uri' => 'https://example.com/'
+     * ]);
+     *
+     * // Then, you can make relative requests:
+     * Network::get('user/100/info');
+     * ```
+     *
+     * > **Note:** This method is best suited for static usage, where a default base URL
+     * or common settings (e.g., headers) are required across all requests.
+     * Once the client is created, the config cannot be changed.
      */
     public static function config(array $config): void
     {
@@ -111,85 +139,259 @@ class Network implements NetworkInterface, LazyObjectInterface
     }
 
     /**
-     * {@inheritdoc}
+     * Set the HTTP client used by the Network class.
+     *
+     * Overrides the default client for all outgoing requests.
+     * If not set, the default Luminova `\Luminova\Http\Client\Novio` client is used.
+     *
+     * @param ClientInterface $client HTTP client implementation.
+     * 
+     * @return void
      */
-    public function getClient(): ?ClientInterface
+    public static function client(ClientInterface $client): void
     {
-        return ($this->client && method_exists($this->client, 'getClient'))
-            ? $this->client->getClient() 
-            : null;
+        self::$http = $client;
     }
 
     /**
-     * {@inheritdoc}
+     * Retrieves the current HTTP client instance.
+     * 
+     * This method returns the Luminova `Novio` or `Guzzle` client object if it is being used; otherwise, 
+     * it returns the client interface object.
+     *
+     * @return ClientInterface|null Returns the instance of the HTTP client used for requests.
      */
-    public function get(UriInterface|string $uri = '', array $options = []): ResponseInterface
+    public static function getClient(): ClientInterface
     {
-        try{
-            return $this->client->request('GET', $uri, $options);
+        if(!self::$http instanceof ClientInterface){
+            return self::create();
+        }
+
+        if(self::$http instanceof Guzzle){
+            return self::$http->getClient();
+        }
+
+        return self::$http;
+    }
+
+    /**
+     * Execute a synchronous GET request.
+     *
+     * Sends a GET request to the given URI and returns the server response.
+     *
+     * @param UriInterface<T>|string $uri The target URI.
+     * @param array<string,mixed> $options Client-specific request options.
+     *
+     * @return ResponseInterface<T> Returns the request response object.
+     *
+     * @throws RequestException  On request errors.
+     * @throws ConnectException  On connection failures.
+     * @throws ClientException   On 4xx client errors.
+     * @throws ServerException   On 5xx server errors.
+     */
+    public static function get(
+        UriInterface|string $uri = '',
+        array $options = []
+    ): ResponseInterface {
+        try {
+            return self::create()->request('GET', $uri, $options);
         } catch (Throwable $e) {
-            return $this->handleRequestException($e, false);
+            return self::handleRequestException($e, false);
         }
     }
 
     /**
-     * {@inheritdoc}
+     * Dispatch an HTTP request and return a promise.
+     *
+     * By default, the request is sent asynchronously. To force synchronous
+     * execution, pass `['async' => false]` in the options array.
+     *
+     * @param UriInterface<T>|string $uri Request URI object or URI string.
+     * @param string $method HTTP method (GET, POST, etc.).
+     * @param array<string,mixed> $options Client-specific request options.
+     *
+     * @return PromiseInterface<T> Promise resolving to the HTTP response.
+     *
+     * @example - Example:
+     * ```php
+     * Network::fetch(
+     *     'https://example.com',
+     *     'GET',
+     *     ['headers' => ['Accept' => 'application/json']]
+     * )->then(
+     *     fn (ResponseInterface $response) => 
+     *         echo $response->getBody()->getContents()
+     * )->catch(
+     *     fn (Throwable $e) => echo $e->getMessage()
+     * );
+     * ```
      */
-    public function fetch(UriInterface|string $uri = '', string $method = 'GET', array $options = []): PromiseInterface
+    public static function fetch(
+        UriInterface|string $uri = '',
+        string $method = 'GET',
+        array $options = []
+    ): PromiseInterface 
     {
-        return $this->requestAsync($method, $uri, $options);
+        return self::requestAsync($method, $uri, $options);
     }
 
     /**
-     * {@inheritdoc}
+     * Execute a synchronous POST request.
+     *
+     * Sends a POST request to the given URI and returns the server response.
+     *
+     * @param UriInterface<T>|string $uri Target URI.
+     * @param array<string,mixed> $options Client-specific request options.
+     *
+     * @return ResponseInterface<T> Returns the request response object.
+     *
+     * @throws RequestException On request errors.
+     * @throws ConnectException On connection failures.
+     * @throws ClientException On 4xx client errors.
+     * @throws ServerException On 5xx server errors.
      */
-    public function post(UriInterface|string $uri = '', array $options = []): ResponseInterface
+    public static function post(
+        UriInterface|string $uri = '',
+        array $options = []
+    ): ResponseInterface 
     {
-        try{
-            return $this->client->request('POST', $uri, $options);
+        try {
+            return self::create()->request('POST', $uri, $options);
         } catch (Throwable $e) {
-            return $this->handleRequestException($e, false);
+            return self::handleRequestException($e, false);
         }
     }
 
     /**
-     * {@inheritdoc}
+     * Send a synchronous HTTP request.
+     *
+     * Executes an HTTP request using the given method and URI and
+     * returns the server response.
+     *
+     * @param string $method HTTP method (e.g., GET, POST).
+     * @param UriInterface<T>|string $uri Request URI object or URI string.
+     * @param array<string,mixed> $options Client-specific request options.
+     *
+     * @return ResponseInterface<T> Returns the request response object.
+     *
+     * @throws RequestException  On request errors.
+     * @throws ConnectException  On connection failures.
+     * @throws ClientException   On 4xx client errors.
+     * @throws ServerException   On 5xx server errors.
      */
-    public function request(string $method, UriInterface|string $uri = '', array $options = []): ResponseInterface
+    public static function request(
+        string $method,
+        UriInterface|string $uri = '',
+        array $options = []
+    ): ResponseInterface 
     {
-        try{
-            return $this->client->request($method, $uri, $options);
+        try {
+            return self::create()->request($method, $uri, $options);
         } catch (Throwable $e) {
-            return $this->handleRequestException($e, false);
+            return self::handleRequestException($e, false);
         }
     }
 
     /**
-     * {@inheritdoc}
+     * Send a synchronous HTTP request using a request object.
+     *
+     * Dispatches a fully configured request instance and returns
+     * the server response.
+     *
+     * @param RequestInterface<T> $request Prepared request instance.
+     * @param array<string,mixed> $options Client-specific request options.
+     *
+     * @return ResponseInterface<T> Returns the request response object.
+     *
+     * @throws RequestException  On request errors.
+     * @throws ConnectException  On connection failures.
+     * @throws ClientException   On 4xx client errors.
+     * @throws ServerException   On 5xx server errors.
      */
-    public function send(RequestInterface $request, array $options = []): ResponseInterface
+    public static function send(
+        RequestInterface $request,
+        array $options = []
+    ): ResponseInterface 
     {
-        return $this->doSend($request, $options);
+        return self::doSend($request, $options);
     }
 
     /**
-     * {@inheritdoc}
+     * Send an HTTP request asynchronously.
+     *
+     * Dispatches the given request using the configured HTTP client and
+     * returns a promise that resolves to the response.
+     *
+     * @param RequestInterface<T> $request Fully configured request instance.
+     * @param array<string,mixed> $options Client-specific request options.
+     *
+     * @return PromiseInterface<T> Promise resolving to the request response.
      */
-    public function sendAsync(RequestInterface $request, array $options = []): PromiseInterface
+    public static function sendAsync(
+        RequestInterface $request,
+        array $options = []
+    ): PromiseInterface 
     {
-        return $this->doSend($request, $options, true, true);
+        return self::doSend($request, $options, true, true);
     }
 
     /**
-     * {@inheritdoc}
+     * Send an HTTP request asynchronously using a URI.
+     *
+     * Creates and dispatches an asynchronous request for the given HTTP method
+     * and URI, returning a promise that resolves to the response.
+     *
+     * @param string $method HTTP method (GET, POST, etc.).
+     * @param UriInterface<T>|string $uri Request URI object or URI string.
+     * @param array<string,mixed> $options Client-specific request options.
+     *
+     * @return PromiseInterface<T> Promise resolving to the request response.
      */
-    public function requestAsync(string $method, UriInterface|string $uri = '', array $options = []): PromiseInterface
+    public static function requestAsync(
+        string $method,
+        UriInterface|string $uri = '',
+        array $options = []
+    ): PromiseInterface 
     {
-        try{
-            return $this->client->requestAsync($method, $uri, $options);
+        try {
+            return self::create()->requestAsync($method, $uri, $options);
         } catch (Throwable $e) {
-            return $this->handleRequestException($e, true);
+            return self::handleRequestException($e, true);
         }
+    }
+
+    /**
+     * Create or return the shared HTTP client instance.
+     *
+     * @return ClientInterface|\Luminova\Interface\ClientInterface<ClientInterface>
+     */
+    private static function create(): ClientInterface
+    {
+        if (self::$http instanceof ClientInterface) {
+            return self::$http;
+        }
+
+        $client = Luminova::kernel()->getHttpClient(self::$config) 
+            ?? new Novio(self::$config);
+
+        if ($client instanceof ClientInterface) {
+            return self::$http = $client;
+        }
+
+        if (is_string($client) && class_exists($client)) {
+            $client = new $client(self::$config);
+
+            if ($client instanceof ClientInterface) {
+                return self::$http = $client;
+            }
+        }
+
+        throw new RuntimeException(sprintf(
+            'Invalid HTTP client: %s returned by %s; expected %s implementation.',
+            get_class($client),
+            'Kernel::getHttpClient()',
+            ClientInterface::class
+        ));
     }
 
     /**
@@ -202,7 +404,7 @@ class Network implements NetworkInterface, LazyObjectInterface
      * 
      * @return PromiseInterface<\T>|ResponseInterface<\T> Return guzzle promise or response object for Novio client.
     */
-    private function doSend(
+    private static function doSend(
         RequestInterface $request, 
         array $options = [],
         bool $async = false,
@@ -211,10 +413,10 @@ class Network implements NetworkInterface, LazyObjectInterface
     {
         try{
             return $async 
-                ? $this->client->sendAsync($request, $options)
-                : $this->client->send($request, $options);
+                ? self::create()->sendAsync($request, $options)
+                : self::create()->send($request, $options);
         } catch (Throwable $e) {
-            return $this->handleRequestException($e, $promise);
+            return self::handleRequestException($e, $promise);
         }
     }
 
@@ -230,7 +432,10 @@ class Network implements NetworkInterface, LazyObjectInterface
      * @return PromiseInterface<\T>|ResponseInterface<\T>|never Returns the response if present, or null if no response is available.
      * @throws RequestException $e Throw the exception encountered during a request.
      */
-    private function handleRequestException(Throwable $e, bool $promise = false): PromiseInterface|ResponseInterface
+    private static function handleRequestException(
+        Throwable $e, 
+        bool $promise = false
+    ): PromiseInterface|ResponseInterface
     {
         if($e instanceof GuzzleRequestException) {
             if($promise){
@@ -248,31 +453,33 @@ class Network implements NetworkInterface, LazyObjectInterface
         
         if($promise){
             return new Rejected(
-                ($e instanceof AppException) ? $e : new RequestException($e->getMessage(), $e->getCode(), $e)
+                ($e instanceof ExceptionInterface) 
+                    ? $e : new RequestException($e->getMessage(), $e->getCode(), $e)
             );
         }
 
-        $this->handleAppException($e);
+        self::handleAppException($e);
     }
 
     /**
-     * Handles an AppException by throwing a RequestException or re-throwing the original exception.
+     * Handles an App Exception by throwing a RequestException or re-throwing the original exception.
      *
-     * This method processes an AppException. If the exception is an instance of AppException,
+     * This method processes an App Exception. If the exception is an instance of App Exception,
      * it rethrows it; otherwise, it wraps the exception in a RequestException and throws it.
      *
      * @param Throwable $e The application-specific or guzzle exception.
      *
-     * @return never This method does not return a value and will always throw an exception.
+     * @return void
+     * @throws Exception
      */
-    private function handleAppException(Throwable $e): never
+    private static function handleAppException(Throwable $e): void
     {
-        if ($e instanceof AppException) {
+        if ($e instanceof ExceptionInterface) {
             throw $e;
         }
 
         if (
-            ($e->getPrevious() instanceof AppException) || 
+            ($e->getPrevious() instanceof ExceptionInterface) || 
             ($e->getPrevious() instanceof GuzzleException)
         ) {
             throw new RequestException(
@@ -288,15 +495,15 @@ class Network implements NetworkInterface, LazyObjectInterface
     /**
      * Resolves the dynamic method name and performs the corresponding HTTP request.
      *
-     * @param string  $method The HTTP method (e.g., 'get', 'post', 'put', etc.)
-     * @param array   $arguments Contains URL as first element and optional options array as second.
-     * @param bool    $isStatic  Flag to indicate static method context.
+     * @param string $method The HTTP method (e.g., 'get', 'post', 'put', etc.)
+     * @param array $arguments Contains URL as first element and optional options array as second.
+     * @param bool $isStatic Flag to indicate static method context.
      *
      * @return mixed Response object or a Promise.
      *
      * @throws BadMethodCallException for invalid static calls with no arguments.
      */
-    private function resolve(string $method, array $arguments, bool $isStatic = false): mixed
+    private static function resolve(string $method, array $arguments, bool $isStatic = false): mixed
     {
         $options = $arguments[1] ?? [];
         $url = $arguments[0] ?? '';
@@ -323,12 +530,12 @@ class Network implements NetworkInterface, LazyObjectInterface
 
         try{
             if ($isAsync) {
-                return $this->client->requestAsync(substr($method, 0, -5), $url, $options);
+                return self::create()->requestAsync(substr($method, 0, -5), $url, $options);
             }
 
-            return $this->client->request($method, $url, $options);
+            return self::create()->request($method, $url, $options);
         } catch (Throwable $e) {
-            return $this->handleRequestException($e, $isAsync);
+            return self::handleRequestException($e, $isAsync);
         }
     }
 }

@@ -27,7 +27,7 @@ use function \Luminova\Funcs\{
     make_dir
 };
 
-class JWT implements LazyObjectInterface
+final class JWT implements LazyObjectInterface
 {
     /**
      * Shared instance of the JWT.
@@ -97,7 +97,7 @@ class JWT implements LazyObjectInterface
     ): self 
     {
         if(!self::$instance instanceof static){
-            self::$instance = new static($algo, $salt, $path, $iss, $aud);
+            self::$instance = new self($algo, $salt, $path, $iss, $aud);
         }
 
         return self::$instance;

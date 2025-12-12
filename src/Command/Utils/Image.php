@@ -10,11 +10,11 @@
  */
 namespace Luminova\Command\Utils;
 
+use \GdImage;
+use \WeakMap;
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Color;
 use \Luminova\Utility\Reference\WeakReference;
-use \GdImage;
-use \WeakMap;
 
 class Image
 {

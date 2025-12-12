@@ -198,7 +198,7 @@ class Notification implements LazyObjectInterface
 
             switch ($config->getPlatform()) {
                 case Message::ANDROID:
-                    $pConfig = AndroidConfig::fromArray($config->fromArray());
+                    $pConfig = AndroidConfig::fromArray($config->toArray());
                     if ($sound !== null) {
                         $pConfig = $pConfig->withSound($sound);
                     }
@@ -211,7 +211,7 @@ class Notification implements LazyObjectInterface
                     break;
 
                 case Message::APN:
-                    $pConfig = ApnsConfig::fromArray($config->fromArray());
+                    $pConfig = ApnsConfig::fromArray($config->toArray());
 
                     if ($sound !== null) {
                         $pConfig = $pConfig->withSound($sound);
@@ -225,7 +225,7 @@ class Notification implements LazyObjectInterface
                     break;
 
                 case Message::WEBPUSH:
-                    $pConfig = WebPushConfig::fromArray($config->fromArray());
+                    $pConfig = WebPushConfig::fromArray($config->toArray());
                     if ($priority !== '') {
                         $pConfig = $pConfig->withUrgency($priority);
                     }
@@ -263,7 +263,7 @@ class Notification implements LazyObjectInterface
      */
     private function rawMessage(Message $config): ?MessageCaster
     {
-        $payload = $config->fromArray();
+        $payload = $config->toArray();
 
         if($payload !== []){
             unset($payload['raw'], $payload['platform']);
@@ -277,7 +277,8 @@ class Notification implements LazyObjectInterface
      * Send a notification to a specific device by token.
      *
      * @param Message|array<string,mixed> $config The notification payload.
-     * @param bool $validateOnly Optional. If set to true, the message will only be validated without sending.
+     * @param bool $validateOnly Optional. If set to true, the message 
+     *      will only be validated without sending.
      *
      * @return self Return instance of luminova firebase notification class.
      * @throws RuntimeException If token is not valid or an error occurred while sending notification.
@@ -289,7 +290,7 @@ class Notification implements LazyObjectInterface
         
         try {
             if (is_array($config)) {
-                $config = new Message($config);
+                $config = Message::fromArray($config);
             }
 
             if ($config instanceof Message) {
@@ -330,7 +331,7 @@ class Notification implements LazyObjectInterface
         
         try {
             if (is_array($config)) {
-                $config = new Message($config);
+                $config = Message::fromArray($config);
             }
 
             if ($config instanceof Message) {
@@ -373,7 +374,7 @@ class Notification implements LazyObjectInterface
 
         try {
             if (is_array($config)) {
-                $config = new Message($config);
+                $config = Message::fromArray($config);
             }
 
             if ($config instanceof Message) {

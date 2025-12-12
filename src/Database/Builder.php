@@ -19,9 +19,8 @@ use \Luminova\Luminova;
 use \Luminova\Time\Time;
 use \Luminova\Base\Cache;
 use \Luminova\Logger\Logger;
-use \Luminova\Utility\Promise\Promise;
+use \Luminova\Promise\Promise;
 use \Luminova\Foundation\Core\Database;
-use \Luminova\Utility\Object\LazyObject;
 use \Luminova\Cache\{FileCache, MemoryCache};
 use function \Luminova\Funcs\is_associative;
 use \Luminova\Database\{Connection, Manager, RawExpression, Helpers\Alter};
@@ -227,18 +226,11 @@ final class Builder implements LazyObjectInterface
     private const INSET = 'INSET';
 
     /**
-     * Database connection instance.
-     *
-     * @var Connection<LazyObjectInterface>|null $conn
-     */
-    private static ?LazyObjectInterface $conn = null;
-
-    /**
      * Prepared statement object.
      * 
      * @var DatabaseInterface|mixed $stmt
      */
-    private static mixed $stmt = null;
+    private mixed $stmt = null;
 
     /**
      * Database driver instance.
@@ -285,9 +277,9 @@ final class Builder implements LazyObjectInterface
     /**
      * Table query max limits.
      * 
-     * @var array $maxLimit 
+     * @var array<int,int> $limiting 
      */
-    private array $maxLimit = [];
+    private array $limiting = [];
 
     /**
      * Table query group column by.
@@ -372,11 +364,11 @@ final class Builder implements LazyObjectInterface
     private bool $isCollectMetadata = false;
 
     /**
-     * Query selection handler.
+     * Query selector handler.
      * 
-     * @var array $handler 
+     * @var array<string,mixed> $selector 
      */
-    private array $handler = [];
+    private array $selector = [];
 
     /**
      * Ignore duplicates during insertion.
@@ -488,7 +480,7 @@ final class Builder implements LazyObjectInterface
      * 
      * @var mixed $lastInsertId
      */
-    private static mixed $lastInsertId = null;
+    private mixed $lastInsertId = null;
 
     /**
      * Private constructor to prevent direct instantiation.
@@ -511,21 +503,20 @@ final class Builder implements LazyObjectInterface
         $this->resetState(true);
         $this->freeStmt();
 
-        self::$conn ??= LazyObject::newObject(fn(): Connection => Connection::getInstance());
         self::$cacheDriver = env('database.caching.driver', 'filesystem');
         $this->tableName = $table ?? '';
         $this->tableAlias = $alias ?? '';
     }
 
     /**
-     * Check if database connected.
+     * Check if the current builder database is connected.
      * 
      * @return bool Return true if database connected, false otherwise.
      */
-    public static function isConnected(): bool 
+    public function isConnected(): bool 
     {
-        return (self::$conn->database() instanceof DatabaseInterface) 
-            && self::$conn->database()->isConnected();
+        return ($this->db instanceof DatabaseInterface) 
+            && $this->db->isConnected();
     }
 
     /**
@@ -588,7 +579,7 @@ final class Builder implements LazyObjectInterface
      */
     public function getLastInsertedId(): mixed 
     {
-        return self::$lastInsertId;
+        return $this->lastInsertId;
     }
 
     /**
@@ -602,18 +593,34 @@ final class Builder implements LazyObjectInterface
     }
 
     /**
-     * Get database connection driver instance.
+     * Return a connected database driver.
+     *
+     * If $shared is true, reuse the shared connection instance.
+     * Otherwise create a new connection.
+     *
+     * @param bool $shared Use shared connection instance.
      * 
-     * @return DatabaseInterface Return database driver instance.
-     * @throws DatabaseException Throws if database connection failed.
+     * @return DatabaseInterface Connected database driver.
+     * @throws DatabaseException If connection cannot be established.
      */
-    public static function database(): DatabaseInterface
+    public static function database(bool $shared = true): DatabaseInterface
     {
-        if(self::isConnected()){
-            return self::$conn->database();
+        $conn = $shared 
+            ? Connection::getInstance() 
+            : new Connection();
+
+        $db = $conn->database() ?? $conn->connect();
+
+        if($db instanceof DatabaseInterface && $db->isConnected()){
+            $db->free();
+            return $db;
         }
 
-        throw new DatabaseException('Error: Database connection failed.');
+        $conn = null;
+        throw new DatabaseException(
+            'Error: Database connection failed.',
+            ErrorCode::CONNECTION_DENIED
+        );
     }
 
     /**
@@ -753,16 +760,81 @@ final class Builder implements LazyObjectInterface
     }
 
     /**
+     * Attach a database connection or driver to the builder.
+     *
+     * Accepts either a DatabaseInterface or Connection instance.
+     * Ensures the database is connected before assigning.
+     * Optionally clears any active statements on the driver.
+     *
+     * @param DatabaseInterface|Connection|null $conn Connection source or null to assign new connection.
+     * @param bool $freeStmt Whether to free active statements and release cursor before use.
+     * 
+     * @return self Return instance of database builder.
+     * @throws DatabaseException If no active connection is available.
+     */
+    public function connection(DatabaseInterface|Connection|null $conn = null, bool $freeStmt = false): self
+    {
+        if($conn === null){
+            $this->db = self::database(shared: false);
+
+            if($freeStmt){
+                $this->db->free();
+            }
+
+            return $this;
+        }
+
+        if($conn instanceof DatabaseInterface){
+            if(!$conn->isConnected()){
+                throw new DatabaseException('Error: Database is not connected.');
+            }
+
+            $this->db = $conn;
+
+            if($freeStmt){
+                $this->db->free();
+            }
+
+            return $this;
+        }
+
+        if($conn instanceof Connection){
+            $db = $conn->database();
+
+            if(!$db instanceof DatabaseInterface){
+               $db = $conn->connect();
+            }
+
+            if($db instanceof DatabaseInterface){
+                $this->db = $db;
+
+                if($freeStmt){
+                    $this->db->free();
+                }
+
+                return $this;
+            }
+        }
+
+        $conn = null;
+        throw new DatabaseException(
+            'Error: Database connection failed.',
+            ErrorCode::CONNECTION_DENIED
+        );
+    }
+
+    /**
      * Adds a table join to the current query.
      *
      * Use this method to combine data from another table or subquery into your main query.
      * You can specify the type of join (INNER, LEFT, etc.) and optionally assign an alias
      * for the joined table.
      *
-     * @param string $table The table name to join.  
+     * @param string|null $table The table name to join or null for sub-query join.  
      * @param string|null $alias Optional alias for the joined table.  
      * @param string|null $type The type of join to use (`INNER`, `LEFT`, `RIGHT`, `FULL`, or `CROSS`).  
-     * @param bool $forSubquery Set to `true` if the joined source is a subquery instead of a normal table.  
+     * @param bool $forSubquery Set to `true` if the joined source is a subquery 
+     *              instead of a normal table.  
      *
      * @return self Returns the instance of builder class.
      * @throws InvalidArgumentException If `$table` or `$type` is an empty string.
@@ -795,20 +867,29 @@ final class Builder implements LazyObjectInterface
      * @see crossJoin() - Use `CROSS` when you want every combination of rows (Cartesian product).  
      * 
      * @methodGroup QueryInitializer Initialize a new table join. 
+     * 
+     * > **Note:*
+     * > If table name is set to `NULL`, `$forSubquery` will be enabled.
      */
     public function join(
-        string $table,
+        ?string $table,
         ?string $alias = null,
         ?string $type = null,
         bool $forSubquery = false
     ): self
     {
-        $table = trim($table);
-        self::assertTableName($table, $alias);
+        $forSubquery = $forSubquery || $table === null;
+        $table = ($table === null) ? null : trim($table);
 
-        $this->tableJoin[$table . ($alias ?? '')] = [
+        if($table !== null || $alias !== null){
+            self::assertTableName($table, $alias);
+        }
+        
+        $id = $table ?? uniqid('jsbq_');
+
+        $this->tableJoin[$id . ($alias ?? '')] = [
             'type'  => strtoupper($type ?? ''),
-            'table' => $table,
+            'table' => (string) $table,
             'alias' => (string) $alias,
             'as'    => $alias ? "AS {$alias}" : '',
             'isForSubquery' => $forSubquery
@@ -889,7 +970,12 @@ final class Builder implements LazyObjectInterface
      * 
      * @methodGroup QueryCondition Add simple conditions to join table.
      */
-    public function on(string $condition, string $comparison, mixed $value, string $connector = 'AND'): self
+    public function on(
+        string $condition, 
+        string $comparison, 
+        mixed $value, 
+        string $connector = 'AND'
+    ): self
     {
         [, $connector, ] = $this->assertOperators(__METHOD__, null, $connector);
         $value = $this->getValue($value);
@@ -1214,15 +1300,17 @@ final class Builder implements LazyObjectInterface
     }
 
     /**
-     * Sets the query limit for SELECT statements.
+     * Sets the query limit and optional offset for SELECT statements.
      *
      * This method adds a `LIMIT` clause to the query, restricting the number of 
      * rows returned and optionally specifying an offset.
      *
-     * @param int $limit  The maximum number of results to return. Must be greater than 0.
+     * @param int $limit The maximum number of results to return. Must be greater than 0.
      * @param int $offset The starting offset for the results (default: `0`).
      *
      * @return self Returns the instance of the builder class.
+     * @see self::offset()
+     * @see self::max() Fpr update or delete columns.
      *
      * @example - Limiting number of results:
      * 
@@ -1240,10 +1328,41 @@ final class Builder implements LazyObjectInterface
      */
     public function limit(int $limit, int $offset = 0): self
     {
-        if($limit > 0){
-            $this->maxLimit = [max(0, $offset), $limit];
-        }
+        $this->offset($offset);
+        $this->limiting[1] = max(0, $limit);
 
+        return $this;
+    }
+
+    /**
+     * Sets the query pagination offset for SELECT statements.
+     *
+     * This method adds offset to `LIMIT` clause, specifying start row for returned records.
+     *
+     * @param int $offset The starting offset for the results.
+     *
+     * @return self Returns the instance of the builder class.
+     * @see self::limit()
+     * @see self::max() Fpr update or delete columns.
+     *
+     * @example - Pagination offset:
+     * 
+     * ```php
+     * Builder::table('users')
+     *      ->where('country', '=', 'NG')
+     *      ->limit(10)
+     *      ->offset(5)
+     *      ->select()
+     *      ->get();
+     * 
+     * Generates: LIMIT 5,10
+     * ```
+     * 
+     * @methodGroup QueryConfiguration Enforce query result limit for select operation. 
+     */
+    public function offset(int $offset): self
+    {
+        $this->limiting[0] = max(0, $offset);
         return $this;
     }
 
@@ -1256,6 +1375,8 @@ final class Builder implements LazyObjectInterface
      * @param int $limit The maximum number of rows to update or delete.
      *
      * @return self  Returns the instance of the builder class.
+     * @see self::limit() Fpr selecting rows.
+     * @see self::offset() Fpr raw selection start.
      *
      * @example - Limiting number of rows to affect:
      * 
@@ -1272,9 +1393,7 @@ final class Builder implements LazyObjectInterface
      */
     public function max(int $limit): self
     {
-        $this->maxLimit = [0, max(0, $limit)];
-
-        return $this;
+        return $this->limit($limit, 0);
     }
 
     /**
@@ -1726,7 +1845,6 @@ final class Builder implements LazyObjectInterface
      * @param array $values An array of range boundaries. Must contain an even number of values.
      *                        Each pair (e.g., [0, 100]) represents a range.
      * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
-     * @param bool $not Set to `true` to use `NOT BETWEEN` instead of `BETWEEN`.
      * 
      * @return self Returns the current query builder instance.
      * @throws DatabaseException If less than two values are provided, or an odd number of values is passed.
@@ -1752,8 +1870,8 @@ final class Builder implements LazyObjectInterface
      * // (balance BETWEEN :balance_btw_0_a AND :balance_btw_0_b
      * //  OR balance BETWEEN :balance_btw_2_a AND :balance_btw_2_b)
      * 
-     * // Using NOT BETWEEN
-     * $query->between('balance', [0, 100], 'AND', true);
+     * // Using OR BETWEEN
+     * $query->between('balance', [0, 100], 'OR');
      * ```
      * 
      * > **Note:**
@@ -1763,46 +1881,9 @@ final class Builder implements LazyObjectInterface
      * 
      * @methodGroup QueryCondition Add match between conditions.
      */
-    public function between(string $column, array $values, string $connector = 'AND', bool $not = false): self
+    public function between(string $column, array $values, string $connector = 'AND'): self
     {
-        $count = count($values);
-        $operator = $not ? 'NOT BETWEEN' : 'BETWEEN';
-
-        if ($count < 2) {
-            throw new DatabaseException(
-                "{$operator} requires at least two values for column {$column}.",
-                ErrorCode::VALUE_FORBIDDEN
-            );
-        }
-
-        if ($count % 2 !== 0) {
-            throw new DatabaseException(
-                "Odd number of values passed to {$operator} for column {$column}, last value should be removed.",
-                ErrorCode::USER_WARNING
-            );
-        }
-
-        $segments = [];
-
-        for ($i = 0; $i < $count - 1; $i += 2) {
-            $a = $values[$i];
-            $b = $values[$i + 1];
-
-            $placeholder = $this->trimPlaceholder("{$column}_btw_{$i}");
-            $keyA = "{$placeholder}_a";
-            $keyB = "{$placeholder}_b";
-
-            $segments[] = "({$column} {$operator} {$keyA} AND {$keyB})";
-
-            $this->bind($keyA, $a)
-                ->bind($keyB, $b);
-        }
-
-        if ($segments !== []) {
-            $this->options['whereRaw'][] = trim($connector . ' (' . implode(' OR ', $segments) . ')');
-        }
-
-        return $this;
+        return $this->whereBetween($column, $values, $connector, false);
     }
 
     /**
@@ -1842,7 +1923,7 @@ final class Builder implements LazyObjectInterface
      */
     public function notBetween(string $column, array $values, string $connector = 'AND'): self
     {
-        return $this->between($column, $values, $connector, true);
+        return $this->whereBetween($column, $values, $connector, true);
     }
 
     /**
@@ -3491,9 +3572,10 @@ final class Builder implements LazyObjectInterface
         $this->assertInsertOptions();
         $length = count($values);
         $useTransaction = false;
+        $savepoint = null;
 
         if ($this->inSafeMode()) {
-            $useTransaction = $this->transaction();
+            [$useTransaction, $savepoint] = $this->withTransaction();
         }
 
         try {
@@ -3501,11 +3583,11 @@ final class Builder implements LazyObjectInterface
                 ? $this->executeInsertPrepared($values, $type, $length, $escapeValues) 
                 : $this->executeInsertQuery($values, $type, $length);
         } catch (Throwable $e) {
-            $this->resolveException($e);
+            $this->resolveException($e, savepoint: $savepoint);
             return 0;
         }
 
-        return $this->finishInsert($useTransaction, $inserted);
+        return $this->finishInsert($useTransaction, $inserted, $savepoint);
     }
 
     /**
@@ -3520,7 +3602,8 @@ final class Builder implements LazyObjectInterface
      *   conditions will throw an exception (to prevent accidental full-table updates).
      * - Values must be passed as an associative array (`column => value`).
      * 
-     * @param array<string,mixed>|null $values The array of columns and values to update, or build using (`set()` method).
+     * @param array<string,mixed>|null $values The array of columns and values to update, 
+     *      or build using (`set()` method).
      * 
      * @return int Return the number of rows affected.
      * 
@@ -3581,7 +3664,12 @@ final class Builder implements LazyObjectInterface
         $this->buildConditions($sql);
         $this->addRawWhereClause($sql);
 
-        $limit = $this->maxLimit[1] ?? 0;
+        $limit = $this->limiting[1] ?? 0;
+        $ordering = $this->getOptions('ordering');
+
+        if($ordering !== []){
+            $sql .= ' ORDER BY ' . rtrim(implode(', ', $ordering), ', ');
+        }
 
         if($limit > 0){
             $sql .= " LIMIT {$limit}";
@@ -3600,7 +3688,7 @@ final class Builder implements LazyObjectInterface
         $useTransaction = false;
 
         if ($this->inSafeMode()) {
-            $useTransaction = $this->transaction();
+            [$useTransaction, $savepoint] = $this->withTransaction();
         }
 
         try {
@@ -3619,7 +3707,7 @@ final class Builder implements LazyObjectInterface
 
             $response = $this->db->execute() ? $this->db->rowCount() : 0;
         } catch (Throwable $e) {
-            $this->resolveException($e);
+            $this->resolveException($e, savepoint: $savepoint);
             return 0;
         }
 
@@ -3628,7 +3716,7 @@ final class Builder implements LazyObjectInterface
                 return $this->commit() ? $response : 0;
             }
 
-            $this->rollback();
+            $this->rollback(name: $savepoint);
             return 0;
         }
         
@@ -3741,10 +3829,10 @@ final class Builder implements LazyObjectInterface
         self::assertTableName($table, null);
         $this->assertInsertOptions();
 
-        $isCopy = $this->handler['isCopy'] ?? false;
-        $fromColumns = $this->handler['columns'] ?? [];
+        $isCopy = $this->selector['isCopy'] ?? false;
+        $fromColumns = $this->selector['columns'] ?? [];
 
-         if (!$isCopy || $this->handler === []) {
+         if (!$isCopy || $this->selector === []) {
             throw new DatabaseException(
                 'The copy(...) method must be called before to(...).',
                 ErrorCode::BAD_METHOD_CALL
@@ -3761,7 +3849,7 @@ final class Builder implements LazyObjectInterface
         }
 
         $this->isCollectMetadata = true;
-        self::$lastInsertId = null;
+        $this->lastInsertId = null;
 
         if(!$this->get()){
             return 0;
@@ -3792,10 +3880,11 @@ final class Builder implements LazyObjectInterface
 
         $cacheable = $this->isCacheable;
         $inserted = 0;
+        $savepoint = null;
         $useTransaction = false;
 
         if ($this->inSafeMode()) {
-            $useTransaction = $this->transaction();
+            [$useTransaction, $savepoint] = $this->withTransaction();
         }
 
         try {
@@ -3810,7 +3899,7 @@ final class Builder implements LazyObjectInterface
             $this->resolveException($e, true);
         }
 
-        return $this->finishInsert($useTransaction, $inserted);
+        return $this->finishInsert($useTransaction, $inserted, $savepoint);
     }
 
     /**
@@ -4090,7 +4179,7 @@ final class Builder implements LazyObjectInterface
     {
         $this->assertHandler(__METHOD__);
         
-        $returnMode = $this->handler['returns'] 
+        $returnMode = $this->selector['returns'] 
             ?? $returnMode 
             ?? RETURN_ALL;
 
@@ -4100,7 +4189,7 @@ final class Builder implements LazyObjectInterface
             return $result;
         }
 
-        if($assert = ($this->handler['assert'] ?? null) !== null){
+        if($assert = ($this->selector['assert'] ?? null) !== null){
             $this->assertStrictConditions($assert, true);
         }
 
@@ -4126,9 +4215,9 @@ final class Builder implements LazyObjectInterface
         }
 
         return $this->buildExecutableStatement(
-            $this->handler['sql'] ?? '', 
-            $this->handler['method'], 
-            $this->handler['columns'] ?? ['*'], 
+            $this->selector['sql'] ?? '', 
+            $this->selector['method'], 
+            $this->selector['columns'] ?? ['*'], 
             $returnMode, 
             $fetchMode
         );
@@ -4171,8 +4260,8 @@ final class Builder implements LazyObjectInterface
     {
         $this->assertHandler(__METHOD__);
 
-        return ((self::$stmt instanceof DatabaseInterface && self::$stmt->ok()) 
-            ? self::$stmt 
+        return (($this->stmt instanceof DatabaseInterface && $this->stmt->ok()) 
+            ? $this->stmt 
             : $this->stmt()
         )->fetch(RETURN_STREAM, $this->getFetchMode($fetchMode));
     }
@@ -4294,13 +4383,13 @@ final class Builder implements LazyObjectInterface
         $this->assertHandler(__METHOD__);
 
         $this->returns = self::RETURN_STATEMENT;
-        $this->handler['method'] = 'stmt';
-        $this->handler['returns'] = RETURN_STMT;
+        $this->selector['method'] = 'stmt';
+        $this->selector['returns'] = RETURN_STMT;
 
-        self::$stmt = $this->get(FETCH_OBJ, RETURN_STMT);
+        $this->stmt = $this->get(FETCH_OBJ, RETURN_STMT);
 
-        if(self::$stmt instanceof DatabaseInterface && self::$stmt->ok()){
-            return self::$stmt;
+        if($this->stmt instanceof DatabaseInterface && $this->stmt->ok()){
+            return $this->stmt;
         }
 
         $this->freeStmt();
@@ -4401,34 +4490,12 @@ final class Builder implements LazyObjectInterface
      */
     public function count(string $column = '*'): self 
     {
-        $this->handler = [
+        $this->selector = [
             'sql' => " COUNT({$column})",
             'method' => 'total'
         ];
 
         return $this;
-    }
-
-    /**
-     * @deprecated Use {@see count()} instead.
-     *
-     * Alias for `count()`. Retained for backward compatibility.
-     *
-     * @param string $column Column to count (default: `*`).
-     *
-     * @return self Returns the current query builder instance.
-     */
-    public function total(string $column = '*'): self 
-    {
-        return $this->count($column);
-    }
-
-    /**
-     * @deprecated Method has been deprecated use {@see onCondition()} instead.
-     */
-    public function onClause(RawExpression|string $sql, string $connector = 'AND'): self
-    {
-        return $this->onCondition($sql, $connector);
     }
 
     /**
@@ -4460,7 +4527,7 @@ final class Builder implements LazyObjectInterface
      */
     public function sum(string $column): self
     {
-        $this->handler = [
+        $this->selector = [
             'sql' => " SUM({$column}) AS totalCalc",
             'method' => 'sum'
         ];
@@ -4495,7 +4562,7 @@ final class Builder implements LazyObjectInterface
      */
     public function average(string $column): self
     {
-        $this->handler = [
+        $this->selector = [
             'sql' => " AVG({$column}) AS totalCalc",
             'method' => 'average'
         ];
@@ -4532,7 +4599,7 @@ final class Builder implements LazyObjectInterface
      */
     public function select(array $columns = ['*']): self 
     {
-        $this->handler = [
+        $this->selector = [
             'sql' => '',
             'columns' => $columns,
             'method' => 'select'
@@ -4569,7 +4636,7 @@ final class Builder implements LazyObjectInterface
      */
     public function find(array $columns = ['*']): mixed 
     {
-        $this->handler = [
+        $this->selector = [
             'sql' => '',
             'columns' => $columns,
             'method' => 'find',
@@ -4618,7 +4685,7 @@ final class Builder implements LazyObjectInterface
      */
     public function copy(array $columns = ['*']): self
     {
-        $this->handler = [
+        $this->selector = [
             'sql' => '',
             'columns' => $columns,
             'method' => 'select',
@@ -4689,7 +4756,7 @@ final class Builder implements LazyObjectInterface
      *                    If provided in PDO, savepoint will be created instead.
      * 
      * @return bool Returns true if the transaction and optional savepoint were successfully started.
-     * @throws DatabaseException Throws exception on PDO if failure to set transaction isolation level or create savepoint.
+     * @throws DatabaseException Throws if invalid savepoint name or if failure to set transaction isolation level or create savepoint.
      * 
      * @see commit()
      * @see rollback();
@@ -4730,6 +4797,19 @@ final class Builder implements LazyObjectInterface
     }
 
     /**
+     * Set a named transaction savepoint.
+     * 
+     * @param string $name Optional name for a savepoint.
+     * 
+     * @return bool Returns true on success or false on failure.
+     * @throws DatabaseException If an invalid savepoint name or database error.
+     */
+    public function savepoint(string $name): bool 
+    {
+        return $this->db->savepoint($name);
+    }
+
+    /**
      * Checks if a transaction is currently active.
      *
      * @return bool Returns true if a transaction is active, false otherwise.
@@ -4752,6 +4832,7 @@ final class Builder implements LazyObjectInterface
      *                Only supported in MySQLi.
      * 
      * @return bool Returns true if the transaction was successfully committed.
+     * @throws DatabaseException Throws if invalid savepoint name or failure to create savepoint.
      * 
      * @see transaction()
      * @see rollback()
@@ -4778,7 +4859,7 @@ final class Builder implements LazyObjectInterface
      *                    If provided in PDO, rolls back to the savepoint named.
      * 
      * @return bool Return true if rolled back was successful, otherwise false.
-     * @throws DatabaseException Throws exception on PDO if failure to create savepoint.
+     * @throws DatabaseException Throws if invalid savepoint name or failure to create savepoint.
      * 
      * @see transaction()
      * @see commit()
@@ -4786,7 +4867,7 @@ final class Builder implements LazyObjectInterface
      */
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
-        $rollback = false;
+        $rollback = true;
 
         if($this->inTransaction()){
             $rollback = $this->db->rollback($flags, $name);
@@ -4797,33 +4878,23 @@ final class Builder implements LazyObjectInterface
     }
 
     /**
-     * Releases an active database transaction if one is in progress.
+     * Removes the named savepoint from the set of savepoints of the current transaction.
      * 
-     * This method performs a rollback only if a transaction is currently open.
-     * It is safe to call regardless of whether a transaction exists.
+     * @param string $name The savepoint name to release.
      * 
-     * Useful for cleaning up unused or failed transactions in `finally` blocks,
-     * or in cases where safe mode or conditional transactional logic is used.
-     * 
-     * @param int $flags Optional flags to pass to the rollback operation (driver-specific).
-     * @param string|null $name Optional savepoint name if partial rollback is supported.
-     * 
-     * @return bool Returns true if no transaction was active or rollback succeeded, false on rollback failure.
-     * @see rollback()
-     * 
-     * @internal - Used internally to release transaction, returning false instead exception if error.
+     * @return bool Returns true on success or false on failure.
+     * @throws DatabaseException Throws if invalid savepoint name.
      */
-    public function release(int $flags = 0, ?string $name = null): bool 
+    public function release(string $name): bool 
     {
-        if (!$this->inTransaction()) {
-            return true;
+        $released = false;
+
+        if($this->inTransaction()){
+            $released = $this->db->release($name);
         }
 
-        try {
-            return $this->db->rollback($flags, $name);
-        } catch (Throwable) {
-            return false;
-        }
+        $this->reset();
+        return $released;
     }
 
     /**
@@ -4850,15 +4921,76 @@ final class Builder implements LazyObjectInterface
     }
 
     /**
+     * Apply a row-level update lock to the query for concurrency control.
+     *
+     * Call this method before executing `find([...])`, `select([...])` or similar fetch operations.
+     * 
+     * @return self Returns the current Builder instance.
+     * 
+     * > **Note:** 
+     * > Must be used inside a transaction.
+     * > Locking is only useful if you need selected value to decide the update/insert.
+     *
+     * @example Lock rows for update (exclusive lock):
+     * 
+     * ```php
+     * $tbl = Builder::Table('users');
+     * 
+     * $tbl->transaction();
+     * 
+     * $rows = $tbl->where('user_id', '=', 123)
+     *     ->lockForUpdate() // Prevents others from reading or writing
+     *     ->find();
+     * 
+     * $tbl->commit();
+     * ```
+     */
+    public function lockForUpdate(): self 
+    {
+        return $this->lockFor('update');
+    }
+
+    /**
+     * Apply a row-level share lock to the query for concurrency control.
+     *
+     * Call this method before executing `find()`, `select()` or similar fetch operations.
+     * 
+     * @param string $mode The lock mode: 'update' or 'shared' (default: `update`).
+     * 
+     * @return self Returns the current Builder instance.
+     * 
+     * > **Note:** 
+     * > Must be used inside a transaction.
+     * > Locking is only useful if you need to read value only.
+     *
+     * @example - Lock rows for shared read (shared lock):
+     * 
+     * ```php
+     * $tbl = Builder::Table('users');
+     * 
+     * $tbl->transaction();
+     * 
+     * $rows = $tbl->where('user_id', '=', 123)
+     *     ->lockInShare() // Allows others to read, but not write
+     *     ->find();
+     * 
+     * $tbl->commit();
+     * ```
+     */
+    public function lockInShare(): self 
+    {
+        return $this->lockFor('share');
+    }
+
+    /**
      * Apply a row-level lock to the query for concurrency control.
      *
-     * Call this method before executing `find()` or similar fetch operations.
-     * Must be used within a transaction.
+     * Call this method before executing `find()`, `select()` or similar fetch operations.
      * 
      * **Lock Modes:**
      * 
-     * - `'update'`: Exclusive lock. Allows reads, blocks writes by others.
-     * - `'shared'`: Shared lock. Allows others to read, but not write.
+     * - `update`: Exclusive lock. Allows reads, blocks writes by others {@see self::lockForUpdate()}.
+     * - `shared`: Shared lock. Allows others to read, but not write {@see self::lockInShare()}.
      * 
      * 
      * @param string $mode The lock mode: 'update' or 'shared' (default: `update`).
@@ -4866,7 +4998,9 @@ final class Builder implements LazyObjectInterface
      * @return self Returns the current Builder instance.
      * @throws InvalidArgumentException If invalid lock type is given.
      * 
-     * > **Note:** Must be used inside a transaction.
+     * > **Note:** 
+     * > Must be used inside a transaction.
+     * > Locking is only useful if you need selected value to decide the update/insert.
      *
      * @example Lock rows for update (exclusive lock):
      * 
@@ -4890,7 +5024,7 @@ final class Builder implements LazyObjectInterface
      * $tbl->transaction();
      * 
      * $rows = $tbl->where('user_id', '=', 123)
-     *     ->lockFor('shared') // Allows others to read, but not write
+     *     ->lockFor('share') // Allows others to read, but not write
      *     ->find();
      * 
      * $tbl->commit();
@@ -4900,11 +5034,14 @@ final class Builder implements LazyObjectInterface
     {
         $mode = strtolower($mode);
 
-        if(!in_array($mode, ['update', 'shared'], true)){
+        if(!in_array($mode, ['update', 'shared', 'share'], true)){
             throw new InvalidArgumentException("Invalid lock type: $mode");
         }
  
-        $this->lock = Alter::getBuilderTableLock($this->db->getDriver(), ($mode === 'update'));
+        $this->lock = Alter::getBuilderTableLock(
+            $this->db->getDriver(), 
+            $mode === 'update'
+        );
 
         return $this;
     }
@@ -4971,10 +5108,11 @@ final class Builder implements LazyObjectInterface
     public function truncate(?int $resetIncrement = null): bool 
     {
         $deleted = false;
+        $savepoint = null;
         $useTransaction = false;
 
         if ($this->inSafeMode()) {
-            $useTransaction = $this->transaction();
+            [$useTransaction, $savepoint] = $this->withTransaction();
         }
 
         try {
@@ -5006,7 +5144,7 @@ final class Builder implements LazyObjectInterface
                 }
             }
         } catch (Throwable $e) {
-            $this->resolveException($e);
+            $this->resolveException($e, savepoint: $savepoint);
             return false;
         }
 
@@ -5015,7 +5153,7 @@ final class Builder implements LazyObjectInterface
                 return $this->commit();
             }
 
-            $this->rollback();
+            $this->rollback(name: $savepoint);
             return false;
         }
 
@@ -5060,10 +5198,11 @@ final class Builder implements LazyObjectInterface
         self::assertTableName($this->tableName);
 
         $result = false;
+        $savepoint = null;
         $useTransaction = false;
 
         if ($this->inSafeMode()) {
-            $useTransaction = $this->transaction();
+            [$useTransaction, $savepoint] = $this->withTransaction();
         }
 
         try {
@@ -5074,7 +5213,7 @@ final class Builder implements LazyObjectInterface
                 $this->db->exec("INSERT INTO temp_{$this->tableName} SELECT * FROM {$this->tableName}") > 0
             );
         } catch (Throwable $e) {
-            $this->resolveException($e);
+            $this->resolveException($e, savepoint: $savepoint);
             return false;
         }
 
@@ -5083,7 +5222,7 @@ final class Builder implements LazyObjectInterface
                 return $this->commit();
             }
 
-            $this->rollback();
+            $this->rollback(name: $savepoint);
             return false;
         }
 
@@ -5130,18 +5269,19 @@ final class Builder implements LazyObjectInterface
     {
         self::assertTableName($this->tableName);
 
-        $sql = Alter::getDropTable($this->db->getDriver(), $this->tableName, $isTemporalTable);
         $result = false;
+        $savepoint = null;
         $useTransaction = false;
+        $sql = Alter::getDropTable($this->db->getDriver(), $this->tableName, $isTemporalTable);
 
         if ($this->inSafeMode()) {
-            $useTransaction = $this->transaction();
+            [$useTransaction, $savepoint] = $this->withTransaction();
         }
 
         try {
             $result = (bool) $this->db->exec($sql);
         } catch (Throwable $e) {
-            $this->resolveException($e);
+            $this->resolveException($e, savepoint: $savepoint);
             return false;
         }
 
@@ -5150,7 +5290,7 @@ final class Builder implements LazyObjectInterface
                 return $this->commit();
             }
 
-            $this->rollback();
+            $this->rollback(name: $savepoint);
             return false;
         }
 
@@ -5242,7 +5382,10 @@ final class Builder implements LazyObjectInterface
         $this->freeStmt();
 
         if($this->db instanceof DatabaseInterface){
-            $this->release();
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
+
             $this->db->free();
 
             if($this->db->isConnected()){
@@ -5252,16 +5395,7 @@ final class Builder implements LazyObjectInterface
 
         $this->db = null;
 
-        if(!(self::$conn instanceof Connection) || !self::isConnected()){
-            return true;
-        }
-
-        if(self::$conn->purge(true)){
-            self::$conn = null;
-            return true;
-        }
-
-        return false;
+        return true;
     }
 
     /**
@@ -5296,23 +5430,45 @@ final class Builder implements LazyObjectInterface
      */
     public function freeStmt(): bool 
     {
-        if(self::$stmt instanceof DatabaseInterface){
-            if(self::$stmt->inTransaction()){
-                self::$stmt->rollback();
+        if($this->stmt instanceof DatabaseInterface){
+            if($this->stmt->inTransaction()){
+                $this->stmt->rollback();
             }
             
-            self::$stmt->free();
+            $this->stmt->free();
 
-            if(self::$stmt->isConnected()){
-                self::$stmt->close();
+            if($this->stmt->isConnected()){
+                $this->stmt->close();
             }
         }
 
-        self::$stmt = null;
-        $this->handler = [];
+        $this->stmt = null;
+        $this->selector = [];
         $this->returns = null;
 
         return true;
+    }
+
+    /**
+     * Start or create nested transaction.
+     * 
+     * @return array{bool:inTransaction,?string:savepoint}
+     */
+    private function withTransaction(): array
+    {
+        try{
+            if(!$this->inTransaction()){
+                return [$this->transaction(), null];
+            }
+        
+            $savepoint = uniqid('builder_savepoint_' . $this->getObjectId());
+
+            if($this->savepoint($savepoint)){
+                return [true, $savepoint];
+            }
+        }catch(Throwable){}
+
+        return [false, null];
     }
 
     /**
@@ -5401,6 +5557,7 @@ final class Builder implements LazyObjectInterface
         if (!self::$instance instanceof self) {
             $instance = new self($table, $alias);
             $instance->db = self::database();
+
             return $instance;
         }
 
@@ -5428,7 +5585,7 @@ final class Builder implements LazyObjectInterface
     {
         $this->tableJoin = [];
         $this->joinConditions = [];
-        $this->maxLimit = [];
+        $this->limiting = [];
         $this->conditions = [];
         $this->querySetValues = [];
         $this->hasCache = false;
@@ -5442,8 +5599,8 @@ final class Builder implements LazyObjectInterface
         $this->isReplace = false;
         $this->resetOptions();
 
-        if(!$new && (self::$stmt === null || $this->returns !== self::RETURN_STATEMENT)){
-            $this->handler = [];
+        if(!$new && ($this->stmt === null || $this->returns !== self::RETURN_STATEMENT)){
+            $this->selector = [];
         }
 
         if($new){
@@ -5460,8 +5617,7 @@ final class Builder implements LazyObjectInterface
     {
         return $this->isSafeMode 
             && !$this->isCollectMetadata
-            && $this->debugMode === self::DEBUG_NONE 
-            && !$this->inTransaction();
+            && $this->debugMode === self::DEBUG_NONE;
     }
 
     /**
@@ -5477,7 +5633,6 @@ final class Builder implements LazyObjectInterface
             !$response || 
             $response === [] ||
             $response === (object)[] ||
-            !$this->isCacheable() || 
             ($response instanceof DatabaseInterface) || 
             ($response instanceof \PDOStatement) || 
             ($response instanceof \mysqli_result)
@@ -5485,7 +5640,11 @@ final class Builder implements LazyObjectInterface
             return;
         }
 
-        if ($this->inSafeMode() || (is_object($response) && count(get_object_vars($response)) === 0)) {
+        if (
+            !$this->isCacheable() 
+            || $this->inSafeMode() 
+            || (is_object($response) && count(get_object_vars($response)) === 0)
+        ) {
             return;
         }
 
@@ -5524,7 +5683,10 @@ final class Builder implements LazyObjectInterface
 
         if($matches === []){
             throw new DatabaseException(
-                sprintf('No match columns defined. Use $query->match([...]) before calling $query->%s(...).', $fn),
+                sprintf(
+                    'No match columns defined. Use $query->match([...]) before calling $query->%s(...).', 
+                    $fn
+                ),
                 ErrorCode::LOGIC_ERROR
             );
         }
@@ -5562,7 +5724,6 @@ final class Builder implements LazyObjectInterface
 
         $this->cacheKey = '';
         $this->isCacheReady = false;
-        $this->release();
         $this->reset();
 
         return $response;
@@ -5579,10 +5740,14 @@ final class Builder implements LazyObjectInterface
      *
      * @throws Throwable If $throwNow is true.
      */
-    private function resolveException(Throwable $e, bool $throwInstant = false): void  
+    private function resolveException(
+        Throwable $e, 
+        bool $throwInstant = false,
+        ?string $savepoint = null
+    ): void  
     {
         if ($this->inTransaction()) {
-            $this->rollback();
+            $this->rollback(name: $savepoint);
         }
 
         if($throwInstant || $e->getCode() === ErrorCode::TERMINATED){
@@ -5606,23 +5771,88 @@ final class Builder implements LazyObjectInterface
      * 
      * @return int Return number of inserted rows if successful, 0 on failure.
      */
-    private function finishInsert(bool $useTransaction, mixed $result): int 
+    private function finishInsert(bool $useTransaction, mixed $result, ?string $savepoint): int 
     {
         if($useTransaction && $this->db->inTransaction()){
             if($result > 0){
-               return $this->commit() ? $result : 0;
+               $result = $this->commit() ? $result : 0;
+            }else{
+                $result = 0;
+                $this->rollback(name: $savepoint);
             }
-
-            $this->rollback();
-            return 0;
         }
-        
-        if(!$this->db->inTransaction()){
-            self::$lastInsertId = ($result > 0) ? $this->db?->getLastInsertId() : null;
-        }
-
+   
+        $this->lastInsertId = ($result > 0) 
+            ? $this->db->getLastInsertId() 
+            : null;
+   
         $this->reset();
         return (int) $result;
+    }
+
+    /**
+     * Add a `BETWEEN` condition to the query.
+     * 
+     * This method adds a SQL `BETWEEN` clause for comparing a column's value
+     * within one or more numeric or date ranges. You can pass multiple pairs of
+     * values to create multiple ranges automatically joined by `OR`.
+     * 
+     * The `BETWEEN` operator includes both boundary values.
+     * 
+     * @param string $column The column name to apply the condition on.
+     * @param array $values An array of range boundaries. Must contain an even number of values.
+     *                        Each pair (e.g., [0, 100]) represents a range.
+     * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
+     * @param bool $isNot Set to `true` to use `NOT BETWEEN` instead of `BETWEEN`.
+     * 
+     * @return self Returns the current query builder instance.
+     * @throws DatabaseException If less than two values are provided, or an odd number of values is passed.
+     */
+    private function whereBetween(
+        string $column, 
+        array $values, 
+        string $connector = 'AND', 
+        bool $isNot = false
+    ): self
+    {
+        $count = count($values);
+        $operator = $isNot ? 'NOT BETWEEN' : 'BETWEEN';
+
+        if ($count < 2) {
+            throw new DatabaseException(
+                "{$operator} requires at least two values for column {$column}.",
+                ErrorCode::VALUE_FORBIDDEN
+            );
+        }
+
+        if ($count % 2 !== 0) {
+            throw new DatabaseException(
+                "Odd number of values passed to {$operator} for column {$column}, last value should be removed.",
+                ErrorCode::USER_WARNING
+            );
+        }
+
+        $segments = [];
+
+        for ($i = 0; $i < $count - 1; $i += 2) {
+            $a = $values[$i];
+            $b = $values[$i + 1];
+
+            $placeholder = $this->trimPlaceholder("{$column}_btw_{$i}");
+            $keyA = "{$placeholder}_a";
+            $keyB = "{$placeholder}_b";
+
+            $segments[] = "({$column} {$operator} {$keyA} AND {$keyB})";
+
+            $this->bind($keyA, $a)
+                ->bind($keyB, $b);
+        }
+
+        if ($segments !== []) {
+            $this->options['whereRaw'][] = trim($connector . ' (' . implode(' OR ', $segments) . ')');
+        }
+
+        return $this;
     }
 
     /**
@@ -5659,7 +5889,7 @@ final class Builder implements LazyObjectInterface
      */
     private function assertHandler(string $fn): void 
     {
-        if(!$this->isCollectMetadata && $this->handler === [] && $this->unions === []){
+        if(!$this->isCollectMetadata && $this->selector === [] && $this->unions === []){
             throw new DatabaseException(
                 "Calling {$fn}(...) without a valid query build is not allowed.",
                 ErrorCode::BAD_METHOD_CALL
@@ -5980,14 +6210,20 @@ final class Builder implements LazyObjectInterface
 
         $this->addRawWhereClause($sql);
 
-        if(!$isDelete){
+        if($isDelete){
+            $ordering = $this->getOptions('ordering');
+
+            if($ordering !== []){
+                $sql .= ' ORDER BY ' . rtrim(implode(', ', $ordering), ', ');
+            }
+        }else{
             [$query, $isOrdered] = $this->addOrderAndGrouping();
             $sql .= $query;
 
             $this->setMatchAgainst($sql, $isOrdered);
         }
 
-        [$offset, $limit] = $this->maxLimit + [0, 0];
+        [$offset, $limit] = $this->limiting + [0, 0];
 
         if($isDelete || $isNext){
             $limit = $isNext ? 1 : $limit;
@@ -6012,6 +6248,7 @@ final class Builder implements LazyObjectInterface
             $this->options['current']['sql'] = $sql;
         }
 
+        $savepoint = null;
         $useTransaction = false;
         $canExecute = (!$this->isCollectMetadata || $this->debugMode === self::DEBUG_NONE);
         $hasParams = ($this->conditions !== [] 
@@ -6019,7 +6256,7 @@ final class Builder implements LazyObjectInterface
             || $this->getOptions('binds') !== []);
 
         if ($method === 'delete' && $this->inSafeMode()) {
-            $useTransaction = $this->transaction();
+            [$useTransaction, $savepoint] = $this->withTransaction();
         }
 
         if($hasParams){
@@ -6064,7 +6301,7 @@ final class Builder implements LazyObjectInterface
                 return $this->commit() ? $response : 0;
             }
 
-            $this->rollback();
+            $this->rollback(name: $savepoint);
             return 0;
         }
         
@@ -6155,7 +6392,7 @@ final class Builder implements LazyObjectInterface
         $sqlParts = [];
         $params = [];
         $columns = $this->getOptions('unionColumns');
-        [$offset, $limit] = $this->maxLimit + [0, 0];
+        [$offset, $limit] = $this->limiting + [0, 0];
 
         $isColumns = $columns !== [];
         $isConditions = $this->conditions !== [];
@@ -6236,10 +6473,11 @@ final class Builder implements LazyObjectInterface
             }
         }
 
+        $savepoint = null;
         $useTransaction = false;
 
         if ($this->inSafeMode()) {
-            $useTransaction = $this->transaction();
+            [$useTransaction, $savepoint] = $this->withTransaction();
         }
 
         if($placeholder === []){
@@ -6262,6 +6500,10 @@ final class Builder implements LazyObjectInterface
         }
 
         if(!$this->db->ok()){
+            if($useTransaction && $this->db->inTransaction()){
+                $this->rollback(name: $savepoint);
+            }
+
             $this->reset();
             return false;
         }
@@ -6284,7 +6526,7 @@ final class Builder implements LazyObjectInterface
                 return false;
             }
 
-            $this->rollback();
+            $this->rollback(name: $savepoint);
             return false;
         }
 
@@ -6482,11 +6724,14 @@ final class Builder implements LazyObjectInterface
      */
     private static function administration(string|int $identifier, string $action, int $timeout = 300): bool 
     {
-        $tbl = self::table('locks');
-        $driver = $tbl->database()->getDriver();
+        $db = self::database();
+        $driver = $db->getDriver();
+
         $pgsqlPlaceholder = ($driver === 'pgsql') 
             ? (is_int($identifier) ? ':lockName' : 'hashtext(:lockName)')
             : null;
+
+        $tbl = self::table('locks');
 
         if ($driver === 'sqlite') {
             static $exists = null;
@@ -6494,7 +6739,7 @@ final class Builder implements LazyObjectInterface
 
             if(!$exists){
                 $createTblQuery = 'CREATE TABLE IF NOT EXISTS locks (name TEXT PRIMARY KEY, acquired_at INTEGER)';
-                $exists = (bool) $tbl->database()->exec($createTblQuery);
+                $exists = (bool) $db->exec($createTblQuery);
 
                 if(!$exists){
                     throw new DatabaseException(
@@ -6508,7 +6753,7 @@ final class Builder implements LazyObjectInterface
         $query = Alter::getAdministrator($driver, $action, $pgsqlPlaceholder);
 
         try {
-            $stmt = $tbl->database()->prepare($query)->bind(':lockName', $identifier);
+            $stmt = $db->prepare($query)->bind(':lockName', $identifier);
             $tbl = null;
 
             if (
@@ -6523,7 +6768,9 @@ final class Builder implements LazyObjectInterface
             }
 
             if($action === 'isLocked' && ($row = $stmt->fetchNext()) !== false){
-                return ($driver === 'sqlite') ? ($row->lockCount > 0) : (bool) $row->isLockDone;
+                return ($driver === 'sqlite') 
+                    ? ($row->lockCount > 0) 
+                    : (bool) $row->isLockDone;
             }
         } catch (Throwable $e) {
             DatabaseException::throwException($e->getMessage(), $e->getCode(), $e);
@@ -6575,7 +6822,7 @@ final class Builder implements LazyObjectInterface
 
         if($this->isCollectMetadata){
             $this->options['current']['params'][$placeholder] = $value;
-        }else{
+        }elseif($this->debugMode === self::DEBUG_NONE){
             if($params === null){
                 $this->db->bind(":$placeholder", $value);
             }else{
@@ -6761,7 +7008,7 @@ final class Builder implements LazyObjectInterface
         $inserted = 0;
         $ignore = $this->isIgnoreDuplicate ? 'IGNORE ' : '';
         $isDebug = $this->debugMode !== self::DEBUG_NONE;
-        self::$lastInsertId = null;
+        $this->lastInsertId = null;
 
         $replacements = [];
         [$placeholders, $inserts] = self::mapInsertColumns($values[0]);
@@ -7507,10 +7754,10 @@ final class Builder implements LazyObjectInterface
         $inserts = '';
 
         foreach($values as $column => $value){
-            $inserts .= "$column, ";
+            $inserts .= "`{$column}`, ";
             $placeholders .= ($value instanceof RawExpression) 
                 ? $value->toString() . ', ' 
-                : ":$column, ";
+                : ":{$column}, ";
         }
 
         return [rtrim($placeholders, ', '), rtrim($inserts, ', ')];
@@ -7530,7 +7777,7 @@ final class Builder implements LazyObjectInterface
 
         foreach ($columns as $column => $val) {
             $value = $this->getValue($val);
-            $placeholders[] = "{$column} = " . (($value instanceof RawExpression) 
+            $placeholders[] = "`{$column}` = " . (($value instanceof RawExpression) 
                 ? $value->toString() 
                 : $this->trimPlaceholder($column)
             );

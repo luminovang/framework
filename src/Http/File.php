@@ -1,6 +1,6 @@
 <?php 
 /**
- * File represents an uploaded file.
+ * Luminova Framework File Uploaded Object.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -10,13 +10,16 @@
  */
 namespace Luminova\Http;
 
-use \Luminova\Http\Helper\FileConfig;
-use \Luminova\Interface\LazyObjectInterface;
-use \Luminova\Common\{Helpers, Maths};
+use \Luminova\Storage\Uploader;
+use \Luminova\Http\UploadConfig;
+use \Luminova\Http\Message\Stream;
+use \Psr\Http\Message\StreamInterface;
+use \Psr\Http\Message\UploadedFileInterface;
+use \Luminova\Utility\{MIME, Helpers, Maths};
+use \Luminova\Interface\{Arrayable, LazyObjectInterface};
 use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
-use function \Luminova\Funcs\get_mime;
 
-class File implements LazyObjectInterface
+class File implements UploadedFileInterface, LazyObjectInterface, Arrayable
 {
     /**
      * Upload error file has not size.
@@ -91,9 +94,9 @@ class File implements LazyObjectInterface
     /**
      * File upload configurations.
      *
-     * @var FileConfig|null $config
+     * @var UploadConfig|null $config
      */
-    protected ?FileConfig $config = null;
+    protected ?UploadConfig $config = null;
 
     /**
      * Is content binary data.
@@ -110,6 +113,13 @@ class File implements LazyObjectInterface
     private ?bool $isBase64 = null;
 
     /**
+     * File upload status.
+     * 
+     * @var bool $uploaded
+     */
+    private bool $uploaded = false;
+
+    /**
      * Constructs a File object for handling uploaded file data.
      *
      * @param int $index The index of the file in the uploaded file array, typically representing the position in a multi-file upload scenario.
@@ -119,8 +129,10 @@ class File implements LazyObjectInterface
      * @param string|null $extension The file extension (e.g., `jpg`, `png`, `pdf`).
      * @param string|null $temp The temporary file path where the uploaded file is stored on the server.
      * @param int $error The error code associated with the file upload (default: `UPLOAD_ERR_NO_FILE`).
-     * @param string|null $content The file's content in string format, typically used when the file data is stored directly in memory as an alternative to using the `temp`.
+     * @param StreamInterface|string|null $content The file's content in string format, typically used when the file data is stored directly in memory as an alternative to using the `temp`.
      * @param bool $isBlob Indicates whether the uploaded file is handled as a binary large object (BLOB), which is commonly used for in-memory file storage (default: `false`).
+     * 
+     * @throws InvalidArgumentException If neither `temp` nor `content` is provided.
      */
     public function __construct(
         protected int $index = 0,
@@ -130,9 +142,17 @@ class File implements LazyObjectInterface
         protected ?string $extension = null,
         protected ?string $temp = null,
         protected int $error = UPLOAD_ERR_NO_FILE,
-        protected ?string $content = null,
+        protected StreamInterface|string|null $content = null,
         protected bool $isBlob = false
-    ) {
+    ) 
+    {
+        if($this->temp === null && $this->content === null){
+            throw new InvalidArgumentException(
+                'Either temp file path or content must be provided for the uploaded file.'
+            );
+        }
+
+        $this->uploaded = false;
         $this->message = null;
     }
 
@@ -149,6 +169,61 @@ class File implements LazyObjectInterface
     }
 
     /**
+     * Retrieve the filename sent by the client.
+     *
+     * {@inheritDoc}
+     * @see self::getName()
+     */
+    public function getClientFilename(): ?string
+    {
+        return $this->name;
+    }
+    
+    /**
+     * Retrieve the media type sent by the client.
+     *
+     * {@inheritDoc}
+     * @see self::getType()
+     */
+    public function getClientMediaType(): ?string
+    {
+        return $this->type;
+    }
+
+    /**
+     * Retrieve a stream representing the uploaded file.
+     *
+     * {@inheritDoc}
+     */
+    public function getStream(): StreamInterface
+    {
+        if ($this->uploaded) {
+            throw new RuntimeException(
+                'Cannot retrieve stream: file has already been uploaded.'
+            );
+        }
+
+        if($this->isStream()){
+            return $this->content;
+        }
+
+        if ($this->temp) {
+            $resource = fopen($this->temp, 'rb');
+
+            if ($resource === false) {
+                throw new RuntimeException("Failed to open file stream: {$this->temp}");
+            }
+
+            return $this->content = new Stream($resource);
+        }
+
+        $body = (string) ($this->content ?? '');
+        $this->content = null;
+
+        return $this->content = Stream::fromStringReadOnly($body);
+    }
+
+    /**
      * Gets the index of the file.
      *
      * @return int Return the index of the file.
@@ -162,6 +237,7 @@ class File implements LazyObjectInterface
      * Gets the name of the file.
      *
      * @return string|null Return the name of the file.
+     * @see self::getClientFilename()
      */
     public function getName(): ?string
     {
@@ -211,13 +287,14 @@ class File implements LazyObjectInterface
             return $this->mime;
         }
 
-        return $this->mime = get_mime($this->temp ?? $this->content ?? '') ?: null;
+        return $this->mime = MIME::guess($this->temp ?? $this->getContent() ?? '');
     }
 
     /**
      * Gets the MIME type of the file.
      *
      * @return string|null Return the MIME type of the file.
+     * @see self::getClientMediaType()
      */
     public function getType(): ?string
     {
@@ -251,7 +328,7 @@ class File implements LazyObjectInterface
      */
     public function getContent(): ?string
     {
-        return $this->content;
+        return $this->content ? (string) $this->content : null;
     }
 
     /**
@@ -291,7 +368,7 @@ class File implements LazyObjectInterface
      *
      * > **Note:** The property value maybe be null if not configured.
      *
-     * @return FileConfig Returns instance of upload configuration.
+     * @return UploadConfig Returns instance of upload configuration.
      * 
      * @example - Example:
      * 
@@ -305,13 +382,13 @@ class File implements LazyObjectInterface
      * var_dump($config->data);
      * ```
      */
-    public function getConfig(): FileConfig
+    public function getConfig(): UploadConfig
     {
-        if($this->config instanceof FileConfig){
+        if($this->config instanceof UploadConfig){
             return $this->config;
         }
 
-        return $this->config = new FileConfig();
+        return $this->config = new UploadConfig();
     }
 
     /**
@@ -338,7 +415,9 @@ class File implements LazyObjectInterface
             return $this->isBinary;
         }
 
-        return $this->isBin = ($this->content === null) ? false : Helpers::isBinary($this->content);
+        return $this->isBin = ($this->content === null) 
+            ? false 
+            : Helpers::isBinary($this->getContent());
     }
 
     /**
@@ -365,8 +444,8 @@ class File implements LazyObjectInterface
         return $this->isBase64 = ($this->content === null) 
             ? false 
             : Helpers::isBase64Encoded(
-                $this->content, 
-                (!$this->config instanceof FileConfig) ? false : ($this->config->base64Strict ?? false)
+                $this->getContent(), 
+                (!$this->config instanceof UploadConfig) ? false : ($this->config->base64Strict ?? false)
             );
     }
 
@@ -378,6 +457,26 @@ class File implements LazyObjectInterface
     public function isError(): bool
     {
         return $this->error !== UPLOAD_ERR_OK && $this->error !== UPLOAD_ERR_PARTIAL;
+    }
+
+    /**
+     * Checks if file was uploaded successfully.
+     *
+     * @return bool Returns true if file was uploaded, false otherwise.
+     */
+    public function isUploaded(): bool
+    {
+        return $this->uploaded;
+    }
+
+    /**
+     * Checks if file content is stream.
+     *
+     * @return bool Returns true if file is stream, false otherwise.
+     */
+    public function isStream(): bool 
+    {
+        return ($this->content instanceof StreamInterface);
     }
 
     /**
@@ -412,47 +511,75 @@ class File implements LazyObjectInterface
     }
 
     /**
-     * Set file configurations for upload behavior file type restriction.
-     * 
-     * @param array<string,mixed> $config An associative array of file configuration key and value.
-     * 
-     * @return self Returns the current file instance.
-     * 
-     * **Supported Configurations:**
-     * 
-     * - `upload_path`:    (string) The path where files will be uploaded.
-     * - `max_size`:       (int) Maximum allowed file size in bytes.
-     * - `min_size`:       (int) Minimum allowed file size in bytes.
-     * - `allowed_types`:  (string|string[]) A list array of allowed file types or String separated by pipe symbol (e.g, `png|jpg|gif`).
-     * - `chunk_length`:   (int) Write length of chunk in bytes (default: 5242880).
-     * - `if_existed`:     (string) How to handle existing files (e.g, `File::IF_EXIST_RENAME`, `File::IF_EXIST_*`) (default: `File::IF_EXIST_OVERWRITE`).
-     * - `symlink`:        (string) Specify a valid path to create a symlink after upload was completed (e.g `/writeable/storages/`, `/public/assets/`).
-     * - `data`:           (mixed) Additional custom configuration information.
-     * - `base64_strict`:  (bool) If true, base64_decode() will return false on invalid characters.
-     * 
-     * @example - Setting configurations:
+     * Configure file upload behavior and restrictions.
+     *
+     * Applies upload rules such as size limits, allowed file types,
+     * storage location, and post-upload handling. The configuration
+     * can be provided as a UploadConfig instance or an associative array.
+     *
+     * @param UploadConfig|array<string,mixed> $config Upload configuration options.
+     *
+     * @return self Return instance of file object.
+     * @throws RuntimeException If the upload path is invalid or points to a file.
+     * @see UploadConfig
+     *
+     * **Supported configuration options:**
+     *
+     * - `upload_path`   (string)  Destination directory for uploaded files.
+     * - `max_size`      (int)     Maximum allowed file size in bytes.
+     * - `min_size`      (int)     Minimum allowed file size in bytes.
+     * - `allowed_types` (string|string[]) Allowed file extensions or a pipe-separated string (e.g. `png|jpg|gif`).
+     * - `chunk_length`  (int)     Chunk write size in bytes (default: 5 MB).
+     * - `if_existed`    (string)  How to handle existing files
+     *                            (e.g. `File::IF_EXIST_RENAME`, `File::IF_EXIST_OVERWRITE`).
+     * - `symlink`       (string)  Optional path to create a symlink after upload completes.
+     * - `data`          (mixed)   Custom application-specific data.
+     * - `base64_strict` (bool)    If true, `base64_decode()` fails on invalid characters.
+     *
+     * @example - Using array Configuration:
      * 
      * ```php
      * $file->setConfig([
-     *      'max_size' => 5000,
-     *      'base64_strict' => true
+     *     'upload_path'    => '/writeable/uploads',
+     *     'max_size'       => 5_000_000,
+     *     'base64_strict'  => true,
      * ]);
+     * ```
+     * @example Using a UploadConfig object
+     * 
+     * ```php
+     * use \Luminova\Http\UploadConfig;
+     * 
+     * $config = UploadConfig::fromArray([
+     *     'uploadPath'   => '/writeable/uploads',
+     *     'maxSize'      => 5_000_000,
+     *     'allowedTypes' => ['jpg', 'png'],
+     * ]);
+     * ```
+     *
+     * ```php
+     * use Luminova\Http\File;
+     * use Luminova\Http\UploadConfig;
+     *
+     * $config = new UploadConfig(
+     *     uploadPath:      '/writeable/uploads/',
+     *     maxSize:         5_000_000,
+     *     allowedTypes:    ['jpg', 'png'],
+     *     base64Strict:    true
+     * );
+     *
+     * $file = new File($_FILES['image']);
+     * $file->setConfig($config);
+     * ```
      */
-    public function setConfig(array $config): self
+    public function setConfig(UploadConfig|array $config): self
     {
-        $this->config ??= new FileConfig();
+        $this->config = ($config instanceof UploadConfig) 
+            ? $config 
+            : UploadConfig::fromArray($config);
 
-        foreach ($config as $key => $value) {
-     
-            if($key === 'base64_strict' || $key === 'base64Strict'){
-                $this->isBase64 = null;
-            }
-
-            $value = ($key === 'upload_path' || $key === 'uploadPath')
-                ? rtrim($value, TRIM_DS) . DIRECTORY_SEPARATOR
-                : $value;
-
-            $this->config->setValue($key, $value);
+        if($this->config->base64Strict !== null){
+            $this->isBase64 = null;
         }
 
         return $this;
@@ -461,7 +588,7 @@ class File implements LazyObjectInterface
     /**
      * Sets the file's error or feedback message and status code.
      * 
-     * Commonly used by the `Luminova\Utility\Storage\Uploader` class to provide
+     * Commonly used by the `Luminova\Storage\Uploader` class to provide
      * feedback on upload errors or processing issues.
      *
      * @param string $message The descriptive error or feedback message.
@@ -474,6 +601,7 @@ class File implements LazyObjectInterface
     {
         $this->message = $message;
         $this->error = $code;
+        $this->uploaded = UPLOAD_ERR_OK === $code;
 
         return $this;
     }
@@ -494,12 +622,34 @@ class File implements LazyObjectInterface
         $this->error = UPLOAD_ERR_NO_FILE;
         $this->isBlob = false;
         $this->mime = null;
+        $this->uploaded = false;
 
         if ($this->temp && is_file($this->temp)) {
             @unlink($this->temp);
         }
 
         $this->temp = null;
+    }
+
+    /**
+     * Move the uploaded file to a new location.
+     * 
+     * {@inheritdoc}
+     * 
+     * @return void
+     * @see Uploader - For more advance upload methods.
+     */
+    public function moveTo(string $targetPath): void 
+    {
+        if($this->uploaded){
+            throw new RuntimeException("File has already been moved or uploaded.");
+        }
+
+        if($targetPath === ''){
+            throw new InvalidArgumentException("Target path cannot be empty.");
+        }
+
+        $this->uploaded = Uploader::move($this, $targetPath);
     }
 
     /**
@@ -511,6 +661,22 @@ class File implements LazyObjectInterface
      */
     public function toArray(): array
     {
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function __toArray(): array
+    {
         return [
             'index'     => $this->index,
             'name'      => $this->name,
@@ -521,6 +687,7 @@ class File implements LazyObjectInterface
             'error'     => $this->error,
             'content'   => $this->content,
             'isBlob'    => $this->isBlob,
+            'isStream'  => $this->isStream(),
         ];
     }
 
@@ -563,7 +730,7 @@ class File implements LazyObjectInterface
      */
     public function valid(): bool
     {
-         if ($this->temp === null && $this->content === null) {
+        if ($this->temp === null && $this->content === null) {
             $this->error = self::UPLOAD_ERR_NO_FILE_DATA;
             $this->message = sprintf(
                 'No file data received for "%s". Possible causes: ' .
@@ -588,7 +755,7 @@ class File implements LazyObjectInterface
             return false;
         }
 
-        if ($this->config instanceof FileConfig && !$this->isPassedCustomValidation()) {
+        if ($this->config instanceof UploadConfig && !$this->isPassedCustomValidation()) {
             return false;
         }
 
@@ -622,11 +789,11 @@ class File implements LazyObjectInterface
         $message = match($code) {
             UPLOAD_ERR_INI_SIZE => sprintf(
                 'File exceeds server size limit (%s). ',
-                Maths::toUnit($maxUpload, true)
+                Maths::toUnit($maxUpload, withName: true)
             ),
             UPLOAD_ERR_FORM_SIZE => sprintf(
                 'File exceeds form size limit (%s). ',
-                Maths::toUnit(min($maxUpload, $maxPost), true)
+                Maths::toUnit(min($maxUpload, $maxPost), withName: true)
             ),
             UPLOAD_ERR_PARTIAL    => 'File was only partially uploaded. ',
             UPLOAD_ERR_NO_FILE => 'No file was selected or uploaded. ',
@@ -639,8 +806,8 @@ class File implements LazyObjectInterface
         $troubleshoot = match($code) {
             UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => sprintf(
                 "Current limits: MaxUpload=%s, MaxPost=%s",
-                Maths::toUnit($maxUpload, true),
-                Maths::toUnit($maxPost, true)
+                Maths::toUnit($maxUpload, withName: true),
+                Maths::toUnit($maxPost, withName: true)
             ),
             UPLOAD_ERR_PARTIAL => 'This may indicate network problems during upload.',
             UPLOAD_ERR_NO_TMP_DIR => 'Contact server administrator to create upload_tmp_dir.',
@@ -663,8 +830,8 @@ class File implements LazyObjectInterface
             $this->error = UPLOAD_ERR_INI_SIZE;
             $this->message = sprintf(
                 'File size: "%s" exceeds maximum limit. Maximum allowed size: %s',
-                Maths::toUnit($this->size, true),
-                Maths::toUnit($this->config->maxSize, true)
+                Maths::toUnit($this->size, withName: true),
+                Maths::toUnit($this->config->maxSize, withName: true)
             );
             return false;
         }
@@ -673,8 +840,8 @@ class File implements LazyObjectInterface
             $this->error = self::UPLOAD_ERR_MIN_SIZE;
             $this->message = sprintf(
                 'File size: "%s" is too small. Minimum allowed size: %s.', 
-                Maths::toUnit($this->size, true),
-                Maths::toUnit($this->config->minSize, true)
+                Maths::toUnit($this->size, withName: true),
+                Maths::toUnit($this->config->minSize, withName: true)
             );
             return false;
         }

@@ -11,7 +11,8 @@
 namespace Luminova\Command\Consoles;
 
 use \Luminova\Base\Console;
-use \Luminova\Component\Seo\Sitemap;
+use \Luminova\Command\Terminal;
+use \Luminova\Components\Seo\Sitemap;
 
 class Sitemaps extends Console 
 {
@@ -38,11 +39,10 @@ class Sitemaps extends Console
      */
     public function run(?array $options = []): int
     {
-        $this->term->perse($options);
-        $command = trim($this->term->getCommand());
+        $name = trim($this->input->getName());
 
-        if ($command !== 'sitemap') {
-            return $this->term->oops($command);
+        if ($name !== 'sitemap') {
+            return Terminal::oops($name);
         } 
 
         return $this->__generate();
@@ -64,32 +64,32 @@ class Sitemaps extends Console
     private function __generate(): int 
     {
         $config = new \App\Config\Sitemap();
-        $config->maxScan = $this->term->getAnyOption('limit', 'l', $config->maxScan);
-        $config->scanSpeed = $this->term->getAnyOption('delay', 'd', $config->scanSpeed);
-        $config->scanUrlPrefix = $this->term->getAnyOption('prefix', 'p', $config->scanUrlPrefix);
-        $config->changeFrequently = $this->term->getAnyOption('change', 'c', $config->changeFrequently);
-        $config->maxExecutionTime = $this->term->getAnyOption('max-execution', 'e', $config->maxExecutionTime);
-        $config->includeStaticHtml = (bool) $this->term->getAnyOption('html', 's', $config->includeStaticHtml);
+        $config->maxScan = $this->input->getAnyOption('limit', 'l', $config->maxScan);
+        $config->scanSpeed = $this->input->getAnyOption('delay', 'd', $config->scanSpeed);
+        $config->scanUrlPrefix = $this->input->getAnyOption('prefix', 'p', $config->scanUrlPrefix);
+        $config->changeFrequently = $this->input->getAnyOption('change', 'c', $config->changeFrequently);
+        $config->maxExecutionTime = $this->input->getAnyOption('max-execution', 'e', $config->maxExecutionTime);
+        $config->includeStaticHtml = (bool) $this->input->getAnyOption('html', 's', $config->includeStaticHtml);
 
-        $url = $this->term->getAnyOption('url', 'u', null);
-        $basename = $this->term->getAnyOption('basename', 'f', 'sitemap.xml');
+        $url = $this->input->getAnyOption('url', 'u', null);
+        $basename = $this->input->getAnyOption('basename', 'f', 'sitemap.xml');
 
         $options = [
-            'isBroken' => (bool) $this->term->getAnyOption('broken', 'b', false), 
-            'isLinkTree' => (bool) $this->term->getAnyOption('link-tree', 't', false), 
-            'treeFormat' => $this->term->getOption('format', null) ?: null, 
-            'verbose' => $this->term->getVerbose(default: 3),
-            'isDryRun' => (bool) $this->term->getAnyOption('dry-run', 'n', false),
-            'ignoreAssets' => (bool) $this->term->getAnyOption('ignore-asset', 'a', true)
+            'isBroken' => (bool) $this->input->getAnyOption('broken', 'b', false), 
+            'isLinkTree' => (bool) $this->input->getAnyOption('link-tree', 't', false), 
+            'treeFormat' => $this->input->getOption('format', null) ?: null, 
+            'verbose' => $this->input->getVerbose(default: 3),
+            'isDryRun' => (bool) $this->input->getAnyOption('dry-run', 'n', false),
+            'ignoreAssets' => (bool) $this->input->getAnyOption('ignore-asset', 'a', true)
         ];
 
-        if(Sitemap::generate($url, $this->term, $basename, $config, $options)){
+        if(Sitemap::generate($url, $basename, $config, $options)){
             return STATUS_SUCCESS;
         }
 
-        $this->term->beeps();
-        $this->term->newLine();
-        $this->term->error('Sitemap creation failed');
+        Terminal::beeps();
+        Terminal::newLine();
+        Terminal::error('Sitemap creation failed');
     
         return STATUS_ERROR;
     }

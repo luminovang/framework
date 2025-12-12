@@ -12,8 +12,8 @@ namespace Luminova\Base;
 
 use \DateTimeInterface;
 use \Luminova\Database\Builder;
+use \Luminova\Storage\Filesystem;
 use \Luminova\Security\Validation;
-use \Luminova\Utility\Storage\Filesystem;
 use \Peterujah\NanoBlock\SearchController as SearchInstance;
 use \Luminova\Interface\{DatabaseInterface, LazyObjectInterface};
 use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
@@ -128,6 +128,13 @@ abstract class Model implements LazyObjectInterface
     private static ?SearchInstance $searchInstance = null;
 
     /**
+     * Shared model instance.
+     * 
+     * @var self|null $instance
+     */
+    private static ?self $instance = null;
+
+    /**
      * Search flags.
      * 
      * @var array<string,string> $searchFilters
@@ -143,11 +150,32 @@ abstract class Model implements LazyObjectInterface
     ];
 
     /**
-     * Constructor for the Model class.
+     * Constructor method to initialize the model object.
      */
     public function __construct()
     {
         $this->onCreate();
+    }
+
+    /**
+     * Magic method to handle static method calls on the class.
+     * 
+     * This method ensures that a single shared instance of the class
+     * is created and used for all static method calls.
+     * 
+     * @param string $method The name of the method being called.
+     * @param array<int,mixed> $arguments The arguments passed to the method. 
+     * 
+     * @return mixed Returns the result.
+     * @throws Throwable If error.
+     */
+    public static function __callStatic(string $method, array $arguments): mixed
+    {
+        if(!static::$instance instanceof static){
+            static::$instance = new static();
+        }
+
+        return static::$instance->{$method}(...$arguments);
     }
 
     /**
@@ -388,7 +416,7 @@ abstract class Model implements LazyObjectInterface
         return Builder::query("SELECT {$fields} FROM {$this->table} {$columns} LIMIT {$offset}, {$limit}")
             ->cacheable($this->cacheable)
             ->returns($this->resultType)
-            ->cache($cache_key, $this->table . '_search', $this->expiry, $$this->getCacheFolder())
+            ->cache($cache_key, $this->table . '_search', $this->expiry, $this->getCacheFolder())
             ->execute([
                 'keyword' => "%{$query}%"
             ]);
@@ -458,7 +486,7 @@ abstract class Model implements LazyObjectInterface
         }
 
         $path = root("/writeable/caches/filesystem/database/{$folder}/");
-        return Filesystem::remove($path) > 0;
+        return Filesystem::delete($path) > 0;
     }
 
     /**

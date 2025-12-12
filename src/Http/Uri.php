@@ -13,10 +13,11 @@ namespace Luminova\Http;
 use \Stringable;
 use \Luminova\Exceptions\ErrorCode;
 use \Psr\Http\Message\UriInterface;
-use \Luminova\Interface\LazyObjectInterface;
 use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Interface\{Arrayable, LazyObjectInterface};
 
-class Uri implements UriInterface, LazyObjectInterface, Stringable
+class Uri implements UriInterface, LazyObjectInterface, Stringable, Arrayable
 {
     /**
      * Constructs a new Uri instance with optional components.
@@ -34,7 +35,7 @@ class Uri implements UriInterface, LazyObjectInterface, Stringable
         private string $userInfo = '',
         private string $host = '',
         private ?int $port = null,
-        private string $path = '',
+        private string $path = '/',
         private string $query = '',
         private string $fragment = ''
     ) {}
@@ -78,10 +79,40 @@ class Uri implements UriInterface, LazyObjectInterface, Stringable
             userInfo: ($parts['user'] ?? '') . (isset($parts['pass']) ? ':' . $parts['pass'] : ''),
             host: $parts['host'] ?? '',
             port: $parts['port'] ?? null,
-            path: $parts['path'] ?? '',
+            path: $parts['path'] ?? '/',
             query: ltrim($parts['query'] ?? '', '?'),
             fragment: ltrim($parts['fragment'] ?? '', '#')
         );
+    }
+
+    /**
+     * Create a URI instance from a string.
+     *
+     * Parses a URI string into its individual components (scheme, host, port,
+     * path, and query) and returns a new Uri instance populated with those values.
+     *
+     * This method supports both absolute URIs (e.g. "https://example.com/path")
+     * and relative URIs (e.g. "/login?next=/admin"). If the URI does not define
+     * a path, the path defaults to "/".
+     *
+     * @param string $uri The URI string to parse.
+     * @return static Returns a new Uri instance created from the parsed URI.
+     *
+     * @throws InvalidArgumentException If the URI string is invalid.
+     */
+    public static function fromString(string $uri): self
+    {
+        if ($uri === '') {
+            return new self();
+        }
+
+        $parts = parse_url($uri);
+
+        if ($parts === false) {
+            throw new InvalidArgumentException('Invalid URI string');
+        }
+        
+        return self::fromArray($parts);
     }
 
     /**
@@ -337,11 +368,60 @@ class Uri implements UriInterface, LazyObjectInterface, Stringable
     }
 
     /**
+     * Convert the URI into an associative array.
+     *
+     * Returns the individual URI components as an array. Missing components
+     * are returned as empty strings or null where appropriate.
+     *
+     * @return array<string,string|int|null> Returns an array representation of the URI.
+     */
+    public function toArray(): array
+    {
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function __toArray(): array
+    {
+        $user = $pass = null;
+
+        if ($this->userInfo !== '') {
+            [$user, $pass] = array_pad(
+                explode(':', $this->userInfo, 2),
+                2,
+                null
+            );
+        }
+
+        return [
+            'scheme'    => $this->scheme,
+            'host'      => $this->host,
+            'authority' => $this->getAuthority(),
+            'user'      => $user,
+            'pass'      => $pass,
+            'port'      => $this->port,
+            'path'      => $this->path ?: '/',
+            'query'     => $this->query,
+            'fragment'  => $this->fragment,
+        ];
+    }
+
+    /**
      * Build URI's as string.
      * 
      * @param string $authority The authority.
      * 
-     * @return string Return full URL.
+     * @return string Return the full URL.
      */
     private function getString(?string $authority = null): string 
     {

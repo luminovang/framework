@@ -831,8 +831,9 @@ final class Commands
                 '-o, --output' => 'Optional. Log output path or log level (e.g., debug).',
                 '-s, --sleep'  => 'Optional. Microseconds to wait between tasks. Default: 100000 (0.1s).',
                 '-l, --limit'  => 'Optional. Max number of tasks to process in one loop.',
-                '-i, --idle'   => 'Optional. Max idle attempts before stopping.',
+                '-i, --id'     => 'Optional. Run a specific task by ID.',
                 '-f, --flock-worker' => 'Optional. Use a file lock to prevent multiple worker instances from running at the same time.',
+                '--idle'   => 'Optional. Max idle attempts before stopping.',
             ],
             'examples' => [
                 'php novakit task:run --output=debug --limit=5' => 'Run and log 5 tasks with debug output.',
@@ -1062,7 +1063,7 @@ final class Commands
             }
 
             $name = strstr($command, ':', true) ?: $command;
-            $key = "php novakit $command --help";
+            $key = "php novakit {$command} --help";
 
             if($largest !== null){
                 $length = strlen($key);

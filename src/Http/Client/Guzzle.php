@@ -13,7 +13,7 @@ namespace Luminova\Http\Client;
 use \Throwable;
 use \Luminova\Luminova;
 use \GuzzleHttp\Client;
-use \Luminova\Utility\Promise\Promise;
+use \Luminova\Promise\Promise;
 use \Psr\Http\Client\ClientInterface;
 use \Luminova\Interface\PromiseInterface;
 use \GuzzleHttp\Exception\GuzzleException;
