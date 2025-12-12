@@ -8,8 +8,8 @@
  * @license See LICENSE file
  */
 use \Luminova\Command\Terminal;
-use \Luminova\Command\Utils\{Color, Text};
 use \Luminova\Foundation\Error\Message;
+use \Luminova\Command\Utils\{Color, Text};
 use function \Luminova\Funcs\filter_paths;
 
 /**

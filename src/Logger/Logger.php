@@ -11,36 +11,30 @@
 namespace Luminova\Logger;
 
 use \Throwable;
+use \Luminova\Luminova;
 use \Luminova\Http\Request;
-use \Luminova\Common\Helpers;
 use \Psr\Log\LoggerInterface;
+use \Luminova\Utility\Helpers;
 use \App\Config\Logger as Config;
 use \Luminova\Logger\{NovaLogger, LogLevel};
 use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
 
 /**
- * Static logger class methods.
+ * Static logger methods for system and application events.
  *
- * @method static void emergency(string $message, array $context = []) Logs a system emergency (highest severity).
- * @method static void alert(string $message, array $context = []) Logs an alert that requires immediate action.
- * @method static void warning(string $message, array $context = []) Logs a warning about a potential issue.
- * @method static void notice(string $message, array $context = []) Logs a normal but significant event.
+ * @method static void emergency(string $message, array $context = []) Logs a critical system failure (highest severity).
+ * @method static void alert(string $message, array $context = []) Logs an alert requiring immediate action.
+ * @method static void critical(string $message, array $context = []) Logs a serious condition requiring prompt attention.
+ * @method static void error(string $message, array $context = []) Logs a runtime error that affects execution.
+ * @method static void warning(string $message, array $context = []) Logs a potential problem or risk.
+ * @method static void notice(string $message, array $context = []) Logs a normal but noteworthy event.
  * @method static void info(string $message, array $context = []) Logs general informational messages.
- * @method static void debug(string $message, array $context = []) Logs debugging information for developers.
+ * @method static void debug(string $message, array $context = []) Logs developer-focused debugging information.
  * @method static void phpError(string $message, array $context = []) Logs a PHP runtime error.
  * @method static void php(string $message, array $context = []) Alias for `phpError`, logs PHP-related issues.
- * @method static void critical(string $message, array $context = []) Logs a critical condition that requires prompt attention.
- * @method static void error(string $message, array $context = []) Logs an error that prevents execution but does not require immediate shutdown.
  */
 final class Logger
 {
-    /**
-     * PSR logger interface.
-     * 
-     * @var LoggerInterface|null $logger
-     */
-    private static ?LoggerInterface $logger = null;
-
     /**
      * Telegram bot token.
      * 
@@ -49,9 +43,16 @@ final class Logger
     private static ?string $telegramToken = null;
 
     /**
-     * Initialize logger instance.
+     * Logger class;
+     *
+     * @var LoggerInterface|NovaLogger|null $logger
      */
-    public function __construct(){}
+    private static ?LoggerInterface $logger = null;
+
+    /**
+     * Prevent initializing logger class.
+     */
+    private function __construct(){}
 
     /**
      * Support for other custom log levels.
@@ -84,16 +85,17 @@ final class Logger
     }
 
     /**
-     * Get the shared instance of the application's PSR-compliant logger.
+     * Return the active PSR-compliant logger instance.
      *
-     * If no logger is specified in `App\Config\Logger->getLogger()`, the default `NovaLogger` is used.
+     * Falls back to the default `NovaLogger` if no custom logger is configured in
+     * `App\Kernel->getLogger()`.
      *
      * @return LoggerInterface|NovaLogger Return the active logger instance.
      */
-    public static function getLogger(): LoggerInterface
+    public static function logger(): LoggerInterface
     {
-        if(!self::$logger instanceof LoggerInterface){
-            self::$logger = (new Config())->getLogger() ?? new NovaLogger();
+        if (!self::$logger instanceof LoggerInterface) {
+            self::$logger = Luminova::kernel()->getLogger() ?? new NovaLogger();
         }
 
         return self::$logger;
@@ -113,7 +115,7 @@ final class Logger
     {
         self::assertPsrLogger();
        
-        self::getLogger()->log(
+        self::logger()->log(
             ($level === 'phpError') ? LogLevel::PHP : $level, 
             $message, 
             $context + self::getAutoContext()
@@ -121,7 +123,7 @@ final class Logger
     }
 
     /**
-     * Logs performance and metric data.
+     * Logs performance metric data.
      *
      * @param string $message The profiling data to log.
      * @param array<string|int,mixed> $context Additional context data (optional).
@@ -168,32 +170,59 @@ final class Logger
         array $context = [],
     ): string
     {
-        if(self::getLogger() instanceof NovaLogger){
-            return self::getLogger()->message($level, $message, $context) . PHP_EOL;
+        if(self::logger() instanceof NovaLogger){
+            return self::$logger->message($level, $message, $context) . PHP_EOL;
         }
 
         return NovaLogger::formatMessage($level, $message, '', $context) . PHP_EOL;
     }
 
     /**
-     * Dispatches a log message to a specified destination (file, email, or remote server) asynchronously.
-     * 
-     * The destination is determined by the provided parameter (`$to`) which can be a log level, email address, 
-     * URL, Telegram bot chat Id or null. Email and remote logging are handled asynchronously. By default, in development, logs 
-     * are written to a file unless an explicit email address or URL is specified.
-     * 
-     * In production, if no destination is provided, the method checks for default email or remote URL 
-     * configurations in the environment file (`logger.mail.logs` or `logger.remote.logs`).
-     * 
-     * @param string|int|null $to The destination for the log message (log level, email address, telegram bot chat Id, URL, or NULL).
-     * @param string $message The message to be logged.
-     * @param array<string|int,mixed> $context Optional additional data to provide context for the log.
+     * Sets a debug trace to the active logger, if tracing is supported.
+     *
+     * This method forwards the given trace data to the internal logger
+     * only when the logger instance supports tracing (NovaLogger).
+     * If tracing is unavailable or unsupported, the call is safely ignored.
+     *
+     * @param array $trace Debug trace data (stack trace, context, metadata).
+     *
+     * @return bool Returns true when the trace was accepted by the logger,
+     *              false when tracing is not supported or no logger is available.
+     */
+    public static function tracer(array $trace): bool
+    {
+        if(self::logger() instanceof NovaLogger){
+            self::$logger->setTracer($trace);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Dispatch a log message to a local or remote destination.
+     *
+     * The destination is resolved from `$to`, which may be a log level, email
+     * address, URL, Telegram chat ID, or `null` to detected from `env`.
+     *
+     * - If `$to` is a log level, the message is written locally unless the level
+     *   is marked as dispatchable.
+     * - If `$to` is null, the method falls back to configured remote destinations
+     *   (`logger.mail.logs`, `logger.remote.logs`, or Telegram settings).
+     * - Email, remote URL, and Telegram dispatches are sent asynchronously.
+     *
+     * If no valid remote destination is resolved, the message is logged locally.
+     * An exception is thrown only when an explicitly invalid destination is
+     * provided.
+     *
+     * @param string|int|null $to Log destination: (e.g, log level, email address, URL, Telegram chat ID or null).
+     * @param string $message The log message.
+     * @param array<string|int,mixed> $context Additional context data for the log entry.
      *
      * @return void
-     * @throws InvalidArgumentException If the provided destination is invalid (not a valid log level, 
-     *                                  email address, or URL).
-     * @throws RuntimeException If email or remote logging is attempted with an invalid logger class or 
-     *                           the logger does not implement the PSR LoggerInterface.
+     * @throws InvalidArgumentException When `$to` is provided but does not resolve to a valid destination.
+     * @throws RuntimeException When a dispatch logger is misconfigured or 
+     *         does not implement the required logger interface.
      */
     public static function dispatch(string|int|null $to, string $message, array $context = []): void 
     {
@@ -201,47 +230,58 @@ final class Logger
             return;
         }
 
-        $isFile = ($to && LogLevel::has($to));
+        $level = LogLevel::CRITICAL;
+
+        if ($to !== null && LogLevel::has($to)) {
+            if (!self::isDispatchable($to)) {
+                self::log($to, $message, $context);
+                return;
+            }
+
+            $level = $to;
+        }
+
+        $to = self::getRemoteDestination($to ?? LogLevel::ERROR);
         
-        if($isFile && !LogLevel::isCritical($to)){
+        if (LogLevel::has($to)) {
             self::log($to, $message, $context);
             return;
         }
 
-        $level = $isFile ? $to : LogLevel::ALERT;
-        $to = self::getLogDestination($to ?? LogLevel::ERROR);
+        $isValidDestination = false;
+
+        if ($to) {
+            $isValidDestination = true;
+
+            if(self::isTelegramChatId($to)) {
+                self::assertInterface('Telegram dispatch');
+                self::logger()
+                    ->setLevel($level)
+                    ->telegram($to, self::getTelegramToken(), $message, $context + self::getAutoContext());
+            } elseif (Helpers::isEmail($to)) {
+                self::assertInterface('Email dispatch');
+                self::logger()
+                    ->setLevel($level)
+                    ->mail($to, $message, $context + self::getAutoContext()); 
+            } elseif(Helpers::isUrl($to)) {
+                self::assertInterface('Remote dispatch');
+                self::logger()
+                    ->setLevel($level)
+                    ->remote($to, $message, $context + self::getAutoContext());
+            } else{
+                $isValidDestination = false;
+            }
+        }
         
-        if ($to && LogLevel::has($to)) {
-            self::log($to, $message, $context);
-            return;
-        }
-
-        $valid = true;
-        $context += self::getAutoContext();
-
-        if ($to && Helpers::isEmail($to)) {
-            self::assertInterface('Email dispatch');
-            self::getLogger()->setLevel($level)->mail($to, $message, $context); 
-        } elseif($to && Helpers::isUrl($to)) {
-            self::assertInterface('Remote dispatch');
-            self::getLogger()->setLevel($level)->remote($to, $message, $context);
-        } elseif($to && self::isTelegramChatId($to)) {
-            self::assertInterface('Telegram dispatch');
-            self::getLogger()->setLevel($level)->telegram($to, self::getTelegramToken(), $message, $context);
-        }else{
-            $valid = false;
-        }
-
-        self::getLogger()->setLevel(LogLevel::ALERT);
-
-        if(!$valid){
+        if(!$isValidDestination){
             throw new InvalidArgumentException(sprintf(
-                'Invalid log destination "%s" provided. Expected a valid log level, email address, remote URL, or Telegram chat ID. ' .
-                'To enable auto-dispatch logging, configure one of the following in your environment file: ' .
-                '"logger.mail.logs" for email, "logger.remote.logs" for remote logging, or both "telegram.bot.token" and "telegram.bot.chat.id" for Telegram.',
-                $to
-            ));            
+                'Invalid log destination "%s". Expected a log level, email, URL, or Telegram chat ID. ' .
+                'Configure "logger.mail.logs", "logger.remote.logs", or Telegram bot credentials in your environment.',
+                (string) $to
+            ));
         }
+
+        self::logger()->setLevel(LogLevel::DEBUG);
     }
 
     /**
@@ -267,6 +307,7 @@ final class Logger
         }
 
         self::assertInterface('Remote');
+        
         if(!Helpers::isUrl($url)) {
             throw new InvalidArgumentException(sprintf(
                 'Invalid logger destination: "%s" was provided. A valid URL is required.', 
@@ -274,7 +315,7 @@ final class Logger
             ));
         }
 
-        self::getLogger()->remote($url, $message, $context + self::getAutoContext());
+        self::logger()->remote($url, $message, $context + self::getAutoContext());
     }
 
     /**
@@ -307,7 +348,7 @@ final class Logger
             ));
         }
 
-        self::getLogger()->mail($email, $message, $context + self::getAutoContext()); 
+        self::logger()->mail($email, $message, $context + self::getAutoContext()); 
     }
 
     /**
@@ -336,7 +377,26 @@ final class Logger
             ));
         }
 
-        self::getLogger()->telegram($chatId, self::getTelegramToken(), $message, $context + self::getAutoContext()); 
+        self::logger()->telegram($chatId, self::getTelegramToken(), $message, $context + self::getAutoContext()); 
+    }
+
+    /**
+     * Determine whether a log entry should be dispatched.
+     * 
+     * @param string|int $to Log level name or numeric severity.
+     *
+     * @return bool Returns true if the log level should be dispatched,
+     *              false otherwise.
+     */
+    private static function isDispatchable(string|int $to): bool
+    {
+        $dispatches = (array) env('logger.dispatch.levels', []);
+
+        if (!$dispatches) {
+            return LogLevel::isCritical($to);
+        }
+
+        return in_array($to, $dispatches, true);
     }
 
     /**
@@ -345,22 +405,18 @@ final class Logger
      * In production, prioritizes:
      * 1. Email log address (`logger.mail.logs`)
      * 2. Remote log URL (`logger.remote.logs`)
-     * 3. Telegram chat ID (`telegram.bot.chat.id`)
+     * 3. Telegram chat ID (`logger.telegram.bot.chat.id`)
      * Falls back to the provided destination if none are set.
      *
      * @param string $to The fallback destination provided.
      *
      * @return string Return the resolved destination.
      */
-    private static function getLogDestination(string $to): string
+    private static function getRemoteDestination(string $to): string
     {
-        if (!PRODUCTION) {
-            return $to;
-        }
-
         return env('logger.mail.logs')
             ?: env('logger.remote.logs')
-            ?: env('telegram.bot.chat.id')
+            ?: env('logger.telegram.bot.chat.id')
             ?: $to;
     }
 
@@ -401,7 +457,7 @@ final class Logger
      */
     private static function getTelegramToken(): ?string
     {
-        return self::$telegramToken ??= env('telegram.bot.token');
+        return self::$telegramToken ??= env('logger.telegram.bot.token');
     }
 
     /**
@@ -432,7 +488,7 @@ final class Logger
      */
     private static function assertInterface(string $prefix): void 
     {
-        if(self::getLogger() instanceof NovaLogger){
+        if(self::logger() instanceof NovaLogger){
             return;
         }
 
@@ -440,7 +496,7 @@ final class Logger
             '%s logging requires %s, your provided logger interface: %s is not supported.', 
             $prefix.
             NovaLogger::class,
-            self::$logger::class
+            get_class(self::$logger ?? '')
         ), RuntimeException::NOT_SUPPORTED);
     }
 
@@ -457,14 +513,13 @@ final class Logger
      */
     private static function assertPsrLogger(): void 
     {
-        if(self::getLogger() instanceof LoggerInterface){
+        if(self::logger() instanceof LoggerInterface){
             return;
         }
 
         throw new RuntimeException(sprintf(
-            'Invalid Logger Interface: "%s", Your logger class in configuration: "%s", must implement "%s".', 
-            self::$logger::class,
-            Config::class,
+            'Invalid Logger Interface: "%s", Your logger class must implement "%s".', 
+            get_class(self::$logger ?? ''),
             LoggerInterface::class,
         ), RuntimeException::NOT_SUPPORTED);
     }

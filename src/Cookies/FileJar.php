@@ -18,7 +18,7 @@ use \Luminova\Exceptions\FileException;
 use \App\Config\Cookie as CookieConfig;
 use \Luminova\Base\Cookie as BaseCookie;
 use \Luminova\Exceptions\CookieException;
-use \Luminova\Interface\CookieJarInterface;
+use \Luminova\Interface\{Arrayable, CookieJarInterface};
 use function \Luminova\Funcs\{
     root,
     write_content,
@@ -26,7 +26,7 @@ use function \Luminova\Funcs\{
     make_dir
 };
 
-class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Countable
+class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Countable, Arrayable
 {
     /**
      * Cookies. 
@@ -96,7 +96,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function __construct(string|array $from, array $config = [])
     {
-        $this->config = [...$this->config, ...$config];
+        $this->config = array_merge($this->config, $config);
         $this->initCookies($from);
     }
 
@@ -116,7 +116,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function __get(string $property): mixed 
     {
-        $options = $this->toArray();
+        $options = $this->__toArray();
         if(array_key_exists($property, $options)){
             return $options[$property];
         }
@@ -137,7 +137,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function toString(bool $metadata = false): string
     {
-        $options = $this->toArray();
+        $options = $this->__toArray();
         return $metadata 
             ? self::parseToString(
                 $options['value'] ?? '', 
@@ -155,11 +155,26 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function toArray(): array
     {
-        return [
-            ...$this->getOptions(),
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->__toArray();
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function __toArray(): array
+    {
+        return array_merge($this->getOptions(), [
             'value'  => $this->getValue(),
             'name' => $this->config['name']
-        ];
+        ]);
     }
 
     /** 
@@ -239,10 +254,10 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function setCookies(array $cookies): self
     {
-        $this->cookies = [
-            ...$this->cookies,
-            ...self::toLowercase($cookies)
-        ];
+        $this->cookies = array_merge(
+            $this->cookies,
+            self::toLowercase($cookies)
+        );
 
         $this->save();
         return $this;

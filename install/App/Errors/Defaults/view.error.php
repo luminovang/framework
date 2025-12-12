@@ -1,6 +1,6 @@
 <?php 
 /**
- * @var \Luminova\Exceptions\AppException<\T>|null $error
+ * @var \Luminova\Exceptions\LuminovaException<\T>|null $error
  */
 use \Luminova\Foundation\Error\Message;
 use function \Luminova\Funcs\{href, filter_paths, get_class_name};

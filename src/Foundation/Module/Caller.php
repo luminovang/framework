@@ -19,7 +19,7 @@ use \ReflectionException;
 use \RecursiveIteratorIterator;
 use \RecursiveDirectoryIterator;
 use \RecursiveCallbackFilterIterator;
-use \Luminova\Exceptions\AppException;
+use \Luminova\Exceptions\LuminovaException;
 use \Luminova\Exceptions\RuntimeException;
 
 final class Caller 
@@ -105,7 +105,7 @@ final class Caller
 
             return $return ? $calls : $count;
         }catch(Throwable $e){
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw $e;
             }
 

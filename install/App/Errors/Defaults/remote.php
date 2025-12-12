@@ -5,10 +5,10 @@
  *
  * @var \Luminova\Foundation\Error\Message $error
  */
-use Luminova\Http\Client\Novio;
+use \Luminova\Http\Client\Novio;
 use function \Luminova\Funcs\logger;
-use Luminova\Exceptions\AppException;
-use Luminova\Foundation\Error\Message;
+use \Luminova\Foundation\Error\Message;
+use \Luminova\Exceptions\LuminovaException;
 
 include_once __DIR__ . '/tracing.php';
 
@@ -55,7 +55,7 @@ if ($endpoint) {
                     $response->getContents()
                 ));
             }
-        } catch (AppException $e) {
+        } catch (LuminovaException $e) {
             logger('exception', sprintf('Network Exception: %s', $e->getMessage()));
         } catch (Throwable $fe) {
             logger('exception', sprintf('Unexpected Exception: %s', $fe->getMessage()));

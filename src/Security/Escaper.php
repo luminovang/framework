@@ -17,7 +17,7 @@ use function \Luminova\Funcs\is_utf8;
 /**
  * @mixin \Laminas\Escaper\Escaper
  */
-class Escaper
+final class Escaper
 {
     /**
      * Laminas Escaper object.
@@ -124,14 +124,14 @@ class Escaper
      * 
      * ```php
      * $escaper = Escaper::with('UTF-8');
-     * $escaped = $escaper->escape('<b>Hello</b>');
+     * $escaped = $escaper->escapeHtml('<b>Hello</b>');
      * ```
      */
     public static function with(?string $encoding = null): self
     {
         if(!self::$instance instanceof self){
             self::$isEscaper ??= class_exists(LaminasEscaper::class);
-            self::$instance = new static($encoding);
+            self::$instance = new self($encoding);
 
             if (self::$isEscaper) {
                 self::$instance->escaper = new LaminasEscaper($encoding ?? 'utf-8');
@@ -139,6 +139,40 @@ class Escaper
         }
 
         return self::$instance;
+    }
+
+    /**
+     * Escapes a user input string based on the specified context.
+     * 
+     * **Supported Context Values:**
+     *
+     * - html - Escape general HTML content. 
+     * - js -   Escape JavaScript code. 
+     * - css -  Escape CSS styles. 
+     * - url -  Escape URL.
+     *
+     * @param string $input The input string to escape.
+     * @param string $context The escaper context (e.g, `html`, `js`, `css` or `url`).
+     * @param string $encoding The escape character encoding to use (default: 'utf-8').
+     * 
+     * @return string Return the escaped string.
+     * @throws InvalidArgumentException If an unsupported, invalid or blank encoding is provided.
+     */
+    public static function escape(string $input, string $context, ?string $encoding = null): string 
+    {
+        if (!in_array($context, ['html', 'js', 'css', 'url'], true)) {
+            throw new InvalidArgumentException(\sprintf('Invalid escape context provided "%s".', $context));
+        }
+
+        $escaper = self::with($encoding);
+
+        if ($encoding !== null && $escaper->getEncoding() !== $encoding) {
+            $escaper = $escaper->setEncoding($encoding);
+        }
+
+        $method = 'escape' . \ucfirst($context);
+
+        return $escaper->{$method}($input);
     }
 
     /**

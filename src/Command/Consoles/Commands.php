@@ -187,7 +187,8 @@ final class Commands
                 '-f,  --basename'        => "Output file name (default: sitemap.xml or broken.sitemap.json for broken links).",
                 '-b,  --broken'          => "Generate a JSON report of broken links instead of an XML sitemap.",
                 '-t,  --link-tree'      => "Generate a plain TXT report of all website links instead of an XML sitemap or JSON broken links report.",
-                '--format'     =>    'Custom output format for link tree, e.g., "{url} | {title} | {status} | {lastmod}". Default is "{url} {title} ({status})"',
+                '-dx, --desc-xpath' => 'XPath selector for extracting the description text from a page when generating a link-tree, e.g. //p[@class="intro"].',
+                '--format'     =>    'Custom output format for link tree, e.g., "{url} | {title} | {status} | {lastmod} | {description}". Default is "{url} {title} ({status})"',
                 '-l,  --limit'           => "Maximum number of URLs to scan (0 = no limit).",
                 '-d,  --delay'           => "Delay in seconds between each URL scan (minimum: 1).",
                 '-e,  --max-execution'   => "Maximum script execution time in seconds (0 = unlimited).",
@@ -213,7 +214,8 @@ final class Commands
                 'php novakit sitemap --url=https://example.com --broken --basename=scan.json',
                 'php novakit sitemap --url=https://localhost --broken --limit=50',
                 "\033[1;36mLink Tree Scan\033[0m",
-                'php novakit sitemap -t --format "{url} | {title}"'
+                'php novakit sitemap -t --format "{url} | {title}"',
+                'php novakit sitemap -t --format "{url} | {title} | {description}" --desc-xpath="//p[@aria-label="Subheading for this page"]"'
             ],
         ],
 
@@ -831,8 +833,9 @@ final class Commands
                 '-o, --output' => 'Optional. Log output path or log level (e.g., debug).',
                 '-s, --sleep'  => 'Optional. Microseconds to wait between tasks. Default: 100000 (0.1s).',
                 '-l, --limit'  => 'Optional. Max number of tasks to process in one loop.',
-                '-i, --idle'   => 'Optional. Max idle attempts before stopping.',
+                '-i, --id'     => 'Optional. Run a specific task by ID.',
                 '-f, --flock-worker' => 'Optional. Use a file lock to prevent multiple worker instances from running at the same time.',
+                '--idle'   => 'Optional. Max idle attempts before stopping.',
             ],
             'examples' => [
                 'php novakit task:run --output=debug --limit=5' => 'Run and log 5 tasks with debug output.',
@@ -1062,7 +1065,7 @@ final class Commands
             }
 
             $name = strstr($command, ':', true) ?: $command;
-            $key = "php novakit $command --help";
+            $key = "php novakit {$command} --help";
 
             if($largest !== null){
                 $length = strlen($key);

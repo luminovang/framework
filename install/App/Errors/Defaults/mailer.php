@@ -5,10 +5,10 @@
  *
  * @var \Luminova\Foundation\Error\Message|null $error
  */
-use Luminova\Utility\Email\Mailer;
+use function \Luminova\Funcs\logger;
+use Luminova\Components\Email\Mailer;
 use Luminova\Foundation\Error\Message;
 use Luminova\Exceptions\MailerException;
-use function \Luminova\Funcs\logger;
 
 include_once __DIR__ . '/tracing.php';
 

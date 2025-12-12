@@ -10,8 +10,8 @@
  */
 namespace Luminova\Models;
 
-use \App\Tasks\TaskQueue;
 use \Luminova\Base\Queue;
+use \App\Tasks\TaskQueue;
 use \Luminova\Exceptions\{DatabaseException, InvalidArgumentException};
 use function \Luminova\Funcs\camel_case;
 
@@ -355,10 +355,27 @@ class Task
      * Checks if the task handler is a serialized Opis\Closure.
      * 
      * @return bool Return true if the handler appears to be an Opis closure, false otherwise.
+     * @deprecated Use isClosure() instead.
      */
     public function isOpisClosure(): bool
     {
-        return $this->handler && Queue::isClosure($this->handler);
+        return $this->isClosure();
+    }
+
+    /**
+     * Checks if the task handler is a serialized Closure.
+     * 
+     * @return bool Return true if the handler appears to be a closure, false otherwise.
+     */
+    public function isClosure(): bool
+    {
+        if(!$this->handler){
+            return false;
+        }
+
+        [, $status] = Queue::withClosure($this->handler);
+
+        return $status;
     }
 
     /**

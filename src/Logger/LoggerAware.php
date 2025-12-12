@@ -12,7 +12,7 @@ namespace Luminova\Logger;
 
 use \Throwable;
 use \Luminova\Exceptions\{
-    AppException, 
+    LuminovaException, 
     RuntimeException, 
     InvalidArgumentException
 };
@@ -50,7 +50,7 @@ class LoggerAware extends AbstractLogger implements LoggerAwareInterface
         try{
             return $this->logger->{$method}(...$arguments);
         }catch(Throwable $e){
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw $e;
             }
 
@@ -115,7 +115,7 @@ class LoggerAware extends AbstractLogger implements LoggerAwareInterface
     }
 
     /**
-     * Log an performance metric.
+     * Log performance metric.
      *
      * @param string $data The profiling data to log.
      * @param array<string|int,mixed> $context Additional context data (optional).
