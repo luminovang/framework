@@ -13,10 +13,9 @@ namespace Luminova\Foundation\Module;
 use \Throwable;
 use \ReflectionClass;
 use \ReflectionException;
-use \Luminova\Utility\Storage\Filesystem;
+use \Luminova\Storage\Filesystem;
 use \Luminova\Exceptions\RuntimeException;
 use function \Luminova\Funcs\{
-    path,
     write_content,
     get_content,
     make_dir,
@@ -110,7 +109,7 @@ final class Service
             return true;
         }
 
-        $path = path('services') . $alias . self::$suffix;
+        $path = Filesystem::path('services') . $alias . self::$suffix;
         return file_exists($path);
     }
 
@@ -134,7 +133,7 @@ final class Service
         }
 
 
-        $path = path('services') . $alias . self::$suffix;
+        $path = Filesystem::path('services') . $alias . self::$suffix;
         return file_exists($path) && unlink($path);
     }
 
@@ -145,11 +144,11 @@ final class Service
     */
     public static function clear(): bool
     {
-        $path = path('services');
+        $path = Filesystem::path('services');
         self::$instances = [];
         self::$services = [];
 
-        return is_dir($path) ? Filesystem::remove($path) : false;
+        return is_dir($path) ? Filesystem::delete($path) : false;
     }
 
     /**
@@ -348,7 +347,7 @@ final class Service
             }
 
             try {
-                $path = path('services');
+                $path = Filesystem::path('services');
                 make_dir($path);
                 write_content($path . $alias . self::$suffix, $stringInstance);
             } catch (Throwable $e) {
@@ -366,7 +365,7 @@ final class Service
     */
     private static function getCachedInstance(string $alias): ?object
     {
-        $path = path('services') . $alias . self::$suffix;
+        $path = Filesystem::path('services') . $alias . self::$suffix;
 
         if (file_exists($path)) {
             $content = get_content($path);

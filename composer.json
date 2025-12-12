@@ -23,7 +23,7 @@
         }
     ],
     "require": {
-        "php": "^8.0",
+        "php": "^8.1",
         "ext-json": "*",
         "ext-mbstring": "*"
     },
@@ -37,7 +37,6 @@
     },
     "suggest": {
         "luminovang/luminova": "Required when using this component within the full Luminova framework.",
-        "opis/closure": "Required if you want to store anonymous functions or closures in the BackgroundTaskQueue system.",
         "ext-curl": "Required for the CURLRequest class.",
         "ext-exif": "Required for running tests on the Image class.",
         "ext-fileinfo": "Improves MIME type detection for files.",

@@ -10,12 +10,12 @@
  */
 namespace Luminova\Interface;
 
+use \DateTimeZone;
 use \Luminova\Base\Cache;
-use \Psr\Cache\CacheItemPoolInterface;
 use \Psr\SimpleCache\CacheInterface;
+use \Psr\Cache\CacheItemPoolInterface;
 use \Luminova\Exceptions\EncryptionException;
 use \Luminova\Exceptions\InvalidArgumentException;
-use \DateTimeZone;
 
 interface AuthenticatorInterface
 {

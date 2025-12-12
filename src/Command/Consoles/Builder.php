@@ -29,7 +29,9 @@ class Builder extends Console
      * {@inheritdoc}
      */
     protected string|array $usages = [
-        "php novakit build:project --help"
+        "php novakit build:project --help",
+        "php novakit build:project --type=export",
+        "php novakit build:project --type=archive"
     ];
 
     /**
@@ -37,24 +39,19 @@ class Builder extends Console
      */
     public function run(?array $options = []): int
     {
-        $this->term->perse($options);
-        $type = $this->term->getAnyOption('type', 't');
+        AppBuilder::options([
+            'progress'  => $this->input->getAnyOption('progress', 'p', true),
+            'quiet'     => $this->input->getAnyOption('quiet', 'q', false),
+            'verbose'   => $this->input->getVerbose(default: 3)
+        ]);
 
-        if($type === false){ 
-            foreach ($this->usages as $line) {
-                $this->term->writeln($line);
-            }
+        $result = match($this->input->getAnyOption('type', 't')){
+            'build', 'export', 'e' => AppBuilder::export('builds'),
+            'zip', 'archive', 'a'  => AppBuilder::archive('project.zip'),
+            default => null
+        };
 
-            return STATUS_ERROR;
-        }
-
-        if($type === 'build'){
-            AppBuilder::export('builds');
-        }elseif($type === 'zip'){
-            AppBuilder::archive('project.zip');
-        }
-
-        return STATUS_SUCCESS;
+        return ($result === null) ? STATUS_ERROR : STATUS_SUCCESS;
     }
 
     /**
