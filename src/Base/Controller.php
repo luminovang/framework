@@ -11,19 +11,20 @@ declare(strict_types=1);
  */
 namespace Luminova\Base;
 
+use \Throwable;
 use \Luminova\Boot;
-use \App\Application;
 use \Luminova\Http\Request;
 use \Luminova\Template\View;
+use \Luminova\Template\Response;
 use \Luminova\Security\Validation;
-use \Luminova\Utility\Object\LazyObject;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Foundation\Core\Application as CoreApplication;
+use \Luminova\Exceptions\JsonException;
+use \Luminova\Components\Object\LazyObject;
+use \Luminova\Foundation\Core\Application;
 use \Luminova\Interface\{
     RoutableInterface, 
     LazyObjectInterface, 
     InputValidationInterface, 
-    HttpRequestInterface
+    RequestInterface
 };
 
 /**
@@ -31,12 +32,6 @@ use \Luminova\Interface\{
  *
  * - Provides custom rendering, request handling, and input validation.
  * - Use this class as a foundation for routable controller methods.
- *
- * @property View|LazyObjectInterface $view Instance of the template view class.
- * @property View<LazyObjectInterface> $tpl Instance of the template view class.
- * @property Request<HttpRequestInterface,LazyObjectInterface>|null $request @inheritDoc
- * @property Validation<InputValidationInterface,LazyObjectInterface>|null $input @inheritDoc
- * @property Application<CoreApplication,LazyObjectInterface>|CoreApplication|null $app @inheritDoc
  *
  * @see https://luminova.ng/docs/0.0.0/templates/views
  * @see https://luminova.ng/docs/0.0.0/controllers/http-controller
@@ -70,46 +65,76 @@ use \Luminova\Interface\{
  *          ->failed(!$this->app->session->isOnline());
  * }
  * ``` 
+ * 
+ * @example - Register global classes for the template lifecycle:
+ * 
+ * - Exported objects are available in template files as `$this->foo`.
+ * - Use `export()` when the property is not accessible (not public or protected),
+ *   or when view isolation is enabled.
+ * 
+ * @see View::export()
+ *
+ * ```php 
+ * protected function onCreate(): void 
+ * {
+ *      $this->tpl->export($object, 'foo');
+ *      $this->tpl->export(MyClass::class);
+ *      $this->tpl->export(new MyClass(arguments));
+ *      $this->tpl->export(new MyClass(arguments), 'MyClass');
+ * }
+ * ```
  */
 abstract class Controller implements RoutableInterface
 {
     /**
      * Lazy loaded HTTP request object.
      * 
-     * @var Request<HttpRequestInterface,LazyObjectInterface>|null $request
+     * @var Request<RequestInterface,LazyObjectInterface> $request
      */
-    protected ?LazyObjectInterface $request = null;
+    protected readonly LazyObjectInterface $request;
  
     /**
      * Lazy loaded input validation object.
      * 
-     * @var Validation<InputValidationInterface,LazyObjectInterface>|null $input
+     * @var Validation<InputValidationInterface,LazyObjectInterface> $input
      */
-    protected ?LazyObjectInterface $input = null;
+    protected readonly LazyObjectInterface $input;
  
     /**
      * Lazy loaded application instance.
      * 
-     * @var Application<CoreApplication,LazyObjectInterface>|CoreApplication|null $app
+     * @var Application<LazyObjectInterface>|\App\Application<Application> $app
      */
-    protected ?LazyObjectInterface $app = null;
+    protected readonly LazyObjectInterface $app;
 
     /**
-     * Controller constructor.
+     * Lazy loaded template view object.
+     * 
+     * @var View<LazyObjectInterface> $tpl
+     * @see https://luminova.ng/docs/0.0.0/templates/views
+     */
+    protected readonly LazyObjectInterface $tpl;
+
+    /**
+     * Initialize controller class.
      *
      * Automatically lazily initializes commonly used objects so they are immediately
      * available within the controller when needed:
      *  - `$this->app`      : The main Application instance
      *  - `$this->input`    : Input Validation object
      *  - `$this->request`  : Incoming Request object
+     *  - `$this->tpl`      : View Template object
      *
      * Calls `$this->onCreate()` after initialization for further setup.
      */
     public function __construct()
     {
-        $this->app     = LazyObject::newObject(fn(): CoreApplication => Boot::application());
-        $this->input   = LazyObject::newObject(Validation::class);
-        $this->request = LazyObject::newObject(Request::class);
+        $this->app     = Boot::application();
+        $this->tpl     = LazyObject::newObject(fn(): View => new View($this->app));
+        $this->request = LazyObject::newObject(fn(): Request => Request::getInstance());
+        $this->input   = LazyObject::newObject(
+            fn(): Validation => (new Validation)->setRequest($this->request)
+        );
 
         $this->onCreate();
     }
@@ -135,23 +160,6 @@ abstract class Controller implements RoutableInterface
      */
     public function __get(string $property): mixed
     {
-        if($property === 'view' || $property === 'tpl'){
-            return $this->app->view;
-        }
-
-        if($property === 'validate'){
-            if (!PRODUCTION) {
-                throw new RuntimeException('Property $validate is deprecated. Use $input instead.');
-            }
-
-            trigger_error(
-                'Property $validate is deprecated. Please use $input instead.',
-                E_USER_DEPRECATED
-            );
-
-            return $this->input;
-        }
-
         return property_exists($this, $property)
             ? $this->{$property}
             : null;
@@ -167,156 +175,220 @@ abstract class Controller implements RoutableInterface
      */
     public function __isset(string $property): bool
     {
-        return (
-            $property === 'view' || 
-            $property === 'tpl' || 
-            property_exists($this, $property)
-        );
+        return isset($this->{$property});
     }
 
     /**
-     * Render a template within the controller.
-     * 
-     * This method will render specified template and send the output to browser or system.
-     * 
-     *  Supported content types:
-     * 
-     * - html: HTML content
-     * - json: JSON content
-     * - text | txt : Plain text content
-     * - xml: XML content
-     * - js: JavaScript content
-     * - css: CSS content
-     * - rdf: RDF content
-     * - atom: Atom feed content
-     * - rss: RSS feed content
+     * Render a template and send it to the client from a controller.
      *
-     * @param string $template The template file name without the extension (e.g., `index`).
-     * @param array<string,mixed> $options Optional scope data to pass to the template.
-     * @param string $type The content extension type (default: `View::HTML`).
-     * @param int $status HTTP status code (default: 200 OK).
-     * 
-     * @return int Return one of the following status codes:  
-     * - `STATUS_SUCCESS` if the view is handled successfully,  
-     * - `STATUS_SILENCE` if failed, silently terminate without error page allowing you to manually handle the state.
-     * 
-     * @see https://luminova.ng/docs/0.0.0/templates/views
-     * 
-     * @example - This examples are equivalent:
-     * 
+     * This method resolves a template, renders it with the provided data,
+     * and writes the output directly to the HTTP response.
+     *
+     * Supported content types:
+     * - html : HTML output (default)
+     * - json : JSON output
+     * - text | txt : Plain text output
+     * - xml  : XML output
+     * - js   : JavaScript output
+     * - css  : CSS output
+     * - rdf  : RDF feed
+     * - atom : Atom feed
+     * - rss  : RSS feed
+     *
+     * Execution flow:
+     * 1. Resolve template by name (without extension)
+     * 2. Bind data into template scope
+     * 3. Render output using the selected content type
+     * 4. Send response with HTTP status code
+     *
+     * @param string $template Template name without file extension (e.g. `index`).
+     * @param array<string,mixed> $options Data available inside the template scope.
+     * @param string $type Response content type (default: View::HTML).
+     * @param int $status HTTP status code (default: 200).
+     *
+     * @return int Response status code:
+     *      - STATUS_SUCCESS: View rendered successfully
+     *      - STATUS_SILENCE: Rendering failed or output suppressed
+     *
+     * @see View For template class.
+     * @see self::send() For sending contents.
+     * @see self::contents() For reading template contents.
+     * @link https://luminova.ng/docs/0.0.0/templates/views
+     *
+     * @example - Example:
      * ```php
+     * #[Route('/foo')]
      * public function fooView(): int
      * {
-     *      return $this->view('template-name', [...], View::HTML, 200);
-     * 
-     *      // Same as 
-     *      return $this->app->view->view('template-name', View::HTML)->render([...], 200);
-     * 
-     *      // And global function
-     *      return \Luminova\Funcs\view('template-name', 200, [...], View::HTML)
+     *     return $this->view('template-name', [
+     *         'title' => 'Home'
+     *     ], View::HTML, 200);
+     *
+     *     // Equivalent fluent usage:
+     *     return $this->tpl->view('template-name', View::HTML)
+     *         ->render(['title' => 'Home'], 200);
+     *
+     *     // Global helper:
+     *     return \Luminova\Funcs\view('template-name')
+     *         ->render(['title' => 'Home'], 200);
      * }
      * ```
      */
     protected final function view(
-        string $template, 
-        array $options = [], 
-        string $type = View::HTML, 
+        string $template,
+        array $options = [],
+        string $type = View::HTML,
         int $status = 200
-    ): int
+    ): int 
     {
-        return $this->app->view->view($template, $type)
+        return $this->tpl->view($template, $type)
             ->render($options, $status);
     }
 
     /**
-     * Render template and return content as a string.
-     * 
-     * Unlike the `view` method, the `respond` method will render specified template and 
-     * return the output instead of directly sending to browser or system.
-     * 
-     * Supported content types:
-     * 
-     * - html: HTML content
-     * - json: JSON content
-     * - text | txt : Plain text content
-     * - xml: XML content
-     * - js: JavaScript content
-     * - css: CSS content
-     * - rdf: RDF content
-     * - atom: Atom feed content
-     * - rss: RSS feed content
+     * Send a response from a controller.
      *
-     * @param string $template The template file name without the extension (e.g., `index`).
-     * @param array<string,mixed> $options Optional scope data to pass to the template.
-     * @param string $type The content extension type (default: `View::HTML`).
-     * @param int $status HTTP status code (default: 200 OK).
+     * Accepts array, object, or string payloads. Non-string values are automatically
+     * encoded to JSON using a safe encoding strategy.
+     *
+     * JSON encoding rules:
+     * - Throws an exception on encoding failure
+     * - Preserves Unicode characters
+     * - Preserves slashes without escaping
+     *
+     * @param object|array|string $body Response payload (auto-encoded if not string)
+     * @param array $headers Response headers
+     * @param int $status HTTP status code (default: 200)
+     *
+     * @return int Return response status code.
+     * @throws JsonException When JSON encoding fails.
      * 
-     * @return string|null Return the rendered template output contents or null if no content.
+     * @see Response For response class.
+     * @see self::contents() For reading template contents.
+     * @see self::view() For rendering templates.
+     * @see Luminova\Funcs\response() Global helper function.
      * 
-     * @see https://luminova.ng/docs/0.0.0/templates/views
-     * 
-     * @example - This examples are equivalent:
-     * 
+     * @example - Example:
      * ```php
+     * #[Route('/foo')]
      * public function fooView(): int
      * {
-     *      $content = $this->contents('view-name', [...], View::HTML, 200);
-     * 
-     *      // Same as 
-     *      $content = $this->app->view->view('view-name', View::HTML)
-     *          ->contents([...], 200);
+     *     return $this->send(
+     *          ['status' => 'ok', 'message' => 'Account created'],
+     *          ['Content-Type' => 'application/json'], 
+     *          200
+     *      );
+     * }
+     * ```
+     */
+    protected final function send(
+        object|array|string $body,
+        array $headers = [],
+        int $status = 200
+    ): int 
+    {
+        if (!is_string($body)) {
+            $headers['Content-Type'] ??= 'application/json';
+            
+            try {
+                $body = json_encode(
+                    $body,
+                    JSON_THROW_ON_ERROR |
+                    JSON_UNESCAPED_UNICODE |
+                    JSON_UNESCAPED_SLASHES |
+                    JSON_BIGINT_AS_STRING
+                );
+            } catch (Throwable $e) {
+                throw new JsonException($e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        return Response::getInstance()
+            ->setStatus($status)
+            ->render($body, $headers);
+    }
+
+    /**
+     * Render a template and return the output as a string.
+     *
+     * This method renders a template without sending it to the HTTP response.
+     * The result is returned as a raw string for further processing, modification,
+     * or manual response handling.
+     *
+     * Supported content types:
+     * - html : HTML output
+     * - json : JSON output
+     * - text | txt : Plain text output
+     * - xml  : XML output
+     * - js   : JavaScript output
+     * - css  : CSS output
+     * - rdf  : RDF feed
+     * - atom : Atom feed
+     * - rss  : RSS feed
+     *
+     * Execution flow:
+     * 1. Resolve template by name (without extension)
+     * 2. Bind provided data into template scope
+     * 3. Render output using selected content type
+     * 4. Return rendered content as string (no response output is sent)
+     *
+     * @param string $template Template name without file extension (e.g. `index`).
+     * @param array<string,mixed> $options Data available inside the template scope.
+     * @param string $type Response content type (default: View::HTML).
+     * @param int $status HTTP status code used during rendering (default: 200).
+     *
+     * @return string|null Rendered template content or null if rendering fails or produces no output.
+     *
+     * @see View For template class.
+     * @see self::send() For sending contents.
+     * @see self::view() For rendering templates.
+     * @link https://luminova.ng/docs/0.0.0/templates/views
+     *
+     * @example - Example:
+     * ```php
+     * #[Route('/foo')]
+     * public function fooView(): int
+     * {
+     *     $content = $this->contents('view-name', [
+     *         'title' => 'Home'
+     *     ], View::HTML, 200);
+     *
+     *     // Equivalent fluent usage:
+     *     $content = $this->tpl->view('view-name', View::HTML)
+     *         ->contents(['title' => 'Home'], 200);
+     *
+     *     // Global helper:
+     *     return \Luminova\Funcs\view('template-name')
+     *         ->contents(['title' => 'Home'], 200);
      * }
      * ```
      */
     protected final function contents(
-        string $template, 
-        array $options = [], 
-        string $type = View::HTML, 
+        string $template,
+        array $options = [],
+        string $type = View::HTML,
         int $status = 200
-    ): ?string
+    ): ?string 
     {
-        return $this->app->view->view($template, $type)
+        return $this->tpl->view($template, $type)
             ->contents($options, $status);
     }
 
     /**
-     * Render template and return content as a string.
+     * Called immediately after object creation.
      *
-     * This method is deprecated and kept only for backward compatibility.
-     * It now simply forwards all arguments to `contents()`.
-     *
-     * @deprecated Use contents() directly. This wrapper will be removed in a future release.
-     *
-     * @param string $template The view template name.
-     * @param array  $options  Data passed into the template.
-     * @param string $type     Output extension type. Defaults to View::HTML.
-     * @param int    $status   HTTP status code. Defaults to 200.
-     *
-     * @return string|null Rendered template output.
-     */
-    protected final function respond(
-        string $template, 
-        array $options = [], 
-        string $type = View::HTML, 
-        int $status = 200
-    ): ?string
-    {
-        return $this->contents($template, $options, $type, $status);
-    }
-
-    /**
-     * onCreate override hook method.
+     * Override to customize setup or initialize dependencies.
      * 
-     * Called automatically when the controller instance is created.
-     * Intended to be overridden in subclasses for custom initialization logic.
+     * > Lifecycle hook called immediately after object creation.
      */
     protected function onCreate(): void {}
 
     /**
-     * onDestroy override hook method.
+     * Lifecycle hook called when the instance is destroyed.
+     *
+     * Override to perform cleanup or teardown logic.
      * 
-     * Called automatically when the controller instance is destroyed.
-     * Intended to be overridden in subclasses for custom cleanup or teardown logic.
+     * > Lifecycle hook called when the instance is destroyed.
      */
     protected function onDestroy(): void {}
 

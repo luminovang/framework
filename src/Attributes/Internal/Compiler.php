@@ -12,6 +12,7 @@ namespace Luminova\Attributes\Internal;
 
 use \Throwable;
 use \SplFileInfo;
+use \Luminova\Boot;
 use \ReflectionClass;
 use \ReflectionMethod;
 use \Luminova\Luminova;
@@ -80,14 +81,15 @@ final class Compiler
             return;
         }
 
-        [$namespace, $fileName] = self::$parser->load(
+        [$namespace, $fileName, $isExcluded, $subPrefix] = self::$parser->load(
             $path . ($this->hmvc ? '' : 'Http'), 
             'http', 
             $context, 
             $uri
         );
         
-        Luminova::addClassMetadata('controllers', self::$parser->searches);
+        Boot::add(Boot::CLASS_METADATA, 'controllers', self::$parser->searches);
+
         if($namespace === null){
             return;
         }
@@ -102,7 +104,7 @@ final class Compiler
             return;
         }
 
-        Luminova::addClassMetadata('filename', $fileName);
+        Boot::add(Boot::CLASS_METADATA, 'filename', $fileName);
 
         /**
          * Handle context attributes and register error handlers.
@@ -157,7 +159,7 @@ final class Compiler
             }
         }
 
-        self::$parser->cache('http', $context);
+        self::$parser->cache('http', $context, $isExcluded, $subPrefix);
     }
 
     /**
@@ -174,7 +176,7 @@ final class Compiler
             return;
         }
 
-        [$namespace, $fileName] = self::$parser->load(
+        [$namespace, $fileName, $isExcluded, $subPrefix] = self::$parser->load(
             $path . ($this->hmvc ? '' : 'Cli'), 
             'cli', 
             $command,
@@ -195,7 +197,7 @@ final class Compiler
             return;
         }
 
-        Luminova::addClassMetadata('filename', $fileName);
+        Boot::add(Boot::CLASS_METADATA, 'filename', $fileName);
 
         foreach ($instance->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
             $callback = $fileName . '::' . $method->getName();
@@ -234,7 +236,7 @@ final class Compiler
             }
         }
     
-        self::$parser->cache('cli', $command);
+        self::$parser->cache('cli', $command, $isExcluded, $subPrefix);
     }
 
     /**
@@ -249,7 +251,7 @@ final class Compiler
     public function export(string $path): self
     {
         $files = self::$parser->iterator($path, 'export');
-        $api = env('app.api.prefix', 'api');
+        $api = Luminova::getApiPrefix();
 
         foreach ($files as $file) {
             $fileName = pathinfo($file->getBasename(), PATHINFO_FILENAME);
@@ -315,7 +317,7 @@ final class Compiler
      * whether it should be processed based on the current context and middleware.
      *
      * @param string $pattern The raw route pattern (alias or path).
-     * @param string $prefix The current URI prefxi (e.g., first path name).
+     * @param string $prefix The current URI prefix (e.g., first path name).
      * @param mixed  $middleware The middleware assigned to the route, if any.
      * @param string &$normalized The resulting normalized pattern (output parameter).
      *
@@ -562,6 +564,7 @@ final class Compiler
         $pattern = $normalize ?? Router::toPatterns($pattern);
     
         self::$parser->routes['basePattern'] = $pattern;
+        self::$parser->routes['rawBasePattern'] = $instance->pattern;
         self::$parser->routes['excluders'] = $instance->mergeExcluders ? [] : $instance->exclude;
         
         if($instance->onError !== null){

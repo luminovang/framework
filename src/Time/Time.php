@@ -1,6 +1,6 @@
-<?php 
+<?php
 /**
- * Luminova Framework
+ * Luminova Framework DateTime DateTimeImmutable
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -10,118 +10,150 @@
  */
 namespace Luminova\Time;
 
-use \Luminova\Exceptions\DateTimeException;
-use \DateTimeImmutable;
-use \DateTimeZone;
 use \DateTime;
-use \IntlDateFormatter;
-use \DateTimeInterface;
-use \DateInterval;
+use \Throwable;
 use \Stringable;
-use \Exception;
+use \DateInterval;
+use \DateTimeZone;
+use \DateTimeImmutable;
+use \DateTimeInterface;
+use \Luminova\Exceptions\RuntimeException;
+use \Luminova\Exceptions\DateTimeException;
 
 class Time extends DateTimeImmutable implements Stringable
 {
     /**
      * Timezone instance.
-     * 
-     * @var DateTimeZone
+     *
+     * @var DateTimeZone|null $timezone
      */
     private ?DateTimeZone $timezone = null;
 
     /**
-     * Default datetime format to use when displaying datetime string.
+     * Datetime format used when casting the instance to a string.
      *
      * @var string $stringFormat
      */
     private static string $stringFormat = 'Y-M-D H:i:s';
 
     /**
-     * Default datetime format to use.
+     * Standard datetime format used internally for construction and storage.
      *
      * @var string $defaultFormat
      */
     private static string $defaultFormat = 'Y-m-d H:i:s';
 
     /**
-     * Regular expression pattern for relative time keywords.
-     * 
-     * @var string $relativePattern 
+     * Regex that matches PHP relative-time keywords accepted by strtotime / DateTime::modify.
+     *
+     * @var string $relativePattern
      */
     private static string $relativePattern = '/this|next|last|tomorrow|yesterday|midnight|today|[+-]|first|last|ago/i';
 
     /**
-     * Regular expression pattern for relative time ago keywords.
-     * 
-     * @var string $agoRelativePattern 
+     * Regex that matches the human-readable "N unit(s) ago" format produced by {@see ago()}.
+     *
+     * @var string $agoRelativePattern
      */
     private static string $agoRelativePattern = '/^\d+\s+(second|minute|hour|day|week|month|year|decade)s?\s+ago$/i';
 
     /**
-     * Time constructor.
+     * Creates a new Time instance.
      *
-     * @param string|null $datetime Optional datetime string.
-     * @param DateTimeZone|string|null $timezone Optional timezone.
+     * Accepts any datetime string that PHP understands, including relative
+     * expressions ("next Monday", "2 days ago") and absolute ISO strings.
      *
-     * @throws DateTimeException Throws if error occurs during DateTimeImmutable object construction.
+     * @param string|null $datetime Optional datetime string; defaults to now.
+     * @param DateTimeZone|string|null $timezone Optional timezone; defaults to the PHP default.
+     *
+     * @throws DateTimeException If the underlying DateTimeImmutable construction fails.
      */
     public function __construct(?string $datetime = null, DateTimeZone|string|null $timezone = null)
     {
         $datetime ??= '';
         $timezone ??= date_default_timezone_get();
         $this->timezone = self::timezone($timezone);
-       
+
         if ($datetime !== '' && !self::isAbsolute($datetime)) {
-           $datetime = self::fromRelative($datetime, $this->timezone);
+            $datetime = self::fromRelative($datetime, $this->timezone)
+                ->format('Y-m-d H:i:s.u');
         }
 
         try {
             parent::__construct($datetime, $this->timezone);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             throw new DateTimeException(
-                sprintf('Error occurred while constructing DateTimeImmutable object: %s', $e->getMessage()), 
-                $e->getCode(), 
+                sprintf('Error occurred while constructing DateTimeImmutable object: %s', $e->getMessage()),
+                $e->getCode(),
                 $e
             );
         }
     }
 
     /**
-     * Converts string to timezone instance if not already a timezone instance.
-     *
-     * @param DateTimeZone|string $timezone Optional timezone to associate with the current DateTime instance.
-     *
-     * @return DateTimeZone The timezone instance.
-     */
-    public static function timezone(DateTimeZone|string $timezone): DateTimeZone
-    {
-        return ($timezone instanceof DateTimeZone) ? $timezone : new DateTimeZone($timezone);
-    }
-
-    /**
-     * Returns current DateTime instance with the timezone set.
+     * Create a new instance representing the current date and time.
      *
      * @param DateTimeZone|string|null $timezone Optional timezone.
      *
-     * @return self New DateTimeImmutable object.
-     * @throws DateTimeException Throws if any error occurs.
+     * @return static Return a new instance of time immutable object.
+     * @throws DateTimeException If failed to create datetime object.
      */
     public static function now(DateTimeZone|string|null $timezone = null): self
     {
-        return new self(null, $timezone);
+        return new self(timezone: $timezone);
     }
 
     /**
-     * Returns a new Time instance while parsing a datetime string.
+     * Create a new instance set to midnight (00:00:00) of the current day.
      *
-     * @param string $datetime Datetime string to parse.
      * @param DateTimeZone|string|null $timezone Optional timezone.
      *
-     * @return self New DateTimeImmutable object.
-     * @throws DateTimeException Throws if any error occurs.
+     * @return static Return a new instance of time immutable object.
+     * @throws DateTimeException If failed to create datetime object.
+     */
+    public static function today(DateTimeZone|string|null $timezone = null): self
+    {
+        return new self(date('Y-m-d 00:00:00'), $timezone);
+    }
+
+    /**
+     * Create a new instance set to midnight (00:00:00) of yesterday.
+     *
+     * @param DateTimeZone|string|null $timezone Optional timezone.
+     *
+     * @return static Return a new instance of time immutable object.
+     * @throws DateTimeException If failed to create datetime object.
+     */
+    public static function yesterday(DateTimeZone|string|null $timezone = null): self
+    {
+        return new self(date('Y-m-d 00:00:00', strtotime('-1 day')), $timezone);
+    }
+
+    /**
+     * Create a new instance set to midnight (00:00:00) of tomorrow.
+     *
+     * @param DateTimeZone|string|null $timezone Optional timezone.
+     *
+     * @return static Return a new instance of time immutable object.
+     * @throws DateTimeException If failed to create datetime object.
+     */
+    public static function tomorrow(DateTimeZone|string|null $timezone = null): self
+    {
+        return new self(date('Y-m-d 00:00:00', strtotime('+1 day')), $timezone);
+    }
+
+    /**
+     * Parses an arbitrary datetime string and returns a new instance.
+     *
+     * Accepts absolute strings, relative keywords, and "N unit(s) ago" expressions.
+     *
+     * @param string $datetime Datetime string to parse (e.g. "first day of December 2020").
+     * @param DateTimeZone|string|null $timezone Optional timezone.
+     *
+     * @return static Return a new instance of time immutable object.
+     * @throws DateTimeException If failed to create datetime object.
      *
      * @example - Example:
-     * 
      * ```php
      * $time = Time::parse('first day of December 2020');
      * ```
@@ -132,38 +164,268 @@ class Time extends DateTimeImmutable implements Stringable
     }
 
     /**
-     * Return a new time with the time set to midnight.
+     * Creates a new instance from individual date/time components.
      *
-     * @param DateTimeZone|string|null $timezone
+     * Any omitted component falls back to its current-date equivalent.
      *
-     * @return self Return new DateTimeImmutable object.
+     * @param int|null $year Optional year numeric value to drive from.
+     * @param int|null $month Optional month to drive from.
+     * @param int|null $day Optional day to drive from.
+     * @param int|null $hour Optional hour to drive from.
+     * @param int|null $minutes Optional minutes to drive from.
+     * @param int|null $seconds Optional seconds to drive from.
+     * @param DateTimeZone|string|null $timezone Optional timezone.
      *
-     * @throws DateTimeException Throws if any error occurred.
+     * @return static Return a new instance of time immutable object.
+     * @throws DateTimeException If failed to create datetime object.
      */
-    public static function today(DateTimeZone|string|null $timezone = null): self
+    public static function createFrom(
+        ?int $year    = null,
+        ?int $month   = null,
+        ?int $day     = null,
+        ?int $hour    = null,
+        ?int $minutes = null,
+        ?int $seconds = null,
+        DateTimeZone|string|null $timezone = null
+    ): self 
     {
-        return new self(date('Y-m-d 00:00:00'), $timezone);
+        $seconds ??= 0;
+        $minutes ??= 0;
+        $hour    ??= 0;
+        $day     ??= (int) date('d');
+        $month   ??= (int) date('m');
+        $year    ??= (int) date('Y');
+
+        return new self(
+            date(self::$defaultFormat, strtotime("{$year}-{$month}-{$day} {$hour}:{$minutes}:{$seconds}")),
+            $timezone
+        );
     }
 
     /**
-     * Returns an instance set to midnight yesterday morning.
+     * Creates a new instance from an existing DateTimeInterface, preserving its timezone.
      *
-     * @param DateTimeZone|string|null $timezone
+     * @param DateTimeInterface $datetime Source datetime object.
      *
-     * @return self Return new DateTimeImmutable object.
-     *
-     * @throws DateTimeException Throws if any error occurred.
+     * @return static Return a new instance of time immutable object.
+     * @throws DateTimeException If failed to create datetime object.
      */
-    public static function yesterday(DateTimeZone|string|null $timezone = null): self
+    public static function fromInstance(DateTimeInterface $datetime): self
     {
-        return new self(date('Y-m-d 00:00:00', strtotime('-1 day')), $timezone);
+        return new self(
+            $datetime->format(self::$defaultFormat),
+            $datetime->getTimezone() ?: null
+        );
     }
 
     /**
-     * Return string datetime of this format 'yyyy-mm-dd H:i:s'.
-     * @param DateTimeZone|string|null $timezone Optional timezone string.
-     * 
-     * @return string Returns datetime string.
+     * Creates a new instance from a Unix timestamp.
+     *
+     * The timestamp is interpreted as UTC and then converted to the given timezone.
+     *
+     * @param int $timestamp The unix timestamp to drive from.
+     * @param DateTimeZone|string|null $timezone  Target timezone; defaults to the PHP default.
+     *
+     * @return static Return a new instance of time immutable object.
+     * @throws DateTimeException If failed to create datetime object.
+     */
+    public static function fromTimestamp(int $timestamp, DateTimeZone|string|null $timezone = null): self
+    {
+        $timezone ??= date_default_timezone_get();
+        $time = new self(gmdate(self::$defaultFormat, $timestamp), 'UTC');
+
+        return $time->setTimezone($timezone);
+    }
+
+    /**
+     * Creates a new instance from date components only; the time is set to 00:00:00.
+     *
+     * Omitted components default to the corresponding values of the current date.
+     *
+     * @param int|null $year Optional year numeric value to drive from.
+     * @param int|null $month Optional month numeric value to drive from.
+     * @param int|null $day Optional days to drive from.
+     * @param DateTimeZone|string|null $timezone Optional timezone.
+     *
+     * @return static Return a new instance of time immutable object.
+     * @throws DateTimeException If failed to create datetime object.
+     */
+    public static function fromDate(
+        ?int $year  = null,
+        ?int $month = null,
+        ?int $day   = null,
+        DateTimeZone|string|null $timezone = null
+    ): self 
+    {
+        return self::createFrom(year: $year, month: $month, day: $day, timezone: $timezone);
+    }
+
+    /**
+     * Creates a new instance using today's date with the supplied time components.
+     *
+     * Omitted components default to 0.
+     *
+     * @param int|null $hour Optional hour of the day to drive from.
+     * @param int|null $minutes Optional minutes to drive from.
+     * @param int|null $seconds Optional seconds to drive from.
+     * @param DateTimeZone|string|null $timezone Optional timezone.
+     *
+     * @return static Return a new instance of time immutable object.
+     * @throws DateTimeException If failed to create datetime object.
+     */
+    public static function fromTime(
+        ?int $hour = null,
+        ?int $minutes = null,
+        ?int $seconds = null,
+        DateTimeZone|string|null $timezone = null
+    ): self 
+    {
+        return self::createFrom(hour: $hour, minutes: $minutes, seconds: $seconds, timezone: $timezone);
+    }
+
+    /**
+     * Resolves a relative datetime expression to an absolute object.
+     *
+     * Handles both "N unit(s) ago" strings and PHP relative keywords
+     * (e.g. "next Monday", "-3 years").
+     *
+     * @param string $datetime Relative datetime string.
+     * @param DateTimeZone|string|null $timezone Optional timezone applied to the resolved instant.
+     *
+     * @return static Return resolved datetime as Time object.
+     * @throws DateTimeException If the expression cannot be resolved.
+     * @example - Example:
+     * ```php
+     * $datetime = Time::fromRelative('10 hours ago')->format('Y-m-d H:i:s.u');
+     * ```
+     */
+    public static function fromRelative(string $datetime, DateTimeZone|string|null $timezone = null): self
+    {
+        $timezone = ($timezone !== null) ? self::timezone($timezone) : $timezone;
+
+        if (self::isTimeAgo($datetime)) {
+            return self::fromTimeAgo($datetime, $timezone);
+        }
+
+        if (self::isRelative($datetime)) {
+            $now = new self('now', $timezone);
+
+            if ($now->modify($datetime) === false) {
+                throw new DateTimeException("Invalid relative time '{$datetime}' passed");
+            }
+        } else {
+            $now = new self($datetime, $timezone);
+        }
+
+        if ($timezone instanceof DateTimeZone) {
+            $now = $now->setTimezone($timezone);
+        }
+
+        return $now;
+    }
+
+    /**
+     * Creates a new DateTimeImmutable from a format string and a datetime string.
+     *
+     * Thin wrapper around {@see DateTimeImmutable::createFromFormat()}.
+     *
+     * @param string $format PHP date format string.
+     * @param string $datetime Datetime string matching $format.
+     * @param DateTimeZone|string|null $timezone Optional timezone.
+     *
+     * @return DateTimeImmutable|false New instance on success, false on failure.
+     * @throws DateTimeException If failed to create datetime object.
+     */
+    public static function fromFormat(
+        string $format,
+        string $datetime,
+        DateTimeZone|string|null $timezone = null
+    ): DateTimeImmutable|bool 
+    {
+        try{
+            return parent::createFromFormat($format, $datetime, $timezone);
+        } catch(Throwable $e){
+            throw new DateTimeException($e->getMessage(), $e->getCode(), $e);
+        }
+    }
+
+    /**
+     * Create a new Time object from human-readable "N unit(s) ago" expression back into a datetime instance.
+     *
+     * Accepts "just now" as a special case. Supported units: second, minute, hour,
+     * day, week, month, year, decade.
+     *
+     * @param string $expression Expression such as "3 hours ago" or "1 decade ago".
+     * @param DateTimeZone|string|null $timezone Optional timezone for the resulting instance.
+     *
+     * @return static Return a new instance of time immutable object.
+     * @throws DateTimeException If the format is invalid or the unit is unrecognized.
+     */
+    public static function fromTimeAgo(string $expression, DateTimeZone|string|null $timezone = null): self
+    {
+        $expression  = strtolower(trim($expression));
+        $timezone = self::timezone($timezone ?? date_default_timezone_get());
+
+        if ($expression === 'just now') {
+            return (new self('now', $timezone))->setTimezone($timezone);
+        }
+
+        $parts = explode(' ', $expression, 3);
+        if (count($parts) !== 3 || $parts[2] !== 'ago') {
+            throw new DateTimeException('Invalid relative time format: "' . $expression . '"');
+        }
+
+        $quantity = (int) $parts[0];
+        $unit     = rtrim($parts[1], 's');
+
+        $intervals = [
+            'second' => 'PT%dS',
+            'minute' => 'PT%dM',
+            'hour'   => 'PT%dH',
+            'day'    => 'P%dD',
+            'week'   => 'P%dW',
+            'month'  => 'P%dM',
+            'year'   => 'P%dY',
+            'decade' => 'P%dY',
+        ];
+
+        if (!isset($intervals[$unit])) {
+            throw new DateTimeException('Invalid time unit: "' . $unit . '"');
+        }
+
+        if ($unit === 'decade') {
+            $quantity *= 10;
+        }
+
+        $datetime = new self('now', $timezone);
+
+        return $datetime->sub(new DateInterval(sprintf($intervals[$unit], $quantity)));
+    }
+
+    /**
+     * Normalizes a timezone value to a DateTimeZone instance.
+     *
+     * Returns the argument unchanged if it is already a DateTimeZone.
+     *
+     * @param DateTimeZone|string $timezone Timezone name or instance.
+     *
+     * @return DateTimeZone Return instance of timezone.
+     * @throws \DateInvalidTimeZoneException If failed to create timezone object.
+     */
+    public static function timezone(DateTimeZone|string $timezone): DateTimeZone
+    {
+        return ($timezone instanceof DateTimeZone) 
+            ? $timezone 
+            : new DateTimeZone($timezone);
+    }
+
+    /**
+     * Create current datetime formatted as "Y-m-d H:i:s".
+     *
+     * @param DateTimeZone|string|null $timezone Timezone to use; defaults to UTC.
+     *
+     * @return string Return formatted data string.
+     * @throws DateTimeException If failed to create date.
      */
     public static function datetime(DateTimeZone|string|null $timezone = 'UTC'): string
     {
@@ -171,579 +433,247 @@ class Time extends DateTimeImmutable implements Stringable
     }
 
     /**
-     * Returns an instance set to midnight tomorrow morning.
+     * Create a Time instance in UTC, converting from an optional source datetime.
      *
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
+     * If no argument is supplied the current time is used.
      *
-     * @return self Return new DateTimeImmutable object.
-     * @throws DateTimeException Throws if any error occurred.
+     * @param DateTimeInterface|string|null $datetime Source datetime object, string, or null for now.
+     *
+     * @return static Return a new instance normalized to UTC.
+     * @throws DateTimeException If failed to create date.
      */
-    public static function tomorrow(DateTimeZone|string|null $timezone = null): self
+    public static function UTC(DateTimeInterface|string|null $datetime = null): self
     {
-        return new self(date('Y-m-d 00:00:00', strtotime('+1 day')), $timezone);
-    }
+        $utc = new DateTimeZone('UTC');
+        $datetime ??= 'now';
 
-    /**
-     * Returns a new instance with the date time values individually set.
-     *
-     * @param int|null $year Year to pass.
-     * @param int|null $month Month to pass.
-     * @param int|null $day Day to pass.
-     * @param int|null $hour Hour to pass.
-     * @param int|null $minutes Minutes to pass.
-     * @param int|null $seconds Seconds to pass.
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
-     *
-     * @return self Return new DateTimeImmutable object.
-     * @throws DateTimeException Throws if any error occurred.
-     */
-    public static function createFrom(
-        ?int $year = null, 
-        ?int $month = null, 
-        ?int $day = null, 
-        ?int $hour = null, 
-        ?int $minutes = null, 
-        ?int $seconds = null, 
-        DateTimeZone|string|null $timezone = null
-    ): self 
-    {
-        $year ??= date('Y');
-        $month ??= date('m');
-        $day ??= date('d');
-        $hour ??= 0;
-        $minutes ??= 0;
-        $seconds ??= 0;
-
-        return new self(
-            date(self::$defaultFormat, strtotime("{$year}-{$month}-{$day} {$hour}:{$minutes}:{$seconds}")), 
-            $timezone
-        );
-    }
-
-    /**
-     * Gets year from the current datetime format.
-     *
-     * @return string Return year
-    */
-    public function getYear(): string
-    {
-        return $this->toFormat('y');
-    }
-
-    /**
-     * Gets month from the current datetime format.
-     *
-     * @return string Return month.
-     */
-    public function getMonth(): string
-    {
-        return $this->toFormat('M');
-    }
-
-    /**
-     * Gets day from the current datetime format.
-     *
-     * @return string Return day of the month
-     */
-    public function getDay(): string
-    {
-        return $this->toFormat('d');
-    }
-
-    /**
-     * Gets hour (in 24-hour format), from the current datetime format.
-     *
-     * @return string Return hours of the day.
-     */
-    public function getHour(): string
-    {
-        return $this->toFormat('H');
-    }
-
-    /**
-     * Gets minutes from the current datetime format.
-     *
-     * @return string Return minutes.
-     */
-    public function getMinute(): string
-    {
-        return $this->toFormat('m');
-    }
-
-    /**
-     * Gets seconds from the current datetime format.
-     *
-     * @return string Return seconds.
-     */
-    public function getSecond(): string
-    {
-        return $this->toFormat('s');
-    }
-
-    /**
-     * Gets day of the year, from the current datetime format.
-     *
-     * @return string Return day of the year.
-     */
-    public function getDayOfYear(): string
-    {
-        return $this->toFormat('D');
-    }
-
-    /**
-     * Gets week of the month, from the current datetime format.
-     *
-     * @return string Return week of the month.
-     */
-    public function getWeekOfMonth(): string
-    {
-        return $this->toFormat('W');
-    }
-
-    /**
-     * Gets week of the year from the current datetime format.
-     *
-     * @return string Return week of the year.
-     */
-    public function getWeekOfYear(): string
-    {
-        return $this->toFormat('w');
-    }
-
-     /**
-     * Gets week of the day from the current datetime format.
-     *
-     * @return string Return day of the week.
-     */
-    public function getDayOfWeek(): string
-    {
-        return $this->toFormat('c');
-    }
-
-    /**
-     * Gets quarter of the year, from the current datetime format.
-     *
-     * @return string Return quarter of the year.
-     */
-    public function getQuarter(): string
-    {
-        return $this->toFormat('Q');
-    }
-
-    /**
-     * Returns the name of the current timezone.
-     * 
-     * @return string The name of the current timezone.
-     */
-    public function getTimezoneName(): string
-    {
-        return $this->timezone->getName();
-    }
-
-    /**
-     * Calculates the maximum age in seconds until a given timestamp.
-     *
-     * @param int $timestamp The target timestamp to calculate the maximum age against.
-     * 
-     * @return int Return the number of seconds from the current timestamp to the given timestamp.
-     */
-    public function getMaxAge(int $timestamp): int
-    {
-        return max(0, $timestamp - parent::getTimestamp());
-    }
-
-    /**
-     * Returns Datetime instance of UTC timezone.
-     *
-     * @param DateTimeInterface|Time|string $datetime Datetime object or string
-     *
-     * @return DateTime Return new datetime instance of UTC timezone.
-     * @throws DateTimeException Throws if any error occurred.
-     */
-    public function getInstanceUtc(DateTimeInterface|Time|string $datetime, ?string $timezone = null):  DateTime
-    {
-        if ($datetime instanceof Time) {
-            $datetime = $datetime->toDatetime();
-        } elseif (is_string($datetime)) {
-            $timezone ??= $this->timezone;
-            $datetime = new DateTime($datetime, self::timezone($timezone));
+        if (is_string($datetime)) {
+            $datetime = new self($datetime, $utc);
         }
 
-        if ($datetime instanceof DateTime || $datetime instanceof DateTimeImmutable) {
-            $datetime = $datetime->setTimezone(new DateTimeZone('UTC'));
+        if ($datetime instanceof DateTimeImmutable) {
+            return $datetime->setTimezone($utc);
         }
 
         return $datetime;
     }
 
     /**
-     * Set the TimeZone associated with the DateTime, and returns a new instance with the updated timezone.
+     * Create social time ago expression from datetime.
+     * 
+     * This converts a datetime value to a human-readable relative string (e.g. "3 hours ago").
      *
-     * @param DateTimeZone|string $timezone Timezone to set.
+     * @param DateTimeImmutable|string|int $datetime The source, a datetime object, an ISO string, or a Unix timestamp.
+     * @param bool $full When true, returns all non-zero components (e.g. "1 hour, 3 minutes, 5 seconds ago").
+     * @param DateTimeZone|string|null $timezone Optional timezone for the "now" reference point.
      *
-     * @return self Return new DateTimeImmutable object.
-     * @throws DateTimeException Throws if any error occurred.
+     * @return string|false Relative string on success, false if $datetime could not be resolved.
+     * @throws DateTimeException If failed to create date.
      */
-    public function setTimezone(DateTimeZone|string $timezone): self
-    {
-        $timezone = self::timezone($timezone);
-
-        return self::fromInstance($this->toDatetime()->setTimezone($timezone));
-    }
-
-    /**
-     * Determine if the current time is already in daylight savings.
-     * 
-     * @return bool Return true if the current time is already in daylight saving, false otherwise.
-     */
-    public function isDaylight(): bool
-    {
-        return $this->format('I') === '1'; 
-    }
-
-    /**
-     * Check whether the passed timezone is the same as the application timezone.
-     * 
-     * @return bool true if the passed timezone is the same as the local timezone false otherwise.
-     */
-    public function isSystemTimezone(): bool
-    {
-        return date_default_timezone_get() === $this->timezone->getName();
-    }
-
-    /**
-     * Returns boolean whether object is in UTC.
-     * 
-     * @return bool Whether the timezone offset is UTC.
-     */
-    public function isUtc(): bool
-    {
-        return $this->getOffset() === 0;
-    }
-
-    /**
-     * Check if time string has a relative time keywords.
-     * 
-     * @param string $datetime The datetime string to check.
-     * 
-     * @return bool True if the string contains relative time keywords otherwise, false.
-     */
-    public static function isRelative(string $datetime): bool
-    {
-        return preg_match(self::$relativePattern, $datetime) === 1;
-    }
-
-    /**
-     * Check if time string has a human-readable relative time keywords from `ago` method.
-     * 
-     * @param string $datetime The datetime string to check.
-     * 
-     * @return bool True if the string contains relative time keywords otherwise, false.
-     */
-    public static function isAgo(string $datetime): bool
-    {
-        return preg_match(self::$agoRelativePattern, $datetime) === 1;
-    }
-
-    /**
-     * Check if time string is a valid absolute time string.
-     * 
-     * @param string $datetime The datetime string to check.
-     * 
-     * @return bool True if the string contains absolute time time otherwise, false.
-     */
-    public static function isAbsolute(string $datetime): bool
-    {
-        return (bool) preg_match('/\d{4}-\d{1,2}-\d{1,2}/', $datetime);
-    }
-
-    /**
-     * Returns a formatted datetime to your preferred format.
-     * 
-     * @param string|null $format Format to return (default: `YYYY-MM-DD HH:MM:SS`).
-     * 
-     * @return string|false Formatted datetime string otherwise false.
-     */
-    public function toFormat(?string $format = null): string|bool
-    {
-        $format ??= $this->stringFormat;
-
-        return IntlDateFormatter::formatObject($this->toDatetime(), $format);
-    }
-
-    /**
-     * Returns a formatted time string (ex. 17:17:17).
-     *
-     * @return string|false Formatted time string otherwise false.
-     */
-    public function toTime(): string|bool
-    {
-        return $this->toFormat('HH:mm:ss');
-    }
-
-    /**
-     * Converts the current instance to a mutable DateTime object.
-     * 
-     * @return DateTime Return new datetime object.
-     * @throws DateTimeException Throws if any error occurred.
-     */
-    public function toDatetime(): DateTime
-    {
-        $dateTime = new DateTime('', $this->getTimezone());
-        $dateTime->setTimestamp(parent::getTimestamp());
-
-        return $dateTime;
-    }
-
-    /**
-     * Takes an instance of DateTimeInterface and returns an instance of Time with it's same values.
-     *
-     * @param DateTimeInterface $datetime An instance of DateTimeInterface.
-     * 
-     * @return self Return new DateTimeImmutable object.
-     * @throws DateTimeException Throws if any error occurred.
-     */
-    public static function fromInstance(DateTimeInterface $datetime): self
-    {
-        $date = $datetime->format(self::$defaultFormat);
-        $timezone = $datetime->getTimezone();
-
-        return new self($date, $timezone);
-    }
-
-    /**
-     * Returns a new instance with the datetime set based on the provided UNIX timestamp.
-     *
-     * @param int $timestamp Timestamp to create datetime from.
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
-     *
-     * @return self Return new DateTimeImmutable object.
-     *
-     * @throws DateTimeException Throws if any error occurred.
-     */
-    public static function fromTimestamp(int $timestamp, DateTimeZone|string|null $timezone = null): self
-    {
-        $time = new self(gmdate(self::$defaultFormat, $timestamp), 'UTC');
-
-        $timezone ??= date_default_timezone_get();
-
-        return $time->setTimezone($timezone);
-    }
-
-     /**
-     * Returns a new instance based on the year, month and day. If any of those three are left empty, will default to the current value.
-     *
-     * @param int|null $year Year to pass.
-     * @param int|null $month Month to pass.
-     * @param int|null $day Day to pass.
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
-     *
-     * @return self Return new DateTimeImmutable object.
-     *
-     * @throws DateTimeException Throws if any error occurred.
-     */
-    public static function fromDate(
-        ?int $year = null, 
-        ?int $month = null, 
-        ?int $day = null, 
+    public static function ago(
+        DateTimeImmutable|string|int $datetime,
+        bool $full = false,
         DateTimeZone|string|null $timezone = null
-    ): self
+    ): string|bool 
     {
-        return self::createFrom($year, $month, $day, null, null, null, $timezone);
-    }
-
-    /**
-     * Returns a new instance with the date set to today, and the time set to the values passed in.
-     *
-     * @param int|null $hour Hour to pass.
-     * @param int|null $minutes Minutes to pass.
-     * @param int|null $seconds Seconds to pass.
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
-     *
-     * @return self Return new DateTimeImmutable object.
-     * @throws DateTimeException Throws if any error occurred.
-     */
-    public static function fromTime(
-        ?int $hour = null, 
-        ?int $minutes = null, 
-        ?int $seconds = null, 
-        DateTimeZone|string|null $timezone = null
-    ): self
-    {
-        return self::createFrom(null, null, null, $hour, $minutes, $seconds, $timezone);
-    }
-
-    /**
-     * Returns a new datetime instance from a relative time format.
-     *
-     * @param string $datetime Relative time string (2 days ago, -3 years etc..).
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
-     *
-     * @return string Return formatted DateTime string.
-     * @throws DateTimeException Throws if invalid relative time format was passed.
-     */
-    public static function fromRelative(string $datetime, DateTimeZone|string|null $timezone = null): string
-    {
-        $timezone = is_string($timezone) ? self::timezone($timezone): $timezone;
-        
-        if(self::isAgo($datetime)){
-            $now = self::agoToDatetime($datetime, $timezone);
-        }else{
-            if(self::isRelative($datetime)){
-                $now = new DateTime('now');
-                if($now->modify($datetime) === false){
-                    throw new DateTimeException('Error Invalid relative time "' . $datetime . '" passed');
-                }
-            }else{
-                $now = new DateTime($datetime);
-            }
-
-            if($timezone instanceof DateTimeZone){
-                $now = $now->setTimezone($timezone);
-            }
+        if (is_numeric($datetime)) {
+            $datetime = self::fromTimestamp($datetime, $timezone);
         }
 
-        return $now->format('Y-m-d H:i:s.u');
+        if (is_string($datetime)) {
+            $datetime = new static($datetime, $timezone);
+        }
+
+        if (!$datetime instanceof DateTimeImmutable) {
+            return false;
+        }
+
+        return self::createTimeAgo($datetime, $full, $timezone);
     }
 
     /**
-     * Create new DateTimeImmutable object formatted according to the specified format.
+     * Checks whether at least $minutes have elapsed since the given datetime.
      *
-     * @param string $format Format to convert to
-     * @param string $datetime datetime to convert to format.
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
+     * @param DateTimeImmutable|string|int $datetime Reference point, datetime object, ISO string, or Unix timestamp.
+     * @param int $minutes The number of minutes to test against.
+     * @param DateTimeZone|string|null $timezone Timezone for the "now" reference; defaults to UTC.
      *
-     * @return DateTimeImmutable|false Returns new DateTimeImmutable false otherwise
-     * @throws DateTimeException Throws if any error occurred.
+     * @return bool True if $minutes or more have passed, false otherwise.
+     * @throws DateTimeException If the datetime cannot be resolved to a valid timestamp.
      */
-    public static function fromFormat(
-        string $format, 
-        string $datetime, 
-        DateTimeZone|string|null $timezone = null
-    ): DateTimeImmutable|bool
+    public static function passed(
+        DateTimeImmutable|string|int $datetime,
+        int $minutes,
+        DateTimeZone|string|null $timezone = 'UTC'
+    ): bool 
     {
-        return parent::createFromFormat($format, $datetime, $timezone);
+        if (is_numeric($datetime)) {
+            if ($datetime < $minutes) {
+                return false;
+            }
+
+            $datetime = self::fromTimestamp((int) $datetime, $timezone);
+        } elseif (!$datetime instanceof DateTimeImmutable) {
+            $datetime = self::fromFormat(self::$defaultFormat, $datetime, $timezone);
+        }
+
+        $timestamp = $datetime->getTimestamp();
+
+        if (!$timestamp) {
+            throw new DateTimeException('Invalid datetime "' . $datetime . '" specified');
+        }
+
+        $interval = self::now($timezone)->diff($datetime);
+        $difference = $interval->days * 24 * 60 + $interval->h * 60 + $interval->i;
+
+        return $difference >= $minutes;
     }
 
     /**
-     * Returns an array representation of the given calendar month.
-     * The array values are timestamps which allow you to easily format.
-     * 
-     * @param ?string $month Month default is `date('n)`.
-     * @param ?string $year Year default is `date('y')`.
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
-     * 
-     * @return array<int,mixed> Return an array of calendar values.
+     * Retrieve the ordinal suffix for a given day number (e.g. 1 → "1st", 22 → "22nd").
+     *
+     * @param int $day The day of the month.
+     *
+     * @return string Return day number with its ordinal suffix appended.
+     */
+    public static function suffix(int $day): string
+    {
+        $lastDigit  = $day % 10;
+        $lastTwoDigits = $day % 100;
+
+        if ($lastDigit === 1 && $lastTwoDigits !== 11) {
+            return $day . 'st';
+        }
+
+        if ($lastDigit === 2 && $lastTwoDigits !== 12) {
+            return $day . 'nd';
+        }
+
+        if ($lastDigit === 3 && $lastTwoDigits !== 13) {
+            return $day . 'rd';
+        }
+
+        return $day . 'th';
+    }
+
+    /**
+     * Retrieve a two-dimensional array of Unix timestamps representing a full calendar month.
+     *
+     * Each inner array is a week (Sunday–Saturday). The grid may include days from the
+     * previous and next months to complete the first and last weeks.
+     *
+     * @param string|null $month Numeric month (1–12); defaults to the current month.
+     * @param string|null $year Four-digit year; defaults to the current year.
+     * @param DateTimeZone|string|null $timezone Optional timezone.
+     *
+     * @return array<int,array<int,int>> Array of weeks, each containing 7 Unix timestamps.
      */
     public static function calendar(
-        ?string $month = null, 
-        ?string $year = null, 
+        ?string $month = null,
+        ?string $year  = null,
         DateTimeZone|string|null $timezone = null
-    ): array
+    ): array 
     {
         $month ??= date('n');
-        $year ??= date('Y');
+        $year  ??= date('Y');
 
-        $firstDay = new self("$year-$month-01", $timezone); 
-        $lastDay = new self($firstDay->format('Y-m-t'), $timezone);
-        
-        $firstDay->setTime(0, 0, 0);
-        $lastDay->setTime(23, 59, 59);
+        $firstDay = (new self("{$year}-{$month}-01", $timezone))->setTime(0, 0, 0);
+        $lastDay  = (new self($firstDay->format('Y-m-t'), $timezone))->setTime(23, 59, 59);
 
         $start = $firstDay->modify('last Sunday')->getTimestamp();
-        $stop = $lastDay->modify('next Sunday')->getTimestamp();
+        $stop  = $lastDay->modify('next Sunday')->getTimestamp();
 
         $calendar = [];
-        while ($start < $stop)
-        {
-            $week = range($start, min($stop, $start + 6 * 86400), 86400);
-            $calendar[] = $week;
-            $start += 7 * 86400; 
+        while ($start < $stop) {
+            $calendar[] = range($start, min($stop, $start + 6 * 86400), 86400);
+            $start += 7 * 86400;
         }
 
         return $calendar;
     }
 
     /**
-	 * Get an array of dates for each day in a specific month.
-	 *
-	 * @param string|int|null $month The month (1-12).
-	 * @param string|int|null $year The year (e.g., 2023).
-	 * @param string $format The format for the returned dates (default is 'd-M-Y').
-	 * 
-	 * @return array<int,string> Return an array of dates within the specified month.
-	 */
-	public static function days(
-        string|int|null $month = null, 
-        string|int|null $year = null, 
+     * Retrieve an array of formatted date strings for every day in the given month.
+     *
+     * @param int|null $month Month number (1–12); defaults to the current month.
+     * @param int|null $year Four-digit year; defaults to the current year.
+     * @param string $format PHP date format for each entry; defaults to "d-M-Y".
+     *
+     * @return array<int,string> Return a list array of days.
+     */
+    public static function days(
+        ?int $month = null,
+        ?int $year = null,
         string $format = 'd-M-Y'
     ): array 
-	{
-        $month ??= date('M');
-        $year ??= date('Y');
+    {
+        $month ??= date('n');
+        $year  ??= date('Y');
 
-		$daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
-		$days = [];
+        $maxDays = cal_days_in_month(CAL_GREGORIAN, (int) $month, (int) $year);
+        $days = [];
 
-		for ($day = 1; $day <= $daysInMonth; $day++) {
-			$days[] = date($format, mktime(0, 0, 0, $month, $day, $year));
-		}
+        for ($day = 1; $day <= $maxDays; $day++) {
+            $days[] = date($format, mktime(0, 0, 0, (int) $month, $day, (int) $year));
+        }
 
-		return $days;
-	}
+        return $days;
+    }
 
     /**
-	 * Get an array of months for each month in a specific year.
-     * 
-	 * @param string $format The format for the returned dates (default is "M").
-	 * 
-	 * @return array<int,string> Return an array of month within the specified year.
-	 */
-    public static function months(string $format = 'M'): array 
+     * Retrieve an array mapping month numbers (1–12) to formatted month strings.
+     *
+     * @param string $format PHP date format for each entry; defaults to "M" (e.g. "Jan").
+     * @param int|null $year Four-digit year, defaults to the current year.
+     *
+     * @return array<int,string> Return an associative array int-index, of months.
+     */
+    public static function months(string $format = 'M', ?int $year = null): array
     {
         $months = [];
+
         for ($month = 1; $month <= 12; $month++) {
-            $timestamp = mktime(0, 0, 0, $month, 1, null);
-            $months[$month] = date($format, $timestamp);
+            $months[$month] = date($format, mktime(0, 0, 0, $month, 1, $year));
         }
 
         return $months;
     }
 
     /**
-     * Get the name of a month based on its numeric value.
+     * Retrieve the name of a month from its numeric value.
      *
-     * @param int $month The numeric value of the month (1 for January, 2 for February, etc.).
-     * @param bool $full_name  If true, returns the full month name (e.g., "January"). 
-     *                    If false, returns the abbreviated month name (e.g., "Jan").
+     * @param int $month Month number (1 = January … 12 = December).
+     * @param bool $fullname If true the full name (e.g. "January"), false for the abbreviation (e.g. "Jan").
      *
-     * @return string Return the name of the specified month, either full or abbreviated.
+     * @return string Return the name of the month by its numeric value.
      */
-    public static function month(int $month, bool $full_name = false): string 
+    public static function month(int $month, bool $fullname = false): string
     {
-        return self::createFromFormat('!m', $month)
-            ->format($full_name ? 'F' : 'M');
+        return self::createFromFormat('!m', (string) $month)
+            ->format($fullname ? 'F' : 'M');
     }
 
     /**
-     * Generate a list of years between a start and end year.
+     * Generates an inclusive list of years between a start and end year.
      *
-     * @param int|string|null $start Starting year. Defaults to the current year if not provided.
-     * @param int|string|null $end Ending year. Defaults to the current year minus 3 years if not provided.
-     * 
-     * @return array<int, int> List of years.
+     * Returns years in descending order when $start > $end, ascending when $start ≤ $end.
+     *
+     * @param int|string|null $start Starting year; defaults to the current year.
+     * @param int|string|null $end Ending year, defaults to three years before $start.
+     *
+     * @return array<int,int> Return array list of years between `$starts` and `$end`.
      */
-    public static function years(int|string|null $start = null, int|string|null $end = null): array 
+    public static function years(int|string|null $start = null, int|string|null $end = null): array
     {
         $start ??= date('Y');
-        $end ??= date('Y', strtotime('-3 years'));
-        
-        // If $end is 0, set it to the current year
-        $end = ($end === 0) ? date('Y') : $end;
+        $end   ??= date('Y', strtotime('-3 years'));
+
+        $end   = ($end === 0) ? (int) date('Y') : $end;
         $start = is_numeric($start) ? (int) $start : (int) date('Y');
-        $end = is_numeric($end) ? (int) $end : (int) date('Y');
+        $end   = is_numeric($end) ? (int) $end : (int) date('Y');
 
         $years = [];
+
         if ($start <= $end) {
             for ($year = $start; $year <= $end; $year++) {
                 $years[] = $year;
@@ -758,225 +688,477 @@ class Time extends DateTimeImmutable implements Stringable
     }
 
     /**
-     * Get a list of time hours in 12-hour format with customizable intervals.
+     * Retrieve a list of 12-hour clock times at the given minute interval.
      *
-     * @param int $interval The interval in minutes. Default is 30.
-     * 
-     * @return array<int,string> An array of time hours.
+     * The list always starts at 12:00AM and ends at 12:00AM of the next day (inclusive).
+     *
+     * @param int $interval Interval in minutes; defaults to 30.
+     *
+     * @return array<int,string> Return array list of times formatted as "g:iA" (e.g. "12:00AM", "12:30AM").
      */
-    public static function hours(int $interval = 30): array 
+    public static function hours(int $interval = 30): array
     {
-        return array_map(fn($timestamp) => date('g:iA', $timestamp), range(0, 24 * 60 * 60, $interval * 60));
+        return array_map(
+            static fn(int $seconds): string => date('g:iA', $seconds),
+            range(0, 24 * 60 * 60, $interval * 60)
+        );
     }
 
     /**
-     * Convert datetime to relative a human-readable representation of the time elapsed since the given datetime.
+     * Determines if `$expression` contains a PHP relative-time keyword.
      *
-     * @param string|int|Time|DateTimeImmutable $datetime The datetime string, Unix timestamp, or time string.
-     * @param bool $full Return full relative time (e.g. 1 hour, 3 minutes, 5 seconds ago) default is false.
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
+     * Relative keywords include: this, next, last, tomorrow, yesterday, midnight,
+     * today, +, -, first, ago.
      *
-     * @return string|false A string representing the time elapsed since the given datetime, in human-readable format.
+     * @param string $expression The relative time expression to check.
      *
-     * > If a string is provided, it must be a valid datetime string or time string.
+     * @return bool Return true if expression matches relative time keyword. 
      */
-    public static function ago(
-        string|int|Time|DateTimeImmutable $datetime, 
-        bool $full = false, 
+    public static function isRelative(string $expression): bool
+    {
+        return preg_match(self::$relativePattern, $expression) === 1;
+    }
+
+    /**
+     * Determines if `$expression` matches the human-readable "N unit(s) ago" format.
+     *
+     * @param string $expression The social time ago expression to check.
+     *
+     * @return bool Return true if expression matches relative time ago keyword. 
+     */
+    public static function isTimeAgo(string $expression): bool
+    {
+        return preg_match(self::$agoRelativePattern, $expression) === 1;
+    }
+
+    /**
+     * Determines if `$expression` contains an absolute date component (YYYY-M-D).
+     *
+     * @param string $expression The time expression to check.
+     *
+     * @return bool Return true if expression matches absolute date format. 
+     */
+    public static function isAbsolute(string $expression): bool
+    {
+        return (bool) preg_match('/\d{4}-\d{1,2}-\d{1,2}/', $expression);
+    }
+
+    /**
+     * Gets the four-digit year of the current instance (e.g. "2024").
+     *
+     * @return string Return the numeric value representing year.
+     */
+    public function getYear(): string
+    {
+        return (string) $this->toFormat('Y');
+    }
+
+    /**
+     * Gets the numeric month of the current instance, with a leading zero (e.g. "04").
+     *
+     * @return string Return the numeric value representing month.
+     */
+    public function getMonth(): string
+    {
+        return (string) $this->toFormat('m');
+    }
+
+    /**
+     * Gets the day of the month of the current instance, with a leading zero (e.g. "09").
+     *
+     * @return string Return the numeric value representing day.
+     */
+    public function getDay(): string
+    {
+        return (string) $this->toFormat('d');
+    }
+
+    /**
+     * Gets the hour of the current instance in 24-hour format, with a leading zero (e.g. "14").
+     *
+     * @return string Return the numeric value representing hour.
+     */
+    public function getHour(): string
+    {
+        return (string) $this->toFormat('H');
+    }
+
+    /**
+     * Gets the minutes of the current instance, with a leading zero (e.g. "05").
+     *
+     * @return string Return the numeric value representing minute.
+     */
+    public function getMinute(): string
+    {
+        return (string) $this->toFormat('i');
+    }
+
+    /**
+     * Gets the seconds of the current instance, with a leading zero (e.g. "09").
+     *
+     * @return string Return the numeric value representing seconds.
+     */
+    public function getSecond(): string
+    {
+        return (string) $this->toFormat('s');
+    }
+
+    /**
+     * Gets the zero-based day of the year (0 = January 1st, 365 = December 31st on a leap year).
+     *
+     * @return string Return the numeric value representing day of the year.
+     */
+    public function getDayOfYear(): string
+    {
+        return (string) $this->toFormat('z');
+    }
+
+    /**
+     * Gets the ISO-8601 day of the week (1 = Monday … 7 = Sunday).
+     *
+     * @return string Return the numeric value representing day of week.
+     */
+    public function getDayOfWeek(): string
+    {
+        return (string) $this->toFormat('N');
+    }
+
+    /**
+     * Gets the week of the month (1-based) for the current instance.
+     *
+     * Calculated as: ceil((dayOfMonth + dayOfWeekOfFirst - 1) / 7)
+     * where dayOfWeekOfFirst is the ISO weekday (1=Mon…7=Sun) of the 1st of the month.
+     *
+     * @return string Return the numeric value representing week of the month.
+     */
+    public function getWeekOfMonth(): string
+    {
+        $dayOfMonth = (int) $this->format('j');
+        $firstDayOfMonth = new self($this->format('Y-m-01'), $this->timezone);
+        $firstWeekdayIndex = (int) $firstDayOfMonth->format('N'); 
+
+        return (string) (int) ceil(($dayOfMonth + $firstWeekdayIndex - 1) / 7);
+    }
+
+    /**
+     * Gets the ISO-8601 week number of the year (01–53).
+     *
+     * @return string Return the numeric value representing week of the year.
+     */
+    public function getWeekOfYear(): string
+    {
+        return (string) $this->toFormat('W');
+    }
+
+    /**
+     * Gets the quarter of the year (1–4) for the current instance.
+     *
+     * @return string Return the numeric value representing quarter of the year.
+     */
+    public function getQuarter(): string
+    {
+        $quarter = (int) ceil((int) $this->format('n') / 3);
+
+        return (string) $quarter;
+    }
+
+    /**
+     * Gets the IANA name of the instance's timezone (e.g. "America/New_York").
+     *
+     * @return string|null Return the timezone name or null if couldn't be resolved.
+     */
+    public function getTimezoneName(): ?string
+    {
+        $tz = $this->timezone ?: $this->getTimezone();
+
+        return ($tz instanceof DateTimeZone) 
+            ? $tz->getName() 
+            : null;
+    }
+
+    /**
+     * Calculate the number of seconds remaining until the given target timestamp.
+     *
+     * @param int $timestamp The target Unix timestamp.
+     *
+     * @return int Seconds until $timestamp, or `0` if the target is in the past.
+     */
+    public function getMaxAge(int $timestamp): int
+    {
+        return max(0, $timestamp - $this->getTimestamp());
+    }
+
+    /**
+     * Sets a new timezone to current time object. 
+     * 
+     * This will create a new instance with its timezone changed to the supplied value.
+     *
+     * @param DateTimeZone|string $timezone The target timezone.
+     *
+     * @return self Return new instance of class with updated timezone.
+     * @throws DateTimeException If failed to create time object.
+     * @throws \DateInvalidTimeZoneException If failed to create timezone object.
+     */
+    public function setTimezone(DateTimeZone|string $timezone): self
+    {
+        return self::fromInstance($this->toDatetime()
+            ->setTimezone(self::timezone($timezone)));
+    }
+
+    /**
+     * Converts the current instance to UTC.
+     * 
+     * This will create a new instance converted to UTC from previous Time object.
+     *
+     * @return self Return new instance with updated timezone to UTC.
+     * @throws \DateInvalidTimeZoneException If failed to create timezone object.
+     */
+    public function toUTC(): self
+    {
+        return $this->setTimezone(new DateTimeZone('UTC'));
+    }
+
+    /**
+     * Converts the current instance to relative social time ago expression.
+     * 
+     * This transforms the Time object to a human-readable relative expression (e.g. "3 hours ago").
+     *
+     * @param bool $full When true, all non-zero time components are included.
+     * @param DateTimeZone|string|null $timezone Optional timezone for the "now" reference point.
+     *
+     * @return string Return social time ago format of current time object.
+     */
+    public function toTimeAgo(bool $full = false, DateTimeZone|string|null $timezone = null): string
+    {
+        return self::createTimeAgo($this, $full, $timezone);
+    }
+
+    /**
+     * Returns the instance formatted according to a PHP date format string.
+     *
+     * Falls back to default format `Y-M-D H:i:s`, when no format is supplied.
+     *
+     * @param string|null $format PHP date format (e.g. "Y-m-d H:i:s"); null uses the default display format.
+     *
+     * @return string|false Formatted string, or false if formatting fails.
+     */
+    public function toFormat(?string $format = null): string|bool
+    {
+        $format ??= self::$stringFormat;
+        return $this->format($format);
+    }
+
+    /**
+     * Convert the time component of the current instance formatted as "H:i:s" (e.g. "17:05:09").
+     *
+     * @return string|null Return time format from current object.
+     */
+    public function toTime(): ?string
+    {
+        return $this->toFormat('H:i:s') ?: null;
+    }
+
+    /**
+     * Converts the Time object to a mutable DateTime.
+     * 
+     * This create copy of the current instance, preserving 
+     * the timestamp, timezone and return instance of `DateTime`.
+     *
+     * @return DateTime Return new instance of DateTime object.
+     * @throws DateTimeException If failed to create datetime object.
+     */
+    public function toDatetime(): DateTime
+    {
+        return (new DateTime('', $this->timezone ?? $this->getTimezone()))
+            ->setTimestamp($this->getTimestamp());
+    }
+
+    /**
+     * Returns the current time formatted with {@see $stringFormat}.
+     *
+     * @return string Return formatted datetime string.
+     */
+    public function toString(): string
+    {
+        return (string) $this->format(self::$stringFormat);
+    }
+
+    /**
+     * Converts datetime to Unix timestamp format.
+     *
+     * @param DateTimeInterface|string|int $datetime The datetime to convert to Unix timestamp.
+     * 
+     * @return int Returns a Unix timestamp.
+     * @throws DateTimeException If invalid datetime format.
+     */
+    public static function toTimestamp(DateTimeInterface|string|int $datetime): int
+    {
+        if ($datetime instanceof DateTimeInterface) {
+            $datetime = (int) $datetime->format('U');
+        } elseif (!is_numeric($datetime)) {
+            $formatted = strtotime($datetime);
+
+            if ($formatted === false) {
+                throw new DateTimeException(sprintf(
+                    'Failed to convert invalid time format: %s', 
+                    $datetime
+                ));
+            }
+
+            $datetime = $formatted;
+        }
+
+        if (!is_string($datetime) && !is_numeric($datetime)) {
+            throw new DateTimeException(sprintf('Invalid time format: %s', gettype($datetime)));
+        }
+      
+        return ($datetime > 0) ? (int) $datetime : 0;
+    }
+
+    /**
+     * Convert datetime or DateInterval to seconds.
+     * 
+     * @param DateInterval|DateTimeInterface|int|null $datetime The datetime or internal object to convert
+     * 
+     * @return int Return converted date interval in seconds.
+     */
+    public static function toSeconds(
+        DateInterval|DateTimeInterface|int|null $datetime,
         DateTimeZone|string|null $timezone = null
-    ): string|bool
+    ): int
     {
-        if (is_string($datetime)) {
-            $datetime = new static($datetime, $timezone);
+        if($datetime === null){
+            return 0;
         }
 
-        if (is_numeric($datetime)) {
-            $datetime = self::parse("@$datetime", $timezone)->format(self::$stringFormat);
+        if(is_numeric($datetime)){
+            return $datetime;
         }
 
-        if (!$datetime instanceof Time && !$datetime instanceof DateTime && !$datetime instanceof DateTimeImmutable) {
-            return false;
+        $timezone = ($timezone === null) ? null : self::timezone($timezone);
+        $now = new DateTime(timezone: $timezone);
+        
+        if($datetime instanceof DateInterval){
+            return $now->add($datetime)->getTimestamp() - $now->getTimestamp();
         }
 
-        $now = self::now($timezone);
-        $elapsed = $now->diff($datetime);
-        $week = (int) floor($elapsed->d / 7);
-        $elapsed->d -= $week * 7;
-        $decades = (int) floor($elapsed->y / 10);
-        $elapsed->y -= $decades * 10;
-
-        $formats = [
-            ['decade', $decades],
-            ['year', $elapsed->y],
-            ['month', $elapsed->m],
-            ['week', $week],
-            ['day', $elapsed->d],
-            ['hour', $elapsed->h],
-            ['minute', $elapsed->i],
-            ['second', $elapsed->s],
-        ];
-
-        $intervals = '';
-        foreach ($formats as [$relative, $unit]) {
-            if ($unit > 0) {
-                $interval = $unit . ' ' . $relative . ($unit > 1 ? 's' : '');
-                if (!$full) {
-                    return $interval . ' ago';
-                }
-
-                $intervals .= $interval . ', ';
-            }
+        if($datetime instanceof DateTimeInterface){
+            $diff = $now->diff($datetime);
+     
+            return $diff->s 
+                + ($diff->i * 60) 
+                + ($diff->h * 3600) 
+                + ($diff->d * 86400) 
+                + ($diff->m * 2_592_000) 
+                + ($diff->y * 31_536_000);
         }
 
-        if($intervals === ''){
-            return 'just now';
-        }
-
-        return trim($intervals, ', ') . ' ago';
+        return 0;
     }
 
     /**
-     * Convert relative time ago to datetime instance.
-     * 
-     * @param string $ago Social time ago.
-     * @param DateTimeZone|string|null $timezone Optional timezone to associate with current DateTime instance.
-     * 
-     * @return DateTime Return new datetime instance.
-     * @throws DateTimeException If invalid time unit was found in the ago format.
-     */
-    public static function agoToDatetime(string $ago, DateTimeZone|string|null $timezone = null): DateTime
-    {
-        $ago = strtolower(trim($ago));
-        $timezone = self::timezone($timezone);
-
-        if ($ago === 'just now') {
-            return (new DateTime('now', $timezone))->setTimezone($timezone);
-        }
-
-        $parts = explode(' ', $ago, 3);
-        if (count($parts) !== 3 || strtolower($parts[2]) !== 'ago') {
-            throw new DateTimeException('Invalid relative time format');
-        }
-
-        $quantity = (int) $parts[0];
-        $unit = strtolower(rtrim($parts[1], 's')); 
-
-        $intervals = [
-            'second' => 'PT%dS',
-            'minute' => 'PT%dM',
-            'hour' => 'PT%dH',
-            'day' => 'P%dD',
-            'week' => 'P%dW',
-            'month' => 'P%dM',
-            'year' => 'P%dY',
-            'decade' => 'P%dY',
-        ];
-
-        if (!isset($intervals[$unit])) {
-            throw new DateTimeException('Invalid time unit: ' . $unit);
-        }
-
-        if ($unit === 'decade') {
-            $quantity *= 10;
-        }
-
-        $datetime = new DateTime('now', $timezone);
-        $datetime->sub(new DateInterval(sprintf($intervals[$unit], $quantity)));
-
-        return $datetime;
-    }
-
-    /**
-	 * Check if a certain amount of minutes has passed since the given timestamp.
-	 *
-	 * @param string|int|Time|DateTimeImmutable $datetime Either a Unix timestamp, DateTimeImmutable or a string representing a date/time.
-	 * @param int $minutes The number of minutes to check against.
-	 *
-	 * @return bool True if the specified minutes have passed, false otherwise.
-     * @throws DateTimeException If invalid datetime was passed.
-	 */
-	public static function passed(
-        Time|DateTimeImmutable|string|int $datetime,
-        int $minutes, 
-        DateTimeZone|string|null $timezone = 'UTC'
-    ): bool 
-	{
-        if (is_numeric($datetime)) {
-            if ($datetime < $minutes) {
-                return false;
-            }
-
-            $datetime = self::parse("@$datetime", $timezone);
-        } elseif(!($datetime instanceof Time || $datetime instanceof DateTime || $datetime instanceof DateTimeImmutable)) {
-            $datetime = self::fromFormat(self::$defaultFormat, $datetime, $timezone);
-        }
-
-        $timestamp = $datetime->getTimestamp();
-       
-        if ($timestamp === false || $timestamp === 0) {
-            throw new DateTimeException('Invalid datetime "' . $datetime . '" specified');
-        }
-        
-        $interval = self::now($timezone)->diff($datetime);
-        $difference = $interval->days * 24 * 60 + $interval->h * 60 + $interval->i;
-        
-		return $difference >= $minutes;
-	}
-
-    /**
-     * Get the suffix for a given day (e.g., 1st, 2nd, 3rd, 4th).
+     * Get a new Time instance advanced by the given interval cycle.
      *
-     * @param string|int $day The day for which to determine the suffix.
-     * 
-     * @return string The day with its appropriate suffix.
+     * Adds a predefined interval to the current instance using the given cycle
+     * and optional multiplier. Supported cycles include hourly, daily, weekly,
+     * monthly, quarterly, yearly, biannual, and decade intervals.
+     *
+     * This method does not modify the current instance. A new Time instance is returned.
+     *
+     * @param string $cycle The interval cycle to apply. Supported values:
+     *                      `hourly`, `daily`, `weekly`, `monthly`, `quarterly`,
+     *                      `yearly`, `annually`, `decade`.
+     * @param int $unit Number of cycle units to add (minimum: 1).
+     *
+     * @return static Return a new Time instance with the interval added.
+     *
+     * @example - Add one week.
+     * ```php
+     * $billing = Time::parse('2026-01-01 10:00:00');
+     *
+     * $next = $billing->toNextCycle('weekly');
+     * // Returns: 2026-01-08 10:00:00
+     * ```
+     *
+     * @example - Add two quarters.
+     * ```php
+     * $billing->toNextCycle('quarterly', 2);
+     * // Adds 6 months
+     * ```
+     *
+     * @example - Add three years.
+     * ```php
+     * $billing->toNextCycle('yearly', 3);
+     * ```
      */
-    public static function suffix(string|int $day): string 
+    public function toNextCycle(string $cycle = 'monthly', int $unit = 1): self
     {
-        $day = is_string($day) ? (int) $day : $day;
+        $unit = max(1, $unit);
+        $duration = match (strtolower(trim($cycle))) {
+            'hourly'    => "PT{$unit}H",
+            'daily'     => "P{$unit}D",
+            'weekly'    => "P{$unit}W",
+            'monthly'   => "P{$unit}M",
+            'yearly',   => "P{$unit}Y",
 
-        $lastDigit = $day % 10;
-        $lastTwoDigits = $day % 100;
+            'quarterly' => 'P' . ($unit * 3) . 'M',
+            'biannual'  => 'P' . ($unit * 6) . 'M',
+            'annually'  => "P{$unit}Y",
+            'decade'    => 'P' . ($unit * 10) . 'Y',
+            default     => "P{$unit}M"
+        };
 
-        if ($lastDigit === 1 && $lastTwoDigits !== 11) {
-            return $day . "st";
-        } 
-
-        if ($lastDigit === 2 && $lastTwoDigits !== 12) {
-            return $day . "nd";
-        }
-        
-        if ($lastDigit === 3 && $lastTwoDigits !== 13) {
-            return $day . "rd";
-        } 
-
-        return $day . "th";
+        return $this->add(new DateInterval($duration));
     }
 
     /**
-     * Wakeup is called during unserializing the Time object.
+     * Returns true when the current instant falls within a daylight saving time period.
+     *
+     * @return bool Return true if is daylight saving, otherwise false.
      */
-    public function __wakeup(): void
+    public function isDaylight(): bool
     {
-        $this->timezone = new DateTimeZone((string) $this->timezone);
-        parent::__construct('now', $this->timezone);
+        return $this->format('I') === '1';
     }
 
     /**
-     * Return the current current datetime string
-     * 
-     * @return string
+     * Returns true when the instance's timezone matches the PHP runtime default timezone.
+     *
+     * @return bool Return true if current Time object (timezone), is same as default system timezone.
+     */
+    public function isSystemTimezone(): bool
+    {
+        return date_default_timezone_get() === $this->getTimezoneName();
+    }
+
+    /**
+     * Returns true when the instance's timezone offset is exactly 0 (UTC / GMT).
+     *
+     * @return bool Return true if timezone offset is UTC.
+     */
+    public function isUtc(): bool
+    {
+        return $this->getOffset() === 0;
+    }
+
+    /**
+     * Returns the current time formatted with {@see self::toString()}.
+     *
+     * @return string Return datetime string format.
      */
     public function __toString(): string
     {
-        return self::now()->format(self::$stringFormat);
+        return $this->toString();
     }
 
     /**
-     * Magic getter method to allow access to properties.
+     * Proxies property-style access to any public getX() method.
      *
-     * @param string $name Method name to get
+     * Example: $time->year calls $time->getYear().
      *
-     * @return array|bool|DateTimeInterface|DateTimeZone|int|DateTime|self|string|null
+     * @param string $name Property name (matched case-insensitively to getX methods).
+     *
+     * @return DateTimeInterface|DateTimeZone|array|string|bool|int|null
      */
     public function __get(string $name): mixed
     {
@@ -990,16 +1172,121 @@ class Time extends DateTimeImmutable implements Stringable
     }
 
     /**
-     * Allow for property-type checking to any getX method...
+     * Static method proxy.
      *
-     * @param string $name Method name to get
+     * @param string $method The target method name.
+     * @param array $arguments Optional method arguments.
      * 
-     * @return bool Return true if method exist.
+     * @return mixed Return result of called method.
      */
-    public function __isset(string $name): bool
+    public function __call(string $method, array $arguments): mixed
     {
-        $method = 'get' . ucfirst($name);
+        if (method_exists($this, $method)) {
+            return $this->{$method}(...$arguments);
+        }
 
-        return method_exists($this, $method);
+        throw new RuntimeException(sprintf(
+            'Method: %s does not exist in %s',
+            $method,
+            static::class
+        ));
+    }
+
+    /**
+     * Restores the instance after unserialization.
+     *
+     * Re-initialize the timezone property and calls the parent constructor.
+     * 
+     * @return void
+     */
+    public function __wakeup(): void
+    {
+        $this->timezone = new DateTimeZone(
+            $this->getTimezoneName() ?: 'UTC'
+        );
+
+        parent::__construct('now', $this->timezone);
+    }
+
+    /**
+     * Builds a human-readable relative time string for a given datetime.
+     *
+     * @param DateTimeImmutable $datetime Reference datetime (in the past).
+     * @param bool $full Include all non-zero units when true.
+     * @param DateTimeZone|string|null $timezone Timezone for the "now" anchor.
+     *
+     * @return string Return E.g. "3 hours ago", "1 decade, 2 years ago", or "just now".
+     */
+    private static function createTimeAgo(
+        DateTimeImmutable $datetime,
+        bool $full = false,
+        DateTimeZone|string|null $timezone = null
+    ): string 
+    {
+        $now = self::now($timezone);
+        $elapsed = $now->diff($datetime);
+
+        $weeks = (int) floor($elapsed->d / 7);
+        $elapsed->d -= $weeks * 7;
+
+        $decades  = (int) floor($elapsed->y / 10);
+        $elapsed->y -= $decades * 10;
+
+        $units = [
+            ['decade', $decades],
+            ['year',   $elapsed->y],
+            ['month',  $elapsed->m],
+            ['week',   $weeks],
+            ['day',    $elapsed->d],
+            ['hour',   $elapsed->h],
+            ['minute', $elapsed->i],
+            ['second', $elapsed->s],
+        ];
+
+        $parts = [];
+        foreach ($units as [$label, $value]) {
+            if ($value <= 0) {
+                continue;
+            }
+
+            $suffix = ($value > 1) ? 's' : '';
+            $part = "{$value} {$label}{$suffix}";
+
+            if (!$full) {
+                return $part . ' ago';
+            }
+
+            $parts[] = $part;
+        }
+
+        if($part === []){
+            return 'just now';
+        }
+
+        return implode(', ', $parts) . ' ago';
+    }
+
+    /**
+     * @deprecated Use {@see isTimeAgo()} instead.
+     */
+    public static function isAgo(string $datetime): bool
+    {
+        return self::isTimeAgo($datetime);
+    }
+
+    /**
+     * @deprecated Use {@see fromTimeAgo()} instead.
+     *
+     * @param string $ago
+     * @param DateTimeZone|string|null $timezone
+     *
+     * @return DateTimeInterface
+     */
+    public static function agoToDatetime(
+        string $ago,
+        DateTimeZone|string|null $timezone = null
+    ): DateTimeInterface
+    {
+        return self::fromTimeAgo($ago, $timezone);
     }
 }

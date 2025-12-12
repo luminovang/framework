@@ -42,7 +42,7 @@ class TaskQueue extends Queue
     /**
      * {@inheritDoc}
      */
-    protected bool $supportOpisClosure = true;
+    protected bool $isClosureSupported = true;
 
     /**
      * {@inheritDoc}

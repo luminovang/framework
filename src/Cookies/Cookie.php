@@ -14,10 +14,10 @@ use \Stringable;
 use \Luminova\Time\Time;
 use \App\Config\Cookie as CookieConfig;
 use \Luminova\Base\Cookie as BaseCookie;
-use \Luminova\Interface\CookieInterface;
+use \Luminova\Interface\{Arrayable, CookieInterface};
 use \Luminova\Exceptions\CookieException;
 
-class Cookie extends BaseCookie implements CookieInterface, Stringable
+class Cookie extends BaseCookie implements CookieInterface, Stringable, Arrayable
 {
     /**
      * Cookie prefix.
@@ -481,6 +481,22 @@ class Cookie extends BaseCookie implements CookieInterface, Stringable
      * {@inheritdoc}
      */
     public function toArray(): array
+    {
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function __toArray(): array
     {
         return [
             ...$this->options,

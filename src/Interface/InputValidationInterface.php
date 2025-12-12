@@ -10,71 +10,81 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Interface\{LazyObjectInterface, HttpRequestInterface};
+use \Luminova\Interface\RequestInterface;
+use \Luminova\Interface\LazyObjectInterface;
 
 interface InputValidationInterface 
 {
     /**
-     * Validate input data against the applied rules.
-     * 
-     * This method validates incoming request data against validation rules defined via  
-     * `$input->rules = [...]`, `$input->setRules()`, or `$input->addField()`.  
-     * 
-     * You must define rules before calling `validate()`, or pass them as the second parameter.
-     * 
-     * @param \Luminova\Http\Request<HttpRequestInterface,LazyObjectInterface>|null $request The HTTP request instance containing input data to validate (default: `null`).
-     * @param array<string,string>|null $rules Optional validation rules if not previously applied (default `null`).
-     * 
-     * @return bool Returns true if all validation rules pass, otherwise false.
-     * @throws RuntimeException If passed object of `LazyObjectInterface` that does not contain `HttpRequestInterface` object. When `$request` is null without setting input data from `setBody`.
-     * 
-     * @see setBody() - To set validate input data from array.
-     * 
-     * @example - Example:
+     * Validate input data against defined rules.
+     *
+     * Uses rules defined via `$this->rules`, {@see setRules()}, or {@see addField()}.
+     * Input data is resolved from the provided request or from previously set body data.
+     *
+     * Behavior:
+     * - If no rules are defined, validation passes immediately.
+     * - Rules may be defined as pipe-separated strings or structured arrays.
+     * - Empty rules and special rules (`none`, `nullable`) are ignored.
+     * - Validation failures are collected and reset on each call.
+     *
+     * @param RequestInterface|LazyObjectInterface|null $request
+     *        Optional request instance used to resolve input data.
+     *
+     * @return bool True if validation passes (no errors), false otherwise.
+     *
+     * @throws RuntimeException If:
+     * - A LazyObject does not resolve to a RequestInterface
+     * - No request is provided and no input body has been set
+     *
+     * @see self:setRequest() set request object to read input from.
+     * @see self::setBody() Set input data manually.
+     * @see self::setRules() Set input validation rules.
+     * @see self::setMessage() Set input validation rule error messages.
+     *
+     * @example - Basic usage:
      * ```php
-     * $request = new Request();
-     * 
-     * $isValid = $input->validate($request, [...]);
+     * $isValid = $input->validate($request);
      * ```
-     * 
-     * @example - Controller Example:
+     *
+     * @example - Controller usage:
      * ```php
-     * // /app/Controller/Http/*
-     * 
-     * $isValid = $this->input->validate($this->request, [...]);
+     * $this->input->rules = [...];
+     * $isValid = $this->input->validate($this->request);
      * ```
-     * 
-     * @example - Validate From Input Array:
+     *
+     * @example - Validate from array:
      * ```php
-     * // /app/Controller/Http/*
-     * $body = [...];
-     * $isValid = $this->input->setBody($body)->validate(rules: [...]);
+     * $isValid = $input->setBody($data)->validate();
      * ```
      */
-    public function validate(HttpRequestInterface|LazyObjectInterface|null $request = null, ?array $rules = null): bool;
+    public function validate(RequestInterface|LazyObjectInterface|null $request = null): bool;
 
     /**
-     * Check if all validation rules passed.
-     * 
-     * @return bool Returns true if all validation rules are passed, otherwise false.
+     * Determine if validation passed.
+     *
+     * @return bool True if no validation errors exist, false otherwise.
      */
     public function isPassed(): bool;
 
     /**
-     * Get all validation error messages.
-     * 
-     * @return array<string,array> Return array of validation error messages, otherwise empty array.
+     * Get all validation errors.
+     *
+     * @return array<string, array<int, array{message:string, rule:string, field:string}>>
+     *         Errors grouped by field name. Returns an empty array if none exist.
      */
     public function getErrors(): array;
 
     /**
-     * Get the error message for a specific input field or using field index position.
-     * 
-     * @param string|int $fieldIndex The input field by index position or the input filed name (default: 0).
-     * 
-     * @return string Return an error message for the specified field.
+     * Get the first validation error message for a field.
+     *
+     * If an integer is provided, the field is resolved by its position in the
+     * error list. If a string is provided, it is treated as the field name.
+     *
+     * @param string|int $field Field name or index (default: 0 = first field with error).
+     *
+     * @return string Error message, or an empty string if not found.
      */
-    public function getErrorMessage(string|int $fieldIndex = 0): string;
+    public function getErrorMessage(string|int $field = 0): string;
 
     /**
      * Set the input body to validate from array.
@@ -84,7 +94,7 @@ interface InputValidationInterface
      *
      * @param array<string,mixed> &$body The input data to validate passed by reference.
      *
-     * @return self Return instance of validation object.
+     * @return static Return instance of validation object.
      *
      * @example - Example:
      * ```php
@@ -103,88 +113,235 @@ interface InputValidationInterface
     public function setBody(array &$body): self;
 
     /**
-     * Set validation fields and rules.
-     * 
-     * @param array<int,string> $rules The array of validation rules 
-     *                  (e.g, ['email' => 'string|email', 'name' => 'required']).
-     * 
-     * @return static Return instance of the Validation class.
+     * Set the HTTP request instance used for validation.
+     *
+     * This allows the validator to resolve input data from a request object
+     * without passing it into {@see validate()} each time.
+     *
+     * If a request is already set, it will be replaced.
+     *
+     * @param RequestInterface|LazyObjectInterface $request HTTP request instance.
+     *
+     * @return static Return instance of validation object.
+     *
+     * @throws RuntimeException If a LazyObject cannot be resolved into a RequestInterface.
+     * @see self::validate()
+     */
+    public function setRequest(RequestInterface|LazyObjectInterface $request): self;
+
+    /**
+     * Set validation rules for input fields.
+     *
+     * Each key represents a field name, and the value defines its validation rules.
+     * Rules can be provided as:
+     * - A pipe-separated string (e.g. "required|email")
+     * - An array of rule definitions
+     *
+     * Rule definitions may be:
+     * - A string rule (e.g. "required", "min(3)")
+     * - An array returned by {@see Rule} static methods
+     *
+     * Both formats can be mixed across fields.
+     *
+     * @param array<string,string|array<int,string|array>> $rules Validation rules mapped by field name.
+     *
+     * @return static Return instance of validation object.
+     *
+     * @see \Luminova\Security\Rule
+     *
+     * @example - String rules
+     * ```php
+     * $input->setRules([
+     *     'email' => 'required|email',
+     *     'name'  => 'required',
+     * ]);
+     * ```
+     *
+     * @example - Fluent rule builder
+     * ```php
+     * use Luminova\Security\Rule;
+     *
+     * $input->setRules([
+     *     'email' => [
+     *         Rule::required(),
+     *         Rule::email(),
+     *     ],
+     *     'name' => [
+     *         Rule::required(),
+     *     ],
+     * ]);
+     * ```
      */
     public function setRules(array $rules): self;
 
     /**
-     * Set validation error messages based on fields and rules.
-     * 
-     * @param array<string,array<string,string>> $messages An error messages for validation rules 
-     *              (e.g, ['email' => ['string' => '...', 'email' => '...'], 'name' => ['required' => '...']]).
-     * 
-     * @return static Return instance of the Validation class.
+     * Set custom validation error messages.
+     *
+     * Messages are defined per field and per rule. When validation fails,
+     * the message for the matching field/rule pair is used. If no custom
+     * message is defined, a default message is returned.
+     *
+     * Supported placeholders:
+     * - {field} → Field name
+     * - {rule}  → Rule name
+     * - {value} → Field value at time of validation
+     *
+     * @param array<string, array<string, string>> $messages Custom messages mapped by field and rule.
+     *
+     * @return static Return instance of validation object.
+     *
+     * @example - Example:
+     * ```php
+     * $input->setMessages([
+     *     'email' => [
+     *         'required' => 'Email is required.',
+     *         'email'    => 'Invalid email address: {value}',
+     *     ],
+     *     'name' => [
+     *         'required' => 'Name is required.',
+     *     ],
+     * ]);
+     * ```
      */
     public function setMessages(array $messages): self;
 
     /**
-     * Add a field and rules with an optional error messages using the rule name as an array key for the message.
-     * 
-     * @param string $field The form input field name (e.g, `name`, `email`).
-     * @param string $rules The input field validation rules (e.g, `required|string|email`).
-     * @param array<string,string> $messages Optional validation error message for the each rule (e.g, ['required' => '...', 'string' => '...', 'email' => '...']).
-     * 
+     * Add a field with its validation rules and optional custom messages.
+     *
+     * This is a convenience method that combines {@see setRules()} and
+     * {@see setMessages()} for a single field.
+     *
+     * Rules can be provided as:
+     * - A pipe-separated string (e.g. "required|string|email")
+     * - An array of rule definitions
+     *
+     * Messages are defined per rule using the rule name as the key.
+     * If a message is not provided, the default message for the rule is used.
+     *
+     * @param string $field Field name (e.g. "name", "email").
+     * @param string|array<int,string|array> $rules Validation rules.
+     * @param array<string,string> $messages Optional custom messages per rule.
+     *
      * @return static Return instance of the Validation class.
+     *
+     * @see \Luminova\Security\Rule
+     *
+     * @example - Example:
+     * ```php
+     * use Luminova\Security\Rule;
+     *
+     * $input->addField(
+     *     'email',
+     *     [Rule::required(), Rule::email()],
+     *     [
+     *         'required' => 'Email is required.',
+     *         'email'    => 'Invalid email address.',
+     *     ]
+     * );
+     * ```
      */
-    public function addField(string $field, string $rules, array $messages = []): self;
+    public function addField(string $field, array|string $rules, array $messages = []): self;
 
     /**
-     * Get the error message at the specified field and error indexes.
-     * This will return the first input field that has error, and the first error rule.
-     * 
-     * @param string|int $fieldIndex The input field by index number or input filed name (default: 0).
-     * @param int $errorIndex The error index for current field if has multiple rules (default: 0).
-     * 
-     * @return string Error message.
+     * Get a validation error message.
+     *
+     * Retrieves an error message by field name or by index. If no field is specified,
+     * the first field with an error is used. If the field has multiple errors, the
+     * message is selected by its index.
+     *
+     * @param string|int $field Field name or field index (default: 0 = first field with error).
+     * @param int $error Error index within the field (default: 0 = first error).
+     *
+     * @return string The error message, or an empty string if not found.
+     *
+     * @example - Get first error (default)
+     * ```php
+     * $input->getError();
+     * ```
+     *
+     * @example - Get first error for a specific field
+     * ```php
+     * $input->getError('email');
+     * ```
+     *
+     * @example Get second error for a field
+     * ```php
+     * $input->getError('email', 1);
+     * ```
      */
-    public function getError(string|int $indexField = 0, int $errorIndex = 0): string;
+    public function getError(string|int $field = 0, int $error = 0): string;
 
     /**
-     * Retrieve validation errors for a specific field by name or index.
-     * 
-     * This method returns the validation errors for a given field, identified either by 
-     * its array index or its field name.
-     * 
-     * - If `$fieldIndex` is an integer, the corresponding field name is resolved by position.
-     * - If `$fieldIndex` is a string, the method fetches the error data for that field.
-     * 
-     * @param string|int $fieldIndex The field name or index position in error list (default: 0).
-     * 
-     * @return array<int,array> An array of validation error details for the specified field.
-     * 
-     * > **Note:**
-     * >  Once retrieved, the field’s error data is removed from `$this->failures`.
+     * Get validation errors for a field by name or index.
+     *
+     * If an integer is provided, the field is resolved by its position in the
+     * error list. If a string is provided, it is treated as the field name.
+     *
+     * Once retrieved, the field’s errors are removed from the internal failure list.
+     *
+     * @param string|int $field Field name or index (default: 0 = first field with errors).
+     *
+     * @return array<int,array{message:string,rule:string,field:string}> List of error entries for the field.
+     *
+     * @example - Get first field errors:
+     * ```php
+     * $errors = $input->getFields();
+     * ```
+     *
+     * @example - Get errors by field name:
+     * ```php
+     * $errors = $input->getFields('email');
+     * ```
      */
-    public function getFields(string|int $fieldIndex = 0): array;
+    public function getFields(string|int $field = 0): array;
 
     /**
-     * Get the first field that has validation error.
-     * 
-     * @param string|int $fieldIndex The input field by index number or input filed name.
-     * 
-     * @return string Return the field name causing the validation error.
+     * Get the name of a field with a validation error.
+     *
+     * If an integer is provided, the field is resolved by its position in the
+     * error list. If a string is provided, it is treated as the field name.
+     *
+     * @param string|int $field Field name or index (default: 0 = first field with error).
+     *
+     * @return string Field name that has a validation error, or an empty string if not found.
      */
-    public function getField(string|int $fieldIndex = 0): string;
+    public function getField(string|int $field = 0): string;
 
     /**
-     * Validate a username according to standard requirements.
-     * 
+     * Validate a username against format, length, and reserved constraints.
+     *
+     * This method performs a strict validation check to ensure a username follows
+     * acceptable system rules. It returns early on the first failure encountered.
+     *
+     * Validation behavior:
+     * - Enforces length between 3 and 64 characters (UTF-8 safe).
+     * - Allows only letters (any language), numbers, underscore (_), hyphen (-), and dot (.).
+     * - Rejects any whitespace characters.
+     * - Controls uppercase usage:
+     *   - If $allowUppercase is false, any uppercase letter will fail validation.
+     *   - If $allowUppercase is true, usernames cannot be entirely uppercase.
+     * - Prevents use of reserved usernames (case-insensitive match).
+     * - Applies pattern-based restrictions:
+     *   - Cannot be all numbers.
+     *   - Cannot start or end with dot (.) or hyphen (-).
+     *   - Cannot contain consecutive dots (..), hyphens (--), or underscores (__).
+     *
      * @param string $username The username to validate.
-     * @param bool $allowUppercase Whether to allow username to contain uppercase (default: `false`).
-     * @param array $reservedUsernames Optional list if reserved usernames (e.g, `['root', 'admin', 'system']`).
-     * 
-     * @return array Validation result containing:
+     * @param bool $allowUppercase Whether uppercase letters are allowed (default: true).
+     * @param string[] $reservedUsernames List of reserved usernames (case-insensitive) (e.g. ['root', 'admin', 'system']).
+     *
+     * @return array{0: bool, 1: ?string} Validation result containing:
      *               - (bool) Whether the username is valid
      *               - (string|null) Error message if invalid
+     *
+     * @example - Example:
+     * ```php
+     * [$valid, $error] = Validation::isUsername('admin', true, ['admin']);
+     * ```
      */
-    public static function validateUsername(
-        string $username, 
-        bool $allowUppercase = true,  
+    public static function isUsername(
+        string $username,
+        bool $allowUppercase = true,
         array $reservedUsernames = []
     ): array;
 }

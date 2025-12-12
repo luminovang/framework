@@ -96,7 +96,8 @@ interface ViewResponseInterface
 
     /**
      * Send all response headers and the status code to the client without content body.
-     * Optionally validate the against REST Api headers based on `App\Config\Apis` if `$validate` is set to true.
+     * 
+     * Optionally validate request headers based on `App\Config\Security` if `$validate` is set to true.
      * 
      * @param bool $validate Whether to apply APIs headers validations (default: false).
      * 
@@ -318,18 +319,16 @@ interface ViewResponseInterface
     /**
      * Send a file or content as a browser download.
      *
-     * @param string $fileOrContent The file path or content for download.
+     * @param StreamInterface|string|resource $source File path, open resource, stream object, or raw string.
      * @param string|null $name Optional name for the downloaded file.
-     * @param array $headers Optional download headers.
      * @param int $chunk_size The size of each chunk in bytes for large content (default: 8192, 8KB).
      * @param int $delay The delay between each chunk in microseconds (default: 0).
      * 
      * @return bool Return true if the download was successful, false otherwise.
      */
     public function download(
-        string $fileOrContent, 
+        mixed $source, 
         ?string $name = null, 
-        array $headers = [],
         int $chunkSize = 8192,
         int $delay = 0
     ): bool;
@@ -339,7 +338,6 @@ interface ViewResponseInterface
      *
      * @param string $path File directory location (e.g., `/writeable/storage/images/`).
      * @param string $basename The file name (e.g., `image.png`).
-     * @param array $headers Optional output headers.
      * @param bool $eTag Whether to generate ETag headers (default: true).
      * @param bool $weakEtag Whether to use a weak ETag header or string (default: false).
      * @param int $expiry Enable cache expiry time in seconds, 0 for no cache (default: 0).
@@ -347,12 +345,11 @@ interface ViewResponseInterface
      * @param int $delay Optional delay in microseconds between chunk length (default: 0).
      * 
      * @return bool Return true if file streaming was successful, false otherwise.
-     * @see Luminova\Utility\Storage\FileDelivery For more  advanced usage.
+     * @see Luminova\Storage\FileResponse For more  advanced usage.
      */
     public function stream(
         string $path, 
         string $basename, 
-        array $headers = [],
         bool $eTag = true,
         bool $weakEtag = false,
         int $expiry = 0,

@@ -15,10 +15,10 @@ use \Memcached;
 use \Throwable;
 use \DateInterval;
 use \DateTimeInterface;
+use \Luminova\Time\Time;
 use \Luminova\Base\Cache;
 use \Luminova\Logger\Logger;
-use \Luminova\Time\Timestamp;
-use \Luminova\Exceptions\AppException;
+use \Luminova\Exceptions\LuminovaException;
 use \Luminova\Exceptions\CacheException;
 
 final class MemoryCache extends Cache
@@ -59,7 +59,6 @@ final class MemoryCache extends Cache
     {
         parent::__construct();
         $this->persistentId ??= env('memcached.persistent.id', 'default');
-        //$this->config = ($this->config === []) ? (configs('Storage', [])['memcache'] ?? []) : $this->config;
 
         if(!$this->connect()){
             throw new CacheException('Could not connect to memcache server');
@@ -86,8 +85,8 @@ final class MemoryCache extends Cache
         ?string $persistentId = null
     ): static 
     {
-        if (self::$instance === null) {
-            self::$instance = new static($storage, $persistentId);
+        if (static::$instance === null) {
+            self::$instance = new self($storage, $persistentId);
         }
 
         return self::$instance;
@@ -154,7 +153,8 @@ final class MemoryCache extends Cache
     /**
      * Sets multiple servers in the cache configuration.
      * 
-     * @param array<int,string|int> $config An array of server configurations where each element is an array [host, port, weight].
+     * @param array<int,string|int> $config An array of server configurations 
+     *          where each element is an array [host, port, weight].
      * 
      * @return self Returns the memory cache instance.
      * 
@@ -338,7 +338,8 @@ final class MemoryCache extends Cache
         if(!$this->items[$key]['decoded']){
             $this->items[$key]['data'] = $this->deSerialize(
                 $this->items[$key]['data'],
-                $this->items[$key]['serialize']
+                $this->items[$key]['serializer'] ?? 0,
+                $this->items[$key]['encoding']  ?? true
             );
             $this->items[$key]['decoded'] = true;
         }
@@ -376,14 +377,18 @@ final class MemoryCache extends Cache
         }
 
         $this->items[$key] = [
-            "timestamp" => time(),
-            "expiration" => ($expiration instanceof DateTimeInterface) ? Timestamp::ttlToSeconds($expiration) : $expiration,
-            "expireAfter" => ($expireAfter instanceof DateInterval) ? Timestamp::ttlToSeconds($expireAfter) : $expireAfter,
+            "timestamp" =>  Time::now($this->timezone)->getTimestamp(),
+            "expiration" => ($expiration instanceof DateTimeInterface) 
+                ? Time::toSeconds($expiration) 
+                : $expiration,
+            "expireAfter" => ($expireAfter instanceof DateInterval) 
+                ? Time::toSeconds($expireAfter) 
+                : $expireAfter,
             "data" => $content,
             "lock" => $lock,
-            "encoding" => 'raw',
+            "encoding" => $this->encoding,
             'decoded' => false,
-            "serialize" => $this->serialize,
+            "serializer" => $this->serializer,
             "hash-sum" => $this->storage
         ];
 
@@ -555,7 +560,11 @@ final class MemoryCache extends Cache
             $flags = $result['flags'] ?? false;
             $item = [
                 'key' => $result['key'],
-                'value' => $this->deSerialize($result['value']['data'], $result['value']['serialize']),
+                'value' => $this->deSerialize(
+                    $result['value']['data'], 
+                    $result['value']['serializer'] ?? 0,
+                    $result['value']['encoding']
+                ),
             ];
 
             if($cas !== false){
@@ -608,7 +617,11 @@ final class MemoryCache extends Cache
             return false;
         }
 
-        $content['data'] = $this->deSerialize($content['data'], $content['serialize']);
+        $content['data'] = $this->deSerialize(
+            $content['data'], 
+            $content['serializer'] ?? 0,
+            $content['encoding']
+        );
         $content['decoded'] = true;
 
         $this->items[$key] = $content;
@@ -636,7 +649,7 @@ final class MemoryCache extends Cache
                 return false;
             }
 
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw $e;
             }
 

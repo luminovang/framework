@@ -11,79 +11,144 @@
 namespace Luminova\Security;
 
 use \Throwable;
-use \Luminova\Utility\IP;
-use \Luminova\Common\{Helpers, Maths};
+use \Luminova\Logger\Logger;
+use \Luminova\Http\Network\IP;
 use function \Luminova\Funcs\is_empty;
 use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Interface\{HttpRequestInterface, LazyObjectInterface, InputValidationInterface};
+use \Luminova\Utility\{Luhn, Math, Helpers};
+use \Luminova\Components\Object\LazyObject;
+use \Luminova\Interface\{RequestInterface, LazyObjectInterface, InputValidationInterface};
 
 /**
- * Built-in validation rules for Luminova's Input Validator.
+ * Built-in validation rules for Luminova Input Validator.
  *
- * Each rule can be combined in a validation string like:
+ * Rules are defined as a pipe-separated string:
+ *
  * ```php
  * 'field' => 'required|min(3)|max(20)|email'
  * ```
  *
- * Rules without parameters are basic type or presence checks.  
- * Rules with parameters take arguments in parentheses, which are automatically cast to the correct data types.
+ * Format:
+ * - Plain rule: `required`
+ * - Rule with arguments: `min(3)`, `email([], true)`
+ *
+ * Arguments inside `()` are auto-cast to their expected types.
  *
  * @see https://luminova.ng/docs/0.0.0/security/validation-rules
+ * @see Rule
  *
- * **Available Rules**
+ * **Available Rules:**
  *
- * **Basic Rules (no parameters):**
+ * Basic:
  * ```
- * none, required, alphanumeric, alphabet, numeric, boolean, 
- * hexadecimal, string, array, json, url, email
- * ```
- *
- * **Range and Length Rules:**
- * ```
- * between(int: offset, int: limit), max(float|int: size), min(float|int: size), 
- * size(int: count), limit(int|float: max), length(int: length), fixed(float|int: length),
- * maxlength(int: length), minlength(int: length), maxsize(int: count), minsize(int: count),
- * maxlimit(float|int: offset), minlimit(float|int: limit)
+ * none, required, alphanumeric, alphabet, numeric, boolean,
+ * hexadecimal, string, array, json, url, phone, email
  * ```
  *
- * **Type & Format Rules:**
+ * Range / Length:
  * ```
- * float(string: type), integer(string: type), decimal(string: type), binary(bool: strict, bool: allowPrintable),
- * scheme(string: protocol), latitude(bool: strict, int: precision), longitude(bool: strict, int: precision), 
- * username(bool: allowUppercase, ?array: reservedUsernames), is_value(string: value),
- * phone(int: min, int: max), uuid(int: version), ip(int: version), path(string: access)
+ * between, max, min, size, limit, length, fixed,
+ * maxlength, minlength, maxsize, minsize, maxlimit, minlimit
  * ```
  *
- * **Comparison & Match Rules:**
+ * Type / Format:
  * ```
- * match(string: pattern), equals(string: field), not_equal(string: field)
- * ```
- *
- * **Array & Object Rules:**
- * ```
- * in_array(array: values), is_list(int: min), keys_exists(array: keys)
+ * float, integer, decimal, binary, scheme, latitude, longitude,
+ * username, is_value, phone, email, uuid, ip, path
  * ```
  *
- * **Custom & Utility Rules:**
+ * Comparison:
  * ```
- * callback(callable: fn), default(mixed: value)
+ * match, equals, not_equal
  * ```
+ *
+ * Array:
+ * ```
+ * in_array, is_list, keys_exists
+ * ```
+ *
+ * Utility:
+ * ```
+ * callback, default
+ * ```
+ *
+ * **PHPStan Types:**
+ *
+ * @phpstan-type RuleName =
+ *     'none'|'required'|'alphanumeric'|'alphabet'|'numeric'|'boolean'|
+ *     'hexadecimal'|'string'|'array'|'json'|'url'|'phone'|'email'|
+ *     'between'|'max'|'min'|'size'|'limit'|'length'|'fixed'|'luhn'|
+ *     'maxlength'|'minlength'|'maxsize'|'minsize'|'maxlimit'|'minlimit'|
+ *     'float'|'integer'|'decimal'|'binary'|'scheme'|'latitude'|'longitude'|
+ *     'username'|'name'|'is_value'|'uuid'|'ip'|'path'|
+ *     'match'|'equals'|'not_equal'|
+ *     'in_array'|'is_list'|'keys_exists'|
+ *     'callback'|'default'
+ *
+ * @phpstan-type RuleExpression =
+ *     'between(int,int)'|
+ *     'max(int|float)'|'min(int|float)'|
+ *     'size(int)'|'limit(int|float)'|
+ *     'length(int)'|'fixed(int|float)'|
+ *     'maxlength(int)'|'minlength(int)'|
+ *     'maxsize(int)'|'minsize(int)'|
+ *     'maxlimit(int|float)'|'minlimit(int|float)'|
+ *
+ *     'float(string)'|'integer(string)'|'decimal(string)'|
+ *     'binary(bool,bool)'|
+ *     'scheme(string)'|
+ *     'latitude(bool,int)'|'longitude(bool,int)'|
+ *     'name(bool,int,int)'|'username(bool,?array)'|
+ *     'is_value(string)'|
+ *     'phone(int,int)'|
+ *     'email(array,bool)'|
+ *     'uuid(int)'|'ip(int)'|
+ *     'path(string)'|
+ *
+ *     'match(string)'|
+ *     'equals(string)'|'not_equal(string)'|
+ *
+ *     'in_array(array)'|
+ *     'is_list(int)'|
+ *     'keys_exists(array)'|
+ *
+ *     'callback(callable)'|
+ *     'default(mixed)'
+ *
+ * @phpstan-type InputRules = RuleName|RuleExpression|string
  */
 final class Validation implements InputValidationInterface, LazyObjectInterface
 {
     /**
      * Validation rules for input fields.
      * 
-     * Keys are the field names, and values are the rules applied (as strings).
-     * Multiple rules can be combined with pipe `|` separators.
+     * Keys are the field names, and values are the rules applied as:
+     * - `string` - Multiple rules can be combined with pipe `|` separators.
+     * - `array` - Each rule as an array entry using {@see Rule}
      * 
-     * @var array<string,string> $rules
+     * @var array<string,InputRules|array> $rules
      * 
      * @example - Example:
      * ```php
      * $input->rules = [
      *     'username' => 'required|alphanumeric|max(20)',
-     *     'email'    => 'required|email',
+     *     'email'    => 'required|email([example.com], true)',
+     * ];
+     * ```
+     * @example - Fluent Rules:
+     * ```php
+     * use Luminova\Security\Rule;
+     * 
+     * $input->rules = [
+     *     'username' => [
+     *          Rule::required(),
+     *          Rule::alphanumeric(),
+     *          Rule::max(20)
+     *      ],
+     *     'email' => [
+     *          Rule::required(),
+     *          Rule::email(['example.com'], true),
+     *      ]
      * ];
      * ```
      */
@@ -95,7 +160,7 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
      * Keys are field names, and values are arrays mapping rule names to messages.
      * Placeholders like {field}, {value}, {rule} can be used for dynamic messages.
      * 
-     * @var array<string,array<string,string>> $messages
+     * @var array<string,array<RuleName,string>> $messages
      * 
      * @example - Example:
      * ```php
@@ -117,9 +182,16 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     /**
      * Input data to validate.
      * 
-     * @var array<string,mixed> $body
+     * @var array<string,mixed>|null $body
      */
-    private array $body = [];
+    private ?array $body = null;
+
+    /**
+     * Optional request instance for value mutation.
+     *
+     * @var RequestInterface|LazyObjectInterface|null $request
+     */
+    private RequestInterface|LazyObjectInterface|null $request = null;
 
     /**
      * Validated errors messages.
@@ -149,26 +221,66 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
      */
     public function setBody(array &$body): self
     {
-        $this->body = &$body;
+        $this->body =& $body;
+        $this->request = null;
+
         return $this;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function validate(HttpRequestInterface|LazyObjectInterface|null $request = null, ?array $rules = null): bool
+    public function setRequest(RequestInterface|LazyObjectInterface $request): self
     {
-        $rules ??= $this->rules;
-        $this->setRequestBody($request);
-    
-        if ($rules === [] || ($rules === [] && $this->body === [])) {
+        if(!($request instanceof RequestInterface) && ($request instanceof LazyObject)){
+            if (!$request->isLazyInstanceof(RequestInterface::class)) {
+                throw new RuntimeException(
+                    sprintf(
+                        'Invalid request object. Expected RequestInterface, got %s.',
+                        get_class($request->getLazyObject())
+                    )
+                );
+            }
+        }
+
+        unset($this->body);
+
+        $this->body = $request->getParsedBody(); 
+        $this->request = $request;
+
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function validate(RequestInterface|LazyObjectInterface|null $request = null): bool
+    {
+        if ($this->rules === []) {
             return true;
+        }
+
+        if($request !== null){
+            $this->setRequest($request);
+        }
+
+        if ($this->body === null) {
+            throw new RuntimeException(sprintf(
+                'Validation failed: no input data available. Provide data using %s::setBody(), %s::setRequest(), or pass a valid request instance.',
+                self::class,
+                self::class
+            ));
         }
 
         $this->failures = [];
      
-        foreach ($rules as $field => $rule) {
-            $ruleParts = ($rule === '') ? [] : explode('|', $rule);
+        foreach ($this->rules as $field => $rule) {
+
+            if($rule === '' || $rule === []){
+                continue;
+            }
+
+            $ruleParts = is_array($rule) ?  $rule : explode('|', $rule);
 
             if($ruleParts === []){
                 continue;
@@ -177,19 +289,27 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
             $fieldValue = self::toValue($this->body[$field] ?? null);
 
             foreach ($ruleParts as $rulePart) {
-                [$ruleName, $ruleParam] = self::parseRule($rulePart);
+                [$ruleName, $ruleParam, $error] = is_array($rulePart) 
+                    ? $rulePart
+                    : self::toRuleArguments($rulePart);
 
                 if($ruleName === '' || $ruleName === 'none' || $ruleName === 'nullable'){
                     continue;
                 }
 
-                $this->doValidation(
+                $arguments = $ruleParam ? self::toArguments($ruleParam) : null;
+                $isValid = $this->isDataValid(
                     $ruleName, 
                     $field, 
                     $fieldValue, 
-                    $ruleParam,
-                    ($ruleName === 'default' || $ruleName === 'fallback') ? $request : null
+                    ($arguments === []) ? null : $arguments
                 );
+
+                if ($isValid) {
+                    continue;
+                }
+
+                $this->addError($field, $ruleName, $fieldValue, $error);
             }
         }
 
@@ -207,15 +327,15 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     /**
      * {@inheritdoc}
      */
-    public function getFields(string|int $fieldIndex = 0): array
+    public function getFields(string|int $field = 0): array
     {
         if($this->failures === []){
             return [];
         }
 
-        $field = is_int($fieldIndex) ? 
-            (array_keys($this->failures)[$fieldIndex] ?? null) : 
-            $fieldIndex;
+        $field = is_int($field) ? 
+            (array_keys($this->failures)[$field] ?? null) : 
+            $field;
 
         if($field === null || $field === ''){
             return [];
@@ -234,25 +354,25 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     /**
      * {@inheritdoc}
      */
-    public function getError(string|int $fieldIndex = 0, int $errorIndex = 0): string
+    public function getError(string|int $field = 0, int $error = 0): string
     {
-        return $this->getFields($fieldIndex)[$errorIndex]['message'] ?? '';
+        return $this->getFields($field)[$error]['message'] ?? '';
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getField(string|int $fieldIndex = 0): string
+    public function getField(string|int $field = 0): string
     {
-        return $this->getFields($fieldIndex)[0]['field'] ?? '';
+        return $this->getFields($field)[0]['field'] ?? '';
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getErrorMessage(string|int $fieldIndex = 0): string
+    public function getErrorMessage(string|int $field = 0): string
     {
-        return $this->getError($fieldIndex);
+        return $this->getError($field);
     }
 
     /**
@@ -276,7 +396,7 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     /**
      * {@inheritdoc}
      */
-    public function addField(string $field, string $rules, array $messages = []): self
+    public function addField(string $field, array|string $rules, array $messages = []): self
     {
         $this->rules[$field] = $rules;
 
@@ -298,7 +418,7 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     /**
      * {@inheritdoc}
      */
-    public static function validateUsername(
+    public static function isUsername(
         string $username, 
         bool $allowUppercase = true, 
         array $reservedUsernames = []
@@ -334,7 +454,7 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
 
             foreach($reservedUsernames as $reserved){
                 if( mb_strtolower($reserved, 'UTF-8') === $name){
-                    return [false, 'That username is reserved for system use. Please choose another.'];
+                    return [false, "The username '{$name}' is not allowed."];
                 }
             }
         }
@@ -349,126 +469,211 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     }
 
     /**
-     * Do input validation and set error if any error was found.
-     * 
-     * @param string $ruleName The validation rule name.
-     * @param string $field The input field name.
-     * @param mixed $fieldValue The input value.
-     * @param mixed $ruleParam The input validation rule params (e.g, `true,[]`).
-     * @param HttpRequestInterface|LazyObjectInterface|null $request Http request object.
-     * 
-     * @return void
+     * Convert a comma-separated string of arguments into a structured array of mixed data types.
+     *
+     * Supports automatic conversion of:
+     * - Booleans: `true`, `false`
+     * - Null values: `null`
+     * - Numbers: `1`, `0.5`, `-10`
+     * - Quoted strings: `'text'`, `"text"`
+     * - Arrays: `[1, 2, 3]`, `['a', 'b']`
+     * - Objects: `{key: "value", id: 1}`
+     *
+     * @param array|string|null $value The argument string to parse.
+     * @param ?array $default Optional array to append to the result.
+     *                        If provided, it will be merged with the parsed values.
+     *
+     * @return array Returns a list of converted argument values, or the default array if input is empty.
+     * @throws RuntimeException If an invalid json argument was provided.
+     *
+     * @example - Example:
+     * ```php
+     * Validation::toArguments('true, [user, root, system]');
+     * // Returns: [true, ['user', 'root', 'system']]
+     *
+     * Validation::toArguments('false, {name: "Peter"}, null, 1, "etc"');
+     * // Returns: [false, (object)['name' => 'Peter'], null, 1, 'etc']
+     * ```
      */
-    private function doValidation(
-        string $ruleName, 
-        string $field,
-        mixed $fieldValue,
-        string $ruleParam,
-        HttpRequestInterface|LazyObjectInterface|null $request = null
-    ): void 
+    public static function toArguments(array|string|null $value, ?array $default = null): array
     {
-        $hasError = false;
-        $isEmptyValue = ($fieldValue === '' || $fieldValue === null);
+        if ($value === null || $value === '') {
+            return $default ?? [];
+        }
+
+        if(is_array($value)){
+            return $value;
+        }
+
+        $value = trim($value);
+
+        if ($value === '') {
+            return $default ?? [];
+        }
+
+        $args = [];
+        $current = '';
+        $depth = 0;
+
+        $len = strlen($value);
+        for ($i = 0; $i < $len; $i++) {
+            $char = $value[$i];
+
+            if ($char === '[' || $char === '{') {
+                $depth++;
+            } elseif ($char === ']' || $char === '}') {
+                $depth--;
+            } elseif ($char === ',' && $depth === 0) {
+                $args[] = self::toDatatype($current);
+                $current = '';
+                continue;
+            }
+
+            $current .= $char;
+        }
         
-        switch ($ruleName) {
-            case 'required':
-                $hasError = ($isEmptyValue || $this->isEmpty($fieldValue));
-            break;
-            case 'callback':
-                $hasError = ($ruleParam && !self::resolveCallable($ruleParam, $fieldValue, $field));
-            break;
-            case 'match':
-                $hasError = $ruleParam && ($isEmptyValue || !preg_match('/' . $ruleParam . '/', $fieldValue));
-            break;
-            case 'equals':
-                $hasError = ($fieldValue !== self::toValue($this->body[$ruleParam]));
-            break;
-            case 'is_value':
-                $hasError = ($fieldValue !== self::toArguments($ruleParam, [[], null])[0]);
-            break;
-            case 'not_equal':
-                $hasError = ($fieldValue === self::toValue($this->body[$ruleParam]));
-            break;
-            case 'is_list': 
-                $hasError = !$isEmptyValue && !self::isCommaSeparated(
-                    $fieldValue,
-                    self::toArguments($ruleParam, [1])[0] ?? 1
-                );
-                break;
-            case 'in_array':
-                if ($ruleParam !== '') {
-                    $hasError = $isEmptyValue;
-
-                    if(!$isEmptyValue){
-                        $hasError = true;
-                        [$matches, $strict] = self::toArguments($ruleParam, [[], true]);
-
-                        if($matches !== [] && is_array($matches)){
-                            $hasError = !in_array($fieldValue, $matches, $strict);
-                        }
-                    }
-                }
-            break;
-            case 'username':
-                $hasError = $isEmptyValue;
-
-                if(!$isEmptyValue){
-                    [$isValid, $error] = self::validateUsername(
-                        $fieldValue, 
-                        ...self::toArguments($ruleParam, [true, []])
-                    );
-
-                    $hasError = !$isValid;
-
-                    if ($hasError) {
-                        $this->messages[$field][$ruleName] ??= $error;
-                    }
-                }
-            break;
-            case 'key_exists':
-                $hasError = true;
-
-                if($ruleParam !== '' && !$isEmptyValue){
-                    if(is_array($fieldValue)){
-                        [$keys,] = self::toArguments($ruleParam, [[], null]);
-                        $hasError = $keys !== [] && empty(array_intersect($keys, array_keys($fieldValue)));
-                    }
-                }
-            break;
-            case 'keys_exists':
-                $hasError = true;
-
-                if($ruleParam !== '' && !$isEmptyValue){
-                    if(is_array($fieldValue)){
-                        [$keys, $strict] = self::toArguments($ruleParam, [[], false]);
-
-                        if ($strict) {
-                            $hasError = !empty(array_diff($keys, array_keys($fieldValue))) 
-                                || !empty(array_diff(array_keys($fieldValue), $keys));
-                        } else {
-                            $hasError = !empty(array_diff($keys, array_keys($fieldValue)));
-                        }
-                    }
-                }
-            break;
-            case 'default':
-            case 'fallback':
-                if ($isEmptyValue || $this->isEmpty($fieldValue)) {
-                    $this->body[$field] = $ruleParam ? self::toArguments($ruleParam, []) : '';
-                    
-                    if($request instanceof HttpRequestInterface || $request instanceof LazyObjectInterface){
-                        $request->setField($field, $this->body[$field]);
-                    }
-                }
-            break;
-            default:
-                $hasError = !self::isValid($ruleName, $fieldValue, $ruleParam);
-            break;
+        if (trim($current) !== '') {
+            $args[] = self::toDatatype($current);
         }
 
-        if ($hasError) {
-            $this->addError($field, $ruleName, $fieldValue);
+        return ($default === null) 
+            ? $args 
+            : self::fillDefaults($args, $default);
+    }
+
+    /**
+     * Validate if a value exists in a given allowed list.
+     *
+     * If no values are provided, validation fails unless the input is empty.
+     *
+     * @param mixed $value Input value.
+     * @param array|null $args [allowedValues, strictComparison]
+     * @param bool $isEmpty Whether the value is empty.
+     *
+     * @return bool True if value exists in the allowed list.
+     */
+    private static function isInArray(mixed $value, ?array $args, bool $isEmpty): bool
+    {
+        if (!$args) {
+            return !$isEmpty;
         }
+
+        [$matches, $strict] = self::fillDefaults($args, [[], false]);
+
+        if($matches === [] || !is_array($matches)){
+            return false;
+        }
+
+        return in_array($value, $matches, $strict);
+    }
+
+    /**
+     * Validate username and optionally store error message.
+     *
+     * @param string $field Field name.
+     * @param mixed $value Username value.
+     * @param array|null $args [allowUppercase, reservedUsernames]
+     *
+     * @return bool True if username is valid.
+     */
+    private function isValidUsername(
+        string $field,
+        mixed $value,
+        ?array $args
+    ): bool 
+    {
+        [$valid, $error] = self::isUsername(
+            $value,
+            ...self::fillDefaults($args, [true, []])
+        );
+
+        if (!$valid && $error) {
+            $this->messages[$field]['username'] ??= $error;
+        }
+
+        return $valid;
+    }
+
+    /**
+     * Check if at least one of the given keys exists in an array value.
+     *
+     * @param mixed $value Input array.
+     * @param array|null $args List of keys to check.
+     *
+     * @return bool True if at least one key exists.
+     */
+    private static function isAnyKeyExists(mixed $value, ?array $args): bool
+    {
+        if (!$args || !is_array($value)) {
+            return false;
+        }
+
+        $keys = $args[0] ?? [];
+
+        if($keys === []){
+            return false;
+        }
+
+        return !empty(array_intersect($keys, array_keys($value)));
+    }
+
+    /**
+     * Validate that required keys exist in an array.
+     *
+     * @param mixed $value Input array.
+     * @param array|null $args [keys, strictMode]
+     *
+     * @return bool True if all required keys exist.
+     */
+    private static function isKeysExists(mixed $value, ?array $args): bool
+    {
+        if (!$args || !is_array($value)) {
+            return false;
+        }
+
+        [$keys, $strict] = self::fillDefaults($args, [[], false]);
+
+        $fieldKeys = array_keys($value);
+
+        if ($strict) {
+            return empty(array_diff($keys, $fieldKeys))
+                && empty(array_diff($fieldKeys, $keys));
+        }
+
+        return empty(array_diff($keys, $fieldKeys));
+    }
+
+    /**
+     * Apply default value when input is empty.
+     *
+     * This method mutates internal body and optionally updates request object.
+     *
+     * @param string $field Field name.
+     * @param mixed $value Input value.
+     * @param array|null $args Default value configuration.
+     *
+     * @return bool Always returns true (no validation error).
+     */
+    private function isDefaultApplied(
+        string $field,
+        mixed $value,
+        ?array $args
+    ): bool 
+    {
+        if (!self::isEmpty($value)) {
+            return true;
+        }
+
+        if (
+            $this->request instanceof \Luminova\Http\Request 
+            || $this->request instanceof LazyObject
+        ) {
+            $this->request->setField($field, $args[0] ?? '');
+            return true;
+        }
+
+        $this->body[$field] = $args[0] ?? '';
+        return true;
     }
 
     /**
@@ -490,52 +695,45 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
      * @return bool The boolean result of the callable execution.
      * @throws RuntimeException If the callable is invalid or does not exist.
      */
-    private static function resolveCallable(string $callable, mixed $value, string $field): bool
+    private static function isCallbackResolved(callable|string|array $callable, mixed $value, string $field): bool
     {
-        [$target, $max] = self::toArguments($callable, [null, 2]);
-        $params = [$value];
-
-        if($max > 1){
-            $params[] = $field;
+        if(!$callable){
+            throw new RuntimeException('Invalid callable rule callback provided.');
         }
 
-        if($target){
-            if (is_callable($target)) {
-                return (bool) $target(...$params);
-            }
-
-            if (is_string($target)) {
-                if (str_contains($target, '@')) {
-                    [$class, $method] = explode('@', $target, 2);
-                    self::assertCallable($class, info: [$class]);
-
-                    $instance = new $class();
-                    self::assertCallable([$instance, $method], 'method', [$method, $class]);
-
-                    return (bool) $instance->{$method}(...$params);
-                }
-
-                if (str_contains($target, '::')) {
-                    [$class, $method] = explode('::', $target, 2);
-
-                    self::assertCallable($class, info: [$class], isStatic: true);
-                    self::assertCallable([$class, $method], 'method', [$class], true);
-
-                    return (bool) $class::{$method}(...$params);
-                }
-            }
-
-            if (is_array($target) && count($target) === 2) {
-                [$class, $method] = $target;
-
-                self::assertCallable($class, info: [$class], isStatic: true);
-                self::assertCallable([$class, $method], 'method', [$class], true);
-
-                return (bool) $class::{$method}(...$params);
-            }
+        if(is_callable($callable)){
+            return (bool) $callable($value, $field);
         }
 
-        throw new RuntimeException('Invalid callable rule callback provided.');
+        $class = null;
+        $method = null;
+
+        if (is_string($callable)) {
+            if (str_contains($callable, '@')) {
+                [$class, $method] = explode('@', $callable, 2);
+                self::assertCallable($class, info: [$class]);
+
+                $instance = new $class();
+                self::assertCallable([$instance, $method], 'method', [$method, $class]);
+
+                return (bool) $instance->{$method}($value, $field);
+            }
+
+            if (str_contains($callable, '::')) {
+                [$class, $method] = explode('::', $callable, 2);
+            }
+        } elseif(is_array($callable) && count($callable) === 2) {
+            [$class, $method] = $callable;
+        }
+
+        if($class && $method){
+            self::assertCallable($class, info: [$class], isStatic: true);
+            self::assertCallable([$class, $method], 'method', [$class], true);
+
+            return (bool) $class::{$method}($value, $field);
+        }
+
+        return false;
     }
 
     /**
@@ -584,85 +782,161 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     }
 
     /**
-     * Validate a value against a specific rule.
-     * 
-     * @param string $ruleName The input validation rule name to execute.
-     * @param string $value The input value to validate.
-     * @param string $arguments The validation rule arguments.
-     * 
-     * @return boolean Return true if the rule passed else false.
+     * Validate a single field against a given rule.
+     *
+     * Executes the specified validation rule using the provided value and arguments.
+     * Returns `true` if validation fails, otherwise `false`.
+     *
+     * Some rules may mutate the input:
+     * - `default` / `fallback` will assign a value when the field is empty.
+     *
+     * Custom rules:
+     * - `callback` expects a callable and must return a boolean.
+     *
+     * Error handling:
+     * - On failure, the caller is expected to register an error message.
+     * - If an exception occurs during validation:
+     *   - In development, it is rethrown.
+     *   - In production, it is logged and treated as a validation failure.
+     *
+     * @param string $name Validation rule name (e.g. "required", "min", "equals").
+     * @param string $field Field name being validated.
+     * @param mixed  $value The field value.
+     * @param array|null $arguments Rule arguments (e.g. [10, 20]).
+     *
+     * @return bool True if validation failed, false otherwise.
      */
-    private static function isValid(string $ruleName, mixed $value, ?string $arguments = null): bool
+    private function isDataValid(
+        string $name, 
+        string $field, 
+        mixed $value,
+        ?array $arguments = null
+    ): bool 
     {
-        try {
-            return match ($ruleName) {
-                'string' => is_string($value),
-                'between' => self::isBetween($value, ...self::toArguments((string) $arguments, [1, 100])),
-                'lat', 'latitude' => !is_array($value) && 
-                    Maths::isLat((string) $value, ...self::toArguments((string) $arguments, [false, 6])),
-                'lng', 'longitude' => !is_array($value) && 
-                        Maths::isLng((string) $value, ...self::toArguments((string) $arguments, [false, 6])),
-                'latlng' => !is_array($value) && Maths::isLatLng(...array_merge(
-                        explode(',', (string) $value, 2), 
-                        self::toArguments((string) $arguments, [false, 6])
-                    )),
-                'phone' => !is_array($value) 
-                    && Helpers::isPhone((string) $value, ...self::toArguments((string) $arguments, [10, 15])),
-                'uuid'  => !is_array($value) 
-                    && Helpers::isUuid((string) $value, ($arguments === '') ? 4 : (int) $arguments),
-                'ip' => !is_array($value) && 
-                    IP::isValid((string) $value, ($arguments === '') ? 0 : (int) $arguments),
-                'numeric' => is_numeric($value),
-                'integer' => self::validateInteger($value, (string) $arguments),
-                'digit'  => !is_array($value) && ctype_digit((string) $value),
-                'float' => self::validateFloat($value, $arguments),
-                'email' => is_string($value) && filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
+        $isEmpty = ($value === '' || $value === null);
+
+        try{
+            return match ($name) {
+                'required' => !($isEmpty || self::isEmpty($value)),
+                'string'   => is_string($value),
+                'numeric'  => is_numeric($value),
+                'boolean'  => self::isBoolean($value),
+                'integer'  => self::isInteger($value, (string) ($arguments[0] ?? 'unsigned')),
+                'float'    => self::isFloatNumber($value, (string) ($arguments[0] ?? 'unsigned')),
+                'decimal'  => self::isFloatNumber($value, (string) ($arguments[0] ?? 'unsigned'), true),
+                'digit'    => (is_string($value) || is_numeric($value)) && ctype_digit((string) $value),
+                'luhn'     => (is_string($value) || is_numeric($value)) && Luhn::isValid((string) $value),
+                'between'  => self::isBetween($value, ...self::fillDefaults($arguments, [1, 100])),
+                'phone' => !$isEmpty && (is_string($value) || is_numeric($value))
+                    && Helpers::isPhone((string) $value, ...self::fillDefaults($arguments, [10, 15])),
+                'uuid'  => !$isEmpty && is_string($value) 
+                    && Helpers::isUuid((string) $value, (int) ($arguments[0] ?? 4)),
+                'email' => !$isEmpty && is_string($value) 
+                    && Helpers::isEmail($value, ...self::fillDefaults($arguments, [[], false])),
+                'url'   => !$isEmpty && is_string($value) 
+                    && Helpers::isUrl($value, ...self::fillDefaults($arguments, [false, true])), 
+                'username' => !$isEmpty 
+                    && $this->isValidUsername($field, $value, $arguments),
+                'name'      => !$isEmpty && is_string($value) 
+                    && self::isName($value, ...self::fillDefaults($arguments, [false, 2, 150])),
+                'is_value'  => ($value === ($arguments[0] ?? null)),
+                'equals'    => !$isEmpty 
+                    && ($value === self::toValue($this->body[$arguments[0] ?? null])),
+                'not_equal' => !$isEmpty 
+                    && ($value !== self::toValue($this->body[$arguments[0] ?? null])),
+                'is_list'   => !$isEmpty 
+                    && self::isCommaSeparated($value, $arguments[0] ?? 1),
+                'in_array'    => self::isInArray($value, $arguments, $isEmpty),
+                'key_exists'  => !$isEmpty && self::isAnyKeyExists($value, $arguments),
+                'keys_exists' => !$isEmpty && self::isKeysExists($value, $arguments),
+                'latlng'      => is_string($value) && Math::isLatLng(...array_merge(
+                    explode(',', (string) $value, 2), 
+                    self::fillDefaults($arguments, [false, 6])
+                )),
+                'lat', 'latitude'   => is_string($value) && 
+                    Math::isLat((string) $value, ...self::fillDefaults($arguments, [false, 6])),
+                'lng', 'longitude' => is_string($value) && 
+                    Math::isLng((string) $value, ...self::fillDefaults($arguments, [false, 6])),
+                'binary'       => self::isBinary($value, ...self::fillDefaults($arguments, [true, false])),
+                'alphabet'     => is_string($value) && ctype_alpha($value),
                 'alphanumeric' => is_string($value) && ctype_alnum($value),
-                'alphabet' => is_string($value) && ctype_alpha($value),
-                'url' => is_string($value) && filter_var($value, FILTER_VALIDATE_URL) !== false,
-                'decimal' => self::validateFloat($value, (string) $arguments, true),
-                'binary' => self::isBinary($value, ...self::toArguments((string) $arguments, [true, false])),
-                'boolean' => self::isBoolean($value),
-                'hexadecimal' => !is_array($value) && ctype_xdigit((string) $value),
-                'array' => is_array($value) || (is_string($value) && is_array(json_decode($value, true, 512, JSON_THROW_ON_ERROR))),
-                'json' => is_string($value) && json_validate($value),
-                'path', 'scheme' => self::validatePath($ruleName, $value, (string) $arguments),
-                'length', 'minlength', 'maxlength' => self::isLength($ruleName, $value, $arguments, 'string'),
-                'limit', 'minlimit', 'maxlimit' => self::isLength($ruleName, $value, $arguments, 'numeric'),
-                'size', 'minsize', 'maxsize' => self::isLength($ruleName, $value, $arguments, 'array'),
-                'min', 'max', 'fixed', => self::isLength($ruleName, $value, $arguments),
+                'hexadecimal'  => is_string($value) && ctype_xdigit((string) $value),
+                'array' => is_array($value) 
+                    || (is_string($value) && is_array(json_decode($value, true, 512, JSON_THROW_ON_ERROR))),
+                'json'  => is_string($value) && json_validate($value),
+                'ip'    => is_string($value) && 
+                    IP::isValid((string) $value, (int) ($arguments[0] ?? 0)),
+                'callback' =>  $arguments && self::isCallbackResolved(
+                    $arguments[0],
+                    $value,
+                    $field
+                ),
+                'match', 'regex' => !$isEmpty && is_string($value) && $arguments
+                    && preg_match('/' . preg_quote(trim($arguments[0], '/'), '/') . '/', $value),
+                'path'   => self::isFilePath($value, (string) ($arguments[0] ?? '')),
+                'scheme' => self::isProtocol($value, (string) ($arguments[0] ?? '')),
+                'length', 'minlength', 'maxlength' => self::isLength($name, $value, 'string', $arguments),
+                'limit', 'minlimit', 'maxlimit' => self::isLength($name, $value, 'numeric', $arguments),
+                'size', 'minsize', 'maxsize' => self::isLength($name, $value, 'array', $arguments),
+                'min', 'max', 'fixed', => self::isLength($name, $value, 'auto', $arguments),
+                'default', 'fallback' => $this->isDefaultApplied($field, $value, $arguments),
                 default => true
             };
         } catch (Throwable $e) {
-            if($e instanceof RuntimeException){
-                throw new RuntimeException(
-                    sprintf('%s while validating rule "%s".', $e->getMessage(), $ruleName),
-                    previous: $e
-                );
+            $error = sprintf(
+                'Error while validating rule "%s": %s',
+                $name,
+                $e->getMessage()
+            );
+
+            if (!PRODUCTION) {
+                throw new RuntimeException($error, $e->getCode(), $e);
             }
+
+            Logger::error($error, [
+                'rule' => $name,
+                'field' => $field,
+                'value' => $value,
+                'arguments' => $arguments,
+            ]);
+
+            $this->messages[$field][$name] = sprintf(
+                'Validation error on rule "%s".',
+                $name
+            );
+
             return false;
         }
     }
 
     /**
-     * Validates if the given value is an integer and optionally checks if it meets specific conditions.
+     * Validates whether a value is a valid integer and optionally checks its sign constraint.
      *
-     * @param mixed $value The value to be validated.
-     * @param string $param The condition to check for the integer value. Accepts 'positive', 'negative', or any other string to validate the integer without additional conditions.
+     * The method accepts numeric strings and integers, but rejects floats.
      *
-     * @return bool Return true if the value is a valid integer and meets the condition (if provided); `false` otherwise.
+     * Supported constraints:
+     * - positive: value must be > 0
+     * - negative: value must be < 0
+     * - unsigned: value must be >= 0
+     *
+     * Any unknown constraint will bypass sign validation.
+     *
+     * @param mixed $value  The value to validate.
+     * @param string $param Sign constraint (positive|negative|unsigned).
+     *
+     * @return bool True if value is a valid integer and satisfies the constraint.
      */
-    private static function validateInteger(mixed $value, string $param = 'none'): bool
+    private static function isInteger(mixed $value, string $param = 'unsigned'): bool
     {
         if (str_contains((string) $value, '.') || !is_numeric($value)) {
             return false;
         }
 
         $value = (int) $value;
-
         return match ($param) {
             'positive' => $value > 0,
             'negative' => $value < 0,
+            'unsigned' => $value >= 0,
             default    => true,
         };
     }
@@ -692,7 +966,7 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
         }
 
         $value = strtolower(trim((string) $value));
-        return in_array($value, ['true', 'false', '1', '0'], true);
+        return in_array($value, ['true', 'false', '1', '0', 'yes', 'no'], true);
     }
 
     /**
@@ -733,26 +1007,41 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     }
 
     /**
-     * Validate numeric, string, or array value against a length/size rule.
+     * Validates a value against a length or size rule (min, max, fixed).
      *
-     * Type-specific rules will fail if applied to the wrong type.
-     * 'min' / 'max' / 'fixed' are universal.
-     * 'limit', 'length', 'size' are mapped internally to 'fixed' per type.
+     * Supports multiple data types:
+     * - string: character length
+     * - array: element count
+     * - numeric: digit count or numeric value depending on mode
      *
-     * @param string $rule   Rule name
-     * @param mixed  $value  Value to validate (numeric, string, array)
-     * @param int|float $length Expected length/size/value
-     * @param string $mode Used internally to revalidate as string length.
+     * Some rule aliases (limit, length, size) are internally normalized to "fixed".
+     *
+     * Type mismatch will result in validation failure.
      * 
-     * @return bool Returns true if passed, otherwise false.
+     * Internally resolves:
+     * - min  => >= limit
+     * - max  => <= limit
+     * - fixed => == limit
+     *
+     * If validation fails in "auto" mode and the value is numeric,
+     * the check is retried using string length comparison.
+     *
+     * @param string $rule Range rule (min|max|fixed or alias).
+     * @param mixed $value Value to evaluate.
+     * @param string $mode Evaluation mode (auto|string|numeric).
+     * @param array|null $arguments The length, limit arguments.
+     *
+     * @return bool True if value satisfies the rule.
      */
     private static function isLength(
         string $rule, 
         mixed $value, 
-        mixed $length, 
-        string $mode = 'auto'
+        string $mode,
+        ?array $arguments
     ): bool
     {
+        $length = $arguments[0] ?? 1;
+
         [$count, $limit,, $aliases, $type] = self::getCountInfo($value, $length, mode: $mode);
        
         if($count === null || $aliases === null) {
@@ -773,18 +1062,59 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
 
         // Revalidate as string length if failed
         if($result === false && $mode === 'auto' && $type === 'numeric'){
-            return self::isLength($rule, $value, $length, 'string');
+            return self::isLength($rule, $value, 'string', $length);
         }
 
         return $result;
     }
 
     /**
+     * Validate if a string is a valid name.
+     *
+     * A valid name:
+     * - Contains only letters, spaces, dots, apostrophes, or hyphens.
+     * - Does not start or end with a space or punctuation.
+     * - Has a length between the specified minimum and maximum.
+     *
+     * @param string $name The name to validate.
+     * @param bool $forceFirstName If true, requires at least two words (first and last name).
+     * @param int $min Minimum length of the name (default: 2).
+     * @param int $max Maximum length of the name (default: 150).
+     *
+     * @return bool Returns true if the name is valid, false otherwise.
+     */
+    private static function isName(
+        string $name,
+        bool $forceFirstName = false,
+        int $min = 2,
+        int $max = 150
+    ): bool 
+    {
+        $name = trim($name);
+
+        if ($name === '') {
+            return false;
+        }
+
+        $length = mb_strlen($name, 'UTF-8');
+
+        if ($length < $min || $length > $max) {
+            return false;
+        }
+
+        $pattern = $forceFirstName
+            ? '/^[\p{L}]+(?:[ .\'-][\p{L}]+)+$/u'
+            : '/^[\p{L}]+(?:[ .\'-][\p{L}]+)*$/u';
+
+        return (bool) preg_match($pattern, $name);
+    }
+
+    /**
      * Get value count/length info for numeric, string, or array types.
      *
      * @param mixed $value Value to measure.
-     * @param mixed $min   Minimum constraint.
-     * @param mixed $max   Maximum constraint (optional).
+     * @param mixed $min Minimum constraint.
+     * @param mixed $max Maximum constraint (optional).
      * @param bool $strict Used internally to revalidate as string length.
      * 
      * @return array [count, min, max, aliases]
@@ -800,38 +1130,30 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
             return [0, (int) $min, (int) $max, null, null];
         }
 
-        if (($mode === 'auto' || $mode === 'numeric') && is_numeric($value)) {
-            return [
+        return match(true){
+            ($mode === 'auto' || $mode === 'numeric') && is_numeric($value) => [
                 to_numeric((string) $value, true), 
                 to_numeric((string) $min, true), 
                 to_numeric((string) $max, true), 
                 ['minlimit'=>'min','maxlimit'=>'max', 'limit'=>'fixed'],
                 'numeric'
-            ];
-        }
-        
-        if (($mode === 'auto' || $mode === 'string') && is_string($value)) {
-            return [
+            ],
+            ($mode === 'auto' || $mode === 'string') && is_string($value) => [
                 mb_strlen($value), 
                 (int) $min, 
                 (int) $max, 
                 ['minlength'=>'min','maxlength'=>'max','length'=>'fixed'],
                 'string'
-            ];
-
-        }
-        
-        if (($mode === 'auto' || $mode === 'array') && is_array($value)) {
-            return [
+            ],
+            ($mode === 'auto' || $mode === 'array') && is_array($value) => [
                 count($value), 
                 (int) $min, 
                 (int) $max, 
                 ['minsize'=>'min','maxsize'=>'max','size'=>'fixed'],
                 'array'
-            ];
-        }
-
-        return [null, null, null, null, null];
+            ],
+            default => [null, null, null, null, null]
+        };
     }
 
     /**
@@ -920,19 +1242,28 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     }
 
     /**
-     * Validates if the given value is an float or decimal number 
-     * and optionally checks if it meets specific conditions.
+     * Validates whether a value is a float or decimal number and optionally enforces a sign constraint.
      *
-     * @param mixed $value The value to be validated.
-     * @param mixed $param The condition to check for the integer value. 
-     *              Accepts 'positive', 'negative', or any other string 
-     *              to validate the integer without additional conditions.
-     * @param bool $isDecimal Whether is decimal mode.
+     * The method accepts numeric strings representing floating-point numbers.
+     * Integer values are rejected.
      *
-     * @return bool Return true if the value is a valid integer 
-     *      and meets the condition (if provided); `false` otherwise.
+     * Validation rules:
+     * - In decimal mode: value must contain a decimal point and must not be a pure digit string.
+     * - In non-decimal mode: scientific notation (e.g. 1e5) is rejected.
+     *
+     * Supported constraints:
+     * - positive: value must be greater than 0
+     * - negative: value must be less than 0
+     *
+     * Unknown constraints are ignored and no additional validation is applied.
+     *
+     * @param mixed $value Numeric value to validate.
+     * @param string $param Sign constraint (positive|negative).
+     * @param bool $isDecimal Whether strict decimal format validation is enforced.
+     *
+     * @return bool True if value is a valid float/decimal and satisfies the constraint (if applied).
      */
-    private static function validateFloat(mixed $value, mixed $param = 'none', bool $isDecimal = false): bool
+    private static function isFloatNumber(mixed $value, string $param = 'unsigned', bool $isDecimal = false): bool
     {
         if (!is_numeric($value) || is_int($value)) {
             return false;
@@ -951,38 +1282,70 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
         return match ($param) {
             'positive' => $value > 0,
             'negative' => $value < 0,
+            'unsigned' => $value >= 0,
             default => true,
         };
     }
 
     /**
-     * Validates if the given value is a valid file path based on the specified condition.
+     * Validates whether a value is a valid file path and optionally checks file accessibility.
      *
-     * @param mixed $value The value to be validated. Should be a string representing a file path.
-     * @param string $param The condition to check for the file path. 
-     *                 Accepts 'true' to check if the path is readable or any other string to validate the path format.
-     * mailto://
+     * By default, this only validates the path format (not filesystem existence).
      *
-     * @return bool Returns true if the value passed false otherwise.
+     * Supported modes:
+     * - readable: path must be readable (is_readable)
+     * - writable: path must be writable (is_writable)
+     * - empty/default: validates path format only
+     *
+     * @param mixed $value File path to validate.
+     * @param string $param Validation mode (readable|writable|format).
+     *
+     * @return bool True if valid file path and passes the selected condition.
      */
-    private static function validatePath(string $rule, mixed $value, string $param = ''): bool
+    private static function isFilePath(mixed $value, string $param): bool
     {
         if(!is_string($value)){
             return false;
         }
 
-        if($rule === 'path'){
-            return ($param === 'true' || $param === 'readable') 
-                ? is_readable($value)
-                : (($param === 'writable') 
-                    ? is_writable($value) 
-                    : (bool) preg_match('#^(?:[a-zA-Z]:[\\\/]|/|\\\\)[\\w\\s\\-_.\\/\\\\]+$#i', $value)
-                );
+        if($param === 'true' || $param === 'readable') {
+            return is_readable($value);
         }
 
-        return ($param === '') 
-            ? (bool) preg_match('#^[a-z][a-z\d+.-]*:(//)?#i', $value)
-            : str_starts_with($value, rtrim($param, ':// ') . ':');
+        if($param === 'writable') {
+            return is_writable($value);
+        }
+
+        return (bool) preg_match('#^(?:[a-zA-Z]:[\\\/]|/|\\\\)[\\w\\s\\-_.\\/\\\\]+$#i', $value);
+    }
+
+    /**
+     * Validates whether a value is a URL-like protocol string.
+     *
+     * Examples:
+     * - https://
+     * - ftp://
+     * - mailto:
+     *
+     * If no parameter is provided, it checks for a valid protocol format.
+     * If a parameter is provided, it validates against that specific protocol.
+     *
+     * @param mixed $value Protocol string to validate.
+     * @param string $param Optional protocol name (e.g. https, ftp, mailto).
+     *
+     * @return bool True if the value matches the protocol rule.
+     */
+    private static function isProtocol(mixed $value, string $param = ''): bool
+    {
+        if(!is_string($value)){
+            return false;
+        }
+
+        if($param === '') {
+            return (bool) preg_match('#^[a-z][a-z\d+.-]*:(//)?#i', $value);
+        }
+
+        return str_starts_with($value, rtrim($param, ':// ') . ':');
     }
 
     /**
@@ -992,7 +1355,7 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
      * 
      * @return bool Return true if the value is not empty, false otherwise.
      */
-    private function isEmpty(mixed $value): bool 
+    private static function isEmpty(mixed $value): bool 
     {
         if(is_string($value) || is_numeric($value)){
             return trim((string) $value) === '';
@@ -1029,70 +1392,6 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     }
 
     /**
-     * Convert a comma-separated string of arguments into a structured array of mixed data types.
-     *
-     * Supports automatic conversion of:
-     * - Booleans: `true`, `false`
-     * - Null values: `null`
-     * - Numbers: `1`, `0.5`, `-10`
-     * - Quoted strings: `'text'`, `"text"`
-     * - Arrays: `[1, 2, 3]`, `['a', 'b']`
-     * - Objects: `{key: "value", id: 1}`
-     *
-     * @param string $value   The argument string to parse.
-     * @param ?array $default Optional array to append to the result.
-     *                        If provided, it will be merged with the parsed values.
-     *
-     * @return array Returns a list of converted argument values, or the default array if input is empty.
-     * @throws RuntimeException If an invalid json argument was provided.
-     *
-     * @example - Example:
-     * ```php
-     * Validation::toArguments('true, [user, root, system]');
-     * // Returns: [true, ['user', 'root', 'system']]
-     *
-     * Validation::toArguments('false, {name: "Peter"}, null, 1, "etc"');
-     * // Returns: [false, (object)['name' => 'Peter'], null, 1, 'etc']
-     * ```
-     */
-    public static function toArguments(string $value, ?array $default = null): array
-    {
-        $value = trim($value);
-        if ($value === '') {
-            return $default ?? [];
-        }
-
-        $args = [];
-        $current = '';
-        $depth = 0;
-
-        $len = strlen($value);
-        for ($i = 0; $i < $len; $i++) {
-            $char = $value[$i];
-
-            if ($char === '[' || $char === '{') {
-                $depth++;
-            } elseif ($char === ']' || $char === '}') {
-                $depth--;
-            } elseif ($char === ',' && $depth === 0) {
-                $args[] = self::toDatatype($current);
-                $current = '';
-                continue;
-            }
-
-            $current .= $char;
-        }
-        
-        if (trim($current) !== '') {
-            $args[] = self::toDatatype($current);
-        }
-
-        return ($default === null) 
-            ? $args 
-            : self::fillDefaults($args, $default);
-    }
-
-    /**
      * Merge arrays by filling missing values from the default array.
      * 
      * If $param has fewer items than $default, it fills the remaining
@@ -1103,8 +1402,12 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
      * 
      * @return array The completed array.
      */
-    private static function fillDefaults(array $param, array $default): array
+    private static function fillDefaults(?array $param, array $default): array
     {
+        if($param === null){
+            return $default;
+        }
+
         $paramCount = count($param);
         $defaultCount = count($default);
 
@@ -1116,58 +1419,6 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
             $param,
             array_slice($default, $paramCount)
         );
-    }
-
-    /**
-     * Load the request body from the HttpRequestInterface or LazyObjectInterface.
-     *
-     * @param HttpRequestInterface|LazyObjectInterface|null $request
-     * 
-     * @throws RuntimeException When no body is provided and no valid request is available.
-     * @throws RuntimeException When the lazy object does not resolve to HttpRequestInterface.
-     */
-    private function setRequestBody(HttpRequestInterface|LazyObjectInterface|null $request): void 
-    {
-        if($this->body !== []){
-            return;
-        }
-
-        if($request === null){
-            throw new RuntimeException(
-               'No request body found. Provide an array using setBody() or pass a valid request object.'
-            );
-        }
-
-        if(!$request instanceof HttpRequestInterface && $request instanceof LazyObjectInterface){
-            if (!$request->isLazyInstanceof(HttpRequestInterface::class)) {
-                throw new RuntimeException(
-                    sprintf(
-                        'Invalid request object. Expected HttpRequestInterface, got %s.',
-                        get_class($request->getLazyObject())
-                    )
-                );
-            }
-        }
-
-        $this->body = $request->getBody();
-    }
-
-    /**
-     * Get the number of decimal digits in a number.
-     *
-     * @param string|float|int $value The numeric value or string.
-     * 
-     * @return int Number of digits after the decimal point.
-     */
-    private static function getPrecision(string|float|int $value): int
-    {
-        $value = (string) $value;
-
-        if (!str_contains($value, '.')) {
-            return 0;
-        }
-
-        return strlen(substr(strrchr($value, '.'), 1));
     }
 
     /**
@@ -1293,9 +1544,8 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
      * 
      * @return array{0:string,1:string} Returns an array containing the rule name and parameter (if any).
      */
-    private static function parseRule(string $rule): array
+    private static function toRuleArguments(string $rule): array
     {
-        // if (preg_match('/^(\w+)(?:\(([^)]*)\))?$/', trim($rule), $matches)) {
         if (!preg_match('/^(\w+)(?:\((.*)\))?$/', trim($rule), $matches)) {
             return ['', ''];
         }
@@ -1307,30 +1557,65 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     }
 
     /**
-     * Add validation error message.
-     * 
-     * @param string $field input field name.
-     * @param string $ruleName Rule name.
-     * @param mixed $value Filed value.
-     * 
-     * @return void 
+     * Add a validation error for a field.
+     *
+     * Uses a custom message if defined, otherwise falls back to a default message.
+     * Placeholders in custom messages are replaced with: field, rule, value.
+     *
+     * @param string $field Field name.
+     * @param string $ruleName Rule being validated.
+     * @param mixed  $value Field value (optional).
+     * @param string|null $message Default error message.
      */
-    private function addError(string $field, string $ruleName, mixed $value = null): void
+    private function addError(
+        string $field,
+        string $ruleName,
+        mixed $value = null,
+        ?string $message = null
+    ): void
     {
-        $message = $this->messages[$field][$ruleName] ?? null;
+        $message ??= ($this->messages[$field][$ruleName] ?? null);
         $message = ($message === null) 
-            ? "Validation failed for field: '{$field}', while validating [{$ruleName}]."
-            : self::replace($message, [$field, $ruleName, $value]);
+            ? self::defaultMessage($field, $ruleName) 
+            : self::replace($message, [Rule::formatField($field), $ruleName, htmlspecialchars((string) $value)]);
 
         $this->failures[$field][] = [
             'message' => $message,
-            'rule' => $ruleName,
-            'field' => $field
+            'rule'    => $ruleName,
+            'field'   => $field,
         ];
     }
 
     /**
+     * Return the default error message for a rule.
+     *
+     * Used when no custom message exists for the field/rule pair.
+     *
+     * @param string $field Field name.
+     * @param string $rule  Failed rule name.
+     *
+     * @return string
+     */
+    private function defaultMessage(string $field, string $rule): string
+    {
+        return match ($rule) {
+            'required'   => "The {$field} field is required.",
+            'email'      => "The {$field} must be a valid email address.",
+            'phone'      => "The {$field} must be a valid phone number.",
+            'username'   => "The {$field} must be a valid username.",
+            'between'    => "The {$field} is out of the allowed range.",
+            'length'     => "The {$field} has an invalid length.",
+            'match'      => "The {$field} format is invalid.",
+            'equals'     => "The {$field} does not match the required value.",
+            'not_equal'  => "The {$field} must not match the given value.",
+            default      => "The {$field} is invalid ({$rule}).",
+        };
+    }
+
+    /**
      * Translate placeholders.
+     * 
+     * Supports placeholders: {field}, {rule}, {value}.
      * 
      * @param string $message message to be translated.
      * @param array $placeholders array.
@@ -1339,8 +1624,10 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
      */
     private static function replace(string $message, array $placeholders = []): string 
     {
-        return ($placeholders === []) 
-            ? $message 
-            : str_replace(['{field}', '{rule}', '{value}'], $placeholders, $message);
+        return str_replace(
+            ['{field}', '{rule}', '{value}'], 
+            $placeholders, 
+            $message
+        );
     }
 }

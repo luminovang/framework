@@ -15,7 +15,7 @@ use \Stringable;
 use \Luminova\Luminova;
 use \Luminova\Command\Terminal;
 use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Foundation\Error\Guard;
+use \Luminova\Foundation\Error\Error;
 
 class Message implements Stringable
 {
@@ -59,7 +59,7 @@ class Message implements Stringable
      */
     public function getCode(): string|int
     {
-        return Guard::getCode($this->code);
+        return Error::getCode($this->code);
     }
 
     /**
@@ -109,7 +109,7 @@ class Message implements Stringable
      */
     public function getDescription(): string
     {
-        return Guard::sanitizeMessage($this->message);
+        return Error::sanitizeMessage($this->message);
     }
 
     /**
@@ -133,7 +133,7 @@ class Message implements Stringable
      */
     public static function getBacktrace(): array 
     {
-        return Guard::getBacktrace();
+        return Error::getBacktrace();
     }
 
      /**
