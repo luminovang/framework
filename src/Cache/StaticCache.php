@@ -11,12 +11,13 @@
 namespace Luminova\Cache;
 
 use \Closure;
+use \Luminova\Boot;
 use \DateTimeInterface;
-use \Luminova\Luminova;
+use \Luminova\Time\Time;
 use \Luminova\Http\Header;
-use \Luminova\Time\Timestamp;
-use \Luminova\Utility\Storage\Filesystem;
-use function \Luminova\Funcs\{make_dir, string_length};
+use \Luminova\Utility\MIME;
+use \Luminova\Storage\Filesystem;
+use function \Luminova\Funcs\make_dir;
 
 final class StaticCache
 {
@@ -93,7 +94,7 @@ final class StaticCache
     public function setExpiry(DateTimeInterface|int|null $expiration): self
     {
         $this->expiration = ($expiration instanceof DateTimeInterface) 
-            ? Timestamp::ttlToSeconds($expiration) 
+            ? Time::toSeconds($expiration) 
             : $expiration;
 
         return $this;
@@ -286,7 +287,7 @@ final class StaticCache
      */
     public function clear(?string $version = null): int 
     {
-        return Filesystem::remove(
+        return Filesystem::delete(
             $this->getLocation() . 
             ($version ?? APP_VERSION) . 
             DIRECTORY_SEPARATOR
@@ -312,7 +313,7 @@ final class StaticCache
 
         
         if(self::$cache === [] && $this->init() === false){
-            Header::headerNoCache(404);
+            Header::sendNoCacheHeaders(404);
             return false;
         }
 
@@ -326,7 +327,7 @@ final class StaticCache
         $eTag = self::$cache['ETag'] ?? null;
 
         if($onBeforeRender === null){
-            Luminova::addClassMetadata('cache', true);
+            Boot::add(Boot::CLASS_METADATA, 'cache', true);
         }else{
             $onBeforeRender();
         }
@@ -360,7 +361,7 @@ final class StaticCache
             }
         }
 
-        Header::validate($this->getHeaders(true), $status);
+        Header::send($this->getHeaders(true), status: $status);
 
         if($status === null){
             Header::clearOutputBuffers('all');
@@ -432,9 +433,9 @@ final class StaticCache
         $now = time();
         $fileMTime = $this->filename ? (@filemtime($this->filename) ?: $now) : $now;
         $expiration = ($this->expiration === 0) ? 31536000 * 5 : $this->expiration;
-        $length = (int) ($headers['Content-Length'] ?? string_length($content));
+        $length = (int) ($headers['Content-Length'] ?? strlen($content));
 
-        $headers['Content-Type'] = Header::getContentTypes($type);
+        $headers['Content-Type'] ??= MIME::findType($type);
         $headers['Content-Length'] = $length;
 
         return Filesystem::write(
@@ -599,7 +600,7 @@ final class StaticCache
         }
         
         if($burst && $this->maxBurst !== null){
-            if ($this->maxBurst instanceof \DateTimeInterface) {
+            if ($this->maxBurst instanceof DateTimeInterface) {
                 $this->maxBurst = $this->maxBurst->getTimestamp();
             } elseif (is_int($this->maxBurst) && $this->maxBurst <= 315360000) { 
                 $this->maxBurst = time() + $this->maxBurst;

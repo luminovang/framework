@@ -10,8 +10,8 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use \Luminova\Exceptions\LuminovaException;
 
 interface ExceptionInterface
 {
@@ -147,7 +147,7 @@ interface ExceptionInterface
      * The handler also prevents recursive exception handling and ensures consistent shutdown behavior.
      *
      * @return void
-     * @throws AppException<\T,Throwable> Re-throws the exception in non-production environments 
+     * @throws LuminovaException<\T,Throwable> Re-throws the exception in non-production environments 
      *                   or when explicitly configured for CLI.
      */
     public function handle(): void;
@@ -177,14 +177,14 @@ interface ExceptionInterface
      * @param Throwable|null $previous The previous exception, if available (default: null).
      * 
      * @return never
-     * @throws AppException<static> Throws the exception from the called class.
+     * @throws LuminovaException<static> Throws the exception from the called class.
      */
     public static function throwException(string $message, string|int $code = 0, ?Throwable $previous = null): void;
     
     /**
      * Rethrow or handle an exception as a specified exception class.
      *
-     * If the given Throwable is already an instance of `Luminova\Exceptions\AppException`, it will be handled directly.
+     * If the given Throwable is already an instance of `Luminova\Exceptions\LuminovaException`, it will be handled directly.
      * Otherwise, a new exception of the specified class (or the current class if not provided) will be created with the
      * same message, code, and previous exception, then handled.
      *

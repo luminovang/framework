@@ -123,19 +123,23 @@ final class Commands
         ],
 
         'build:project' => [
-            'name' => 'Builder',
-            'group' => 'build:project',
-            'description' => "Archive required application files for production based on 'app.version' or copy them to build directory without zipping.",
+            'name'      => 'Builder',
+            'group'     => 'build:project',
+            'description' => "Build the application for production: either copy required files to the build directory or package them as a ZIP archive based on 'app.version'.",
             'usages' => [
                 'php novakit build:project',
             ],
             'options' => [
-                '--type' => "Specify the type of build to generate (`zip` or `build`).",
-                '-h, --help' => 'Show help information for this command.'
+                '-t, --type'     => "Build type: export (e) for directory copy, or archive (a) for ZIP packaging.",
+                '-p, --progress' => "Show progress indicator during build process.",
+                '-q, --quiet'    => "Suppress all output except errors.",
+                '-v, --verbose'  => "Increase output verbosity (use multiple times for more detail).",
+                '-h, --help'     => "Display help information for this command."
             ],
             'examples' => [
-                'php novakit build:project --type=zip' => 'Generates application production files as zip files',
-                'php novakit build:project --type=build' => 'Copy application production files to build directory.',
+                'php novakit build:project -t=archive' => 'Package the application into a production ZIP archive.',
+                'php novakit build:project -t=export' => 'Copy application files to the production build directory.',
+                'php novakit build:project -t=zip -vv' => 'Package application into ZIP archive with verbose output.'
             ],
         ],
 
@@ -187,7 +191,8 @@ final class Commands
                 '-f,  --basename'        => "Output file name (default: sitemap.xml or broken.sitemap.json for broken links).",
                 '-b,  --broken'          => "Generate a JSON report of broken links instead of an XML sitemap.",
                 '-t,  --link-tree'      => "Generate a plain TXT report of all website links instead of an XML sitemap or JSON broken links report.",
-                '--format'     =>    'Custom output format for link tree, e.g., "{url} | {title} | {status} | {lastmod}". Default is "{url} {title} ({status})"',
+                '-dx, --desc-xpath' => 'XPath selector for extracting the description text from a page when generating a link-tree, e.g. //p[@class="intro"].',
+                '--format'     =>    'Custom output format for link tree, e.g., "{url} | {title} | {status} | {lastmod} | {description}". Default is "{url} {title} ({status})"',
                 '-l,  --limit'           => "Maximum number of URLs to scan (0 = no limit).",
                 '-d,  --delay'           => "Delay in seconds between each URL scan (minimum: 1).",
                 '-e,  --max-execution'   => "Maximum script execution time in seconds (0 = unlimited).",
@@ -213,7 +218,8 @@ final class Commands
                 'php novakit sitemap --url=https://example.com --broken --basename=scan.json',
                 'php novakit sitemap --url=https://localhost --broken --limit=50',
                 "\033[1;36mLink Tree Scan\033[0m",
-                'php novakit sitemap -t --format "{url} | {title}"'
+                'php novakit sitemap -t --format "{url} | {title}"',
+                'php novakit sitemap -t --format "{url} | {title} | {description}" --desc-xpath="//p[@aria-label="Subheading for this page"]"'
             ],
         ],
 
@@ -831,8 +837,9 @@ final class Commands
                 '-o, --output' => 'Optional. Log output path or log level (e.g., debug).',
                 '-s, --sleep'  => 'Optional. Microseconds to wait between tasks. Default: 100000 (0.1s).',
                 '-l, --limit'  => 'Optional. Max number of tasks to process in one loop.',
-                '-i, --idle'   => 'Optional. Max idle attempts before stopping.',
+                '-i, --id'     => 'Optional. Run a specific task by ID.',
                 '-f, --flock-worker' => 'Optional. Use a file lock to prevent multiple worker instances from running at the same time.',
+                '--idle'   => 'Optional. Max idle attempts before stopping.',
             ],
             'examples' => [
                 'php novakit task:run --output=debug --limit=5' => 'Run and log 5 tasks with debug output.',
@@ -842,7 +849,7 @@ final class Commands
         'task:listen' => [
             'name' => 'TaskWorker',
             'group' => 'task:listen',
-            'description' => 'Listen for new task events written to the task log file. Useful for real-time CLI monitoring.',
+            'description' => 'Depreciated use task:tail',
             'usages' => [
                 'php novakit task:listen'
             ],
@@ -850,8 +857,30 @@ final class Commands
                 '-h, --help' => 'Show help information for this command.',
                 '-c, --class' => 'Optional. Task queue class with logEvents file path set.',
             ],
+            'examples' => [],
+        ],
+
+        'task:tail' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:tail',
+            'description' => 'Continuously monitor a task queue log file and output new events in real-time. Useful for CLI debugging and live monitoring of task execution.',
+            'usages' => [
+                'php novakit task:tail'
+            ],
+            'options' => [
+                '-h, --help' => 'Display help information for this command.',
+                '-c, --class' => 'Optional. Specify the task queue class to monitor. The class must have "$eventLogging" set to true.',
+                '-j, --json' => 'Output log lines as formatted JSON when possible.',
+                '-s, --since' => 'Filter log entries from a specific time. Accepts relative values like "10s", "5m", "2h" or absolute timestamps.',
+                '-g, --grep' => 'Only show log lines containing the specified string (case-insensitive).',
+                '-x, --exclude' => 'Exclude log lines containing the specified string (case-insensitive).',
+                '-w, --wait' => 'Optional wait in seconds for tail line operations.',
+                '-r, --retry' => 'Number of retry attempts while the file is unavailable or not readable.'
+            ],
             'examples' => [
-                'php novakit task:listen --class=App\\Tasks\\MyTask' => 'Listen to events from a custom task class.',
+                'php novakit task:tail --class=App\\Tasks\\MyTask' => 'Monitor events from a custom task class in real-time.',
+                'php novakit task:tail --json --since=10m' => 'Show log entries from the last 10 minutes in JSON format.',
+                'php novakit task:tail --grep=ERROR --exclude=DEBUG' => 'Only show lines containing "ERROR" but exclude lines containing "DEBUG".'
             ],
         ],
 
@@ -1062,7 +1091,7 @@ final class Commands
             }
 
             $name = strstr($command, ':', true) ?: $command;
-            $key = "php novakit $command --help";
+            $key = "php novakit {$command} --help";
 
             if($largest !== null){
                 $length = strlen($key);

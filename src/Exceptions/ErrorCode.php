@@ -15,407 +15,417 @@ class ErrorCode
     /** 
      * @var int ERROR 
      */
-    public const ERROR = E_ERROR;
+    public final const ERROR = E_ERROR;
     
     /** 
      * @var int PARSE_ERROR 
      */
-    public const PARSE_ERROR = E_PARSE;
+    public final const PARSE_ERROR = E_PARSE;
     
     /** 
      * @var int CORE_ERROR 
      */
-    public const CORE_ERROR = E_CORE_ERROR;
+    public final const CORE_ERROR = E_CORE_ERROR;
     
     /** 
      * @var int COMPILE_ERROR 
      */
-    public const COMPILE_ERROR = E_COMPILE_ERROR;
+    public final const COMPILE_ERROR = E_COMPILE_ERROR;
     
     /** 
      * @var int IO_ERROR 
      */
-    public const IO_ERROR = 4080;
+    public final const IO_ERROR = 4080;
 
     /** 
      * @var int WARNING 
      */
-    public const WARNING = E_WARNING;
+    public final const WARNING = E_WARNING;
     
     /** 
      * @var int CORE_WARNING 
      */
-    public const CORE_WARNING = E_CORE_WARNING;
+    public final const CORE_WARNING = E_CORE_WARNING;
     
     /** 
      * @var int COMPILE_WARNING 
      */
-    public const COMPILE_WARNING = E_COMPILE_WARNING;
+    public final const COMPILE_WARNING = E_COMPILE_WARNING;
     
     /** 
      * @var int USER_WARNING 
      */
-    public const USER_WARNING = E_USER_WARNING;
+    public final const USER_WARNING = E_USER_WARNING;
 
     /** 
      * @var int NOTICE 
      */
-    public const NOTICE = E_NOTICE;
+    public final const NOTICE = E_NOTICE;
     
     /** 
      * @var int USER_NOTICE 
      */
-    public const USER_NOTICE = E_USER_NOTICE;
+    public final const USER_NOTICE = E_USER_NOTICE;
 
     /** 
      * @var int USER_ERROR 
      */
-    public const USER_ERROR = E_USER_ERROR;
+    public final const USER_ERROR = E_USER_ERROR;
     
     /** 
      * @var int RECOVERABLE_ERROR 
      */
-    public const RECOVERABLE_ERROR = E_RECOVERABLE_ERROR;
+    public final const RECOVERABLE_ERROR = E_RECOVERABLE_ERROR;
 
     /** 
      * @var int DEPRECATED 
      */
-    public const DEPRECATED = E_DEPRECATED;
+    public final const DEPRECATED = E_DEPRECATED;
     
     /** 
      * @var int USER_DEPRECATED 
      */
-    public const USER_DEPRECATED = E_USER_DEPRECATED;
+    public final const USER_DEPRECATED = E_USER_DEPRECATED;
 
     // PDO SQLSTATE Codes
     /** 
      * @var string UNABLE_TO_CONNECT 
      */
-    public const UNABLE_TO_CONNECT = '08001';
+    public final const UNABLE_TO_CONNECT = '08001';
     
     /** 
      * @var string CONNECTION_DENIED 
      */
-    public const CONNECTION_DENIED = '08004';
+    public final const CONNECTION_DENIED = '08004';
     
     /** 
      * @var string INTEGRITY_CONSTRAINT_VIOLATION 
      */
-    public const INTEGRITY_CONSTRAINT_VIOLATION = '23000';
+    public final const INTEGRITY_CONSTRAINT_VIOLATION = '23000';
     
     /** 
      * @var string SQL_SYNTAX_ERROR_OR_ACCESS_VIOLATION 
      */
-    public const SQL_SYNTAX_ERROR_OR_ACCESS_VIOLATION = '42000';
+    public final const SQL_SYNTAX_ERROR_OR_ACCESS_VIOLATION = '42000';
 
     // MySQL Error Codes
     /** 
      * @var int ACCESS_DENIED_FOR_USER 
      */
-    public const ACCESS_DENIED_FOR_USER = 1044;
+    public final const ACCESS_DENIED_FOR_USER = 1044;
     
     /** 
      * @var int ACCESS_DENIED_INVALID_PASSWORD 
      */
-    public const ACCESS_DENIED_INVALID_PASSWORD = 1045;
+    public final const ACCESS_DENIED_INVALID_PASSWORD = 1045;
     
     /** 
      * @var int UNKNOWN_DATABASE 
      */
-    public const UNKNOWN_DATABASE = 1049;
+    public final const UNKNOWN_DATABASE = 1049;
     
     /** 
      * @var int SYNTAX_ERROR_IN_SQL_STATEMENT 
      */
-    public const SYNTAX_ERROR_IN_SQL_STATEMENT = 1064;
+    public final const SYNTAX_ERROR_IN_SQL_STATEMENT = 1064;
     
     /** 
      * @var int TABLE_DOES_NOT_EXIST 
      */
-    public const TABLE_DOES_NOT_EXIST = 1146;
+    public final const TABLE_DOES_NOT_EXIST = 1146;
 
     // PostgreSQL Error Codes
     /** 
      * @var string INVALID_AUTHORIZATION_SPECIFICATION 
      */
-    public const INVALID_AUTHORIZATION_SPECIFICATION = '28000';
+    public final const INVALID_AUTHORIZATION_SPECIFICATION = '28000';
     
     /** 
      * @var string INVALID_CATALOG_NAME 
      */
-    public const INVALID_CATALOG_NAME = '3D000';
+    public final const INVALID_CATALOG_NAME = '3D000';
 
     // Custom Luminova Error Codes
     /** 
      * @var int EXECUTION_FAILED 
      */
-    public const EXECUTION_FAILED = 1510;
+    public final const EXECUTION_FAILED = 1510;
 
     /** 
      * @var int DATABASE_ERROR 
      */
-    public const DATABASE_ERROR = 1500;
+    public final const DATABASE_ERROR = 1500;
+
+    /** 
+     * @var int DATABASE_PERMISSION_DENIED 
+     */
+    public final const DATABASE_PERMISSION_DENIED = 13;
     
     /** 
      * @var int FAILED_ALL_CONNECTION_ATTEMPTS 
      */
-    public const FAILED_ALL_CONNECTION_ATTEMPTS = 1503;
+    public final const FAILED_ALL_CONNECTION_ATTEMPTS = 1503;
     
     /** 
      * @var int CONNECTION_LIMIT_EXCEEDED 
      */
-    public const CONNECTION_LIMIT_EXCEEDED = 1509;
+    public final const CONNECTION_LIMIT_EXCEEDED = 1509;
     
     /** 
      * @var int INVALID_DATABASE_DRIVER 
      */
-    public const INVALID_DATABASE_DRIVER = 1406;
+    public final const INVALID_DATABASE_DRIVER = 1406;
     
     /** 
      * @var int DATABASE_DRIVER_NOT_AVAILABLE 
      */
-    public const DATABASE_DRIVER_NOT_AVAILABLE = 1501;
+    public final const DATABASE_DRIVER_NOT_AVAILABLE = 1501;
     
     /** 
      * @var int DATABASE_TRANSACTION_READONLY_FAILED 
      */
-    public const DATABASE_TRANSACTION_READONLY_FAILED = 1417;
+    public final const DATABASE_TRANSACTION_READONLY_FAILED = 1417;
     
     /** 
      * @var int DATABASE_TRANSACTION_FAILED 
      */
-    public const DATABASE_TRANSACTION_FAILED = 1420;
+    public final const DATABASE_TRANSACTION_FAILED = 1420;
     
     /** 
      * @var int TRANSACTION_SAVEPOINT_FAILED 
      */
-    public const TRANSACTION_SAVEPOINT_FAILED = 1418;
+    public final const TRANSACTION_SAVEPOINT_FAILED = 1418;
     
     /** 
      * @var int FAILED_TO_ROLLBACK_TRANSACTION 
      */
-    public const FAILED_TO_ROLLBACK_TRANSACTION = 1419;
+    public final const FAILED_TO_ROLLBACK_TRANSACTION = 1419;
     
     /** 
      * @var int NO_STATEMENT_TO_EXECUTE 
      */
-    public const NO_STATEMENT_TO_EXECUTE = 1499;
+    public final const NO_STATEMENT_TO_EXECUTE = 1499;
     
     /** 
      * @var int VALUE_FORBIDDEN 
      */
-    public const VALUE_FORBIDDEN = 1403;
+    public final const VALUE_FORBIDDEN = 1403;
     
     /** 
      * @var int INVALID_ARGUMENTS 
      */
-    public const INVALID_ARGUMENTS = 1001;
+    public final const INVALID_ARGUMENTS = 1001;
     
     /** 
      * @var int INVALID 
      */
-    public const INVALID = 1002;
+    public final const INVALID = 1002;
 
     /** 
      * @var int TERMINATED 
      */
-    public const TERMINATED = 10001;
+    public final const TERMINATED = 10001;
     
     /** 
      * @var int RUNTIME_ERROR 
      */
-    public const RUNTIME_ERROR = 5001;
+    public final const RUNTIME_ERROR = 5001;
     
     /** 
      * @var int CLASS_NOT_FOUND 
      */
-    public const CLASS_NOT_FOUND = 5011;
+    public final const CLASS_NOT_FOUND = 5011;
     
     /** 
      * @var int STORAGE_ERROR 
      */
-    public const STORAGE_ERROR = 5079;
+    public final const STORAGE_ERROR = 5079;
     
     /** 
      * @var int VIEW_NOT_FOUND 
      */
-    public const VIEW_NOT_FOUND = 404;
+    public final const VIEW_NOT_FOUND = 404;
     
     /** 
      * @var int INPUT_VALIDATION_ERROR 
      */
-    public const INPUT_VALIDATION_ERROR = 4070;
+    public final const INPUT_VALIDATION_ERROR = 4070;
     
     /** 
      * @var int ROUTING_ERROR 
      */
-    public const ROUTING_ERROR = 4161;
+    public final const ROUTING_ERROR = 4161;
     
     /** 
      * @var int NOT_FOUND 
      */
-    public const NOT_FOUND = 4040;
+    public final const NOT_FOUND = 4040;
     
     /** 
      * @var int BAD_METHOD_CALL 
      */
-    public const BAD_METHOD_CALL = 4051;
+    public final const BAD_METHOD_CALL = 4051;
     
     /** 
      * @var int CACHE_ERROR 
      */
-    public const CACHE_ERROR = 5071;
+    public final const CACHE_ERROR = 5071;
     
     /** 
      * @var int FILESYSTEM_ERROR 
      */
-    public const FILESYSTEM_ERROR = 6204;
+    public final const FILESYSTEM_ERROR = 6204;
     
     /** 
      * @var int COOKIE_ERROR 
      */
-    public const COOKIE_ERROR = 4961;
+    public final const COOKIE_ERROR = 4961;
     
     /** 
      * @var int DATETIME_ERROR 
      */
-    public const DATETIME_ERROR = 2306;
+    public final const DATETIME_ERROR = 2306;
     
     /** 
      * @var int CRYPTOGRAPHY_ERROR 
      */
-    public const CRYPTOGRAPHY_ERROR = 3423;
+    public final const CRYPTOGRAPHY_ERROR = 3423;
     
     /** 
      * @var int WRITE_PERMISSION_DENIED 
      */
-    public const WRITE_PERMISSION_DENIED = 6205;
+    public final const WRITE_PERMISSION_DENIED = 6205;
     
     /** 
      * @var int READ_PERMISSION_DENIED 
      */
-    public const READ_PERMISSION_DENIED = 6206;
+    public final const READ_PERMISSION_DENIED = 6206;
     
     /** 
      * @var int READ_WRITE_PERMISSION_DENIED 
      */
-    public const READ_WRITE_PERMISSION_DENIED = 6209;
+    public final const READ_WRITE_PERMISSION_DENIED = 6209;
     
     /** 
      * @var int CREATE_DIR_FAILED 
      */
-    public const CREATE_DIR_FAILED = 6207;
+    public final const CREATE_DIR_FAILED = 6207;
     
     /** 
      * @var int SET_PERMISSION_FAILED 
      */
-    public const SET_PERMISSION_FAILED = 6208;
+    public final const SET_PERMISSION_FAILED = 6208;
     
     /** 
      * @var int JSON_ERROR 
      */
-    public const JSON_ERROR = 4180;
+    public final const JSON_ERROR = 4180;
     
     /** 
      * @var int SECURITY_ISSUE 
      */
-    public const SECURITY_ISSUE = 4973;
+    public final const SECURITY_ISSUE = 4973;
     
     /** 
      * @var int MAILER_ERROR 
      */
-    public const MAILER_ERROR = 449;
+    public final const MAILER_ERROR = 449;
     
     /** 
      * @var int INVALID_CONTROLLER 
      */
-    public const INVALID_CONTROLLER = 1003;
+    public final const INVALID_CONTROLLER = 1003;
     
     /** 
      * @var int INVALID_METHOD 
      */
-    public const INVALID_METHOD = 4052;
+    public final const INVALID_METHOD = 4052;
     
     /** 
      * @var int INVALID_REQUEST_METHOD 
      */
-    public const INVALID_REQUEST_METHOD = 4053;
+    public final const INVALID_REQUEST_METHOD = 4053;
     
     /** 
      * @var int NOT_ALLOWED 
      */
-    public const NOT_ALLOWED = 4061;
+    public final const NOT_ALLOWED = 4061;
     
     /** 
      * @var int NOT_ALLOWED 
      */
-    public const NOT_SUPPORTED = 4062;
+    public final const NOT_SUPPORTED = 4062;
     
     /** 
      * @var int LOGIC_ERROR 
      */
-    public const LOGIC_ERROR = 4229;
+    public final const LOGIC_ERROR = 4229;
     
     /** 
      * @var int UNDEFINED 
      */
-    public const UNDEFINED = 8790;
+    public final const UNDEFINED = 8790;
 
     /** 
      * @var int HTTP_RESPONSE_ERROR 
      */
-    public const HTTP_RESPONSE_ERROR = 4978;
+    public final const HTTP_RESPONSE_ERROR = 4978;
     
     /** 
      * @var int HTTP_CLIENT_ERROR 
      */
-    public const HTTP_CLIENT_ERROR = 4974;
+    public final const HTTP_CLIENT_ERROR = 4974;
     
     /** 
      * @var int HTTP_CONNECTION_ERROR 
      */
-    public const HTTP_CONNECTION_ERROR = 4975;
+    public final const HTTP_CONNECTION_ERROR = 4975;
     
     /** 
      * @var int HTTP_REQUEST_ERROR 
      */
-    public const HTTP_REQUEST_ERROR = 4976;
+    public final const HTTP_REQUEST_ERROR = 4976;
     
     /** 
      * @var int HTTP_SERVER_ERROR 
      */
-    public const HTTP_SERVER_ERROR = 4977;
+    public final const HTTP_SERVER_ERROR = 4977;
 
     /** 
      * @var int TERMINATE 
      */
-    public const TERMINATE = 1200;
+    public final const TERMINATE = 1200;
     
     /** 
      * @var int TIMEOUT 
      */
-    public const TIMEOUT_ERROR = 1201;
+    public final const TIMEOUT_ERROR = 1201;
     
     /** 
      * @var int PROCESS_ERROR 
      */
-    public const PROCESS_ERROR = 1202;
+    public final const PROCESS_ERROR = 1202;
 
     // SQLite Error Codes
     /** 
      * @var int DATABASE_IS_FULL 
      */
-    public const DATABASE_IS_FULL = 5;
+    public final const DATABASE_IS_FULL = 5;
     
     /** 
      * @var int DATABASE_LOCKED 
      */
-    public const DATABASE_LOCKED = 6;
+    public final const DATABASE_LOCKED = 6;
     
     /** 
      * @var int CANNOT_OPEN_DATABASE_FILE 
      */
-    public const CANNOT_OPEN_DATABASE_FILE = 14;
+    public final const CANNOT_OPEN_DATABASE_FILE = 14;
+
+    /** 
+     * @var int AI_CLIENT_ERROR 
+     */
+    public final const AI_CLIENT_ERROR = 153;
 
     /**
      * Retrieves the descriptive name of a given error or exception code.
@@ -561,6 +571,7 @@ class ErrorCode
             // Custom Luminova Error Codes
             self::EXECUTION_FAILED => ['Execution Failed', 'Execution operation failed'],
             self::DATABASE_ERROR => ['Database Error', 'General database error'],
+            self::DATABASE_PERMISSION_DENIED => ['Permission Denied', 'Database Permission Denied'],
             self::FAILED_ALL_CONNECTION_ATTEMPTS => ['Connection Attempts Failed', 'All connection attempts failed'],
             self::CONNECTION_LIMIT_EXCEEDED => ['Connection Limit Exceeded', 'Database connection limit exceeded'],
             self::INVALID_DATABASE_DRIVER => ['Invalid DB Driver', 'Invalid database driver specified'],
@@ -617,6 +628,7 @@ class ErrorCode
             self::DATABASE_IS_FULL => ['Database Full', 'Database is full'],
             self::DATABASE_LOCKED => ['Database Locked', 'Database is locked'],
             self::CANNOT_OPEN_DATABASE_FILE => ['Cannot Open DB File', 'Cannot open database file'],
+            self::AI_CLIENT_ERROR => ['AI Client Error', 'AI client request error'],
             default => null
         };
     }

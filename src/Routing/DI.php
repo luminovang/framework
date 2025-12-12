@@ -14,29 +14,29 @@ use \Closure;
 use \Throwable;
 use \ReflectionClass;
 use \Luminova\Security\JWT;
+use \Luminova\Http\Request;
 use \Luminova\Cache\RedisCache;
 use \Luminova\Http\Client\Novio;
 use \Luminova\Sessions\Session;
 use \Luminova\Template\Response;
 use function \Luminova\Funcs\root;
-use \Luminova\Component\Seo\Schema;
-use \Luminova\Utility\Email\Mailer;
-use \Luminova\Http\{Request, Network};
-use \Luminova\Utility\Collections\Arr;
+use \Luminova\Components\Seo\Schema;
+use \Luminova\Components\Email\Mailer;
+use \Luminova\Components\Collections\Arr;
 use \Luminova\Foundation\Module\Factory;
-use \Luminova\Component\Languages\Translator;
-use \Luminova\Cache\{FileCache, MemoryCache};
 use \Luminova\Cookies\{Cookie, FileJar};
+use \Luminova\Exceptions\ClassException;
+use \Luminova\Components\Languages\Translator;
+use \Luminova\Cache\{FileCache, MemoryCache};
 use \Luminova\Notifications\Firebase\Notification;
 use \Luminova\Security\Encryption\{Sodium, Openssl};
-use \Luminova\Exceptions\ClassException;
+use \Psr\Http\Message\RequestInterface as PsrRequestInterface;
 use \Luminova\Interface\{
     ClientInterface,
     CookieInterface,
-    NetworkInterface,
     CookieJarInterface,
     InvokableInterface,
-    HttpRequestInterface,
+    RequestInterface,
     ViewResponseInterface,
 };
 
@@ -295,8 +295,7 @@ class DI
     private static function getDefault(string $class): Closure|string|null
     {
         return match ($class) {
-            Request::class, HttpRequestInterface::class      => Request::class,
-            Network::class, NetworkInterface::class          => Network::class,
+            Request::class, RequestInterface::class, PsrRequestInterface::class      => Request::class,
             Novio::class, ClientInterface::class              => Novio::class,
             Response::class, ViewResponseInterface::class    => Response::class,
             Session::class       => Session::class,
