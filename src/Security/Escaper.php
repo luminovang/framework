@@ -17,7 +17,7 @@ use function \Luminova\Funcs\is_utf8;
 /**
  * @mixin \Laminas\Escaper\Escaper
  */
-class Escaper
+final class Escaper
 {
     /**
      * Laminas Escaper object.
@@ -131,7 +131,7 @@ class Escaper
     {
         if(!self::$instance instanceof self){
             self::$isEscaper ??= class_exists(LaminasEscaper::class);
-            self::$instance = new static($encoding);
+            self::$instance = new self($encoding);
 
             if (self::$isEscaper) {
                 self::$instance->escaper = new LaminasEscaper($encoding ?? 'utf-8');

@@ -15,6 +15,7 @@ use \Luminova\Base\Queue;
 use \Luminova\Base\Console;
 use \Luminova\Logger\Logger;
 use \Luminova\Logger\LogLevel;
+use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Text;
 use \Luminova\Command\Utils\Color;
 use function \Luminova\Funcs\{
@@ -61,15 +62,14 @@ class TaskWorker extends Console
      */
     public function run(?array $params = null): int
     {
-        $this->term->perse($params);
         setenv('throw.cli.exceptions', 'true');
 
         $failed = false;
-        $command = trim($this->term->getCommand() ?: '');
+        $name = trim($this->input->getName() ?: '');
         ob_start();
 
         try {
-            $runCommand = match($command){
+            $runCommand = match($name){
                 'task:init'       => $this->taskTable(),
                 'task:deinit'     => $this->taskTable(true),
                 'task:queue'      => $this->taskEnqueue(),
@@ -122,7 +122,7 @@ class TaskWorker extends Console
        $this->logOutput(trim(ob_get_clean() ?: ''), $failed);
 
         if ($runCommand === 'unknown') {
-            return $this->term->oops($command);
+            return Terminal::oops($name);
         } 
             
         return (int) $runCommand;
@@ -138,7 +138,7 @@ class TaskWorker extends Console
 
     private function getTaskInstance(bool $isRunner = false): ?Queue 
     {
-        $class = $this->term->getAnyOption('class', 'c', '\\App\\Tasks\\TaskQueue');
+        $class = $this->input->getAnyOption('class', 'c', '\\App\\Tasks\\TaskQueue');
 
         if (!str_starts_with($class, '\\App\\Tasks\\') && !class_exists($class)) {
             $class = '\\App\\Tasks\\' . ltrim($class, '\\');
@@ -152,7 +152,7 @@ class TaskWorker extends Console
                 return null;
             }
 
-            $this->term->error($error);
+            Terminal::error($error);
 
             return null;
         }
@@ -170,14 +170,14 @@ class TaskWorker extends Console
                 return null;
             }
 
-            $this->term->error($error);
+            Terminal::error($error);
             
             return $task = null;
         }
 
         $task->mode = 'cli';
         $task->returnAsTaskModel = false;
-        $task->setTerminal($this->term);
+        $task->setTerminal($this->input);
 
         return $task;
     }
@@ -198,23 +198,23 @@ class TaskWorker extends Console
         if ($isDrop) {
             if ($task->deinit()) {
                 $task->close();
-                $this->term->writeln('Task table was dropped successfully.', 'green');
+                Terminal::writeln('Task table was dropped successfully.', 'green');
                 return STATUS_SUCCESS;
             }
 
             $task->close();
-            $this->term->writeln('Nothing was dropped. Task table may not exist.', 'yellow');
+            Terminal::writeln('Nothing was dropped. Task table may not exist.', 'yellow');
             return STATUS_ERROR;
         }
 
         if ($task->init()) {
             $task->close();
-            $this->term->writeln('Task table was created successfully.', 'green');
+            Terminal::writeln('Task table was created successfully.', 'green');
             return STATUS_SUCCESS;
         }
 
         $task->close();
-        $this->term->writeln('No changes made. Task table may already exist.', 'yellow');
+        Terminal::writeln('No changes made. Task table may already exist.', 'yellow');
         return STATUS_ERROR;
     }
 
@@ -237,7 +237,7 @@ class TaskWorker extends Console
         }
 
         $result = 0;
-        $handler = $this->term->getAnyOption('task', 't', null);
+        $handler = $this->input->getAnyOption('task', 't', null);
         $isBatch = false;
 
         if (!$handler) {
@@ -245,22 +245,22 @@ class TaskWorker extends Console
 
             if(!$tasks || $tasks === []){
                 $task->close();
-                $this->term->error('Missing task handler. Use -h=<Class@method>, static method -h=<Class::method> or -h=functionName.');
+                Terminal::error('Missing task handler. Use -h=<Class@method>, static method -h=<Class::method> or -h=functionName.');
                 return STATUS_ERROR;
             }
 
             $isBatch = true;
             $result = $task->batchEnqueue($tasks);
         }else{
-            $priority = (int) $this->term->getAnyOption('priority', 'p', 0);
-            $retries = (int) $this->term->getAnyOption('retries', 'r', 0);
-            $schedule = $this->term->getAnyOption('schedule', 's', null);
-            $forever = $this->term->getAnyOption('forever', 'f', null);
+            $priority = (int) $this->input->getAnyOption('priority', 'p', 0);
+            $retries = (int) $this->input->getAnyOption('retries', 'r', 0);
+            $schedule = $this->input->getAnyOption('schedule', 's', null);
+            $forever = $this->input->getAnyOption('forever', 'f', null);
             $forever = ($forever === null) ? null : (int) $forever;
-            $rawArgs = $this->term->getAnyOption('args', 'a', '[]');
+            $rawArgs = $this->input->getAnyOption('args', 'a', '[]');
 
             if($forever !== null && $forever < 5){
-                $this->term->error("The --forever interval must be at least 5 minutes. Given: {$forever}");
+                Terminal::error("The --forever interval must be at least 5 minutes. Given: {$forever}");
                 return STATUS_ERROR;
             }
 
@@ -287,12 +287,12 @@ class TaskWorker extends Console
         $task->close();
 
         if ($result === -0) {
-            $this->term->writeln("Handler [$handler] is not allowed or invalid.", 'red');
+            Terminal::writeln("Handler [$handler] is not allowed or invalid.", 'red');
             return STATUS_ERROR;
         }
 
         if ($result) {
-            $this->term->writeln($isBatch 
+            Terminal::writeln($isBatch 
                     ? "[$result] task(s) was queued successfully."
                     : "Task was queued successfully with ID: #{$result} Handler: [$handler].", 
                 'green'
@@ -300,7 +300,7 @@ class TaskWorker extends Console
             return STATUS_SUCCESS;
         }
 
-        $this->term->writeln("Task could not be queued. Check handler and arguments.", 'yellow');
+        Terminal::writeln("Task could not be queued. Check handler and arguments.", 'yellow');
         return STATUS_ERROR;
     }
 
@@ -320,9 +320,9 @@ class TaskWorker extends Console
             return STATUS_ERROR;
         }
 
-        $offset = (int) $this->term->getAnyOption('offset', 'o', 0);
-        $limit  = $this->term->getAnyOption('limit', 'l', null);
-        $status = $this->term->getAnyOption('status', 's', Queue::ALL);
+        $offset = (int) $this->input->getAnyOption('offset', 'o', 0);
+        $limit  = $this->input->getAnyOption('limit', 'l', null);
+        $status = $this->input->getAnyOption('status', 's', Queue::ALL);
 
         $result = $task->list(
             $status, 
@@ -333,7 +333,7 @@ class TaskWorker extends Console
 
         if (!$result) {
             $task->close();
-            $this->term->writeln('No tasks found for the given status or range.', 'yellow');
+            Terminal::writeln('No tasks found for the given status or range.', 'yellow');
             return STATUS_ERROR;
         }
 
@@ -358,9 +358,9 @@ class TaskWorker extends Console
 
         $task->close();
 
-        $this->term->writeln("Total tasks ({$result['count']} of {$result['total']})", 'green');
-        $this->term->write(
-            $this->term->table($header, $rows, null, 'yellow')
+        Terminal::writeln("Total tasks ({$result['count']} of {$result['total']})", 'green');
+        Terminal::write(
+            Terminal::table($header, $rows, null, 'yellow')
         );
 
         return STATUS_SUCCESS;
@@ -376,16 +376,16 @@ class TaskWorker extends Console
     private function taskStatus(): int 
     {
 
-        $id = (int) $this->term->getAnyOption('id', 'i', null);
-        $status = $this->term->getAnyOption('status', 's', null);
+        $id = (int) $this->input->getAnyOption('id', 'i', null);
+        $status = $this->input->getAnyOption('status', 's', null);
 
         if (!$id) {
-            $this->term->error('Missing task ID. Use -i=<id> to specify the task.');
+            Terminal::error('Missing task ID. Use -i=<id> to specify the task.');
             return STATUS_ERROR;
         }
 
         if (!$status) {
-            $this->term->error('Missing status. Use -s=<status> to provide a new status value.');
+            Terminal::error('Missing status. Use -s=<status> to provide a new status value.');
             return STATUS_ERROR;
         }
 
@@ -399,11 +399,11 @@ class TaskWorker extends Console
         $task->close();
 
         if (!$updated) {
-            $this->term->writeln("Failed to update task #$id to status [$status].", 'red');
+            Terminal::writeln("Failed to update task #$id to status [$status].", 'red');
             return STATUS_ERROR;
         }
 
-        $this->term->writeln("Task #$id status updated to [$status].", 'green');
+        Terminal::writeln("Task #$id status updated to [$status].", 'green');
         return STATUS_SUCCESS;
     }
 
@@ -415,10 +415,10 @@ class TaskWorker extends Console
      */
     private function taskInfo(): int
     {
-        $id = (int) $this->term->getAnyOption('id', 'i', 0);
+        $id = (int) $this->input->getAnyOption('id', 'i', 0);
 
         if ($id < 1) {
-            $this->term->error('Invalid or missing task ID. Use -i=<task_id>.');
+            Terminal::error('Invalid or missing task ID. Use -i=<task_id>.');
             return STATUS_ERROR;
         }
 
@@ -432,7 +432,7 @@ class TaskWorker extends Console
         $task->close();
 
         if (!$row) {
-            $this->term->writeln("Task with ID [$id] not found.", 'yellow');
+            Terminal::writeln("Task with ID [$id] not found.", 'yellow');
             return STATUS_ERROR;
         }
 
@@ -454,7 +454,7 @@ class TaskWorker extends Console
             ];
         }
 
-        $this->term->write($this->term->table(
+        Terminal::write(Terminal::table(
             headers: ['Field', 'Value'], 
             rows: $rows,
             headerColor: 'green',
@@ -480,10 +480,10 @@ class TaskWorker extends Console
      */
     private function taskDelete(): int
     {
-        $id = (int) $this->term->getAnyOption('id', 'i', 0);
+        $id = (int) $this->input->getAnyOption('id', 'i', 0);
 
         if ($id < 1) {
-            $this->term->error('Invalid or missing task ID. Use -i=<task_id>.');
+            Terminal::error('Invalid or missing task ID. Use -i=<task_id>.');
             return STATUS_ERROR;
         }
 
@@ -495,12 +495,12 @@ class TaskWorker extends Console
 
         if (!$task->delete($id)) {
             $task->close();
-            $this->term->writeln("Task with ID [$id] could not be deleted or does not exist.", 'yellow');
+            Terminal::writeln("Task with ID [$id] could not be deleted or does not exist.", 'yellow');
             return STATUS_ERROR;
         }
 
         $task->close();
-        $this->term->writeln("Task with ID [$id] has been deleted.", 'green');
+        Terminal::writeln("Task with ID [$id] has been deleted.", 'green');
         return STATUS_SUCCESS;
     }
 
@@ -518,17 +518,17 @@ class TaskWorker extends Console
             return STATUS_ERROR;
         }
 
-        $status = $this->term->getAnyOption('status', 's', Queue::ALL);
+        $status = $this->input->getAnyOption('status', 's', Queue::ALL);
         $count = $task->purge($status);
 
         if ($count === 0) {
             $task->close();
-            $this->term->writeln("No tasks matched for purging with status [$status].", 'yellow');
+            Terminal::writeln("No tasks matched for purging with status [$status].", 'yellow');
             return STATUS_ERROR;
         }
 
         $task->close();
-        $this->term->writeln("Purged $count task(s) with status [$status].", 'green');
+        Terminal::writeln("Purged $count task(s) with status [$status].", 'green');
         return STATUS_SUCCESS;
     }
 
@@ -538,10 +538,10 @@ class TaskWorker extends Console
      */
     private function taskPause(): int
     {
-        $id = (int) $this->term->getAnyOption('id', 'i', 0);
+        $id = (int) $this->input->getAnyOption('id', 'i', 0);
 
         if ($id < 1) {
-            $this->term->error('Missing or invalid task ID.');
+            Terminal::error('Missing or invalid task ID.');
             return STATUS_ERROR;
         }
 
@@ -553,12 +553,12 @@ class TaskWorker extends Console
 
         if (!$task->pause($id)) {
             $task->close();
-            $this->term->writeln("Task ID [$id] could not be paused or doesn't exist.", 'yellow');
+            Terminal::writeln("Task ID [$id] could not be paused or doesn't exist.", 'yellow');
             return STATUS_ERROR;
         }
 
         $task->close();
-        $this->term->writeln("Task ID [$id] has been paused.", 'green');
+        Terminal::writeln("Task ID [$id] has been paused.", 'green');
         return STATUS_SUCCESS;
     }
 
@@ -568,28 +568,28 @@ class TaskWorker extends Console
      */
     private function taskResume(): int
     {
-        $id = (int) $this->term->getAnyOption('id', 'i', 0);
+        $id = (int) $this->input->getAnyOption('id', 'i', 0);
 
         if ($id < 1) {
-            $this->term->error('Missing or invalid task ID.');
+            Terminal::error('Missing or invalid task ID.');
             return STATUS_ERROR;
         }
 
         $task = $this->getTaskInstance();
 
         if (!$task instanceof Queue) {
-            $this->term->error('Invalid task class.');
+            Terminal::error('Invalid task class.');
             return STATUS_ERROR;
         }
 
         if (!$task->resume($id)) {
             $task->close();
-            $this->term->writeln("Task ID [$id] could not be resumed or isn't paused.", 'yellow');
+            Terminal::writeln("Task ID [$id] could not be resumed or isn't paused.", 'yellow');
             return STATUS_ERROR;
         }
 
         $task->close();
-        $this->term->writeln("Task ID [$id] has been resumed.", 'green');
+        Terminal::writeln("Task ID [$id] has been resumed.", 'green');
         return STATUS_SUCCESS;
     }
 
@@ -599,28 +599,28 @@ class TaskWorker extends Console
      */
     private function taskRetry(): int
     {
-        $id = (int) $this->term->getAnyOption('id', 'i', 0);
+        $id = (int) $this->input->getAnyOption('id', 'i', 0);
 
         if ($id < 1) {
-            $this->term->error('Missing or invalid task ID.');
+            Terminal::error('Missing or invalid task ID.');
             return STATUS_ERROR;
         }
 
         $task = $this->getTaskInstance();
 
         if (!$task instanceof Queue) {
-            $this->term->error('Invalid task class.');
+            Terminal::error('Invalid task class.');
             return STATUS_ERROR;
         }
 
         if (!$task->retry($id)) {
             $task->close();
-            $this->term->writeln("Task ID [$id] could not be retried.", 'yellow');
+            Terminal::writeln("Task ID [$id] could not be retried.", 'yellow');
             return STATUS_ERROR;
         }
 
         $task->close();
-        $this->term->writeln("Task ID [$id] has been marked for retry.", 'green');
+        Terminal::writeln("Task ID [$id] has been marked for retry.", 'green');
         return STATUS_SUCCESS;
     }
 
@@ -638,7 +638,7 @@ class TaskWorker extends Console
         $task = $this->getTaskInstance(true);
 
         if ($task instanceof Queue) {
-            $flock = $this->term->getAnyOption('flock-worker', 'f');
+            $flock = $this->input->getAnyOption('flock-worker', 'f');
 
             if($flock){
                 if($task->isLocked()){
@@ -648,15 +648,15 @@ class TaskWorker extends Console
                 $task->lock();
             }
 
-            $sleep  = (int) $this->term->getAnyOption('sleep', 's', 100000);
-            $limit  = $this->term->getAnyOption('limit', 'l');
-            $idle   = (int) $this->term->getAnyOption('idle', 'i', 10);
+            $sleep  = (int) $this->input->getAnyOption('sleep', 's', 100000);
+            $limit  = $this->input->getAnyOption('limit', 'l');
+            $idle   = (int) $this->input->getAnyOption('idle', 'i', 10);
 
             $task->onComplete = function(int $id, string $handler, string $status){
                 $label = Color::style($handler, 'lightYellow');
                 $spacing = Text::padding('', 10, Text::RIGHT);
 
-                $this->term->writeln("  Task #[{$id}] {$label}{$spacing}{$status}");
+                Terminal::writeln("  Task #[{$id}] {$label}{$spacing}{$status}");
             };
 
             $task->run($sleep, ($limit !== null) ? (int) $limit : null, $idle);
@@ -687,7 +687,7 @@ class TaskWorker extends Console
         $info = $task->getPathInfo('event');
 
         if (!$info) {
-            $this->term->writeln(sprintf(
+            Terminal::writeln(sprintf(
                 'Missing logging flag. Set "%s::$eventLogging" to true, e.g., "%s::$eventLogging = true".',
                 $task::class,
                 $task::class
@@ -698,13 +698,13 @@ class TaskWorker extends Console
         $filename = $info[1];
 
         if (file_exists($filename) && !is_file($filename)) {
-            $this->term->writeln("Task events log file not found: $filename", 'yellow');
+            Terminal::writeln("Task events log file not found: $filename", 'yellow');
             return STATUS_ERROR;
         }
 
-        $this->term->writeln(sprintf("Listening for task events in: %s", $task::class));
-        $this->term->writeln('Press Ctrl+C to stop.', 'green');
-        $this->term->newLine();
+        Terminal::writeln(sprintf("Listening for task events in: %s", $task::class));
+        Terminal::writeln('Press Ctrl+C to stop.', 'green');
+        Terminal::newLine();
 
         $task = null;
         $lastSize = 0;
@@ -715,7 +715,7 @@ class TaskWorker extends Console
             }
 
             if (!is_readable($filename)) {
-                $this->term->error("Cannot read tasks event log file: $filename");
+                Terminal::error("Cannot read tasks event log file: $filename");
                 break;
             }
 
@@ -760,16 +760,16 @@ class TaskWorker extends Console
             return STATUS_ERROR;
         }
 
-        $stop = $this->term->getAnyOption('stop-worker', 's');
-        $resume = $this->term->getAnyOption('resume-worker', 'r');
+        $stop = $this->input->getAnyOption('stop-worker', 's');
+        $resume = $this->input->getAnyOption('resume-worker', 'r');
 
         if(!$stop && !$resume){
-            $this->term->writeln("Please specify either --stop-worker (-s) or --resume-worker (-r).", 'yellow');
+            Terminal::writeln("Please specify either --stop-worker (-s) or --resume-worker (-r).", 'yellow');
             return STATUS_ERROR;
         }
 
         if($stop && $resume){
-            $this->term->writeln("Cannot use --stop-worker and --resume-worker at the same time.", 'yellow');
+            Terminal::writeln("Cannot use --stop-worker and --resume-worker at the same time.", 'yellow');
             return STATUS_ERROR;
         }
 
@@ -777,21 +777,21 @@ class TaskWorker extends Console
 
         if ($stop) {
             if (make_dir($path) && file_put_contents($filename, '1')) {
-                $this->term->writeln("Worker stop signal created: {$filename}", 'green');
+                Terminal::writeln("Worker stop signal created: {$filename}", 'green');
                 return STATUS_SUCCESS;
             }
 
-            $this->term->writeln("Failed to create stop signal file.", 'red');
+            Terminal::writeln("Failed to create stop signal file.", 'red');
             return STATUS_ERROR;
         }
 
         if ($resume) {
             if (file_exists($filename) && unlink($filename)) {
-                $this->term->writeln("Worker resume signal processed. Signal file removed.", 'green');
+                Terminal::writeln("Worker resume signal processed. Signal file removed.", 'green');
                 return STATUS_SUCCESS;
             }
 
-            $this->term->writeln("No signal file found to remove, or failed to delete.");
+            Terminal::writeln("No signal file found to remove, or failed to delete.");
             return STATUS_ERROR;
         }
 
@@ -806,27 +806,27 @@ class TaskWorker extends Console
             return STATUS_ERROR;
         }
 
-        $dir = $this->term->getAnyOption('dir', 'd');
+        $dir = $this->input->getAnyOption('dir', 'd');
 
         if (!$dir) {
-            $this->term->writeln("✖ No export path specified. Use --dir=path/to/file.txt", 'yellow');
+            Terminal::writeln("✖ No export path specified. Use --dir=path/to/file.txt", 'yellow');
             return STATUS_ERROR;
         }
 
-        $status = $this->term->getAnyOption('status', 's', Queue::ALL);
+        $status = $this->input->getAnyOption('status', 's', Queue::ALL);
         $metadata = '';
 
         if ($task->export($status, $dir, $metadata)) {
-            $this->term->writeln("✔ Tasks were successfully exported to: {$dir}", 'green');
+            Terminal::writeln("✔ Tasks were successfully exported to: {$dir}", 'green');
 
             if (!empty($metadata)) {
-                $this->term->writeln($metadata);
+                Terminal::writeln($metadata);
             }
 
             return STATUS_SUCCESS;
         }
 
-        $this->term->writeln("✖ Failed to export tasks to: {$dir}", 'red');
+        Terminal::writeln("✖ Failed to export tasks to: {$dir}", 'red');
         return STATUS_ERROR;
     }
 
@@ -860,14 +860,14 @@ class TaskWorker extends Console
             return;
         }
 
-        $this->term->writeln(Text::style($title, Text::FONT_BOLD | Text::FONT_UNDERLINE), $color);
-        $this->term->newLine();
+        Terminal::writeln(Text::style($title, Text::FONT_BOLD | Text::FONT_UNDERLINE), $color);
+        Terminal::newLine();
 
         $output = is_array($value) || is_object($value)
             ? json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
             : (string) $value;
 
-        $this->term->writeln($output);
+        Terminal::writeln($output);
     }
 
     private function getMapColumnName(string $column): string 
@@ -897,10 +897,10 @@ class TaskWorker extends Console
             return;
         }
 
-        $logger = $this->term->getAnyOption('output', 'o');
+        $logger = $this->input->getAnyOption('output', 'o');
 
         if (!$logger) {
-            $this->term->writeln($output, $failed ? 'red' : null);
+            Terminal::writeln($output, $failed ? 'red' : null);
             return;
         }
 

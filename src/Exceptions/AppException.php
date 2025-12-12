@@ -10,15 +10,15 @@
  */
 namespace Luminova\Exceptions;
 
-use \Throwable;
 use \Exception;
+use \Throwable;
 use \Stringable;
 use \Luminova\Luminova;
 use \Luminova\Logger\Logger;
 use \Luminova\Exceptions\ErrorCode;
+use function \Luminova\Funcs\import;
 use \Luminova\Foundation\Error\Guard;
 use \Luminova\Interface\ExceptionInterface;
-use function \Luminova\Funcs\import;
 
 abstract class AppException extends Exception implements ExceptionInterface, Stringable
 {
@@ -126,16 +126,6 @@ abstract class AppException extends Exception implements ExceptionInterface, Str
     public function getDescription(): string
     {
         return Guard::sanitizeMessage($this->message);
-    }
-
-    /**
-     * Get filtered error message.
-     * 
-     * @deprecated Since 3.6.8, Use getDescription() instead.
-     */
-    public function getFilteredMessage(): string 
-    {
-        return $this->getDescription();
     }
 
     /**

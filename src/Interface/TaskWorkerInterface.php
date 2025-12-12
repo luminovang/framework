@@ -11,8 +11,7 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Command\Terminal;
-use \Luminova\Interface\LazyObjectInterface;
+use \Luminova\Command\Input;
 
 interface TaskWorkerInterface
 {
@@ -21,9 +20,9 @@ interface TaskWorkerInterface
      *
      * This makes command arguments and options available inside the queue class.
      *
-     * @param Terminal|LazyObjectInterface $term Terminal instance that provides command arguments/options.
+     * @param Input $input The instance of command input arguments/options.
      *
      * @return static Returns the instance of the class.
      */
-    public function setTerminal(LazyObjectInterface|Terminal $term): self;
+    public function setTerminal(Input $input): self;
 }

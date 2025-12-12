@@ -129,11 +129,11 @@ class Connection implements LazyObjectInterface, Countable
      * optionally assigning it to a specific shard server identified by `$locationId`.
      * If the selected shard is unreachable, it can fallback to available backup servers.
      *
-     * @param string  $locationId         Shard identifier (e.g., region name or server key).
-     * @param bool    $fallbackOnError    Fallback to a backup server if shard server connection is unavailable.
-     * @param ?bool   $pool               Enable connection pooling (if applicable).
-     * @param ?int    $maxPoolConnections     Maximum number of connections allowed in the pool.
-     * @param bool    $sharedInstance     Reuse a shared static instance if set to true.
+     * @param string $locationId Shard identifier (e.g., region name or server key).
+     * @param bool $fallbackOnError Fallback to a backup server if shard server connection is unavailable.
+     * @param ?bool $pool Enable connection pooling (if applicable).
+     * @param ?int $maxPoolConnections Maximum number of connections allowed in the pool.
+     * @param bool $sharedInstance Reuse a shared static instance if set to true.
      * 
      * @return Connection Returns an initialized database connection instance.
      * @throws DatabaseException If connection retries fail, max connection limit is reached, an invalid driver is detected, or a connection error occurs.
@@ -148,7 +148,7 @@ class Connection implements LazyObjectInterface, Countable
     {
         $instance = $sharedInstance
             ? self::getInstance($pool, $maxPoolConnections, false)
-            : new static($pool, $maxPoolConnections, false);
+            : new self($pool, $maxPoolConnections, false);
 
         $instance->shardServerLocation = $locationId;
         $instance->isShardFallbackOnError = $fallbackOnError;
@@ -183,7 +183,7 @@ class Connection implements LazyObjectInterface, Countable
     ): static
     {
         if (!self::$instance instanceof static) {
-            self::$instance = new static($pool, $maxPoolConnections, $autoConnect);
+            self::$instance = new self($pool, $maxPoolConnections, $autoConnect);
         }
 
         return self::$instance;
@@ -277,6 +277,9 @@ class Connection implements LazyObjectInterface, Countable
             'pdo' => PdoDatabase::class
         ];
 
+        /**
+         * @var DatabaseInterface|null $driver
+         */
         $driver = $drivers[$config->getValue('connection')] ?? null;
 
         if ($driver === null) {
@@ -286,7 +289,7 @@ class Connection implements LazyObjectInterface, Countable
             );
         }
 
-        $connection = new $driver($config);
+        $connection = $driver::getInstance($config);
 
         if (!$connection instanceof DatabaseInterface) {
             throw new DatabaseException(
@@ -539,7 +542,8 @@ class Connection implements LazyObjectInterface, Countable
             'production' => PRODUCTION,
             'username' => env("{$var}.username"),
             'password' => env("{$var}.password"),
-            'database' => env("{$var}.name")
+            'database' => env("{$var}.name"),
+            'commands' => env("{$var}.commands"),
         ];
     }
 
@@ -702,10 +706,11 @@ class Connection implements LazyObjectInterface, Countable
     */
     private function shouldThrow(string|int $code): bool 
     {
-        return in_array($code, [
+        return !PRODUCTION || in_array($code, [
             ErrorCode::DATABASE_DRIVER_NOT_AVAILABLE,
             ErrorCode::INVALID_DATABASE_DRIVER,
-            ErrorCode::RUNTIME_ERROR
+            ErrorCode::RUNTIME_ERROR,
+            ErrorCode::VALUE_FORBIDDEN
         ]);
     }
 

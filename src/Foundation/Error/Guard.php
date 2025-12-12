@@ -10,14 +10,14 @@
  */
 namespace Luminova\Foundation\Error;
 
-use \App\Application;
+use \Throwable;
 use \Luminova\Boot;
 use \Luminova\Luminova;
 use \Luminova\Http\Header;
 use \Luminova\Logger\Logger;
 use \Luminova\Exceptions\ErrorCode;
 use \Luminova\Foundation\Error\Message;
-use \Luminova\Exceptions\ErrorException;
+use \Luminova\Exceptions\{ErrorException, RuntimeException};
 
 final class Guard
 {
@@ -40,6 +40,7 @@ final class Guard
      * 
      * Hooks PHP's error and shutdown events so that:
      * - All errors are routed through {@see self::handle()}.
+     * - Uncaught exceptions handler with {@see self::exceptions()}.
      * - Fatal errors on shutdown are processed by {@see self::shutdown()}.
      * 
      * @return void
@@ -48,6 +49,7 @@ final class Guard
     public static function register(): void
     {
         set_error_handler([static::class, 'handle']);
+        set_exception_handler([static::class, 'exceptions']);
         register_shutdown_function([static::class, 'shutdown']);
     }
 
@@ -75,10 +77,10 @@ final class Guard
      * - In production or with `display_errors` disabled:  
      *   Logs the error in a structured format.
      *
-     * @param int    $severity The error severity level.
-     * @param string $message  The error message.
-     * @param string $file     The full path to the file where the error occurred.
-     * @param int    $line     The line number of the error.
+     * @param int $severity The error severity level.
+     * @param string $message The error message.
+     * @param string $file The full path to the file where the error occurred.
+     * @param int $line The line number of the error.
      * 
      * @return bool Return true if handled, false if suppressed.
      * @internal
@@ -90,7 +92,7 @@ final class Guard
         }
 
         $code = self::findCode($message, $severity);
-        $file = Luminova::filterPath($file);
+        $file = Luminova::trimSystemPath($file);
         $name = ErrorCode::getName($code);
         
         if((bool) ini_get('display_errors') && !PRODUCTION){
@@ -155,7 +157,7 @@ final class Guard
                 '[%s (%s)] %s File: %s Line: %d.', 
                 $name, (string) $code,
                 $error['message'],
-                Luminova::filterPath($error['file']), 
+                Luminova::trimSystemPath($error['file']), 
                 $error['line']
             );
         }
@@ -167,6 +169,23 @@ final class Guard
                 $error['message'], $error['file'], $error['line']
             ));
         }
+    }
+
+    /**
+     * Handle uncaught exceptions.
+     * 
+     * @param Throwable $e The exception object.
+     * 
+     * @return void
+     * @internal
+     */
+    public static function exceptions(Throwable $e): void
+    {
+        RuntimeException::throwException(
+            $e->getMessage(),
+            $e->getCode(), 
+            $e
+        );
     }
 
     /**
@@ -187,7 +206,12 @@ final class Guard
         ?int $line = null
     ): void 
     {
-        throw new ErrorException(message: $message, code: $code, file: $file, line: $line);
+        throw new ErrorException(
+            message: $message, 
+            code: $code, 
+            file: $file, 
+            line: $line
+        );
     }
 
     /**
@@ -357,15 +381,11 @@ final class Guard
 
         if (Luminova::isCommand()) {
             echo $error;
-            return;
+            exit(STATUS_ERROR);
         }
 
-        if (!headers_sent()) {
-            header('HTTP/1.1 500 Internal Server Error');
-            header('Retry-After: ' . $retryAfter);
-        }
-
-        printf('<html><head><title>Error Occurred</title></head><body><h1>Error Occurred</h1><p>%s</p></body></html>', $error);
+        Header::terminate(500, $error, 'Internal Server Error', $retryAfter);
+        exit(STATUS_ERROR);
     }
     
     /**
@@ -460,7 +480,7 @@ final class Guard
         }
         
         if (!$isCommand) {
-            Header::clearOutputBuffers();
+            Header::clearOutputBuffers('all');
         }
 
         if(file_exists($path . $view)){

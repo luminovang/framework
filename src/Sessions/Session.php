@@ -15,8 +15,8 @@ namespace Luminova\Sessions;
 
 use \Luminova\Luminova;
 use \Luminova\Time\Time;
-use \Luminova\Utility\IP;
 use \Luminova\Logger\Logger;
+use \Luminova\Http\Network\IP;
 use \Luminova\Base\SessionHandler;
 use \App\Config\Session as SessionConfig;
 use \Luminova\Exceptions\InvalidArgumentException;
@@ -24,7 +24,7 @@ use \Luminova\Sessions\Managers\Session as SessionManager;
 use \Luminova\Interface\{LazyObjectInterface, SessionManagerInterface};
 use \Luminova\Exceptions\{ErrorCode, LogicException, RuntimeException};
 
-class Session implements LazyObjectInterface
+final class Session implements LazyObjectInterface
 {
     /**
      * Session manager interface
@@ -207,7 +207,7 @@ class Session implements LazyObjectInterface
     public static function getInstance(?SessionManagerInterface $manager = null): static
     {
         if (self::$instance === null) {
-            self::$instance = new static($manager);
+            self::$instance = new self($manager);
         }
 
         return self::$instance;
@@ -1037,7 +1037,9 @@ class Session implements LazyObjectInterface
         }
 
         if ($status === self::NONE) {
-            $this->setSessionConfigurations();
+            if($isSession){
+                self::initializeSessionCookie();
+            }
 
             if($this->manager->start($sessionId)){
                 $this->setIpChangeEventListener();
@@ -1450,39 +1452,43 @@ class Session implements LazyObjectInterface
     }
 
     /**
-     * Configure session settings.
+     * Configure PHP session settings based on the session configuration.
+     *
+     * This method sets various PHP session ini settings according to the 
+     * properties defined in the `SessionConfig` class. It handles settings 
+     * such as session expiration, save path, cookie usage, and strict mode.
      *
      * @return void
+     * @throws RuntimeException If the specified session save path is not writable.
+     * 
+     * @example - Example:
+     * ```php
+     * Session::initializeSessionCookie();
+     * session_start();
+     * ```
      */
-    private function setSessionConfigurations(): void
+    public static function initializeSessionCookie(): void
     {
-        $sameSite = in_array(self::$config->sameSite, ['Lax', 'Strict', 'None'], true) 
-            ? self::$config->sameSite 
-            : 'Lax';
-
-        session_set_cookie_params([
-            'lifetime' => self::$config->expiration,
-            'path'     => self::$config->sessionPath,
-            'domain'   => self::$config->sessionDomain,
-            'secure'   => true, 
-            'httponly' => true,
-            'samesite' => $sameSite,
-        ]);
-        ini_set('session.name', $this->getName());
-        ini_set('session.cookie_samesite', $sameSite);
+        self::$config ??= new SessionConfig();
 
         if (self::$config->expiration > 0) {
             ini_set('session.gc_maxlifetime', (string) self::$config->expiration);
-            ini_set('session.cookie_lifetime', (string) self::$config->expiration);
         }
 
-        if (self::$config->savePath && is_writable(self::$config->savePath)) {
+        if (self::$config->savePath) {
+            if(!is_writable(self::$config->savePath)){
+                throw new RuntimeException(sprintf(
+                    'The specified session save path "%s" is not writable. Please ensure the directory exists and has appropriate permissions.',
+                    self::$config->savePath
+                ));
+            }
+
             ini_set('session.save_path', self::$config->savePath);
         }
 
-        ini_set('session.use_trans_sid', '0');
         ini_set('session.use_strict_mode', '1');
         ini_set('session.lazy_write', '1');
+        ini_set('session.use_trans_sid', '0');
 
         if (PHP_SAPI === 'cli' || Luminova::isCommand()) {
             ini_set('session.use_cookies', '0');
@@ -1493,6 +1499,23 @@ class Session implements LazyObjectInterface
 
         ini_set('session.use_cookies', '1');
         ini_set('session.use_only_cookies', '1');
+
+        if (self::$config->cookieName) {
+            session_name(self::$config->cookieName);
+        }
+
+        $sameSite = in_array(self::$config->sameSite, ['Lax', 'Strict', 'None'], true)
+            ? self::$config->sameSite
+            : 'Lax';
+
+        session_set_cookie_params([
+            'lifetime' => self::$config->expiration,
+            'path'     => self::$config->sessionPath,
+            'domain'   => self::$config->sessionDomain,
+            'secure'   => true,
+            'httponly' => true,
+            'samesite' => $sameSite,
+        ]);
     }
 
     /**

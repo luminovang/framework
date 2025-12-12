@@ -10,10 +10,10 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Utility\Storage\Filesystem;
+use \Luminova\Http\Downloader;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Interface\{LazyObjectInterface, DatabaseInterface};
 use function \Luminova\Funcs\{root, make_dir};
+use \Luminova\Interface\{LazyObjectInterface, DatabaseInterface};
 
 final class Manager implements LazyObjectInterface
 {
@@ -95,7 +95,7 @@ final class Manager implements LazyObjectInterface
                 }
             }
 
-            if($count > 0 && Filesystem::download($filepath, $filename, [], true)){
+            if($count > 0 && Downloader::download($filepath, $filename, delete: true)){
                 $count++;
             }
         }

@@ -45,12 +45,85 @@ class Stream implements StreamInterface, Stringable
      * @param resource $resource A valid PHP stream resource (e.g., from fopen, php://temp).
      *
      * @throws InvalidArgumentException If the provided value is not a valid stream resource.
+     * @see self::fromString() for creating a stream from a string.
      */
     public function __construct(private mixed $resource)
     {
         if (!is_resource($this->resource)) {
-            throw new InvalidArgumentException('Invalid resource provided; expected a valid stream resource.');
+            throw new InvalidArgumentException(sprintf(
+                'Invalid stream resource provided; expected a resource, got %s.',
+                gettype($this->resource)
+            ));
         }
+    }
+
+    /**
+     * Create a Stream instance from a string.
+     *
+     * @param string $content The raw string to convert.
+     * @param string $mode The mode in which to open the temporary stream (default: 'rb+').
+     * 
+     * @return static Return a new Stream instance containing the string data.
+     * @throws RuntimeException if the temporary stream cannot be created.
+     */
+    public static function fromString(string $content, string $mode = 'rb+'): static
+    {
+        $stream = fopen('php://temp', $mode); 
+
+        if ($stream === false) {
+            throw new RuntimeException('Unable to create temporary stream ("php://temp").');
+        }
+
+        if($content !== ''){
+            fwrite($stream, $content);
+        }
+        
+        rewind($stream);
+
+        return new static($stream);
+    }
+
+    /**
+     * Create an immutable (read-only) stream from a string.
+     *
+     * The stream is written once, rewound, and reopened in read-only mode
+     * to prevent further modification.
+     * 
+     * @param string $content The raw string to convert.
+     * 
+     * @return static Return a new read-only Stream instance containing the string data.
+     * @throws RuntimeException if the temporary stream cannot be created.
+     * 
+     * @see self::fromString() for creating a writable stream from a string.
+     * 
+     * > **Note:**
+     * > This method opens the stream in read-only mode, ensuring that
+     * > the content cannot be modified after creation using `rb` mode.
+     */
+    public static function fromStringReadOnly(string $content): static
+    {
+        $resource = fopen('php://temp', 'wb+');
+
+        if ($resource === false) {
+            throw new RuntimeException('Unable to create temporary stream.');
+        }
+
+        if ($content !== '') {
+            fwrite($resource, $content);
+        }
+
+        rewind($resource);
+
+        $uri = stream_get_meta_data($resource)['uri'];
+        fclose($resource);
+
+        $resource = fopen($uri, 'rb');
+
+        if ($resource === false) {
+            throw new RuntimeException('Unable to reopen stream as read-only.');
+        }
+
+        return new static($resource);
     }
 
     /**
@@ -257,6 +330,17 @@ class Stream implements StreamInterface, Stringable
     }
 
     /**
+     * Retrieves the URI of the stream if available.
+     *
+     * @return string|null Return the URI of the stream, or null if not available.
+     * @see self::getMetadata() for retrieving all metadata including URI.
+     */
+    public function getUri(): ?string
+    {
+        return $this->getMetadata('uri') ?: null;
+    }
+
+    /**
      * Get the total size of the stream in bytes.
      *
      * Returns the number of bytes in the stream if known, or null if unknown.
@@ -273,7 +357,7 @@ class Stream implements StreamInterface, Stringable
             return null;
         }
 
-        $uri = $this->getMetadata('uri');
+        $uri = $this->getUri();
         if ($uri) {
             clearstatcache(true, $uri);
         }

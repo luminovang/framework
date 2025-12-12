@@ -10,7 +10,7 @@
  * ╚══════╝ ╚═════╝ ╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝
  *
  * @package Luminova
- * @author Ujah Chigozie Peter
+ * @author Ujah Chigozie Peter 
  * @copyright (c) Nanoblock Technology Ltd
  * @license See LICENSE file
  * @link https://luminova.ng
@@ -18,11 +18,14 @@
 namespace Luminova;
 
 use \Throwable;
+use \App\Kernel;
 use \ReflectionClass;
 use \Luminova\Logger\Logger;
-use \Luminova\Debugger\Performance;
-use \Luminova\Exceptions\{ErrorCode, FileException};
 use function \Luminova\Funcs\root;
+use \Luminova\Debugger\Performance;
+use \Luminova\Interface\ServiceKernelInterface;
+use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Exceptions\{ErrorCode, FileException};
 
 final class Luminova 
 {
@@ -31,7 +34,7 @@ final class Luminova
      * 
      * @var string VERSION
      */
-    public const VERSION = '3.8.0';
+    public const VERSION = '3.7.1';
 
     /**
      * Framework version name.
@@ -88,19 +91,16 @@ final class Luminova
     ];
 
     /**
-     * Controller class information.
-     * 
-     * @var array<string,string> $routedClassMetadata
+     * Shared application kernel object.
+     *
+     * @var ServiceKernelInterface|null $kernel
      */
-    private static array $routedClassMetadata = [
-        'filename'    => null,
-        'uri'         => null,
-        'namespace'   => null,
-        'method'      => null,
-        'controllers' => 0,
-        'cache'       => false,
-        'staticCache' => false,
-    ];
+    private static ?ServiceKernelInterface $kernel = null;
+
+    /**
+     * Prevent initialization
+     */
+    private function __construct(){}
 
     /**
      * Get the framework copyright information.
@@ -135,25 +135,87 @@ final class Luminova
     public static final function version(bool $integer = false): string|int
     {
         return $integer 
-            ? (int) \Luminova\Common\Helpers::toStrictInput(self::VERSION, 'int') 
+            ? (int) str_replace('.', '', self::VERSION)
             : self::VERSION;
     }
 
     /**
-     * Start or stop application profiling.
+     * Start or stop recording application performance profiling.
+     *
+     * Profiling is only active when debugging is enabled and the application
+     * is not running in production.
+     *
+     * @param string $action The profiling action (typically: `start` or `stop`).
+     * @param array|null $command Optional CLI command context for profiling stop.
      * 
-     * @param string $action The name of the action (e.g, start or stop).
-     * @param array|null $context Additional information to pass to profiling (default: null).
-     * 
+     * **Command structure:**
+     *
+     * ```
+     * [
+     *     'command'      => string,        // Original CLI input (without PHP binary)
+     *     'name'       => string,        // Resolved command name.
+     *     'group'      => string,        // Command group namespace.
+     *     'arguments'  => string[],      // Positional arguments (e.g. ['limit=2'])
+     *     'options'    => array<string,mixed>, // Named options (e.g. ['no-header' => null])
+     *     'input'      => string,        // Full executable command string
+     *     'params'     => string[],      // Parsed parameter values
+     * ]
+     * ```
+     *
      * @return void
+     * @throws InvalidArgumentException If an unsupported action is provided in non-production.
+     * 
+     * @see Performance::start() To start recording performance profiling
+     * @see Performance::stop() To stop recording.
      */
-    public static final function profiling(string $action, ?array $context = null): void
+    public static final function profiling(string $action, ?array $command = null): void
     {
-        if((!PRODUCTION || STAGING) && env('debug.show.performance.profiling', false)){
-            ($action === 'start')
-                ? Performance::start() 
-                : Performance::stop(null, $context);
+        if (PRODUCTION || !STAGING && !env('debug.show.performance.profiling', false)) {
+            return;
         }
+
+        switch ($action) {
+            case 'start':
+                Performance::start();
+                return;
+
+            case 'stop':
+                Performance::stop(command: $command);
+                return;
+
+            default:
+                throw new InvalidArgumentException(
+                    sprintf('Invalid profiling action "%s". Expected "start" or "stop".', $action)
+                );
+        }
+    }
+
+    /**
+     * Get the application kernel instance.
+     *
+     * Returns the kernel responsible for bootstrapping the application
+     * and providing access to core modules during the application lifecycle.
+     *
+     * - By default, a shared kernel instance is returned.
+     * - If `$notShared` is true, or the kernel is configured not to be shared,
+     *   a new kernel instance is created and returned.
+     *
+     * @param bool $notShared Force creation of a new kernel instance.
+     *
+     * @return ServiceKernelInterface Kernel instance used to bootstrap the application.
+     * @see https://luminova.ng/docs/0.0.0/foundation/kernel
+     */
+    public static function kernel(bool $notShared = false): ServiceKernelInterface
+    {
+        if($notShared === true || !Kernel::shouldShareObject()){
+            return Kernel::create(false);
+        }
+
+        if(!self::$kernel instanceof ServiceKernelInterface){
+            self::$kernel = Kernel::create(true);
+        }
+
+        return self::$kernel;
     }
 
     /**
@@ -185,33 +247,126 @@ final class Luminova
     }
 
     /**
-     * Convert a relative path to a full absolute URL.
+     * Convert a relative application path to a fully qualified URL.
      *
-     * Automatically removes system-relative parts like `public/`, and resolves base URL 
-     * based on the current environment (development vs production).
+     * Normalizes system paths (like `public/`), then builds a full URL
+     * based on the environment (development or production).
      *
-     * @param string $path Relative file path to convert.
+     * @param string $path Application-relative file or route path.
+     *
+     * @return string Returns the fully qualified absolute URL.
      * 
-     * @return string Return fully qualified URL.
+     * @example - Absolute URL Example:
+     * ```php
+     * // Development environment
+     * echo Luminova::toAbsoluteUrl('public/images/logo.png');
+     * // http://localhost/my-project-path/public/images/logo.png
+     *
+     * // Production environment
+     * echo Luminova::toAbsoluteUrl('public/images/logo.png');
+     * // https://example.com/images/logo.png
+     * ```
+     *
+     * @example - Route Example:
+     * ```php
+     * echo Luminova::toAbsoluteUrl('about');
+     * // Dev:  http://localhost/my-project-path/public/about
+     * // Prod: https://example.com/about
+     * ```
      */
     public static function toAbsoluteUrl(string $path): string
     {
         if (NOVAKIT_ENV === null && !PRODUCTION) {
             $base = rtrim(self::getBase(), 'public/');
-            $basePos = strpos($path, $base);
 
-            if ($basePos !== false) {
-                $path = trim(substr($path, $basePos + strlen($base)), TRIM_DS);
+            if (($pos = strpos($path, $base)) !== false) {
+                $path = trim(substr($path, $pos + strlen($base)), TRIM_DS);
             }
         } else {
-            $path = trim(self::filterPath($path), TRIM_DS);
+            $path = trim(self::trimSystemPath($path), TRIM_DS);
         }
 
         if (str_starts_with($path, 'public/')) {
-            $path = ltrim($path, 'public/');
+            $path = substr($path, strlen('public/'));
         }
 
-        return \Luminova\Funcs\start_url($path);
+        return self::urlFromRoot($path);
+    }
+
+    /**
+     * Build a URL starting from the application entry point.
+     *
+     * Generates either an absolute or relative URL depending on the
+     * environment and the `$relative` flag.
+     *
+     * - In development, the front controller path is included.
+     * - In production, URLs are resolved from the application root.
+     * - Host and port are preserved when available.
+     *
+     * @param string|null $route Optional route path to append.
+     * @param bool $relative Whether to return a relative URL.
+     *
+     * @return string Returns the constructed application URL.
+     *
+     * @example - Example:
+     * 
+     * Assuming your application path is like: `/Some/Path/To/htdocs/my-project-path/public/`.
+     * 
+     * ```php
+     * echo Luminova::urlFromRoot('about');
+     * ```
+     * 
+     * It returns depending on your development environment:
+     * 
+     * **On Development:**
+     * - http://localhost:8080/about
+     * - http://localhost/my-project-path/public/about
+     * - http://localhost/public/about
+     * 
+     * **In Production:**
+     * - http://example.com:8080/about
+     * - http://example.com/about
+     * 
+     * @example - Relative URL Example:
+     * 
+     * ```php
+     * echo Luminova::urlFromRoot('about', true); 
+     * // /my-project-path/public/about
+     * // /about
+     * ```
+     */
+    public static function urlFromRoot(?string $route = null, bool $relative = false): string
+    {
+        $route = ($route === null || $route === '')
+            ? '/'
+            : '/' . ltrim($route, '/');
+
+        if(PRODUCTION){
+            return $relative ? $route : APP_URL . $route;
+        }
+
+        $controller = trim(CONTROLLER_SCRIPT_PATH, TRIM_DS);
+
+        if ($relative) {
+            if($controller === ''){
+                return $route;
+            }
+
+            return '/' . $controller . $route;
+        }
+
+        $hostname = $_SERVER['HTTP_HOST'] 
+            ?? $_SERVER['HOST'] 
+            ?? $_SERVER['SERVER_NAME'] 
+            ?? 'localhost';
+
+        $base = URL_SCHEME . '://' . $hostname;
+
+        if ($controller !== '') {
+            $base .= '/' . $controller;
+        }
+
+        return $base . $route;
     }
 
     /**
@@ -291,7 +446,7 @@ final class Luminova
      * The resulting string is hashed with MD5 to produce a fixed-length cache ID.
      *
      * @param string|null $salt Optional cache salt to include in key hashing (default: null).
-     * @param bool|null $uriQueryParams Whether to include query parameters in the cache ID (default: false).
+     * @param bool|null $uriQuery Whether to include query parameters in the cache ID (default: false).
      *                  If set to null, it uses default from `env(page.cache.query.params)`
      *                  If explicitly set, it overrides the default env.
      *
@@ -331,31 +486,39 @@ final class Luminova
     }
 
     /**
-     * Determines if the current request is an API request.
-     * 
-     * Checks if the first URI segment matches the API prefix 
-     * (e.g., `/example.com/api`, `public/api` or custom api prefix based on env(app.api.prefix)),
-     * and optionally treats AJAX requests as API calls.
-     * 
-     * @param bool $includeAjax If true, treats XMLHttpRequest (AJAX) as an API request.
-     * 
-     * @return bool Return true if the request starts with the API prefix or is AJAX (when enabled).
+     * Determine whether the current request targets API endpoint.
+     *
+     * A request is considered an API if the first URI segment
+     * matches the configured API prefix (for example: `/api`, `public/api`,
+     * or a custom prefix from `env(app.api.prefix)`), or—when enabled—
+     * if the request is an XMLHttpRequest.
+     *
+     * @param bool|null $ajaxAsApi When true, treats XMLHttpRequest (AJAX) requests as API endpoint. 
+     *              If null, falls back to `env(app.validate.ajax.asapi)`.
+     *
+     * @return bool True if the request matches the API prefix or qualifies
+     *        as an AJAX request when enabled.
      */
-    public static function isApiPrefix(bool $includeAjax = false): bool
+    public static function isApiPrefix(?bool $ajaxAsApi = null): bool
     {
-        static $prefix = null;
+       static $prefix, $isAjaxAsApi, $isUp = null;
+        
+       $isUp ??= defined('IS_UP');
 
-        if ($prefix === null) {
-            $prefix = defined('IS_UP') ? env('app.api.prefix', 'api') : 'api';
-        }
-
+        $prefix ??= $isUp ? env('app.api.prefix', 'api') : 'api';
         $segments = self::getSegments();
 
         if ($segments !== [] && $segments[0] === $prefix) {
             return true;
         }
 
-        return $includeAjax 
+        $isAjaxAsApi ??= $isUp
+            ? env('app.validate.ajax.asapi', false)
+            : false;
+
+        $validateAjaxAsApi ??= $ajaxAsApi ?? false;
+
+        return $validateAjaxAsApi
             && isset($_SERVER['HTTP_X_REQUESTED_WITH']) 
             && strcasecmp($_SERVER['HTTP_X_REQUESTED_WITH'], 'XMLHttpRequest') === 0;
     }
@@ -411,19 +574,30 @@ final class Luminova
     }
 
     /**
-     * Filters a full file path by removing everything before the first known system directory.
-     * 
-     * Useful for hiding sensitive server paths when displaying errors or logs. The resulting path
-     * will always start from one of the known system directories (like `app`, `system`, etc.).
+     * Trim a file path to start from a known system directory.
      *
-     * @param string $path Full file path to filter.
-     * 
-     * @return string Return filtered path starting from project root, or original path if no match found.
+     * This method removes any leading path segments before the first recognized
+     * system directory (e.g., `app`, `system`). It's useful for hiding sensitive
+     * server directories when displaying errors, logs, or debugging information.
+     *
+     * The returned path will always start from the first matched system directory.
+     * If no system directory is found in the path, the original path is returned.
+     *
+     * @param string $path The full file path to filter.
+     *
+     * @return string The trimmed path starting from a known system directory, or
+     *                the original path if no match is found.
+     *
+     * @example - Example:
+     * ```php
+     * Luminova::trimSystemPath('/var/www/project/app/Controllers/Home.php');
+     * // Returns: app/Controllers/Home.php
+     * ```
      */
-    public static function filterPath(string $path): string 
+    public static function trimSystemPath(string $path): string
     {
-        // normalize for cross-platform support
-        $normalized = str_replace('\\', '/', $path); 
+        // Normalize path for cross-platform support
+        $normalized = str_replace('\\', '/', $path);
 
         foreach (self::$systemPaths as $dir) {
             $needle = '/' . trim($dir, '/') . '/';
@@ -523,99 +697,47 @@ final class Luminova
     }
 
     /**
-     * Get the base name(s) from fully qualified class name(s).
+     * Get the base class name(s) from fully qualified class name(s).
      *
-     * Accepts a single FQCN (e.g., `App\Controllers\HomeController`) or a comma-separated list.
-     * Removes leading slashes and namespace paths, returning just the class names.
+     * Accepts:
+     * - A single fully qualified class name (FQCN), e.g. `App\Controllers\HomeController`
+     * - A comma-separated string of FQCNs, e.g. `App\Models\User, App\Services\Log`
+     * - An array of FQCNs
      *
-     * @param string $class One or more fully qualified class names, separated by commas if multiple.
-     * 
-     * @return string Return the base class name, or comma-separated base class names (e.g., `HomeController, UserModel`).
+     * Returns the base class name(s) while preserving the input format:
+     * - Single string input → returns a single string
+     * - Comma-separated string → returns a comma-separated string
+     * - Array → returns an array of base names
      *
-     * @example - Usages:
-     * 
+     * @param string[]|string $class One or more fully qualified class names.
+     *
+     * @return string[]|string Base class name(s), format matches the input.
+     *
+     * @example - Examples:
      * ```php
-     * Luminova::getClassBaseNames('\App\Controllers\HomeController'); // HomeController
-     * Luminova::getClassBaseNames('App\Models\User, App\Services\Log'); // User, Log
+     * Luminova::getClassBaseName('\App\Controllers\HomeController'); 
+     * // Returns: 'HomeController'
+     *
+     * Luminova::getClassBaseName('App\Models\User, App\Services\Log'); 
+     * // Returns: 'User, Log'
+     *
+     * Luminova::getClassBaseName(['App\Models\User', 'App\Services\Log']); 
+     * // Returns: ['User', 'Log']
      * ```
      */
-    public static function getClassBaseNames(string $class): string
+    public static function getClassBaseName(array|string $class): array|string
     {
         if (!$class) {
-            return '';
+            return is_array($class) ? [] : '';
         }
 
-        if (str_contains($class, ',')) {
-            return implode(', ', array_map(function (string $ns): string {
-                return basename(str_replace('\\', '/', trim($ns, " \t\n\r\0\x0B\\")));
-            }, explode(',', $class)));
-        }
+        $isArray = is_array($class);
+        $classes = $isArray ? $class : explode(',', $class);
 
-        $class = ltrim($class, '\\');
-        return basename(str_replace('\\', '/', $class));
-    }
+        $bases = array_map(function (string $ns): string {
+            return basename(str_replace('\\', '/', trim($ns, " \t\n\r\0\x0B\\")));
+        }, $classes);
 
-    /**
-     * Retrieve all metadata related to the currently routed controller class.
-     *
-     * This data typically includes controller name, method, namespace, etc.
-     * 
-     * **The returned array includes:**
-     * 
-     * - `filename`:    (string|null) The resolved full path to the controller file.
-     * - `uri`:         (string|null) The matched route URI.
-     * - `namespace`:   (string|null) The fully qualified controller class name.
-     * - `method`:      (string|null) The controller class method that was executed.
-     * - `controllers`:   (int) The number of controllers was discovered via attribute routing.
-     * - `cache`:       (bool) Whether this route was cached.
-     * - `staticCache`: (bool) Whether this route was serve from static cache.
-     *
-     * @return array<string,string> Return an associative array of routed class information.
-     *
-     * @internal Used by the routing system to track resolved route details.
-     */
-    public static function getClassMetadata(): array
-    {
-        return self::$routedClassMetadata;
-    }
-
-    /**
-     * Sets or updates a single metadata entry for the routed controller class.
-     *
-     * Common keys include:
-     * - `filename`, `uri`, `namespace`, `method`, `controllers`, `cache`, `staticCache`
-     * 
-     * @param string $key Metadata key (e.g., 'namespace', 'method').
-     * @param mixed  $value Corresponding value to assign.
-     *
-     * @return void
-     *
-     * @internal Used by the routing system to assign individual route values.
-     */
-    public static function addClassMetadata(string $key, mixed $value): void
-    {
-        self::$routedClassMetadata[$key] = $value;
-    }
-
-    /**
-     * Merge a new set of metadata into the existing routed controller class info.
-     * 
-     * This method replaces existing keys with the provided ones.
-     * 
-     * All expected keys are:
-     * - `filename`, `uri`, `namespace`, `method`, `controllers`, `cache`, `staticCache`
-     *
-     * @param array<string,mixed> $metadata An associative array Key-value pairs of controller routing metadata.
-     *
-     * @return void
-     *
-     * @internal Used by the routing system to initialize class routing context.
-     */
-    public static function setClassMetadata(array $metadata): void
-    {
-        self::$routedClassMetadata = array_replace(
-            self::$routedClassMetadata, 
-            $metadata
-        );
+        return $isArray ? $bases : implode(', ', $bases);
     }
 }

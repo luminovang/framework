@@ -13,7 +13,7 @@ namespace Luminova\Security\Encryption;
 use \OpenSSLCertificate;
 use \OpenSSLAsymmetricKey;
 use \App\Config\Encryption;
-use Luminova\Common\Helpers;
+use Luminova\Utility\Helpers;
 use Luminova\Exceptions\ErrorCode;
 use \Luminova\Exceptions\EncryptionException;
 

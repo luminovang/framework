@@ -37,7 +37,8 @@ abstract class Database implements LazyObjectInterface
         'socket_path'       => '',
         'persistent'        => true,
         'timeout'           => 0,
-        'emulate_prepares'  => true
+        'emulate_prepares'  => true,
+        'commands'          => []
     ];
 
     /**
@@ -94,6 +95,11 @@ abstract class Database implements LazyObjectInterface
      *         'socket' => false,
      *         'socket_path' => '',
      *         'sqlite_path' => '', // Only used if version is sqlite
+     *         'commands' => [
+     *              'SET GLOBAL slow_query_log = ON', 
+     *              'SET GLOBAL long_query_time = 1', 
+     *              'SET GLOBAL log_queries_not_using_indexes = ON'
+     *          ]
      *     ],
      *     'US' => [
      *         'host' => 'us.db.server',

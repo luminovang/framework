@@ -86,8 +86,8 @@ final class MemoryCache extends Cache
         ?string $persistentId = null
     ): static 
     {
-        if (self::$instance === null) {
-            self::$instance = new static($storage, $persistentId);
+        if (static::$instance === null) {
+            self::$instance = new self($storage, $persistentId);
         }
 
         return self::$instance;
@@ -154,7 +154,8 @@ final class MemoryCache extends Cache
     /**
      * Sets multiple servers in the cache configuration.
      * 
-     * @param array<int,string|int> $config An array of server configurations where each element is an array [host, port, weight].
+     * @param array<int,string|int> $config An array of server configurations 
+     *          where each element is an array [host, port, weight].
      * 
      * @return self Returns the memory cache instance.
      * 

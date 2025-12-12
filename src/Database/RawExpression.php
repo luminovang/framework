@@ -13,18 +13,18 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Exceptions\InvalidArgumentException;
-use \Luminova\Exceptions\BadMethodCallException;
 use \Stringable;
 use \JsonSerializable;
+use \Luminova\Exceptions\BadMethodCallException;
+use \Luminova\Exceptions\InvalidArgumentException;
 
 /**
- * @method static RawExpression currentDate()   Create a raw SQL expression for current date, using `CURDATE()` SQL function.
- * @method static RawExpression currentTime()   Create a raw SQL expression for current time, using `CURTIME()` SQL function.
- * @method static RawExpression currentYear()   Create a raw SQL expression for current year, using `YEAR(NOW())` SQL function.
- * @method static RawExpression currentMonth()  Create a raw SQL expression for current month, using `MONTH(NOW())` SQL function.
- * @method static RawExpression currentDay()    Create a raw SQL expression for current day, using `DAY(NOW())` SQL function.
- * @method static RawExpression currentHour()   Create a raw SQL expression for current hour, using `HOUR(NOW())` SQL function.
+ * @method static RawExpression currentDate() Create a raw SQL expression for current date, using `CURDATE()` SQL function.
+ * @method static RawExpression currentTime() Create a raw SQL expression for current time, using `CURTIME()` SQL function.
+ * @method static RawExpression currentYear() Create a raw SQL expression for current year, using `YEAR(NOW())` SQL function.
+ * @method static RawExpression currentMonth() Create a raw SQL expression for current month, using `MONTH(NOW())` SQL function.
+ * @method static RawExpression currentDay() Create a raw SQL expression for current day, using `DAY(NOW())` SQL function.
+ * @method static RawExpression currentHour() Create a raw SQL expression for current hour, using `HOUR(NOW())` SQL function.
  * @method static RawExpression currentMinute() Create a raw SQL expression for current minute, using `MINUTE(NOW())` SQL function.
  * @method static RawExpression currentSecond() Create a raw SQL expression for current seconds, using `SECOND(NOW())` SQL function.
  */

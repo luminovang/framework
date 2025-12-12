@@ -11,42 +11,43 @@
 namespace Luminova\Logger;
 
 use \Throwable;
+use \Luminova\Luminova;
 use \Luminova\Http\Request;
-use \Luminova\Common\Helpers;
+use \Luminova\Utility\Helpers;
 use \Psr\Log\LoggerInterface;
 use \App\Config\Logger as Config;
 use \Luminova\Logger\{NovaLogger, LogLevel};
 use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
 
 /**
- * Static logger class methods.
+ * Static logger methods for system and application events.
  *
- * @method static void emergency(string $message, array $context = []) Logs a system emergency (highest severity).
- * @method static void alert(string $message, array $context = []) Logs an alert that requires immediate action.
- * @method static void warning(string $message, array $context = []) Logs a warning about a potential issue.
- * @method static void notice(string $message, array $context = []) Logs a normal but significant event.
+ * @method static void emergency(string $message, array $context = []) Logs a critical system failure (highest severity).
+ * @method static void alert(string $message, array $context = []) Logs an alert requiring immediate action.
+ * @method static void critical(string $message, array $context = []) Logs a serious condition requiring prompt attention.
+ * @method static void error(string $message, array $context = []) Logs a runtime error that affects execution.
+ * @method static void warning(string $message, array $context = []) Logs a potential problem or risk.
+ * @method static void notice(string $message, array $context = []) Logs a normal but noteworthy event.
  * @method static void info(string $message, array $context = []) Logs general informational messages.
- * @method static void debug(string $message, array $context = []) Logs debugging information for developers.
+ * @method static void debug(string $message, array $context = []) Logs developer-focused debugging information.
  * @method static void phpError(string $message, array $context = []) Logs a PHP runtime error.
  * @method static void php(string $message, array $context = []) Alias for `phpError`, logs PHP-related issues.
- * @method static void critical(string $message, array $context = []) Logs a critical condition that requires prompt attention.
- * @method static void error(string $message, array $context = []) Logs an error that prevents execution but does not require immediate shutdown.
  */
 final class Logger
 {
-    /**
-     * PSR logger interface.
-     * 
-     * @var LoggerInterface|null $logger
-     */
-    private static ?LoggerInterface $logger = null;
-
     /**
      * Telegram bot token.
      * 
      * @var string|null $telegramToken
      */
     private static ?string $telegramToken = null;
+
+    /**
+     * Logger class;
+     *
+     * @var LoggerInterface|NovaLogger|null $logger
+     */
+    private static ?LoggerInterface $logger = null;
 
     /**
      * Initialize logger instance.
@@ -93,7 +94,8 @@ final class Logger
     public static function getLogger(): LoggerInterface
     {
         if(!self::$logger instanceof LoggerInterface){
-            self::$logger = (new Config())->getLogger() ?? new NovaLogger();
+            self::$logger = Luminova::kernel()->getLogger() 
+                ?? new NovaLogger();
         }
 
         return self::$logger;
@@ -121,7 +123,7 @@ final class Logger
     }
 
     /**
-     * Logs performance and metric data.
+     * Logs performance metric data.
      *
      * @param string $message The profiling data to log.
      * @param array<string|int,mixed> $context Additional context data (optional).
@@ -169,7 +171,7 @@ final class Logger
     ): string
     {
         if(self::getLogger() instanceof NovaLogger){
-            return self::getLogger()->message($level, $message, $context) . PHP_EOL;
+            return self::$logger->message($level, $message, $context) . PHP_EOL;
         }
 
         return NovaLogger::formatMessage($level, $message, '', $context) . PHP_EOL;
@@ -267,6 +269,7 @@ final class Logger
         }
 
         self::assertInterface('Remote');
+        
         if(!Helpers::isUrl($url)) {
             throw new InvalidArgumentException(sprintf(
                 'Invalid logger destination: "%s" was provided. A valid URL is required.', 
@@ -440,7 +443,7 @@ final class Logger
             '%s logging requires %s, your provided logger interface: %s is not supported.', 
             $prefix.
             NovaLogger::class,
-            self::$logger::class
+            get_class(self::$logger ?? '')
         ), RuntimeException::NOT_SUPPORTED);
     }
 
@@ -462,9 +465,8 @@ final class Logger
         }
 
         throw new RuntimeException(sprintf(
-            'Invalid Logger Interface: "%s", Your logger class in configuration: "%s", must implement "%s".', 
-            self::$logger::class,
-            Config::class,
+            'Invalid Logger Interface: "%s", Your logger class must implement "%s".', 
+            get_class(self::$logger ?? ''),
             LoggerInterface::class,
         ), RuntimeException::NOT_SUPPORTED);
     }

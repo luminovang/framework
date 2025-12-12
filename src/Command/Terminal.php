@@ -13,16 +13,15 @@ namespace Luminova\Command;
 use \Closure;
 use \Luminova\Boot;
 use \Luminova\Luminova;
-use \Luminova\Utility\IP;
 use \Luminova\Command\Novakit;
+use \Luminova\Http\Network\IP;
 use \Luminova\Security\Validation;
 use \Luminova\Exceptions\IOException;
 use \Luminova\Command\Consoles\Commands;
 use \Luminova\Command\Utils\{Text, Color};
-use \Luminova\Interface\LazyObjectInterface;
 use function \Luminova\Funcs\{is_platform, list_to_array};
 
-class Terminal implements LazyObjectInterface
+final class Terminal
 {
     /**
      * Represents the standard output stream.
@@ -50,14 +49,14 @@ class Terminal implements LazyObjectInterface
      *
      * @var int|null $windowHeight
      */
-    protected static ?int $windowHeight = null;
+    private static ?int $windowHeight = null;
 
     /**
      * Width of terminal visible window
      *
      * @var int|null $windowWidth
      */
-    protected static ?int $windowWidth = null;
+    private static ?int $windowWidth = null;
 
     /**
      * About system information.
@@ -84,14 +83,7 @@ class Terminal implements LazyObjectInterface
      *
      * @var bool $isNewLine
      */
-    protected static bool $isNewLine = true;
-
-    /**
-     * The parsed command information from (perse).
-     *
-     * @var array $commands
-     */
-    protected static array $commands = [];
+    private static bool $isNewLine = true;
 
     /**
      * Flags to determine if color and ansi are supported 
@@ -99,7 +91,7 @@ class Terminal implements LazyObjectInterface
      *
      * @var array{colors:array{0:?bool,1:?bool},ansi:array{0:?bool,1:?bool}} $isSupported
      */
-    protected static array $isSupported = [
+    private static array $isSupported = [
         'colors' => [
             0 => null, //stdout
             1 => null, //stderr,
@@ -128,14 +120,14 @@ class Terminal implements LazyObjectInterface
      * 
      * @var Validation|null $validation;
      */
-    protected static ?Validation $validation = null;
+    private static ?Validation $validation = null;
 
     /**
      * Command is initialized.
      * 
      * @var bool $isInitialized;
      */
-    protected static bool $isInitialized = false;
+    private static bool $isInitialized = false;
 
     /**
      * Initialize command line instance before running any commands
@@ -156,14 +148,12 @@ class Terminal implements LazyObjectInterface
      */
     public static function init(): void
     {
-        self::$commands = [];
-
         if(self::$isInitialized){
             return;
         }
         self::$isReadLine = extension_loaded('readline');
 
-        Boot::shouldDefineCommandStreams();
+        Boot::defineCliStreams();
         self::isColorSupported(self::STD_OUT);
         self::$isInitialized = true;
     }
@@ -1393,38 +1383,6 @@ class Terminal implements LazyObjectInterface
     }
 
     /**
-     * Parses and processes command-line arguments and options, making them accessible in console controllers.
-     * 
-     * This method is used to extract and register command arguments, options, and flags passed to the CLI. Once parsed, you can retrieve values using helper methods like `getOption`, `getArgument`, and `getAnyOption`. It serves as an internal setter to store and expose parsed command data within extended controller classes.
-     * 
-     * @param array<string,mixed> $options Command arguments, options, and flags extracted from CLI execution.
-     * 
-     * @return void
-     * @internal
-     * 
-     * @example - Usage Example:
-     * 
-     * ```php
-     * class Command extends Luminova\Base\Console 
-     * {
-     *      public function run(?array $options = []): int
-     *      {
-     *          $this->term->perse($options);
-     *          
-     *          // Access the command and options
-     *          $command = $this->term->getCommand();
-     *          $foo = $this->term->getOption('foo');
-     *          $fooAlias = $this->term->getAnyOption('foo', 'f');
-     *      }
-     * }
-     * ```
-     */
-    public static final function perse(array $options): void
-    {
-        self::$commands = $options;
-    }
-
-    /**
      * Convert executed command array arguments to their original string form.
      * 
      * @param array $arguments The command arguments from $_SERVER['argv'].
@@ -1451,40 +1409,45 @@ class Terminal implements LazyObjectInterface
     {
         $caller = $arguments[0] ?? '';
         $result = [
-            'caller' => '',
-            'command' => '',
             'group' => '',
+            'name'  => '',
             'arguments' => [],
             'options' => [],
-            'exe_string' => self::toString($arguments),
+            'command' => '',
+            'input' => self::toString($arguments),
         ];
 
         if ($caller === 'novakit' || $caller === 'php' || preg_match('/^.*\.php$/', $caller)) {
             array_shift($arguments); //Remove the front controller file
-            $result['caller'] = implode(' ', $arguments);
+            $result['command'] = implode(' ', $arguments);
             $command = $arguments[0] ?? '';
 
-            // php index.php group command
+            // php index.php group name
             // php novakit group --foo
 
             if($controller){
                 $result['group'] = $command; 
-                $result['command'] = $arguments[1] ?? '';
+                $result['name'] = $arguments[1] ?? '';
             }else{
                 $pos = strpos($command, ':');
                 $result['group'] = ($pos === false) ? $command : substr($command, 0, $pos); 
-                $result['command'] = $command;
+                $result['name'] = $command;
             }
         }else{
-            $hasSpace = array_reduce($arguments, fn($carry, $item) => $carry || str_contains($item, ' '), false);
+            $hasSpace = array_reduce(
+                $arguments, 
+                fn($carry, $item) => $carry || str_contains($item, ' '), 
+                false
+            );
             $callerCommend = $arguments;
 
             if ($hasSpace) {
                 $callerCommend = implode(' ', $arguments);
                 $callerCommend = $callerCommend[0];
             }
-            $result['caller'] = $callerCommend;
-            $result['command'] = $arguments[1]??'';
+            
+            $result['command'] = $callerCommend;
+            $result['name'] = $arguments[1] ?? '';
         }
 
         // Unset command name 
@@ -1546,200 +1509,6 @@ class Terminal implements LazyObjectInterface
         }
 
         return $result;
-    }
-
-    /**
-     * Get command argument by index number.
-     * 
-     * @param int $index The index position to get.
-     * 
-     * @return mixed Return command argument by index number.
-     */
-    public static function getArgument(int $index): mixed
-    {
-        return self::$commands['arguments'][$index - 1] ?? null;
-    }
-
-    /**
-     * Get command arguments.
-     * 
-     * @return array Return command arguments.
-     */
-    public static function getArguments(): array
-    {
-        return self::$commands['arguments'] ?? [];
-    }
-
-    /**
-     * Get command group name.
-     * 
-     * @return string|null Return the command group.
-     */
-    public static function getCommand(): ?string
-    {
-        return self::$commands['command'] ?? null;
-    }
-
-    /**
-     * Get command group name.
-     * 
-     * @return string|null Return the command name.
-     */
-    public static function getGroup(): ?string
-    {
-        return self::$commands['group'] ?? null;
-    }
-
-    /**
-     * Get command caller command string.
-     * 
-     * @return string|null Return the full passed command, options and arguments.
-     */
-    public static function getCaller(): ?string
-    {
-        return self::$commands['caller'] ?? null;
-    }
-
-    /**
-     * Get options value from command arguments.
-     * If option key is passed with an empty value true will be return otherwise the default value.
-     * 
-     * @param string $key Option key to retrieve.
-     * @param mixed $default Default value to return (default: false).
-     * 
-     * @return mixed Return option value, true if empty value, otherwise default value.
-     */
-    public static function getOption(string $key, mixed $default = false): mixed
-    {
-        $options = self::getOptions();
-
-        if (array_key_exists($key, $options)) {
-            return $options[$key] ?? true;
-        }
-    
-        return $default;
-    }
-
-    /**
-     * Get options value from command arguments with an alias key to lookup if main key isn't found.
-     * If option key is passed with an empty value true will be return otherwise the default value.
-     * 
-     * @param string $key Option key to retrieve.
-     * @param string $alias Option key alias to retrieve. if main key is not found.
-     * @param mixed $default Default value to return (default: false).
-     * 
-     * @return mixed Return option value, true if empty value, otherwise default value.
-     */
-    public static function getAnyOption(string $key, string $alias, mixed $default = false): mixed
-    {
-        $options = self::getOptions();
-
-        if (array_key_exists($key, $options)) {
-            return $options[$key] ?? true;
-        }
-
-        if (array_key_exists($alias, $options)) {
-            return $options[$alias] ?? true;
-        }
-    
-        return $default;
-    }
-
-    /**
-     * Get the verbosity level from CLI options.
-     *
-     * This method checks for both short (`-v`, `-vv`, `-vvv`) 
-     * and long (`--verbose` or `--verbose=<level>`) flags.  
-     * Returns an integer level between 0 (silent) and `$max` (most verbose).
-     * 
-     * Level meaning:
-     * - 0 = Silent or default mode
-     * - 1 = Verbose
-     * - 2 = More verbose
-     * - 3 = Debug-level verbosity
-     * - n = More-level verbosity
-     *
-     * @param string $short The short flag key (default: `v`).
-     * @param string $long The long flag alias (default: `verbose`).
-     * @param int $maxLevel The maximum verbosity level (default: `3`).
-     * @param int $default Default verbose level (default: 0).
-     *
-     * @return int Returns the verbosity level between 0 and `$max` or default if not specified.
-     * @example - In Code:
-     * 
-     * ```php
-     * $verbose = $this->term->getVerbose(maxLevel: 5, default: 0);
-     * ```
-     * 
-     * @example - In Command:
-     * ```bash
-     *   php novakit script -v           # returns 1
-     *   php novakit script -vv          # returns 2
-     *   php novakit script -vvv         # returns 3
-     *   php novakit script --verbose=2  # returns 2
-     *   php novakit script              # returns default level 0
-     * ```
-     */
-    public static function getVerbose(
-        string $short = 'v', 
-        string $long = 'verbose', 
-        int $maxLevel = 3,
-        int $default = 0
-    ): int 
-    {
-        foreach (self::getOptions() as $opt => $value) {
-            if ($long === $opt) {
-                return min((int) $value, $maxLevel);
-            }
-            
-            if (preg_match('/^(' . preg_quote($short, '/') . '+)$/', $opt, $match)) {
-                return min(strlen($match[1]), $maxLevel);
-            }
-        }
-
-        return $default;
-    }
-
-    /**
-     * Returns the command controller class method name.
-     * 
-     * @return string|null Return the command controller class method or null.
-     */
-    public static function getMethod(): ?string
-    {
-        return self::getQuery('classMethod');
-    }
-
-    /**
-     * Returns the array of options.
-     * 
-     * @return array Return array of executed command options.
-     */
-    public static function getOptions(): array
-    {
-        return self::$commands['options']??[];
-    }
-
-    /**
-     * Gets a single query command-line by name, if it doesn't exists return null.
-     *
-     * @param string $name Option key name.
-     * 
-     * @return mixed Return command option query value.
-    */
-    public static function getQuery(string $name): mixed
-    {
-        return self::$commands[$name] ?? null;
-    }
-
-    /**
-     * Returns the entire command associative that was executed.
-     * 
-     * @return array Return an associative array of the entire command information
-     */
-    public static function getQueries(): array
-    {
-        return self::$commands;
     }
 
     /**
@@ -1892,21 +1661,6 @@ class Terminal implements LazyObjectInterface
             getenv('DISABLE_ANSI') !== false
         );
     }
-    
-    /**
-     * Determines if a specific command-line flag is present.
-     * 
-     * @param string $flag The flag to search for (e.g., `--no-ansi`, `--no-color`, `--no-header`).
-     * 
-     * @return bool Returns true if the flag is present, false otherwise.
-     */
-    public static function hasFlag(string $flag): bool
-    {
-        $options = self::getOptions();
-        return ($options !== [] && array_key_exists($flag, $options)) 
-            ? true 
-            : in_array($flag, $_SERVER['argv']);
-    }
 
     /**
      * Determines if the current terminal is a supported macOS terminal.
@@ -2022,8 +1776,11 @@ class Terminal implements LazyObjectInterface
         static $terminal = null;
 
         if(Novakit::hasCommand($command, 'system')){
-            $terminal ??= new static();
-            $terminal->perse($options);
+            if(!$terminal instanceof Input){
+                $terminal = new Input($options);
+            }
+            
+            $terminal->replace($options);
 
             return Novakit::execute($terminal, $options, 'system') === STATUS_SUCCESS;
         }
@@ -2038,18 +1795,49 @@ class Terminal implements LazyObjectInterface
      * 
      * @return bool Return true if command is help, false otherwise.
      */
-    public static final function isHelp(string|array $command): bool 
+    public static final function isHelp(string|array|null $command = null): bool 
     {
         if(!$command){
-            return false;
+            return self::hasFlag('help') || self::hasFlag('h');
         }
 
-        if(is_array($command)){
-            $command = ($command['options'] ?? $command);
-            return array_key_exists('help', $command) || array_key_exists('h', $command);
+        $command = $command['options'] ?? $command;
+
+        if(is_string($command)){
+            return preg_match('/^(-h|--help)$/', $command) === 1;
         }
 
-        return preg_match('/^(-h|--help)$/', $command) === 1;
+        foreach($command as $arg){
+            $help = ltrim($arg, '-');
+
+            if ($help === 'help' || $help === 'h') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Determines if a specific CLI flag is present.
+     *
+     * Supports both short (-f) and long (--flag) forms.
+     *
+     * @param string $flag The flag to search for (with or without leading dashes).
+     *
+     * @return bool Returns true if the flag exists, false otherwise.
+     */
+    public static function hasFlag(string $flag): bool
+    {
+        $normalized = ltrim($flag, '-');
+
+        foreach ($_SERVER['argv'] ?? [] as $arg) {
+            if (ltrim($arg, '-') === $normalized) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -2075,6 +1863,10 @@ class Terminal implements LazyObjectInterface
                 self::newLine();
                 $head = Color::apply("------[{$name} Help Information]------", Text::FONT_BOLD, 'brightCyan');
                 self::writeln($head);
+            }
+
+            if(!is_array($properties)){
+                continue;
             }
 
             $total = count($properties);
@@ -2159,8 +1951,7 @@ class Terminal implements LazyObjectInterface
     public static function getSystemId(
         string $prefix = '', 
         string $algo = 'sha256',  
-        bool $binary = false,
-        bool $forSession = false
+        bool $binary = false
     ): string
     {
         if(self::$session['id'] !== null){

@@ -16,25 +16,24 @@ use \Luminova\Boot;
 use \App\Application;
 use \App\Config\Files;
 use \Luminova\Luminova;
-use \Luminova\Utility\IP;
 use \Luminova\Template\View;
 use \Luminova\Logger\Logger;
 use \Luminova\Cookies\Cookie;
-use \Luminova\Common\Helpers;
+use \Luminova\Http\Network\IP;
 use \Luminova\Security\Escaper;
 use \Luminova\Sessions\Session;
-use \Luminova\Foundation\Error\Guard;
-use \Luminova\Utility\String\Listifier;
-use \Luminova\Utility\Storage\Filesystem;
+use \Luminova\Template\Response;
+use \Luminova\Storage\Filesystem;
+use \Luminova\Utility\{MIME, Helpers};
+use \Luminova\Components\String\Listifier;
+use \Luminova\Promise\{Rejected, Fulfilled};
 use \Luminova\Cache\{FileCache, MemoryCache};
 use \Luminova\Http\{Request, HttpCode, UserAgent};
-use \Luminova\Template\{Engines\Layout, Response};
 use \Luminova\Foundation\Module\{Factory, Service};
-use \Luminova\Utility\Promise\{Rejected, Fulfilled};
 use \Luminova\Interface\{
     LazyObjectInterface,
     InputValidationInterface,
-    HttpRequestInterface,
+    RequestInterface,
     ViewResponseInterface,
     SessionManagerInterface
 };
@@ -77,12 +76,12 @@ use \Luminova\Exceptions\{
 function root(?string $path = null, ?string $filename = null): string
 {
     $path = $path
-        ? (\trim(\str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $path), TRIM_DS) . \DIRECTORY_SEPARATOR)
+        ? (\trim(\str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $path), \TRIM_DS) . \DIRECTORY_SEPARATOR)
         : '';
-    $path .= $filename ? \ltrim($filename, TRIM_DS) : '';
+    $path .= $filename ? \ltrim($filename, \TRIM_DS) : '';
 
-    if (\file_exists(APP_ROOT . '.env')) {
-        return APP_ROOT . $path;
+    if (\file_exists(\APP_ROOT . '.env')) {
+        return \APP_ROOT . $path;
     }
 
     $root = \dirname(__DIR__, 1) . \DIRECTORY_SEPARATOR;
@@ -109,37 +108,45 @@ function root(?string $path = null, ?string $filename = null): string
 }
 
 /**
- * Get an instance of the application.
+ * Get the application instance.
  *
- * This function returns either a shared (singleton) or a new instance of the core application class.
- * By default, Luminova's core `Application` doesn't accept constructor arguments, but this function
- * allows passing optional arguments to override or customize the instance.
+ * Returns the current shared application instance or creates a new one.
  *
- * @param bool $shared Whether to return a shared instance (default: true).
- * @param mixed ...$arguments Optional arguments to pass to the application constructor.
+ * - When `$shared` is true (default), the shared application instance is returned.
+ * - When `$shared` is false, a new application instance is created via the kernel.
+ * - If `$new` is provided, it replaces the current shared application instance.
  *
- * @return Luminova\Foundation\Core\Application|App\Application Returns the shared instance if `$shared` is true,
- *         or a new instance if `$shared` is false.
+ * This helper does not pass arguments to the application constructor.
+ * Application creation and configuration are handled internally by the kernel.
+ *
+ * @param bool $shared Whether to return the shared instance (default: true).
+ * @param Application|null $new Optional application instance to replace the shared one.
+ *
+ * @return Application Returns a shared or newly created application instance.
  *
  * @see https://luminova.ng/docs/0.0.0/foundation/application
  *
- * @example - Creating a new instance with arguments:
- * 
+ * @example - Create a new application instance:
  * ```php
  * use function Luminova\Funcs\app;
- * 
- * $app = app(shared: false, 'foo', 'bar');
+ *
+ * $app = app(shared: false);
+ * ```
+ *
+ * @example - Replace the shared application instance:
+ * ```php
+ * app(new: $customApp);
  * ```
  */
-function app(bool $shared = true, mixed ...$arguments): Application 
+function app(bool $shared = true, ?Application $new = null): Application
 {
     if (!$shared) {
-        return new Application(...$arguments);
+        return Luminova::kernel(false)->getApplication();
     }
 
-    return ($arguments === [])
-        ? Application::getInstance()
-        : Application::setInstance(new Application(...$arguments));
+    return ($new === null)
+        ? Luminova::kernel(true)->getApplication()
+        : Luminova::kernel(true)->getApplication()->setInstance($new);
 }
 
 /**
@@ -150,10 +157,10 @@ function app(bool $shared = true, mixed ...$arguments): Application
  *
  * @param bool $shared Whether to return a shared instance (default: true).
  * 
- * @return Request<HttpRequestInterface,LazyObjectInterface> Returns instance of HTTP request class.
+ * @return Request<RequestInterface,LazyObjectInterface> Returns instance of HTTP request class.
  * @see https://luminova.ng/docs/0.0.0/http/request
  */
-function request(bool $shared = true): HttpRequestInterface 
+function request(bool $shared = true): RequestInterface 
 {
     if (!$shared) {
         return new Request();
@@ -216,7 +223,6 @@ function response(int $status = 200, ?array $headers = null,  bool $shared = tru
  * 
  * @return never This function does not return; it ends the request.
  * @throws ResponseException If error occur while sending abort response.
- * @since 3.6.8
  *
  * @example - Examples:
  * 
@@ -232,7 +238,7 @@ function abort(
     string|array|object|null $message = null,
     array $headers = [],
     ?string $type = null
-): void 
+): never 
 {
     $response = response($status, $headers);
 
@@ -267,8 +273,7 @@ function abort(
  * @param string|null $method Redirection method: 'refresh' or null for standard.
  * @param int $status HTTP redirect status code (default: 302).
  *
- * @return void
- * @since 3.6.8
+ * @return never
  * 
  * @example - Basic redirect (302 Found):
  * 
@@ -288,7 +293,7 @@ function abort(
  * redirect('/dashboard', 'refresh');
  * ```
  */
-function redirect(string $uri, ?string $method = null, int $status = 302): void
+function redirect(string $uri, ?string $method = null, int $status = 302): never
 {
     response($status)->redirect($uri, $method);
     exit;
@@ -304,10 +309,9 @@ function redirect(string $uri, ?string $method = null, int $status = 302): void
  * @param string|null $method Redirection method (`refresh` or `null` for default).
  * @param int $status HTTP status code for the redirect (default: 302).
  *
- * @return void
- * @since 3.6.8
+ * @return never
  */
-function back(?string $fallback = null, ?string $method = null, int $status = 302): void
+function back(?string $fallback = null, ?string $method = null, int $status = 302): never
 {
     redirect($_SERVER['HTTP_REFERER'] ?? $fallback ?? '/', $method, $status);
     exit;
@@ -315,38 +319,58 @@ function back(?string $fallback = null, ?string $method = null, int $status = 30
 
 /**
  * Template view response helper.
- * 
- * This function renders a template based on the given template content type, data options, and HTTP status code.
  *
- * @param string $template The template filename to render.
- * @param int $status HTTP response status code (default: 200).
- * @param array<string,mixed> $options Optional template scope data.
- * @param string $type Template rendering content type (default: `View::HTML`).
+ * Creates or reuses a View instance and prepares it to render
+ * the given template using the specified content type.
  *
- * @return int Returns response status code `STATUS_SUCCESS` or `STATUS_SILENCE` if failed.
- * @since 3.6.8
- * @example - Usage:
+ * This helper does not render immediately. It returns a View
+ * instance so you can chain rendering or content methods.
+ *
+ * @param string $template Template file name or identifier.
+ * @param string $type Template content type (default: View::HTML).
+ *
+ * @return View Returns the prepared view instance for rendering or content output.
+ *
+ * @example - Render and send output:
  * ```php
- * return view('index', 200, ['name' => 'Peter']);
+ * use function Luminova\Funcs\view;
+ *
+ * return view('index')
+ *     ->render(['name' => 'Peter'], 200);
+ * ```
+ *
+ * @example - Return rendered contents:
+ * ```php
+ * use function Luminova\Funcs\view;
+ *
+ * return view('index')
+ *     ->contents(['name' => 'Peter'], 200);
  * ```
  */
-function view(string $template, int $status = 200, array $options = [], string $type = View::HTML): int
+function view(string $template, string $type = View::HTML): View
 {
-    return Application::getInstance()
-        ->getView()
-        ->view($template, $type)
-        ->render($options, $status);
+    static $view = null;
+
+    if (!$view instanceof View) {
+        $view = new View(Boot::application());
+    }
+
+    return $view->view($template, $type);
 }
 
 /**
- * Generate a URL to a view, route, or file path within the application.
+ * Generate a URL to a route or file within the application.
  *
- * If `$view` is null or empty, it links to the base path.
+ * Builds either an absolute URL using `APP_URL` or a relative URL
+ * based on the current request depth.
  *
- * @param string|null $view The path or view name to link to (default: null).
- * @param bool $absolute Whether to return an absolute URL using `APP_URL` (default: false).
+ * If `$view` is null or empty, the base path is returned.
  *
- * @return string Return the generated URL.
+ * @param string|null $uri The route, view name, or file path.
+ * @param bool $absolute Whether to return an absolute URL (default: false).
+ * @param int $depth  Directory depth used for relative URLs (default: `0`).
+ *
+ * @return string Returns the generated URL.
  *
  * @example - Examples:
  * ```php
@@ -355,115 +379,178 @@ function view(string $template, int $status = 200, array $options = [], string $
  * href('admin/dashboard', true); // "https://example.com/admin/dashboard"
  * ```
  */
-function href(?string $view = null, bool $absolute = false, ?int $depth = null): string 
+function href(?string $uri = null, bool $absolute = false, int $depth = 0): string 
 {
-    $view = ($view === null) ? '' : \ltrim($view, '/');
+    $uri = ($uri === null) ? '' : \ltrim($uri, '/');
 
     if($absolute){
-        return \rtrim(APP_URL, '/') . '/' . $view;
+        return \rtrim(\APP_URL, '/') . '/' . $uri;
     }
 
     static $relative = null;
 
     if($relative === null){
-       /* $relative = Application::getInstance()
-            ->getView()
-            ->link(depth: $depth);*/
-        $relative = View::link(depth: $depth);
+        $relative = View::fromRelativeRoot(depth: $depth);
     }
 
-    return $relative . $view;
+    return $relative . $uri;
 }
 
 /**
- * Generate a URL to a file in the public `assets/` folder.
+ * Generate a URL to a file in the public `assets/` directory.
  *
- * If `$filename` is null, it links to the base assets directory.
+ * Builds a relative or absolute URL pointing to an asset such as
+ * CSS, JavaScript, images, or other public files.
  *
- * @param string|null $filename The asset path or filename (e.g., "css/app.css").
- * @param bool $absolute Whether to return an absolute URL using `APP_URL` (default: false).
+ * If `$filename` is null or empty, the base `assets/` path is returned.
+ *
+ * @param string|null $filename Asset path or file name (e.g. "css/app.css").
+ * @param bool $absolute Whether to return an absolute URL (default: false).
+ * @param int $depth Directory depth for relative URLs (default: 0).
  *
  * @return string Return the generated URL to the assets file or base assets folder if no filename is provided.
  *
  * @example - Examples:
  * ```php
- * asset('css/style.css');        // "/assets/css/style.css"
- * asset(null);                   // "/assets/"
- * asset('js/app.js', true);      // "https://example.com/assets/js/app.js"
+ * asset('css/style.css');   // "/assets/css/style.css"
+ * asset();                  // "/assets/"
+ * asset('css');             // "/assets/css/"
+ * asset('js/app.js', true); // "https://example.com/assets/js/app.js"
  * ```
  */
-function asset(?string $filename = null, bool $absolute = false): string
+function asset(?string $filename = null, bool $absolute = false, int $depth = 0): string
 {
     $filename = ($filename === null) ? '' : \ltrim($filename, '/');
 
-    return href("assets/{$filename}", $absolute);
+    return href("assets/{$filename}", $absolute, $depth);
 }
 
 /**
- * PHP Template layout helper class.
- * Allow you to extend and inherit a section of another template view file.
- * 
- * @param string $file Layout filename without the extension path.
- * @param string $module The HMVC custom module name (e.g, `Blog`, `User`).
- * 
- * @return Layout Returns the layout class instance.
- * @throws RuntimeException Throws if layout file is not found.
- * 
- * @example - Usage examples:
- * ```php
- * layout('foo')
- * // Or
- * layout('foo/bar/baz')
- * ```
- * 
- * > All layouts must be stored in `resources/Views/layout/` directory.
- * @deprecated Use layout object in template connext `$this->layout` or `$self->layout` in isolation.
- */
-function layout(string $file, string $module = ''): Layout
-{
-    Guard::deprecate(
-        'Function %s() is deprecated. Use layout object in template connext %s instead.', 
-        '3.6.9', 
-        ['layout', '$this->layout or $self->layout']
-    );
-
-    return Layout::of(module: $module)
-        ->template($file);
-}
-
-/**
- * Return shared functions instance or a specific context instance.
- * 
- * If context is specified, return an instance of the specified context, 
- * otherwise return anonymous class which extends `Luminova\Foundation\Core\Functions`.
- * 
- * **Supported contexts:**
- * 
- *  -   ip: - Return instance of 'Luminova\Utility\IP'.
- *  -   document:  Return instance of 'Luminova\Utility\IP'.
- *  -   math:  Return instance of 'Luminova\Common\Maths'.
+ * Safely invoke a PHP function from within a namespaced scope.
  *
- * @param string|null $context The context to return it's instance (default: null).
- * @param mixed $arguments [, mixed $... ] Optional initialization arguments based on context.
+ * This helper validates that the requested function:
+ * - Is not listed in PHP's `disable_functions` configuration
+ * - Exists either in the current namespace or the global scope
  *
- * @return Luminova\Foundation\Core\Functions<\T>|object<\T>|mixed Returns an instance of functions, 
- *              object string, or boolean value depending on the context, otherwise null.
+ * When executed inside a namespace, the function name is automatically
+ * resolved to the global function table if a local definition is not found.
  *
- * @throws AppException If an error occurs.
- * @throws RuntimeException If unable to call method.
+ * Behaviors:
+ * - In non-production environments, invalid or disabled functions throw exceptions.
+ * - In production, disabled functions are logged and execution is skipped.
+ *
+ * @param string $function The name of the function to invoke.
+ * @param mixed  ...$arguments Arguments passed to the target function.
+ *
+ * @return mixed Returns the function result, or false if execution is blocked.
+ * @throws RuntimeException If the function is disabled or does not exist.
+ *
  * @see https://luminova.ng/docs/0.0.0/foundation/functions
  */
-function func(?string $context = null, mixed ...$arguments): mixed 
+
+/**
+ * Safely calls a PHP function with arguments, handling disabled functions
+ * and global namespace fallback.
+ *
+ * This wrapper ensures:
+ *  - Functions disabled via PHP `disable_functions` are caught.
+ *  - Developer-friendly exceptions in non-production environments.
+ *  - Logging in production if a function is disabled.
+ *  - Automatic fallback to global namespace if needed.
+ *
+ * @param callable-string $function The name of the function to call.
+ * @param mixed ...$arguments Arguments to pass to the function.
+ *
+ * @return mixed Returns the result of the called function, or false if disabled in production.
+ * @throws RuntimeException If the function does not exist or is disabled (in non-production).
+ * 
+ * @see https://luminova.ng/docs/0.0.0/foundation/functions
+ */
+function func(string $function, mixed ...$arguments): mixed
 {
-    if ($context === null) {
-        return Factory::functions();
+    static $disables = null;
+
+    $function = \ltrim($function, '\\');
+
+    if ($disables === null) {
+        $disables = \array_map(
+            'trim', \explode(',', \ini_get('disable_functions') ?: '')
+        );
     }
 
-    if (\in_array($context, ['ip', 'document', 'math'], true)) {
-        return Factory::functions()->{$context}(...$arguments);
+    $isDisabled = \in_array($function, $disables, true);
+
+    if (!$isDisabled) {
+        $global = "\\{$function}";
+
+        if (function_exists_cached($global)) {
+            return $global(...$arguments);
+        }
+
+        if (function_exists_cached($function)) {
+            return $function(...$arguments);
+        }
     }
 
-    return null;
+    $error = \sprintf($isDisabled 
+        ? 'Function "%s" is disabled by PHP configuration.'
+        : 'Function "%s" does not exist.',  
+        $function
+    );
+
+    if (\PRODUCTION) {
+        Logger::error($error);
+        return false;
+    }
+    
+    throw new RuntimeException($error);
+}
+
+/**
+ * Finish the HTTP response immediately while allowing PHP to continue running.
+ *
+ * This function attempts to terminate the client response as early as possible
+ * while letting PHP execute remaining logic (logging, cache writes, async work).
+ *
+ * Behavior:
+ * - Optionally closes the active session to prevent blocking.
+ * - Optionally ignores client aborts.
+ * - Uses server-specific request finish functions when available.
+ * - Falls back to flushing output buffers safely.
+ *
+ * Notes:
+ * - This is best-effort only. Web servers and proxies may still terminate execution.
+ * - Do not rely on this for critical work; use queues or workers instead.
+ *
+ * @param bool $closeSession Whether to close the active session before finishing the response.
+ * @param bool $ignoreAbort Whether to ignore client disconnects (non-CLI only).
+ *
+ * @return bool Returns true if a response flush attempt was made.
+ */
+function finish_response(bool $closeSession = true, bool $ignoreAbort = true): bool
+{
+    if ($closeSession && \session_status() === \PHP_SESSION_ACTIVE) {
+        \session_write_close();
+    }
+
+    if($ignoreAbort && PHP_SAPI !== 'cli'){
+        func('ignore_user_abort', true);
+    }
+
+    try {
+        return (bool) func('fastcgi_finish_request');
+    } catch (\Throwable) {
+        try {
+            return (bool) func('litespeed_finish_request');
+        } catch (\Throwable) {
+            while (\ob_get_level() > 0) {
+                @\ob_end_flush();
+            }
+
+            @\flush();
+            return true;
+        }
+    }
 }
 
 /**
@@ -698,23 +785,7 @@ function locale(?string $locale = null): string|bool
  */
 function start_url(?string $route = null, bool $relative = false): string
 {
-    $route = (!$route ? '/' : '/' . \ltrim($route, '/'));
-
-    if ($relative) {
-        return PRODUCTION ? $route : '/' . CONTROLLER_SCRIPT_PATH . $route;
-    }
-
-    if(PRODUCTION){
-        return APP_URL . $route;
-    }
-
-    $hostname = $_SERVER['HTTP_HOST'] 
-        ?? $_SERVER['HOST'] 
-        ?? $_SERVER['SERVER_NAME'] 
-        ?? $_SERVER['SERVER_ADDR'] 
-        ?? 'localhost';
-
-    return URL_SCHEME . '://' . $hostname . '/' . CONTROLLER_SCRIPT_PATH . $route;
+    return Luminova::urlFromRoot($route, $relative);
 }
 
 /**
@@ -765,7 +836,7 @@ function absolute_url(string $path): string
  */
 function filter_paths(string $path): string 
 {
-    return Luminova::filterPath($path);
+    return Luminova::trimSystemPath($path);
 }
 
 /**
@@ -925,18 +996,14 @@ function uppercase_words(string $input): string
  * 
  * @return string Return the generated UUID string.
  * @throws InvalidArgumentException If the namespace or name is not provided for versions 3 or 5.
- * @see https://luminova.ng/docs/0.0.0/foundation/functions
+ * @see https://luminova.ng/docs/0.0.0/utility/helpers
+ * @see Helpers
  * 
  * @example - Example:
  * ```php
  * $version = 4;
  * 
  * $uuid = uuid($version); // uuid-string
- * 
- * // To check if UUID is valid use 
- * if(func()->isUuid($uuid, $version)){
- *      echo 'Yes';
- * }
  * ```
  */
 function uuid(int $version = 4, ?string $namespace = null, ?string $name = null): string 
@@ -1170,11 +1237,11 @@ function cookie(string $name, string $value = '', array $options = [], bool $sha
  * -   'cookie'         `\Luminova\Cookies\Cookie`
  * -   'functions'      `\Luminova\Foundation\Core\Functions`
  * -   'modules'        `\Luminova\Library\Modules`
- * -   'language'       `\Luminova\Component\Languages\Translator`
+ * -   'language'       `\Luminova\Components\Languages\Translator`
  * -   'logger'         `\Luminova\Logger\Logger`
  * -   'escaper'        `\Luminova\Security\Escaper`
  * -   'network'        `\Luminova\Http\Network`
- * -   'Filesystem'    `\Luminova\Utility\Storage\Filesystem`
+ * -   'filesystem'     `\Luminova\Storage\Filesystem`
  * -   'validate'       `\Luminova\Security\Validation`
  * -   'response'       `\Luminova\Template\Response`
  * -   'request'        `\Luminova\Http\Request`
@@ -1407,7 +1474,7 @@ function import_lib(string $library, bool $throw = false): bool
         $library = "{$library}.php";
     }
 
-    $path = root('/libraries/libs/', \trim($library, TRIM_DS));
+    $path = root('/libraries/libs/', \trim($library, \TRIM_DS));
 
     try {
         import($path, true);
@@ -1712,7 +1779,7 @@ function to_array(mixed $input): array
  * Convert an array or string delimited string list to a standard JSON object.
  *
  * @param array|string $input Input array or listified string 
- *                  from `Luminova\Utility\String\Listifier` (e.g, `foo=bar,bar=2,baz=[1;2;3]`).
+ *                  from `Luminova\Components\String\Listifier` (e.g, `foo=bar,bar=2,baz=[1;2;3]`).
  *
  * @return object|false JSON object if successful, false on failure.
  * 
@@ -1752,7 +1819,7 @@ function to_object(array|string $input): object|bool
     }
 
     try {
-        return \json_decode(\json_encode($input, JSON_THROW_ON_ERROR));
+        return \json_decode(\json_encode($input, \JSON_THROW_ON_ERROR));
     } catch (\JsonException) {
         return false;
     }
@@ -1761,7 +1828,7 @@ function to_object(array|string $input): object|bool
 /**
  * Convert a valid string list to an array.
  *
- * The function uses `Luminova\Utility\String\Listifier` to convert a string list format into an array.
+ * The function uses `Luminova\Components\String\Listifier` to convert a string list format into an array.
  *
  * @param string $list The string to convert.
  *
@@ -1881,7 +1948,7 @@ function get_content(
     int $delay = 0
 ): string|bool 
 {
-    return Filesystem::getContent($filename, $length, $offset, $useInclude, $context, $delay);
+    return Filesystem::contents($filename, $length, $offset, $useInclude, $context, $delay);
 }
 
 /**
@@ -2011,7 +2078,7 @@ function validate(?array $inputs = null, ?array $rules = null, array $messages =
  */
 function get_class_name(string|object $from): string 
 {
-    return Luminova::getClassBaseNames(\is_string($from) ? $from : \get_class($from));
+    return Luminova::getClassBaseName(\is_string($from) ? $from : \get_class($from));
 }
 
 /**
@@ -2066,7 +2133,7 @@ function is_blob(mixed $value): bool
 function which_php(): ?string
 {
     if (\defined('PHP_BINARY')) {
-        return PHP_BINARY;
+        return \PHP_BINARY;
     }
 
     if (isset($_SERVER['_']) && \str_contains($_SERVER['_'], 'php')) {
@@ -2167,28 +2234,24 @@ function string_length(string $content, ?string $charset = null): int
  * otherwise it treats the input as raw binary and uses `\finfo->buffer()`.
  *
  * @param string $input File path or raw binary string to extract mime from.
- * @param string|null $magicDatabase  Optional path to a custom magic database (e.g, \path\custom.magic).
+ * @param string|null $magicDatabase Optional MIME magic database file (e.g, `\path\custom.mgc`).
+ * @param string|null $customDatabase Optional MIME custom database file (e.g, `\path\custom.json`).
  * 
  * @return string Return the detected MIME type (e.g. "image/jpeg"), or false if detection fails.
+ * @throws RuntimeException If database file is not readable or if there is an error reading the file.
+ * @throws InvalidArgumentException If the extension or MIME type is invalid.
  */
-function get_mime(string $input, ?string $magicDatabase = null): string|bool
+function get_mime(string $input, ?string $magicDatabase = null, ?string $customDatabase = null): string|bool
 {
     if($input === ''){
         return 'text/plain';
     }
 
-    $finfo = new \finfo(FILEINFO_MIME_TYPE, $magicDatabase);
-
-    if ($finfo === false) {
-        return false;
+    if($customDatabase !== null){
+        MIME::database($customDatabase);
     }
 
-    $mime = \is_file($input)
-        ? ($finfo->file($input) ?: \mime_content_type($input))
-        : $finfo->buffer($input);
-    
-    finfo_close($finfo);
-    return $mime;
+    return MIME::guess($input, $magicDatabase);
 }
 
 /**
@@ -2325,7 +2388,7 @@ function cache(
         }
 
         if ($driver === 'filesystem') {
-            $subfolder = \trim($persistentIdOrSubfolder, TRIM_DS) . \DIRECTORY_SEPARATOR;
+            $subfolder = \trim($persistentIdOrSubfolder, \TRIM_DS) . \DIRECTORY_SEPARATOR;
             if ($cache->getFolder() !== $subfolder) {
                 $cache->setFolder($subfolder);
             }
@@ -2374,7 +2437,7 @@ function array_merge_recursive_replace(array ...$array): array {
     foreach ($array as $params) {
         foreach ($params as $key => $value) {
             if (\is_numeric($key) && !\in_array($value, $merged, true)) {
-                $merged[] = is_array($value) 
+                $merged[] = \is_array($value) 
                     ? array_merge_recursive_replace($merged[$key] ?? [], $value) 
                     : $value;
             } else {
@@ -2518,14 +2581,13 @@ function http_status_header(int $status): bool
 function function_exists_cached(string $function): bool
 {
     static $functions = [];
-    $func = $functions[$function] ?? null;
+    $isFunc = $functions[$function] ?? null;
 
-    if($func === null){
-        $functions[$function] = (\function_exists($function) ? 't' : 'f');
-        return $functions[$function] === 't';
+    if($isFunc === null){
+        return $functions[$function] = \function_exists($function);
     }
 
-    return $func === 't';
+    return $isFunc;
 }
 
 /**
@@ -2544,12 +2606,11 @@ function function_exists_cached(string $function): bool
 function class_exists_cached(string $class, bool $autoload = true): bool
 {
     static $classes = [];
-    $cached = $classes[$class] ?? null;
+    $isClass = $classes[$class] ?? null;
 
-    if($cached === null){
-        $classes[$class] = (\class_exists($class, $autoload) ? 't' : 'f');
-        return $classes[$class] === 't';
+    if($isClass === null){
+        return $classes[$class] = \class_exists($class, $autoload);
     }
 
-    return $cached === 't';
+    return $isClass;
 }

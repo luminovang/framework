@@ -10,8 +10,8 @@
  */
 namespace Luminova\Command\Utils;
 
-use \Luminova\Command\Utils\Text;
 use \Luminova\Command\Terminal;
+use \Luminova\Command\Utils\Text;
 
 /**
  * Color class for managing and retrieving ANSI color codes and names dynamically.

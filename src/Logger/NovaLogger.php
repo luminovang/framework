@@ -15,15 +15,15 @@ use \Throwable;
 use \JsonException;
 use \App\Config\Logger;
 use \Luminova\Time\Time;
-use \Luminova\Utility\IP;
 use \Luminova\Http\Request;
 use \Psr\Log\AbstractLogger;
-use \Luminova\Common\Helpers;
+use \Luminova\Http\Network\IP;
+use \Luminova\Utility\Helpers;
 use \Luminova\Logger\LogLevel;
 use \Luminova\Http\Client\Novio;
-use \Luminova\Utility\Email\Mailer;
+use \Luminova\Components\Email\Mailer;
 use function \Luminova\Funcs\{root, make_dir};
-use \Luminova\Utility\Storage\{Archive, Filesystem};
+use \Luminova\Storage\{Archive, Filesystem};
 use \Luminova\Exceptions\{AppException, FileException, InvalidArgumentException};
 
 class NovaLogger extends AbstractLogger
@@ -50,6 +50,13 @@ class NovaLogger extends AbstractLogger
     protected bool $autoBackup = false;
 
     /**
+     * Log message template format.
+     * 
+     * @var string|null $logFormat
+     */
+    protected static ?string $logFormat = null;
+
+    /**
      * Original log level before dispatching.
      * 
      * @var string $level
@@ -68,16 +75,23 @@ class NovaLogger extends AbstractLogger
      * 
      * @param string $name The Logging system identifier name (default: `default`).
      * @param string $extension The log file name extension (default: `.log`).
+     * @param string|null $logFormat Optional log message format 
+     *          (default: `[{time:Y-m-d H:i:s.uP}] {level} {name} {message} {context}`).
      */
     public function __construct(
         protected string $name = 'default', 
-        protected string $extension = '.log'
+        protected string $extension = '.log',
+        ?string $logFormat = null
     )
     {
         self::$path ??= root('/writeable/logs/');
         $this->maxSize = (int) env('logger.max.size', Logger::$maxSize);
         $this->autoBackup = env('logger.create.backup', Logger::$autoBackup);
         self::$sendContext ??= env('logger.telegram.send.context', Logger::$telegramSendContext);
+
+        if($logFormat !== null){
+            self::setLogFormat($logFormat);
+        }
     }
 
     /**
@@ -88,6 +102,53 @@ class NovaLogger extends AbstractLogger
     public function getName(): string
     {
         return $this->name;
+    }
+
+    /**
+     * Get the active log format.
+     *
+     * Returns the currently configured log format. If none has been set,
+     * it will be resolved once from the environment configuration and
+     * cached for subsequent calls.
+     *
+     * Supported placeholders:
+     * - {level}      Log level (uppercased)
+     * - {name}       Logger or channel name
+     * - {time:fmt}   Date/time with optional PHP date format
+     * - {message}    Log message
+     * - {context}    Context payload (JSON or readable dump)
+     *
+     * @return string Returns the active log format string.
+     */
+    public static function getLogFormat(): string
+    {
+        if (self::$logFormat === null) {
+            self::$logFormat = env('logger.log.format')
+                ?: '[{time:Y-m-d H:i:s.uP}] {level} {name} {message} {context}';
+        }
+
+        return self::$logFormat;
+    }
+
+    /**
+     * Set a custom log format.
+     *
+     * Overrides the global log format used for message rendering.
+     * Passing an empty value will reset the format back to the
+     * environment or default configuration.
+     *
+     * @param string|null $format Custom format template 
+     *      (e.g, `[{level}] [{name}] [{time:Y-m-d H:i:s.uP}] {message} {context}`).
+     *
+     * @return string Returns the active log format after assignment.
+     */
+    public static function setLogFormat(string $format): string
+    {
+        self::$logFormat = ($format !== '')
+            ? $format
+            : null;
+
+        return self::getLogFormat();
     }
 
     /**
@@ -258,6 +319,7 @@ class NovaLogger extends AbstractLogger
             strtoupper($this->level),
             self::$name
         );
+
         $fiber = new Fiber(function () use ($email, $subject, $body, $message, $context) {
             try {
                 if (!Mailer::to($email)->subject($subject)->body($body)->text(strip_tags($body))->send()) {
@@ -267,14 +329,10 @@ class NovaLogger extends AbstractLogger
                         $context
                     );
                 }
-            } catch (AppException $e) {
+            }catch (Throwable $e) {
                 $this->e(
-                    'Mailer Error', $e->getMessage(), 
-                    $message, $context
-                );
-            } catch (Throwable $fe) {
-                $this->e(
-                    'Unexpected Mailer Error', $fe->getMessage(), 
+                    ($e instanceof AppException) ? 'Mailer Error' : 'Unexpected Mailer Error', 
+                    $e->getMessage(), 
                     $message, $context
                 );
             }
@@ -357,7 +415,7 @@ class NovaLogger extends AbstractLogger
                     IP::get(),
                     $this->name,
                     $this->level,
-                    Time::now()->format('Y-m-d\TH:i:s.uP'),
+                    Time::now()->format('Y-m-d H:i:s.uP'),
                     $request->getUrl(),
                     $request->getMethod(),
                     $request->getUserAgent()->toString(),
@@ -529,13 +587,10 @@ class NovaLogger extends AbstractLogger
         $key = md5($key);
         $contents = ($contents === null) ? [] : json_decode($contents, true);
         $contents[$key] = $this->normalizeArrayKeys(json_decode($data, true));
-        $contents[$key]['info']['DateTime'] = Time::now()->format('Y-m-d\TH:i:s.uP');
-        
-        if ($contents[$key] === null) {
-            return false;
-        }
+        $contents[$key]['info']['DateTime'] = Time::now()->format('Y-m-d H:i:s.uP');
 
         $updated = json_encode($contents, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        
         if ($updated === false) {
             return false;
         }
@@ -555,41 +610,48 @@ class NovaLogger extends AbstractLogger
      * @param string|null $name Optional log system name.
      * @param array $context Optional. Additional contextual information for the log entry.
      *                        Default is an empty array.
+     * @param string|null $format Optional log message format (default).
      *
      * @return string Return the formatted log message. If context is provided, it will be
      *                appended to the message.
      */
     public static function formatMessage(
-        string $level, 
-        string $message, 
-        ?string $name = null, 
-        array $context = []
+        string $level,
+        string $message,
+        ?string $name = null,
+        array $context = [],
+        ?string $format = null
     ): string 
     {
-        $message = sprintf(
-            $name ? '[%s] [%s] [%s] %s' : '[%s]%s [%s] %s', 
-            strtoupper($level), 
-            $name ?? '',
-            Time::now()->format('Y-m-d\TH:i:s.uP'), 
-            $message
+        $isDefaultFormat = ($format === null);
+        $format ??= self::getLogFormat();
+        $format = preg_replace_callback(
+            '/\{time(?::([^}]+))?\}/',
+            static function ($m) {
+                return Time::now()->format($m[1] ?? 'Y-m-d H:i:s.uP');
+            },
+            $format
         );
         
-        if($context === []){
-            return $message;
+        $replacements = [
+            '{level}'   => strtoupper($level),
+            '{name}'    => $name ?: '',
+            '{message}' => $message,
+            '{context}' => '',
+        ];
+
+        if ($context !== []) {
+            $replacements['{context}'] = PRODUCTION
+                ? self::toJsonContext($context, false)
+                : print_r($context, true);
         }
 
-        $message .= ' [CONTEXT] ';
-
-        if (!PRODUCTION) {
-            $message .= print_r($context, true);
-
-            return $message;
+        if ($isDefaultFormat && !$name) {
+            unset($replacements['{name}']);
         }
 
-        $message .= self::toJsonContext($context, false);
-        
-        return $message;
-    }    
+        return preg_replace('/\s+/', ' ', trim(strtr($format, $replacements)));
+    }
 
     /**
      * Converts a context array to a JSON string.
@@ -751,7 +813,6 @@ class NovaLogger extends AbstractLogger
     ): void 
     {
         $fiber = new Fiber(function () use ($from, $url, $body, $message, $context) {
-            $error = null;
             try {
                 $response = (new Novio())->request('POST', $url, ['body' => $body]);
                 if ($response->getStatusCode() !== 200) {
@@ -765,16 +826,13 @@ class NovaLogger extends AbstractLogger
                         $context
                     );
                 }
-                return;
-            } catch (AppException $e) {
-                $error = $e->getMessage();
-                $from = "{$from} Network Error";
-            } catch (Throwable $fe) {
-                $error = $fe->getMessage();
-                $from = "Unexpected {$from} Error";
-            }
+            } catch (Throwable $e) {
+                $from = ($e instanceof AppException) 
+                    ? "{$from} Network Error" 
+                    : "Unexpected {$from} Error";
 
-            $this->e($from, $error, "({$this->level}) {$message}", $context);
+                $this->e($from, $e->getMessage(), "({$this->level}) {$message}", $context);
+            }
         });
 
         $fiber->start();
