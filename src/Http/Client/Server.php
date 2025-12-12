@@ -12,18 +12,18 @@
 namespace Luminova\Http\Client;
 
 use \Closure;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Http\Helper\ClientServerTrait;
-use \Luminova\Interface\HttpRequestInterface;
+use Luminova\Exceptions\RuntimeException;
+use Luminova\Http\Helper\ClientServerTrait;
+use Luminova\Interface\RequestInterface;
 
 class Server 
 {
     /**
      * List of PIDs of forked processes.
      * 
-     * @var array $pids
+     * @var array $processes
      */
-    private array $pids = []; 
+    private array $processes = []; 
 
     /**
      * Track active child processes
@@ -408,14 +408,14 @@ class Server
      * Runs the server and begins listening for incoming connections.
      *
      * @param int|null $timeout Optional timeout for client connections, in microseconds (default: 100000 µs).
-     * @param int $sleep Time in microseconds to wait between connection attempts (default: 10000 µs).
+     * @param float|int $sleep Time in seconds to wait between connection attempts (default: 0.1).
      * @param bool $simultaneous Whether to allow multiple simultaneous connections (default: false).
      *
      * @return void
      */
     public function run(
-        int|null $timeout = 100000, 
-        int $sleep = 10000, 
+        ?int $timeout = 100000, 
+        float|int $sleep = 0.1, 
         bool $simultaneous = false
     ): void
     {
@@ -474,7 +474,7 @@ class Server
             self::$connections = [];
             self::$clients = [];
             $this->routes = [];
-            $this->pids = [];
+            $this->processes = [];
 
             if($this->booting){
                 $this->booting = false;
@@ -488,7 +488,7 @@ class Server
                     'port' => $this->port,'endpoint' => $this->endpoint
                 ]);
 
-                echo ($response instanceof HttpRequestInterface) 
+                echo ($response instanceof RequestInterface) 
                     ? $response->toString() 
                     : (string) $response;
             }
@@ -718,11 +718,11 @@ class Server
      * Monitors incoming client connections and handles requests concurrently.
      *
      * @param int $timeout Timeout for the stream select operation (default: null).
-     * @param int $sleep Duration to pause between operations in microseconds (default: 0).
+     * @param float|int $sleep Duration to pause between operations in seconds (default: 0).
      *
      * @return void
      */
-    private function listeners(int $timeout, int $sleep): void
+    private function listeners(int $timeout, float|int $sleep): void
     {
         $this->_echo("Server is now running with ID: {$this->getId()}.");
         while (($this->running && $this->socket !== null && self::$sockets !== [])) {
@@ -746,9 +746,7 @@ class Server
                 $this->waitForConnections();
             }
 
-            if ($sleep > 0) {
-                usleep($sleep);
-            }
+            uwait($sleep);
         }
     }
 
@@ -771,10 +769,10 @@ class Server
         } 
         
         if ($pid !== 0) {
-            $this->pids[0] = [
-                'pid' => $pid,
+            $this->processes[0] = [
+                'pid'     => $pid,
                 'timeout' => $timeout,
-                'sleep' => $sleep
+                'sleep'   => $sleep
             ];
             
             if($this->booting){
@@ -806,7 +804,7 @@ class Server
         if ($pid !== 0) {
             $this->activeProcesses++;
             $this->_echo("Forked child process with PID {$pid}. Active processes: {$this->activeProcesses}.");
-            $this->pids[$idx] = [
+            $this->processes[$idx] = [
                 'pid' => $pid
             ];
             return;
@@ -894,7 +892,7 @@ class Server
      */
     private function waitForConnections(): void
     {
-        foreach ($this->pids as $idx => $fork) {
+        foreach ($this->processes as $idx => $fork) {
             $status = $this->waitAsyncProcess($fork['pid']);
             self::$clients[self::$connections[$idx][1]]['pid'] = $fork['pid'];
 
@@ -912,14 +910,14 @@ class Server
      */
     private function waitForConnection(): void 
     {
-        if($this->pids === []){
+        if($this->processes === []){
             return;
         }
 
-        $status = $this->waitAsyncProcess($this->pids[0]['pid']);
+        $status = $this->waitAsyncProcess($this->processes[0]['pid']);
 
-        while (($this->pids !== [] && $this->running && $this->socket !== null && self::$sockets !== [])) {
-            $code = $this->getRemainingSockets($this->pids[0]['timeout']);
+        while (($this->processes !== [] && $this->running && $this->socket !== null && self::$sockets !== [])) {
+            $code = $this->getRemainingSockets($this->processes[0]['timeout']);
 
             if ($code === 1) {
                 break;
@@ -934,15 +932,13 @@ class Server
                 $sid = $this->getSid();
 
                 self::$connections[$sid] = $this->setAndGetClient($client, $sid);
-                self::$clients[self::$connections[$sid][1]]['pid'] = $this->pids[0]['pid'];
+                self::$clients[self::$connections[$sid][1]]['pid'] = $this->processes[0]['pid'];
                 $this->handler();
-                $this->exited($status, $this->pids[0]['pid']);
+                $this->exited($status, $this->processes[0]['pid']);
                 $this->cleanupProcesses(false);
             }
 
-            if ($this->pids[0]['sleep'] > 0) {
-                usleep($this->pids[0]['sleep']);
-            }
+            uwait($this->processes[0]['sleep'] ?? 0);
         }
     }
 

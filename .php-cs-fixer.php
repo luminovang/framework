@@ -9,6 +9,6 @@ declare(strict_types=1);
  * @license See LICENSE file
  * @link https://luminova.ng
  */
-use \Luminova\Debugger\PhpCsFixer;
+use Luminova\Debugger\PhpCsFixer;
 
 return (new PhpCsFixer(__DIR__, PhpCsFixer::FIX_FRAMEWORK))->getRules();

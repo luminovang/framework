@@ -20,7 +20,4 @@ namespace Luminova\Interface;
  * objects, helping IDEs recognize and suggest the original class methods 
  * when type-hinted alongside `LazyObjectInterface`.
  */
-interface LazyObjectInterface
-{
-    // This is a marker interface with no methods.
-}
+interface LazyObjectInterface {}

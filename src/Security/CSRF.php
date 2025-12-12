@@ -10,138 +10,154 @@
  */
 namespace Luminova\Security;
 
-use \Luminova\Sessions\Session;
-use \App\Config\Session as CookieConfig;
+use \App\Config\Session as Config;
+use Luminova\Interface\SessionManagerInterface;
+use Luminova\Sessions\Managers\{Session, Cookie};
 
-final class CSRF 
+/**
+ * Cross-Site Request Forgery (CSRF) token manager.
+ *
+ * Generates, stores, retrieves, validates, and deletes CSRF tokens.
+ * Uses session storage by default and falls back to cookie storage when
+ * cookie storage is configured or PHP sessions are unavailable.
+ *
+ * @see self::csrf() To determine the token storage manager.
+ * @see \Luminova\Http\Request::getCsrfToken() To retrieve the token from a request.
+ */
+final class CSRF
 {
     /**
-     * Token session input name.
+     * Token input name.
      *
-     * @var string $tokenName
-     * @internal Used in {@see Luminova\Http\Request::getCsrfToken())
+     * @var string INPUT_NAME
      */
-    private static $tokenName = "csrf_token";
+    public const INPUT_NAME = 'csrf_token';
 
     /**
-     * Token session key name.
+     * Token session storage key.
      *
-     * @var string $token
+     * @var string
      */
-    private static $token = "csrf_token_token";
+    private const TOKEN_NAME = 'csrf_token_token';
 
     /**
-     * Cookie config.
+     * Session storage manager.
      *
-     * @var CookieConfig $config
+     * @var SessionManagerInterface|null $manager
      */
-    private static ?CookieConfig $config = null;
+    private static ?SessionManagerInterface $manager = null;
 
     /**
-     * Initialize the session configuration.
+     * Private constructor.
      */
-    private static function intConfig(): void 
+    private function __construct(){}
+
+    /**
+     * Retrieve the current CSRF token or generate one if none exists.
+     *
+     * @return string Return the current CSRF token.
+     */
+    public static function getToken(): string
     {
-        self::$config ??= new CookieConfig();
+        $token = self::csrf()->getItem(self::TOKEN_NAME, '');
+
+        return ($token !== '') 
+            ? $token 
+            : self::refresh();
     }
 
     /**
-     * Retrieves a previously generated CSRF token or generates a new token 
-     * if none was found, then stores it.
+     * Return the CSRF token as an HTTP response header.
      *
-     * @return string Return the generated CSRF token.
+     * @return array{X-CSRF-Token:string} Return the CSRF response header.
      */
-    public static function getToken(): string 
+    public static function getHeader(): array
     {
-        if (self::hasToken()) {
-            return (self::tokenStorage() === 'cookie') 
-                ? $_COOKIE[self::$token] 
-                : $_SESSION[self::$token];
-        }
-
-        return self::refresh();
+        return [
+            'X-CSRF-Token' => self::getToken(),
+        ];
     }
 
     /**
-     * Generates a new CSRF token and stores it. 
-     * Use this method when you need to regenerate a token after validation.
-     * 
+     * Generate and store a new CSRF token.
+     *
+     * Use this method to replace the current token, such as after
+     * successful validation when a new token is required.
+     *
      * @return string Return the generated CSRF token.
      */
-    public static function refresh(): string 
+    public static function refresh(): string
     {
-        $token = self::generateToken();
-        self::saveToken($token);
+        $token = self::newToken();
+
+        self::csrf()->setItem(self::TOKEN_NAME, $token);
+
         return $token;
     }
 
     /**
-     * Delete stored CSRF token.
+     * Delete the stored CSRF token.
      *
      * @return void
      */
-    public static function delete(): void 
+    public static function delete(): void
     {
-        self::intConfig();
-        $storage = self::tokenStorage();
-
-        if($storage === 'cookie'){
-            self::saveToken('', time() - self::$config->expiration);
-            return;
-        }
-
-        unset($_SESSION[self::$token]);
+        self::csrf()->deleteItem(self::TOKEN_NAME);
     }
 
     /**
-     * Generates and display an HTML hidden input field for the CSRF token.
-     * 
-     * @return void 
-     */
-    public static function inputToken(): void 
-    {
-        echo '<input type="hidden" name="' . self::$tokenName . '" value="' . self::getToken() . '">';
-    }
-
-    /**
-     * Generates and display an HTML meta tag for the CSRF token.
-     * 
+     * Output an HTML hidden input containing the CSRF token.
+     *
      * @return void
      */
-    public static function metaToken(): void 
+    public static function inputToken(): void
     {
-        echo '<meta name="' . self::$tokenName . '" content="' . self::getToken() . '">';
+        printf(
+            '<input type="hidden" name="%s" value="%s">',
+            htmlspecialchars(self::INPUT_NAME, ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars(self::getToken(), ENT_QUOTES, 'UTF-8')
+        );
     }
 
     /**
-     * Validates a submitted CSRF token.
+     * Output an HTML meta tag containing the CSRF token.
+     *
+     * @return void
+     */
+    public static function metaToken(): void
+    {
+        printf(
+            '<meta name="%s" content="%s">',
+            htmlspecialchars(self::INPUT_NAME, ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars(self::getToken(), ENT_QUOTES, 'UTF-8')
+        );
+    }
+
+    /**
+     * Validate a submitted CSRF token.
      *
      * @param string $token The token submitted by the user.
-     * @param bool $reusable Whether to retain or delete the token after successful verification (default: true).
-     * 
-     * @return bool Return true if the submitted token is valid, false otherwise.
+     * @param bool $reusable Whether to retain the token after successful verification.
+     *
+     * @return bool Return true if the token is valid, false otherwise.
      */
-    public static function validate(string $token, bool $reusable = false): bool 
+    public static function validate(string $token, bool $reusable = false): bool
     {
-        self::intConfig();
-        $storage = self::tokenStorage();
-        $tokenHash = '';
-
-        if ($storage === 'cookie') {
-            $tokenHash = self::hasCookie() ? $_COOKIE[self::$token] : '';
-        } elseif(isset($_SESSION[self::$token])) {
-            $tokenHash = $_SESSION[self::$token];
+        if ($token === '') {
+            return false;
         }
 
-        if ($tokenHash && hash_equals($tokenHash, $token)) {
-            if(!$reusable) {
-                self::delete();
-            }
+        $stored = self::csrf()->getItem(self::TOKEN_NAME, '');
 
-            return true;
+        if ($stored === '' || !hash_equals($stored, $token)) {
+            return false;
         }
 
-        return false; 
+        if (!$reusable) {
+            self::delete();
+        }
+
+        return true;
     }
 
     /**
@@ -151,81 +167,51 @@ final class CSRF
      */
     public static function hasToken(): bool 
     {
-        return (self::tokenStorage() === 'cookie') 
-            ? self::hasCookie() 
-            : isset($_SESSION[self::$token]);
+        return self::csrf()->hasItem(self::TOKEN_NAME);
     }
 
-
     /**
-     * Generates a new CSRF token.
+     * Generate a cryptographically secure CSRF token.
      *
-     * @return string Return a new generated token.
+     * @return string Return a 64-character hexadecimal token.
      */
-    private static function generateToken(): string
+    private static function newToken(): string
     {
         return bin2hex(random_bytes(32));
     }
 
     /**
-     * Determine which storage location to use.
-     * 
-     * If session is not enabled fallback to using cookie storage.
-     * 
-     * @return string Return cookie or session based on csrf storage configuration.
+     * Determine the storage location for CSRF tokens.
+     *
+     * Uses session storage by default and falls back to cookie storage when
+     * cookie storage is configured or PHP sessions are unavailable.
+     *
+     * @return SessionManagerInterface Return the configured CSRF storage manager.
      */
-    private static function tokenStorage(): string 
+    private static function csrf(): SessionManagerInterface
     {
-        self::intConfig();
-        $status = session_status();
-
-        if (self::$config->csrfStorage === 'cookie' || $status === PHP_SESSION_DISABLED) {
-            return 'cookie';
+        if (self::$manager instanceof SessionManagerInterface) {
+            return self::$manager;
         }
 
-        if($status === PHP_SESSION_NONE){
-            (new Session())->start();
-        }
+        $config = new Config();
+        $config->sameSite = 'Strict';
+        $config->useStrictMode = true;
 
-        return 'session';
-    }
+        $useCookie = $config->csrfStorage === 'cookie'
+            || session_status() === PHP_SESSION_DISABLED;
 
-    /**
-     * Save token depending on storage.
-     * 
-     * @param string $token The generated csrf token to save.
-     * @param ?int $expiry The expiration time of the token in seconds.
-     * 
-     * @return void 
-     */
-    private static function saveToken(string $token, ?int $expiry = null): void 
-    {
-        self::intConfig();
-        $storage = self::tokenStorage();
+        self::$manager = $useCookie
+            ? new Cookie('csrf')
+            : new Session('csrf');
 
-        if($storage === 'cookie'){
-            setcookie(self::$token, $token, [
-                'expires' => ($expiry ?? time() + self::$config->expiration),
-                'path' => self::$config->sessionPath,
-                'domain' => self::$config->sessionDomain,
-                'secure' => true,
-                'httponly' => true,
-                'samesite' => self::$config->sameSite 
-            ]);
-            $_COOKIE[self::$token] = $token;
-            return;
-        }
+        $useCookie 
+            ? self::$manager->setConfig($config)
+            : \Luminova\Sessions\Session::configure($config);
 
-        $_SESSION[self::$token] = $token;
-    }
+        self::$manager->setNamespace('csrf_auth');
+        self::$manager->start();
 
-    /**
-     * Check if cookie taken was already created
-     * 
-     * @return bool Return true if cookie toke exists, false otherwise.
-     */
-    private static function hasCookie(): bool 
-    {
-        return isset($_COOKIE[self::$token]) && $_COOKIE[self::$token] !== '';
+        return self::$manager;
     }
 }

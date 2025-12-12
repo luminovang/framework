@@ -11,7 +11,7 @@
 namespace Luminova\Attributes;
 
 use \Attribute;
-use \Luminova\Exceptions\RouterException;
+use Luminova\Exceptions\RouterException;
 
 #[Attribute(Attribute::TARGET_CLASS)]
 final class Prefix
@@ -20,33 +20,41 @@ final class Prefix
      * Defines a non-repeatable routing prefix for HTTP controller classes.
      *
      * This attribute assigns a URI prefix to a controller and optionally sets an error handler. 
-     * It helps centralize error management and organize controllers when compiling attributes to routes for performance. 
+     * It helps centralize error management and organize controllers when compiling attributes 
+     * to routes for performance. 
      * 
      * **Predefined Route Placeholders:**
      *
-     * - (:root)         → matches everything (catch-all)
-     * - (:base)         → matches everything with or without `/` (catch-all)
-     * - (:any)          → matches any characters, including slashes
-     * - (:int)          → matches integers (digits only)
-     * - (:integer)      → alias for :int
-     * - (:mixed)        → matches any characters except slash (lazy)
-     * - (:string)       → matches a non-empty segment without slashes
-     * - (:optional)     → optional segment (may be empty)
-     * - (:alphabet)     → letters only (A-Z, a-z)
-     * - (:alphanumeric) → letters and digits only
-     * - (:username)     → letters, digits, dots, underscores, hyphens
-     * - (:version)      → version numbers like: 1.0, 2.3.4, 10.0.1.2, etc.
-     * - (:number)       → integer or decimal with optional sign
-     * - (:double)       → floating-point number with optional sign
-     * - (:float)        → decimal numbers only
-     * - (:path)         → multiple segments separated by slashes
-     * - (:uuid)         → standard UUID (8-4-4-4-12 hex digits)
+     * - `(:base)`         Matches an optional root path and any following content.
+     * - `(:root)`         Matches an optional root path followed by any content.
+     * - `(:group)`        Matches any content, including `/`, and may be empty.
+     * - `(:int)`          Matches one or more digits. Alias of `(:integer)`.
+     * - `(:integer)`      Matches one or more digits.
+     * - `(:mixed)`        Matches a single URI segment, including an empty segment.
+     * - `(:string)`       Matches a non-empty URI segment without `/`.
+     * - `(:optional)`     Matches an optional URI segment.
+     * - `(:alphabet)`     Matches letters only (`A-Z` and `a-z`).
+     * - `(:alphanumeric)` Matches letters and digits only.
+     * - `(:username)`     Matches letters, digits, `.`, `_`, and `-`, with an optional `@` prefix.
+     * - `(:number)`       Matches integers or decimal numbers with an optional `+` or `-` sign.
+     * - `(:numeric)`      Matches integers or decimal numbers with an optional `-` sign.
+     * - `(:version)`      Matches dot-separated numeric versions such as `1.0`, `2.3.4`, or `10.0.1.2`.
+     * - `(:double)`       Matches integers or decimal numbers with an optional `+` or `-` sign.
+     * - `(:float)`        Matches decimal numbers with an optional `+` or `-` sign.
+     * - `(:file)`         Matches a filename containing an extension.
+     * - `(:filepath)`     Matches a file path containing zero or more directories and a filename with an extension.
+     * - `(:path)`         Matches two or more non-empty URI segments separated by `/`.
+     * - `(:uuid)`         Matches a UUID-shaped value in `8-4-4-4-12` hexadecimal format.
+     * - `(:ulid)`         Matches a 26-character ULID using Crockford Base32.
+     *
+     * Typed placeholders can be made optional by prefixing their type with `?`,
+     * for example `(:?int)`, `(:?string)`, or `(:?numeric)`.
      *
      * @param string $pattern The base prefix or patterns this controller class should handle
      *                   (e.g., `/user/(:root)`, `/user` or `/user/?.*`).
      * @param string|array|null $onError Optional error handler for routing errors. 
      *                                   Can be a callable or a (e.g, `[class, method]`) array.
-     * @param array<int,string> $exclude An optional list of URI prefixes to exclude from class matching.
+     * @param string[] $exclude An optional list of URI prefixes to exclude from class matching.
      *                          This is used internally when parsing attributes routing performance.
      * @param bool $mergeExcluders Wether to merge the exclude list with based prefix or pattern (default: false).
      *          If true `pattern+exclude` are combined as (e.g, `/(?!api(?:/|$)|blog(?:/|$)|admin(?:/|$)).*'`).
@@ -54,16 +62,28 @@ final class Prefix
      * @throws RouterException If the provided error handler is not a valid callable.
      * @see https://luminova.ng/docs/0.0.0/routing/dynamic-uri-pattern
      * @see https://luminova.ng/docs/0.0.0/attributes/uri-prefix
+     * 
+     * @signature - $onError Signature:
+     * 
+     * Invoked when specified URI pattern matches.
+     * 
+     * ```php
+     * fn(
+     *      int $status, 
+     *      Luminova\Routing\Segments $segments, 
+     *      Luminova\Foundation\Core\Application $app
+     * ):int
+     * ```
      *
-     * @example Usage:
+     * @example - Usage:
      * ```php
      * namespace App\Controllers\Http;
      * 
      * use Luminova\Base\Controller;
      * use Luminova\Attributes\Prefix;
-     * use App\Errors\Controllers\ErrorController;
+     * use App\Errors\Controllers\AppError;
      *
-     * #[Prefix(pattern: '/api/(:base)', onError: [ErrorController::class, 'onWebError'])]
+     * #[Prefix(pattern: '/api/(:base)', onError: [AppError::class, 'onTrigger'])]
      * class RestController extends Controller {
      *      // Controller implementation
      * }
