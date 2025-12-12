@@ -20,15 +20,15 @@ use \CurlHandle;
 use \CurlMultiHandle;
 use \Luminova\Http\Uri;
 use \Luminova\Luminova;
+use \Luminova\Http\Header;
 use \Luminova\Http\Network;
-use Luminova\Http\HttpCode;
-use \Luminova\Utility\Async;
 use \Luminova\Cookies\FileJar;
+use \Luminova\Http\HttpStatus;
+use \Luminova\Promise\Promise;
 use \Luminova\Http\Message\Stream;
 use \Luminova\Http\Message\Response;
-use \Luminova\Http\Helper\Normalizer;
 use function \Luminova\Funcs\array_extend_default;
-use \Luminova\Exceptions\{ErrorCode, AppException};
+use \Luminova\Exceptions\{ErrorCode, LuminovaException};
 use \Luminova\Interface\ResponseInterface as MsgResponseInterface;
 use \Psr\Http\Message\{UriInterface, RequestInterface, ResponseInterface};
 use \Luminova\Interface\{PromiseInterface, ClientInterface, CookieJarInterface};
@@ -380,7 +380,7 @@ class Novio implements ClientInterface
      */
     public function requestAsync(string $method, UriInterface|string $uri = '', array $options = []): PromiseInterface
     {
-        return Async::awaitPromise(fn() => $this->request(
+        return Promise::await(fn(): ResponseInterface => $this->request(
             $method, 
             $uri, 
             $options
@@ -428,7 +428,7 @@ class Novio implements ClientInterface
         );
 
         return new Response(
-            body: $isStream ? $stream : $response,
+            body: $isStream ? $stream->setReadOnly(true, true) : $response,
             statusCode: (int) $statusCode,
             headers: $this->headers,
             info: $info,
@@ -471,7 +471,7 @@ class Novio implements ClientInterface
         }
 
         $httpVersion = $httpVersion ?: '1.1';
-        $reasonPhrase = $reasonPhrase ?: HttpCode::phrase($statusCode);
+        $reasonPhrase = $reasonPhrase ?: HttpStatus::phrase($statusCode);
 
         return [$httpVersion, $statusCode, $reasonPhrase];
     }
@@ -831,7 +831,7 @@ class Novio implements ClientInterface
         );
 
         return new Response(
-            body: $isStream ? $request['stream'] : $body,
+            body: $isStream ? $request['stream']->setReadOnly(true, true) : $body,
             statusCode: (int) $statusCode,
             headers: $headers,
             info: $info,
@@ -850,7 +850,7 @@ class Novio implements ClientInterface
      * @param CurlHandle $curl The CURL object that resolved to options.
      * 
      * @return array{0: string|null, 1: array} Return response and info.
-     * @throws AppException Throw app exception.
+     * @throws LuminovaException Throw app exception.
      */
     private function doRequest(CurlHandle $curl): array
     {
@@ -1331,6 +1331,7 @@ class Novio implements ClientInterface
 
     /**
      * Creates and returns a Stream object from a provided resource or file path.
+     * 
      * If a file path is provided, it opens a stream to that file. The method ensures
      * the stream is both readable and writable, throwing an exception if these conditions
      * are not met or if the stream cannot be opened.
@@ -1344,7 +1345,7 @@ class Novio implements ClientInterface
     private static function createStreamResponse(CurlHandle &$curl, mixed $sink): Stream
     {
         if (!is_resource($sink)) {
-            $handler = @fopen($sink, 'r+');
+            $handler = @fopen($sink, 'rb+');
             
             if ($handler === false) {
                 curl_close($curl);
@@ -1393,10 +1394,10 @@ class Novio implements ClientInterface
             [$key, $value] = explode(': ', $header, 2);
 
             $key = trim($key);
-            Normalizer::assertHeader($key);
+            Header::assert($key, isValue: false);
 
             $value = trim($value);
-            Normalizer::assertValue($value);
+            Header::assert($value);
 
             return [$key, [$value]];
         }
@@ -1524,8 +1525,8 @@ class Novio implements ClientInterface
                 continue;
             }
 
-            Normalizer::assertHeader($key);
-            $value = Normalizer::normalizeHeaderValue($value);
+            Header::assert($key, isValue: false);
+            $value = Header::normalize($value);
 
             $line[] = "{$key}: " . implode(', ', $value);
         }

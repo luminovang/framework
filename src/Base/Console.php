@@ -11,11 +11,11 @@
 namespace Luminova\Base;
 
 use \Luminova\Boot;
-use \App\Application;
+use \Luminova\Command\Input;
 use \Luminova\Command\Terminal;
-use \Luminova\Utility\Object\LazyObject;
+use \Luminova\Foundation\Core\Application;
+use \Luminova\Components\Object\LazyObject;
 use \Luminova\Interface\LazyObjectInterface;
-use \Luminova\Foundation\Core\Application as CoreApplication;
 
 /**
  * A class to extend when building a console CLI controller for Novakit commands.
@@ -44,6 +44,13 @@ abstract class Console
      * such as for displaying help.
      */
     protected string $name = '';
+
+    /**
+     * Optional command aliases.
+     * 
+     * @var string[] $aliases
+     */
+    protected array $aliases = [];
 
     /**
      * Command usage instructions.
@@ -122,42 +129,56 @@ abstract class Console
     /**
      * Lazy loaded application instance.
      * 
-     * @var CoreApplication|Application<CoreApplication>|null $app
+     * @var \T<Application>|Application<Application> $app
      */
-    protected ?LazyObjectInterface $app = null;
+    protected readonly LazyObjectInterface $app;
 
     /**
-     * Lazy loaded terminal instance.
+     * Command input. 
      * 
-     * @var Terminal<LazyObjectInterface>|null $term
+     * @var Input $input
      */
-    protected ?LazyObjectInterface $term = null;
-
+    protected readonly Input $input;
+    
     /**
      * Initialize console command, register lazy objects and onCreate method hook.
      */
     public function __construct()
     {
-        $this->term = LazyObject::newObject(Terminal::class);
-        $this->app = LazyObject::newObject(fn(): CoreApplication => Boot::application());
+        Terminal::init();
 
+        $this->app = LazyObject::newObject(fn(): Application => Boot::application());
         $this->onCreate();
     }
 
     /**
-     * Allows access to protected static methods.
-     *
-     * @param string $method The method name to call.
-     * @param array<int,mixed> $arguments The arguments to pass to the method.
+     * Parse command input.
      * 
-     * @return mixed Return the value of the method, or null if the method doesn't exist.
-     * @ignore 
+     * This parses and processes command-line arguments and options, making them accessible in console controllers.
+     * 
+     * @param array<string,mixed> $command Command arguments, options, and flags extracted from CLI execution.
+     * 
+     * @return static Returns instance of console.
      */
-    public static function __callStatic(string $method, array $arguments): mixed
+    public final function parse(Input|array $command): self
     {
-        return method_exists(static::class, $method) 
-            ? static::{$method}(...$arguments) 
-            : null;
+        if(isset($this->input)){
+            $this->input->replace(
+                ($command instanceof Input) ? $command->getArray() : $command
+            );
+
+            return $this;
+        }
+
+        $this->input = ($command instanceof Input) 
+            ? $command 
+            : new Input($command);
+
+        if($this->options !== []){
+            $this->input->setKnownOptions(array_keys($this->options));
+        }
+
+        return $this;
     }
 
     /**
@@ -187,10 +208,9 @@ abstract class Console
     abstract public function run(?array $params = null): int;
 
     /**
-     * onCreate method that gets triggered on object creation, 
-     * designed to be overridden in subclasses for custom initialization.
-     * 
-     * @return void
+     * Called immediately after object creation.
+     *
+     * Override to customize setup or initialize dependencies.
      */
     protected function onCreate(): void {}
 

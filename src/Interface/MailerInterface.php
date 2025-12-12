@@ -15,13 +15,6 @@ use \Luminova\Exceptions\MailerException;
 interface MailerInterface
 {
     /**
-     * Constructor.
-     *
-     * @param bool $exceptions Whether to throw exceptions if error (default: false).
-     */
-    public function __construct(bool $exceptions = false);
-
-    /**
      * Initialize mail client configurations.
      */
     public function initialize(): void;
@@ -29,7 +22,7 @@ interface MailerInterface
     /**
      * Retrieve the mailer client instance.
      * 
-     * @return Luminova\Utility\Email\Clients\NovaMailer|\PHPMailer\PHPMailer\PHPMailer|\Swift_Mailer Return instance of mailer client in use.
+     * @return Luminova\Components\Email\Clients\NovaMailer|\PHPMailer\PHPMailer\PHPMailer|\Swift_Mailer Return instance of mailer client in use.
      */
     public function getMailer(): mixed;
 
@@ -189,4 +182,68 @@ interface MailerInterface
      * @return void
      */
     public function isHTML(bool $isHtml = true): void;
+
+    /**
+     * Reset the mailer state to its default values.
+     *
+     * Clears all recipients (To, CC, BCC), attachments, headers, and message content,
+     * and resets transport-related properties such as host, port, and authentication
+     * credentials.
+     *
+     * This method is useful when reusing the same mailer instance to send multiple
+     * independent emails, ensuring no data leaks between messages.
+     *
+     * @return static Return instanceof mail.
+     */
+    public function reset(): static;
+
+    /**
+     * Clear all primary recipients.
+     *
+     * Removes every email address previously added via `addAddress()`.
+     * CC, BCC, and other message data remain unchanged.
+     *
+     * @return static Return instanceof mail.
+     */
+    public function clearAddresses(): static;
+
+    /**
+     * Clear all carbon copy (CC) recipients.
+     *
+     * Removes every email address added as a CC recipient.
+     * Primary recipients and BCC recipients are not affected.
+     *
+     * @return static Return instanceof mail.
+     */
+    public function clearCc(): static;
+
+    /**
+     * Clear all blind carbon copy (BCC) recipients.
+     *
+     * Removes every email address added as a BCC recipient.
+     * Primary and CC recipients remain unchanged.
+     *
+     * @return static Return instanceof mail.
+     */
+    public function clearBcc(): static;
+
+    /**
+     * Remove all attached files from the message.
+     *
+     * Clears the internal attachment list so that subsequent sends
+     * do not include any previously added attachments.
+     *
+     * @return static Return instanceof mail.
+     */
+    public function clearAttachments(): static;
+
+    /**
+     * Clear all custom email headers.
+     *
+     * Removes any manually added headers such as custom MIME,
+     * priority, or application-specific values.
+     *
+     * @return static Return instanceof mail.
+     */
+    public function clearHeaders(): static;
 }

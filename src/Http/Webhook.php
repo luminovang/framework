@@ -1,6 +1,6 @@
 <?php 
 /**
- * Luminova Framework Webhook Helper.
+ * Luminova Framework HTTP Webhooks.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -11,12 +11,14 @@
 namespace Luminova\Http;
 
 use \Closure;
+use \Throwable;
 use \JsonException;
+use \Luminova\Luminova;
 use \Luminova\Http\Request;
+use \Luminova\Http\Network\IP;
 use \Luminova\Http\Client\Novio;
 use \Luminova\Interface\{ResponseInterface, LazyObjectInterface};
 use \Luminova\Exceptions\{
-    ErrorCode,
     LogicException, 
     RuntimeException, 
     EncryptionException,
@@ -39,14 +41,14 @@ class Webhook implements LazyObjectInterface
      * 
      * @var string EVENT_KEY
      */
-    protected const EVENT_KEY = 'app.webhook.event';
+    protected final const EVENT_KEY = 'app.webhook.event';
 
     /**
      * Configuration key used to indicate whether the payload should be signed.
      *
      * @var string SIGN_KEY
      */
-    protected const SIGN_KEY = 'app.webhook.signable';
+    protected final const SIGN_KEY = 'app.webhook.signable';
 
     /**
      * Custom headers to include in the outgoing webhook request.
@@ -65,9 +67,9 @@ class Webhook implements LazyObjectInterface
     /**
      * The name of the HTTP header used to transmit the payload signature.
      * 
-     * @var string $xSignature
+     * @var string|null $xSignature
      */
-    protected string $xSignature = 'X-Signature';
+    protected ?string $xSignature = 'X-Signature';
 
     /**
      * Salt key used in generating random secret for payloads sign signature.
@@ -126,35 +128,51 @@ class Webhook implements LazyObjectInterface
     private ?string $rawPayload = null;
 
     /**
-     * Create a new webhook instance.
+     * If webhook is in listening mode.
+     * 
+     * @var bool $isListening
+     */
+    private bool $isListening = false;
+
+    /**
+     * HTTP request object.
+     * 
+     * @var Request|null $request
+     */
+    private static ?Request $request = null;
+
+    /**
+     * Create a new webhook client instance.
      *
-     * @param string $url The URL to which the webhook request will be sent.
-     * @param string $method  The HTTP method to use for the request (default: POST).
-     * @param int $timeout The request timeout in seconds (default: 0), for no timeout.
+     * Initializes the webhook with the target URL, request method,
+     * timeout, and default sending state.
+     *
+     * @param string $url Target webhook endpoint URL.
+     * @param string $method HTTP request method (default: `POST`).
+     * @param int $timeout Request timeout in seconds (default: `0` no timeout).
      */
     public function __construct(
         private string $url,
         protected string $method = 'POST',
         protected int $timeout = 0
-    ) {
+    )
+    {
         $this->setMethod($this->method);
+        $this->isListening = false;
+        $this->incoming = [];
     }
 
     /**
      * Retrieve the webhook payload.
      *
-     * This method returns either the full payload (including internal config)
-     * or just the actual data section depending on the given flag.
+     * This method returns either the full payload if validation succeeded otherwise
      *
-     * @param bool $withConfig Set to true to return the full payload including config metadata (default: `false`).
-     *
-     * @return array|string|null Return the payload array, raw data string, or null if empty.
+     * @return array|string|null Return decoded payload or empty if failed.
      */
-    public function getPayload(bool $withConfig = false): array|string|null
+    public function getPayload(): mixed
     {
-        return $withConfig 
-            ? $this->payload 
-            : ($this->payload['_data'] ?? null);
+        return $this->payload['_data'] 
+            ?? $this->payload;
     }
 
     /**
@@ -201,8 +219,8 @@ class Webhook implements LazyObjectInterface
      * 
      * ```php
      * $webhook->setHeaders([
+     *     'Accept' => 'application/json',
      *     'X-App-Token' => 'abc123',
-     *     'Accept' => 'application/json'
      * ]);
      * ```
      */
@@ -213,7 +231,9 @@ class Webhook implements LazyObjectInterface
     }
 
     /**
-     * Set the data to be sent as the request payload or verify as incoming payload.
+     * Set the webhook request payload.
+     * 
+     * The sets the HTTP webhook request body to be sign and send.
      *
      * @param array|string $payload Payload can be an array or a raw JSON string.
      * 
@@ -253,13 +273,22 @@ class Webhook implements LazyObjectInterface
      */
     public function addPayload(string $name, mixed $value): self
     {
-        $this->payload['_data'][$name] = $value;
+        $payload = $this->payload['_data'] ?? [];
+
+        if(!is_array($payload)){
+            $payload = [$payload];
+        }
+
+        $payload[$name] = $value;
+        $this->payload['_data'] = $payload;
 
         return $this;
     }
 
     /**
-     * Set the secret key used for signing or verifying the payload.
+     * Set payload signature secrete.
+     * 
+     * The secret key is used for signing outgoing and verifying incoming request payload.
      *
      * @param string $secret The shared secret key.
      * 
@@ -272,20 +301,131 @@ class Webhook implements LazyObjectInterface
     }
 
     /**
-     * Set the event name inside the webhook payload configuration.
+     * Define the outgoing webhook event name.
      *
-     * This stores the event name under the `_config` key of the payload,
-     * using the predefined `EVENT_KEY` constant.
+     * This sets the event identifier that will be sent in the payload under the
+     * internal `_hook` structure using the predefined `EVENT_KEY`.
      *
-     * @param string $name The event name to assign (e.g., 'user.created', 'payment.failed').
-     * 
+     * Has no effect when the instance is in listening mode.
+     *
+     * @param string $name Event name (e.g. 'user.created', 'payment.failed').
+     *
      * @return static Return instance of webhook class.
      */
     public function setEvent(string $name): self
     {
-        $this->payload['_config'][self::EVENT_KEY] = $name;
+        if($this->isListening){
+            return $this;
+        }
+
+        $this->payload['_hook'][self::EVENT_KEY] = $name;
 
         return $this;
+    }
+
+    /**
+     * Define accepted incoming webhook event names.
+     *
+     * This registers the events that this listener will accept when processing
+     * incoming webhook requests.
+     *
+     * Only applies when the instance is in listening mode.
+     *
+     * @param string|string[] $name Event name(s) to accept (e.g. 'user.created', 'payment.failed').
+     *
+     * @return static Return instance of webhook class.
+     * @see self::listen()
+     */
+    public function setAcceptEvents(array|string $name): self
+    {
+        return $this->setIncoming('accept.events', $name);
+    }
+
+    /**
+     * Define the event key(s) used to extract and resolve incoming the webhook event name.
+     *
+     * Some webhook providers (e.g. PayStack) include the event name under
+     * a custom payload key such as `event` instead of the default `_hook` structure.
+     * This method allows you to register a key that should be used
+     * to resolve the incoming event name.
+     *
+     * @param string $name The payload key that contains the event name.
+     *
+     * @return static Return instance of webhook class.
+     * @example  - Example:
+     * ```php
+     * $webhook->setEventField('event');
+     * ```
+     * Example payload:
+     * `{ "event": "charge.success", "data": { ... } }`
+     */
+    public function setEventField(string $name): self
+    {
+        $this->incoming['accept.event.filed'] = $name;
+        return $this;
+    }
+
+    /**
+     * Define allowed origins for incoming webhook requests.
+     *
+     * This restricts which request origins are permitted when the webhook
+     * is operating in listening mode. Multiple origins can be added either
+     * as a single string or an array of values.
+     *
+     * Has no effect when the instance is not in listening mode.
+     *
+     * @param string|string[] $origin One or more allowed origin URLs or domains.
+     *
+     * @return static Return instance of webhook class.
+     * @see self::setAllowEmptyOrigin() To allow non-browser client.
+     * @see \App\Config\Security For global origin configuration.
+     */
+    public function setAllowedOrigins(array|string $origin = ['*']): self
+    {
+        return $this->setIncoming('accept.origins', $origin);
+    }
+
+    /**
+     * Allow or deny requests without an Origin header.
+     *
+     * When enabled, requests that do not include an Origin header (e.g. server-to-server
+     * or CLI requests) will be accepted. When disabled, such requests will be rejected.
+     *
+     * @param bool $allow Whether to allow requests with no Origin header.
+     *
+     * @return static Return instance of webhook class.
+     */
+    public function setAllowEmptyOrigin(bool $allow = true): self
+    {
+        return $this->setIncoming('accept.empty.origin', $allow);
+    }
+
+    /**
+     * Add one or more IP addresses to the blacklist.
+     *
+     * Requests originating from these IPs will be denied during validation.
+     *
+     * @param string|string[] $ip IP address or list of addresses to block.
+     *
+     * @return static Return instance of webhook class.
+     */
+    public function addIPBlacklist(array|string $ip): self
+    {
+        return $this->setIncoming('ip.blacklisted', $ip);
+    }
+
+    /**
+     * Add one or more IP addresses to the whitelist.
+     *
+     * When defined, only requests from these IPs will be accepted.
+     *
+     * @param string|string[] $ip IP address or list of allowed addresses.
+     *
+     * @return static Return instance of webhook class.
+     */
+    public function addIPWhitelist(array|string $ip): self
+    {
+        return $this->setIncoming('ip.whitelisted', $ip);
     }
 
     /**
@@ -312,7 +452,7 @@ class Webhook implements LazyObjectInterface
      *
      * This defines the algorithm used in signature generation and verification (e.g., sha256, sha512).
      *
-     * @param string $algo The name of the hashing algorithm (default is 'sha256').
+     * @param string $algo The name of the hashing algorithm (default: 'sha256').
      * 
      * @return static Return instance of webhook class.
      */
@@ -332,7 +472,7 @@ class Webhook implements LazyObjectInterface
      * 
      * @return static Return instance of webhook class.
      */
-    public function setSignatureHeader(string $xSignature): self
+    public function setSignatureHeaderName(string $xSignature): self
     {
         $this->xSignature = $xSignature;
 
@@ -355,7 +495,7 @@ class Webhook implements LazyObjectInterface
      * $webhook->setPayload(['event' => 'update'])
      *      ->sign()
      *      ->setAlgo('sha256')
-     *      ->setSignatureHeader('X-MyApp-Signature'); // $request->header->get('X-Myapp-Signature')
+     *      ->setSignatureHeaderName('X-MyApp-Signature'); // $request->header->get('X-Myapp-Signature')
      * ```
      *
      * > **Note:** If no secret is provided and none was set previously, a random secret will be generated.
@@ -364,7 +504,7 @@ class Webhook implements LazyObjectInterface
     public function sign(?string $secret = null): self
     {
         $this->isSignable = true;
-        $this->payload['_config'][self::SIGN_KEY] = 1;
+        $this->payload['_hook'][self::SIGN_KEY] = 1;
 
         if($secret){
             $this->secret = $secret;
@@ -374,85 +514,205 @@ class Webhook implements LazyObjectInterface
     }
 
     /**
-     * Listen and prepare a webhook for incoming verification.
-     * 
-     * This method initializes a new webhook instance with the provided signature and optional event name.
-     * It should be called at the start of the webhook lifecycle to register the signature and context.
+     * Create a webhook listener for incoming request verification.
      *
-     * @param string $signature The signature from the incoming request (e.g., `X-Signature` header).
-     * @param string|null $event Optional event name expected in the payload.
-     * 
-     * @return static Return a new webhook instance configured for signature verification.
+     * This method creates a new webhook instance in listening mode and prepares it
+     * to validate incoming payloads, signatures, events, origins, and client IPs.
      *
-     * @see isSignature()
-     * @see unpack()
+     * If no signature is passed and no signature header name is configured,
+     * signature verification will be skipped. To resolve the signature
+     * automatically from the request headers, call `setSignatureHeaderName()`.
      *
-     * @example - Example Usage: 
+     * @param string|null $signature Optional request signature (for example, from the X-Signature header).
+     * @param string|array<int,string> $events Optional event name or list of allowed events to accept.
+     *
+     * @return static Returns a new webhook listener instance.
+     *
+     * @see self::request() Create outgoing request object.
+     * @see self::unpack() Verify and process the incoming request.
+     * @see self::setEventField() Set the payload field used for the event name.
+     * @see self::setAcceptEvents() Define allowed event names.
+     * @see self::setSignatureHeaderName() Set the request header used for the signature.
+     * @see self::setAllowedOrigins() Restrict allowed request origins.
+     * @see self::setAllowEmptyOrigin() Allow requests without an Origin header.
+     * @see self::addIPBlacklist() Block specific client IPs.
+     * @see self::addIPWhitelist() Allow only trusted client IPs.
+     *
+     * @example - Create and verify an incoming webhook:
      * ```php
      * $webhook = Webhook::listen(
-     *     $request->header->get('X-Signature'), // OR $_SERVER['HTTP_X_SIGNATURE']
+     *     $request->header->get('X-Signature'),
      *     'event-name'
      * )
      * ->setAlgo('sha256')
      * ->setSecret('your-secret-key');
+     *
+     * $webhook->unpack(fn (mixed $data) => store($data));
      * ```
      */
-    public static function listen(string $signature, ?string $event = null): static
+    public static function listen(?string $signature = null, string|array $events = []): static
     {
         $instance = new static('');
         $instance->signature = $signature;
-        $instance->incoming = ['onIncoming' => 1, 'event' => $event];
+        $instance->xSignature = null;
+        $instance->isListening = true;
+        $instance->incoming = [
+            'onIncoming' => 1, 
+            'ip.whitelisted' => [],
+            'ip.blacklisted' => [],
+            'accept.event.filed' => [],
+            'accept.empty.origin' => false,
+            'accept.events' => is_array($events) ? $events : [$events],
+            'accept.origins' => [],
+            'accept.event.filed' => '_event',
+        ];
 
         return $instance;
     }
 
     /**
-     * Unpack and validate the incoming webhook data.
+     * Create a webhook client for sending requests.
+     *
+     * This is a shortcut factory for creating a new webhook instance
+     * with the target URL, HTTP method, and request timeout.
+     *
+     * @param string $url Target webhook endpoint URL.
+     * @param string $method HTTP request method to use (default: `POST`).
+     * @param int $timeout Request timeout in seconds. Use `0` for no timeout.
+     *
+     * @return static Returns a new webhook instance for request client.
+     * @throws InvalidArgumentException If the URL is empty or invalid.
      * 
-     * This method verifies the signature of the payload and optionally runs a callback
-     * with the decoded data if validation succeeds.
+     * @see self::listen() For handling incoming request.
+     * @see self::send() To sent HTTP request for prepared webhook payload.
      *
-     * @param Closure|null $onResponse Optional callback to handle the decoded payload.
-     * @param array|null  $data Optional raw data to verify (defaults to request body).
-     * 
-     * @return mixed|null Return the decoded payload, or the result of the callback if provided.
+     * @example Create a basic webhook client
+     * ```php
+     * $webhook = Webhook::request('https://example.com/webhook')
+     *     ->setPayload(['status' => 'OK'])
+     *     ->send();
+     * ```
+     */
+    public static function request(
+        string $url,
+        string $method = 'POST',
+        int $timeout = 0
+    ): static
+    {
+        if(!$url){
+            throw new InvalidArgumentException(
+                'Provide a valid webhook request URL.'
+            );
+        }
+
+        return new static($url, $method, $timeout);
+    }
+
+    /**
+     * Verify and unpack an incoming webhook request.
      *
-     * @throws EncryptionException If the signature check fails or the webhook is misconfigured.
-     * @throws LogicException If called before initializing the webhook via `listen()`.
+     * This method validates the request origin, IP rules, listener state,
+     * and payload signature before returning the decoded data.
      *
-     * @example - Example Usage: 
+     * If validation succeeds:
+     * - returns the decoded payload, or
+     * - passes it to the callback and returns the callback result.
+     *
+     * If validation fails:
+     * - throws an exception in development, or
+     * - sends an error response and terminates request in production.
+     *
+     * @param (Closure(mixed):mixed)|null $onResponse Optional callback to process the verified payload.
+     * @param array<string,mixed>|null $data Optional payload to verify instead of the current request body.
+     *
+     * @return mixed Returns the decoded payload, callback result, or false if terminated in production.
+     * @throws RuntimeException If verification fails in development mode.
+     *
+     * @example - Process verified payload
      * ```php
      * $webhook = Webhook::listen(...);
-     * 
-     * $webhook->unpack(function(mixed $payload): mixed {
-     *     // Handle verified data
-     *     return $payload;
+     *
+     * $webhook->unpack(function (mixed $payload): mixed {
+     *     // Handle verified webhook data
+     *     return true;
      * });
+     * ```
+     *
+     * @example - Get verified payload directly
+     * ```php
+     * webhook = Webhook::listen(...);
      * 
-     * // Or get the payload directly
      * $data = $webhook->unpack();
      * ```
      *
-     * > You can also pass raw input using `(new Request)->getBody()`.
+     * > **Note:** 
+     * > You may also pass raw decoded request data manually for debugging.
      */
     public function unpack(?Closure $onResponse = null, ?array $data = null): mixed
     {
-        if (!$this->isSignature($data)) {
-            if (!$this->decoded) {
-                throw new RuntimeException(
-                    'No request data to unpack.',
-                    ErrorCode::NOT_ALLOWED
-                );
+        $allowed = null;
+        $error = null;
+
+        try{
+            if (!$this->isOriginAllowed($allowed)) {
+                $error = [403, 'Access denied: request origin not allowed.'];
+            } elseif(!$this->isWhitelisted() || $this->isBlacklisted()){
+                $error = [401, 'Access denied: client not authorized.'];
+            } elseif(!$this->isListening) {
+                $error = [500, 'Invalid state: webhook is not in listening mode.'];
+            } elseif(!$this->isSignature($data)) {
+                $error = $this->decoded 
+                    ? [406, 'Signature mismatch. Data may have been tampered with.']
+                    : [400, 'No request data to handle.'];
+            } else {
+                // if ($allowed) {
+                //     Header::send(['Access-Control-Allow-Origin' => $allowed], status: 200);
+                // } else {
+                //    Header::sendStatus(200);
+                // }
+
+                $payload = $this->decoded['_data'] ?? $this->decoded;
+
+                if ($onResponse instanceof Closure) {
+                    return $onResponse($payload);
+                }
+
+                return $payload;
             }
-
-            throw new EncryptionException('Signature mismatch. Payload may have been tampered with.');
+        } catch (Throwable $e) {
+            $error = [500, $e->getMessage()];
         }
 
-        if ($onResponse instanceof Closure) {
-            return $onResponse($this->decoded['_data'] ?? null);
+        $this->free();
+
+        if(!PRODUCTION){
+            throw new RuntimeException($error[1]);
         }
 
-        return $this->decoded['_data'] ?? null;
+        Luminova::terminate(...$error);
+        return false;
+    }
+
+    /**
+     * Check if the current request IP is whitelisted.
+     *
+     * @return bool Returns true if the request IP matches a whitelist, false otherwise.
+     * @see self::addIPWhitelist()
+     */
+    public function isWhitelisted(): bool
+    {
+        return $this->hasIPAddress('ip.whitelisted');
+    }
+
+    /**
+     * Check if the current request IP is blacklisted.
+     *
+     * @return bool Returns true if the request IP matches a blacklist, false otherwise.
+     * @see self::addIPBlacklist()
+     */
+    public function isBlacklisted(): bool
+    {
+        return $this->hasIPAddress('ip.blacklisted');
     }
 
     /**
@@ -472,60 +732,173 @@ class Webhook implements LazyObjectInterface
             return false;
         }
 
-        $event = $this->incoming['event'] 
-            ?? $this->payload['_config'][self::EVENT_KEY] 
-            ?? null;
-
-        if (
-            $event && (
-                !isset($this->decoded['_config'][self::EVENT_KEY]) || 
-                $this->decoded['_config'][self::EVENT_KEY] !== $event ||  $this->decoded !== $event
-            )
-        ) {
+        if(!$this->rawPayload){
             return false;
         }
 
-        if(!isset($this->decoded['_config'][self::SIGN_KEY])){
+        $isInternal = isset($this->decoded['_hook']['webhook.internal']);
+
+        if(!$isInternal && !$this->signature && !$this->xSignature){
             return true;
         }
 
-        if (!$this->signature || !$this->secret) {
+        if(!$this->signature && $this->xSignature){
+            self::$request ??= Request::getInstance();
+            $this->signature = self::$request->header->get($this->xSignature);
+        }
+
+        if(!$this->signature){
+            return true;
+        }
+
+        $accepts = $this->incoming['accept.events'] ?? null;
+
+        if($accepts){
+            $event = $this->decoded['_hook'][self::EVENT_KEY] ?? null;
+
+            if(!$isInternal){
+                $name = $this->incoming['accept.event.filed'] ?? '_event';
+                $event = $this->decoded[$name] 
+                    ?? $this->decoded['event'] 
+                    ?? null;
+
+                if(!is_string($event)){
+                    $event = null;
+                }
+            }
+
+            if (!$event || !in_array($event, (array) $accepts, true)) {
+                return false;
+            }
+        }
+
+        if($isInternal && !isset($this->decoded['_hook'][self::SIGN_KEY])){
+            return true;
+        }
+
+        if (!$this->signature) {
             return false;
         }
 
-        return $this->rawPayload && hash_equals(
+        return $this->secret && hash_equals(
             hash_hmac($this->algo, $this->rawPayload, $this->secret), 
             $this->signature
         );
     }
 
     /**
-     * Send the configured webhook request to the target URL.
+     * Check whether the current request origin is allowed.
      *
-     * Automatically signs the payload if signing is enabled.
-     * The payload is attached using the specified field type based on the request method.
+     * If no allowed origins are configured, all requests are accepted.
+     * Same-origin requests are always allowed. For cross-origin requests,
+     * the request origin must match a configured allowed origin.
      *
-     * @param string|null $field Optional request field to attach the payload:
-     *      - 'query'         → For GET requests (appends data to the URL)
-     *      - 'body'          → For raw POST/PUT/PATCH/DELETE payloads (e.g. JSON)
-     *      - 'form_params'   → For application/x-www-form-urlencoded
-     *      - 'multipart'     → For multipart/form-data
-     *      If null, defaults to 'query' for GET and 'body' for other methods.
-     * 
-     * @return ResponseInterface<\Psr\Http\Message\ResponseInterface> Return the HTTP response returned from the request.
-     * @throws EncryptionException If the payload is invalid or missing during the signing process.
-     * @throws RequestException If error is encountered while sending webhook request.
-     * @throws InvalidArgumentException If an invalid field name was provided.
+     * @param string|null $allowed Matched allowed origin, if found.
      *
-     * @example - Example Usage: 
+     * @return bool Returns true if the request origin is allowed, otherwise false.
+     * @see self::setAllowedOrigins()
+     * @see self::setAllowEmptyOrigins()
+     */
+    public function isOriginAllowed(?string &$allowed = null): bool
+    {
+        if (!$this->isListening) {
+            return false;
+        }
+
+        $allowedOrigins = $this->incoming['accept.origins'] ?? null;
+
+        if (!$allowedOrigins || $allowedOrigins === ['*']) {
+            return true;
+        }
+
+        self::$request ??= Request::getInstance();
+
+        if (self::$request->isSameOrigin(false)) {
+            return true;
+        }
+
+        $origin = self::$request->getOrigin();
+
+        if (!$origin) {
+            return (bool) ($this->incoming['accept.empty.origin'] ?? false);
+        }
+
+        foreach ($allowedOrigins as $accept) {
+            if ($accept === '*' || $origin === $accept) {
+                $allowed = $accept;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Free request payload data.
+     *
+     * @return void
+     */
+    public function free(): void 
+    {
+        $this->decoded = null;
+        $this->payload = [];
+        $this->rawPayload = null;
+    }
+
+    /**
+     * Send the configured webhook request.
+     *
+     * This method builds the request, optionally signs the payload,
+     * attaches it using the selected request field, and sends it
+     * to the target webhook URL.
+     *
+     * If no field is provided:
+     * - GET requests use `query`
+     * - all other methods use `body`
+     *
+     * Supported request fields:
+     * - `query`       Append payload as URL query parameters
+     * - `body`        Send raw request body (for JSON or raw data)
+     * - `form_params` Send URL-encoded form data
+     * - `multipart`   Send multipart form data
+     *
+     * @param string|null $field Optional request field used to attach the payload.
+     *
+     * @return ResponseInterface<\Psr\Http\Message\ResponseInterface> Returns the HTTP response from the remote server.
+     *
+     * @throws InvalidArgumentException If an unsupported request field is provided.
+     * @throws EncryptionException If payload signing fails.
+     * @throws RequestException If the webhook URL is missing or the request fails.
+     *
+     * @example - Send a signed POST webhook:
      * ```php
-     * // Basic POST webhook
-     * $webhook->setPayload(['event' => 'ping'])->send();
+     * $webhook = Webhook::request('https://example.com/webhook/users', 'POST')
+     *     ->setPayload([
+     *         'status' => 'OK',
+     *         'user' => [
+     *             'id' => 12345,
+     *             'email' => 'user@example.com',
+     *         ],
+     *     ])
+     *     ->setSecret('your-shared-secret')
+     *     ->setAlgo('sha256')
+     *     ->setSignatureHeaderName('X-Signature')
+     *     ->setEvent('system.logs')
+     *     ->sign();
      *
-     * // GET request with query parameters
-     * $webhook->setMethod('GET')
-     *         ->setPayload(['id' => 123])
-     *         ->send('query');
+     * $response = $webhook->send();
+     *
+     * if ($response->getStatusCode() === 200) {
+     *     echo "Webhook sent successfully.";
+     * }
+     * ```
+     *
+     * @example - Send GET request with query parameters:
+     * ```php
+     * $response = $webhook
+     *     ->setMethod('GET')
+     *     ->setPayload(['id' => 123])
+     *     ->send('query');
      * ```
      */
     public function send(?string $field = null): ResponseInterface
@@ -536,28 +909,59 @@ class Webhook implements LazyObjectInterface
             );
         }
 
-        if ($field && !in_array($field, ['query', 'body', 'form_params', 'multipart'])) {
-            throw new InvalidArgumentException(
-                "Invalid request field '{$field}'. Use one of: 'query', 'body', 'form_params', or 'multipart'."
-            );
+        if(!$field){
+            $field = ($this->method === 'GET') ? 'query' : 'body';
+        }else{
+            if (!in_array($field, ['query', 'body', 'form_params', 'multipart'], true)) {
+                throw new InvalidArgumentException(
+                    "Invalid request field '{$field}'. Use one of: 'query', 'body', 'form_params', or 'multipart'."
+                );
+            }
         }
+
+        $this->payload['_hook']['webhook.internal'] = true;
 
         if($this->isSignable){
             $this->signPayload();
         }
 
-        $field ??= ($this->method === 'GET') ? 'query' : 'body';
-
         $options = [
             'timeout' => $this->timeout,
-            'headers' => $this->buildHeaders()
+            'headers' => $this->getHeaders()
         ];
 
-        if ($this->payload !== null) {
+        if ($this->payload) {
             $options[$field] = $this->payload;
         }
 
         return (new Novio())->request($this->method, $this->url, $options);
+    }
+
+    /**
+     * Set data to incoming detail.
+     *
+     * @param string $context The array key context.
+     * @param array|string $value The value(s).
+     * 
+     * @return static Return instance of webhook class.
+     */
+    protected function setIncoming(string $context, array|string $value): self
+    {
+        if(!$this->isListening){
+            return $this;
+        }
+
+        if(!is_array($value)){
+            $this->incoming[$context][] = $value;
+            return $this;
+        }
+
+        $this->incoming[$context] = array_merge(
+            $this->incoming[$context], 
+            $value
+        );
+
+        return $this;
     }
 
     /**
@@ -580,6 +984,13 @@ class Webhook implements LazyObjectInterface
      */
     protected function signPayload(): void
     {
+        if(!$this->xSignature){
+            throw new RequestException(sprintf(
+                'Missing signature header name. Set via %s::setSignatureHeaderName()',
+                static::class
+            ));
+        }
+
         $this->rawPayload = $this->encode($this->payload);
 
         if (!$this->rawPayload) {
@@ -597,7 +1008,7 @@ class Webhook implements LazyObjectInterface
      *
      * @return array Return list of headers to send with the request.
      */
-    private function buildHeaders(): array
+    protected function getHeaders(): array
     {
         if (!isset($this->headers['Content-Type'])) {
             $this->headers['Content-Type'] = 'application/json';
@@ -614,7 +1025,6 @@ class Webhook implements LazyObjectInterface
      * @return bool Return true if decoding succeeded and the result is not empty.
      * @throws LogicException If the webhook context is not properly initialized via `listen()`.
      */
-
     private function doCapture(?array $data = null): bool
     {
         if ($this->incoming === []) {
@@ -630,6 +1040,33 @@ class Webhook implements LazyObjectInterface
         }
 
         return !empty($this->decoded);
+    }
+
+    /**
+     * Check if the current request IP matches a defined list.
+     *
+     * This validates the request IP against either a whitelist or blacklist
+     * context, depending on the provided key.
+     *
+     * @param string $context Configuration key (e.g. 'ip.whitelisted', 'ip.blacklisted').
+     *
+     * @return bool Returns true if the request IP matches an entry, false otherwise.
+     */
+    private function hasIPAddress(string $context = 'ip.blacklisted'): bool
+    {
+        $addresses = $this->incoming[$context] ?? [];
+
+        if($addresses === []){
+            return $context === 'ip.whitelisted';
+        }
+
+        foreach($addresses as $ip){
+            if(IP::equals($ip)){
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -660,16 +1097,15 @@ class Webhook implements LazyObjectInterface
      */
     private function encode(array $payload = [], bool $capture = false): ?string
     {
-        static $request = null;
         $contentType = '';
         $method = null;
 
         if($payload === [] && $capture){
-            $request = Request::getInstance();
+            self::$request ??= Request::getInstance();
 
-            $payload = $request->getBody();
-            $method = $request->getMethod();
-            $contentType = $request->getContentType();
+            $payload = self::$request->getParsedBody();
+            $method = self::$request->getMethod();
+            $contentType = self::$request->getContentType();
         }
 
         if ($payload === []) {

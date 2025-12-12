@@ -26,9 +26,25 @@ abstract class Seeder
      * 
      * @param Builder $builder Database builder instance.
      * 
-     * @return void
+     * @return int Return number of inserted records.
+     * @example - Example:
+     * ```php
+     * use function \Luminova\Funcs\uuid;
+     * 
+     * public function run(Builder $builder): int
+     * {
+     *      return $builder->from('posts')->insert([
+     *          [
+     *              'id' => 100,
+     *              'uuid' => uuid(),
+     *              'title' => 'Getting Started with PHP Luminova',
+     *          ],
+     *          // more columns
+     *      ]);
+     * }
+     * ```
      */
-    public abstract function run(Builder $builder): void;
+    public abstract function run(Builder $builder): int;
 
     /**
      * Invoke another seeder within seeder run method.

@@ -12,13 +12,12 @@ declare(strict_types=1);
 namespace Luminova\Foundation\Core;
 
 use \Closure;
-use \Luminova\Boot;
+use \Throwable;
 use \Luminova\Luminova;
-use \Luminova\Template\View;
 use \Luminova\Routing\{Router, DI};
-use \Luminova\Utility\Object\LazyObject;
+use \Luminova\Foundation\Error\Guard;
+use \Luminova\Exceptions\BadMethodCallException;
 use \Luminova\Interface\{RouterInterface, LazyObjectInterface};
-use \Luminova\Exceptions\{RuntimeException, BadMethodCallException};
 
 /**
  * Base class for the application.
@@ -34,36 +33,35 @@ abstract class Application implements LazyObjectInterface
      * 
      * @var int IDLE 
      */
-    public const IDLE = 0;
+    public final const IDLE = 0;
 
     /**
      * Application boot state initialized.
      * 
      * @var int CREATED 
      */
-    public const CREATED = 1;
+    public final const CREATED = 1;
 
     /**
-     * Application bool state completed.
+     * Application boot state completed.
      * 
      * @var int COMPLETED 
      */
-    public const COMPLETED = 2;
+    public final const COMPLETED = 2;
+
+    /**
+     * Application boot state terminated.
+     * 
+     * @var int TERMINATED 
+     */
+    public final const TERMINATED = 3;
 
     /**
      * Instance of the Router class.
      *
-     * @var RouterInterface|null $router
+     * @var RouterInterface $router
      */
-    public ?RouterInterface $router = null;
-
-    /**
-     * Lazy loaded template view object.
-     * 
-     * @var View|LazyObjectInterface|null $view
-     * @see https://luminova.ng/docs/0.0.0/templates/views
-     */
-    public ?LazyObjectInterface $view = null;
+    public readonly RouterInterface $router;
 
     /**
      * Singleton instance of Application.
@@ -73,38 +71,40 @@ abstract class Application implements LazyObjectInterface
     private static ?self $instance = null;
 
     /**
-     * Application is lifecycle state counter.
+     * Application is state lifecycle.
      *
      * @var int $lifecycle
      */
     private static int $lifecycle = self::IDLE;
 
     /**
-     * Is application terminated.
-     * 
-     * @var array<string,mixed> $termination
+     * Allow only known lifecycle hooks
+     *
+     * @var string[] $hooks
      */
-    public array $termination = ['isTerminated' => false, 'info' => []];
+    private static array $hooks = [
+        'onPreCreate',
+        'onCreate',
+        'onDestroy',
+        'onStart',
+        'onFinish',
+        'onRouteResolved',
+        'onTerminated',
+        'onShutdown',
+    ];
 
     /**
-     * Flag for application architecture.
-     * 
-     * @var bool|null $isHmvcModule
+     * Mark object creation state.
+     *
+     * @var string $objectState
      */
-    public static ?bool $isHmvcModule = null;
-
-    /**
-     * Flag indicating when application class is cloned.
-     * 
-     * @var bool $isCloneCircularLocked
-     */
-    private bool $isCloneCircularLocked = false;
+    private string $objectState = 'new';
 
     /**
      * Core application constructor.
      * 
      * Builds the application only once. The first construction runs the full
-     * lifecycle: onPreCreate, router setup, view setup, and onCreate. Any later
+     * lifecycle: onPreCreate, router setup, and onCreate. Any later
      * construction will skip all lifecycle work unless `$recreate` is true.
      * 
      * The `$recreate` flag forces a full rebuild, allowing the application to
@@ -117,39 +117,49 @@ abstract class Application implements LazyObjectInterface
      */
     public function __construct(private bool $recreate = false) 
     {
-        self::$isHmvcModule ??= env('feature.app.hmvc', false);
-
         if(!$this->recreate && self::$lifecycle > self::IDLE){
-            if((self::$instance instanceof static)){
-                $this->router ??= self::$instance->router;
-                $this->view ??= self::$instance->view;
+            // This is intentional, to prevent routing system initializing again 
+            // in new application object if app class ic initialized again after boot
+            return;
+        }
+
+        try{
+            $this->onPreCreate();
+
+            Luminova::permission('rw', throw: true);
+
+            if(!isset($this->router)){
+                $this->router = Luminova::kernel()->getRoutingSystem($this) 
+                    ?? new Router($this);
             }
 
-            return;
+            $this->router->addNamespace(Luminova::isHmvc()
+                ? '\\App\\Modules\\Controllers\\' 
+                : '\\App\\Controllers\\'
+            );
+
+            $this->onCreate();
+            self::$lifecycle = self::CREATED;
+        }catch(Throwable $e){
+            Guard::shutdown([
+                'type' => E_ERROR,
+                'message' => sprintf(
+                    'Application failed to initialize. ' . 
+                    'An exception may have been thrown during onPreCreate or onCreate, ' . 
+                    'or a file permission issue occurred. Code: %s, Error: "%s"', 
+                    $e->getCode(),
+                    $e->getMessage()
+                ),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
         }
-
-        $this->onPreCreate();
-
-        if($this->termination['isTerminated']){
-            $this->__doTermination();
-            return;
-        }
-
-        Luminova::permission('rw', throw: true);
-        $this->router ??= $this->getRouterInstance() ?? new Router($this);
-        $this->router->addNamespace(self::$isHmvcModule
-            ? '\\App\\Modules\\Controllers\\' 
-            : '\\App\\Controllers\\'
-        );
-
-        $this->view ??= LazyObject::newObject(fn() :View => new View($this));
-
-        $this->onCreate();
-        self::$lifecycle = self::CREATED;
     }
 
     /**
      * Core application destruct.
+     * 
+     * @return void 
      */
     public function __destruct()
     {
@@ -162,71 +172,16 @@ abstract class Application implements LazyObjectInterface
     }
 
     /**
-     * Trigger application early termination.
-     *
-     * This method allows you to terminate the application execution early.
-     *
-     * @param bool $terminate (optional) If set to true, the application will be terminated.
-     *                        If set to false (default), the application will continue to run.
-     * @param array $info Additional termination information to be included in `onterminated` event hook.
-     *
-     * @return void
-     *
-     * @example - Terminates application:
-     * 
-     * ```php
-     * namespace App;
-     * 
-     * class Application extends Luminova\Foundation\Core\Application
-     * {
-     *      protected function onPreCreate(): void 
-     *      {
-     *          if($this->instance->ofSomethingIsTrue()){
-     *              $this->terminate([...]);
-     *          }
-     * 
-     *          \Luminova\Routing\DI::bind(MyInterface::class, MyConcreteClass::class);
-     *      }
-     * 
-     *      protected function onTerminate(array $info): bool 
-     *      {
-     *          if($info['foo']['bar'] === true){
-     *              // Allow termination
-     *              return true;
-     *          }
-     * 
-     *          // Deny Termination
-     *          return false;
-     *      }
-     * 
-     *      protected function onTerminated(array $info): void 
-     *      {
-     *          Logger::debug('Application was terminated', $info);
-     *      }
-     * }
-     * ```
-     * > **Note:** The `terminate` method should be call before object creation.
-     */
-    protected final function terminate(array $info = []): void 
-    {
-        $info += ['uri' => $this->getUri()];
-
-        $this->termination = [
-            'isTerminated' => $this->onTerminate($info),
-            'info' => $info
-        ];
-    }
-
-    /**
      * Bind a class or interface for dependency injection (DI) in controller methods.
      * 
-     * This lets you map an interface or class name to a concrete implementation or a closure.
+     * This allows you to map an interface or class name to a concrete implementation or a closure.
      * When a controller method type-hints a dependency, this binding ensures the right object is injected.
      *
      * @param class-string $abstract The interface or class name to bind.
      * @param (Closure():T)|class-string $resolver The concrete class or closure returning the instance.
      * 
      * @return static Return instance of application class.
+     * @see DI
      * @see https://luminova.ng/docs/0.0.0/routing/dependency-injection
      * 
      * @example - Simple and advanced bindings:
@@ -249,6 +204,7 @@ abstract class Application implements LazyObjectInterface
      * ```
      * 
      * > **Note:** 
+     * >
      * > Prefer class names for simple bindings. Use closures when instantiation requires logic.
      */
     protected final function bind(string $abstract, Closure|string $resolver): self 
@@ -258,22 +214,66 @@ abstract class Application implements LazyObjectInterface
     }
 
     /**
-     * Trigger an application event or lifecycle hook.
+     * Trigger protected application lifecycle hooks.
+     *
+     * This method calls the matching `on*` method if it is supported. Unknown hooks throws an exception.
+     * For `onTerminated`, the first argument is normalized with a default `uri`.
      * 
-     * @param string $event The event or hook method name to trigger.
-     * @param mixed ...$arguments Optional arguments for the event method.
+     * **Hooks**
+     * - `onPreCreate`
+     * - `onCreate`
+     * - `onStart`
+     * - `onFinish`
+     * - `onRouteResolved`
+     * - `onTerminated`
+     * - `onShutdown`
+     *
+     * @param string $hook Hook method name (e.g. `onCreate`, `onDestroy`).
+     * @param mixed ...$arguments Optional arguments passed to the hook.
      * 
      * @return void
+     * @throws BadMethodCallException If invalid event hook is provided.
      */
-    public final function __on(string $event, mixed ...$arguments): void 
+    public final function trigger(string $hook, mixed ...$arguments): void
     {
-        $this->{$event}(...$arguments);
+        $isTerminated = false;
+
+        if ($hook === 'onTerminated') {
+            $isTerminated = true;
+            $info = $arguments[0] ?? [];
+            $arguments[0] = $info + ['uri' => $this->getUri()];
+        }
+
+        if (!in_array($hook, self::$hooks, true)) {
+            throw new BadMethodCallException("Invalid lifecycle event: {$hook}");
+        }
+
+        $this->{$hook}(...$arguments);
+
+        if($isTerminated){
+            self::$lifecycle = self::TERMINATED;
+        }
     }
 
     /**
-     * Lifecycle onPreCreate hook: Triggers once before application object creation.
+     * @deprecated Use trigger instead.
+     *
+     * @param string $event
+     * @param mixed ...$arguments
      * 
-     * This allows you to override or create a custom initialization logic before routing system is initialized.
+     * @return void
+     */
+    public final function __on(string $event, mixed ...$arguments): void
+    {
+        $this->trigger($event, $arguments);
+    }
+
+    /**
+     * Application pre create lifecycle hook.
+     * 
+     * The onPreCreate hook is triggered once, immediately after application class is initialized 
+     * before routing system runs. This allows you to override or create 
+     * a custom initialization logic before routing system starts.
      * 
      * @return void
      * @see self::onCreate()
@@ -289,7 +289,7 @@ abstract class Application implements LazyObjectInterface
      *      $rate = new RateLimiter();
      *      if(!$rate->check('key')->isAllowed()){
      *          $rate->respond();
-     *          $this->terminate(); // Optionally terminate application.
+     *          Luminova::terminate(429, 'Too many request'); // Optionally terminate application.
      *      }
      * }
      * ```
@@ -297,8 +297,9 @@ abstract class Application implements LazyObjectInterface
     protected function onPreCreate(): void {}
 
     /**
-     * Lifecycle onCreate hook: Triggers once before application object creation.
+     * Application post create lifecycle hook.
      * 
+     * The onCreate hook is triggered once, after application class is initialized and routing system initialized.
      * This allows you to override properties and initialize other function requires in application.
      * 
      * @return void
@@ -309,8 +310,10 @@ abstract class Application implements LazyObjectInterface
     protected function onCreate(): void {}
 
     /**
-     * Lifecycle onDestroy hook: Triggered once on object destruction.
-     * Override in subclasses for custom cleanup.
+     * Application destruction lifecycle hook.
+     * 
+     * The onDestroy hook is triggered once on object destruction.
+     * Override in subclasses for custom cleanup or logging.
      * 
      * @return void
      * @example - Example:
@@ -327,7 +330,17 @@ abstract class Application implements LazyObjectInterface
     protected function onDestroy(): void {}
 
     /**
-     * Lifecycle onStart hook: Triggered when the application starts handling a request.
+     * Application pre request handling lifecycle hook.
+     * 
+     * The onStart hook is triggered when the application routing starts handling incoming requests.
+     * 
+     * **Possible Info keys:**
+     * - `context` - The application context (CLI or HTTP).
+     * - `method`  - The HTTP request method.
+     * - `uri`     - The request URI.
+     * - `module`  - The HMVC URI module (same as prefix). 
+     * - `prefix`  - The URI prefix. 
+     * 
      *
      * @param array<string,mixed> $info Request state information.
      * 
@@ -336,97 +349,101 @@ abstract class Application implements LazyObjectInterface
     protected function onStart(array $info): void {}
 
     /**
-     * Lifecycle onFinish hook: Triggered after a request is handled, regardless of success or failure.
+     * Application post request handling lifecycle hook.
      * 
-     * @param array<string,mixed> $info Request controller information.
+     * The onFinish lifecycle hook is triggered after a request is handled, regardless of success or failure.
      * 
-     * **Class Info keys:**
+     * **Possible Info keys:**
      * 
-     * - `filename`  (string|null) Optional controller class file name.
-     * - `namespace` (string|null) Optional controller class namespace.
-     * - `method`    (string|null) Optional controller class method name.
-     * - `controllers` (int) Number of controller files scanned for matched attributes.
-     * - `cache`     (bool) Whether cached version rendered or new content.
-     * - `staticCache` (bool) Whether a static cached version was served (e.g, page.html) or regular cache (e.g, `page`).
+     * - `filename`      (string|null) Optional controller class file name.
+     * - `namespace`     (string|null) Optional controller class namespace.
+     * - `method`        (string|null) Optional controller class method name.
+     * - `command`       (array|null) Optional executed command for CLI.
+     * - `controllers`   (int) Number of controller files scanned for matched attributes.
+     * - `isCache`       (bool) Whether cached version rendered or new content.
+     * - `isStaticCache` (bool) Whether a static cached version was served (e.g, page.html) 
+     *                          or regular cache (e.g, `page`).
+     * 
+     * @param array<string,mixed> $info The handled request and controller information.
      * 
      * @return void 
+     * 
+     * > **Note:**
+     * > after onFinish is called (too late to modify UI)
      */
     protected function onFinish(array $info): void {}
 
     /**
-     * Triggered after a route context is successfully registered.
+     * Application method-based routes lifecycle hook.
+     * 
+     * The onRouteResolved lifecycle hook is triggered after a method-based route context is resolved 
+     * via (`/routes/`), based on URI prefix or CLI.
      *  
-     * @param string $context The name of the registered context.
+     * @param string $context The resolved prefix or context name loaded.
      * 
      * @return void 
+     * @see ../../../routes/
      */
-    protected function onContextInstalled(string $context): void {}
+    protected function onRouteResolved(string $context): void {}
 
     /**
-     * Triggered after a view controller method is called.
+     * Application termination lifecycle hook.
      * 
-     * @param string $uri The URI of the presented view.
-     * 
-     * @return void 
-     */
-    protected function onViewPresent(string $uri): void {}
-   
-    /**
-     * Called before the application is allowed to terminate.
+     * The onTerminated lifecycle hook is triggered after the application terminates.
+     * Use it for final cleanup, logging, or notifications.
      *
-     * This method is invoked internally after `terminate()` is called. It determines
-     * whether the application termination should proceed or be canceled.
-     * 
-     * You can override this method to inspect the `$info` payload and return
-     * `true` to allow termination or `false` to prevent it. If termination is allowed,
-     * the `onTerminated()` method will be triggered.
+     * **Info array keys:**
+     * - `status`  (int)    Termination status (HTTP or exit code)
+     * - `message` (string) Termination message
+     * - `title`   (string|null) Optional title
+     * - `uri`     (string|null) Optional URI
+     * - `context` (string) Execution context (`http` or `cli`)
      *
-     * @param array $info Additional termination context data passed from `terminate()`.
+     * @param array<string,mixed> $info Additional termination information.
      *
-     * @return bool Return `true` to allow termination or `false` to cancel it.
-     */
-    protected function onTerminate(array $info): bool 
-    {
-       return true;
-    }
-
-    /**
-     * Triggered after the application has been terminated.
+     * @example - Terminate:
+     * ```php
+     * if ($this->instance->ofSomethingIsTrue()) {
+     *    Luminova::terminate(500, 'Error...');
+     * }
+     * ```
+     * @example - Handle Termination:
+     * ```php
+     * namespace App;
      *
-     * This method is called only if `onTerminate()` returns `true`, indicating that 
-     * the application is allowed to terminate. Use this hook to perform any final 
-     * cleanup, logging, or notification logic after termination.
+     * class Application extends Luminova\Foundation\Core\Application
+     * {
+     *     protected function onTerminated(array $info): void
+     *     {
+     *         Logger::debug('Application terminated', $info);
+     *     }
+     * }
+     * ```
      *
-     * @param array $info Contextual information related to the termination request.
-     *
-     * @return void
+     * > **Note:** 
+     * >
+     * > Triggered whenever `Luminova::terminate()` is called.
      */
     protected function onTerminated(array $info): void {}
 
     /**
-     * Triggered after a command controller is called.
+     * Application error shutdown lifecycle hook.
      * 
-     * @param array $options The presented command options.
-     * 
-     * @return void 
-     */
-    protected function onCommandPresent(array $options): void {}
-
-    /**
-     * Called after script shutdown triggered by a fatal error or forced termination.
+     * The onShutdown hook is triggered after script shutdown triggered by a fatal error or forced termination.
      * 
      * This hook gives the application a final chance to inspect the shutdown state.
      * If it returns `false`, the framework will skip further error handling—allowing
      * the application to take full control (e.g., for custom logging or rendering).
-     * 
-     * Returning `true` lets the framework continue with its default error page or logging flow.
      *
      * @param array<string,mixed> $error The last recorded error before shutdown (if any).
      * 
      * @return bool Return `false` to take over shutdown handling, `true` to let the framework proceed.
      * 
      * > **Note:** 
-     * > This hook only get called if shutting down because of an error.
+     * >
+     * > - Returning `true` allows the framework continue with its default error handling flow.
+     * > - This hook only get called if shutting down because of an error.
+     * > - It does not trigger when `Luminova::terminate()` is called, except if an error that causes shutdown.
      */
     public function onShutdown(array $error): bool 
     {
@@ -434,32 +451,25 @@ abstract class Application implements LazyObjectInterface
     }
 
     /**
-     * Set the singleton instance to a new application instance.
+     * Set or replace the singleton instance with a new application object.
      * 
-     * @param self $new The new application object to set.
+     * @param Application $new The new application object.
      * 
-     * @return static Return the new shared application instance.
+     * @return static Return the updated shared application instance.
      */
-    public static function setInstance(Application $new): static
+    public function setInstance(Application $new): static
     {
-        if(self::$instance instanceof static){
-            $new->router ??= self::$instance->router;
-            $new->view ??= self::$instance->view;
-        }
-
-        return self::$instance = $new;
+        return static::$instance = $new;
     }
 
     /**
      * Retrieve the shared application instance.
      *
      * If the Application has already been created, this method
-     * will not trigger the normal creation lifecycle, the constructor skips
-     * onCreate, onDestroy, and any re-initialization logic for later requests except `$recreate` is set to `true`.
+     * will not trigger `onPreCreate` or `onCreate` creation lifecycle again.
      * 
-     * This guarantees that the router, view engine, and other core services
-     * come from the original Application, while additional instances simply
-     * reuse them.
+     * This guarantees that the core services come from the initial Application object, 
+     * while additional instances simply reuse them.
      * 
      * @param bool $recreate Wether to forces a full rebuild (default: false).
      *
@@ -467,118 +477,26 @@ abstract class Application implements LazyObjectInterface
      */
     public static function getInstance(bool $recreate = false): static 
     {
-        if(!self::$instance instanceof static){
-            self::$instance = new static($recreate);
+        if(!static::$instance instanceof static){
+            static::$instance = new static($recreate);
+            static::$instance->objectState = 'shared';
         }
        
-        return self::$instance;
+        return static::$instance;
     }
 
     /**
-     * Returns an instance of the application routing system.
-     *
-     * You may override this method in your application class to return a custom implementation
-     * of the routing system by extending or replacing the default router.
-     *
-     * @return \T<RouterInterface>|null Return instance of the routing system, or null to use default.
-     */
-    protected function getRouterInstance(): ?RouterInterface
-    {
-        return null;
-    }
-
-    /**
-     * Get the current request URI from the router.
+     * Get the current request URI.
      * 
      * Alias {@see \Luminova\Luminova::getUriSegments()}
      *
      * @return string Return the current request URI paths.
      * > **Note:**
-     * > Return `Router::CLI_URI` as `__cli__` if called in CLI environment.
+     * > Return `__cli__` if called in CLI environment.
      */
     public final function getUri(): string 
     {
-        return Luminova::isCommand() 
-            ? Router::CLI_URI 
-            : Luminova::getUriSegments();
-    }
-
-    /**
-     * Get the current view instance.
-     *
-     * Returns either a `View` object or a lazy-loaded wrapper implementing 
-     * `LazyObjectInterface`. If no view has been initialized, this method creates 
-     * a new `View` instance without assigning it to `$this->view`.
-     *
-     * @return View<LazyObjectInterface>|View Return the current view instance or a newly created one.
-     *
-     * > **Note:** 
-     * > Calling this method does **not** update the `$view` property if it is null. 
-     * > This means `$app->getView()` and `$app->view` may not reference the same object.
-     */
-
-    /**
-     * Get the current view instance.
-     *
-     * Returns the existing `View` instance or a lazy-loaded view object implementing
-     * `LazyObjectInterface`. If the view has not been initialized, a new `View`
-     * instance is created and stored in `$this->view` before being returned.
-     *
-     * @return View|LazyObjectInterface Returns the template view object.
-     * @throws RuntimeException If called within a template view files.
-     * 
-     * @example - In Application Example:
-     * ```php
-     * // /app/Application.php
-     * $this->view;
-     * $this->getView();
-     * ```
-     * @example - In Controllers Example:
-     * ```php
-     * // /app/Controllers/Http/Controller.php
-     * 
-     * $this->app->view;
-     * $this->app->getView();
-     * ```
-     * 
-     * @example - In Global app Function Example:
-     * ```php
-     * use function Luminova\Funcs\app;
-     * 
-     * $app = $app();
-     * 
-     * $app->view;
-     * $app->getView();
-     * ```
-     */
-    public final function getView(): LazyObjectInterface|View
-    {
-        if (
-            ($this->view instanceof View) ||
-            ($this->view instanceof LazyObjectInterface)
-        ) { 
-            return $this->view;
-        }
-
-        if($this->isCloneCircularLocked){
-            if(!Boot::has('__IN_TEMPLATE_CONTEXT__')){
-                return new View($this);
-            }
-
-            [$file, $line] = RuntimeException::trace(1);
-            $e = new RuntimeException(
-                'Accessing "$app->getView()" inside templates is forbidden. ' . 
-                'Use "$this->view()" or "$self->view()" instead.'
-            );
-
-            if($file){
-                $e->setFile($file)->setLine($line);
-            }
-
-            throw $e;
-        }
-
-        return $this->view = new View($this);
+        return Luminova::isCommand() ? Router::CLI_URI : Luminova::getUriSegments();
     }
 
     /**
@@ -601,19 +519,6 @@ abstract class Application implements LazyObjectInterface
            return static::${$property};
         }
 
-        // Error Will be remove in the future
-        if (
-            ($this->view instanceof View || $this->view instanceof LazyObjectInterface) && 
-            $this->view->getProperty($property, false, false) !== View::KEY_NOT_FOUND
-        ) {
-            throw new BadMethodCallException(sprintf(
-                'Accessing view property "%s" directly from %s is deprecated. ' .
-                'Use "$app->view->%1$s" or "$app->getView()->%1$s" instead.',
-                $property,
-                static::class
-            ));
-        }
-
         return null;
     }
 
@@ -633,18 +538,11 @@ abstract class Application implements LazyObjectInterface
             return $this->{$method}(...$arguments);
         }
 
-        $msg = 'Method "%s" does not exist in %s.';
-
-        // Error Will be remove in the future
-        if (
-            ($this->view instanceof View || $this->view instanceof LazyObjectInterface) && 
-            $this->view->hasMethod($method)
-        ) {
-           $msg = 'Calling view method "%s" directly from %s is deprecated. ' . 
-           ' Use "$app->view->%1$s()" or "$app->getView()->%1$s()" instead.';
-        }
-
-        throw new BadMethodCallException(sprintf($msg, $method, static::class));
+        throw new BadMethodCallException(sprintf(
+            'Method "%s" does not exist in %s.', 
+            $method, 
+            static::class
+        ));
     }
 
     /**
@@ -671,48 +569,9 @@ abstract class Application implements LazyObjectInterface
     }
 
     /**
-     * Clear view and router references when the Application instance is cloned.
-     *
-     * A cloned Application must not inherit the original `$view` or `$router`
-     * objects. Leaving them in place creates circular references and exposes
-     * internal services to templates through:
-     *   - $this->app->view
-     *   - $this->app->router
-     *   - $self->app->view
-     *   - $self->app->router
-     *
-     * @reference {
-     *      Luminova\Templates\View,
-     *      Luminova\Templates\Engines\Scope,
-     *      Luminova\Routing\Router
-     * }
+     * Clear references when the Application instance is cloned.
      *
      * @internal Ensures clones start without internal bindings.
      */
-    public function __clone()
-    {
-        $this->view = null;
-        $this->router = null;
-        $this->isCloneCircularLocked = true;
-    }
-
-    /**
-     * Terminates the application if it is marked as terminated.
-     *
-     * This function checks if the application instance is marked as terminated. 
-     * If it is, it triggers the 'onTerminated' event with the context (either 'CLI' or 'HTTP'), 
-     * the request method, and the URI segments. Finally, it exits the script.
-     *
-     * @return void
-     * @throws RouterException If the application instance is not provided.
-     */
-    private function __doTermination(): void 
-    {
-        if(!$this->termination['isTerminated']){
-            return;
-        }
-
-        $this->onTerminated($this->termination['info']);
-        exit(0);
-    }
+    public function __clone() {}
 }

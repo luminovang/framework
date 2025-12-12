@@ -104,38 +104,59 @@ final class Commands
         'server' => [
             'name'        => 'Server',
             'group'       => 'server',
-            'description' => 'Start the Luminova PHP development server. Optionally bind it to a specific hostname or use the machine\'s local network address for testing on other devices.',
+            'description' => "Start the Luminova PHP development server using PHP's built-in HTTP server.\nYou can bind it to a custom host or use the local network address for testing on other devices.",
+
+            'aliases' => ['http', 'serve'],
+
             'usages' => [
                 'php novakit server',
             ],
+
             'options' => [
-                '-b, --php'      => 'Specify a custom PHP binary path.',
-                '-a, --host'     => 'Bind the server to a specific hostname or address.',
-                '-p, --port'     => 'Set the port for the development server. Defaults to 8080.',
-                '-t, --testing'  => 'Bind the server to the machine\'s local network address for testing on other devices.',
-                '-h, --help'     => 'Display help information for this command.'
+                '-b, --php'    => 'Path to a custom PHP binary.',
+                '-a, --host'   => 'Set the hostname or IP address to bind the server.',
+                '-p, --port'   => 'Set the starting port (default: 8080).',
+                '-r, --retry'  => 'Number of retry attempts if the port is already in use (default: 5).',
+                '-t, --testing'=> 'Bind to the machine\'s local network address for access from other devices.',
+                '-j, --json'   => 'Output server details in JSON format for automation and scripting.',
+                '-h, --help'   => 'Display help information for this command.',
             ],
+
             'examples' => [
-                'php novakit server' => 'Start the development server on localhost.',
-                'php novakit server --port=8080 --testing' => 'Start the server on port 8080 and make it accessible to other devices on the same network.',
-                'php novakit server --host=localhost --port=8080 --php=<PHP-BINARY-PATH>' => 'Start the server using a specified PHP binary and host configuration.',
+                'php novakit server' => 'Start the development server using default host and port.',
+
+                'php novakit server --port=8080 --testing' =>
+                    'Start the server on port 8080 and expose it to other devices on the same network.',
+
+                'php novakit server --host=localhost --port=8080 --php=/path/to/php' =>
+                    'Start the server using a custom PHP binary and host configuration.',
+
+                'php novakit server --port=8080 --retry=10' =>
+                    'Increase retry attempts when ports are already in use.',
+
+                'php novakit server --json' =>
+                    'Output machine-readable server details for use in scripts and automation.',
             ],
         ],
 
         'build:project' => [
-            'name' => 'Builder',
-            'group' => 'build:project',
-            'description' => "Archive required application files for production based on 'app.version' or copy them to build directory without zipping.",
+            'name'      => 'Builder',
+            'group'     => 'build:project',
+            'description' => "Build the application for production: either copy required files to the build directory\nor package them as a ZIP archive based on 'app.version'.",
             'usages' => [
                 'php novakit build:project',
             ],
             'options' => [
-                '--type' => "Specify the type of build to generate (`zip` or `build`).",
-                '-h, --help' => 'Show help information for this command.'
+                '-t, --type'     => "Build type: export (e) for directory copy, or archive (a) for ZIP packaging.",
+                '-p, --progress' => "Show progress indicator during build process.",
+                '-q, --quiet'    => "Suppress all output except errors.",
+                '-v, --verbose'  => "Increase output verbosity (use multiple times for more detail).",
+                '-h, --help'     => "Display help information for this command."
             ],
             'examples' => [
-                'php novakit build:project --type=zip' => 'Generates application production files as zip files',
-                'php novakit build:project --type=build' => 'Copy application production files to build directory.',
+                'php novakit build:project -t=archive' => 'Package the application into a production ZIP archive.',
+                'php novakit build:project -t=export' => 'Copy application files to the production build directory.',
+                'php novakit build:project -t=zip -vv' => 'Package application into ZIP archive with verbose output.'
             ],
         ],
 
@@ -187,7 +208,8 @@ final class Commands
                 '-f,  --basename'        => "Output file name (default: sitemap.xml or broken.sitemap.json for broken links).",
                 '-b,  --broken'          => "Generate a JSON report of broken links instead of an XML sitemap.",
                 '-t,  --link-tree'      => "Generate a plain TXT report of all website links instead of an XML sitemap or JSON broken links report.",
-                '--format'     =>    'Custom output format for link tree, e.g., "{url} | {title} | {status} | {lastmod}". Default is "{url} {title} ({status})"',
+                '-dx, --desc-xpath' => 'XPath selector for extracting the description text from a page when generating a link-tree, e.g. //p[@class="intro"].',
+                '--format'     =>    'Custom output format for link tree, e.g., "{url} | {title} | {status} | {lastmod} | {description}". Default is "{url} {title} ({status})"',
                 '-l,  --limit'           => "Maximum number of URLs to scan (0 = no limit).",
                 '-d,  --delay'           => "Delay in seconds between each URL scan (minimum: 1).",
                 '-e,  --max-execution'   => "Maximum script execution time in seconds (0 = unlimited).",
@@ -213,7 +235,8 @@ final class Commands
                 'php novakit sitemap --url=https://example.com --broken --basename=scan.json',
                 'php novakit sitemap --url=https://localhost --broken --limit=50',
                 "\033[1;36mLink Tree Scan\033[0m",
-                'php novakit sitemap -t --format "{url} | {title}"'
+                'php novakit sitemap -t --format "{url} | {title}"',
+                'php novakit sitemap -t --format "{url} | {title} | {description}" --desc-xpath="//p[@aria-label="Subheading for this page"]"'
             ],
         ],
 
@@ -310,7 +333,7 @@ final class Commands
        'create:controller' => [
             'name' => 'Generators',
             'group' => 'create:controller',
-            'description' => 'Generate and install a new controller class. Optionally implement an interface, create a template view, or target a specific module.',
+            'description' => "Generate and install a new controller class. Optionally implement an interface,\ncreate a template view, or target a specific module.",
             'usages' => [
                 'php novakit create:controller <ClassName>'
             ],
@@ -393,7 +416,7 @@ final class Commands
         'create:model' => [
             'name' => 'Generators',
             'group' => 'create:model',
-            'description' => 'Generate a new database model class that extends `Luminova\Base\Model`. The file is saved in `/app/Models/` for MVC or `/app/Modules/<?Module>/Models/` for HMVC.',
+            'description' => "Generate a new database model class that extends `Luminova\Base\Model`.\nThe file is saved in `/app/Models/` for MVC or `/app/Modules/<?Module>/Models/` for HMVC.",
             'usages' => [
                 'php novakit create:model <ModelClassName>'
             ],
@@ -588,7 +611,7 @@ final class Commands
         'task:init' => [
             'name' => 'TaskWorker',
             'group' => 'task:init',
-            'description' => 'Initialize the task queue system and create the required table in your database. Used to initialize the task system.',
+            'description' => "Initialize the task queue system and create the required table in your database.\nUsed to initialize the task system.",
             'usages' => [
                 'php novakit task:init'
             ],
@@ -831,8 +854,9 @@ final class Commands
                 '-o, --output' => 'Optional. Log output path or log level (e.g., debug).',
                 '-s, --sleep'  => 'Optional. Microseconds to wait between tasks. Default: 100000 (0.1s).',
                 '-l, --limit'  => 'Optional. Max number of tasks to process in one loop.',
-                '-i, --idle'   => 'Optional. Max idle attempts before stopping.',
+                '-i, --id'     => 'Optional. Run a specific task by ID.',
                 '-f, --flock-worker' => 'Optional. Use a file lock to prevent multiple worker instances from running at the same time.',
+                '--idle'   => 'Optional. Max idle attempts before stopping.',
             ],
             'examples' => [
                 'php novakit task:run --output=debug --limit=5' => 'Run and log 5 tasks with debug output.',
@@ -842,7 +866,7 @@ final class Commands
         'task:listen' => [
             'name' => 'TaskWorker',
             'group' => 'task:listen',
-            'description' => 'Listen for new task events written to the task log file. Useful for real-time CLI monitoring.',
+            'description' => 'Depreciated use task:tail',
             'usages' => [
                 'php novakit task:listen'
             ],
@@ -850,8 +874,30 @@ final class Commands
                 '-h, --help' => 'Show help information for this command.',
                 '-c, --class' => 'Optional. Task queue class with logEvents file path set.',
             ],
+            'examples' => [],
+        ],
+
+        'task:tail' => [
+            'name' => 'TaskWorker',
+            'group' => 'task:tail',
+            'description' => "Continuously monitor a task queue log file and output new events in real-time.\nUseful for CLI debugging and live monitoring of task execution.",
+            'usages' => [
+                'php novakit task:tail'
+            ],
+            'options' => [
+                '-h, --help' => 'Display help information for this command.',
+                '-c, --class' => 'Optional. Specify the task queue class to monitor. The class must have "$eventLogging" set to true.',
+                '-j, --json' => 'Output log lines as formatted JSON when possible.',
+                '-s, --since' => 'Filter log entries from a specific time. Accepts relative values like "10s", "5m", "2h" or absolute timestamps.',
+                '-g, --grep' => 'Only show log lines containing the specified string (case-insensitive).',
+                '-x, --exclude' => 'Exclude log lines containing the specified string (case-insensitive).',
+                '-w, --wait' => 'Optional wait in seconds for tail line operations.',
+                '-r, --retry' => 'Number of retry attempts while the file is unavailable or not readable.'
+            ],
             'examples' => [
-                'php novakit task:listen --class=App\\Tasks\\MyTask' => 'Listen to events from a custom task class.',
+                'php novakit task:tail --class=App\\Tasks\\MyTask' => 'Monitor events from a custom task class in real-time.',
+                'php novakit task:tail --json --since=10m' => 'Show log entries from the last 10 minutes in JSON format.',
+                'php novakit task:tail --grep=ERROR --exclude=DEBUG' => 'Only show lines containing "ERROR" but exclude lines containing "DEBUG".'
             ],
         ],
 
@@ -879,7 +925,7 @@ final class Commands
         'clear:caches' => [
             'name' => 'Clear',
             'group' => 'clear:caches',
-            'description' => 'Clears cached pages, database cache files, and route files from the writeable caches directory. If no directory is specified, all cached files will be cleared.',
+            'description' => "Clears cached pages, database cache files, and route files from the writeable caches directory.\nIf no directory is specified, all cached files will be cleared.",
             'usages' => [
                 'php novakit clear:caches',
             ],
@@ -957,6 +1003,16 @@ final class Commands
     ];
 
     /**
+     * List of available command aliases.
+     *
+     * @var array<string,array<string,mixed>> $aliases
+     */
+    private static array $aliases = [
+        'http' => 'server',
+        'serve' => 'server'
+    ];
+
+    /**
      * Get all available commands.
      * 
      * @return array<string,array<string,mixed>> Return all available commands and their information.
@@ -976,7 +1032,12 @@ final class Commands
      */
     public static function get(string $group): array 
     {
-        return self::getCommands()[$group] ?? [];
+        $command = self::getCommands();
+        $alias = self::$aliases[$group] ?? 'noop';
+
+        return $command[$group] 
+            ?? $command[$alias] 
+            ?? [];
     }
 
     /**
@@ -1003,32 +1064,33 @@ final class Commands
      * 
      * @return string|null Return the closest matching command group, or null if no close match is found.
      */
-    public static function search(string $input): ?string
+    public static function search(string $input, int $threshold = 3): ?string
     {
         $input = strtolower($input);
         $suggestion = null;
-        $shortestDistance = -1;
+        $shortestDistance = PHP_INT_MAX;
 
         foreach (self::getCommands() as $command) {
             $group = strtolower($command['group']);
+            $aliases = array_map('strtolower', $command['aliases'] ?? []);
 
-            if (str_starts_with($group, $input)) {
+            if ($input === $group || in_array($input, $aliases, true)) {
                 return $command['group'];
             }
 
-            $distance = levenshtein($input, $group);
+            $candidates = array_merge(['main' => $group], $aliases);
 
-            if ($distance === 0) {
-                return $command['group'];
-            }
+            foreach ($candidates as $from => $candidate) {
+                $distance = levenshtein($input, $candidate);
 
-            if ($distance < $shortestDistance || $shortestDistance < 0) {
-                $suggestion = $command['group'];
-                $shortestDistance = $distance;
+                if ($distance < $shortestDistance) {
+                    $shortestDistance = $distance;
+                    $suggestion = ($from === 'main') ? $command['group'] : $candidate;
+                }
             }
         }
 
-        return $suggestion;
+        return ($shortestDistance <= $threshold) ? $suggestion : null;
     }
 
     /**
@@ -1041,9 +1103,14 @@ final class Commands
     public static function suggest(string $input): string
     {
         $suggestion = self::search($input);
-        return $suggestion 
-            ? 'Do you mean "' . Color::style($suggestion, 'cyan') . '"?'
-            : '';
+
+        if(!$suggestion){
+            return '';
+        }
+
+        $suggestion = Color::style($suggestion, 'cyan');
+
+        return "Do you mean: '{$suggestion}'?";
     }
 
     /**
@@ -1057,12 +1124,20 @@ final class Commands
         $last = 0;
 
         foreach (self::$commands as $command => $value) {
-            if ($command === 'help' || ($group && !str_starts_with($command, $group))) {
+            if ($command === 'help') {
                 continue;
             }
 
+            if ($group) {
+                $aliases = $value['aliases'] ?? [];
+
+                if (!str_starts_with($command, $group) && !in_array($group, $aliases, true)) {
+                    continue;
+                }
+            }
+
             $name = strstr($command, ':', true) ?: $command;
-            $key = "php novakit $command --help";
+            $key = "php novakit {$command} --help";
 
             if($largest !== null){
                 $length = strlen($key);
@@ -1096,7 +1171,7 @@ final class Commands
     private static function getDescription(): string 
     {
         $title = Color::apply(
-            " PHP Luminova Novakit Command Help (Novakit Version: " . Luminova::NOVAKIT_VERSION .
+            "PHP Luminova Novakit Command Help (Novakit Version: " . Luminova::NOVAKIT_VERSION .
             ", Framework Version: " . Luminova::VERSION . ")",
             Text::FONT_BOLD, 'brightBlack'
         );
