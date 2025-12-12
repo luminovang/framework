@@ -2495,16 +2495,16 @@ class Filesystem implements Stringable
      * Determines whether a permission mode contains only supported bits.
      *
      * @param int $permissions The permission mode to validate.
-     * @param bool $directory Whether the permissions are intended for a directory.
+     * @param bool $isDirectory Whether the permissions are intended for a directory.
      *
      * @return bool Returns true if the permission mode is valid, false otherwise.
      */
     private static function isValidPermissions(
         int $permissions,
-        bool $directory = true
+        bool $isDirectory = true
     ): bool 
     {
-        return ($permissions & ~($directory ? 07777 : 0777)) === 0;
+        return ($permissions & ~($isDirectory ? 07777 : 0777)) === 0;
     }
 
     /**
@@ -2632,7 +2632,7 @@ class Filesystem implements Stringable
      * Asserts that a permission mode contains only supported permission bits.
      *
      * @param int $permissions The permission mode to validate.
-     * @param bool $directory Whether the permissions are intended for a directory.
+     * @param bool $isDirectory Whether the permissions are intended for a directory.
      *
      * @return void
      *
@@ -2640,13 +2640,13 @@ class Filesystem implements Stringable
      */
     private static function assertPermissions(
         int $permissions,
-        bool $directory = true
+        bool $isDirectory = true
     ): void 
     {
-        if (!self::isValidPermissions($permissions, $directory)) {
+        if (!self::isValidPermissions($permissions, $isDirectory)) {
             throw new InvalidArgumentException(sprintf(
                 "Invalid %s permissions: '%04o'.",
-                $directory ? 'directory' : 'file',
+                $isDirectory ? 'directory' : 'file',
                 $permissions
             ));
         }

@@ -27,7 +27,7 @@ final class NoScope
     /**
      * Guard instance that traps all `$self` interactions.
      *
-     * @param integer $id
+     * @param int $id
      */
     public function __construct(private int $id = 0) {$this->id = spl_object_id($this);}
     public function __id():int { return $this->id; }

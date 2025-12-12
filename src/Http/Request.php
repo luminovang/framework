@@ -1068,7 +1068,7 @@ final class Request implements RequestInterface, LazyObjectInterface, Stringable
     /**
      * {@inheritdoc}
      */
-    public function isApi(?bool $ajaxAsApi = null): bool
+    public function isApi(?bool $validateAjaxAsApi = null): bool
     {
         $segments = $this->getUri()->getPaths();
 
@@ -1079,9 +1079,9 @@ final class Request implements RequestInterface, LazyObjectInterface, Stringable
             return true;
         }
 
-        $ajaxAsApi ??= Env::get('app.validate.ajax.asapi', false);
+        $validateAjaxAsApi ??= Env::get('app.validate.ajax.asapi', false);
 
-        return $ajaxAsApi
+        return $validateAjaxAsApi
             && $this->isAjax();
     }
 

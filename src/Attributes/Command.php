@@ -69,7 +69,7 @@ final class Command
      *
      * @param string $pattern CLI command pattern, for example `list` or `user/(:int)`.
      * @param string|null $group Command group this route belongs to.
-     * @param bool $error  Whether this command handles a CLI error.
+     * @param bool $isErrorHandler Whether this command handles a CLI error.
      * @param string|null $middleware  Middleware scope. Must be either
      *      {@see self::GLOBAL_MIDDLEWARE} or {@see self::GROUP_MIDDLEWARE}.
      * @param string[]|null $aliases Alternative command patterns that resolve to the same command.
@@ -111,7 +111,7 @@ final class Command
     public function __construct(
         public string $pattern = '/',
         public ?string $group = null,
-        public bool $error = false,
+        public bool $isErrorHandler = false,
         public ?string $middleware = null,
         public ?array $aliases = null,
     ) {

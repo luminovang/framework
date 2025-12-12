@@ -5640,7 +5640,7 @@ trait BuilderTrait
      * @param string $groupConnector
      * @param mixed $value
      * @param string $connector
-     * @param boolean $isNotHaving
+     * @param bool $isNotHaving
      * @param string $fn
      * 
      * @return self

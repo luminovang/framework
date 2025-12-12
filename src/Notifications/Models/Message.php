@@ -1117,7 +1117,7 @@ final class Message
      * Undocumented function
      *
      * @param array $data
-     * @param boolean $deep
+     * @param bool $deep
      * @return array
      */
     private static function cleanArray(array $data, bool $deep = false): array

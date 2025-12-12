@@ -1102,11 +1102,15 @@ final class MemoryCache extends Cache
      */
     private function toggleBinaryProtocol(bool $enable = false): bool 
     {
-        if((bool) $this->conn->getOption(Memcached::OPT_BINARY_PROTOCOL) === $enable){
+        if(
+            (bool) $this->conn->getOption(Memcached::OPT_BINARY_PROTOCOL) === $enable
+        ){
             return false;
         }
 
-        if((bool) $this->conn->setOption(Memcached::OPT_BINARY_PROTOCOL, $enable) === true){
+        if(
+            (bool) $this->conn->setOption(Memcached::OPT_BINARY_PROTOCOL, $enable) === true
+        ){
             return true;
         }
 

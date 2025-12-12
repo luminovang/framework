@@ -1049,13 +1049,17 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
      *
      * @param string $haystack The string to search in.
      * @param string $needle The substring to search for.
-     * @param bool $allow Inverts the match condition.
+     * @param bool $isAllow Inverts the match condition.
      *
      * @return bool True if the condition passes, false otherwise.
      */
-    private static function isContains(string $haystack, string $needle, bool $allow = false): bool
+    private static function isContains(
+        string $haystack, 
+        string $needle, 
+        bool $isAllow = false
+    ): bool
     {
-        return $allow
+        return $isAllow
             ? str_contains($haystack, $needle)
             : !str_contains($haystack, $needle);
     }
@@ -1347,8 +1351,8 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
      *  - $allowPrintable : when true (and non-strict), accept printable ASCII strings as a fallback.
      * 
      * @param mixed $value  Value to check.
-     * @param bool  $strict If true, only characters 0 and 1 are accepted.
-     * @param bool  $allowPrintable If true and not strict, accept printable ASCII strings as fallback.
+     * @param bool $strict If true, only characters 0 and 1 are accepted.
+     * @param bool $allowPrintable If true and not strict, accept printable ASCII strings as fallback.
      * 
      * @return bool Returns true if value is binary according to the options, false otherwise.
      * 

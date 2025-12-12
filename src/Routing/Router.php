@@ -709,15 +709,15 @@ final class Router implements RouterInterface
     /**
      * {@inheritdoc}
      */
-    public static function isApiRequest(?bool $ajaxAsApi = null): bool
+    public static function isApiRequest(?bool $validateAjaxAsApi = null): bool
     {
         if (self::isApiPrefix()) {
             return true;
         }
 
-        $ajaxAsApi ??= Env::get('app.validate.ajax.asapi', false);
+        $validateAjaxAsApi ??= Env::get('app.validate.ajax.asapi', false);
 
-        return $ajaxAsApi
+        return $validateAjaxAsApi
             && isset($_SERVER['HTTP_X_REQUESTED_WITH'])
             && strcasecmp($_SERVER['HTTP_X_REQUESTED_WITH'], 'XMLHttpRequest') === 0;
     }
@@ -1307,7 +1307,7 @@ final class Router implements RouterInterface
      *
      * @param array<string,mixed> $routes Collection of route patterns and their handling functions.
      * @param string $uri The view request URI path.
-     * @param boolean $isMiddleware
+     * @param bool $isMiddleware
      *
      * @return int Return status code.
      * @throws RouterException if method is not callable or doesn't exist.
@@ -2180,8 +2180,8 @@ final class Router implements RouterInterface
      *
      * @param string $type
      * @param string|null $handler
-     * @param boolean $isUnion
-     * @param boolean $isCommand
+     * @param bool $isUnion
+     * @param bool $isCommand
      * 
      * @return never
      * @throws RouterException

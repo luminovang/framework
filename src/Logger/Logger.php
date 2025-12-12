@@ -927,9 +927,11 @@ final class Logger
     /**
      * File tail follow log file entries.
      *
-     * @param resource $fp
+     * @param mixed $fp
      * @param string $filename
-     * @param integer $sleep
+     * @param int $sleep
+     * @param int|null $memoryLimit
+     * @param int|null $startMemory
      * 
      * @return Generator
      */
@@ -984,8 +986,10 @@ final class Logger
     /**
      * File tail all log file entries.
      *
-     * @param resource $fp
-     * @param integer|null $lines
+     * @param mixed $fp
+     * @param int|null $lines
+     * @param int|null $memoryLimit
+     * @param int|null $startMemory
      * 
      * @return Generator
      */

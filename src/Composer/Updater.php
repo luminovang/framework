@@ -71,7 +71,7 @@ final class Updater
     /**
      * Undocumented variable
      *
-     * @var boolean
+     * @var bool
      */
     private static bool $isPhpVciAutoload = false;
 

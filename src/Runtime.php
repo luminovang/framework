@@ -863,14 +863,14 @@ final class Runtime
      * It can return the list as a simple array of function names or as an associative array
      * with function names as keys and `true` as values.
      * 
-     * @param bool $flip Whether to return an associative lookup array.
+     * @param bool $flipValue Whether to return an associative lookup array.
      * 
-     * @return ($flip is true ? array<string, true> : array<int, string>) Returns an array of disabled function names or an associative array if `$flip` is true.
+     * @return ($flipValue is true ? array<string, true> : array<int, string>) Returns an array of disabled function names or an associative array if `$flipValue` is true.
      */
-    public static function disabledFunctions(bool $flip = false): array
+    public static function disabledFunctions(bool $flipValue = false): array
     {
         if (self::$disabledFunctions !== null) {
-            return ($flip && isset(self::$disabledFunctions[0])) 
+            return ($flipValue && isset(self::$disabledFunctions[0])) 
                 ? array_flip(self::$disabledFunctions) 
                 : self::$disabledFunctions;
         }
@@ -889,7 +889,7 @@ final class Runtime
                 continue;
             }
 
-            if ($flip) {
+            if ($flipValue) {
                 $disabled[$function] = true;
                 continue;
             }

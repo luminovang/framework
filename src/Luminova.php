@@ -929,7 +929,8 @@ final class Luminova
      * Undocumented function
      *
      * @param string $path
-     * @return boolean
+     * 
+     * @return bool
      */
     private static function isAppRoot(string $path): bool 
     {
@@ -1057,9 +1058,9 @@ final class Luminova
      *
      * @param string $path
      * @param array $scope
-     * @param boolean $once
-     * @param boolean $require
-     * @param boolean $promise
+     * @param bool $once
+     * @param bool $require
+     * @param bool $promise
      * 
      * @return mixed
      */

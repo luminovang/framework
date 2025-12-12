@@ -71,7 +71,7 @@ interface ContentResponseInterface
      * 
      * This overrides the environment variable `output.minify.html`.
      *
-     * @param boolean $minify Whether to minify the HTML content (default: true).
+     * @param bool $minify Whether to minify the HTML content (default: true).
      * @param string[]|null $preserveTags HTML tags whose contents should be preserved during minification 
      *                                    (e.g. `PRE`, `CODE`, `SCRIPT`, `STYLE`).
      *                                    If `null`, uses the default from `env(output.minify.preserve.tags)`.

@@ -618,10 +618,10 @@ interface RouterInterface
      * the configured API prefix, or when AJAX requests are configured to qualify
      * as API requests.
      *
-     * When `$ajaxAsApi` is null, the value is resolved from
+     * When `$validateAjaxAsApi` is null, the value is resolved from
      * `app.validate.ajax.asapi`.
      *
-     * @param bool|null $ajaxAsApi Whether to treat AJAX requests as API requests.
+     * @param bool|null $validateAjaxAsApi Whether to treat AJAX requests as API requests.
      *                             When null, uses the application configuration.
      *
      * @return bool True if the request matches the API prefix or qualifies as AJAX.
@@ -629,5 +629,5 @@ interface RouterInterface
      * @see self::isApiPrefix()
      * @see self::isUriPrefix()
      */
-    public static function isApiRequest(?bool $ajaxAsApi = null): bool;
+    public static function isApiRequest(?bool $validateAjaxAsApi = null): bool;
 }

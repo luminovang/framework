@@ -846,7 +846,10 @@ final class Terminal
             
             $input = self::input();
             $input = ($input === '') ? $default : $input;
-        } while ($rules !== false  && !self::validate($input, ['input' => $rules], $errors));
+        } while (
+            $rules !== false  
+            && !self::validate($input, ['input' => $rules], $errors)
+        );
     
         return $input;
     }
@@ -855,14 +858,14 @@ final class Terminal
      * Display a multiple-choice selection prompt in the terminal.
      *
      * Users select options using index numbers. Supports single or multiple selection.
-     * - If `$required` is true, at least one option must be selected.
-     * - `$multiChoice` allows selecting multiple options separated by commas.
+     * - If `$isRequired` is true, at least one option must be selected.
+     * - `$allowMultiChoice` allows selecting multiple options separated by commas.
      *
      * @param string $text The message describing the choice.
      * @param array<string|int,mixed> $options The list of selectable options.
      *      Can be indexed or associative array (keys will still be shown as selection indexes).
-     * @param bool $required Whether the user must select at least one option (default: false).
-     * @param bool $multiChoice Allow multiple selections separated by commas (default: true).
+     * @param bool $isRequired Whether the user must select at least one option (default: false).
+     * @param bool $allowMultiChoice Allow multiple selections separated by commas (default: true).
      *
      * @return array<string|int,mixed> Returns an array of selected keys and their corresponding values.
      *
@@ -876,8 +879,8 @@ final class Terminal
      *          'male' => 'Male', 
      *          'female' => 'Female'
      *      ], 
-     *      required: true, 
-     *      multiChoice: false
+     *      isRequired: true, 
+     *      allowMultiChoice: false
      * );
      * ```
      *
@@ -889,16 +892,18 @@ final class Terminal
     public static function chooser(
         string $text, 
         array $options, 
-        bool $required = false,
-        bool $multiChoice = true
+        bool $isRequired = false,
+        bool $allowMultiChoice = true
     ): array
     {
         if ($options == []) {
-            throw new IOException('Invalid argument, $options is required for chooser.');
+            throw new IOException(
+                'Invalid argument, $options is required for chooser.'
+            );
         }
 
         $lastIndex = 0;
-        $placeholder = $multiChoice 
+        $placeholder = $allowMultiChoice 
             ? 'To specify multiple values, separate them with commas.'
             : '';
         $rules = '';
@@ -916,7 +921,10 @@ final class Terminal
             $index++;
         }
         
-        $rules = $required ? "required|key_exist([" . rtrim($rules, ',')  . "])" : 'nullable';
+        $rules = $isRequired 
+            ? "required|key_exist([" . rtrim($rules, ',')  . "])" 
+            : 'nullable';
+
         self::writeln($text);
         self::writeOptions($optionValues, strlen((string) $lastIndex));
         self::writeln($placeholder);
@@ -930,14 +938,14 @@ final class Terminal
             $input = self::input();
             $input = ($input === '') ? '0' : $input;
 
-            if(!$multiChoice && str_contains($input, ',')){
+            if(!$allowMultiChoice && str_contains($input, ',')){
                 $input = null;
                 self::fwrite('Multiple options is not allowed, select one option to continue.');
                 self::newLine();
             }
-        } while ($required && ($input === null) ? true : !self::validate($input, ['input' => $rules]));
+        } while ($isRequired && ($input === null) ? true : !self::validate($input, ['input' => $rules]));
 
-        return self::getInputValues($multiChoice 
+        return self::getInputValues($allowMultiChoice 
             ? list_to_array($input) 
             : [$input], 
             $optionValues
@@ -4052,7 +4060,7 @@ final class Terminal
      * @param array $args
      * @param array $options
      * @param float $startTime
-     * @param integer $exitCode
+     * @param int $exitCode
      * @param string $output
      * @param string $error
      * 

@@ -277,14 +277,14 @@ final class Timezone
      * - `tz:{group}:{country}` → timezone list
      * - `fl:tz:{group}:{country}` → flipped lookup map
      *
-     * @param bool $flip Whether to return a lookup-map reference instead of list reference.
+     * @param bool $flipValue Whether to return a lookup-map reference instead of list reference.
      * @param int $tzGroup Timezone group filter (DateTimeZone::* constants).
      * @param string|null $tzCountryCode Optional ISO country code filter.
      *
      * @return string Cache reference key pointing to stored timezone data.
      */
     private static function fromCacheReference(
-        bool $flip = false,
+        bool $flipValue = false,
         int $tzGroup = DateTimeZone::ALL,
         ?string $tzCountryCode = null
     ): string 
@@ -298,7 +298,7 @@ final class Timezone
             );
         }
 
-        if (!$flip) {
+        if (!$flipValue) {
             return $key;
         }
 

@@ -179,13 +179,13 @@ trait CacheTrait
      * A GC cycle is always triggered in the `finally` block when `$gc` is true.
      *
      * @param string|null $key Cache key to load, or null for driver-specific default behavior (default: null).
-     * @param bool $gc  When true, triggers a GC cycle after the load attempt (default: true).
+     * @param bool $triggerGc When true, triggers a GC cycle after the load attempt (default: true).
      *
      * @return bool Returns true on success, false on failure.
      *
      * @throws CacheException If not connected, or if a read error occurs in a non-production environment.
      */
-    protected function load(?string $key = null, bool $gc = true): bool 
+    protected function load(?string $key = null, bool $triggerGc = true): bool 
     {
         if(!$this->storage){
             return false;
@@ -214,7 +214,7 @@ trait CacheTrait
                 'load'
             );
         } finally {
-            if($gc){
+            if($triggerGc){
                 $this->gc();
             }
         }
@@ -226,17 +226,17 @@ trait CacheTrait
      * Return a cache item from the local pool, loading it from the backend if not already present.
      *
      * @param string|null $key Cache key to check and optionally load (default: null).
-     * @param bool  $gc  When true, passes the GC flag through to `load()` (default: false).
+     * @param bool $triggerGc When true, passes the GC flag through to `load()` (default: false).
      *
      * @return bool Returns true if the item is available in the local pool, false otherwise.
      */
-    protected function reload(?string $key = null, bool $gc = false): bool 
+    protected function reload(?string $key = null, bool $triggerGc = false): bool 
     {
         if (isset($this->items[$key])) {
             return true;
         }
 
-        if (!$this->load($key, $gc)) {
+        if (!$this->load($key, $triggerGc)) {
             return false;
         }
 
@@ -351,7 +351,7 @@ trait CacheTrait
         }
 
         if($reload){
-            $this->load(gc: false);
+            $this->load(triggerGc: false);
         }
 
         $item = $this->createRawPayload(

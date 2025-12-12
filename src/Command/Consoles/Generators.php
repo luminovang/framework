@@ -103,7 +103,7 @@ class Generators extends Console
      *
      * @param string $name Controller name.
      * @param string $type The type of controller.
-     * @param bool $template
+     * @param string|bool $template
      * @param string $module
      * @param bool $hmvc
      * @param string|null $implement

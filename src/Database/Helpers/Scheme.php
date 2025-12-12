@@ -22,7 +22,7 @@ class Scheme
      * @param string $table
      * @param array $input
      * @param string|null $column
-     * @param boolean $alter
+     * @param bool $alter
      * 
      * @return string
      */
@@ -914,7 +914,7 @@ class Scheme
      * Table locking scheme.
      *
      * @param string $driver
-     * @param boolean $forUpdate
+     * @param bool $forUpdate
      * 
      * @return string
      */

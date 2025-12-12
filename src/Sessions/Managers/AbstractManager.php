@@ -125,7 +125,7 @@ abstract class AbstractManager implements SessionManagerInterface
      * Parse storage and namespace name.
      *
      * @param string $name
-     * @param boolean $forNamespace
+     * @param bool $forNamespace
      * 
      * @return string
      * @throws InvalidArgumentException if an invalid name

@@ -492,7 +492,7 @@ final Class Random
     /**
      * Generate a random password.
      *
-     * @param integer $length The max length.
+     * @param bool $length The max length.
      * 
      * @return string Return generated password.
      */

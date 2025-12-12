@@ -71,15 +71,15 @@ final class Compiler
      * Constructor to initialize the compiler.
      *
      * @param string $baseGroup Base group for route patterns.
-     * @param bool $cli Flag indicating if running in CLI mode.
-     * @param bool $hmvc Flag indicating if running application with hmvc module.
+     * @param bool $isCli Flag indicating if running in CLI mode.
+     * @param bool $isHmvc Flag indicating if running application with hmvc module.
      */
     public function __construct(
         private string $baseGroup = '',
-        private bool $cli = false,
-        private bool $hmvc = false
+        private bool $isCli = false,
+        private bool $isHmvc = false
     ) {
-        self::$parser ??= new Tokenizer($this->cli, $this->hmvc);
+        self::$parser ??= new Tokenizer($this->isCli, $this->isHmvc);
     }
 
     /**
@@ -112,12 +112,12 @@ final class Compiler
      */
     public function forHttp(string $path, string $context = '', string $uri = '/'): void
     {
-        if ($this->cli) {
+        if ($this->isCli) {
             return;
         }
 
         [$namespace, $fileName, $isExcluded, $subPrefix] = self::$parser->load(
-            $path . ($this->hmvc ? '' : 'Http'),
+            $path . ($this->isHmvc ? '' : 'Http'),
             'http',
             $context,
             $uri
@@ -165,7 +165,7 @@ final class Compiler
                 $attr = $attribute->newInstance();
 
                 // If the route is an error handler, register it and skip. 
-                if ($attr->error) {
+                if ($attr->isErrorHandler) {
                     $this->addError($attr->pattern, $callback);
 
                     if ($attr->aliases) {
@@ -181,7 +181,14 @@ final class Compiler
                  * Process the matched context against patterns (e.g., `/foo/(:placeholder)`).
                  * If the middleware and prefix are not empty, and the pattern is the base, skip processing.
                  */
-                if (!$this->isPatternValid($attr->pattern, $context, $attr->middleware, $pattern)) {
+                if (
+                    !$this->isPatternValid(
+                        $attr->pattern, 
+                        $context, 
+                        $attr->middleware, 
+                        $pattern
+                    )
+                ) {
                     continue;
                 }
 
@@ -214,12 +221,12 @@ final class Compiler
      */
     public function forCli(string $path, string $command): void
     {
-        if (!$this->cli) {
+        if (!$this->isCli) {
             return;
         }
 
         [$namespace, $fileName, $isExcluded, $subPrefix] = self::$parser->load(
-            $path . ($this->hmvc ? '' : 'Cli'),
+            $path . ($this->isHmvc ? '' : 'Cli'),
             'cli',
             $command,
             "/$command"
@@ -490,7 +497,7 @@ final class Compiler
         bool $forCli = false
     ): void 
     {
-        if (!$forCli || !$this->cli) {
+        if (!$forCli || !$this->isCli) {
             $context = match (true) {
                 $middleware === Route::BEFORE_MIDDLEWARE => 'http.middleware',
                 $middleware === Route::AFTER_MIDDLEWARE => 'http.after',
@@ -816,7 +823,7 @@ final class Compiler
         $suffix = $suffix ? $suffix . '\\' : '';
         $path   = $file->getPathname();
 
-        if (!$this->hmvc) {
+        if (!$this->isHmvc) {
             return [
                 "\\App\\Controllers\\{$suffix}",
                 basename(dirname($path, 2))
@@ -829,7 +836,7 @@ final class Compiler
             throw new RouterException(sprintf(
                 'Invalid HMVC module structure. Controller must be inside: %s/Controllers/%s',
                 '/app/Modules/{Module}',
-                $this->cli ? 'Cli' : 'Http'
+                $this->isCli ? 'Cli' : 'Http'
             ));
         }
 
@@ -956,7 +963,10 @@ final class Compiler
         foreach ($class->getAttributes(Error::class) as $error) {
             $instance = $error->newInstance();
 
-            if ($instance->context === $context || $instance->context === 'web') {
+            if (
+                $instance->context === $context 
+                || $instance->context === 'web'
+            ) {
                 continue;
             }
 

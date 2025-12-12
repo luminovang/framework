@@ -461,7 +461,7 @@ class FileTail
     /**
      * Close file handler and optionally close notifier and remove watch.
      *
-     * @param boolean $all Whether to close notifier and remove watch.
+     * @param bool $all Whether to close notifier and remove watch.
      * 
      * @return void
      */

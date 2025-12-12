@@ -927,7 +927,8 @@ abstract class Cache implements LazyObjectInterface
      * Auto PHP or binary unserialization.
      *
      * @param string $data
-     * @param boolean $isIgBinary
+     * @param bool $isIgBinary
+     * 
      * @return mixed
      */
     private function autoUnserialize(string $data, bool $isIgBinary): mixed

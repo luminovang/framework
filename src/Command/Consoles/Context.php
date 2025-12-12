@@ -186,7 +186,7 @@ class Context extends Console
     {
         $isHmvc = Runtime::isHmvc();
         $apiPrefix = Luminova::apiPrefix();
-        $collector = (new Compiler(hmvc: $isHmvc))
+        $collector = (new Compiler(isHmvc: $isHmvc))
             ->export($isHmvc ? 'app/Modules' : 'app/Controllers');
 
         $head = "<?php\nuse Luminova\Routing\Router;\n/** @var \Luminova\Routing\Router \$router */\n/** @var \Luminova\Foundation\Core\Application \$app */\n\n";

@@ -686,7 +686,7 @@ interface RequestInterface extends \Psr\Http\Message\RequestInterface
      * The request is considered an API request when its URI path uses the
      * configured API prefix, such as `/api` or `/public/api`.
      *
-     * @param bool|null $ajaxAsApi Whether to treat XMLHttpRequest (AJAX)
+     * @param bool|null $validateAjaxAsApi Whether to treat XMLHttpRequest (AJAX)
      *                             requests as API requests. If null, the
      *                             default value from `env(app.validate.ajax.asapi)`
      *                             is used.
@@ -695,7 +695,7 @@ interface RequestInterface extends \Psr\Http\Message\RequestInterface
      * 
      * @see self::isAjax()
      */
-    public function isApi(?bool $ajaxAsApi = null): bool;
+    public function isApi(?bool $validateAjaxAsApi = null): bool;
 
     /**
      * Determine whether the current request is an AJAX request.

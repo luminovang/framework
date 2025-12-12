@@ -67,7 +67,7 @@ final class Route
      * @param string $pattern Route URI pattern, for example `/blog/(:int)`.
      * @param string[] $methods HTTP methods supported by the route. Defaults to `GET`.
      *     Use `ANY` to match all supported HTTP methods.
-     * @param bool $error Whether this route handles an HTTP error.
+     * @param bool $isErrorHandler Whether this route handles an HTTP error.
      * @param string|null $middleware Middleware execution point. Must be either
      *     {@see self::BEFORE_MIDDLEWARE} or {@see self::AFTER_MIDDLEWARE}.
      * @param string[]|null $aliases Alternative URI patterns that resolve to this route.
@@ -102,7 +102,7 @@ final class Route
     public function __construct(
         public string $pattern = '/',
         public array $methods = ['GET'],
-        public bool $error = false,
+        public bool $isErrorHandler = false,
         public ?string $middleware = null,
         public ?array $aliases = null,
     ) {

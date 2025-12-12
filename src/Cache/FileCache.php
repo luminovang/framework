@@ -179,7 +179,7 @@ final class FileCache extends Cache
             return true;
         }
 
-        $this->load(gc: false);
+        $this->load(triggerGc: false);
         $ratePerSecond = 100;
         $start = microtime(true);
         $results = 0;
@@ -356,7 +356,7 @@ final class FileCache extends Cache
         $this->assertStorageAndKey($key);
         $key = $this->toKey($key);
 
-        $this->reload($key, gc: false);
+        $this->reload($key, false);
 
         $item = $this->items[$key] ?? [];
         $isDecoded = (bool) ($item[self::DECODED] ?? false);
@@ -396,7 +396,7 @@ final class FileCache extends Cache
     public function getItems(array $keys, bool $withMetadata = false): array 
     {
         $this->assertStorageAndKey($keys);
-        $this->reload(gc: false);
+        $this->reload(triggerGc: false);
 
         $keys = $this->toKeys($keys);
         $items = [];
@@ -490,7 +490,7 @@ final class FileCache extends Cache
 
         $committed = 0;
         $added = 0;
-        $this->load(gc: false);
+        $this->load(triggerGc: false);
         $tmp = [];
 
         foreach($items as $key => $item){
@@ -542,7 +542,7 @@ final class FileCache extends Cache
         $key = $this->toKey($key);
 
         try{
-            if (!$this->reload($key, gc: false)) {
+            if (!$this->reload($key, false)) {
                 return false;
             }
         }catch(Throwable){
@@ -572,7 +572,7 @@ final class FileCache extends Cache
     public function hasExpired(string $key): bool 
     {
         $key = $this->toKey($key);
-        // $this->load(gc: false);
+        // $this->load(triggerGc: false);
 
         if (!$this->hasItem($key)) {
             return true;
@@ -586,7 +586,7 @@ final class FileCache extends Cache
      */
     public function deleteItem(string $key, bool $gcExpiredLocks = false): bool 
     {
-        // $this->load(gc: false);
+        // $this->load(triggerGc: false);
         $key = $this->toKey($key);
 
         if (!$this->hasItem($key)) {
@@ -621,7 +621,7 @@ final class FileCache extends Cache
         $deletedCount = 0;
         $items = [];
 
-        $this->load(gc: false);
+        $this->load(triggerGc: false);
 
         foreach ($keys as $key) {
             if($key === ''){
@@ -826,7 +826,7 @@ final class FileCache extends Cache
             return 0;
         }
 
-        $this->load(gc: false);
+        $this->load(triggerGc: false);
         $items = [];
         $hashes = [];
         $counter = 0;
@@ -1126,7 +1126,7 @@ final class FileCache extends Cache
 
         $this->assertStorageAndKey($pattern);
 
-        if(!$this->reload(gc: false) || $this->items === []){
+        if(!$this->reload(triggerGc: false) || $this->items === []){
             return 0;
         }
 

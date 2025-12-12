@@ -876,7 +876,7 @@ class Header implements LazyObjectInterface, Countable
     /**
      * Check if headers are already sent.
      *
-     * @param boolean $ifNotSentIgnore If true return `true` otherwise throw or log in production.
+     * @param bool $ifNotSentIgnore If true return `true` otherwise throw or log in production.
      * 
      * @return bool Return false if not sent, true if sent and `$ifNotSentIgnore` is true, otherwise error.
      * @throws RuntimeException in development mode.
