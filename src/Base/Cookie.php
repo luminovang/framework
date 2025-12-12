@@ -11,7 +11,6 @@
 namespace Luminova\Base;
 
 use \Luminova\Time\Time;
-use \Luminova\Time\Timestamp;
 use \App\Config\Cookie as CookieConfig;
 use \Luminova\Interface\LazyObjectInterface;
 
@@ -24,7 +23,7 @@ abstract class Cookie implements LazyObjectInterface
      * 
      * @var string NONE
      */
-    public const NONE = 'none';
+    public final const NONE = 'none';
 
     /**
      * Cookies are not sent on normal cross-site sub-requests (for example to
@@ -33,7 +32,7 @@ abstract class Cookie implements LazyObjectInterface
      * 
      * @var string LAX
      */
-    public const LAX = 'lax';
+    public final const LAX = 'lax';
 
     /**
      * Cookies will only be sent in a third-party context and not be sent
@@ -41,7 +40,7 @@ abstract class Cookie implements LazyObjectInterface
      * 
      * @var string STRICT
      */
-    public const STRICT = 'strict';
+    public final const STRICT = 'strict';
 
     /**
      * Expires date string format.
@@ -51,7 +50,7 @@ abstract class Cookie implements LazyObjectInterface
      * 
      * @var string EXPIRES_FORMAT
      */
-    public const EXPIRES_FORMAT = 'D, d-M-Y H:i:s T';
+    public final const EXPIRES_FORMAT = 'D, d-M-Y H:i:s T';
 
     /**
      * A cookie name can be any US-ASCII characters, except control characters,
@@ -62,14 +61,14 @@ abstract class Cookie implements LazyObjectInterface
      * 
      * @var string RESERVED_CHAR_LIST
      */
-    public const RESERVED_CHAR_LIST = "=,; \t\r\n\v\f()<>@:\\\"/[]?{}";
+    public final const RESERVED_CHAR_LIST = "=,; \t\r\n\v\f()<>@:\\\"/[]?{}";
 
     /**
      * Cookie default options.
      * 
      * @var array<string,mixed> DEFAULT_OPTIONS
      */
-    public const DEFAULT_OPTIONS = [
+    public final const DEFAULT_OPTIONS = [
         'prefix' => '',
         'expires'  => 0,
         'path'     => '/',
@@ -191,7 +190,7 @@ abstract class Cookie implements LazyObjectInterface
             ];
         }
 
-        $options['expires'] = Timestamp::ttlTimestamp($options['expires']);
+        $options['expires'] = Time::toTimestamp($options['expires']);
         
         return array_merge($default ?? self::DEFAULT_OPTIONS, $options);
     }

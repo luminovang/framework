@@ -12,9 +12,9 @@ namespace Luminova\Exceptions;
 
 use \Throwable;
 use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use \Luminova\Exceptions\LuminovaException;
 
-class BadMethodCallException extends AppException
+class BadMethodCallException extends LuminovaException
 {
     /**
      * Constructor for BadMethodCallException.

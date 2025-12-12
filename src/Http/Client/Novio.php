@@ -20,15 +20,16 @@ use \CurlHandle;
 use \CurlMultiHandle;
 use \Luminova\Http\Uri;
 use \Luminova\Luminova;
+use \Luminova\Http\Method;
+use \Luminova\Http\Header;
 use \Luminova\Http\Network;
-use Luminova\Http\HttpCode;
-use \Luminova\Utility\Async;
 use \Luminova\Cookies\FileJar;
+use \Luminova\Http\HttpStatus;
+use \Luminova\Promise\Promise;
 use \Luminova\Http\Message\Stream;
 use \Luminova\Http\Message\Response;
-use \Luminova\Http\Helper\Normalizer;
 use function \Luminova\Funcs\array_extend_default;
-use \Luminova\Exceptions\{ErrorCode, AppException};
+use \Luminova\Exceptions\{ErrorCode, LuminovaException};
 use \Luminova\Interface\ResponseInterface as MsgResponseInterface;
 use \Psr\Http\Message\{UriInterface, RequestInterface, ResponseInterface};
 use \Luminova\Interface\{PromiseInterface, ClientInterface, CookieJarInterface};
@@ -352,6 +353,42 @@ class Novio implements ClientInterface
     }
 
     /**
+     * Clean up resources on object destruction.
+     */
+    public function __destruct()
+    {
+        if ($this->mh) {
+            curl_multi_close($this->mh);
+        }
+    }
+
+    /**
+     * Handle dynamic method calls for HTTP verbs (e.g., get(), post(), etc.).
+     *
+     * This allows calling $client->get($uri, $options) instead of $client->request('GET', $uri, $options).
+     *
+     * @param string $method The HTTP method being called.
+     * @param array $args The arguments passed to the method (URI and options).
+     * 
+     * @return mixed The response from the request method.
+     * @throws RequestException Throws if an unsupported method is called.
+     */
+    public function __call(string $method, array $args): mixed
+    {
+        $method = strtoupper($method);
+
+        if(!in_array($method, Method::METHODS, true)) {
+           throw new RequestException(sprintf(
+                'Undefined method "%s" called. No such method exists in %s class.',
+                $method,
+                __CLASS__
+            ), ErrorCode::LOGIC_ERROR);
+        }
+
+        return $this->request($method, ...$args);
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function send(RequestInterface $request, array $options = []): ResponseInterface
@@ -380,7 +417,7 @@ class Novio implements ClientInterface
      */
     public function requestAsync(string $method, UriInterface|string $uri = '', array $options = []): PromiseInterface
     {
-        return Async::awaitPromise(fn() => $this->request(
+        return Promise::await(fn(): ResponseInterface => $this->request(
             $method, 
             $uri, 
             $options
@@ -427,8 +464,16 @@ class Novio implements ClientInterface
             $info
         );
 
+        $isHttpErrors = $this->mutable['http_errors'] 
+            ?? $this->config['http_errors'] 
+            ?? true;
+
+        if($isHttpErrors){
+            $this->assertHttpErrors($statusCode);
+        }
+
         return new Response(
-            body: $isStream ? $stream : $response,
+            body: $isStream ? $stream->setReadOnly(true, true) : $response,
             statusCode: (int) $statusCode,
             headers: $this->headers,
             info: $info,
@@ -471,7 +516,7 @@ class Novio implements ClientInterface
         }
 
         $httpVersion = $httpVersion ?: '1.1';
-        $reasonPhrase = $reasonPhrase ?: HttpCode::phrase($statusCode);
+        $reasonPhrase = $reasonPhrase ?: HttpStatus::phrase($statusCode);
 
         return [$httpVersion, $statusCode, $reasonPhrase];
     }
@@ -507,7 +552,6 @@ class Novio implements ClientInterface
         $url = $this->toFullUrl($uri);
 
         if(!$url || $url === '/'){
-            curl_close($curl);
             throw new ConnectException(sprintf(
                 'Invalid URL resolved: "%s". Provide a valid absolute URL or a relative path to the base URI.',
                 $url
@@ -661,8 +705,6 @@ class Novio implements ClientInterface
 
         if (!curl_setopt_array($curl, $this->options)) {
             $failed = $this->getFailedOptions($curl);
-            curl_close($curl);
-
             throw new RequestException("Failed to set cURL request options.{$failed}");
         }
 
@@ -795,7 +837,6 @@ class Novio implements ClientInterface
 
         if ($jobId === null || $request === null) {
             curl_multi_remove_handle($this->mh, $ch);
-            curl_close($ch);
             return null;
         }
 
@@ -830,8 +871,16 @@ class Novio implements ClientInterface
             $info
         );
 
+        $isHttpErrors = $this->mutable['http_errors'] 
+            ?? $this->config['http_errors'] 
+            ?? true;
+            
+        if($isHttpErrors){
+            $this->assertHttpErrors($statusCode);
+        }
+
         return new Response(
-            body: $isStream ? $request['stream'] : $body,
+            body: $isStream ? $request['stream']->setReadOnly(true, true) : $body,
             statusCode: (int) $statusCode,
             headers: $headers,
             info: $info,
@@ -845,12 +894,30 @@ class Novio implements ClientInterface
     }
 
     /**
+     * Check HTTP status code and throw exceptions for error codes.
+     *
+     * @param int $statusCode The HTTP status code to check.
+     * 
+     * @return void
+     * @throws ClientException Throws for 4xx status codes.
+     * @throws ServerException Throws for 5xx status codes.
+     */
+    private function assertHttpErrors(int $statusCode): void
+    {
+        if ($statusCode >= 400 && $statusCode < 500) {
+            throw new ClientException("Client error: HTTP {$statusCode}");
+        } elseif ($statusCode >= 500) {
+            throw new ServerException("Server error: HTTP {$statusCode}");
+        }
+    }
+
+    /**
      * Execute CURL request and return response and info.
      * 
      * @param CurlHandle $curl The CURL object that resolved to options.
      * 
      * @return array{0: string|null, 1: array} Return response and info.
-     * @throws AppException Throw app exception.
+     * @throws LuminovaException Throw app exception.
      */
     private function doRequest(CurlHandle $curl): array
     {
@@ -859,15 +926,10 @@ class Novio implements ClientInterface
     
         if ($response === false || $errorCode) {
             $error = curl_error($curl);
-
-            curl_close($curl);
             self::handleException($error, $errorCode);
         }
 
-        $info = (array) curl_getinfo($curl);
-        curl_close($curl);
-        
-        return [$response, $info];
+        return [$response, (array) curl_getinfo($curl)];
     }
 
     /**
@@ -885,13 +947,11 @@ class Novio implements ClientInterface
         if (($method !== 'HEAD' && !$response) || $errorCode) {
             $error = curl_error($curl);
             curl_multi_remove_handle($this->mh, $curl);
-            curl_close($curl);
             self::handleException($error, $errorCode);
         }
 
         $info = (array) curl_getinfo($curl);
         curl_multi_remove_handle($this->mh, $curl);
-        curl_close($curl);
 
         return [$response, $info];
     }
@@ -1331,6 +1391,7 @@ class Novio implements ClientInterface
 
     /**
      * Creates and returns a Stream object from a provided resource or file path.
+     * 
      * If a file path is provided, it opens a stream to that file. The method ensures
      * the stream is both readable and writable, throwing an exception if these conditions
      * are not met or if the stream cannot be opened.
@@ -1344,10 +1405,9 @@ class Novio implements ClientInterface
     private static function createStreamResponse(CurlHandle &$curl, mixed $sink): Stream
     {
         if (!is_resource($sink)) {
-            $handler = @fopen($sink, 'r+');
+            $handler = @fopen($sink, 'rb+');
             
             if ($handler === false) {
-                curl_close($curl);
                 throw new RequestException(sprintf('Failed to open temporary stream for "%s".', $sink));
             }
             
@@ -1357,7 +1417,7 @@ class Novio implements ClientInterface
         $stream = new Stream($sink);
 
         if (!$stream->isReadable() || !$stream->isWritable()) {
-            curl_close($curl);
+            fclose($sink);
             throw new RequestException('Stream must be both readable and writable.');
         }
 
@@ -1393,10 +1453,10 @@ class Novio implements ClientInterface
             [$key, $value] = explode(': ', $header, 2);
 
             $key = trim($key);
-            Normalizer::assertHeader($key);
+            Header::assert($key, isValue: false);
 
             $value = trim($value);
-            Normalizer::assertValue($value);
+            Header::assert($value);
 
             return [$key, [$value]];
         }
@@ -1411,15 +1471,23 @@ class Novio implements ClientInterface
     /**
      * Convert an associative array of POST data into a JSON string.
      *
-     * @param array $data The POST data array.
+     * @param array|string $data The POST data array.
      *
      * @return string|null Return JSON-encoded string if data is not empty, null otherwise.
      * @throws ClientException If JSON encoding fails.
      */
-    private static function getPostFields(array $data): ?string
+    private static function getPostFields(array|string $data): ?string
     {
         if ($data === []) {
             return null;
+        }
+
+        if (is_string($data)) {
+            if(json_validate($data)){
+                return $data;
+            }
+
+            throw new ClientException('Invalid JSON string provided as POST data.');
         }
 
         try{
@@ -1448,16 +1516,14 @@ class Novio implements ClientInterface
     
             $line = ['name' => $item['name']];
     
-            if (is_string($item['contents'])) {
+            if ($item['contents'] instanceof CurlFile) {
+                $line['contents'] = $item['contents'];
+            } elseif (is_string($item['contents'])) {
                 // If contents is a string, it's either a plain data or a file path
                 // Otherwise, treat it as plain data
-                if (is_file($item['contents']) && is_readable($item['contents'])) {
-                    $line['contents'] = new CurlFile($item['contents']);
-                } else {
-                    $line['contents'] = $item['contents'];
-                }
-            } elseif ($item['contents'] instanceof CurlFile) {
-                $line['contents'] = $item['contents'];
+                $line['contents'] = (is_file($item['contents']) && is_readable($item['contents'])) 
+                    ? new CurlFile($item['contents'])
+                    : $item['contents'];
             } else {
                 throw new RequestException("Invalid contents for multipart item: " . print_r($item, true));
             }
@@ -1524,8 +1590,8 @@ class Novio implements ClientInterface
                 continue;
             }
 
-            Normalizer::assertHeader($key);
-            $value = Normalizer::normalizeHeaderValue($value);
+            Header::assert($key, isValue: false);
+            $value = Header::normalize($value);
 
             $line[] = "{$key}: " . implode(', ', $value);
         }

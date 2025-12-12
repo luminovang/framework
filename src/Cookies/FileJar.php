@@ -18,7 +18,7 @@ use \Luminova\Exceptions\FileException;
 use \App\Config\Cookie as CookieConfig;
 use \Luminova\Base\Cookie as BaseCookie;
 use \Luminova\Exceptions\CookieException;
-use \Luminova\Interface\CookieJarInterface;
+use \Luminova\Interface\{Arrayable, CookieJarInterface};
 use function \Luminova\Funcs\{
     root,
     write_content,
@@ -26,7 +26,7 @@ use function \Luminova\Funcs\{
     make_dir
 };
 
-class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Countable
+class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Countable, Arrayable
 {
     /**
      * Cookies. 
@@ -74,7 +74,8 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      * @param array<string,mixed> $config Optional settings or configurations for cookies.
      * 
      * @throws CookieException If invalid source file location is provided.
-     * @throws FileException If the `$from` is provided as an array, the cookie jar is not in read-only mode, and writing the cookies to the file fails.
+     * @throws FileException If the `$from` is provided as an array, the cookie 
+     *              jar is not in read-only mode, and writing the cookies to the file fails.
      * @example - Array Structure:
      *  ```php
      * $from = [
@@ -116,7 +117,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function __get(string $property): mixed 
     {
-        $options = $this->toArray();
+        $options = $this->__toArray();
         if(array_key_exists($property, $options)){
             return $options[$property];
         }
@@ -137,7 +138,7 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      */
     public function toString(bool $metadata = false): string
     {
-        $options = $this->toArray();
+        $options = $this->__toArray();
         return $metadata 
             ? self::parseToString(
                 $options['value'] ?? '', 
@@ -154,6 +155,22 @@ class FileJar extends BaseCookie implements CookieJarInterface, Stringable, Coun
      * {@inheritdoc}
      */
     public function toArray(): array
+    {
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->__toArray();
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function __toArray(): array
     {
         return [
             ...$this->getOptions(),

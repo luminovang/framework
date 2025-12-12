@@ -12,7 +12,7 @@ namespace Luminova\Http;
 
 use \Stringable;
 use \App\Config\Browser;
-use \Luminova\Interface\LazyObjectInterface;
+use \Luminova\Interface\{Arrayable, LazyObjectInterface};
 
 /**
  * Accessors for parsed user-agent details.
@@ -22,8 +22,8 @@ use \Luminova\Interface\LazyObjectInterface;
  * @method string getBrowser()           Get the browser name (e.g. "Firefox").
  * @method string getVersion()           Get the browser version (e.g. "143.0").
  * @method string getUserAgent()         Get the full User-Agent string.
- * @method string getPlatform()             Get the platform/OS name (e.g. "Macintosh").
- * @method string getPlatformModel()       Get the platform/OS name (e.g. "Macintosh").
+ * @method string getPlatform()          Get the platform/OS name (e.g. "Macintosh").
+ * @method string getPlatformModel()     Get the platform/OS name (e.g. "Macintosh").
  * @method string getOs()                Get the device OS identifier (e.g. "Intel Mac OS X").
  * @method string getOsVersion()         Get the device / OS version (e.g. "10.15").
  * @method string getEngine()            Get the rendering engine (e.g. "Gecko", "Blink").
@@ -34,7 +34,7 @@ use \Luminova\Interface\LazyObjectInterface;
  * @method string getMobile()            Get the mobile device name if detected.
  * @method string getReferrer()          Get the referrer hostname if available.
  */
-class UserAgent implements LazyObjectInterface, Stringable
+class UserAgent implements LazyObjectInterface, Stringable, Arrayable
 {
     /**
      * Whether the user agent represents a browser.
@@ -307,6 +307,24 @@ class UserAgent implements LazyObjectInterface, Stringable
      * @return array<string, mixed> Associative array of user agent details.
      */
     public function toArray(): array
+    {
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->__toArray();
+    }
+
+    /**
+     * Convert parsed user agent details into an array.
+     *
+     * @return array<string, mixed> Associative array of user agent details.
+     */
+    public function __toArray(): array
     {
         return [
             'userAgent'      => $this->useragent,

@@ -10,7 +10,11 @@
  */
 namespace Luminova\Security\Encryption\Driver;
 
+use \Throwable;
+use \JsonException;
 use \SodiumException;
+use \App\Config\Encryption;
+use \Luminova\Exceptions\ErrorCode;
 use \Luminova\Interface\EncryptionInterface;
 use \Luminova\Exceptions\EncryptionException;
 
@@ -19,6 +23,27 @@ use \Luminova\Exceptions\EncryptionException;
  */
 class Sodium implements EncryptionInterface
 {
+    /**
+     * Cypher mode supports associated data.
+     * 
+     * @var string AEAD
+     */
+    public const AEAD = 'aead';
+
+    /**
+     * Cypher mode use simple symmetric encryption.
+     * 
+     * @var string SECRETBOX
+     */
+    public const SECRETBOX = 'secretbox';
+
+    /**
+     * Cryptography driver version.
+     * 
+     * @var string VERSION
+     */ 
+    private const VERSION = 'v1';
+
     /**
      * @var string $key
      */
@@ -35,11 +60,36 @@ class Sodium implements EncryptionInterface
     private string $nonce = '';
 
     /**
-     * {@inheritdoc}
+     * Additional authentication data.
+     * 
+     * @var string $aad
      */
-    public function __construct(?string $key = null, ?string $method = null, int $size = 16)
+    private string $aad = '';
+
+    /**
+     * Configuration.
+     *
+     * @var Encryption $config
+     */
+    private static ?Encryption $config = null;
+
+    /**
+     * Initializes a new Sodium encryption driver.
+     *
+     * A key may be provided at construction time, or set later
+     * using `setKey()` before performing encryption or decryption.
+     *
+     * @param string|null $key Encryption key. If omitted, it must be set before use.
+     *
+     * @throws EncryptionException When the provided key is invalid for Sodium.
+     *
+     * @see  Luminova\Security\Encryption\Crypter
+     *       Helper class that applies application-level encryption configuration.
+     * @link https://luminova.ng/docs/0.0.0/encryption/driver Documentation.
+     */
+    public function __construct(?string $key = null)
     {
-        if ($key !== null) {
+        if ($key) {
             $this->setKey($key);
         }
     }
@@ -56,9 +106,43 @@ class Sodium implements EncryptionInterface
     /**
      * {@inheritdoc}
      */
-    public function setKey(string $key): self
+    public function setAssociatedData(array|string $aad): self
     {
-        $this->key = sodium_crypto_generichash($key, '', SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_KEYBYTES);
+        if (is_array($aad)) {
+            try {
+                $aad = json_encode($aad, JSON_THROW_ON_ERROR);
+            } catch (JsonException $e) {
+                throw new EncryptionException(
+                    'Failed to encode associated data.',
+                    ErrorCode::JSON_ERROR,
+                    $e
+                );
+            }
+        }
+
+        $this->aad = $aad;
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function setKey(string $key, int $length = 32, ?string $salt = null): self
+    {
+        try{
+            $this->key = sodium_crypto_generichash(
+                $key, 
+                $salt, 
+                $length
+            );
+        }catch(Throwable $e){
+            throw new EncryptionException(
+                $e->getMessage(), 
+                $e->getCode(),
+                $e->getPrevious()
+            );
+        }
+
         return $this;
     }
 
@@ -67,26 +151,51 @@ class Sodium implements EncryptionInterface
      */
     public function setNonce(?string $nonce = null): self
     {
-        $this->nonce = $nonce ?? $this->nonce();
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function nonce(?string $string = null): string
-    {
-        if ($string === null) {
-            return random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        if($nonce !== null){
+            $this->nonce = $nonce;
+            return $this;
         }
 
-        return mb_substr($string, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES, '8bit');
+        $length = SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES;
+
+        if ($this->getCipherMode() === self::SECRETBOX) {
+            $length = SODIUM_CRYPTO_SECRETBOX_NONCEBYTES;
+        }
+
+        $this->nonce = self::nonce($length);
+        return $this;
     }
 
     /**
      * {@inheritdoc}
+     * 
+     * > **Examples:**
+     * > Use `SODIUM_CRYPTO_SECRETBOX_NONCEBYTES` for SECRETBOX.
+     * > Use `SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES` for AEAD
      */
-    public function setMethod(string $method, int $size = 16): self 
+    public static function nonce(int $length, ?string $string = null): string
+    {
+        try{
+            return ($string === null) 
+                ? random_bytes($length)
+                : mb_substr($string, 0, $length, '8bit');
+        }catch(Throwable $e){
+            throw new EncryptionException(
+                $e->getMessage(), 
+                $e->getCode(),
+                $e->getPrevious()
+            );
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     * 
+     * > **Note:**
+     * > Calling this method has no effect.
+     * > Method is only supported in openssl driver.
+     */
+    public function setMethod(string $method, int $size = 24): self 
     {
         return $this;
     }
@@ -94,73 +203,150 @@ class Sodium implements EncryptionInterface
     /**
      * {@inheritdoc}
      */
-    public function encrypt(): string|bool
+    public function encrypt(): string
     {
         if (!$this->valid()) {
-            throw new EncryptionException('Invalid contraption params!');
+            throw new EncryptionException('Invalid encryption parameters.');
         }
 
-        try{
-            $encrypted = sodium_crypto_secretbox($this->message, $this->nonce, $this->key);
+        $cipherMode = $this->getCipherMode();
 
-            if ($encrypted === false) {
-                return false;
+        if ($cipherMode === self::SECRETBOX && $this->aad !== '') {
+            throw new EncryptionException(
+                'AAD is not supported with sodium secretbox.',
+                ErrorCode::NOT_SUPPORTED
+            );
+        }
+
+        try {
+            $crypt = match ($cipherMode) {
+                self::SECRETBOX => sodium_crypto_secretbox(
+                    $this->message,
+                    $this->nonce,
+                    $this->key
+                ),
+
+                default => sodium_crypto_aead_xchacha20poly1305_ietf_encrypt(
+                    $this->message,
+                    $this->aad,
+                    $this->nonce,
+                    $this->key
+                ),
+            };
+
+            if ($crypt === false) {
+                throw new EncryptionException('Encryption failed.');
             }
 
-            $cipher = base64_encode(json_encode([
-                'nonce' => base64_encode($this->nonce),
-                'hash' => null,
-                'encrypted' => base64_encode($encrypted),
-            ]));
+            $payload = [
+                'v' => self::VERSION,
+                'm' => $cipherMode,
+                'd' => 'sodium',
+                'n' => base64_encode($this->nonce),
+                'c' => base64_encode($crypt),
+            ];
 
-            sodium_memzero($encrypted);
-            $this->free();
+            sodium_memzero($crypt);
 
-            return $cipher;
-        }catch(SodiumException $e){
-            EncryptionException::throwException($e->getMessage(), $e->getCode(), $e->getPrevious());
+            return base64_encode(
+                json_encode($payload, JSON_THROW_ON_ERROR)
+            );
+
+        } catch (JsonException $e) {
+            throw new EncryptionException(
+                'Failed to encode encryption payload.',
+                ErrorCode::JSON_ERROR,
+                $e
+            );
+        } catch (Throwable $e) {
+            throw new EncryptionException(
+                $e->getMessage(),
+                $e->getCode(),
+                $e
+            );
         }
-
-        return false;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function decrypt(): string|bool
+    public function decrypt(): string
     {
         if (!$this->valid()) {
             throw new EncryptionException('Invalid decryption parameters!');
         }
 
-        $data = json_decode(base64_decode($this->message), true);
+        $data = $this->decode();
 
-        if (!is_array($data) || !isset($data['nonce'], $data['encrypted'])) {
-            return false;
+        $isLegacy = $data['isLegacy'] ?? false;
+        $size = $isLegacy 
+            ? SODIUM_CRYPTO_SECRETBOX_MACBYTES
+            : SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES;
+
+        if (mb_strlen($data['cipher'], '8bit') < $size) {
+            throw new EncryptionException(
+                'Decryption error, message was truncated or tampered with.',
+                ErrorCode::SECURITY_ISSUE
+            );
         }
 
-        $nonce = base64_decode($data['nonce']);
-        $encrypted = base64_decode($data['encrypted']);
-
-        if (mb_strlen($encrypted, '8bit') < SODIUM_CRYPTO_SECRETBOX_MACBYTES) {
-            throw new EncryptionException('Decryption error, message was truncated or tampered with.');
-        }
+        $decrypted = false;
 
         try{
-            $decrypted = sodium_crypto_secretbox_open($encrypted, $nonce, $this->key);
-
-            if ($decrypted === false) {
-                return false;
+            if($isLegacy){
+                $decrypted = sodium_crypto_secretbox_open(
+                    $data['cipher'], 
+                    $data['nonce'], 
+                    $this->key
+                );
+            }else{
+                $decrypted = sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
+                    $data['cipher'],
+                    $this->aad,
+                    $data['nonce'],
+                    $this->key
+                );
             }
-
-            $this->free();
-
-            return trim($decrypted);
-        }catch(SodiumException $e){
-            EncryptionException::throwException($e->getMessage(), $e->getCode(), $e->getPrevious());
+        }catch(Throwable $e){
+            throw new EncryptionException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e->getPrevious()
+            );
         }
 
-        return false;
+        if ($decrypted === false) {
+            throw new EncryptionException('Decryption failed');
+        }
+
+        return $decrypted;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function free(): bool 
+    {
+        $this->aad = '';
+        self::$config = null;
+
+        try{
+            if(isset($this->key)){
+                sodium_memzero($this->key);
+            }
+
+            if(isset($this->nonce)){
+                sodium_memzero($this->nonce);
+            }
+
+            if(isset($this->message)){
+                sodium_memzero($this->message);
+            }
+
+            return true;
+        }catch(SodiumException){
+            return false;
+        }
     }
 
     /**
@@ -170,22 +356,85 @@ class Sodium implements EncryptionInterface
      */
     private function valid(): bool
     {
-        return $this->message !== '' && $this->key !== '';
+        return $this->message && $this->key;
     }
 
     /**
-     * {@inheritdoc}
+     * Get sodium cipher mode.
+     * 
+     * @return string Return mode.
      */
-    public function free(): void 
+    private function getCipherMode(): string
     {
-        try{
-            if(isset($this->key)){
-                sodium_memzero($this->key);
-            }
+        self::$config ??= new Encryption();
 
-            if(isset($this->nonce)){
-                sodium_memzero($this->nonce);
+        if(isset(self::$config->sodiumCipher)){
+            return self::$config->sodiumCipher;
+        }
+
+        return self::SECRETBOX;
+    }
+
+    /**
+     * Decode cypher message.
+     * 
+     * @return array|null Return cypher payload.
+     * @throws EncryptionException
+     */
+    private function decode(): array
+    {
+        $json = base64_decode($this->message, true);
+        
+        if ($json === false) {
+            throw new EncryptionException('Invalid base64 encoded cipher message.');
+        }
+
+        try{
+            $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            $data = false;
+        }
+
+        if ($data === false || !is_array($data)) {
+            throw new EncryptionException(
+                'Invalid cipher payload.',
+                ErrorCode::JSON_ERROR
+            );
+        }
+
+        $nonce  = $data['n'] ?? $data['nonce'] ?? null;
+        $cipher = $data['c'] ?? $data['encrypted'] ?? null;
+
+        if (!$nonce || !$cipher) {
+           throw new EncryptionException('Cipher payload is incomplete.');
+        }
+
+        $isLegacy = isset($data['encrypted']);
+
+        if (!$isLegacy) {
+            $driver = $data['d'] ?? null;
+
+            if ($driver !== 'sodium') {
+                throw new EncryptionException(
+                    'Unsupported encryption driver: ' . ($driver ?? 'missing'),
+                    ErrorCode::NOT_SUPPORTED
+                );
             }
-        }catch(SodiumException){}
+        }
+
+        $nonce  = base64_decode($nonce, true);
+        $cipher = base64_decode($cipher, true);
+
+        if ($nonce === false || $cipher === false) {
+           throw new EncryptionException('Invalid cipher encoding.');
+        }
+
+        $isSecretBox = ($data['m'] ?? null) === self::SECRETBOX;
+
+        return [ 
+            'isLegacy'   => $isLegacy || $isSecretBox,
+            'nonce'      => $nonce,
+            'cipher'     => $cipher
+        ];
     }
 }

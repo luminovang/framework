@@ -24,9 +24,10 @@ interface CookieJarInterface
      * @param array<string,mixed> $config Optional configurations or settings to apply to the 
      *        new or updated cookie.
      * 
-     * @return static Returns the created or updated cookie jar instance.
+     * @return self Returns the created or updated cookie jar instance.
      * @throws CookieException If invalid source file location is provided.
-     * @throws FileException If the `$from` is provided as an array, the cookie jar is not in read-only mode, and writing the cookies to the file fails.
+     * @throws FileException If the `$from` is provided as an array, the cookie jar is not in read-only mode, 
+     *              and writing the cookies to the file fails.
      */
     public static function newCookie(array $cookies, array $config = []): CookieJarInterface;
 
@@ -37,7 +38,7 @@ interface CookieJarInterface
      * @param mixed $value The value of the cookie.
      * @param array $options An array of cookie options.
      * 
-     * @return static Return instance of Cookie Jar.
+     * @return self Return instance of Cookie Jar.
      * @throws FileException If writing the cookies to the file fails.
      */
     public function set(mixed $name, mixed $value, array $options = []): CookieJarInterface;
@@ -47,7 +48,7 @@ interface CookieJarInterface
      * 
      * @param mixed $value The value to set.
      * 
-     * @return static Return instance of Cookie Jar.
+     * @return self Return instance of Cookie Jar.
      * @throws CookieException Throws if called without cookie name specified.
      * @throws FileException If writing the cookies to the file fails.
      */
@@ -58,7 +59,7 @@ interface CookieJarInterface
      * 
      * @param CookieConfig|array $options An array of cookie options or cookie config class object.
      * 
-     * @return static Return instance of Cookie Jar.
+     * @return self Return instance of Cookie Jar.
      * @throws CookieException Throws if called without cookie name specified.
      * @throws FileException If writing the cookies to the file fails.
      */
@@ -70,8 +71,9 @@ interface CookieJarInterface
      *
      * @param string $path The custom path to set.
      * 
-     * @return static Returns the current instance for method chaining.
-     * > **Note:** If set a custom cookie request path, you must also set domain `setCookieDomain`.
+     * @return self Returns the current instance for method chaining.
+     * > **Note:** 
+     * > If set a custom cookie request path, you must also set domain `setCookieDomain`.
      */
     public function setCookiePath(string $path): self;
 
@@ -81,8 +83,9 @@ interface CookieJarInterface
      *
      * @param string $domain The custom domain to set.
      * 
-     * @return static Returns the current instance for method chaining.
-     * > **Note:** If set a custom cookie request domain, you must also set path `setCookiePath`.
+     * @return self Returns the current instance for method chaining.
+     * > **Note:** 
+     * > If set a custom cookie request domain, you must also set path `setCookiePath`.
      */
     public function setCookieDomain(string $domain): self;
 
@@ -91,7 +94,7 @@ interface CookieJarInterface
      * 
      * @param array<string,array<string,mixed>> $cookies The array of cookies to set.
      * 
-     * @return static Return instance of Cookie Jar.
+     * @return self Return instance of Cookie Jar.
      * @throws FileException If writing the cookies to the file fails.
      */
     public function setCookies(array $cookies): self;
@@ -121,8 +124,7 @@ interface CookieJarInterface
      * 
      * @param string $name The name of cookie to access.
      * 
-     * @return static Return instance of cookie class.
-     * 
+     * @return self Return instance of cookie class.
      * @example - Manage Cookie By Name:
      * 
      * ```php
@@ -171,7 +173,7 @@ interface CookieJarInterface
      * Only unexpired cookies are returned.
      *
      * @param string $domain The domain to filter cookies.
-     * @param string $path   The path to filter cookies. Defaults to '/'.
+     * @param string $path The path to filter cookies. Defaults to '/'.
      * 
      * @return array<string,array> Return an array of cookies for the specified domain and path.
      * @throws CookieException If the domain is empty.
@@ -539,7 +541,8 @@ interface CookieJarInterface
      * @param array|null $cookies An optional array of cookies to convert. If null, uses the instance's cookies.
      *                            Each cookie should be an associative array with 'value' and 'options' keys.
      *
-     * @return string Return a string containing the Netscape-formatted cookies, or an empty string if no cookies are available.
+     * @return string Return a string containing the Netscape-formatted cookies, 
+     *              or an empty string if no cookies are available.
      */
     public function toNetscapeCookies(?array $cookies = null): string;
 }
