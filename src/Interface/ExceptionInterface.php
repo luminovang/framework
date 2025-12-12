@@ -10,8 +10,8 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Exceptions\AppException;
 use \Throwable;
+use Luminova\Exceptions\LuminovaException;
 
 interface ExceptionInterface
 {
@@ -21,18 +21,18 @@ interface ExceptionInterface
      * Compares the provided code(s) against the exception's string code (if available) 
      * or its numeric code as a fallback.
      *
-     * @param string|int|array<int,string|int> $code The code or list of codes to compare against.
+     * @param array<int,string|int>|string|int $code The code or list of codes to compare against.
      *
      * @return bool Returns `true` if a match is found, otherwise `false`.
      */
-    public function isCode(string|array|int $code): bool;
+    public function isCode(array|string|int $code): bool;
 
     /**
      * Set the exception code.
      *
      * @param string|int $code The exception code as a string or integer (e.g, `Luminova\Exceptions\ErrorCode::*`).
      * 
-     * @return static Return the current exception instance.
+     * @return self Return the current exception instance.
      */
     public function setCode(string|int $code): self;
 
@@ -41,7 +41,7 @@ interface ExceptionInterface
      * 
      * @param string $file The file path where the error occurred.
      * 
-     * @return static Return the current exception instance.
+     * @return self Return the current exception instance.
      */
     public function setFile(string $file): self;
 
@@ -50,17 +50,28 @@ interface ExceptionInterface
      * 
      * @param int $line The line number of the error.
      * 
-     * @return static Return the current exception instance.
+     * @return self Return the current exception instance.
      */
     public function setLine(int $line): self;
 
     /**
-     * Get a formatted message.
+     * Get a sanitized error message.
      * 
-     * This method returns a filtered exception message, ensuring messages doesn't contain 
-     * any sensitive information like private server paths.
+     * This strips environment-specific and backtrace details, ensuring messages doesn't contain 
+     * any sensitive information like server paths and debug details.
+     *
+     * This method cleans raw exception or error strings by removing:
+     * - Application root paths to avoid exposing internal directory structure
+     * - PHP file references with line numbers (e.g. "file.php:12", "file.php on line 12")
+     * - Stack trace sections ("Stack trace: ...")
+     * - PHP exception suffixes ("thrown in ...")
      * 
-     * @return string Return the filtered exception message.
+     * @return string Return a filtered exception message.
+     * 
+     * > The goal is to extract only the human-readable core error message
+     * without debugging or system-level context.
+     * 
+     * @see self::getMessage()
      */
     public function getDescription(): string;
 
@@ -93,128 +104,169 @@ interface ExceptionInterface
     public function getErrorCode(): string|int;
 
     /**
-     * Returns the raw error message when the object is printed or cast to string.
+     * Returns the parent exception string representation.
      * 
-     * Triggered automatically by `echo`, `print`, or string casting.
-     * 
-     * @return string Return the raw error message.
+     * This is the native PHP formatted exception output including class name,
+     * message, file, line, and stack trace.
+     *
+     * Triggered automatically when the object is cast to string (echo/print).
+     *
+     * @return string Full native exception string representation.
+     * @see self::toString() for controlled message output.
      */
     public function __toString(): string;
 
     /**
-     * Returns a formatted error message with code, file, and line details.
-     * 
-     * Format: `Exception: (code) message in file/path/foo.php on line N`.
-     * 
-     * @return string Return the formatted error message with code, file, and line number.
+     * Returns a simplified formatted exception string without stack trace.
+     *
+     * This provides a compact single-line representation containing:
+     * class name, message, file, line, and error code.
+     *
+     * Format:
+     * `Class: message in file.php:line N (code: N)`
+     *
+     * @return string Compact exception summary string.
+     * > **Note:**
+     * > This method is not triggered when exception is cast as string {@see self::__toString()}
      */
     public function toString(): string;
 
     /**
-     * Logs the exception message to the configured logger.
-     * 
-     * Uses `App\Config\Logger`. If asynchronous logging is enabled, logs use Fiber for async processing.
-     * In production, if `logger.mail.logs` or `logger.remote.logs` is set, logs are sent via email or to a remote server.
+     * Logs the current exception through the configured logging pipeline.
      *
-     * @param string $dispatch A log level, email address, or remote URL to send the error to (default: 'exception').
-     * 
+     * The log is processed by the application logger and routed based on the given dispatch key.
+     * In production, logs may be stored locally, streamed, or forwarded to external systems
+     * (e.g. email or remote logging endpoints) depending on configuration.
+     *
+     * If asynchronous logging is enabled, the operation may be executed in a background.
+     *
+     * @param string|null $dispatch Log level or dispatch for remote, email or telegram login (default: `null`).
+     *                      If null decide based on error code.
+     *
      * @return void
-     * 
-     * **Log Levels:**
-     * 
-     * - emergency — Emergency error that needs immediate attention.
-     * - alert — Alert message. 
-     * - critical — Critical issue that may cause the app to fail. 
-     * - error — Standard error.
-     * - warning — Warning message.
-     * - notice — Notice for later review.
-     * - info — Informational message.
-     * - debug — Debugging message.
-     * - exception — Exception message.
-     * - php_error — PHP-related error.
-     * - metrics — Performance metrics, typically for production APIs.
+     *
+     * Available log levels:
+     *
+     * - emergency:     System is unusable and requires immediate attention.
+     * - alert:         Action must be taken immediately.
+     * - critical:      Critical condition affecting application stability.
+     * - error:         Runtime error that does not stop execution.
+     * - warning:       Warning conditions.
+     * - notice:        Normal but significant events.
+     * - info:          Informational messages.
+     * - debug:         Debug-level details for development.
+     * - exception:     Exception reporting channel.
+     * - php:           Native PHP errors.
      */
-    public function log(string $dispatch = 'exception'): void;
+    public function log(?string $dispatch = null): void;
 
     /**
-     * Handles exceptions safely depending on the application environment and error type.
+     * Handles current exception safely through the framework error pipeline instead of throwing it.
      *
-     * This method ensures that exceptions are processed appropriately:
-     * - In CLI mode: either re-throws the exception (if enabled) or shows a CLI-friendly error detail.
-     * - In production: logs the error, shows a user-friendly page for fatal errors, and prevents leaks of sensitive information.
-     * - In development: re-throws the exception so it can be displayed directly.
-     *
-     * The handler also prevents recursive exception handling and ensures consistent shutdown behavior.
+     * Depending on environment and execution mode, it may:
+     * - Be thrown (debug/development mode)
+     * - Be logged silently (production)
+     * - Render CLI or HTTP error views
+     * - Terminate execution for fatal errors
      *
      * @return void
-     * @throws AppException<\T,Throwable> Re-throws the exception in non-production environments 
-     *                   or when explicitly configured for CLI.
+     * @throws LuminovaException<static> In debug environments only
      */
     public function handle(): void;
 
     /**
-     * Get the file and line of a specific call depth where the method was called.
+     * Retrieves the file and line number from the call stack at a given depth.
      *
-     * This method inspects the call stack to determine the file and line number
-     * from which the current method was invoked. It wraps debug_backtrace to return the file and line number
-     * of the caller at the requested depth.
+     * Wraps `debug_backtrace()` and returns the origin of the call at the specified stack level.
      *
-     * @param int $depth The depth in the call stack (0 = the call to this method itself).
-     *              Use `1` to get the immediate caller.
-     * @param int $options Options passed to debug_backtrace (default: `DEBUG_BACKTRACE_IGNORE_ARGS`).
+     * @param int $depth Call stack depth:
+     *        - 0 = current method call
+     *        - 1 = immediate caller
+     *        - higher values trace further up the stack
+     * @param int $options Flags passed to `debug_backtrace()`.
+     *        Defaults to `DEBUG_BACKTRACE_IGNORE_ARGS` for performance.
+     *
+     * @return array{0:?string,1:int} Returns:
+     *         - 0: File path of the caller (null if unavailable)
+     *         - 1: Line number of the caller (1 if unavailable)
      * 
-     * @return array<int,mixed> Returns an array containing:
-     *              - `string|null`: The file of the caller (default: `null`).
-     *              - `int`: The line number in the file (default: 1).
+     * @deprecated Use Luminova\Debugger\Tracer::trace() instead.
      */
     public static function trace(int $depth, int $options = DEBUG_BACKTRACE_IGNORE_ARGS): array;
 
     /**
-     * Creates and handles an exception gracefully.
+     * Throws a new exception of the current class with resolved trace context.
+     *
+     * If a previous exception is provided, its file and line are preserved.
+     * Otherwise, the call stack is inspected to determine origin.
      *
      * @param string $message The exception message.
      * @param string|int $code The exception code (default: 0).
-     * @param Throwable|null $previous The previous exception, if available (default: null).
-     * 
+     * @param Throwable|null $previous Previous exception for chaining context.
+     *
      * @return never
-     * @throws AppException<static> Throws the exception from the called class.
+     * @throws LuminovaException<static> Throws the exception from the called class.
      */
-    public static function throwException(string $message, string|int $code = 0, ?Throwable $previous = null): void;
-    
+    public static function throwException(
+        string $message,
+        string|int $code = 0,
+        ?Throwable $previous = null
+    ): void;
+
     /**
-     * Rethrow or handle an exception as a specified exception class.
+     * Handles an exception through the framework error pipeline instead of throwing it.
      *
-     * If the given Throwable is already an instance of `Luminova\Exceptions\AppException`, it will be handled directly.
-     * Otherwise, a new exception of the specified class (or the current class if not provided) will be created with the
-     * same message, code, and previous exception, then handled.
+     * The exception is enriched with trace context, then passed to the global error handler.
+     * Depending on environment and execution mode, it may:
+     * - Be thrown (debug/development mode)
+     * - Be logged silently (production)
+     * - Render CLI or HTTP error views
+     * - Terminate execution for fatal errors
      *
-     * @param Throwable $e The original exception to rethrow or handle.
-     * @param class-string<ExceptionInterface>|null $abstract The new exception class to throw as (e.g., `Luminova\Exceptions\RuntimeException`). Defaults to the current class if null.
-     * 
+     * @param string $message The exception message.
+     * @param string|int $code The exception code (default: 0).
+     * @param Throwable|null $previous Previous exception for context chaining.
+     *
+     * @return void
+     * @throws LuminovaException<static> In debug environments only
+     */
+    public static function handleException(
+        string $message,
+        string|int $code = 0,
+        ?Throwable $previous = null
+    ): void;
+
+    /**
+     * Re-throws a Throwable as a different exception type while preserving context.
+     *
+     * Creates a new exception instance using the given class (or the current class if none provided),
+     * copying the original message, code, and chaining the previous exception.
+     *
+     * The original file and line are preserved when available; otherwise, the call stack is used
+     * to resolve the origin.
+     *
+     * @param Throwable $e Original exception to transform.
+     * @param class-string<Throwable>|null $abstract Target exception class.
+     *        Defaults to the calling class.
+     *
      * @return never
-     * @throws Throwable Throws the exception from the called class.
-     * @example - Example:
-     * ```
-     * use Luminova\Exceptions\LogicException;
-     * 
-     * try{
-     *      throw new Error('Error message.');
-     * }catch(Throwable $e){
-     *      LogicException::throwAs($e);
+     * @throws ExceptionInterface|Throwable Always throws the newly created exception instance.
+     *
+     * @example - Example calling class:
+     * try {
+     *     throw new Error('Error message');
+     * } catch (Throwable $e) {
+     *     LogicException::throwAs($e);
      * }
-     * ```
-     *  @example - Example:
-     * ```
-     * use Luminova\Exceptions\LogicException;
-     * use Luminova\Exceptions\RuntimeException;
-     * 
-     * try{
-     *      throw new Error('Error message.');
-     * }catch(LogicException $e){
-     *      if($e->isCode(200))
-     *          LogicException::throwAs($e, RuntimeException::class);
+     *
+     * @example - Example other class:
+     * try {
+     *     throw new Error('Error message');
+     * } catch (LogicException $e) {
+     *     if ($e->isCode(200)) {
+     *         LogicException::throwAs($e, RuntimeException::class);
+     *     }
      * }
-     * ```
      */
     public static function throwAs(Throwable $e, ?string $abstract = null): void;
 }

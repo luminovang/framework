@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework Smarty/Twig Proxy
  *
@@ -11,7 +12,7 @@
 namespace Luminova\Template\Engines;
 
 use \ArrayAccess;
-use \Luminova\Exceptions\BadMethodCallException;
+use Luminova\Exceptions\BadMethodCallException;
 
 final class Proxy implements ArrayAccess
 {
@@ -41,6 +42,10 @@ final class Proxy implements ArrayAccess
 
     /**
      * Access property dynamically
+     *
+     * @param string $name
+     * 
+     * @return mixed
      */
     public function __get(string $name): mixed
     {
@@ -56,7 +61,12 @@ final class Proxy implements ArrayAccess
     }
 
     /**
-     * Call methods on view object
+     * Call methods on view object.
+     *
+     * @param string $name
+     * @param array $args
+     * 
+     * @return mixed
      */
     public function __call(string $name, array $args): mixed
     {
@@ -95,17 +105,44 @@ final class Proxy implements ArrayAccess
         return $value;
     }
 
+    /**
+     * Undocumented function
+     *
+     * @param mixed $offset
+     * 
+     * @return bool
+     */
     public function offsetExists(mixed $offset): bool
     {
         return $this->isArrayAccess && 
             (isset($this->scope->{$offset}) || isset($this->options[$offset]));
     }
 
+    /**
+     * Undocumented function
+     *
+     * @param mixed $offset
+     * @return mixed
+     */
     public function offsetGet(mixed $offset): mixed
     {
         return $this->isArrayAccess ? $this->__get((string) $offset) : null;
     }
 
+    /**
+     * Undocumented function
+     *
+     * @param mixed $offset
+     * @param mixed $value
+     * @return void
+     */
     public function offsetSet(mixed $offset, mixed $value): void {}
+
+    /**
+     * Undocumented function
+     *
+     * @param mixed $offset
+     * @return void
+     */
     public function offsetUnset(mixed $offset): void {}
 }

@@ -13,11 +13,12 @@ namespace Luminova\Template\Engines;
 
 use \Throwable;
 use \Stringable;
-use \Luminova\Http\Header;
-use \Luminova\Template\View;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\BadMethodCallException;
-use function \Luminova\Funcs\{root, filter_paths};
+use Luminova\Runtime;
+use Luminova\Luminova;
+use Luminova\Http\Header;
+use Luminova\Template\View;
+use Luminova\Exceptions\RuntimeException;
+use Luminova\Exceptions\BadMethodCallException;
 
 /**
  * Layout
@@ -54,13 +55,6 @@ final class Layout implements Stringable
      * @var bool $process
      */
     private bool $process = true;
-
-    /** 
-     * HMVC feature enabled flag (resolved from env on construct).
-     * 
-     * @var bool|null $isHmvc
-     */
-    private ?bool $isHmvc = null;
 
     /** 
      * Path to the selected layout file (absolute).
@@ -151,8 +145,7 @@ final class Layout implements Stringable
         private bool $isolation = false
     )
     {
-        $this->root = root('/resources/Views/');
-        $this->isHmvc ??= (bool) env('feature.app.hmvc', false);
+        $this->root = Luminova::root('/resources/Views/');
 
         if ($module !== null) {
             $this->module($module);
@@ -270,7 +263,7 @@ final class Layout implements Stringable
         if (!is_file($filename)) {
             throw new RuntimeException(sprintf(
                 'Layout not found: %s', 
-                filter_paths($filename)
+                Luminova::toDisplayPath($filename)
             ));
         }
 
@@ -309,7 +302,7 @@ final class Layout implements Stringable
             throw new RuntimeException(sprintf(
                 'Layout base: %s not found in : %s',
                 $base,
-                filter_paths($this->root)
+                Luminova::toDisplayPath($this->root)
             ));
         }
 
@@ -336,7 +329,7 @@ final class Layout implements Stringable
      */
     public function module(string $module = ''): self
     {
-        if (!$this->isHmvc) {
+        if (!Runtime::isHmvc()) {
             return $this;
         }
 
@@ -344,7 +337,7 @@ final class Layout implements Stringable
         View::isModule($module);
 
         $ctx = ($module === '') ? '' : $module . '/'; 
-        $root = root("/app/Modules/{$ctx}Views/");
+        $root = Luminova::root("/app/Modules/{$ctx}Views/");
 
         if (!is_dir($root)) {
             throw new RuntimeException(sprintf('Layout base module: %s not found: %s', $module, $root));
@@ -755,7 +748,7 @@ final class Layout implements Stringable
      * @return void
      * @throws RuntimeException When the template file cannot be loaded.
      */
-    private function compile(array $options = [], bool $replace = true): void
+    private function compile(array $options = []): void
     {
         if ($this->rendered) {
             return;
@@ -777,7 +770,7 @@ final class Layout implements Stringable
         $this->keys = [];
         //$this->current = null;
 
-        $this->compiler($options, $replace);
+        $this->compiler($options);
     }
 
     /**

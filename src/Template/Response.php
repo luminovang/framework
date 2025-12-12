@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Class for handling HTTP responses.
  *
@@ -11,23 +12,21 @@
 namespace Luminova\Template;
 
 use \Throwable;
-use \Luminova\Component\Seo\Minifier;
-use \Luminova\Exceptions\JsonException;
-use \Luminova\Http\{Header, Helper\Encoder};
-use \Luminova\Interface\ViewResponseInterface;
-use \Luminova\Exceptions\Http\ResponseException;
-use \Luminova\Utility\Storage\{Filesystem, FileDelivery};
-use function \Luminova\Funcs\{string_length, http_status_header};
+use Luminova\Config\Env;
+use Luminova\Http\Header;
+use Luminova\Utility\Mime;
+use Luminova\Http\Downloader;
+use Luminova\Utility\Encoder;
+use Luminova\Storage\Renderer;
+use Luminova\Template\Minifier;
+use Luminova\Exceptions\JsonException;
+use Luminova\Exceptions\ClassException;
+use function Luminova\Funcs\http_status_header;
+use Luminova\Exceptions\Http\ResponseException;
+use Luminova\Interface\ContentResponseInterface;
 
-class Response implements ViewResponseInterface
+class Response implements ContentResponseInterface
 {
-    /**
-     * Indicates if the response content should be minified.
-     * 
-     * @var bool $minify
-     */
-    private bool $minify = false;
-
     /**
      * Response result.
      * 
@@ -38,48 +37,65 @@ class Response implements ViewResponseInterface
     /**
      * Mark response as failed.
      * 
-     * @var bool $failed
+     * @var bool $isFailed
      */
-    private bool $failed = false;
+    private bool $isFailed = false;
 
     /**
      * Shared object.
      * 
-     * @var ViewResponseInterface|null $instance
+     * @var ContentResponseInterface|null $instance
      */
-    private static ?ViewResponseInterface $instance = null;
+    private static ?ContentResponseInterface $instance = null;
 
     /**
-     * Initialize a response object with optional content, headers, and processing settings.
-     *
-     * - Sets the HTTP status code.
-     * - Optionally applies content compression and HTML minification.
-     * - Can automatically add copy buttons to code blocks after minification.
-     * - If `$content` is provided, it will be processed immediately via `content()`.
-     *
-     * @param int $status HTTP status code (default: 200 OK).
-     * @param array<string,mixed> $headers Optional headers as key-value pairs.
-     * @param bool $compress Whether to apply content compression (`gzip`, `deflate`), default false.
-     * @param bool $minifyCodeblocks Exclude HTML code blocks from minification (default false).
-     * @param bool $codeblockButton Add a copy button to minified code blocks (default false).
-     * @param string|array|object|null $content Optional content to process immediately.
-     *
-     * @throws ResponseException If content is not `null` and error was encountered while processing.
+     * Code block actions to add (e.g. `copy`, `ai`, `run`).
      * 
-     * > **Note:** 
-     * > If the `minify` method is not explicitly invoked, 
-     * > the environment variable `page.minification` determines HTML minification.
+     * When null, uses `env(output.minify.codeblock.buttons)`.
+     *
+     * @var array|null
+     */
+    private ?array $codeblockButtons = null;
+
+    /**
+     * Create a response instance with optional content processing.
+     *
+     * Supports HTTP status, headers, content compression, HTML minification,
+     * and optional code block enhancements.
+     *
+     * If `$content` is provided, it is processed immediately.
+     *
+     * When code block options are not explicitly provided, their values are
+     * resolved from the corresponding output configuration settings when
+     * HTML minification is enabled.
+     *
+     * @param string|array|object|null $content Response content.
+     * @param int $status HTTP status code (default: 200).
+     * @param array<string,mixed> $headers Response headers.
+     * @param bool $compress Enable response compression.
+     * @param bool $minify Enable HTML minification (default: `false`).
+     * @param string[]|null $preserveTags HTML tags whose contents should be preserved during minification 
+     *                           (e.g. `PRE`, `CODE`, `SCRIPT`, `STYLE`).
+     *                           If `null`, uses the default from `env(output.minify.preserve.tags)`.
+     *
+     * @throws ResponseException If content processing fails.
      */
     public function __construct(
-        private int $status = 200, 
+        string|array|object|null $content = null,
+        private int $status = 200,
         private array $headers = [],
         private bool $compress = false,
-        private bool $minifyCodeblocks = false,
-        private bool $codeblockButton = false,
-        string|array|object|null $content = null
+        private bool $minify = false,
+        private ?array $preserveTags = null
     )
     {
-        $this->minify = (bool) env('page.minification', false);
+        if($this->minify){
+            $this->preserveTags ??= (array) Env::get('output.minify.preserve.tags', [
+                'TEXTAREA', 'CODE'
+            ]);
+
+            $this->codeblockButtons ??= (array) Env::get('output.minify.codeblock.buttons', []);
+        }
 
         if($content !== null){
             $this->content($content);
@@ -90,26 +106,50 @@ class Response implements ViewResponseInterface
      * {@inheritdoc}
      */
     public static function getInstance(
+        string|array|object|null $content = null,
         int $status = 200,
         array $headers = [],
         bool $compress = false,
-        bool $minifyCodeblocks = false,
-        bool $codeblockButton = false,
-        string|array|object|null $content = null
+        bool $minify = false,
+        ?array $preserveTags = null
     ): self 
     {
-        if (!self::$instance instanceof ViewResponseInterface) {
-            self::$instance = new self(
+        if (!static::$instance instanceof ContentResponseInterface) {
+            static::$instance = new static(
+                $content,
                 $status,
                 $headers,
                 $compress,
-                $minifyCodeblocks,
-                $codeblockButton,
-                $content
+                $minify,
+                $preserveTags
             );
         }
 
-        return self::$instance;
+        return static::$instance;
+    }
+
+    /**
+     * Static proxy method.
+     *
+     * @param string $method Method to call.
+     * @param array $arguments Optional arguments to pass.
+     * 
+     * @return mixed Return result of called method
+     */
+    public static function __callStatic(string $method, array $arguments): mixed 
+    {
+        $instance = new static();
+
+        if(method_exists($instance, $method)){
+            return $instance->{$method}(...$arguments);
+        }
+
+        $instance = null;
+        throw new ClassException(sprintf(
+            'Method: %s does not exist in: %s',
+            $method,
+            static::class
+        ));
     }
 
     /**
@@ -135,20 +175,18 @@ class Response implements ViewResponseInterface
     /**
      * {@inheritdoc}
      */
-    public function minify(bool $minify = true): self 
+    public function minify(
+        bool $minify = true, 
+        ?array $preserveTags = null,
+        ?array $codeBlockButtons = null
+    ): self 
     {
         $this->minify = $minify;
-
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function codeblock(bool $minify = true, bool $button = false): self 
-    {
-        $this->minifyCodeblocks = $minify;
-        $this->codeblockButton = $button;
+        $this->preserveTags = $preserveTags 
+            ?? $this->preserveTags;
+            
+        $this->codeblockButtons = $codeBlockButtons 
+            ?? $this->codeblockButtons;
 
         return $this;
     }
@@ -177,16 +215,16 @@ class Response implements ViewResponseInterface
      * {@inheritdoc}
      */
     public function send(bool $validate = false): void 
-    {
+    { 
         Header::clearOutputBuffers('all');
-        Header::setOutputHandler(withHandler: false);
+        Header::setOutputHandler(true, false);
 
-        if($validate){
-            Header::validate($this->headers, $this->status);
-        }else{
-            Header::sendStatus($this->status);
-            Header::send(array_replace(Header::getDefault(), $this->headers));
-        }
+        Header::send(array_replace(
+            Header::getDefault(), $this->headers), 
+            status: $this->status,
+            enforceCors: $validate
+        );
+
         Header::clearOutputBuffers('all');
     }
 
@@ -195,9 +233,7 @@ class Response implements ViewResponseInterface
      */
     public function sendStatus(): bool
     {
-        return $this->status >= 100 
-            && $this->status < 600 
-            && http_status_header($this->status);
+        return http_status_header($this->status);
     }
 
     /**
@@ -279,7 +315,7 @@ class Response implements ViewResponseInterface
      */
     public function failed(bool $failed = true): self 
     {
-        $this->failed = $failed;
+        $this->isFailed = $failed;
         return $this;
     }
 
@@ -289,7 +325,7 @@ class Response implements ViewResponseInterface
     public function content(string|array|object $content, array $headers = []): self
     {
         if(!is_string($content)){
-            $content = $this->toJson($content);
+            $content = self::toJson($content);
 
             if(empty($headers['Content-Type'])){
                 $headers['Content-Type'] = 'application/json';
@@ -297,14 +333,17 @@ class Response implements ViewResponseInterface
         }
 
         [$headers, $contents] = $this->process($content, $headers);
-        $isNoContent = ($contents === '' || $this->status === 204 || $this->status === 304);
+
+        $isNoContent = $contents === '' 
+            || $this->status === 204 
+            || $this->status === 304;
 
         $this->result = [
-            'exit' => $this->failed 
+            'exit'     => $this->isFailed 
                 ? STATUS_ERROR 
                 : ($isNoContent ? STATUS_SILENCE : STATUS_SUCCESS),
-            'status' => $this->status,
-            'headers' => Header::response($headers),
+            'status'   => $this->status,
+            'headers'  => Header::parse($headers, false),
             'contents' => $isNoContent ? '' : $contents
         ];
 
@@ -314,9 +353,9 @@ class Response implements ViewResponseInterface
     /**
      * {@inheritdoc}
      */
-    public function output(bool $ifHeaderNotSent = false): int 
+    public function output(bool $ifHeaderNotSent = true): int 
     {
-        if(!$this->result){
+        if($this->result === null || $this->result === []){
             return STATUS_ERROR;
         }
 
@@ -334,31 +373,24 @@ class Response implements ViewResponseInterface
             $status = 204;
         }
 
-        if (!$ifHeaderNotSent || ($ifHeaderNotSent && headers_sent())) {
-            Header::sendStatus($status);
-
-            if($isNoContent){
-                unset(
-                    $this->result['headers']['Content-Type'], 
-                    $this->result['headers']['Content-Length']
-                );
-            }
-
-            foreach($this->result['headers'] as $header => $value){
-                header("{$header}: {$value}");
-            }
+        if($isNoContent){
+            unset(
+                $this->result['headers']['Content-Type'], 
+                $this->result['headers']['Content-Length']
+            );
         }
-       
+
         Header::clearOutputBuffers('all');
+        Header::setOutputHandler(true);
+        Header::send($this->result['headers'], $ifHeaderNotSent, false, $status);
 
         if($isNoContent){
-            return $this->result['exit'];
+            return (int) $this->result['exit'];
         }
          
-        Header::setOutputHandler(true);
         echo $this->result['contents'];
 
-        return $this->result['exit'];
+        return (int) $this->result['exit'];
     }
 
     /**
@@ -368,16 +400,19 @@ class Response implements ViewResponseInterface
     {
         [$headers, $contents] = $this->process($content, $headers);
 
-        Header::validate($headers, $this->status);
         Header::clearOutputBuffers('all');
+        Header::setOutputHandler(true);
+        Header::send($headers, status: $this->status);
 
-        if($contents === '' || $this->status === 204 || $this->status === 304){
-            return $this->failed ? STATUS_ERROR : STATUS_SILENCE;
+        if(
+            $contents !== '' 
+            && $this->status !== 204 
+            && $this->status !== 304
+        ){
+            echo $contents;
         }
 
-        Header::setOutputHandler(true);
-        echo $contents;
-        return $this->failed ? STATUS_ERROR : STATUS_SILENCE;
+        return $this->isFailed ? STATUS_ERROR : STATUS_SILENCE;
     }
 
     /**
@@ -385,7 +420,7 @@ class Response implements ViewResponseInterface
      */
     public function json(array|object $content): int 
     {
-        return $this->render($this->toJson($content), [
+        return $this->render(self::toJson($content), [
             'Content-Type' => 'application/json'
         ]);
     }
@@ -424,20 +459,26 @@ class Response implements ViewResponseInterface
      * {@inheritdoc}
      */
     public function download(
-        string $fileOrContent, 
+        mixed $source, 
         ?string $name = null, 
-        array $headers = [],
         int $chunkSize = 8192,
         int $delay = 0
     ): bool 
     {
-        return Filesystem::download(
-            $fileOrContent, 
+        $dl = new Downloader(
+            $source, 
             $name, 
-            $headers,
-            $chunkSize, 
-            $delay
+            $this->headers
         );
+
+        $status = $dl->download(
+            chunkSize: $chunkSize, 
+            delay: $delay
+        );
+
+        $dl->close();
+
+        return $status;
     }
 
     /**
@@ -446,7 +487,6 @@ class Response implements ViewResponseInterface
     public function stream(
         string $path, 
         string $basename, 
-        array $headers = [],
         bool $eTag = true,
         bool $weakEtag = false,
         int $expiry = 0,
@@ -454,14 +494,14 @@ class Response implements ViewResponseInterface
         int $delay = 0
     ): bool 
     {
-        return (new FileDelivery($path, $eTag, $weakEtag))
-            ->output($basename, $expiry, $headers, $length, $delay);
+        return (new Renderer($path, $eTag, $weakEtag))
+            ->send($basename, $expiry, $this->headers, $length, $delay);
     }
 
     /**
      * {@inheritdoc}
      */
-    public function redirect(string $uri, ?string $method = null): void
+    public function redirect(string $uri, ?string $method = null): never
     {
         if ($this->status < 300 || $this->status > 308) {
             $this->status = 0;
@@ -475,9 +515,11 @@ class Response implements ViewResponseInterface
 
             if ($protocol && $httpMethod && $this->getProtocolVersion() >= 1.1) {
                 $this->status = match ($httpMethod) {
-                    'GET' => 302,
-                    'POST', 'PUT', 'DELETE' => 303,
-                    default => 307,
+                    'GET'    => 302,
+                    'PUT',                  
+                    'POST', 
+                    'DELETE' => 303,
+                    default  => 307,
                 };
             }
         }
@@ -490,7 +532,7 @@ class Response implements ViewResponseInterface
             $this->header('Location', $uri)->send();
         }
 
-        exit(0);
+        exit(STATUS_SUCCESS);
     }
 
     /**
@@ -504,7 +546,7 @@ class Response implements ViewResponseInterface
      * @return string Return the detected MIME type (e.g. `application/json`, `text/html`, `text/css`, etc).
      * @internal
      */
-    public static function detectContentType(mixed $body): string
+    protected static function detectContentType(mixed $body): string
     {
         if (is_array($body) || is_object($body)) {
             return 'application/json';
@@ -515,86 +557,20 @@ class Response implements ViewResponseInterface
         }
 
         $trimmed = trim($body);
+
         if ($trimmed === '') {
             return 'text/plain';
         }
 
-        if (
-            (($trimmed[0] === '{' && str_ends_with($trimmed, '}')) ||
-            ($trimmed[0] === '[' && str_ends_with($trimmed, ']')))
-            && json_validate($trimmed)
-        ) {
-            return 'application/json';
-        }
-
-        if (
-            str_starts_with($trimmed, '<?xml') ||
-            preg_match('/^<(\w+:)?[\w-]+(\s+[^>]*)?>/', $trimmed)
-        ) {
-            return 'application/xml';
-        }
-
-        if (
-            str_contains($trimmed, '<html') ||
-            str_contains($trimmed, '<head>') ||
-            str_contains($trimmed, '<body>') ||
-            str_contains($trimmed, '<!DOCTYPE html') ||
-            preg_match('/<!DOCTYPE\s+html\b/i', $trimmed)
-        ) {
-            return 'text/html';
-        }
-
-        if (
-            preg_match('/\b(?:@import|@media|@keyframes|#[a-f\d]+\s*\{)/i', $trimmed) ||
-            (
-                str_contains($trimmed, ':') &&
-                str_contains($trimmed, '{') &&
-                str_contains($trimmed, '}')
-            ) ||
-            preg_match('/^[\s\S]*{[\s\S]*}$/', $trimmed)
-        ) {
-            return 'text/css';
-        }
-
-        if (
-            preg_match('/\b(?:function\s*\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|=>|import\s+|export\s+)/', $trimmed)
+        if (preg_match(
+            '/\b(?:function\s*\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|=>|import\s+|export\s+)/', 
+            $trimmed
+        )
         ) {
             return 'application/javascript';
         }
 
-        if (
-            str_contains($trimmed, '<svg') &&
-            str_contains($trimmed, 'xmlns="http://www.w3.org/2000/svg"')
-        ) {
-            return 'image/svg+xml';
-        }
-
-        $magic = substr($trimmed, 0, 2);
-
-        if ($magic === "\xFF\xD8") {
-            return 'image/jpeg';
-        }
-
-        if ($magic === "\x89\x50") {
-            return 'image/png';
-        }
-
-        if ($magic === "BM") {
-            return 'image/bmp';
-        }
-
-        if ($magic === "GI") {
-            return 'image/gif';
-        }
-
-        if (
-            preg_match('/^([^\n]+,)+[^\n]+$/m', $trimmed) ||
-            preg_match('/^([^\n]+\t)+[^\n]+$/m', $trimmed)
-        ) {
-            return 'text/csv';
-        }
-
-        return 'text/plain';
+        return Mime::guess($trimmed) ?: 'text/plain';
     }
 
     /**
@@ -604,6 +580,7 @@ class Response implements ViewResponseInterface
      * @param string $contentType Header content type.
      * 
      * @return int Return calculated content length.
+     * @deprecated
      */
     protected function calculateContentLength(string $content, string $contentType): int 
     {
@@ -615,7 +592,7 @@ class Response implements ViewResponseInterface
             $charset = $matches[1];
         }
 
-        return string_length($content, $charset);
+        return \Luminova\Funcs\string_length($content, $charset);
     }
 
     /**
@@ -626,10 +603,16 @@ class Response implements ViewResponseInterface
      * @return string Return JSON string
      * @throws JsonException If encoding fails.
      */
-    private function toJson(array|object $content): string 
+    private static function toJson(array|object $content): string 
     {
         try {
-            return json_encode($content, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            return json_encode(
+                $content, 
+                JSON_THROW_ON_ERROR 
+                    | JSON_UNESCAPED_UNICODE 
+                    | JSON_UNESCAPED_SLASHES 
+                    | JSON_BIGINT_AS_STRING
+            );
         }catch(Throwable $e){
             if($e instanceof \JsonException){
                 throw new JsonException($e->getMessage(), $e->getCode(), $e);
@@ -663,25 +646,29 @@ class Response implements ViewResponseInterface
         }
        
         try{
-            if($content !== '' && $this->minify && str_contains($headers['Content-Type'], 'text/html')){
-                $minifier = (new Minifier())->codeblocks($this->minifyCodeblocks)
-                    ->copyable($this->codeblockButton)
-                    ->compress($content, $headers['Content-Type']);
+            if(
+                $content !== '' 
+                && $this->minify 
+                && str_contains($headers['Content-Type'], 'text/html')
+            ){
+                $minifier = (new Minifier(preserveHtmlTags: $this->preserveTags))
+                    ->codeBlockButtons($this->codeblockButtons ?? [])
+                    ->minify($content, $headers['Content-Type']);
 
                 $content = $minifier->getContent();
                 $length = $minifier->getLength();
             }
 
             if($content !== '' && $this->compress){
-                [$encoding, $content, $length] = Encoder::encode($content);
+                [$encoding, $content, $length] = Encoder::compressResponse($content);
 
-                if($encoding !== false){
+                if($encoding !== null){
                     $headers['Content-Encoding'] = $encoding;
                 }
             }
 
             if($length === 0 && $content !== ''){
-                $length = $this->calculateContentLength($content, $headers['Content-Type']);
+                $length = strlen($content);
             }
 
             if($content === ''){
@@ -699,7 +686,11 @@ class Response implements ViewResponseInterface
 
             return [$headers, $content];
         }catch(Throwable $e){
-            throw new ResponseException($e->getMessage(), $e->getCode(), $e);
+            throw new ResponseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
         }
     }
 }

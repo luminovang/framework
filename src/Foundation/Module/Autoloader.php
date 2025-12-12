@@ -10,9 +10,9 @@
  */
 namespace Luminova\Foundation\Module;
 
+use Luminova\Luminova;
 use \RuntimeException;
 use \InvalidArgumentException;
-use function \Luminova\Funcs\root;
 
 final class Autoloader
 {
@@ -40,7 +40,7 @@ final class Autoloader
             return true;
         }
 
-        self::$config ??= root('/app/Config/', 'Modules.php');
+        self::$config ??= Luminova::root('/app/Config/', 'Modules.php');
 
         if (!is_file(self::$config)) {
             throw new RuntimeException(sprintf(
@@ -59,7 +59,7 @@ final class Autoloader
             return false;
         }
 
-        self::$libs ??= root('/libraries/libs/');
+        self::$libs ??= Luminova::root('/libraries/libs/');
 
         $result = spl_autoload_register(
             [self::class, 'resolve'], 

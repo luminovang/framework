@@ -15,407 +15,422 @@ class ErrorCode
     /** 
      * @var int ERROR 
      */
-    public const ERROR = E_ERROR;
+    public final const ERROR = E_ERROR;
     
     /** 
      * @var int PARSE_ERROR 
      */
-    public const PARSE_ERROR = E_PARSE;
+    public final const PARSE_ERROR = E_PARSE;
     
     /** 
      * @var int CORE_ERROR 
      */
-    public const CORE_ERROR = E_CORE_ERROR;
+    public final const CORE_ERROR = E_CORE_ERROR;
     
     /** 
      * @var int COMPILE_ERROR 
      */
-    public const COMPILE_ERROR = E_COMPILE_ERROR;
+    public final const COMPILE_ERROR = E_COMPILE_ERROR;
     
     /** 
      * @var int IO_ERROR 
      */
-    public const IO_ERROR = 4080;
+    public final const IO_ERROR = 4080;
 
     /** 
      * @var int WARNING 
      */
-    public const WARNING = E_WARNING;
+    public final const WARNING = E_WARNING;
     
     /** 
      * @var int CORE_WARNING 
      */
-    public const CORE_WARNING = E_CORE_WARNING;
+    public final const CORE_WARNING = E_CORE_WARNING;
     
     /** 
      * @var int COMPILE_WARNING 
      */
-    public const COMPILE_WARNING = E_COMPILE_WARNING;
+    public final const COMPILE_WARNING = E_COMPILE_WARNING;
     
     /** 
      * @var int USER_WARNING 
      */
-    public const USER_WARNING = E_USER_WARNING;
+    public final const USER_WARNING = E_USER_WARNING;
 
     /** 
      * @var int NOTICE 
      */
-    public const NOTICE = E_NOTICE;
+    public final const NOTICE = E_NOTICE;
     
     /** 
      * @var int USER_NOTICE 
      */
-    public const USER_NOTICE = E_USER_NOTICE;
+    public final const USER_NOTICE = E_USER_NOTICE;
 
     /** 
      * @var int USER_ERROR 
      */
-    public const USER_ERROR = E_USER_ERROR;
+    public final const USER_ERROR = E_USER_ERROR;
     
     /** 
      * @var int RECOVERABLE_ERROR 
      */
-    public const RECOVERABLE_ERROR = E_RECOVERABLE_ERROR;
+    public final const RECOVERABLE_ERROR = E_RECOVERABLE_ERROR;
 
     /** 
      * @var int DEPRECATED 
      */
-    public const DEPRECATED = E_DEPRECATED;
+    public final const DEPRECATED = E_DEPRECATED;
     
     /** 
      * @var int USER_DEPRECATED 
      */
-    public const USER_DEPRECATED = E_USER_DEPRECATED;
+    public final const USER_DEPRECATED = E_USER_DEPRECATED;
 
     // PDO SQLSTATE Codes
     /** 
      * @var string UNABLE_TO_CONNECT 
      */
-    public const UNABLE_TO_CONNECT = '08001';
+    public final const UNABLE_TO_CONNECT = '08001';
     
     /** 
      * @var string CONNECTION_DENIED 
      */
-    public const CONNECTION_DENIED = '08004';
+    public final const CONNECTION_DENIED = '08004';
     
     /** 
      * @var string INTEGRITY_CONSTRAINT_VIOLATION 
      */
-    public const INTEGRITY_CONSTRAINT_VIOLATION = '23000';
+    public final const INTEGRITY_CONSTRAINT_VIOLATION = '23000';
     
     /** 
      * @var string SQL_SYNTAX_ERROR_OR_ACCESS_VIOLATION 
      */
-    public const SQL_SYNTAX_ERROR_OR_ACCESS_VIOLATION = '42000';
+    public final const SQL_SYNTAX_ERROR_OR_ACCESS_VIOLATION = '42000';
 
     // MySQL Error Codes
     /** 
      * @var int ACCESS_DENIED_FOR_USER 
      */
-    public const ACCESS_DENIED_FOR_USER = 1044;
+    public final const ACCESS_DENIED_FOR_USER = 1044;
     
     /** 
      * @var int ACCESS_DENIED_INVALID_PASSWORD 
      */
-    public const ACCESS_DENIED_INVALID_PASSWORD = 1045;
+    public final const ACCESS_DENIED_INVALID_PASSWORD = 1045;
     
     /** 
      * @var int UNKNOWN_DATABASE 
      */
-    public const UNKNOWN_DATABASE = 1049;
+    public final const UNKNOWN_DATABASE = 1049;
     
     /** 
      * @var int SYNTAX_ERROR_IN_SQL_STATEMENT 
      */
-    public const SYNTAX_ERROR_IN_SQL_STATEMENT = 1064;
+    public final const SYNTAX_ERROR_IN_SQL_STATEMENT = 1064;
     
     /** 
      * @var int TABLE_DOES_NOT_EXIST 
      */
-    public const TABLE_DOES_NOT_EXIST = 1146;
+    public final const TABLE_DOES_NOT_EXIST = 1146;
 
     // PostgreSQL Error Codes
     /** 
      * @var string INVALID_AUTHORIZATION_SPECIFICATION 
      */
-    public const INVALID_AUTHORIZATION_SPECIFICATION = '28000';
+    public final const INVALID_AUTHORIZATION_SPECIFICATION = '28000';
     
     /** 
      * @var string INVALID_CATALOG_NAME 
      */
-    public const INVALID_CATALOG_NAME = '3D000';
+    public final const INVALID_CATALOG_NAME = '3D000';
 
     // Custom Luminova Error Codes
     /** 
      * @var int EXECUTION_FAILED 
      */
-    public const EXECUTION_FAILED = 1510;
+    public final const EXECUTION_FAILED = 1510;
 
     /** 
      * @var int DATABASE_ERROR 
      */
-    public const DATABASE_ERROR = 1500;
+    public final const DATABASE_ERROR = 1500;
+
+    /** 
+     * @var int DATABASE_PERMISSION_DENIED 
+     */
+    public final const DATABASE_PERMISSION_DENIED = 13;
     
     /** 
      * @var int FAILED_ALL_CONNECTION_ATTEMPTS 
      */
-    public const FAILED_ALL_CONNECTION_ATTEMPTS = 1503;
+    public final const FAILED_ALL_CONNECTION_ATTEMPTS = 1503;
     
     /** 
      * @var int CONNECTION_LIMIT_EXCEEDED 
      */
-    public const CONNECTION_LIMIT_EXCEEDED = 1509;
+    public final const CONNECTION_LIMIT_EXCEEDED = 1509;
     
     /** 
      * @var int INVALID_DATABASE_DRIVER 
      */
-    public const INVALID_DATABASE_DRIVER = 1406;
+    public final const INVALID_DATABASE_DRIVER = 1406;
     
     /** 
      * @var int DATABASE_DRIVER_NOT_AVAILABLE 
      */
-    public const DATABASE_DRIVER_NOT_AVAILABLE = 1501;
+    public final const DATABASE_DRIVER_NOT_AVAILABLE = 1501;
     
     /** 
      * @var int DATABASE_TRANSACTION_READONLY_FAILED 
      */
-    public const DATABASE_TRANSACTION_READONLY_FAILED = 1417;
+    public final const DATABASE_TRANSACTION_READONLY_FAILED = 1417;
     
     /** 
      * @var int DATABASE_TRANSACTION_FAILED 
      */
-    public const DATABASE_TRANSACTION_FAILED = 1420;
+    public final const DATABASE_TRANSACTION_FAILED = 1420;
     
     /** 
      * @var int TRANSACTION_SAVEPOINT_FAILED 
      */
-    public const TRANSACTION_SAVEPOINT_FAILED = 1418;
+    public final const TRANSACTION_SAVEPOINT_FAILED = 1418;
     
     /** 
      * @var int FAILED_TO_ROLLBACK_TRANSACTION 
      */
-    public const FAILED_TO_ROLLBACK_TRANSACTION = 1419;
+    public final const FAILED_TO_ROLLBACK_TRANSACTION = 1419;
     
     /** 
      * @var int NO_STATEMENT_TO_EXECUTE 
      */
-    public const NO_STATEMENT_TO_EXECUTE = 1499;
+    public final const NO_STATEMENT_TO_EXECUTE = 1499;
     
     /** 
      * @var int VALUE_FORBIDDEN 
      */
-    public const VALUE_FORBIDDEN = 1403;
+    public final const VALUE_FORBIDDEN = 1403;
     
     /** 
      * @var int INVALID_ARGUMENTS 
      */
-    public const INVALID_ARGUMENTS = 1001;
+    public final const INVALID_ARGUMENTS = 1001;
     
     /** 
      * @var int INVALID 
      */
-    public const INVALID = 1002;
+    public final const INVALID = 1002;
 
     /** 
      * @var int TERMINATED 
      */
-    public const TERMINATED = 10001;
+    public final const TERMINATED = 10001;
     
     /** 
      * @var int RUNTIME_ERROR 
      */
-    public const RUNTIME_ERROR = 5001;
+    public final const RUNTIME_ERROR = 5001;
     
     /** 
      * @var int CLASS_NOT_FOUND 
      */
-    public const CLASS_NOT_FOUND = 5011;
+    public final const CLASS_NOT_FOUND = 5011;
     
     /** 
      * @var int STORAGE_ERROR 
      */
-    public const STORAGE_ERROR = 5079;
+    public final const STORAGE_ERROR = 5079;
     
     /** 
      * @var int VIEW_NOT_FOUND 
      */
-    public const VIEW_NOT_FOUND = 404;
+    public final const VIEW_NOT_FOUND = 404;
     
     /** 
      * @var int INPUT_VALIDATION_ERROR 
      */
-    public const INPUT_VALIDATION_ERROR = 4070;
+    public final const INPUT_VALIDATION_ERROR = 4070;
     
     /** 
      * @var int ROUTING_ERROR 
      */
-    public const ROUTING_ERROR = 4161;
+    public final const ROUTING_ERROR = 4161;
     
     /** 
      * @var int NOT_FOUND 
      */
-    public const NOT_FOUND = 4040;
+    public final const NOT_FOUND = 4040;
     
     /** 
      * @var int BAD_METHOD_CALL 
      */
-    public const BAD_METHOD_CALL = 4051;
+    public final const BAD_METHOD_CALL = 4051;
     
     /** 
      * @var int CACHE_ERROR 
      */
-    public const CACHE_ERROR = 5071;
+    public final const CACHE_ERROR = 5071;
     
     /** 
      * @var int FILESYSTEM_ERROR 
      */
-    public const FILESYSTEM_ERROR = 6204;
+    public final const FILESYSTEM_ERROR = 6204;
     
     /** 
      * @var int COOKIE_ERROR 
      */
-    public const COOKIE_ERROR = 4961;
+    public final const COOKIE_ERROR = 4961;
     
     /** 
      * @var int DATETIME_ERROR 
      */
-    public const DATETIME_ERROR = 2306;
+    public final const DATETIME_ERROR = 2306;
     
     /** 
      * @var int CRYPTOGRAPHY_ERROR 
      */
-    public const CRYPTOGRAPHY_ERROR = 3423;
+    public final const CRYPTOGRAPHY_ERROR = 3423;
+
+    /** 
+     * @var int PERMISSION_DENIED 
+     */
+    public const PERMISSION_DENIED = 6201;
     
     /** 
      * @var int WRITE_PERMISSION_DENIED 
      */
-    public const WRITE_PERMISSION_DENIED = 6205;
+    public final const WRITE_PERMISSION_DENIED = 6205;
     
     /** 
      * @var int READ_PERMISSION_DENIED 
      */
-    public const READ_PERMISSION_DENIED = 6206;
+    public final const READ_PERMISSION_DENIED = 6206;
     
     /** 
-     * @var int READ_WRITE_PERMISSION_DENIED 
+     * @var int EXECUTE_PERMISSION_DENIED 
      */
-    public const READ_WRITE_PERMISSION_DENIED = 6209;
+    public final const EXECUTE_PERMISSION_DENIED = 6209;
     
     /** 
      * @var int CREATE_DIR_FAILED 
      */
-    public const CREATE_DIR_FAILED = 6207;
+    public final const CREATE_DIR_FAILED = 6207;
     
     /** 
      * @var int SET_PERMISSION_FAILED 
      */
-    public const SET_PERMISSION_FAILED = 6208;
+    public final const SET_PERMISSION_FAILED = 6208;
     
     /** 
      * @var int JSON_ERROR 
      */
-    public const JSON_ERROR = 4180;
+    public final const JSON_ERROR = 4180;
     
     /** 
      * @var int SECURITY_ISSUE 
      */
-    public const SECURITY_ISSUE = 4973;
+    public final const SECURITY_ISSUE = 4973;
     
     /** 
      * @var int MAILER_ERROR 
      */
-    public const MAILER_ERROR = 449;
+    public final const MAILER_ERROR = 449;
     
     /** 
      * @var int INVALID_CONTROLLER 
      */
-    public const INVALID_CONTROLLER = 1003;
+    public final const INVALID_CONTROLLER = 1003;
     
     /** 
      * @var int INVALID_METHOD 
      */
-    public const INVALID_METHOD = 4052;
+    public final const INVALID_METHOD = 4052;
     
     /** 
      * @var int INVALID_REQUEST_METHOD 
      */
-    public const INVALID_REQUEST_METHOD = 4053;
+    public final const INVALID_REQUEST_METHOD = 4053;
     
     /** 
      * @var int NOT_ALLOWED 
      */
-    public const NOT_ALLOWED = 4061;
+    public final const NOT_ALLOWED = 4061;
     
     /** 
      * @var int NOT_ALLOWED 
      */
-    public const NOT_SUPPORTED = 4062;
+    public final const NOT_SUPPORTED = 4062;
     
     /** 
      * @var int LOGIC_ERROR 
      */
-    public const LOGIC_ERROR = 4229;
+    public final const LOGIC_ERROR = 4229;
     
     /** 
      * @var int UNDEFINED 
      */
-    public const UNDEFINED = 8790;
+    public final const UNDEFINED = 8790;
 
     /** 
      * @var int HTTP_RESPONSE_ERROR 
      */
-    public const HTTP_RESPONSE_ERROR = 4978;
+    public final const HTTP_RESPONSE_ERROR = 4978;
     
     /** 
      * @var int HTTP_CLIENT_ERROR 
      */
-    public const HTTP_CLIENT_ERROR = 4974;
+    public final const HTTP_CLIENT_ERROR = 4974;
     
     /** 
      * @var int HTTP_CONNECTION_ERROR 
      */
-    public const HTTP_CONNECTION_ERROR = 4975;
+    public final const HTTP_CONNECTION_ERROR = 4975;
     
     /** 
      * @var int HTTP_REQUEST_ERROR 
      */
-    public const HTTP_REQUEST_ERROR = 4976;
+    public final const HTTP_REQUEST_ERROR = 4976;
     
     /** 
      * @var int HTTP_SERVER_ERROR 
      */
-    public const HTTP_SERVER_ERROR = 4977;
+    public final const HTTP_SERVER_ERROR = 4977;
 
     /** 
      * @var int TERMINATE 
      */
-    public const TERMINATE = 1200;
+    public final const TERMINATE = 1200;
     
     /** 
      * @var int TIMEOUT 
      */
-    public const TIMEOUT_ERROR = 1201;
+    public final const TIMEOUT_ERROR = 1201;
     
     /** 
      * @var int PROCESS_ERROR 
      */
-    public const PROCESS_ERROR = 1202;
+    public final const PROCESS_ERROR = 1202;
 
     // SQLite Error Codes
     /** 
      * @var int DATABASE_IS_FULL 
      */
-    public const DATABASE_IS_FULL = 5;
+    public final const DATABASE_IS_FULL = 5;
     
     /** 
      * @var int DATABASE_LOCKED 
      */
-    public const DATABASE_LOCKED = 6;
+    public final const DATABASE_LOCKED = 6;
     
     /** 
      * @var int CANNOT_OPEN_DATABASE_FILE 
      */
-    public const CANNOT_OPEN_DATABASE_FILE = 14;
+    public final const CANNOT_OPEN_DATABASE_FILE = 14;
+
+    /** 
+     * @var int AI_AGENT_ERROR 
+     */
+    public final const AI_AGENT_ERROR = 153;
 
     /**
      * Retrieves the descriptive name of a given error or exception code.
@@ -430,7 +445,9 @@ class ErrorCode
         $info = self::resolve($severity) 
             ?? ['Unknown error', 'Unknown error code'];
 
-        return $long ? $info[1] : $info[0];
+        return $long 
+            ? $info[1] 
+            : $info[0];
     }
 
     /**
@@ -505,7 +522,7 @@ class ErrorCode
             E_DEPRECATED, E_USER_DEPRECATED => 'info',
             E_RECOVERABLE_ERROR => 'error',
             E_ALL, 0 => 'exception',
-            default => 'php_error'
+            default => 'php'
         };
     }
 
@@ -514,110 +531,116 @@ class ErrorCode
      *
      * @param string|int $severity The error/exception code to get readable name.
      *
-     * @return array<int,string|null Return a list array corresponding error name for the given code or null.
+     * @return array<int,string>|null Return a list array corresponding error name for the given code or null.
      * @result {string: short-name, string: long-name}
      */
-    private static function resolve(string|int $severity): ?array 
+    private static function resolve(string|int $severity): ?array
     {
         return match ($severity) {
             // PHP Error Constants
-            self::ERROR => ['Fatal Error', 'Fatal runtime error'],
-            self::PARSE_ERROR => ['Parse Error', 'Parse error'],
-            self::CORE_ERROR => ['Core Error', 'PHP core error'],
-            self::COMPILE_ERROR => ['Compile Error', 'Compilation error'],
-            self::IO_ERROR => ['IO Error', 'Input/output error'],
+            self::ERROR => ['Fatal Error', 'A fatal runtime error occurred'],
+            self::PARSE_ERROR => ['Parse Error', 'A syntax error prevented the code from being parsed'],
+            self::CORE_ERROR => ['Core Error', 'A fatal error occurred in the PHP core'],
+            self::COMPILE_ERROR => ['Compile Error', 'A fatal error occurred while compiling the code'],
+            self::IO_ERROR => ['I/O Error', 'An input/output operation failed'],
 
-            self::WARNING => ['Warning', 'Runtime warning'],
-            self::CORE_WARNING => ['Core Warning', 'PHP core warning'],
-            self::COMPILE_WARNING => ['Compile Warning', 'Compilation warning'],
-            self::USER_WARNING => ['User Warning', 'User-generated warning'],
+            self::WARNING => ['Warning', 'A non-fatal runtime warning occurred'],
+            self::CORE_WARNING => ['Core Warning', 'A warning was generated by the PHP core'],
+            self::COMPILE_WARNING => ['Compile Warning', 'A warning occurred while compiling the code'],
+            self::USER_WARNING => ['User Warning', 'A user-generated warning occurred'],
 
-            self::NOTICE => ['Notice', 'Runtime notice'],
-            self::USER_NOTICE => ['User Notice', 'User-generated notice'],
+            self::NOTICE => ['Notice', 'A runtime notice was triggered'],
+            self::USER_NOTICE => ['User Notice', 'A user-generated notice was triggered'],
 
-            self::USER_ERROR => ['User Error', 'User-generated error'],
-            self::RECOVERABLE_ERROR => ['Recoverable Error', 'Catchable fatal error'],
+            self::USER_ERROR => ['User Error', 'A user-generated error was triggered'],
+            self::RECOVERABLE_ERROR => ['Recoverable Error', 'A recoverable fatal error occurred'],
 
-            self::DEPRECATED => ['Deprecated', 'Deprecated feature usage'],
-            self::USER_DEPRECATED => ['User Deprecated', 'User-generated deprecation notice'],
+            self::DEPRECATED => ['Deprecated', 'Use of a deprecated feature or functionality'],
+            self::USER_DEPRECATED => ['User Deprecated', 'A user-generated deprecation notice was triggered'],
 
             // PDO SQLSTATE Codes
-            self::UNABLE_TO_CONNECT => ['Unable to Connect', 'Database connection failed'],
-            self::CONNECTION_DENIED => ['Connection Denied', 'Connection denied'],
-            self::INTEGRITY_CONSTRAINT_VIOLATION => ['Integrity Violation', 'Integrity constraint violation'],
-            self::SQL_SYNTAX_ERROR_OR_ACCESS_VIOLATION => ['SQL Syntax/Access Error', 'SQL syntax or access violation'],
+            self::UNABLE_TO_CONNECT => ['Unable to Connect', 'The database connection could not be established'],
+            self::CONNECTION_DENIED => ['Connection Denied', 'The database server refused the connection'],
+            self::INTEGRITY_CONSTRAINT_VIOLATION => ['Integrity Constraint Violation', 'A database integrity constraint was violated'],
+            self::SQL_SYNTAX_ERROR_OR_ACCESS_VIOLATION => ['SQL Syntax or Access Error', 'The SQL statement contains a syntax or access violation'],
 
             // MySQL Error Codes
-            self::ACCESS_DENIED_FOR_USER => ['Access Denied', 'Access denied for user'],
-            self::ACCESS_DENIED_INVALID_PASSWORD => ['Invalid Password', 'Invalid database user password'],
-            self::UNKNOWN_DATABASE => ['Unknown Database', 'Unknown database not supported'],
-            self::SYNTAX_ERROR_IN_SQL_STATEMENT => ['SQL Syntax Error', 'Syntax error in SQL statement'],
-            self::TABLE_DOES_NOT_EXIST => ['Table Missing', 'Table does not exist'],
+            self::ACCESS_DENIED_FOR_USER => ['Access Denied', 'The database server denied access for the specified user'],
+            self::ACCESS_DENIED_INVALID_PASSWORD => ['Invalid Password', 'The database user password is invalid'],
+            self::UNKNOWN_DATABASE => ['Unknown Database', 'The specified database does not exist'],
+            self::SYNTAX_ERROR_IN_SQL_STATEMENT => ['SQL Syntax Error', 'The SQL statement contains a syntax error'],
+            self::TABLE_DOES_NOT_EXIST => ['Table Not Found', 'The specified database table does not exist'],
 
             // PostgreSQL Error Codes
-            self::INVALID_AUTHORIZATION_SPECIFICATION => ['Invalid Auth', 'Invalid authorization specification'],
-            self::INVALID_CATALOG_NAME => ['Invalid Catalog', 'Invalid database catalog name'],
+            self::INVALID_AUTHORIZATION_SPECIFICATION => ['Invalid Authorization', 'The database authorization specification is invalid'],
+            self::INVALID_CATALOG_NAME => ['Invalid Catalog Name', 'The specified database catalog does not exist'],
 
             // Custom Luminova Error Codes
-            self::EXECUTION_FAILED => ['Execution Failed', 'Execution operation failed'],
-            self::DATABASE_ERROR => ['Database Error', 'General database error'],
-            self::FAILED_ALL_CONNECTION_ATTEMPTS => ['Connection Attempts Failed', 'All connection attempts failed'],
-            self::CONNECTION_LIMIT_EXCEEDED => ['Connection Limit Exceeded', 'Database connection limit exceeded'],
-            self::INVALID_DATABASE_DRIVER => ['Invalid DB Driver', 'Invalid database driver specified'],
-            self::DATABASE_DRIVER_NOT_AVAILABLE => ['DB Driver Not Available', 'Database driver not available'],
-            self::DATABASE_TRANSACTION_READONLY_FAILED => ['Read-only Transaction Failed', 'Read-only transaction failed'],
-            self::DATABASE_TRANSACTION_FAILED => ['Transaction Failed', 'Database transaction failed'],
-            self::TRANSACTION_SAVEPOINT_FAILED => ['Savepoint Failed', 'Transaction savepoint failed'],
-            self::FAILED_TO_ROLLBACK_TRANSACTION => ['Rollback Failed', 'Failed to rollback transaction'],
-            self::NO_STATEMENT_TO_EXECUTE => ['No Statement', 'No statement to execute'],
-            self::VALUE_FORBIDDEN => ['Value Forbidden', 'Value not allowed'],
-            self::INVALID_ARGUMENTS => ['Invalid Arguments', 'Invalid arguments provided'],
-            self::INVALID => ['Invalid', 'Invalid operation'],
-            self::TERMINATED  => ['Terminated', 'Operation manually terminated'],
-            self::RUNTIME_ERROR => ['Runtime Error', 'Runtime execution error'],
-            self::CLASS_NOT_FOUND => ['Class Not Found', 'Class not found'],
-            self::STORAGE_ERROR => ['Storage Error', 'Storage operation error'],
-            self::VIEW_NOT_FOUND => ['View Not Found', 'View not found'],
-            self::INPUT_VALIDATION_ERROR => ['Validation Error', 'Input validation failed'],
-            self::ROUTING_ERROR => ['Routing Error', 'Routing error'],
-            self::NOT_FOUND => ['Not Found', 'Resource not found'],
-            self::BAD_METHOD_CALL => ['Bad Method Call', 'Bad method call'],
-            self::CACHE_ERROR => ['Cache Error', 'Cache operation error'],
-            self::FILESYSTEM_ERROR => ['Filesystem Error', 'Filesystem error'],
-            self::COOKIE_ERROR => ['Cookie Error', 'Cookie handling error'],
-            self::DATETIME_ERROR => ['DateTime Error', 'Date/time operation error'],
-            self::CRYPTOGRAPHY_ERROR => ['Cryptography Error', 'Cryptography error'],
-            self::WRITE_PERMISSION_DENIED => ['Write Permission Denied', 'Write permission denied'],
-            self::READ_PERMISSION_DENIED => ['Read Permission Denied', 'Read permission denied'],
-            self::READ_WRITE_PERMISSION_DENIED => ['Read/Write Permission Denied', 'Read/write permission denied'],
-            self::CREATE_DIR_FAILED => ['Create Directory Failed', 'Failed to create directory'],
-            self::SET_PERMISSION_FAILED => ['Set Permission Failed', 'Failed to set file permissions'],
-            self::JSON_ERROR => ['JSON Error', 'JSON encoding/decoding error'],
-            self::SECURITY_ISSUE => ['Security Issue', 'Security issue detected'],
-            self::MAILER_ERROR => ['Mailer Error', 'Mail sending error'],
-            self::INVALID_CONTROLLER => ['Invalid Controller', 'Invalid controller'],
-            self::INVALID_METHOD => ['Invalid Method', 'Invalid method'],
-            self::INVALID_REQUEST_METHOD => ['Invalid Request Method', 'Invalid HTTP request method'],
-            self::NOT_ALLOWED => ['Not Allowed', 'Operation not allowed'],
-            self::NOT_SUPPORTED => ['Not Supported', 'Operation not supported'],
-            self::LOGIC_ERROR => ['Logic Error', 'Logic error'],
-            self::UNDEFINED => ['Undefined', 'Undefined error'],
+            self::EXECUTION_FAILED => ['Execution Failed', 'The requested operation could not be completed'],
+            self::DATABASE_ERROR => ['Database Error', 'A database operation failed'],
+            self::DATABASE_PERMISSION_DENIED => ['Database Permission Denied', 'The database operation was denied due to insufficient permissions'],
+            self::FAILED_ALL_CONNECTION_ATTEMPTS => ['Connection Attempts Failed', 'All attempts to establish a database connection failed'],
+            self::CONNECTION_LIMIT_EXCEEDED => ['Connection Limit Exceeded', 'The database connection limit has been exceeded'],
+            self::INVALID_DATABASE_DRIVER => ['Invalid Database Driver', 'The specified database driver is invalid'],
+            self::DATABASE_DRIVER_NOT_AVAILABLE => ['Database Driver Unavailable', 'The specified database driver is not available'],
+            self::DATABASE_TRANSACTION_READONLY_FAILED => ['Read-Only Transaction Failed', 'The read-only database transaction could not be completed'],
+            self::DATABASE_TRANSACTION_FAILED => ['Transaction Failed', 'The database transaction could not be completed'],
+            self::TRANSACTION_SAVEPOINT_FAILED => ['Savepoint Failed', 'The transaction savepoint operation failed'],
+            self::FAILED_TO_ROLLBACK_TRANSACTION => ['Rollback Failed', 'The transaction could not be rolled back'],
+            self::NO_STATEMENT_TO_EXECUTE => ['No Statement to Execute', 'There is no database statement available for execution'],
+            self::VALUE_FORBIDDEN => ['Forbidden Value', 'The specified value is not allowed'],
+            self::INVALID_ARGUMENTS => ['Invalid Arguments', 'One or more arguments are invalid'],
+            self::INVALID => ['Invalid Operation', 'The requested operation is invalid'],
+            self::TERMINATED => ['Terminated', 'The operation was manually terminated'],
+            self::RUNTIME_ERROR => ['Runtime Error', 'A runtime error occurred while executing the operation'],
+            self::CLASS_NOT_FOUND => ['Class Not Found', 'The requested class could not be found'],
+            self::STORAGE_ERROR => ['Storage Error', 'A storage operation failed'],
+            self::VIEW_NOT_FOUND => ['View Not Found', 'The requested view could not be found'],
+            self::INPUT_VALIDATION_ERROR => ['Validation Error', 'The provided input failed validation'],
+            self::ROUTING_ERROR => ['Routing Error', 'The request could not be resolved by the router'],
+            self::NOT_FOUND => ['Not Found', 'The requested resource could not be found'],
+            self::BAD_METHOD_CALL => ['Bad Method Call', 'The requested method call is invalid'],
+            self::CACHE_ERROR => ['Cache Error', 'A cache operation failed'],
+            self::FILESYSTEM_ERROR => ['Filesystem Error', 'A filesystem operation failed'],
+            self::COOKIE_ERROR => ['Cookie Error', 'A cookie operation failed'],
+            self::DATETIME_ERROR => ['DateTime Error', 'A date or time operation failed'],
+            self::CRYPTOGRAPHY_ERROR => ['Cryptography Error', 'A cryptographic operation failed'],
+            self::WRITE_PERMISSION_DENIED => ['Write Permission Denied', 'Write access was denied for the requested resource'],
+            self::READ_PERMISSION_DENIED => ['Read Permission Denied', 'Read access was denied for the requested resource'],
+            self::EXECUTE_PERMISSION_DENIED => ['Execute Permission Denied', 'Execute access was denied for the requested resource'],
+            self::PERMISSION_DENIED => ['Permission Denied', 'Read, write, or execute access was denied'],
+            self::CREATE_DIR_FAILED => ['Directory Creation Failed', 'The directory could not be created'],
+            self::SET_PERMISSION_FAILED => ['Permission Update Failed', 'File or directory permissions could not be changed'],
+            self::JSON_ERROR => ['JSON Error', 'A JSON encoding or decoding operation failed'],
+            self::SECURITY_ISSUE => ['Security Issue', 'A potential security issue was detected'],
+            self::MAILER_ERROR => ['Mailer Error', 'An error occurred while sending the email'],
+            self::INVALID_CONTROLLER => ['Invalid Controller', 'The specified controller is invalid or could not be resolved'],
+            self::INVALID_METHOD => ['Invalid Method', 'The specified method is invalid or could not be called'],
+            self::INVALID_REQUEST_METHOD => ['Invalid Request Method', 'The HTTP request method is invalid or unsupported'],
+            self::NOT_ALLOWED => ['Not Allowed', 'The requested operation is not allowed'],
+            self::NOT_SUPPORTED => ['Not Supported', 'The requested operation is not supported'],
+            self::LOGIC_ERROR => ['Logic Error', 'The operation failed due to an application logic error'],
+            self::UNDEFINED => ['Undefined Error', 'The error type could not be determined'],
 
-            self::HTTP_RESPONSE_ERROR => ['HTTP Response Error', 'HTTP response error'],
-            self::HTTP_CLIENT_ERROR => ['HTTP Client Error', 'HTTP client error'],
-            self::HTTP_CONNECTION_ERROR => ['HTTP Connection Error', 'HTTP connection error'],
-            self::HTTP_REQUEST_ERROR => ['HTTP Request Error', 'HTTP request error'],
-            self::HTTP_SERVER_ERROR => ['HTTP Server Error', 'HTTP server error'],
+            self::HTTP_RESPONSE_ERROR => ['HTTP Response Error', 'An error occurred while processing the HTTP response'],
+            self::HTTP_CLIENT_ERROR => ['HTTP Client Error', 'The HTTP client encountered an error'],
+            self::HTTP_CONNECTION_ERROR => ['HTTP Connection Error', 'The HTTP connection could not be established'],
+            self::HTTP_REQUEST_ERROR => ['HTTP Request Error', 'The HTTP request could not be completed'],
+            self::HTTP_SERVER_ERROR => ['HTTP Server Error', 'The HTTP server encountered an internal error'],
 
-            self::TERMINATE => ['Terminate', 'Process terminated'],
-            self::TIMEOUT_ERROR => ['Timeout', 'Operation timed out'],
-            self::PROCESS_ERROR => ['Process Error', 'Process execution error'],
+            self::TERMINATE => ['Terminated', 'The process was terminated'],
+            self::TIMEOUT_ERROR => ['Timeout', 'The operation exceeded its allowed execution time'],
+            self::PROCESS_ERROR => ['Process Error', 'A process execution error occurred'],
 
             // SQLite Error Codes
-            self::DATABASE_IS_FULL => ['Database Full', 'Database is full'],
-            self::DATABASE_LOCKED => ['Database Locked', 'Database is locked'],
-            self::CANNOT_OPEN_DATABASE_FILE => ['Cannot Open DB File', 'Cannot open database file'],
-            default => null
+            self::DATABASE_IS_FULL => ['Database Full', 'The database has reached its storage limit'],
+            self::DATABASE_LOCKED => ['Database Locked', 'The database is currently locked'],
+            self::CANNOT_OPEN_DATABASE_FILE => ['Cannot Open Database File', 'The database file could not be opened'],
+
+            // AI
+            self::AI_AGENT_ERROR => ['AI Agent Error', 'An error occurred while processing the AI agent request'],
+
+            default => null,
         };
     }
 }

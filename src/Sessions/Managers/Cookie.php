@@ -10,37 +10,35 @@
  */
 namespace Luminova\Sessions\Managers;
 
+use \Closure;
 use \Throwable;
-use \Luminova\Logger\Logger;
-use \Luminova\Sessions\Session;
-use \Luminova\Base\Configuration;
-use \Luminova\Exceptions\JsonException;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Security\Encryption\Crypter;
-use \Luminova\Interface\SessionManagerInterface;
+use Luminova\Logger\Logger;
+use Luminova\Utility\Encoder;
+use Luminova\Security\Encryption\Crypter;
+use Luminova\Exceptions\{JsonException, RuntimeException};
 
-final class Cookie implements SessionManagerInterface 
+final class Cookie extends AbstractSessionManager
 {
     /**
-     * Cookie config. 
+     * The cookie ID name.
      * 
-     * @var Configuration $config
+     * @var string COOKIE_ID
      */
-    private ?Configuration $config = null;
+    private const COOKIE_ID = 'PHPCKSESSID';
 
     /**
-     * The session storage index name.
+     * Sessions are enabled, but no session exists.
      * 
-     * @var string $table
+     * @var int NONE 
      */
-    private static string $table = 'default';
+    private const NONE = 1;
 
     /**
-     * The session IS index name.
+     * A session is currently active.
      * 
-     * @var string $secureTable
+     * @var int ACTIVE 
      */
-    private static string $secureTable = '__session_cookie_id';
+    private const ACTIVE = 2;
 
     /**
      * Cookie write close.
@@ -52,67 +50,46 @@ final class Cookie implements SessionManagerInterface
     /**
      * The session id
      * 
-     * @var string|null $sid
+     * @var string|null $sessionId
      */
-    private static ?string $sid = null;
+    private static ?string $sessionId = null;
 
-    /**
+    /** 
      * {@inheritdoc}
      */
-    public function __construct(private string $storage = 'global') {}
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setConfig(Configuration $config): void
+    public function isEmpty(): bool 
     {
-        $this->config = $config;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setStorage(string $storage): self 
-    {
-        $this->storage = $storage;
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setTable(string $table): self 
-    {
-        self::$table = $table;
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getStorage(): string 
-    {
-        return $this->storage;
+        return !isset($_COOKIE[$this->getKey()]);
     }
 
     /** 
      * {@inheritdoc}
      */
-    public function setItem(string $index, mixed $value, ?string $storage = null): self
+    public function isClosed(): bool 
     {
-        return $this->setItems([$index => $value], $storage);
+        return self::$writeClose === true;
     }
 
     /** 
      * {@inheritdoc}
      */
-    public function setItems(array $data, ?string $storage = null): self
+    public static function isValidId(string $sessionId): bool
     {
-        $storage = $this->getKey($storage);
+        return (
+            strlen($sessionId) === 16 ||
+            strlen($sessionId) === 32
+        ) && ctype_xdigit($sessionId);
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function setItems(array $items): self
+    {
         $this->write(array_merge(
-            $this->getItems($storage),
-            $data
-        ), $storage);
+            (array) ($this->getItems()['__data'] ?? []),
+            $items
+        ));
 
         return $this;
     }
@@ -120,73 +97,170 @@ final class Cookie implements SessionManagerInterface
     /** 
      * {@inheritdoc}
      */
-    public function getItem(string $index, mixed $default = null): mixed
+    public function getItems(): array
     {
-        return $this->getItems()[$index] ?? $default;
+        $key = $this->getKey();
+
+        return $_COOKIE[$key] = $this->open();
     }
 
     /**
      * {@inheritdoc}
      */
-    public function deleteItem(?string $index = null, ?string $storage = null): self
+    public function deleteItem(string $name): self
     {
-        $storage = $this->getKey();
-    
-        if(!self::$writeClose && isset($_COOKIE[self::$table][$storage])) {
-            if($index){
-                $data = $this->getItems($storage);
-
-                if (isset($data[$index])) {
-                    $data[$index] = null;
-                    unset($data[$index]);
-                }
-
-                $this->write($data, $storage);
-                return $this;
-            }
-
-            $this->write([], $storage);
+        if(self::$writeClose){
+            return $this;
         }
 
+        $data = $this->toArray();
+        $key = $this->getKey();
+
+        if(!isset($_COOKIE[$key])) {
+            return $this;
+        }
+
+        unset($data[$name]);
+
+        $this->write($data);
         return $this;
     }
 
     /** 
      * {@inheritdoc}
      */
-    public function destroy(bool $allData = false): bool
+    public function clear(): bool 
     {
         if(self::$writeClose){
             return false;
         }
 
+        $cleared = 0;
         $expire = time() - $this->config->expiration;
 
-        if($allData){
-            foreach ($_COOKIE as $name => $value) {
-                if($this->store(
-                    $name, 
-                    '', 
-                    $expire, 
-                    str_ends_with($name, self::$secureTable) ? 'Strict' : $this->config->sameSite 
-                )){
-                    $_COOKIE[$name] = null;
-                    unset($_COOKIE[$name]);
-                }
+        $this->onEach(function(string $name, mixed $_) use ($expire, &$cleared): void {
+            if($this->store(
+                $name, 
+                '', 
+                $expire,
+                encode: false
+            )){
+                unset($_COOKIE[$name]);
+                $cleared++;
             }
+        }, true);
 
-            return true;
+        return $cleared > 0;
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function close(): bool 
+    {
+        if($this->status() !== self::ACTIVE){
+            return false;
         }
 
-        if(isset($_COOKIE[self::$table]) || isset($_COOKIE[self::$secureTable])) {
-            if(
-                $this->store(self::$table, '', $expire) || 
-                $this->store(self::$secureTable, '', $expire)
-            ){
-                $_COOKIE[self::$table] = [];
-                $_COOKIE[self::$secureTable] = null;
+        if(!$this->setCookieId()){
+            return false;
+        }
 
-                unset($_COOKIE[self::$table], $_COOKIE[self::$secureTable]);
+        self::$writeClose = true;
+        $_COOKIE[self::COOKIE_ID] = null;
+
+        return true;
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function status():int
+    {
+        $id = $this->getId();
+
+        return ($id !== null && self::isValidId($id))
+            ? self::ACTIVE 
+            : self::NONE;
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function start(?string $sessionId = null): bool
+    {
+        self::$writeClose = false;
+        $error = null;
+
+        try{
+            if ($this->status() === self::ACTIVE) {
+                if ($sessionId === null || $sessionId === $this->getId()) {
+                    return true;
+                }
+
+                $error = 'A different session ID cannot be started while a session is already active.';
+
+                return false;
+            }
+
+            if ($sessionId !== null && !self::isValidId($sessionId)) {
+                $error = "The provided session cookie value '{$sessionId}' is invalid.";
+
+                if (!PRODUCTION) {
+                    return false;
+                }
+
+                $error .= " A new session cookie value will be generated.";
+                $sessionId = null;
+            }
+
+            return $this->sessionRegenerateId($sessionId);
+        } finally {
+            if($error !== null){
+                $error = "Session Cookie Error: {$error}";
+
+                if (!PRODUCTION) {
+                    throw new RuntimeException($error);
+                }
+
+                Logger::error($error);
+            }
+        }
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function regenerateId(bool $clearSessionData = true): string|bool
+    {
+        return $this->sessionRegenerateId(
+            isRegenerate: true, 
+            clearSessionData: $clearSessionData
+        ) 
+            ? ($_COOKIE[self::COOKIE_ID] ?? false) 
+            : false;
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function getId(): ?string
+    {
+        return self::$sessionId ??= (
+            ($_COOKIE[self::COOKIE_ID] ?? null) ?: null
+        );
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function hasStorage(string $storage): bool
+    {
+        $id = $this->getId();
+        $session = self::KEY_PREFIX . "{$id}_{$storage}";
+
+        foreach (array_keys($_COOKIE) as $name) {
+            if(str_starts_with($name, $session)){
                 return true;
             }
         }
@@ -197,202 +271,27 @@ final class Cookie implements SessionManagerInterface
     /** 
      * {@inheritdoc}
      */
-    public function commit(): self 
+    public function toArray(?string $storage = null): array
     {
-        self::$writeClose = true;
-        return $this;
-    }
+        $key = $this->getKey($storage);
+        $_COOKIE[$key] = $this->open($storage);
 
-    /** 
-     * {@inheritdoc}
-     */
-    public function status():int
-    {
-        $id = $_COOKIE[self::$secureTable] ?? null;
-        return ($id && self::isValidId($id))
-            ? Session::ACTIVE 
-            : Session::NONE;
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function start(?string $sessionId = null): bool
-    {
-        if(!$sessionId){
-            return $this->create();
-        }
-
-        if(self::isValidId($sessionId)){
-            if($this->create($sessionId)){
-                self::$sid = $sessionId;
-                return true;
-            }
-            
-            return false;
-        }
-
-        $error = "Session Cookie Error: The provided session cookie ID '{$sessionId}' is invalid.";
-
-        if(PRODUCTION){
-            Logger::error("{$error} A new session cookie ID will be generated.");
-            return $this->create();
-        }
-
-        throw new RuntimeException($error);
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function regenerateId(bool $clearData = true): string|bool
-    {
-        return $this->create(regenerate: true, clearData: $clearData) 
-            ? ($_COOKIE[self::$secureTable] ?? false) 
-            : false;
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function getId(): ?string
-    {
-        return $_COOKIE[self::$secureTable] ?? self::$sid;
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function hasItem(string $key): bool
-    {
-        return isset($this->getItems()[$key]);
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function hasStorage(string $storage): bool
-    {
-        return isset(self::open()[$storage]['__data']);
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public static function isValidId(string $sessionId): bool
-    {
-        return (bool) preg_match('/^[0-9a-f]{32}$/', $sessionId);
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function getResult(string $type = 'array'): array|object
-    {
-        $_COOKIE[self::$table] = self::open();
-
-        if($type === 'array'){
-            return (array) $_COOKIE[self::$table];
-        }
-
-        if($_COOKIE[self::$table] === []){
-            return (object) $_COOKIE[self::$table];
-        }
-
-        try {
-            return (object) json_decode(
-                json_encode($_COOKIE[self::$table], JSON_THROW_ON_ERROR),
-                null,
-                512,
-                JSON_THROW_ON_ERROR
-            );
-        }catch(Throwable $e){
-            throw new JsonException($e->getMessage(), $e->getCode(), $e);
-        }
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function toAs(string $type = 'array', ?string $index = null): object|array|null
-    {
-        $result = $this->getItems();
-        $result = $index ? ($result[$index]??null) : $result;
-        $isArray = ($type === 'array');
-
-        if($result === null){
-            return null;
-        }
-    
-        if($isArray && is_array($result)){
-            return $result;
-        }
-
-        if(!$isArray && is_object($result)){
-            return $result;
-        }
-
-        try {
-            $data = json_decode(
-                json_encode($result, JSON_THROW_ON_ERROR),
-                $isArray ? true : null,
-                512,
-                JSON_THROW_ON_ERROR
-            );
-
-            return $isArray ? (array) $data : (object) $data;
-        }catch(Throwable $e){
-            if(is_scalar($result)){
-                return $isArray ? [$result] : (object)[$result];
-            }
-            
-            throw new JsonException($e->getMessage(), $e->getCode(), $e);
-        }
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function getItems(?string $storage = null): array
-    {
-        $contents = [];
-        $storage = $this->getKey($storage);
-        $_COOKIE[self::$table] = self::open();
-
-        if(isset($_COOKIE[self::$table][$storage])) {
-            $contents = $this->isEncrypted($storage) 
-                ?  Crypter::decrypt($_COOKIE[self::$table][$storage]['__data'])
-                : $_COOKIE[self::$table][$storage]['__data'];
-        }
-
-        if(!$contents){
-            return [];
-        }
-            
-        if(json_validate($contents)){
-            try {
-                return $_COOKIE[self::$table][$storage]['__data'] = (array) json_decode(
-                    $contents, true, 512, JSON_THROW_ON_ERROR
-                );
-            }catch(Throwable $e){
-                Logger::error('Session Cookie Error: failed to read cookie data' . $e->getMessage());
-                return [];
-            }
-        }
-
-        return (array) $contents;
+        return (array) $_COOKIE[$key];
     }
 
     /**
-     * Get storage name.
+     * Generate storage key.
      * 
      * @param string $storage Optional storage name.
      * 
      * @return string Storage name.
      */
-    private function getKey(?string $storage = null): string 
+    private function getKey(?string $storage = null, ?string $id = null): string 
     {
-        return $storage ?? $this->storage;
+        $id ??= $this->getId();
+        $storage ??= $this->storage;
+
+        return self::KEY_PREFIX . "{$id}_{$storage}_{$this->namespace}";
     }
 
     /**
@@ -409,54 +308,25 @@ final class Cookie implements SessionManagerInterface
             return;
         }
 
-        $storage = $this->getKey($storage);
-        if(!$storage){
-            return;
-        }
+        $key = $this->getKey($storage);
 
-        $_COOKIE[self::$table] = self::open();
-        $_COOKIE[self::$table][$storage]['__data'] = $data;
-        $_COOKIE[self::$table][$storage]['__secure'] = 'off';
-        $items = $_COOKIE[self::$table];
+        $_COOKIE[$key] = $this->open();
+        $_COOKIE[$key]['__data'] = $data;
+        $_COOKIE[$key]['__secure'] = '0';
 
         if($this->config->encryptCookieData){
             $encrypted = Crypter::encrypt(json_encode($data));
-            if($encrypted){
-                $_COOKIE[self::$table][$storage]['__secure'] = 'on';
-                $items[$storage]['__secure'] = 'on';
-                $items[$storage]['__data'] = $encrypted;
+
+            if($encrypted !== false){
+                $_COOKIE[$key]['__secure'] = '1';
+                $_COOKIE[$key]['__data'] = $encrypted;
             }
         }
 
         $this->store(
-            self::$table, 
-            json_encode($items), 
-            time() + $this->config->expiration
+            $key, 
+            serialize($_COOKIE[$key])
         );
-        $items = null;
-    }
-
-    /**
-     * Opens and decodes the cookie data from the session table.
-     *
-     * This method attempts to retrieve and decode the cookie data stored in the session table.
-     * If the data is a JSON string, it decodes it into an array. If it's already an array,
-     * it returns it as is. In case of any errors during decoding, it logs the error and
-     * returns an empty array.
-     *
-     * @return array The decoded cookie data as an array. Returns an empty array if
-     *               the data couldn't be retrieved or decoded.
-     */
-    private static function open(): array 
-    {
-        try {
-            return is_string($_COOKIE[self::$table] ?? []) 
-                ? (array) json_decode($_COOKIE[self::$table], true, 512, JSON_THROW_ON_ERROR) 
-                : (array) ($_COOKIE[self::$table] ?? []);
-        }catch(Throwable $e){
-            Logger::error('Session Cookie Error: failed to decode cookie data' . $e->getMessage());
-            return [];
-        }
     }
 
     /**
@@ -465,84 +335,346 @@ final class Cookie implements SessionManagerInterface
      * This method determines whether the cookie data for a given storage
      * is encrypted based on the configuration and stored cookie information.
      *
-     * @param string|null $storage The storage name to check. If null, the default storage will be used.
+     * @param array $data The data to check.
      *
      * @return bool Returns true if the cookie data is encrypted, false otherwise.
      */
-    private function isEncrypted(?string $storage = null): bool 
+    private function isEncrypted(array $data): bool 
     {
-        $storage = $this->getKey($storage);
         return (
-            $this->config->encryptCookieData && 
-            ($_COOKIE[self::$table][$storage]['__secure'] ?? 'off') === 'on' &&
-            is_string($_COOKIE[self::$table][$storage]['__data'] ?? [])
+            ($data['__secure'] ?? '0') === '1'
+            && ($data['__data'] ?? '') !== ''
+            && is_string($data['__data'] ?? [])
+        );
+    }
+
+    /**
+     * Refresh the cookie expiration time.
+     * 
+     * @param string $name The cookie name.
+     * @param mixed $value The cookie value.
+     * 
+     * @return void
+     */
+    private function refresh(string $name, mixed $value): void
+    {
+        $this->store(
+            $name, 
+            is_array($value) ? serialize($value) : $value
         );
     }
 
     /**
      * Save cookie data.
      *
+     * Cookie values are optionally compressed, then Base64 encoded before being
+     * sent to the browser. Encrypted cookie data is not compressed.
+     *
      * @param string $name Cookie name.
-     * @param string $value cookie contents.
-     * @param int $expiry cookie expiration time.
-     * @param ?string $samesite cookie samesite attribute.
-     * 
-     * @return bool Return true if successful, otherwise false.
+     * @param string $value Cookie contents.
+     * @param int|null $expiry  Cookie expiration timestamp.
+     * @param string|null $samesite SameSite cookie attribute.
+     * @param bool $encode Whether to encode the cookie value.
+     *
+     * @return bool True if the cookie was successfully set, otherwise false.
      */
     private function store(
-        string $name, 
-        string $value, 
-        int $expiry, 
-        ?string $samesite = null
-    ): bool
+        string $name,
+        string $value,
+        ?int $expiry = null,
+        ?string $samesite = null,
+        bool $encode = true
+    ): bool 
     {
+        if (
+            $value !== ''
+            && !str_starts_with($value, 'be:')
+        ) {
+            if (
+                $encode
+                && !$this->config->encryptCookieData
+                && !str_contains($value, ':cp:')
+            ) {
+                [$encoding, $compressed,] = Encoder::compress(
+                    $value,
+                    minLength: 0
+                );
+
+                if ($encoding !== null) {
+                    $value = "{$encoding}:cp:{$compressed}";
+                }
+            }
+
+            $value = 'be:' . base64_encode($value);
+
+            if (strlen($name) + strlen($value) > 3800) {
+                return false;
+            }
+        }
+
         return setcookie($name, $value, [
-            'expires' => $expiry,
-            'path' => $this->config->sessionPath,
-            'domain' => $this->config->sessionDomain,
-            'secure' => true,
+            'expires'  => $expiry ?? (time() + $this->config->expiration),
+            'path'     => $this->config->sessionPath,
+            'domain'   => $this->config->sessionDomain,
+            'secure'   => PRODUCTION,
             'httponly' => true,
-            'samesite' => $samesite ?? $this->config->sameSite 
+            'samesite' => $samesite ?? $this->config->sameSite,
         ]);
     }
 
     /**
-     * Generate cookie session id.
+     * Update the session ID cookie.
      *
-     * @param string|null $sessionId Optional cookie session id.
-     * 
-     * @return bool Return true if successful, otherwise false.
+     * @param string $id The session ID to store.
+     * @param int|null $expiry The Unix expiration timestamp, or null to use the
+     *                         configured session expiration.
+     *
+     * @return bool Return true if the cookie was successfully set, false otherwise.
      */
-    private function create(
-        ?string $sessionId = null, 
-        bool $regenerate = false,
-        bool $clearData = false
-    ): bool
+    private function setCookieId(
+        string $id = '',
+        ?int $expiry = null
+    ): bool 
     {
-        if(!$regenerate && isset($_COOKIE[self::$secureTable])){
-            return true;
+        return setcookie(self::COOKIE_ID, $id, [
+            'expires'  => $expiry ?? (time() + $this->config->expiration),
+            'path'     => '/',
+            'domain'   => $this->config->sessionDomain ?: null,
+            'secure'   => PRODUCTION,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+
+    /**
+     * Open and decode cookie data.
+     *
+     * The cookie value is Base64 decoded, decompressed when necessary, and then
+     * unserialized. The encrypted `__data` value is decrypted separately.
+     *
+     * @param string|null $storage Storage name.
+     *
+     * @return array Decoded cookie data, or an empty array on failure.
+     */
+    private function open(?string $storage = null): array
+    {
+        $key = $this->getKey($storage);
+
+        return $this->parse(
+            $_COOKIE[$key] ?? null,
+            $key
+        );
+
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @param mixed $data
+     * @param string|null $key
+     * @return array
+     */
+    private function parse(mixed $data, ?string $key = null): array
+    {
+        if ($data === null || $data === '') {
+            return [];
         }
 
-        if($this->store(
-            self::$secureTable, 
-            $sessionId ?? bin2hex(random_bytes(16)), 
-            time() + $this->config->expiration, 
-            'Strict'
-        )){
-            $_COOKIE[self::$secureTable] = $sessionId;
+        if(isset($data['__decoded'])){
+            return $data;
+        }
 
-            if(
-                $clearData && 
-                isset($_COOKIE[self::$table]) && 
-                $this->store(self::$table, '', time() - $this->config->expiration)
-            ) {
-                $_COOKIE[self::$table] = [];
-                unset($_COOKIE[self::$table]);
+        if (!is_string($data)) {
+            $data = (array) $data;
+
+            $data['__decoded'] = true;
+            return $data;
+        }
+
+        $error = null;
+
+        try {
+            if (!str_starts_with($data, 'be:')) {
+                $error = "invalid cookie encoding for key: '%s'";
+                return [];
             }
 
+            $items = base64_decode(substr($data, 3), true);
+
+            if ($items === false || $items === '') {
+                $error = "failed to decode cookie key: '%s'";
+                return [];
+            }
+
+            if (str_contains($items, ':cp:')) {
+                [$encoding, $compressed] = explode(':cp:', $items, 2);
+
+                [, $items] = Encoder::decompress(
+                    $compressed,
+                    encoding: $encoding
+                );
+
+                if (!is_string($items)) {
+                    $error = "failed to decompress cookie key: '%s'";
+                    return [];
+                }
+            }
+
+            try {
+                $items = unserialize($items, [
+                    'allowed_classes' => false,
+                ]);
+            } catch (Throwable $e) {
+                $error = "failed to unserialize cookie key: '%s': {$e->getMessage()}";
+                return [];
+            }
+
+            if (!is_array($items)) {
+                $error = "invalid cookie data key: '%s'";
+                return [];
+            }
+
+            if ($this->isEncrypted($items)) {
+                $items['__data'] = $this->decode(
+                    $items['__data'] ?? ''
+                );
+            }
+
+            $items['__decoded'] = true;
+
+            return $items;
+        } finally {
+            if($key !== null){
+                $this->refresh($key, $data);
+
+                if($error !== null){
+                    Logger::error(sprintf(
+                        "Session Cookie Error: {$error}", 
+                        $key
+                    ));
+                }
+            }
+        }
+    }
+
+    /**
+     * Decode encrypted cookie data.
+     *
+     * @param mixed $data Cookie data.
+     *
+     * @return mixed Decoded data, or false when decryption fails.
+     */
+    private function decode(mixed $data): mixed
+    {
+        if ($data === '' || !is_string($data)) {
+            return $data;
+        }
+
+        $data = Crypter::decrypt($data);
+
+        if ($data === false) {
+            Logger::error(
+                'Session Cookie Error: failed to decrypt cookie data'
+            );
+
+            return false;
+        }
+
+        if (!is_string($data)) {
+            return $data;
+        }
+
+        try {
+            return json_decode(
+                $data,
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            );
+        } catch (JsonException) {
+            return $data;
+        }
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @param \Closure $callback
+     * @return void
+     */
+    private function onEach(Closure $callback, bool $thisStorage = false): void 
+    {
+        $session = self::KEY_PREFIX . $this->getId();
+
+        if($thisStorage){
+            $session .= "_{$this->storage}";
+        }
+
+        foreach ($_COOKIE as $name => $value) {
+            if(!str_starts_with($name, $session)){
+                continue;
+            }
+
+            $callback($name, $value);
+        }
+    }
+
+    /**
+     * Generate or refresh the cookie session ID.
+     *
+     * @param string|null $sessionId Optional session ID to use.
+     * @param bool $isRegenerate Whether to generate a new session ID.
+     * @param bool $clearSessionData Whether to clear existing session data.
+     *
+     * @return bool True if successful, otherwise false.
+     */
+    private function sessionRegenerateId(
+        ?string $sessionId = null,
+        bool $isRegenerate = false,
+        bool $clearSessionData = false
+    ): bool 
+    {
+        if (!$isRegenerate && $sessionId === null) {
+            $sessionId = $_COOKIE[self::COOKIE_ID] ?? null;
+        }
+
+        $sessionId ??= bin2hex(random_bytes(8));
+
+        if (!$this->setCookieId($sessionId)) {
+            return false;
+        }
+
+        if (!$isRegenerate && !$clearSessionData) {
+            self::$sessionId = $sessionId;
+            $_COOKIE[self::COOKIE_ID] = $sessionId;
+
             return true;
         }
 
-        return false;
+        if($clearSessionData){
+            $this->clear();
+            
+            self::$sessionId = $sessionId;
+            $_COOKIE[self::COOKIE_ID] = $sessionId;
+
+            return true;
+        }
+
+        $old = $this->getId();
+
+        // Copy old session data to new
+        $this->onEach(function(string $name, mixed $value) use ($old, $sessionId): void {
+            $new = str_replace($old, $sessionId, $name);
+
+            $this->refresh($new, $value);
+            $_COOKIE[$new] = is_string($value) ? $this->parse($value) : $value;
+
+            unset($_COOKIE[$name]);
+        });
+
+        self::$sessionId = $sessionId;
+        $_COOKIE[self::COOKIE_ID] = $sessionId;
+
+        return true;
     }
 }

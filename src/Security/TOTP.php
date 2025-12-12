@@ -10,10 +10,10 @@
  */
 namespace Luminova\Security;
 
-use \Luminova\Exceptions\EncryptionException;
-use \Luminova\Interface\AuthenticatorInterface;
-use \Luminova\Exceptions\InvalidArgumentException;
-use \Luminova\Security\Authenticator\Google;
+use Luminova\Exceptions\EncryptionException;
+use Luminova\Interface\AuthenticatorInterface;
+use Luminova\Exceptions\InvalidArgumentException;
+use Luminova\Security\Authenticator\Google;
 use \Endroid\QrCode\{
     QrCode,
     Writer\PngWriter,
@@ -32,7 +32,7 @@ final class TOTP
     /**
      * Initialize class.
      * 
-     * @param AuthenticatorInterface The client instance used for TOTP operations.
+     * @param AuthenticatorInterface $client The client instance used for TOTP operations.
      */
     private function __construct(private AuthenticatorInterface $client) {}
 
@@ -41,13 +41,13 @@ final class TOTP
      * 
      * @param AuthenticatorInterface|null $client Optional custom authenticator implementation. 
      *                                            Defaults to a Google Authenticator client.
-     * @return static Return a new TOTP instance.
+     * @return self Return a new TOTP instance.
      */
     public static function create(?AuthenticatorInterface $client = null): self
     {
         return new self(
             $client ?? new Google(
-                uniqid('default.') . '@' . APP_HOSTNAME,
+                bin2hex(random_bytes(8)) . '@' . APP_HOSTNAME,
                 APP_NAME
             )
         );
@@ -162,7 +162,8 @@ final class TOTP
      * @param int $timeStep The time step in seconds for TOTP generation. Default: 30.
      * 
      * @return bool Return true if the code is valid; otherwise, false.
-     * @throws EncryptionException If called without a valid authentication secret or an invalid base32 character is found in secret.
+     * @throws EncryptionException If called without a valid authentication secret 
+     *          or an invalid base32 character is found in secret.
      * 
      * @example - Verify Code:
      * 
@@ -203,7 +204,7 @@ final class TOTP
     /**
      * Generate a QR code and output it as PNG or SVG.
      * 
-     * @param int $pixelSize Size of each QR code "block" in pixels.
+     * @param int $size Size of each QR code "block" in pixels.
      * @param string $output Output format: 'png', 'svg', 'base64', etc.
      * 
      * @return string|null Return the generated QR code in the desired format.

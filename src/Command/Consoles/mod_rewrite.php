@@ -1,6 +1,6 @@
-<?php 
+<?php
 /**
- * Luminova Framework Mod-Rewrite Front Controller.
+ * Luminova Framework HTTP Development Server Mod-Rewrite.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -8,29 +8,49 @@
  * @license See LICENSE file
  * @link https://luminova.ng
  */
+
+$NOVAKIT_VERSION = getenv('NOVAKIT_VERSION') ?: '3.0.0';
+$LUMINOVA_VERSION = getenv('LUMINOVA_VERSION') ?: '3.8.5';
+
+$NOVAKIT_SOFTWARE = sprintf(
+    '(NovaKit/%s) (Luminova/%s) (PHP/%s; Development Server)',
+    $NOVAKIT_VERSION,
+    $LUMINOVA_VERSION,
+    PHP_VERSION
+);
+
 if (PHP_SAPI === 'cli') {
+    putenv('RUNTIME_ENV=novakit');
+    putenv("SERVER_SOFTWARE={$NOVAKIT_SOFTWARE}");
+
     return;
 }
 
-$_SERVER['SCRIPT_NAME'] = DIRECTORY_SEPARATOR  . 'index.php';
-$_SERVER['FRAMEWORK_VERSION'] = getenv('FRAMEWORK_VERSION') ?: '3.5.6';
-$_SERVER['NOVAKIT_VERSION'] = getenv('NOVAKIT_VERSION') ?: '2.9.8';
-$_SERVER['NOVAKIT_EXECUTION_ENV'] = dirname($_SERVER['DOCUMENT_ROOT']) . DIRECTORY_SEPARATOR . 'novakit';
-$_SERVER['SERVER_SOFTWARE'] = sprintf(
-    '(NovaKit/%s) (Luminova/%s) (PHP/%s; %s)',
-    $_SERVER['NOVAKIT_VERSION'],
-    $_SERVER['FRAMEWORK_VERSION'],
-    PHP_VERSION,
-    'Development Server'
+$_SERVER['SCRIPT_NAME'] = '/index.php';
+$_SERVER['RUNTIME_ENV'] = 'novakit';
+$_SERVER['LUMINOVA_VERSION'] = $LUMINOVA_VERSION;
+$_SERVER['NOVAKIT_VERSION'] = $NOVAKIT_VERSION;
+$_SERVER['SERVER_SOFTWARE'] = $NOVAKIT_SOFTWARE;
+
+$_LUMINOVA_URI = urldecode(
+    parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/'
 );
 
-// Determine the requested URL path (decoded)
-$_LUMINOVA_URL = urldecode(parse_url('https://luminova.ng' . $_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '');
-$_LUMINOVA_PATH = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\') . DIRECTORY_SEPARATOR . ltrim($_LUMINOVA_URL, '/\\');
+$_LUMINOVA_DOC_ROOT = rtrim(
+    $_SERVER['DOCUMENT_ROOT'],
+    '/\\'
+) . DIRECTORY_SEPARATOR;
 
-// If the path is a real file or directory, let Apache serve it
-if ($_LUMINOVA_URL !== '/' && (is_file($_LUMINOVA_PATH) || is_dir($_LUMINOVA_PATH))) {
+$_LUMINOVA_PATH = $_LUMINOVA_DOC_ROOT . ltrim($_LUMINOVA_URI, '/\\');
+
+unset(
+    $NOVAKIT_VERSION,
+    $LUMINOVA_VERSION,
+    $NOVAKIT_SOFTWARE
+);
+
+if ($_LUMINOVA_URI !== '/' && file_exists($_LUMINOVA_PATH)) {
     return false;
 }
 
-require_once $_SERVER['DOCUMENT_ROOT'] . $_SERVER['SCRIPT_NAME'];
+require_once $_LUMINOVA_DOC_ROOT . 'index.php';

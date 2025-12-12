@@ -12,35 +12,39 @@ declare(strict_types=1);
 namespace Luminova\Routing;
 
 use \Closure;
-use \Exception;
+use \stdClass;
 use \Throwable;
-use \Luminova\Boot;
+use \App\Kernel;
+use \ReflectionType;
+use Luminova\Runtime;
 use \ReflectionClass;
 use \ReflectionMethod;
-use \Luminova\Luminova;
+use Luminova\Luminova;
+use Luminova\Config\Env;
 use \ReflectionFunction;
-use \ReflectionException;
-use \ReflectionNamedType;
 use \ReflectionUnionType;
-use \Luminova\Http\Header;
-use \Luminova\Http\HttpCode;
-use \Luminova\Base\Command;
-use \Luminova\Command\Terminal;
-use \Luminova\Template\Response;
+use \ReflectionNamedType;
+use Luminova\Http\Header;
+use Luminova\Base\Command;
+use Luminova\Logger\Logger;
+use Luminova\Template\View;
+use Luminova\Command\Terminal;
+use Luminova\Template\Response;
 use \ReflectionIntersectionType;
-use \Luminova\Command\Utils\Color;
+use Luminova\Command\Utils\Color;
+use Luminova\Debugger\Performance;
+use \App\Errors\Controllers\AppError;
+use Luminova\Command\Consoles\Commands;
 use \Psr\Http\Message\ResponseInterface;
-use function \Luminova\Funcs\filter_paths;
-use \Luminova\Foundation\Core\Application;
-use \Luminova\Attributes\Internal\Compiler;
-use \App\Errors\Controllers\ErrorController;
-use \Luminova\Routing\{DI, Prefix, Segments};
-use \Luminova\Exceptions\{ErrorCode, AppException, RouterException};
-use \Luminova\Interface\{
+use Luminova\Foundation\Core\Application;
+use Luminova\Attributes\Internal\Compiler;
+use Luminova\Routing\{DI, Prefix, Segments};
+use Luminova\Exceptions\{ErrorCode, LuminovaException, RouterException, ClassException};
+use Luminova\Interface\{
     RoutableInterface, 
     RouterInterface, 
-    ErrorHandlerInterface, 
-    ViewResponseInterface,
+    ErrorControllerInterface, 
+    ContentResponseInterface,
     ResponseInterface as HttpResponseInterface
 };
 
@@ -60,21 +64,42 @@ final class Router implements RouterInterface
      * @internal
      */
     public const CLI_URI = '__cli__';
+
+    /**
+     * Flag for DI no default value
+     * 
+     * @var string NO_DEFAULT_VALUE
+     */
+    private const NO_DEFAULT_VALUE = '__DI_NO_DEFAULT_VALUE__';
     
     /**
      * All allowed HTTP request methods.
      * 
-     * @var array<string,string> $httpMethods
+     * @var array<string,string> HTTP_METHODS
      */
-    private static array $httpMethods = [
-        'GET'       => 'GET', 
-        'POST'      => 'POST', 
-        'PATCH'     => 'PATCH', 
-        'DELETE'    => 'DELETE', 
-        'PUT'       => 'PUT', 
-        'OPTIONS'   => 'OPTIONS', 
-        'HEAD'      => 'HEAD',
-        'CLI'       => 'CLI' //Fake a request method for cli
+    private const HTTP_METHODS = [
+        'GET'       => true,
+        'PUT'       => true,
+        'POST'      => true,
+        'HEAD'      => true,
+        'QUERY'     => true,
+        'PATCH'     => true,
+        'DELETE'    => true,
+        'OPTIONS'   => true,
+        'CLI'       => true, //Fake a request method for cli
+    ];
+
+    /**
+     * Supported handles response classes.
+     * 
+     * @var array<class-string,true> RESPONSES
+     */
+    private const RESPONSES = [
+        Response::class => true,
+        ResponseInterface::class => true,
+        HttpResponseInterface::class => true,
+        ContentResponseInterface::class => true,
+        \Luminova\Http\Message\Response::class => true,
     ];
     
     /**
@@ -99,11 +124,11 @@ final class Router implements RouterInterface
     private static string $uri = '';
 
     /**
-     * The normalized static Uri version. 
+     * The normalized static Uri path. 
      * 
-     * @var string|null $staticCacheUri
+     * @var string|null $uriPath
      */
-    public static ?string $staticCacheUri = null;
+    public static ?string $uriPath = null;
 
     /**
      * Application registered controllers namespace.
@@ -120,18 +145,11 @@ final class Router implements RouterInterface
     private static array $placeholders = [];
 
     /**
-     * Whether router is running in cli mode.
-     * 
-     * @var bool $isCommand
-     */
-    private static bool $isCommand = false;
-
-    /**
      * Allow Dependency injection.
      * 
-     * @var bool $isDIEnabled 
+     * @var bool|null $useDependencyInjection 
      */
-    private static bool $isDIEnabled = false;
+    private static ?bool $useDependencyInjection = null;
 
     /**
      * Flag to terminate router run immediately.
@@ -155,61 +173,88 @@ final class Router implements RouterInterface
     private static array $routes = [];
 
     /**
-     * Application instance.
-     * 
-     * @var Application|null $app 
+     * Undocumented variable
+     *
+     * @var Application|null
      */
     private static ?Application $app = null;
 
     /**
-     * {@inheritdoc}
+     * Initializes the Router class and sets up default properties.
+     * 
+     * @param Application|null $app Instance of core application class.
      */
-    public function __construct(Application $app)
+    public function __construct(?Application $app = null)
     {
-        self::$isCommand = false;
-        self::$app = $app;
-        self::$isDIEnabled = env('feature.route.dependency.injection', false);
+        self::$useDependencyInjection ??= Env::get('feature.route.dependency.injection', false);
 
-        if(Luminova::isCommand()){
-            self::$isCommand = true;
+        if($app instanceof Application){
+            self::$app = $app;
+        }
+
+        if(Runtime::isCommand()){
             Terminal::init();
         }
 
         self::reset(true);
-        Luminova::profiling('start');
-        $app = null;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function context(Prefix|array ...$contexts): self 
+    public function setApplication(Application $app): self 
+    {
+        self::$app = $app;
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function context(?array $contexts = null): self 
     {
         self::onInitialized();
-        self::$uri = self::getUriSegments();
+        self::$uri = self::getUri();
 
         $prefix = self::getPrefix();
+        $isCommand = Runtime::isCommand();
 
-        // Application start event.
-        self::$app->__on('onStart', [
-            'cli' => self::$isCommand ,
-            'method' => self::$method,
-            'uri' => self::$uri,
-            'module' => $prefix
-        ]);
+        $info = [
+            'context' => $isCommand ? 'CLI' : 'HTTP',
+            'method'  => self::$method,
+            'uri'     => self::$uri
+        ];
+
+        $info[Runtime::isHmvc() ? 'module' : 'prefix'] = $prefix;
 
         // When using attribute for routes.
-        if(env('feature.route.attributes', false)){
-           return $this->withAttributes($prefix);
+        if(Env::get('feature.route.attributes', false)){
+            self::getApp()->trigger('onStart', $info);
+
+            return $this->withAttributes($prefix);
+        }
+
+        if($contexts === null){
+            if ($isCommand){
+                $contexts = ['cli' => ['prefix' => 'cli', 'isCommand' => true]];
+            } else{
+                $api = Luminova::apiPrefix();
+                $contexts = [
+                    'web' => ['prefix' => 'web', 'onError' => null],
+                    $api  => ['prefix' => $api, 'onError' => null]
+                ];
+            }
         }
 
         // When using default context manager.
-        if($contexts === null || $contexts === []){
+        if($contexts === []){
            RouterException::rethrow('no.context', ErrorCode::RUNTIME_ERROR);
         }
         
-        if (isset(self::$httpMethods[self::$method])) {
-           return $this->withMethods($prefix, $contexts);
+        if (isset(self::HTTP_METHODS[self::$method])) {
+            self::getApp()->trigger('onStart', $info);
+
+            return $this->withMethods($prefix, $contexts);
         }
         
         RouterException::rethrow('no.route.handler', ErrorCode::RUNTIME_ERROR);
@@ -222,6 +267,14 @@ final class Router implements RouterInterface
     public static function get(string $pattern, Closure|string $callback): void
     {
         self::http('http.routes', 'GET', $pattern, $callback);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function query(string $pattern, Closure|string $callback): void
+    {
+        self::http('http.routes', 'QUERY', $pattern, $callback);
     }
 
     /**
@@ -307,20 +360,27 @@ final class Router implements RouterInterface
      */
     public static function guard(string $group, Closure|string $callback): void
     {
-        if(!self::$isCommand){
+        if (!Runtime::isCommand()) {
             RouterException::rethrow('invalid.middleware.cli');
         }
 
         $group = trim($group, '/');
 
-        if (!$group || !preg_match('/^[a-z][a-z0-9_:-]*$/u', $group)) {
-            RouterException::rethrow('invalid.cli.group', ErrorCode::INVALID_ARGUMENTS, [$group]);
+        if (
+            $group === ''
+            || preg_match('/^[\p{L}][\p{L}\p{N}_:-]*$/u', $group) !== 1
+        ) {
+            RouterException::rethrow(
+                'invalid.cli.group',
+                ErrorCode::INVALID_ARGUMENTS,
+                [$group]
+            );
         }
 
         self::$routes['cli.middleware']['CLI'][$group][] = [
-            'callback' => $callback,
-            'pattern' => $group,
-            'middleware' => true
+            'callback'   => $callback,
+            'pattern'    => $group,
+            'middleware' => true,
         ];
     }
 
@@ -345,8 +405,8 @@ final class Router implements RouterInterface
     public static function command(string $command, Closure|string $callback): void
     {
         self::$routes['cli.commands']['CLI'][] = [
-            'callback' => $callback,
-            'pattern' => self::toPatterns(trim($command, '/'), true),
+            'callback'   => $callback,
+            'pattern'    => self::toPatterns(trim($command, '/'), true),
             'middleware' => false
         ];
     }
@@ -359,7 +419,7 @@ final class Router implements RouterInterface
         $current = self::$base;
         self::$base .= rtrim($prefix, '/');
 
-        $callback(...self::noneParamInjection($callback));
+        $callback(...self::builtinInjection($callback));
         self::$base = $current;
     }
 
@@ -374,38 +434,25 @@ final class Router implements RouterInterface
     /**
      * {@inheritdoc}
      */
-    public static function onError(Closure|array|string $pattern, Closure|array|string|null $handler = null): void
+    public static function onError(
+        Closure|array $handler,
+        string $pattern = '/'
+    ): void
     {
-        $isPatternString = is_string($pattern);
-        $message = 'a callable (closure or [Controller::class, method])';
-
-        if ($handler === null) {
-            if ($isPatternString && str_contains($pattern, '/')) {
-                throw new RouterException(
-                    "Invalid arguments: when defining a global error handler, '\$pattern' must be {$message}, not a URI.",
-                    ErrorCode::INVALID_ARGUMENTS
-                );
-            }
-
-            self::$routes['http.errors']['/'] = $pattern;
-            return;
-        }
-
-        if (!$isPatternString) {
+        if (!Runtime::isCallable($handler)) {
             throw new RouterException(
-                'Invalid arguments: "$pattern" must be a URI string when a callback is provided.',
+                "Invalid error handler: '\$handler' must be a valid callable " .
+                "(closure, callable string, or [Controller::class, method]).",
                 ErrorCode::INVALID_ARGUMENTS
             );
         }
+        
+        $pattern = trim($pattern);
+        $pattern = ($pattern === '/' || $pattern === '') 
+            ? '/' 
+            : self::toPatterns($pattern);
 
-        if (is_string($handler) && str_contains($handler, '/')) {
-            throw new RouterException(
-                "Invalid arguments: '\$handler' cannot be a URI string. Provide {$message}.",
-                ErrorCode::INVALID_ARGUMENTS
-            );
-        }
-
-        self::$routes['http.errors'][self::toPatterns($pattern)] = $handler;
+        self::$routes['http.errors'][$pattern] = $handler;
     }
 
     /**
@@ -413,33 +460,12 @@ final class Router implements RouterInterface
      */
     public function addNamespace(string $namespace): self
     {
-        self::$app::$isHmvcModule ??= env('feature.app.hmvc', false);
-        $namespace = trim($namespace, " \\\\");
-        
-        if($namespace === '') {
-            RouterException::rethrow('argument.empty', ErrorCode::INVALID_ARGUMENTS, [
-                '$namespace'
-            ]);
+        $namespace = trim($namespace, " \\");
 
-            return $this;
-        }
+        self::assertRootNamespace($namespace);
 
-        if (!preg_match('/^(?:[A-Za-z_][A-Za-z0-9_]*)(?:\\\\{1,2}[A-Za-z_][A-Za-z0-9_]*)*$/', $namespace)) {
-            RouterException::rethrow(
-                'invalid.namespace',
-                ErrorCode::NOT_ALLOWED,
-                [$namespace]
-            );
-            return $this;
-        }
+        self::$namespace[] = "\\{$namespace}\\";
 
-        $namespace = "\\{$namespace}\\";
-
-        if (!$this->isNamespace($namespace)) {
-            return $this;
-        }
-
-        self::$namespace[] = $namespace;
         return $this;
     }
 
@@ -448,22 +474,31 @@ final class Router implements RouterInterface
      */
     public function run(): void
     {
+        Runtime::clearLastError();
+        
+        if(
+            (self::$method === 'CLI' || Runtime::isCommand()) 
+            && self::hasCommand('no-profiling')
+        ){
+            Performance::disable();
+        }
+        
         if(self::$terminate){
-            Luminova::profiling('stop');
+            Runtime::profiling('stop');
             exit(STATUS_SUCCESS);
         }
 
-        $context = null;
+        $isCommand = self::$method === 'CLI';
         $exitCode = STATUS_ERROR;
 
-        if(self::$method === 'CLI' && !self::$isCommand){
+        if($isCommand && !Runtime::isCommand()){
             RouterException::rethrow('invalid.request.method', ErrorCode::INVALID_REQUEST_METHOD, [
                 self::$method,
                 'CLI'
             ]);
         }
 
-        if(self::$method !== 'CLI' && self::$isCommand){
+        if(!$isCommand && Runtime::isCommand()){
             RouterException::rethrow('invalid.request.method', ErrorCode::INVALID_REQUEST_METHOD, [
                 self::$method,
                 'HTTP'
@@ -471,23 +506,27 @@ final class Router implements RouterInterface
         }
 
         try{
-            if(self::$method === 'CLI'){
-                $exitCode = self::runAsCommand();
-                $context = ['commands' => self::$commands];
-            }else{
-                $exitCode = self::runAsHttp();
-            }
+            $exitCode = $isCommand 
+                ? $this->runAsCommand() 
+                : $this->runAsHttp();
 
-            self::$app->__on('onFinish', Luminova::getClassMetadata());
-            Luminova::profiling('stop', $context);
-            Boot::tips();
+            Runtime::profiling('stop', $isCommand ? self::$commands : null);
+            Runtime::tips();
         }catch(Throwable $e){
-            if(PRODUCTION){
-                RouterException::throwException($e->getMessage(), $e->getCode(), $e);
+            if($e instanceof LuminovaException){
+                $e->handle();
                 return;
             }
 
-            throw $e;
+            RouterException::handleException($e->getMessage(), $e->getCode(), $e);
+        } finally {
+            ob_start();
+            try{
+                self::getApp()->trigger('onFinish', Runtime::get(Runtime::CLASS_METADATA));
+            } catch(Throwable $e){
+                Logger::exception($e);
+            }
+            ob_end_flush();
         }
 
         exit($exitCode);
@@ -504,31 +543,51 @@ final class Router implements RouterInterface
     /**
      * {@inheritdoc}
      */
-    public static function pattern(string $name, string $pattern, ?int $group = null): void 
+    public static function pattern(string $name, string $pattern, ?int $group = null): void
     {
         $name = trim($name);
-        $forbidden = [
-            'root'    => true,
-            '(:root)' => true,
-            'base'    => true,
-            '(:base)' => true,
-        ];
 
-        if ($name === '' || isset($forbidden[$name]) ) {
+        if ($name === '' || $pattern === '') {
             throw new RouterException(
                 ($name === '') 
-                    ? 'Placeholder name cannot be empty.'
-                    : sprintf('The placeholder name "%s" is reserved and cannot be override.', $name),
+                    ? 'Placeholder name cannot be empty.' 
+                    : 'Placeholder pattern cannot be empty.',
                 ErrorCode::INVALID_ARGUMENTS
             );
         }
 
-        $name = str_starts_with($name, '(:') ? $name : "(:$name)";
+        if (preg_match('/^(?:\(\:)?[\p{L}_][\p{L}\p{N}._-]*(?:\))?$/u', $name) !== 1) {
+            throw new RouterException(
+                sprintf(
+                    'Invalid placeholder name "%s". Must start with a letter or underscore and contain only letters, numbers, dot, underscore, or hyphen.',
+                    $name
+                ),
+                ErrorCode::INVALID_ARGUMENTS
+            );
+        }
 
-        if($group !== null && !str_starts_with($pattern, '(')){
-            $pattern = ($group === 0) 
-                ? '(?:' . $pattern . ')' 
-                : (($group === 1) ? '(' . $pattern . ')' : $pattern);
+        if (!str_starts_with($name, '(:')) {
+            $name = "(:{$name})";
+        }
+
+        static $forbidden = [
+            '(:root)' => true,
+            '(:base)' => true,
+        ];
+
+        if (isset($forbidden[$name])) {
+            throw new RouterException(
+                sprintf('The placeholder name "%s" is reserved and cannot be override.', $name),
+                ErrorCode::INVALID_ARGUMENTS
+            );
+        }
+
+        if ($group !== null && !str_starts_with($pattern, '(')) {
+            if ($group === 0) {
+                $pattern = '(?:' . $pattern . ')';
+            } elseif ($group === 1) {
+                $pattern = '(' . $pattern . ')';
+            }
         }
 
         self::$placeholders[$name] = $pattern;
@@ -545,62 +604,149 @@ final class Router implements RouterInterface
     /**
      * {@inheritdoc}
      */
-    public static function getUriSegments(): string
+    public static function getUriPath(): string
     {
-        return self::$isCommand 
-            ? self::CLI_URI 
-            : (self::$staticCacheUri ?? Luminova::getUriSegments());
+        if (self::$uriPath !== null) {
+            return self::$uriPath;
+        }
+
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+
+        if ($requestUri === '') {
+            return self::$uriPath = '/';
+        }
+
+        $uri = rawurldecode($requestUri);
+
+        if (($position = strpos($uri, '?')) !== false) {
+            $uri = substr($uri, 0, $position);
+        }
+
+        $base = Luminova::documentRootUri();
+
+        if ($base !== '/' && str_starts_with($uri, $base)) {
+            $uri = substr($uri, strlen($base));
+        }
+
+        return self::$uriPath = '/' . ltrim($uri, '/');
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getSegment(): Segments 
+    public static function getUriSegments(): array
     {
-        return new Segments(self::$isCommand ? [self::CLI_URI] : Luminova::getSegments());
+        $path = trim(self::getUriPath(), '/');
+
+        if ($path === '' || $path === 'public') {
+            return [];
+        }
+
+        if (str_starts_with($path, 'public/')) {
+            $path = substr($path, 7);
+        }
+
+        return ($path === '') 
+            ? [] 
+            : explode('/', $path);
     }
 
     /**
-     * Check if the current request URI starts with the given prefix.
-     *
-     * Useful for route matching or highlighting navigation items based on URI segments.
-     *
-     * @param string $prefix The URI prefix to check against. Can be a partial path like "/admin".
-     *
-     * @return bool Returns `true` if the current URI starts with the specified prefix, otherwise `false`.
-     *
-     * @example - Example:
-     * ```php
-     * if (Router::isPrefix('/admin')) {
-     *     // Current page is under /admin section
-     * }
-     *
-     * if (Router::isPrefix('')) {
-     *     // Current page is root "/"
-     * }
-     * ```
+     * {@inheritdoc}
      */
-    public static function isPrefix(string $prefix): bool
+    public static function getSegment(): Segments
     {
-        $prefix = trim($prefix, ' /');
-        $segments = trim(Luminova::getSegments()[0] ?? '', ' /');
-
-        return ($segments === $prefix || ($segments === '/' && $prefix === ''));
-    }
-
-    /**
-     * This method is maintained for backward compatibility and will be removed in a future release.
-     * 
-     * @deprecated Use onError() instead.
-     */
-    public function setErrorListener(Closure|array|string $match, Closure|array|string|null $callback = null): void
-    {
-        \Luminova\Foundation\Error\Guard::deprecate(
-            'router->setErrorListener() is deprecated. Use Router::onError() instead.',
-            '3.6.8'
+        return new Segments(
+            Runtime::isCommand()
+                ? [self::CLI_URI]
+                : self::getUriSegments()
         );
-        
-        self::onError($match, $callback);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function isSegment(string $name, int $position = 0): bool
+    {
+        $segments = self::getUriSegments();
+
+        return isset($segments[$position])
+            && $segments[$position] === trim($name, '/');
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function isUriPrefix(array|string $prefix): bool
+    {
+        $segment = self::getUriSegments()[0] ?? null;
+
+        if ($segment === null) {
+            return false;
+        }
+
+        foreach ((array) $prefix as $value) {
+            if ($segment === trim($value, '/')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function isApiPrefix(): bool
+    {
+        return self::isSegment(Luminova::apiPrefix());
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function isApiRequest(?bool $ajaxAsApi = null): bool
+    {
+        if (self::isApiPrefix()) {
+            return true;
+        }
+
+        $ajaxAsApi ??= Env::get('app.validate.ajax.asapi', false);
+
+        return $ajaxAsApi
+            && isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+            && strcasecmp($_SERVER['HTTP_X_REQUESTED_WITH'], 'XMLHttpRequest') === 0;
+    }
+
+    /**
+     * Determine whether the first URI segment matches any given prefix.
+     *
+     * This checks only the first segment of the current request URI,
+     * making it useful for simple route grouping (e.g. `/admin`, `/api`).
+     *
+     * @param array|string $prefix One or more URI prefixes (e.g. "/admin", "api").
+     *
+     * @return bool Returns true if the first URI segment matches any prefix.
+     *
+     * @deprecated  Use {@see self::isUriPrefix()}
+     */
+    public static function isPrefix(array|string $prefix): bool
+    {
+        return self::isUriPrefix($prefix);
+    }
+
+    /**
+     * Get the request url segments as relative.
+     * 
+     * Resolves the request URI as a relative path, without query string or base path.
+     *
+     * @return string Return the normalized URI segment path (e.g., `/products/view/10`)
+     */
+    private static function getUri(): string
+    {
+        return Runtime::isCommand() 
+            ? self::CLI_URI 
+            : '/' . trim(self::getUriPath(), '/');
     }
 
     /**
@@ -609,30 +755,39 @@ final class Router implements RouterInterface
      * Load the route URI context prefix and make router/application available
      * as global variables inside the context file.
      *
-     * @param string $context Route URI context prefix name.
+     * @param string $prefix Route URI context prefix name.
      * 
      * @return void
      * @throws RouterException
      */
-    private function onContext(string $context): void 
+    private function onPrefixContext(string $prefix): void 
     {
-        $path = APP_ROOT . 'routes' . DIRECTORY_SEPARATOR . $context . '.php';
+        $filepath = Luminova::root('routes', "{$prefix}.php");
 
-        if (!is_file($path)) {
-            self::ePrint(
-                message: RouterException::getInformation('invalid.context', $context), 
-                status: 500
+        if (!is_file($filepath)) {
+            Luminova::terminate(
+                500, 
+                RouterException::getInformation('invalid.context', $prefix, $prefix),
+                httpOutput: self::isApiPrefix() ? 'json' : 'html'
             );
         }
 
-        Closure::bind(
-            static function (string $context, string $path, RouterInterface $router, Application $app): void {
-                require_once $path;
-            }, 
-            null, 
-            null
-        )($context, $path, $this, self::$app);
-        self::$app->__on('onContextInstalled', $context);
+        try{
+            Closure::bind(
+                static function (
+                    string $prefix, 
+                    string $filepath, 
+                    RouterInterface $router, 
+                    Application $app
+                ): void {
+                    require_once $filepath;
+                }, 
+                null, 
+                null
+            )($prefix, $filepath, $this, self::getApp());
+        } finally {
+            self::getApp()->trigger('onRouteResolved', $prefix);
+        }
     }
 
     /**
@@ -645,57 +800,81 @@ final class Router implements RouterInterface
      *
      * @param int  $status HTTP status code to send (default: 404).
      * @param bool $global Whether to invoke the global error handler first.
-     *                     If true, calls `ErrorController::onTrigger()` before checking other handlers.
+     *                     If true, calls `AppError::onTrigger()` before checking other handlers.
      *
-     * @return void
+     * @return never
      */
-    private static function onTriggerError(int $status = 404, bool $global = false): void
+    private static function onTriggerError(
+        int $status = 404, 
+        bool $global = false
+    ): never
     {
         Header::clearOutputBuffers('all');
+  
+        if($global && method_exists(AppError::class, 'onTrigger')){
+            AppError::onTrigger($status, self::getSegment());
 
-        if($global && method_exists(ErrorController::class, 'onTrigger')){
-            ErrorController::onTrigger(self::$app, $status, Luminova::getSegments());
             exit;
         }
 
-        if(self::handleErrors()){
+        if(self::handleErrors($status)){
             exit;
         }
 
-        if(!$global && method_exists(ErrorController::class, 'onTrigger')){
-            ErrorController::onTrigger(self::$app, $status, Luminova::getSegments());
+        if(!$global && method_exists(AppError::class, 'onTrigger')){
+            AppError::onTrigger($status, self::getSegment());
+
             exit;
         }
 
-        self::ePrint(
-            message: PRODUCTION 
-                ? 'The requested resource could not be found on the server.'
-                : "An error occurred:\n\n" . 
-                "- No controller is registered to handle the requested URL.\n" . 
-                "- Alternatively, a custom error handler is missing for this URL prefix in the controller.\n" . 
-                "- Additionally, check your Controller class's prefix pattern to ensure it doesn't exclude the URL.",
-            status: $status
+        if(self::$method === 'OPTIONS'){
+            header('Access-Control-Max-Age: 86400');
+            Luminova::terminate(204, '');
+            exit;
+        }
+
+        Luminova::terminate(
+            $status,
+            match ($status) {
+            404 => 'The requested resource could not be found.',
+            405 => 'Request method "' . self::$method . '" is not allowed.',
+            401 => 'Authentication required but missing/invalid',
+            400 => 'The request is invalid or could not be processed.',
+            default => PRODUCTION
+                ? 'An error occurred while processing your request.'
+                : "An error occurred:\n\n"
+                    . "- No controller is registered for the requested URL.\n"
+                    . "- No custom error handler is registered for this URL or its prefix.\n"
+                    . "- Check the controller's prefix pattern to ensure it does not exclude the requested URL.",
+            },
+            httpOutput: self::isApiPrefix() ? 'json' : 'html'
         );
         exit;
     }
 
     /**
      * Handle route errors.
+     *
+     * @param int $status HTTP status code.
      * 
      * @return bool Return true if error was handled, otherwise false.
      */
-    private static function handleErrors(): bool
+    private static function handleErrors(int $status): bool
     {
         foreach (self::$routes['http.errors'] as $pattern => $callable) {
             $matches = [];
 
-            if(!self::uriCapture($pattern, self::$uri, $matches)){
+            if(!self::matchUri($pattern, self::$uri, matches: $matches)){
                 continue;
             }
 
-            $status = self::call($callable, self::urisToArgs($matches), true);
+            $result = self::call(
+                $callable, 
+                [$status, ...self::routeMatchesToArgs($matches)],
+                forceInjection: true
+            );
 
-            if ($status === STATUS_SUCCESS || $status === STATUS_SILENCE) {
+            if ($result === STATUS_SUCCESS || $result === STATUS_SILENCE) {
                 return true;
             }
         }
@@ -706,8 +885,24 @@ final class Router implements RouterInterface
             return false;
         }
 
-        $status = self::call($root, [], true);
-        return ($status === STATUS_SUCCESS || $status === STATUS_SILENCE);
+        $result = self::call($root, [$status], forceInjection: true);
+
+        return $result === STATUS_SUCCESS 
+            || $result === STATUS_SILENCE;
+    }
+
+    /**
+     * Application object.
+     *
+     * @return Application
+     */
+    private static function getApp(): Application
+    {
+        if(!self::$app instanceof Application){
+            self::$app = Kernel::resolve(Kernel::SERVICE_APPLICATION, shared: true);
+        }   
+
+        return self::$app;
     }
 
     /**
@@ -721,7 +916,7 @@ final class Router implements RouterInterface
      *
      * @param array|string $callback The callback to normalize.
      * 
-     * @return array{string:?namespace,string:?method} Returns a [class, method] pair if invalid.
+     * @return array{0:?string,1:?string} Returns a [class, method] pair if invalid.
      */
     private static function getClassHandler(array|string $callback): array
     {
@@ -729,9 +924,11 @@ final class Router implements RouterInterface
             return $callback + [null, null];
         }
 
-        $annotation = str_contains($callback, '::') 
-            ? '::' 
-            : (str_contains($callback, '@') ? '@' : null);
+        $annotation = match(true) {
+            str_contains($callback, '::')  => '::',
+            str_contains($callback, '@')   => '@',
+            default => null
+        };
 
         if ($annotation === null) {
             return $callback 
@@ -739,9 +936,13 @@ final class Router implements RouterInterface
                 : [null, null];
         }
 
-        [$class, $method] = explode($annotation, $callback, 2);
+        [$class, $method] = explode(
+            $annotation, 
+            $callback, 
+            2
+        );
 
-        return [self::getClassNamespace($class), $method];
+        return [self::findClassNamespace($class), $method];
     }
     
     /**
@@ -753,13 +954,13 @@ final class Router implements RouterInterface
      * 
      * @return class-string<RoutableInterface> Return full qualify class namespace.
      */
-    private static function getClassNamespace(string $className): string
+    private static function findClassNamespace(string $className): string
     {
         if (str_contains($className, '\\') || class_exists($className)) {
             return $className;
         }
 
-        $prefix = self::$isCommand ? 'Cli\\' : 'Http\\';
+        $prefix = Runtime::isCommand() ? 'Cli\\' : 'Http\\';
 
         foreach (self::$namespace as $namespace) {
             $class = "{$namespace}{$prefix}{$className}";
@@ -769,7 +970,7 @@ final class Router implements RouterInterface
             }
         }
 
-        if(self::$isCommand){
+        if(Runtime::isCommand()){
             return '';
         }
 
@@ -784,42 +985,77 @@ final class Router implements RouterInterface
      * @param string $namespace The namespace.
      * 
      * @return bool Return true if valid, otherwise false or throw exception.
-     * @throws RouterException If on development
      */
     private function isNamespace(string $namespace): bool
     {
-        self::$app::$isHmvcModule ??= env('feature.app.hmvc', false);
-        $design = 'MVC';
+        $pattern = Runtime::isHmvc()
+            ? '/^App\\\\{1,2}Modules\\\\{1,2}(?:Controllers|[\p{L}_][\p{L}\p{N}_]*\\\\{1,2}Controllers)\\\\{0,2}$/u'
+            : '/^App\\\\{1,2}Controllers\\\\{0,2}$/';
 
-        if(self::$app::$isHmvcModule){
-            $design = 'HMVC';
-            if (!str_starts_with($namespace, '\\App\\Modules\\')) {
-                RouterException::rethrow(
-                    'invalid.namespace.root',
-                    ErrorCode::NOT_ALLOWED,
-                    ['HMVC', $namespace, '\\App\\Modules\\', ', (e.g., "\App\Modules\<Module>\Controllers\")']
-                );
-                return false;
-            }
-        }elseif (!str_starts_with($namespace, '\\App\\') || str_starts_with($namespace, '\\App\\Modules\\')) {
+        return preg_match($pattern, $namespace) === 1;
+    }
+
+    /**
+     * Validate controller namespace 
+     * 
+     * @param string $namespace The namespace.
+     * 
+     * @return void
+     * @throws RouterException If on development
+     */
+    private function assertRootNamespace(string $namespace): void
+    {
+        if ($namespace === '' || $namespace === '\\') {
             RouterException::rethrow(
-                'invalid.namespace.root',
-                ErrorCode::NOT_ALLOWED,
-                ['MVC', $namespace, '\\App\\', ', (e.g., "\App\Controllers\")']
+                'argument.empty',
+                ErrorCode::INVALID_ARGUMENTS,
+                ['$namespace']
             );
-            return false;
+
+            return;
         }
 
-        if (!str_ends_with($namespace, '\\Controllers\\')) {
+        if (!str_starts_with($namespace, 'App\\')) {
+            RouterException::rethrow(
+                'invalid.namespace',
+                ErrorCode::NOT_ALLOWED,
+                [$namespace]
+            );
+
+            return;
+        }
+
+        if (!str_ends_with($namespace, '\\Controllers')) {
             RouterException::rethrow(
                 'invalid.namespace.end',
                 ErrorCode::NOT_ALLOWED,
-                [$design, $namespace]
+                [$namespace]
             );
-            return false;
+
+            return;
         }
 
-        return true;
+        if (self::isNamespace($namespace)) {
+            return;
+        }
+
+        RouterException::rethrow(
+            'invalid.namespace.root',
+            ErrorCode::NOT_ALLOWED,
+            Runtime::isHmvc()
+                ? [
+                    'HMVC',
+                    $namespace,
+                    '\\App\\Modules\\',
+                    ', (e.g., "\App\Modules\<Module>\Controllers\")',
+                ]
+                : [
+                    'MVC',
+                    $namespace,
+                    '\\App\\',
+                    ', (e.g., "\App\Controllers\")',
+                ]
+        );
     }
 
     /**
@@ -831,7 +1067,7 @@ final class Router implements RouterInterface
      */
     private static function onInitialized(): void
     {
-        if(self::$isCommand){
+        if(Runtime::isCommand()){
             self::$method = 'CLI';
             return;
         }
@@ -858,53 +1094,12 @@ final class Router implements RouterInterface
     }
     
     /**
-     * Show error message with proper header and status code.
-     * 
-     * @param string|null $header Header title of the error message.
-     * @param string|null $message Optional message body to display.
-     * @param int $status HTTP status code.
-     * 
-     * @return void
-     */
-    private static function ePrint(?string $header = null, ?string $message = null, int $status = 404): void 
-    {
-        Header::clearOutputBuffers('all');
-        $header ??= HttpCode::phrase($status);
-        $message ??= $header;
-
-        if (self::$isCommand) {
-            Terminal::error(sprintf('(%d) [%s] %s', $status, $header, $message));
-            exit(STATUS_ERROR);
-        }
-
-        if (Luminova::isApiPrefix()) {
-            Header::headerNoCache($status, 'application/json; charset=utf-8');
-            echo json_encode([
-                'status'  => $status,
-                'error'   => $header,
-                'message' => $message
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            exit(STATUS_ERROR);
-        }
-
-        Header::headerNoCache($status);
-        printf(
-            '<html><title>%d %s</title><body><h1>%s</h1><p>%s</p></body></html>',
-            $status,
-            $header,
-            $header,
-            nl2br($message)
-        );
-        
-        exit(STATUS_ERROR);
-    }
-
-    /**
      * Register a http route.
      *
      * @param string $to The routing group name to add this route.
      * @param string $methods  Allowed methods, can be serrated with | pipe symbol.
-     * @param string $pattern The route URL pattern or template view name (e.g, `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
+     * @param string $pattern The route URL pattern or template view name
+     *               (e.g, `/`, `/home`, `{segment}`, `(:type)`, `/user/([0-9])`).
      * @param Closure|string $callback Callback function to execute.
      * @param bool $terminate Terminate if it before middleware.
      * 
@@ -919,7 +1114,7 @@ final class Router implements RouterInterface
         bool $terminate = false
     ): void
     {
-        if(self::$isCommand){
+        if(Runtime::isCommand()){
             RouterException::rethrow('invalid.middleware.http');
         }
 
@@ -942,101 +1137,29 @@ final class Router implements RouterInterface
      */
     private static function getPrefix(): string
     {
-        if(self::$isCommand){
+        if(Runtime::isCommand()){
             return self::CLI_URI;
         }
 
-        return Luminova::getSegments()[0] ?? '';
-    }
-
-    /**
-     * Extract context prefix from array context arguments.
-     * 
-     * @param array<int,array> $contexts The context arguments as an array.
-     * 
-     * @return array<string,string> Return array of context prefixes.
-     */
-    private function getArrayPrefixes(array $contexts): array 
-    {
-        $prefixes = [];
-
-        foreach ($contexts as $item) {
-            $prefix = $item['prefix'] ?? null;
-
-            if ($prefix === Prefix::WEB || $prefix === null || $prefix === '') {
-                continue;
-            }
-
-            $prefixes[$prefix] = $prefix;
-        }
-
-        return $prefixes;
-    }
-
-    /**
-     * Setup error handlers if any to handle request.
-     * 
-     * @param string $name The context prefix name.
-     * @param Closure|array|null $onError Context error handler.
-     * @param string $prefix The request URI prefix.
-     * @param array<string,string> $prefixes List of context prefix names without web context as web is default.
-     * 
-     * @return bool|int{0} Return true if context match was found, 
-     *      0 if method is CLI but not in CLI mode, otherwise false.
-     */
-    private static function setErrorHandler(
-        string $name, 
-        Closure|array|null $onError, 
-        string $prefix, 
-        array $prefixes
-    ): bool|int
-    {
-        if($prefix === $name) {
-            if ($name === Prefix::CLI){
-                if(self::$isCommand) {
-                    defined('CLI_ENVIRONMENT') || define('CLI_ENVIRONMENT', env('cli.environment.mood', 'testing'));
-                    return true;
-                }
-
-                return 0;
-            }
-            
-            if($onError !== null){
-                self::onError($onError);
-            }
-        
-            if (isset($prefixes[$name])) {  
-                self::$base .= '/' . $name;
-            }
-
-            return true;
-        }
-        
-        if(!isset($prefixes[$prefix]) && self::isWeContext($name, $prefix)) {
-            if($onError !== null){
-                self::onError($onError);
-            }
-
-            return true;
-        }
-        
-        return false;
+        return self::getUriSegments()[0] ?? '';
     }
 
     /**
      * Is context a web instance.
      *
-     * @param string $result The context name.
-     * @param string $prefix The first uri prefix.
+     * @param string $name The context name.
+     * @param string $prefix The first URI prefix.
      * 
      * @return bool Return true if the context is a web instance, otherwise false.
      */
-    private static function isWeContext(string $result, string $prefix): bool 
+    private static function isWeContext(string $name, string $prefix): bool 
     {
         return (
             $prefix === '' || 
-            $result === Prefix::WEB
-        ) && $result !== Prefix::CLI && $result !== Prefix::API && !Luminova::isApiPrefix();
+            $name === Prefix::WEB
+        )   && $name !== Prefix::CLI 
+            && $name !== Prefix::API 
+            && !self::isApiPrefix();
     }
 
     /**
@@ -1045,19 +1168,24 @@ final class Router implements RouterInterface
      * @return int Return status success or failure.
      * @throws RouterException Throws if an error occurs while running cli routes.
      */
-    private static function runAsCommand(): int
+    private function runAsCommand(): int
     {
         $group = self::getArgument();
         $command = self::getArgument(2);
+        Runtime::add(Runtime::CLASS_METADATA, 'command', self::getCommandSegment());
+        
+        $isHelp = false;
+        $needHelp = !$group 
+            || !$command
+            || ($isHelp = Terminal::isHelp($group));
 
-        if(!$group || !$command){
+        if($needHelp){
             Terminal::header();
-            return STATUS_SUCCESS;
-        }
 
-        if(Terminal::isHelp($group)){
-            Terminal::header();
-            Terminal::helper(null, true);
+            if($isHelp || Terminal::isHelp()){
+                Terminal::helper(Commands::get('help'));
+            }
+
             return STATUS_SUCCESS;
         }
 
@@ -1076,7 +1204,7 @@ final class Router implements RouterInterface
                     continue;
                 }
 
-                $group(...self::noneParamInjection($group));
+                $group(...self::builtinInjection($group));
             }
 
             $middleware = (self::$routes['cli.middleware'][self::$method][$group] ?? null);
@@ -1088,13 +1216,25 @@ final class Router implements RouterInterface
             $routes = self::$routes['cli.commands'][self::$method] ?? null;
 
             if ($routes !== null && self::handleCommand($routes)) {
-                self::$app->__on('onCommandPresent', self::getCommandArguments());
                 return STATUS_SUCCESS;
             }
         }
 
-        $command = Color::style("'{$group} {$command}'", 'red');
-        Terminal::fwrite('Unknown command ' . $command . ' not found', Terminal::STD_ERR);
+        $isArray = is_array($group);
+        Terminal::oops(($isArray ? '' : "'{$group} ") . $command);
+
+        if($isArray){
+            $suggestion = Color::style(
+                "{$group['pattern']} {$command}", 
+                'cyan'
+            );
+            
+            Terminal::writeln(
+                "Do you mean: '{$suggestion}'?", 
+                stream: Terminal::STD_ERR
+            );
+
+        }
 
         return STATUS_ERROR;
     }
@@ -1106,48 +1246,43 @@ final class Router implements RouterInterface
      * @return int Return status success, status error on failure.
      * @throws RouterException Throws if any error occurs while running HTTP routes.
      */
-    private static function runAsHttp(): int
+    private function runAsHttp(): int
     {
         $middleware = self::getRoutes('http.middleware'); 
 
-        if ($middleware !== [] && self::handleWebsite($middleware, self::$uri) !== STATUS_SUCCESS) {
+        if (
+            $middleware !== []
+            && self::handleWebsite($middleware, self::$uri, true) !== STATUS_SUCCESS
+        ) {
             return STATUS_ERROR;
         }
 
-        $error = null;
+        $error = 404;
         $routes = self::getRoutes('http.routes', $error);
 
-        if($routes === []){
-            self::ePrint(
-                message: sprintf($error 
-                    ? 'The requested resource could not be located or is unavailable.'
-                    : 'Request method "%s" is not allowed.', 
-                    self::$method
-                ), 
-                status: $error ?? 405
-            );
-            return STATUS_ERROR;
-        }
+        if($routes !== []){
+            $status = self::handleWebsite($routes, self::$uri);
 
-        $status = self::handleWebsite($routes, self::$uri);
-
-        if ($status === STATUS_SILENCE) {
-            return STATUS_ERROR;
-        }
-
-        if ($status === STATUS_SUCCESS) {
-            $after = self::getRoutes('http.after');
-            
-            if($after !== []){
-                self::handleWebsite($after, self::$uri);
+            if ($status === STATUS_SILENCE) {
+                return STATUS_ERROR;
             }
 
-            self::$app->__on('onViewPresent', self::$uri);
+            if ($status === STATUS_SUCCESS) {
+                $after = self::getRoutes('http.after');
+                
+                if($after === []){
+                    return STATUS_SUCCESS;
+                }
+                
+                ob_start();
+                self::handleWebsite($after, self::$uri);
+                ob_end_clean(); 
 
-            return STATUS_SUCCESS;
+                return STATUS_SUCCESS;
+            }
         }
 
-        self::onTriggerError();
+        self::onTriggerError($error);
         return STATUS_ERROR;
     }
 
@@ -1155,55 +1290,64 @@ final class Router implements RouterInterface
      * Retrieve the registered HTTP routes for a specific controller.
      * 
      * @param string $from The name of the controller for which to retrieve the routes.
+     * @param int $error
      * 
      * @return array Return an array of routes registered for the given controller 
      * and HTTP method, or an empty array if none are found.
      */
-    private static function getRoutes(string $from, ?int &$error = null): array 
+    private static function getRoutes(string $from, int &$error = 404): array 
     {
         if(!(self::$routes[$from] ?? null)){
-            $error = 404;
+            $error = 500;
             return [];
         }
 
-        return array_merge(
+        $routes = array_merge(
             self::$routes[$from][self::$method] ?? [], 
             self::$routes[$from][self::ANY_METHOD] ?? []
         );
+
+        if($routes === []){
+            $error = 405;
+            return [];
+        }
+
+        return $routes;
     }
     
     /**
      * Handle a set of routes: if a match is found, execute the relating handling function.
      *
-     * @param array $routes Collection of route patterns and their handling functions.
+     * @param array<string,mixed> $routes Collection of route patterns and their handling functions.
      * @param string $uri The view request URI path.
+     * @param boolean $isMiddleware
      *
      * @return int Return status code.
      * @throws RouterException if method is not callable or doesn't exist.
      */
-    private static function handleWebsite(array $routes, string $uri): int
+    private static function handleWebsite(
+        array $routes,
+        string $uri,
+        bool $isMiddleware = false
+    ): int 
     {
         foreach ($routes as $route) {
             $matches = [];
-            $match = self::uriCapture($route['pattern'], $uri, $matches);
-            $passed = $match 
-                ? self::call(
-                    $route['callback'], 
-                    self::urisToArgs($matches), 
-                    isHttpMiddleware: $route['middleware']
-                 )
-                : STATUS_ERROR;
-      
-            if ((!$match && $route['middleware']) || ($match && $passed === STATUS_SUCCESS)) {
-                return STATUS_SUCCESS;
+
+            if (!self::matchUri($route['pattern'], $uri, matches: $matches)) {
+                continue;
             }
 
-            if($match && $passed === STATUS_SILENCE){
-                return STATUS_SILENCE;
-            }
+            return self::call(
+                $route['callback'],
+                self::routeMatchesToArgs($matches),
+                isHttpMiddleware: ($route['middleware'] ?? false)
+            );
         }
-       
-        return STATUS_ERROR;
+
+        return $isMiddleware
+            ? STATUS_SUCCESS
+            : STATUS_ERROR;
     }
 
     /**
@@ -1217,25 +1361,35 @@ final class Router implements RouterInterface
      */
     private static function handleCommand(array $routes): bool
     {
-        self::$commands = Terminal::parseCommands($_SERVER['argv'] ?? [], true);
-        $queries = self::getCommandArguments();
-        $isHelp = Terminal::isHelp(self::getArgument(2));
-        
-        foreach ($routes as $route) {
-            if($route['middleware']){
-                return self::call($route['callback'], self::$commands, false, true) === STATUS_SUCCESS;
-            }
+        self::$commands = Terminal::parseCommands(
+            $_SERVER['argv'] ?? [],
+            true
+        );
 
+        $queries = self::getCommandSegment();
+        $isHelp = Terminal::isHelp();
+
+        foreach ($routes as $route) {
+            $isMatch = false;
+            $isHelpRoute = ($isHelp || $queries['view'] === $route['pattern']);
+            $isMiddleware = !$isHelpRoute && ($route['middleware'] ?? false);
             $matches = [];
 
-            if (self::uriCapture($route['pattern'], $queries['view'], $matches)) {
-                self::$commands['params'] = self::urisToArgs($matches);
+            if (
+                !$isHelpRoute 
+                && !$isMiddleware
+                && self::matchUri($route['pattern'], $queries['view'], matches: $matches)
+            ) {
+                $isMatch = true;
+                self::$commands['params'] = self::routeMatchesToArgs($matches);
+            }
 
-                return self::call($route['callback'], self::$commands) === STATUS_SUCCESS;
-            } 
-            
-            if ($queries['view'] === $route['pattern'] || $isHelp) {
-                return self::call($route['callback'], self::$commands) === STATUS_SUCCESS;
+            if ($isMatch || $isMiddleware || $isHelpRoute) {
+                return self::call(
+                    $route['callback'],
+                    self::$commands,
+                    isCliMiddleware: $isMiddleware
+                ) === STATUS_SUCCESS;
             }
         }
 
@@ -1243,41 +1397,83 @@ final class Router implements RouterInterface
     }
 
     /**
-     * Convert matched URI segments into trimmed method arguments.
+     * Convert captured URI parameters into trimmed method arguments.
      *
-     * @param array<int,array> $uris Matched URI path segments from regex.
-     * 
-     * @return string[] Return array of trimmed matched parameters (excluding full match).
+     * Supports match results from both {@see preg_match()} and
+     * {@see preg_match_all()} when using {@see PREG_OFFSET_CAPTURE}.
+     * The complete URI match is excluded from the returned arguments.
+     *
+     * Unmatched optional parameters are returned as empty strings.
+     *
+     * @param array<int,array> $matches Regex matches returned with {@see self::matchUri()}.
+     *
+     * @return string[] The captured and trimmed route arguments.
      */
-    private static function urisToArgs(array $uris): array
+    private static function routeMatchesToArgs(array $matches): array
     {
         $params = [];
-        foreach ($uris as $match) {
-            $params[] = (isset($match[0][0]) && $match[0][1] !== -1)
-                ? trim($match[0][0], " \t\n\r\0\x0B/")
-                : '';
+
+        foreach (array_slice($matches, 1) as $match) {
+            if (isset($match[0][0]) && is_array($match[0])) {
+                $match = $match[0];
+            }
+
+            if(($match[1] ?? -1) === -1){
+                $params[] = '';
+                continue;
+            }
+
+            $params[] = trim($match[0] ?? '', " \t\n\r/");
         }
-        return array_slice($params, 1);
+
+        return $params;
     }
 
     /**
-     * Check if a request URI matches a given route pattern and capture parameters.
-     * 
-     * Converts the route pattern into a regex and checks for matches.
+     * Match a request URI against a route pattern and capture its parameters.
      *
-     * @param string $pattern The route regex pattern (e.g., `/api/users/([0-9-.]+)`).
-     * @param string $uri The incoming request URI (e.g., `/api/users/123456/`).
-     * @param array &$matches Reference to store regex match segments.
+     * The pattern is matched against the complete URI using extended regular
+     * expression mode. Route matching is case-sensitive.
      *
-     * @return bool Return true if the URI matches the pattern, false otherwise.
+     * When `$matchAll` is true, all occurrences of the pattern are captured
+     * using {@see preg_match_all()}; otherwise, only the first match is captured
+     * using {@see preg_match()}.
+     *
+     * @param string $pattern The route regular expression pattern.
+     * @param string $uri The request URI to match.
+     * @param bool $matchAll Whether to capture all pattern matches.
+     * @param array &$matches Reference to store the matched values and offsets.
+     *
+     * @return bool True if the pattern matches the URI, otherwise false.
+     *
+     * @throws RouterException If the regular expression is invalid and the
+     *                         application is not running in production.
+     *
+     * @see self::routeMatchesToArgs()
      */
-    private static function uriCapture(string $pattern, string $uri, array &$matches): bool
+    private static function matchUri(
+        string $pattern,
+        string $uri,
+        bool $matchAll = false,
+        array &$matches = []
+    ): bool 
     {
-        if (!preg_match_all("#^{$pattern}$#x", $uri, $matches, PREG_OFFSET_CAPTURE)) {
+        $regex = "#^{$pattern}$#x";
+        $result = $matchAll
+            ? preg_match_all($regex, $uri, $matches, PREG_OFFSET_CAPTURE)
+            : preg_match($regex, $uri, $matches, PREG_OFFSET_CAPTURE);
+
+        if ($result === false) {
+            RouterException::handleException(sprintf(
+                'Invalid route pattern "%s": %s',
+                $pattern,
+                Runtime::lastError()['message'] ?? preg_last_error_msg()
+            ), ErrorCode::ROUTING_ERROR);
+
             return false;
         }
-        
-        return preg_last_error() === PREG_NO_ERROR;
+
+        return $result > 0;
     }
 
     /**
@@ -1305,7 +1501,7 @@ final class Router implements RouterInterface
 
         // Predefined placeholders like '/(:int)/(:string)'
         if (str_contains($input, '(:')) {
-            $placeholders = self::getPlaceholders();
+            $placeholders = self::mergePlaceholders();
             
             // Ensure '/(:root)' always has a leading slash
             //$input = preg_replace('/(?<!\/)\(:root\)/', '/(:root)', $input);
@@ -1328,177 +1524,338 @@ final class Router implements RouterInterface
     }
 
     /**
-     * Dependency injection and parameter casting.
+     * Resolve dependencies and cast arguments to the callable's parameter types.
      *
-     * @param ReflectionMethod|callable $caller Class method or callback closure.
-     * @param string[] $arguments Method arguments to pass to callback method.
-     * @param bool $forceInjection Force use of dependency injection.
+     * Inspects the callable parameters and resolves class dependencies through
+     * dependency injection when enabled. Built-in parameters are cast from the
+     * supplied arguments, while nullable and default values are handled according
+     * to their parameter declarations.
      *
-     * @return array<int,mixed> Return method params and arguments-value pairs.
-     * @internal 
+     * Intersection types are resolved as a single dependency that must satisfy all
+     * declared types. Union types are resolved using the supported route parameter
+     * types and dependency injection rules.
+     *
+     * Any arguments not consumed by the callable parameters are preserved and
+     * appended to the returned argument list.
+     *
+     * @param ReflectionMethod|callable $caller Method or callable to inspect.
+     * @param array<int,mixed> $arguments Arguments supplied to the callable.
+     * @param bool $forceInjection Force use dependency injection.
+     *
+     * @return array<int,mixed> Resolved arguments ready to be passed to the callable.
      */
     private static function injection(
-        ReflectionMethod|callable $caller, 
-        array $arguments = [], 
+        ReflectionMethod|callable $caller,
+        array $arguments = [],
         bool $forceInjection = false
-    ): array
+    ): array 
     {
-        self::$isDIEnabled = self::$isDIEnabled || $forceInjection;
-        
-        if (!self::$isDIEnabled && $arguments === []) {
+        $useDi = self::$useDependencyInjection 
+            || $forceInjection;
+
+        if (!$useDi && $arguments === []) {
             return $arguments;
         }
 
-        try {
-            $parameters = [];
-            $caller = ($caller instanceof ReflectionMethod) ? $caller : new ReflectionFunction($caller);
+        static $supported = [
+            'int'    => true,
+            'bool'   => true,
+            'true'   => true,
+            'false'  => true,
+            'string' => true,
+            'float'  => true,
+            'double' => true,
+        ];
 
-            if ($caller->getNumberOfParameters() === 0 && ($found = count($arguments)) > 0) {
-                RouterException::rethrow('bad.method', ErrorCode::BAD_METHOD_CALL, [
-                    ($caller->isClosure() ? $caller->getName() : $caller->getDeclaringClass()->getName() . '->' . $caller->getName()),
-                    $found,
-                    filter_paths($caller->getFileName()),
-                    $caller->getStartLine()
-                ]);
+        $parameters = self::newReflection($caller, $arguments);
 
-                return $arguments;
-            }
+        if ($parameters === []) {
+            return [];
+        }
 
-            $supported = ['string', 'int', 'float', 'double', 'bool'];
+        $injections = [];
+        $argumentCount = count($arguments);
+        $argumentIndex = 0;
 
-            foreach ($caller->getParameters() as $parameter) {
-                $type = $parameter->getType();
-                $default = '__no_default__';
-                $hint = null;
-                $isUnion = false;
+        foreach ($parameters as $parameter) {
+            $default = self::NO_DEFAULT_VALUE;
 
-                if($type instanceof ReflectionUnionType){
-                    $isUnion = true;
-                    [$hint, $nullable, $builtin] = self::getUnionTypes($type->getTypes(), $supported);
-                }elseif($type instanceof ReflectionNamedType){
-                    $hint = $type->getName();
-                    $nullable = $type->allowsNull();
-                    $builtin = $type->isBuiltin();
-                }
-                
-                if($hint === null){
-                    continue;
-                }
-
-                if($builtin && $arguments === []){
-                    continue;
-                }
-
-                if ($parameter->isDefaultValueAvailable()) {
-                    $default = $parameter->getDefaultValue();
-                }
-
-                if(!self::$isDIEnabled){
-                    if(!$builtin){
-                        continue;
-                    }
-
-                    $parameters[] = self::typeCasting(
-                        $hint, 
-                        array_shift($arguments), 
-                        $nullable, 
-                        $default, 
-                        $isUnion
-                    );
-                }
-                
-                $parameters[] = $builtin 
-                    ? self::typeCasting($hint, array_shift($arguments), $nullable, $default, $isUnion)
-                    : self::newInstance($hint, $nullable, $default);
-            }
-
-            return array_merge(
-                $parameters, 
-                $arguments // Merge the remaining if any
+            [$type, $isNullable, $isBuiltin, $kind] = self::getNamedTypeParam(
+                $parameter->getType(),
+                $supported,
+                useDi: $useDi
             );
-        } catch (ReflectionException) {
-            return $arguments;
+
+            if (
+                $type === null
+                || ($isBuiltin && $argumentIndex >= $argumentCount)
+                || (!$useDi  && !$isBuiltin)
+            ) {
+                continue;
+            }
+
+            if ($parameter->isDefaultValueAvailable()) {
+                $default = $parameter->getDefaultValue();
+            }
+
+            if (!$isBuiltin) {
+                $injections[] = ($kind === 'intersection') 
+                    ? self::newIntersection($type, $default)
+                    : self::newInstance(
+                        $type,
+                        $isNullable,
+                        $default
+                     );
+
+                continue;
+            }
+
+            $injections[] = self::typeCasting(
+                $type,
+                $arguments[$argumentIndex++] ?? null,
+                $isNullable,
+                $default,
+                $kind === 'union'
+            );
         }
+
+        return array_merge(
+            $injections,
+            array_slice($arguments, $argumentIndex)
+        );
     }
 
     /**
-     * Dependency injection for closures that doesn't expect url parameters.
+     * Resolve the callable's reflection parameters.
+     *
+     * @param ReflectionMethod|callable $caller Method or callable to inspect.
+     * @param array<int,mixed> $arguments Supplied callable arguments.
+     *
+     * @return \ReflectionParameter[] Reflected callable parameters,
+     *         or an empty array when the callable has no parameters.
      * 
-     * @param Closure $callback A closure to inject.
-     * 
-     * @return array<int,mixed> An array of parameters.
+     * @throws RouterException If the callable declares no parameters but
+     *                         arguments are supplied outside production.
      */
-    private static function noneParamInjection(Closure $callback): array 
+    private static function newReflection(
+        ReflectionMethod|callable $caller,
+        array $arguments = []
+    ): array
     {
-        $injections = [];
+        if (!$caller instanceof ReflectionMethod) {
+            $caller = new ReflectionFunction($caller);
+        }
 
-        foreach ((new ReflectionFunction($callback))->getParameters() as $param) {
-            $type = $param->getType();
+        if ($caller->getNumberOfParameters() > 0) {
+            return $caller->getParameters();
+        }
 
-            if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
-                $injections[] = self::newInstance(
-                    $type->getName(), 
-                    $type->allowsNull()
-                );
+        if (PRODUCTION || $arguments === []) {
+            return [];
+        }
+
+        RouterException::rethrow('bad.method', ErrorCode::BAD_METHOD_CALL, [
+            $caller->isClosure()
+                ? $caller->getName()
+                : $caller->getDeclaringClass()->getName() . '->' . $caller->getName(),
+            count($arguments),
+            Luminova::toDisplayPath($caller->getFileName()),
+            $caller->getStartLine()
+        ]);
+
+        return [];
+    }
+
+    /**
+     * Resolve parameter type metadata.
+     *
+     * Supports named, union, and intersection reflection types and normalizes
+     * their metadata into a consistent tuple. Intersection types are only
+     * resolved when dependency injection is enabled.
+     *
+     * @param ReflectionType|null $type Parameter reflection type to resolve.
+     * @param array<string,bool> $supported Supported built-in parameter types.
+     * @param bool $useDi Whether dependency injection is enabled.
+     *
+     * @return array{0:string|array<int,string>|null,1:bool,2:bool,3:string}
+     *         A tuple containing the resolved type, nullability, built-in flag,
+     *         and type kind (`named`, `union`, `intersection`, or `unknown`).
+     */
+    private static function getNamedTypeParam(
+        ?ReflectionType $type,
+        array $supported = [],
+        bool $useDi = false
+    ): array
+    {
+        if ($type instanceof ReflectionNamedType) {
+            return [
+                $type->getName(),
+                $type->allowsNull(),
+                $type->isBuiltin(),
+                'named',
+            ];
+        }
+
+        if ($type instanceof ReflectionUnionType) {
+            $param = self::getUnionType(
+                $type->getTypes(),
+                $supported,
+                $useDi
+            );
+
+            $param[] = 'union';
+
+            return $param;
+        }
+
+        if (
+            !$useDi
+            || !($type instanceof ReflectionIntersectionType)
+        ) {
+            return [null, false, false, 'unknown'];
+        }
+
+        $hints = [];
+
+        foreach ($type->getTypes() as $param) {
+            if ($param instanceof ReflectionNamedType) {
+                $hints[] = $param->getName();
             }
         }
-        
+
+        return [
+            $hints ?: null,
+            false,
+            false,
+            'intersection',
+        ];
+    }
+
+    /**
+     * Resolve dependencies without consuming URI arguments.
+     *
+     * Inspects the callable parameters and resolves only non-built-in types
+     * through dependency injection. Built-in parameters are ignored so that
+     * URI arguments are never consumed or mixed into the injected arguments.
+     *
+     * Supports named and intersection dependency types.
+     *
+     * @param ReflectionMethod|callable $caller Method or callable to resolve.
+     *
+     * @return array<int,mixed> Resolved dependency instances in parameter order.
+     */
+    private static function builtinInjection(
+        ReflectionMethod|callable $caller
+    ): array 
+    {
+        $parameters = self::newReflection($caller);
+
+        if ($parameters === []) {
+            return [];
+        }
+
+        $injections = [];
+
+        foreach ($parameters as $parameter) {
+            [$type, $isNullable, $isBuiltin, $kind] = self::getNamedTypeParam(
+                $parameter->getType(),
+                useDi: true
+            );
+
+            if ($isBuiltin || $type === null) {
+                continue;
+            }
+
+            $default = $parameter->isDefaultValueAvailable()
+                ? $parameter->getDefaultValue()
+                : self::NO_DEFAULT_VALUE;
+
+            $injections[] = ($kind === 'intersection')
+                ? self::newIntersection($type, $default)
+                : self::newInstance(
+                    $type,
+                    $isNullable,
+                    $default
+                );
+        }
+
         return $injections;
     }
 
     /**
-     * Execute router HTTP callback class method with the given parameters using instance callback or reflection class.
+     * Execute a router callback with the given arguments.
      *
-     * @param Closure|array{0:class-string<RoutableInterface>,1:string}|string $callback Class public callback method (e.g, UserController:update).
-     * @param array $arguments Method arguments to pass to callback method.
-     * @param bool $forceInjection Force use dependency injection (default: false).
-     * @param bool $isCliMiddleware Indicate Whether caller is CLI middleware (default: false).
-     * @param bool $isHttpMiddleware Indicate Whether caller is HTTP middleware (default: false).
+     * Executes closures directly or resolves and invokes controller callbacks.
+     * Arguments are resolved and cast according to the callback parameter types,
+     * with optional dependency injection.
      *
-     * @return int Return status if controller method was executed successfully, error or silent otherwise.
-     * @throws RouterException if method is not callable or doesn't exist.
+     * @param Closure|array{0:class-string<RoutableInterface>,1:string}|string $callback
+     *        Router callback to execute. Accepts a closure, controller callback
+     *        array, or callable class method.
+     * @param array<int|string,mixed> $arguments Arguments to pass to the callback.
+     * @param bool $forceInjection Force use dependency injection.
+     * @param bool $isCliMiddleware Whether the callback is CLI middleware
+     *        (default: false).
+     * @param bool $isHttpMiddleware Whether the callback is HTTP middleware
+     *        (default: false).
+     *
+     * @return int Response status returned by the executed callback.
+     *
+     * @throws RouterException If the callback or controller method is invalid
+     *                         or cannot be executed.
      */
     private static function call(
-        Closure|string|array $callback, 
-        array $arguments = [], 
+        Closure|string|array $callback,
+        array $arguments = [],
         bool $forceInjection = false,
         bool $isCliMiddleware = false,
         bool $isHttpMiddleware = false
-    ): int
+    ): int 
     {
         if ($callback instanceof Closure) {
-            $isCommand = self::$isCommand && isset($arguments['command']);
-            self::assertReturnTypes($callback, isCommand: $isCommand);
+            $isCommand = Runtime::isCommand() && isset($arguments['name']);
+
+            self::assertReturnTypes(
+                $callback,
+                isCommand: $isCommand
+            );
 
             $arguments = $isCommand
-                ? ($arguments['params'] ?? []) 
+                ? ($arguments['params'] ?? [])
                 : $arguments;
-            
-            Luminova::setClassMetadata([
-                'namespace' => '\\Closure', 
-                'method' => 'function'
-            ]);
+
+            Runtime::add(
+                Runtime::CLASS_METADATA,
+                'namespace',
+                '\\Closure'
+            );
+
+            Runtime::add(
+                Runtime::CLASS_METADATA,
+                'method',
+                'function'
+            );
 
             return self::send(
                 $callback(...self::injection(
-                    $callback, 
-                    $arguments, 
-                    $forceInjection
+                    $callback,
+                    $arguments,
+                    forceInjection: $forceInjection
                 )),
-                $isHttpMiddleware 
+                $isHttpMiddleware
             );
         }
 
         [$namespace, $method] = self::getClassHandler($callback);
 
-        if(!$namespace || !$method){
+        if (!$namespace || !$method) {
             return STATUS_ERROR;
         }
 
         return self::respond(
-            $namespace, 
-            $method, 
-            $arguments, 
+            $namespace,
+            $method,
+            $arguments,
             $forceInjection,
             $isCliMiddleware,
             $isHttpMiddleware
@@ -1511,7 +1868,7 @@ final class Router implements RouterInterface
      * @param class-string<RoutableInterface> $namespace Controller class namespace.
      * @param string $method Controller class routable method name.
      * @param array $arguments Optional arguments to pass to the method.
-     * @param bool $forceInjection Force use dependency injection. Default is false.
+     * @param bool $forceInjection Force use dependency injection.
      * @param bool $isCliMiddleware Indicate Whether caller is cli middleware (default: false).
      * @param bool $isHttpMiddleware Indicate Whether caller is HTTP middleware (default: false).
      *
@@ -1536,11 +1893,10 @@ final class Router implements RouterInterface
             return STATUS_ERROR;
         }
 
-        Luminova::setClassMetadata([
-            'namespace' => $namespace, 
-            'method' => $method,
-            'uri' => self::$uri
-        ]);
+        Runtime::add(Runtime::CLASS_METADATA, 'namespace', $namespace);
+        Runtime::add(Runtime::CLASS_METADATA, 'method', $method);
+        Runtime::add(Runtime::CLASS_METADATA, 'uri', self::$uri);
+        
 
         try {
             $class = new ReflectionClass($namespace);
@@ -1553,7 +1909,7 @@ final class Router implements RouterInterface
                 return STATUS_ERROR;
             }
 
-            $isCommand = self::$isCommand && isset($arguments['command']);
+            $isCommand = Runtime::isCommand() && isset($arguments['name']);
             $caller = $class->getMethod($method);
             
             self::assertReturnTypes($caller, $namespace, $isCommand);
@@ -1561,7 +1917,7 @@ final class Router implements RouterInterface
             if ($caller->isPublic() && !$caller->isAbstract() && 
                 (
                     !$caller->isStatic() || 
-                    ($caller->isStatic() && $class->implementsInterface(ErrorHandlerInterface::class))
+                    ($caller->isStatic() && $class->implementsInterface(ErrorControllerInterface::class))
                 )
             ) {
                 if ($isCommand) {
@@ -1593,42 +1949,44 @@ final class Router implements RouterInterface
                     : ($caller->isStatic() ? null: $class->newInstance());
 
                 $result = self::send(
-                    $caller->invokeArgs($instance, self::injection($caller, $arguments, $forceInjection)),
+                    $caller->invokeArgs($instance, self::injection(
+                        $caller, 
+                        $arguments, 
+                        $forceInjection
+                    )),
                     $isHttpMiddleware 
                 );
                 
-                if($isHttpMiddleware && $result !== STATUS_SUCCESS){
-                    $failed = $class->getMethod('onMiddlewareFailure');
-                    $failed->setAccessible(true);
-                    $failed->invokeArgs($instance, [self::$uri, Luminova::getClassMetadata()]);
+                if($isHttpMiddleware && $result === STATUS_ERROR){
+                    $class->getMethod('onMiddlewareFailure')
+                        ->invokeArgs($instance, [self::$uri, Runtime::get(Runtime::CLASS_METADATA)]);
                 }
 
                 return $result;
             }
         } catch (Throwable $e) {
-            if(str_contains($e->getMessage(), 'Too few arguments')){
-                (new RouterException(
-                    sprintf(
+            $isFewArgs = str_contains($e->getMessage(), 'Too few arguments');
+
+            if($isFewArgs || !($e instanceof LuminovaException)){
+                $message = $isFewArgs 
+                    ? sprintf(
                         '%s. Ensure that routing dependency injection is enabled in env "%s"%s. See %s', 
                         $e->getMessage(),
                         '<highlight>feature.route.dependency.injection</highlight>',
                         ', or remove arguments method signature',
                         '<link>https://luminova.ng/docs/0.0.0/routing/dependency-injection</link>'
-                    ),
-                    $e->getCode(),
-                    $e
-                ))
-                ->setFile($e->getFile())
-                ->setLine($e->getLine())
-                ->handle();
-            }
+                    ) : $e->getMessage();
 
-            if($e instanceof AppException){
-                $e->handle();
+                (new RouterException($message, $e->getCode(), $e))
+                    ->setFile($e->getFile())
+                    ->setLine($e->getLine())
+                    ->handle();
+
                 return STATUS_ERROR;
+
             }
 
-            RouterException::throwException($e->getMessage(), $e->getCode(), $e);
+            $e->handle();
             return STATUS_ERROR;
         }
 
@@ -1640,12 +1998,12 @@ final class Router implements RouterInterface
      * Sends an HTTP response or outputs a view response.
      *
      * This method handles different response types from the routing system:
-     * - If a ViewResponseInterface is given, it directly calls its output method.
+     * - If a ContentResponseInterface is given, it directly calls its output method.
      * - If a PSR-7 ResponseInterface is given, it sends headers, outputs the body,
      *   and returns a status code.
      * - If an integer is given, it is treated as an immediate status code return.
      *
-     * @param ViewResponseInterface|ResponseInterface|int $response
+     * @param ContentResponseInterface|ResponseInterface|int $response
      *     The response object or status code from the routed action.
      *
      * @return int
@@ -1653,14 +2011,30 @@ final class Router implements RouterInterface
      *     STATUS_SILENCE if no content,
      *     or any integer code passed directly.
      */
-    private static function send(ViewResponseInterface|ResponseInterface|int $response, bool $isHttpMiddleware): int
+    private static function send(
+        mixed $response, 
+        bool $isHttpMiddleware
+    ): int
     {
-        if($response instanceof ViewResponseInterface){
+        if($response instanceof ContentResponseInterface){
             return $response->output();
         }
 
         if(!$response instanceof ResponseInterface){
-            return (int) $response;
+            if(is_int($response)){
+                return (int) $response;
+            }
+
+            if (PRODUCTION) {
+                return STATUS_ERROR;
+            }
+
+            self::throwUnsupportedReturnType(
+                get_debug_type($response),
+                handler: null,
+                isUnion: false,
+                isCommand: Runtime::isCommand()
+            );
         }
 
         $status = $response->getStatusCode();
@@ -1674,8 +2048,10 @@ final class Router implements RouterInterface
             }
         }
 
-        Header::validate($response->getHeaders(), $status);
         Header::clearOutputBuffers('all');
+        Header::setOutputHandler(true);
+        Header::send($response->getHeaders(), status: $status);
+    
         $isFailedMiddleware = ($isHttpMiddleware && ($status === 500 || $status === 401));
 
         if ($contents === '' || $status === 204 || $status === 304) {
@@ -1684,7 +2060,6 @@ final class Router implements RouterInterface
                 : STATUS_SILENCE;
         }
 
-        Header::setOutputHandler(true);
         echo $contents;
         return $isFailedMiddleware
             ? STATUS_ERROR 
@@ -1705,96 +2080,151 @@ final class Router implements RouterInterface
      * @throws RouterException If the return type does not match the allowed types.
      */
     private static function assertReturnTypes(
-        ReflectionMethod|Closure $method, 
+        ReflectionMethod|Closure $method,
         ?string $namespace = null,
         bool $isCommand = false
     ): void 
     {
-        // Development Only
-        if(PRODUCTION && !$isCommand){
+        if (PRODUCTION) {
             return;
         }
 
-        $types = ['void'];
-        $name = 'closure';
-        $isUnion = false;
-
         try {
-            if(!$method instanceof ReflectionMethod){
-                $method = new ReflectionFunction($method);
+            $reflection = ($method instanceof ReflectionMethod)
+                ? $method
+                : new ReflectionFunction($method);
+
+            $returnType = $reflection->getReturnType();
+            $name = $reflection->getName() ?: 'callable';
+        } catch (Throwable) {
+            return;
+        }
+
+        $isUnion = ($returnType instanceof ReflectionUnionType);
+        $isIntersection = ($returnType instanceof ReflectionIntersectionType);
+
+        $types = match (true) {
+            $isUnion,
+            $isIntersection
+                => $returnType->getTypes(),
+
+            $returnType instanceof ReflectionNamedType
+                => [$returnType],
+
+            default => [],
+        };
+
+        if($types === []){
+            self::throwUnsupportedReturnType(
+                'mixed',
+                $namespace ? "{$namespace}::{$name}" : $name,
+                isCommand: $isCommand
+            );
+        }
+
+        $typeNames = array_map(
+            static fn(ReflectionNamedType $type): string => $type->getName(),
+            $types
+        );
+
+        if (
+            !$isUnion 
+            && ($returnType instanceof ReflectionNamedType)
+            && $returnType->allowsNull()
+            && !in_array('mixed', $typeNames, true)
+        ) {
+            $typeNames[] = 'null';
+            $isUnion = true;
+        }
+
+        static $builtins = [
+            'string'   => true,
+            'int'      => true,
+            'float'    => true,
+            'double'   => true,
+            'mixed'    => true,
+            'callable' => true,
+            'bool'     => true,
+            'true'     => true,
+            'false'    => true,
+            'array'    => true,
+            'object'   => true,
+            'void'     => true,
+            'never'    => true,
+            'null'     => true,
+        ];
+    
+        $allowed = ['int' => true];
+
+        foreach ($typeNames as $type) {
+            if (isset($allowed[$type])) {
+                continue;
             }
 
-            $result = $method->getReturnType();
-            $name =  $method->getName() ?: 'callable';
-            $types = ['mixed'];
-
-            if($result instanceof ReflectionUnionType){
-                $isUnion = true;
-                $types = array_map(fn($t) => $t->getName(), $result->getTypes());
-            } elseif ($result instanceof ReflectionNamedType) {
-                $types = [$result->getName()];
-                if ($result->allowsNull()) {
-                    $isUnion = true;
-                    $types[] = 'null';
-                }
-            }
-        } catch (Throwable) {}
-
-        $unmap = [
-            'string', 'int', 'float', 'double', 'mixed', 'callable',
-            'bool', 'array', 'object', 'void', 'never', 'null'
-        ];
-        $expected = 'int (STATUS_SUCCESS, STATUS_ERROR, STATUS_SILENCE)';
-        $allowed = $isCommand ? ['int'] : [
-            'int', 
-            'mixed',
-            Response::class, 
-            ViewResponseInterface::class,
-            ResponseInterface::class, 
-            HttpResponseInterface::class,
-        ];
-
-        foreach ($types as $t) {
-            if(in_array($t, $allowed, true)){
-                if($isUnion){
+            if (!$isCommand) {
+                if (isset(self::RESPONSES[$type])) {
                     continue;
                 }
 
-                if(!$isCommand){
-                    return;
-                }
-
-                if($t === 'int' && !in_array('mixed', $allowed, true)){
-                    return;
-                }
-            }
-
-            if(!$isCommand){
-                foreach ($allowed as $cls) {
-                    if (!in_array($cls, $unmap, true) && is_a($t, $cls, true)) {
-                        continue 2; 
+                if (!isset($builtins[$type])) {
+                    foreach (self::RESPONSES as $response => $_) {
+                        if (is_a($type, $response, true)) {
+                            continue 2;
+                        }
                     }
                 }
             }
 
-            throw new RouterException(
-                sprintf(
-                    'Routable handler "%s" returned unsupported type "%s"%s%s%s',
-                    $namespace ? "{$namespace}::{$name}" : $name,
-                    implode('|', $types),
-                    $isUnion ? ', union types must satisfy expected types: ' : '. Expected: ',
-                    $expected,
-                    $isCommand ? '' : sprintf(
-                        ', %s, or a class implementing: %s, %s, or %s',
-                        Response::class,
-                        ViewResponseInterface::class,
-                        ResponseInterface::class, 
-                        HttpResponseInterface::class
-                    )
-                ),
-                ErrorCode::INVALID_METHOD
+            self::throwUnsupportedReturnType(
+                implode('|', $typeNames),
+                $namespace ? "{$namespace}::{$name}" : $name,
+                isUnion: $isUnion || $isIntersection,
+                isCommand: $isCommand
             );
         }
+    }
+
+    /**
+     * Throw Unsupported type exception.
+     *
+     * @param string $type
+     * @param string|null $handler
+     * @param boolean $isUnion
+     * @param boolean $isCommand
+     * 
+     * @return never
+     * @throws RouterException
+     */
+    private static function throwUnsupportedReturnType(
+        string $type,
+        ?string $handler = null,
+        bool $isUnion = false,
+        bool $isCommand = false
+    ): never 
+    {
+        $expected = 'int (STATUS_SUCCESS, STATUS_ERROR, STATUS_SILENCE)';
+
+        if (!$isCommand) {
+            $expected .= sprintf(
+                ', or a response type implementing: %s',
+                implode(', ', array_keys(self::RESPONSES))
+            );
+        }
+
+        throw new RouterException(
+            sprintf(
+                '%sreturned unsupported type "%s"%s%s',
+                ($handler !== null)
+                    ? sprintf('Routable handler "%s" ', $handler)
+                    : 'Handler ',
+                $type,
+                $isUnion
+                    ? ', union/intersection types must satisfy expected types: '
+                    : '. Expected: ',
+                $expected
+            ),
+            ErrorCode::LOGIC_ERROR
+        );
     }
 
     /**
@@ -1808,16 +2238,16 @@ final class Router implements RouterInterface
      */
     private function withAttributes(string $prefix): self 
     {
-        self::$app::$isHmvcModule ??= env('feature.app.hmvc', false);
+        $isHmvc = Runtime::isHmvc();
+        $path = $isHmvc ? 'app/Modules/' : 'app/Controllers/';
 
-        $path = self::$app::$isHmvcModule ? 'app/Modules/' : 'app/Controllers/';
         $attr = new Compiler(
             self::$base, 
-            self::$isCommand, 
-            self::$app::$isHmvcModule
+            Runtime::isCommand(), 
+            $isHmvc
         );
 
-        if(self::$isCommand){
+        if(Runtime::isCommand()){
             $attr->forCli($path, self::getArgument(1));
         }else{
             $attr->forHttp($path, $prefix, self::$uri);
@@ -1831,51 +2261,133 @@ final class Router implements RouterInterface
     }
 
     /**
-     * Register HTTP methods to handle request.
-     * 
-     * This registers routes when using method-based routing instead of attribute.
-     * 
-     * @param string $prefix The application url first prefix.
-     * @param Prefix[]|array<int,array<string,mixed>> $contexts The application prefix contexts.
-     * 
-     * @return self Return router instance.
+     * Resolve and register routes for the current request.
+     *
+     * Registers routes when using method-based routing instead of route attributes.
+     *
+     * @param string $uriPrefix The request URI prefix.
+     * @param Prefix[]|array<string,array> $contexts Application prefix contexts.
+     *
+     * @return self The router instance.
      */
-    private function withMethods(string $prefix, array $contexts): self  
+    private function withMethods(string $uriPrefix, array $contexts): self
     {
+        $request = [];
+        $websites = [];
         $current = self::$base;
-        $isArrayConfig = !($contexts[0] instanceof Prefix);
-        $prefixes = $isArrayConfig ? $this->getArrayPrefixes($contexts) : Prefix::getPrefixes();
+        $isCommand = Runtime::isCommand();
 
-        foreach ($contexts as $context) {
-            $name = $isArrayConfig ? ($context['prefix'] ?? '') : $context->getPrefix();
+        foreach ($contexts as $name => $context) {
+            $prefix = ($context instanceof Prefix)
+                ? $context->getPrefix()
+                : ($context['prefix'] ?? $name);
 
-            if($name === ''){
+            if($prefix === '' || is_int($prefix)){
                 continue;
             }
 
-            self::reset();
+            if ($isCommand) {
+                if ($uriPrefix === $prefix && $this->withCommandRoute($context, $prefix)) {
+                    break;
+                }
 
-            $result = self::setErrorHandler(
-                $name, 
-                $isArrayConfig 
-                    ? ($context['error'] ?? null) 
-                    : $context->getErrorHandler(), 
-                $prefix, 
-                $prefixes
-            );
-
-            if($result === 0){
-                return $this;
+                continue;
             }
 
-            if($result === true){
-                $this->onContext($name);
+            if ($uriPrefix === $prefix) {
+                $request = [$context, $prefix];
                 break;
+            }
+
+            if ($websites === [] && self::isWeContext($prefix, $uriPrefix)) {
+                $websites = [$context, $prefix];
             }
         }
 
+        if($isCommand || ($request === [] && $websites === [])){
+            return $this;
+        }
+
+        $this->withHttpRoute($request, $websites);
+
         self::$base = $current;
+
         return $this;
+    }
+
+    /**
+     * Resolve and register an HTTP route context.
+     *
+     * Resets the router state, registers the context error handler, resolves the
+     * context routes, and triggers the route-resolved application event.
+     *
+     * @param array{0:Prefix|array,1:string} $match Custom URI prefix matched.
+     * @param array{0:Prefix|array,1:string} $websites Registered WEB URIs context found.
+     *
+     * @return void
+     */
+    private function withHttpRoute(
+        array $match,
+        array $websites
+    ): void 
+    {
+        self::reset();
+
+        $isMatchPrefix = $match !== [];
+        $handler = $match + $websites;
+        $context = $handler[0];
+        $prefix = $handler[1];
+        $pattern = '/';
+
+        $onError = ($context instanceof Prefix)
+            ? $context->getErrorHandler()
+            : ($context['onError'] ?? null);
+
+        if ($isMatchPrefix) {
+            $pattern = "/{$prefix}(?:/[^/].*)?/?";
+
+            self::$base .= $pattern;
+        }
+
+        if ($onError !== null) {
+            self::onError(pattern: $pattern, handler: $onError);
+        }
+
+        $this->onPrefixContext($prefix);
+    }
+
+    /**
+     * Resolve and register a CLI route context.
+     *
+     * Verifies that the context is configured for CLI commands before resolving
+     * its routes and triggering the route-resolved application event.
+     *
+     * @param Prefix|array $context Application prefix context.
+     * @param string $prefix The resolved context prefix.
+     *
+     * @return bool `true` if the command context was resolved, otherwise `false`.
+     */
+    private function withCommandRoute(
+        array|Prefix $context,
+        string $prefix
+    ): bool 
+    {
+        $isCommand = ($context instanceof Prefix)
+            ? $context->isCommand()
+            : (bool) ($context['isCommand'] ?? true);
+
+        if (!$isCommand) {
+            return false;
+        }
+
+        self::reset();
+
+        defined('CLI_ENVIRONMENT')
+            || define('CLI_ENVIRONMENT', Env::get('cli.environment.mood', 'testing'));
+
+        $this->onPrefixContext($prefix);
+
+        return true;
     }
 
     /**
@@ -1903,6 +2415,7 @@ final class Router implements RouterInterface
             'group' => $instance->group,
             'name' => $instance->name,
             'description' => $instance->description,
+            'aliases' => [],
             'usages' => $instance->usages,
             'options' => $instance->options,
             'examples' => $instance->examples,
@@ -1910,9 +2423,11 @@ final class Router implements RouterInterface
             'authentication' => $instance->authentication,
         ];
 
+        // Make the command available through get options.
+        $isHelp = $instance->parse($arguments)->isHelp();
+
         // Check command string to determine if it has help arguments.
-        if(!$isMiddleware && Terminal::isHelp($arguments['command'])){
-            
+        if(!$isMiddleware && $isHelp){
             Terminal::header();
 
             if($instance->help($arguments[$id]) === STATUS_ERROR){
@@ -1932,9 +2447,6 @@ final class Router implements RouterInterface
             }
         }
 
-        // Make the command available through get options.
-        $instance->perse($arguments);
-
         return (int) $caller->invokeArgs(
             $instance, 
             self::injection($caller, $arguments['params']??[])
@@ -1942,109 +2454,296 @@ final class Router implements RouterInterface
     }
 
     /**
-     * Resolve URI placeholder patterns.
-     * 
-     * @return array<string,string> $placeholders Return URI patterns.
-     */
-    private static function getPlaceholders(): array 
-    {
-        return [
-            //'(:root)'       => '?(?:/(?:[^/].*)?)?',
-            '(:base)'         => '?(?:/.*)?',
-            '(:root)'         => '?(?:/[^/].*)?',
-            '(:any)'          => '(.*)',
-            '(:int)'          => '(\d+)',
-            '(:integer)'      => '(\d+)',         
-            '(:mixed)'        => '([^/]*?)',
-            '(:string)'       => '([^/]+?)',
-            '(:optional)'     => '?(?:/([^/]*))?',
-            '(:alphabet)'     => '([a-zA-Z]+)',
-            '(:alphanumeric)' => '([a-zA-Z0-9]+)',
-            '(:username)'     => '([a-zA-Z0-9._-]+)',
-            '(:number)'       => '([+-]?\d+(?:\.\d+)?)',
-            '(:version)'      => '(\d+(?:\.\d+)+)',
-            '(:double)'       => '([+-]?\d+(\.\d+)?)',
-            '(:float)'        => '([+-]?\d+\.\d+)',
-            '(:path)'         => '((.+)/([^/]+)+)',
-            '(:uuid)'         => '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})',
-            ...self::$placeholders
-        ];
-    }
-
-    /**
-     * Create a new instance of the given class or return a default object based on the class type.
+     * Merge the default and custom route placeholders.
      *
-     * @param class-string<\T> $class The class name to inject.
-     * @param bool $nullable If true, returns null when the class does not exist (default: false).
-     * 
-     * @return object<\T>|null The new instance of the class, or null if the class is not found.
-     * @throws Exception|AppException Throws if the class does not exist or requires arguments to initialize.
+     * Optional variants are automatically generated for typed placeholders using
+     * the `(:?type)` syntax. Structural placeholders are excluded from automatic
+     * optional generation because they already define their own route structure.
+     *
+     * @return array<string,string> Return the compiled route placeholder patterns.
      */
-    private static function newInstance(
-        string $class, 
-        bool $nullable = false,
-        mixed $default = '__no_default__'
-    ): ?object 
+    private static function mergePlaceholders(): array
     {
-        $instance = match ($class) {
-            \App\Application::class, Application::class => self::$app,
-            RouterInterface::class, Router::class => self::$app->router,
-            Segments::class => new Segments(self::$isCommand ? [self::CLI_URI] : Luminova::getSegments()),
-            Closure::class => fn(mixed ...$arguments): mixed => null,
-            default => DI::isBound($class) ? DI::resolve($class) : null
-        };
+        static $isCompliedPlaceholders;
 
-        if($instance === null){
-            $e = null;
-            $type = null;
-
-            if(DI::isInstantiable($class, $type, $e)){
-                return ($type === 'instantiate') 
-                    ? new $class() 
-                    : $class::getInstance();
-            }
-
-            if($nullable !== '__no_default__'){
-                $e = null;
-                return $default;
-            }
-
-            if($e instanceof Throwable){
-                throw $e;
-            }
-
-            throw new RouterException(
-                sprintf('Class "%s" does not exist or cannot be autoloaded.', $class),
-                ErrorCode::CLASS_NOT_FOUND
-            );
+        if($isCompliedPlaceholders){
+            return self::$placeholders;
         }
 
-        return $instance;
+        $defaults = [
+            '(:base)'         => '?(?:/.*)?',
+            '(:root)'         => '?(?:/[^/].*)?',
+            '(:group)'        => '(.*)',
+
+            '(:int)'          => '(\d+)',
+            '(:integer)'      => '(\d+)',
+            '(:mixed)'        => '([^/]*)',
+            '(:string)'       => '([^/]+)',
+            '(:optional)'     => '?(?:/([^/]*))?',
+
+            '(:alphabet)'     => '([a-zA-Z]+)',
+            '(:alphanumeric)' => '([a-zA-Z0-9]+)',
+            '(:username)'     => '(@?[a-zA-Z0-9._-]+)',
+
+            '(:number)'       => '([+-]?\d+(?:\.\d+)?)',
+            '(:numeric)'      => '([-]?\d+(?:\.\d+)?)',
+            '(:version)'      => '(\d+(?:\.\d+)+)',
+            '(:double)'       => '([+-]?\d+(?:\.\d+)?)',
+            '(:float)'        => '([+-]?\d+\.\d+)',
+
+            '(:file)'         => '([^/]+\.[^/]+)',
+            '(:filepath)'     => '((?:[^/]+/)*[^/]+\.[^/]+)',
+            '(:path)'         => '([^/]+(?:/[^/]+)+)',
+
+            '(:uuid)'         => '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})',
+            '(:ulid)'         => '([0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25})',
+        ];
+
+        $placeholders = [];
+        $excludeOptional = [
+            '(:base)'       => true, 
+            '(:root)'       => true, 
+            '(:group)'      => true, 
+            '(:optional)'   => true,
+        ];
+
+        foreach ($defaults as $name => $pattern) {
+            $placeholders[$name] = $pattern;
+
+            if(isset($excludeOptional[$name])){
+                continue;
+            }
+
+            $type = substr($name, 2, -1);
+            $placeholders["(:?{$type})"] = "?(?:/{$pattern})?";
+        }
+
+        $isCompliedPlaceholders = true;
+
+        return self::$placeholders = array_merge(
+            $placeholders, 
+            self::$placeholders
+        );
     }
 
     /**
-     * Get union types as array or string.
+     * Resolve or create an instance of the given class.
      *
-     * @param ReflectionNamedType[]|ReflectionIntersectionType[] $unions The union types.
-     * 
-     * @return array<mixed> Return the union types.
+     * Resolves framework-specific dependencies first, then attempts to resolve
+     * the class through the dependency injector. If the class cannot be resolved,
+     * it may be instantiated directly or resolved through its singleton instance.
+     *
+     * @param class-string $class The class name to resolve.
+     * @param bool $nullable Whether to return null when the class cannot be resolved.
+     * @param object|null $default Default instance to return when resolution fails.
+     *
+     * @return object|null The resolved instance, default instance, or null.
+     *
+     * @throws Throwable If class resolution or instantiation fails.
+     * @throws ClassException If the class cannot be resolved.
      */
-    private static function getUnionTypes(array $unions, array $supported): array
+    private static function newInstance(
+        string $class,
+        bool $nullable = false,
+        mixed $default = self::NO_DEFAULT_VALUE
+    ): ?object 
+    {
+        if(DI::isBound($class)){
+            return DI::resolve($class);
+        }
+
+        $instance = match ($class) {
+            View::class             => new View(self::getApp()),
+            Router::class           => self::getApp()->router,
+            Application::class      => self::getApp(),
+            \App\Application::class => \App\Application::getInstance(),
+            RouterInterface::class  => Kernel::resolve(
+                Kernel::SERVICE_ROUTING, 
+                true,
+                self::getApp()
+            ),
+            Segments::class         => self::getSegment(),
+            stdClass::class         => new stdClass(),
+            Closure::class          => self::getClosure(),
+            default                 => class_exists($class) 
+                ? new $class() 
+                : self::tryServices($class)
+        };
+
+        if($instance !== null){
+            return $instance;
+        }
+        
+        if ($default !== self::NO_DEFAULT_VALUE && is_object($default)) {
+            return $default;
+        }
+
+        if ($nullable) {
+            return null;
+        }
+
+        throw new ClassException(sprintf(
+            'Class "%s" does not exist or cannot be injected.',
+            $class
+        ));
+    }
+
+    /**
+     * Resolve class interface from kernel service or default DI.
+     *
+     * @param class-string $class The class name to resolve.
+     *
+     * @return object|null The resolved instance, default instance, or null.
+     */
+    private static function tryServices(string $class): ?object
+    {
+        if(!interface_exists($class)){
+            return null;
+        }
+
+        try{
+            $result = Kernel::resolve($class, false);
+
+            if(is_object($result)){
+                return $result;
+            }
+        } catch(Throwable){}
+
+        if(DI::has($class)){
+            try{
+                $result = DI::resolve($class);
+
+                if(is_object($result)){
+                    return $result;
+                }
+            } catch(Throwable){}
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve an instance for an intersection type.
+     *
+     * Attempts to resolve each type and verifies that the resulting instance
+     * satisfies all types declared in the intersection. The first instance that
+     * satisfies every required type is returned.
+     *
+     * If no matching instance can be resolved, an object default value is
+     * returned when provided. Otherwise, a routing exception is thrown.
+     *
+     * @param string[] $types Intersection type names that the instance must satisfy.
+     * @param mixed $default Default value to return when resolution fails.
+     *
+     * @return object|null An instance satisfying all intersection types.
+     *
+     * @throws ClassException If no instance satisfies all required types and
+     *                         no valid object default is available.
+     */
+    private static function newIntersection(
+        array $types,
+        mixed $default,
+    ): ?object 
+    {
+        foreach ($types as $type) {
+            try {
+                $instance = self::newInstance($type);
+            } catch (Throwable) {
+                continue;
+            }
+
+            if ($instance === null) {
+                continue;
+            }
+
+            foreach ($types as $required) {
+                if (!is_a($instance, $required)) {
+                    continue 2;
+                }
+            }
+
+            return $instance;
+        }
+
+        if ($default !== self::NO_DEFAULT_VALUE) {
+            return $default;
+        }
+
+        throw new ClassException(sprintf(
+            'Unable to resolve intersection type: %s.',
+            implode(' & ', $types)
+        ));
+    }
+
+    /**
+     * Create a default closure for resolving Closure dependencies.
+     *
+     * The returned closure accepts any number of arguments and evaluates nested
+     * closures before returning the resolved values. If no arguments are provided,
+     * `null` is returned. A single resolved argument is returned directly, while
+     * multiple resolved arguments are returned as an array.
+     *
+     * @return Closure A default closure that resolves and returns its arguments.
+     */
+    private static function getClosure(): Closure
+    {
+        return static function (mixed ...$arguments): mixed {
+            if ($arguments === []) {
+                return null;
+            }
+
+            $results = [];
+
+            foreach ($arguments as $argument) {
+                if ($argument instanceof Closure) {
+                    $results[] = $argument();
+                    continue;
+                }
+
+                $results[] = $argument;
+            }
+
+            return (count($results) > 1)
+                ? $results
+                : $results[0];
+        };
+    }
+
+    /**
+     * Resolve a usable type from a union type declaration.
+     *
+     * Prefers a class type when dependency injection is enabled. Otherwise,
+     * selects the first supported built-in type. If no supported type is found,
+     * falls back to `mixed`.
+     *
+     * @param ReflectionNamedType[]|ReflectionIntersectionType[] $unions Types declared in the union.
+     * @param array<string,bool> $supported Supported built-in parameter types.
+     * @param bool $useDi Whether to use dependency injection.
+     *
+     * @return array{0:string,1:bool,2:bool} A tuple containing the resolved
+     *         type name, whether it allows `null`, and whether it is a built-in
+     *         type.
+     */
+    private static function getUnionType(
+        array $unions,
+        array $supported = [],
+        bool $useDi = false
+    ): array 
     {
         foreach ($unions as $type) {
-            if (self::$isDIEnabled && !$type->isBuiltin()) {
+            if ($useDi && !$type->isBuiltin()) {
                 return [
                     $type->getName(),
                     $type->allowsNull(),
-                    false
+                    false,
                 ];
             }
 
-            if(in_array($type->getName(), $supported, true)){
+            if (isset($supported[$type->getName()])) {
                 return [
                     $type->getName(),
                     $type->allowsNull(),
-                    true
+                    true,
                 ];
             }
         }
@@ -2053,90 +2752,86 @@ final class Router implements RouterInterface
     }
 
     /**
-     * Cast a value based on typeof value method hint type.
+     * Cast a value according to a parameter type declaration.
      *
-     * @param string $type The type to cast to.
-     * @param mixed $value The value to cast.
-     * 
-     * @return mixed Return the casted value.
+     * Handles nullable parameters, default values, and union types before
+     * converting the value to the requested type.
+     *
+     * @param string $type Parameter type to cast the value to.
+     * @param mixed $value Value to cast.
+     * @param bool $isNullable Whether the parameter allows `null`.
+     * @param mixed $default Default value to use when no value is provided.
+     * @param bool $isUnion Whether the parameter uses a union type.
+     *
+     * @return mixed The casted value, default value, or `null`.
      */
     private static function typeCasting(
-        string $type, 
+        string $type,
         mixed $value,
-        bool $nullable = false, 
-        mixed $default = '__no_default__',
+        bool $isNullable = false,
+        mixed $default = self::NO_DEFAULT_VALUE,
         bool $isUnion = false
-    ): mixed 
+    ): mixed
     {
-        $isNoDedault = $default === '__no_default__';
-        $value = trim((string) $value);
+        $hasDefaultValue = $default !== self::NO_DEFAULT_VALUE;
+        $strValue = trim((string) $value);
+        $isNull = ($value === null || $strValue === '');
 
-        if ($nullable && ($value === null ||  $value === '')) {
-            return $isNoDedault ? null : $default;
-        }
-
-        if (!$isNoDedault && $value !== 0 && $value !== '0' && empty($value)) {
-            return $default;
+        if ($isNull && ($isNullable || $hasDefaultValue)) {
+            return ($isNullable && !$hasDefaultValue)
+                ? null
+                : $default;
         }
 
         if($type === 'mixed'){
-            return  $value;
+            return $value;
         }
 
-        if($isUnion){
-            return match(true){
-                is_int($value)    => (int) $value,
-                is_float($value)  => (float) $value,
-                is_double($value) => (double) $value,
-                default => self::getHintValue(
-                    $type, 
-                    $value, 
-                    ($isNoDedault || $value !== null) ? (string) $value  : $default
-                ) 
-            };
-        }
-
-        return self::getHintValue(
-            $type, 
-            $value, 
-           ($isNoDedault || $value !== null) ? $value  : $default
-        );
+        return match(true){
+            $isUnion && is_int($value)    => (int) $strValue,
+            $isUnion && is_float($value), is_double($value)  => (float) $strValue,
+            default => self::toTypedValue(
+                $type, 
+                $value, 
+                $hasDefaultValue ? $default : $strValue
+            ) 
+        };
     }
 
     /**
-     * Cast a value to a based on specific type.
+     * Convert a value to a supported parameter type.
      *
-     * @param string $type The type to cast to.
-     * @param mixed $value The value to cast.
-     * @param mixed $default The default value to cast.
-     * 
-     * @return mixed Return the casted value.
+     * @param string $type Parameter type to convert the value to.
+     * @param mixed $value Value to convert.
+     * @param mixed $default Default value returned when the type is unsupported.
+     *
+     * @return mixed The converted value or the supplied default value.
      */
-    private static function getHintValue(
-        string $type, 
-        mixed $value, 
+    private static function toTypedValue(
+        string $type,
+        mixed $value,
         mixed $default
     ): mixed 
     {
         return match ($type) {
-            'bool'      => ((float) $value > 0 || strtolower($value) === 'true'),
-            'int'       => (int) $value,
-            'float'     => (float) $value,
-            'double'    => (double) $value,
-            'string'    => (string) $value,
-            'null'      => null,
-            'false'     => false,
-            'true'      => true,
-            default     => $default
+            //'bool'        => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+            'bool'        => strtolower((string) $value) === 'true' || $value === '1',
+            'float', 'double' => (float) $value,
+            'int'         => (int) $value,
+            'string'      => (string) $value,
+            'null'        => null,
+            'false'       => false,
+            'true'        => true,
+            default       => $default,
         };
     }
 
     /**
      * Get the current command controller views.
      * 
-     * @return array<string,mixed> $views Return array of command routes parameters as URI.
+     * @return array{view:string,options:array} $views Return array of command routes parameters as URI.
      */
-    private static function getCommandArguments(): array 
+    private static function getCommandSegment(): array 
     {
         $views = [
             'view' => '',
@@ -2156,17 +2851,61 @@ final class Router implements RouterInterface
     }
 
     /**
-     * Gets request command name.
+     * Get a CLI argument by index, defaulting to the last argument.
      *
-     * @return string Return command argument index.
+     * Supports negative indexes:
+     *   -1 => last argument
+     *   -2 => second last, etc.
+     *
+     * @param int|null $index Index of the argument to retrieve (0-based). 
+     *                   Negative indexes count from the end.
+     * 
+     * @return array|string Returns the argument, or empty string if not found.
      */
-    private static function getArgument(int $index = 1): string 
+    private static function getArgument(?int $index = 1): array|string
     {
-        if(isset($_SERVER['argv'])){
-            return $_SERVER['argv'][$index] ?? '';
+        $argv = $_SERVER['argv'] ?? [];
+
+        if($index === null){
+            return $argv;
         }
 
-        return '';
+        if ($argv === []) {
+            return '';
+        }
+
+        if ($index < 0) {
+            $index = count($argv) + $index;
+        }
+
+        return $argv[$index] ?? '';
+    }
+
+    /**
+     * Determines if a specific CLI flag is present.
+     *
+     * Supports both short (-f) and long (--flag) forms.
+     *
+     * @param string $flag The flag to search for (with or without leading dashes).
+     *
+     * @return bool True if the flag exists, false otherwise.
+     */
+    private static function hasCommand(string $flag): bool
+    {
+        $options = self::$commands['options'] ?? [];
+        $normalized = ltrim($flag, '-');
+
+        if ($options) {
+            return array_key_exists($normalized, $options);
+        }
+
+        foreach ($_SERVER['argv'] ?? [] as $arg) {
+            if (ltrim($arg, '-') === $normalized) {
+                return true;
+            }
+        }
+
+        return false;
     }
     
     /**
@@ -2190,13 +2929,15 @@ final class Router implements RouterInterface
             return;
         }
 
-        Luminova::setClassMetadata([
+        Runtime::set(Runtime::CLASS_METADATA, [
             'filename'    => null,
             'uri'         => null,
             'namespace'   => null,
             'method'      => null,
-            'cache'       => false,
-            'staticCache' => false,
+            'controllers' => 0,
+            'command'     => null,
+            'isCache'     => false,
+            'isStaticCache' => false,
         ]);
     }
 }

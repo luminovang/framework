@@ -10,100 +10,87 @@
  */
 namespace Luminova\Sessions\Managers;
 
-use \Throwable;
-use \Luminova\Logger\Logger;
-use \Luminova\Base\Configuration;
-use \Luminova\Interface\SessionManagerInterface;
-use \Luminova\Exceptions\{ErrorCode, JsonException, RuntimeException};
+use Luminova\Logger\Logger;
+use Luminova\Exceptions\RuntimeException;
 
-final class Session implements SessionManagerInterface 
+final class Session extends AbstractSessionManager
 {
     /**
-     * Session configuration. 
+     * Session ID bits per character.
      * 
-     * @var Configuration $config
+     * @var array BITS_CHAR
      */
-    private ?Configuration $config = null;
+    private const BITS_CHAR = [
+        4 => '[0-9a-f]',
+        0 => '[0-9a-f]',
+        5 => '[0-9a-v]',
+        6 => '[0-9a-zA-Z,-]'
+    ];
 
     /**
-     * The session storage index name.
+     * Cookie write close.
      * 
-     * @var string $table
+     * @var bool $writeClose
      */
-    private static string $table = 'default';
+    private static bool $writeClose = false;
 
     /**
      * The session id
      * 
-     * @var string|null $sid
+     * @var string|null $sessionId
      */
-    private static ?string $sid = null;
+    private static ?string $sessionId = null;
 
-    /**
+    /** 
      * {@inheritdoc}
      */
-    public function __construct(private string $storage = 'global') {}
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setConfig(Configuration $config): void
+    public function isEmpty(): bool 
     {
-        $this->config = $config;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setStorage(string $storage): self 
-    {
-        $this->storage = $storage;
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setTable(string $table): self 
-    {
-        self::$table = $table;
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getStorage(): string 
-    {
-        return $this->storage;
+        return !isset($_SESSION[$this->getKey()]);
     }
 
     /** 
      * {@inheritdoc}
      */
-    public function getItem(string $index, mixed $default = null): mixed
+    public function isClosed(): bool 
     {
-        return $this->getItems()[$index] ?? $default;
+        return session_status() !== PHP_SESSION_ACTIVE 
+            || self::$writeClose;
     }
 
     /** 
      * {@inheritdoc}
      */
-    public function setItem(string $index, mixed $data, ?string $storage = null): self
+    public static function isValidId(string $sessionId): bool
     {
-        return $this->setItems([$index => $data], $storage);
+        $bitsPerCharacter = (int) ini_get('session.sid_bits_per_character');
+
+        if(!isset(self::BITS_CHAR[$bitsPerCharacter])){
+            return false;
+        }
+
+        $sidLength = (int) ini_get('session.sid_length');
+    
+        if ($sidLength <= 0) {
+            return false;
+        }
+
+        $pattern = self::BITS_CHAR[$bitsPerCharacter];
+
+        return (bool) preg_match("/^{$pattern}{{$sidLength}}$/", $sessionId);
     }
 
     /** 
      * {@inheritdoc}
      */
-    public function setItems(array $data, ?string $storage = null): self
+    public function setItems(array $items): self
     {
-        $storage ??= $this->storage;
-        $_SESSION[self::$table][$storage] = $_SESSION[self::$table][$storage] ?? [];
-        $_SESSION[self::$table][$storage] = array_merge(
-            (array) $_SESSION[self::$table][$storage],
-            $data
+        $key = $this->getKey();
+
+        $_SESSION[$key] = (array) ($_SESSION[$key] ?? []);
+        $_SESSION[$key] = array_merge(
+            $_SESSION[$key],
+            $items
         );
 
         return $this;
@@ -112,20 +99,14 @@ final class Session implements SessionManagerInterface
     /** 
      * {@inheritdoc}
      */
-    public function deleteItem(?string $index = null, ?string $storage = null): self
+    public function deleteItem(string $name): self
     {
-        $storage ??= $this->storage;
+        $key = $this->getKey();
+        $items = (array) ($_SESSION[$key] ?? []);
 
-        if($storage && isset($_SESSION[self::$table][$storage])){
-            if($index){
-                $_SESSION[self::$table][$storage][$index] = [];
-
-                unset($_SESSION[self::$table][$storage][$index]);
-                return $this;
-            }
-
-            $_SESSION[self::$table][$storage] = [];
-            unset($_SESSION[self::$table][$storage]);
+        if(array_key_exists($name, $items)){
+            unset($_SESSION[$key][$name]);
+            return $this;
         }
 
         return $this;
@@ -134,10 +115,13 @@ final class Session implements SessionManagerInterface
     /** 
      * {@inheritdoc}
      */
-    public function commit(): self 
+    public function close(): bool 
     {
-        session_write_close();
-        return $this;
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return false;
+        }
+
+        return self::$writeClose = session_write_close();
     }
 
     /** 
@@ -145,29 +129,58 @@ final class Session implements SessionManagerInterface
      */
     public function start(?string $sessionId = null): bool
     {
-        if(!$sessionId){
-            return session_start();
-        }
+        $error = null;
 
-        if(self::isValidId($sessionId)){
-            session_id($sessionId);
-            
-            if(session_start()){
-                self::$sid = $sessionId;
-                return true;
+        try{
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                if ($sessionId === null || $sessionId === session_id()) {
+                    self::$sessionId = session_id();
+                    return true;
+                }
+
+                $error = 'A different session ID cannot be started 
+                while a session is already active.';
+
+                return false;
             }
 
-            return false;
+            if ($sessionId !== null && !self::isValidId($sessionId)) {
+                $bitsChar = (int) ini_get('session.sid_bits_per_character');
+
+                $error = isset(self::BITS_CHAR[$bitsChar]) 
+                    ? "The provided session ID '{$sessionId}' is invalid."
+                    : "Unsupported session.sid_bits_per_character value: '{$bitsChar}'.";
+
+                if (!PRODUCTION) {
+                    return false;
+                }
+
+                $error .= " A new session ID will be generated.";
+                $sessionId = null;
+            }
+
+            if($sessionId !== null){
+                session_id($sessionId);
+            }
+
+            if (!session_start()) {
+                return false;
+            }
+
+            self::$sessionId = session_id();
+
+            return true;
+        } finally {
+            if($error !== null){
+                $error = "Session Error: {$error}";
+
+                if (PRODUCTION) {
+                    Logger::error($error);
+                }
+
+                throw new RuntimeException($error);
+            }
         }
-
-        $error = "Session Error: The provided session ID '{$sessionId}' is invalid.";
-
-        if(PRODUCTION){
-            Logger::error("{$error} A new session ID will be generated.");
-            return session_start();
-        }
-
-        throw new RuntimeException($error);
     }
 
     /** 
@@ -181,9 +194,9 @@ final class Session implements SessionManagerInterface
     /** 
      * {@inheritdoc}
      */
-    public function regenerateId(bool $clearData = true): string|bool
+    public function regenerateId(bool $clearSessionData = true): string|bool
     {
-        return session_regenerate_id($clearData) 
+        return session_regenerate_id($clearSessionData) 
             ? session_id() 
             : false;
     }
@@ -193,80 +206,26 @@ final class Session implements SessionManagerInterface
      */
     public function getId(): ?string
     {
-        return (session_id() ?: self::$sid);
+        return (session_id() ?: self::$sessionId);
     }
 
-    /** 
+    /**
      * {@inheritdoc}
      */
-    public static function isValidId(string $sessionId): bool
+    public function clear(): bool
     {
-        $bitsPerCharacter = (int) ini_get('session.sid_bits_per_character');
-        $sidLength = (int) ini_get('session.sid_length');
-    
-        if ($sidLength <= 0) {
-            return false;
+        $delete = 0;
+
+        foreach ($_SESSION as $name => $_) {
+            if(!str_starts_with($name, self::KEY_PREFIX . "{$this->storage}")){
+                continue;
+            }
+
+            unset($_SESSION[$name]);
+            $delete++;
         }
 
-        $pattern = match ($bitsPerCharacter) {
-            4, 0 => '[0-9a-f]',
-            5 => '[0-9a-v]',
-            6 => '[0-9a-zA-Z,-]',
-            default => throw new RuntimeException(
-                sprintf("Unsupported session.sid_bits_per_character value: '%d'.", $bitsPerCharacter),
-                ErrorCode::NOT_SUPPORTED
-            )
-        };
-
-        return (bool) preg_match("/^{$pattern}{{$sidLength}}$/", $sessionId);
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function destroy(bool $allData = false): bool
-    {
-        if ($allData) {
-            $_SESSION = [];
-            $cookieName = session_name() ?: $this->config?->cookieName;
-
-            session_unset();
-            session_destroy();
-            session_regenerate_id(true);
-
-            return $cookieName ? setcookie(
-                $cookieName,
-                '',
-                [
-                    'expires' => time() - $this->config->expiration, 
-                    'path' => $this->config->sessionPath ?? '/', 
-                    'domain' => $this->config->sessionDomain ?? '', 
-                    'secure' => true, 
-                    'httponly' => true,
-                    'samesite' => $this->config->sameSite ?? 'Strict'
-                ]
-            ) : true;
-        }
-
-        if (isset($_SESSION[self::$table])) {
-            $_SESSION[self::$table] = [];
-            unset($_SESSION[self::$table]);
-            return true;
-        }
-
-        return false;
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function hasItem(string $key): bool
-    {
-        if(isset($_SESSION[self::$table][$this->storage])){
-            return isset($_SESSION[self::$table][$this->storage][$key]);
-        }
-
-        return false;
+        return $delete > 0;
     }
 
     /** 
@@ -274,73 +233,42 @@ final class Session implements SessionManagerInterface
      */
     public function hasStorage(string $storage): bool
     {
-        return isset($_SESSION[self::$table][$storage]);
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function getResult(string $type = 'array'): array|object
-    {
-        if($type === 'array'){
-            return (array) $_SESSION[self::$table] ?? [];
-        }
-
-        $result = $_SESSION[self::$table] ?? [];
-
-        if($result === []){
-            return (object) $result;
-        }
-
-        try {
-            return (object) json_decode(json_encode($result, JSON_THROW_ON_ERROR));
-        }catch(Throwable $e){
-            throw new JsonException($e->getMessage(), $e->getCode(), $e);
-        }
-    }
-
-    /** 
-     * {@inheritdoc}
-     */
-    public function toAs(string $type = 'array', ?string $index = null): object|array|null
-    {
-        $result = $this->getItems();
-        $result = ($index !== null) ? ($result[$index] ?? null) : $result;
-
-        if($result === null){
-            return null;
-        }
-    
-        if($type === 'array'){
-            return (array) $result;
-        }
-
-        if($result === []){
-            return (object) $result;
-        }
-
-        try {
-            return (object) json_decode(json_encode($result, JSON_THROW_ON_ERROR));
-        }catch(Throwable $e){
-            if(is_scalar($result)){
-                return ($type === 'array') ? [$result] : (object)[$result];
+        foreach(array_keys($_SESSION) as $key){
+            if(str_starts_with($key, self::KEY_PREFIX . "{$storage}")){
+                return true;
             }
-
-            throw new JsonException($e->getMessage(), $e->getCode(), $e);
         }
+
+        return false;
     }
 
     /** 
      * {@inheritdoc}
      */
-    public function getItems(?string $storage = null): array
+    public function toArray(?string $storage = null): array
+    {
+        return (array) ($_SESSION[$this->getKey($storage)] ?? []);
+    }
+
+    /** 
+     * {@inheritdoc}
+     */
+    public function getItems(): array
+    {
+       return (array) ($_SESSION[$this->getKey()] ?? []);
+    }
+
+    /**
+     * Generate storage key.
+     * 
+     * @param string $storage Optional storage name.
+     * 
+     * @return string Storage name.
+     */
+    private function getKey(?string $storage = null): string 
     {
         $storage ??= $this->storage;
 
-        if (isset($_SESSION[self::$table][$storage])) {
-            return (array) $_SESSION[self::$table][$storage];
-        }
-
-        return [];
+        return self::KEY_PREFIX . "{$storage}_{$this->namespace}";
     }
 }

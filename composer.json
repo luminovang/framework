@@ -1,5 +1,6 @@
 {
     "name": "luminovang/framework",
+    "version": "3.8.7",
     "description": "Reusable and core component for the Luminova PHP framework.",
     "keywords": [
         "luminova", "php luminova", "php luminova framework", "luminova ng", "novakit",
@@ -23,7 +24,7 @@
         }
     ],
     "require": {
-        "php": "^8.0",
+        "php": "^8.1",
         "ext-json": "*",
         "ext-mbstring": "*"
     },
@@ -37,7 +38,6 @@
     },
     "suggest": {
         "luminovang/luminova": "Required when using this component within the full Luminova framework.",
-        "opis/closure": "Required if you want to store anonymous functions or closures in the BackgroundTaskQueue system.",
         "ext-curl": "Required for the CURLRequest class.",
         "ext-exif": "Required for running tests on the Image class.",
         "ext-fileinfo": "Improves MIME type detection for files.",
@@ -58,11 +58,11 @@
         "sort-packages": true
     },
     "scripts": {
-        "analyze-app": [
+        "analyse": [
             "Composer\\Config::disableProcessTimeout",
             "bash -c \"XDEBUG_MODE=off phpstan analyse --memory-limit 3000M\""
         ],
-        "analyze-code": [
+        "check": [
             "Composer\\Config::disableProcessTimeout",
             "rector process --dry-run"
         ],
@@ -71,8 +71,8 @@
         ]
     },
     "scripts-descriptions": {
-        "analyze-app": "Run static analysis on framework modules using PHPStan.",
-        "analyze-code": "Check code style and perform automated refactoring with Rector (dry run).",
+        "analyse": "Run static analysis on framework modules using PHPStan.",
+        "check": "Check code style and perform automated refactoring with Rector (dry run).",
         "cs-fix": "Fix coding style issues using PHP-CS-Fixer."
     },
     "minimum-stability": "stable",

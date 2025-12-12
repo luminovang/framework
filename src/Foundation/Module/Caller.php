@@ -19,9 +19,12 @@ use \ReflectionException;
 use \RecursiveIteratorIterator;
 use \RecursiveDirectoryIterator;
 use \RecursiveCallbackFilterIterator;
-use \Luminova\Exceptions\AppException;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Exceptions\LuminovaException;
+use Luminova\Exceptions\RuntimeException;
 
+/**
+ * @template T of object
+ */
 final class Caller 
 {
     /**
@@ -75,7 +78,7 @@ final class Caller
     /**
      * Call all public methods within a given class.
      * 
-     * @param class-string<T>|class-object<T> $class class name or instance of a class.
+     * @param class-string<T>|object<T> $class class name or instance of a class.
      * @param bool $return return type.
      * 
      * @return int|array<int,string> Return all called methods in the given and their response.
@@ -105,13 +108,11 @@ final class Caller
 
             return $return ? $calls : $count;
         }catch(Throwable $e){
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw $e;
             }
 
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
-
-        return 0;
     }
 }

@@ -10,43 +10,78 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Base\Configuration;
-use \Luminova\Exceptions\JsonException;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Base\Configuration;
+use Luminova\Exceptions\JsonException;
+use Luminova\Exceptions\RuntimeException;
+use Luminova\Exceptions\InvalidArgumentException;
 
 interface SessionManagerInterface 
 {
     /**
      * Initializes the session manager constructor.
      *
-     * @param string $storage The session storage instance name. Default is 'global'.
+     * @param string $storage The session storage instance name (default: 'global').
      */
     public function __construct(string $storage = 'global');
 
     /**
+     * Determines whether the current session storage is empty.
+     *
+     * Returns `true` when no value exists for the current session key,
+     * otherwise `false`.
+     *
+     * @return bool `true` if the session storage is empty, otherwise `false`.
+     */
+    public function isEmpty(): bool;
+
+    /**
+     * Determines whether the current session is closed.
+     *
+     * A closed session is no longer available for active read/write operations
+     * until it is started again.
+     *
+     * @return bool `true` if the session is closed, otherwise `false`.
+     */
+    public function isClosed(): bool;
+    
+    /**
+     * Validates a session or cookie identifier.
+     *
+     * Determines whether the given identifier conforms to the format accepted
+     * by the underlying session storage.
+     *
+     * @param string $sessionId The session or cookie identifier to validate.
+     *
+     * @return bool `true` if the identifier is valid, otherwise `false`.
+     */
+    public static function isValidId(string $sessionId): bool;
+
+    /**
      * Set session configuration object.
      *
-     * @param Configuration<App\Config\Session> $config Session configuration.
+     * @param Configuration<\App\Config\Session> $config Session configuration.
      */
     public function setConfig(Configuration $config): void;
 
     /**
-     * Sets the session storage instance name where all session items will be stored.
+     * Set the session storage name used to store and retrieve session items.
      *
-     * @param string $storage The session storage key.
-     * 
-     * @return static Return instance of session manager class.
+     * @param string $storage The session storage name.
+     *
+     * @return self Return the current session manager instance.
+     * @throws InvalidArgumentException If the storage name is invalid.
      */
     public function setStorage(string $storage): self;
 
     /**
-     * Sets the session storage table index name to separate user session from other sessions and cookies.
+     * Set the storage namespace used to organize session items.
      *
-     * @param string $table The session storage table index.
-     * 
-     * @return static Return instance of session manager class.
+     * @param string $namespace The storage namespace.
+     *
+     * @return self Return the current session manager instance.
+     * @throws InvalidArgumentException If the namespace is invalid.
      */
-    public function setTable(string $table): self;
+    public function setNamespace(string $namespace): self;
 
     /**
      * Gets the current session storage instance name.
@@ -95,107 +130,79 @@ interface SessionManagerInterface
      * 
      * This method delete the old ID associated to the current session, to retain data set to false.
      * 
-     * @param bool $clearData Whether to delete the old associated session or not (default: `true`).
+     * @param bool $clearSessionData Whether to clear existing session data.
      * 
      * @return string|false Return the new generated session Id on success, otherwise false.
      */
-    public function regenerateId(): string|bool;
+    public function regenerateId(bool $clearSessionData = false): string|bool;
 
     /**
-     * Validates a session or cookie ID based on PHP's session configuration.
+     * Clear all session data stored in the current storage and namespace.
      *
-     * This function checks if a given string is valid PHP session ID according to the current
-     * PHP session configuration, specifically the 'session.sid_bits_per_character' and 'session.sid_length' settings.
+     * Only sessions managed by this class are cleared. Other session or cookie
+     * data is not affected unless its key matches the manager's key format.
      *
-     * @param string $sessionId The session ID to validate.
-     *
-     * @return bool Returns `true` if the session ID matches the expected format, otherwise `false`.
-     *
-     * @throws RuntimeException Throws if `session.sid_bits_per_character` has an unsupported value.
+     * @return bool True if all matching data was cleared successfully, otherwise false.
      */
-    public static function isValidId(string $sessionId): bool;
+    public function clear(): bool;
 
     /**
-     * Empty all data stored in application session or cookie table.
-     * 
-     * This method can optionally clear entire application session or cookie data if `$allData` is set to true.
-     * It uses PHP's `session_destroy()` and `setcookie` to affects the entire session.
-     * 
-     * @param bool $allData Whether to destroy all application session or cookie data (default: false).
+     * Write pending session data and close the active session.
      *
-     * @return bool Return true if storage was data was deleted successfully otherwise false.
-     * 
-     * > **Note:** If `$allData` is set to true, all manager `session` or `cookie` data will be cleared for entire application.
+     * Persists the current session data and releases the session lock. The session
+     * remains available for reading during the current request but must be started
+     * again before further changes can be persisted.
+     *
+     * @return bool `true` if the session was successfully closed, otherwise `false`.
      */
-    public function destroy(bool $allData = false): bool;
-
-    /** 
-     * Write session data and end session.
-     * 
-     * @return self Return instance of session manager class.
-     */
-    public function commit(): self;
+    public function close(): bool;
 
     /** 
      * Retrieves an item from the session storage.
      * 
-     * @param string $index The key to retrieve.
+     * @param string $name The item name to retrieve.
      * @param mixed $default The default value if the key is not found.
      * 
      * @return mixed Return the retrieved data.
      */
-    public function getItem(string $index, mixed $default = null): mixed;
+    public function getItem(string $name, mixed $default = null): mixed;
 
     /** 
      * Stores an item in a specified storage name.
      * 
-     * @param string $index The key to store.
+     * @param string $name The item name to store.
      * @param mixed $data The data to store.
-     * @param string|null $storage Optional storage name.
      * 
-     * @return static Return instance of session manager class.
+     * @return self Return instance of session manager class.
      */
-    public function setItem(string $index, mixed $data, ?string $storage = null): self;
+    public function setItem(string $name, mixed $data): self;
 
     /** 
      * Stores multiple items in a specified storage name at once.
      * 
-     * @param array<string,mixed> $data The date to store where the key is the identifier.
-     * @param string|null $storage Optional storage name.
+     * @param array<string,mixed> $items The items to store where the key is the identifier.
      * 
-     * @return static Return instance of session manager class.
+     * @return self Return instance of session manager class.
      */
-    public function setItems(array $data, ?string $storage = null): self;
+    public function setItems(array $items): self;
 
     /** 
-     * Clears all data from session storage. 
-     * If $index is provided, it will remove the specified key from the session storage.
+     * Delete item from session storage.
+     *  
+     * If `$storage` is provided, it will remove item from specified session storage name.
      * 
-     * @param string|null $index The key index to remove.
-     * @param string|null $storage Optionally specify the storage name to clear or remove an item.
+     * @param string $name The item name to remove.
      * 
-     * @return static Return instance of session manager class.
+     * @return self Return instance of session manager class.
      */
-    public function deleteItem(?string $index = null, ?string $storage = null): self;
+    public function deleteItem(string $name): self;
 
     /** 
      * Retrieves stored items from session storage as an array.
      * 
-     * @param string|null $storage Optional storage key.
-     * 
      * @return array Return the retrieved data.
      */
-    public function getItems(?string $storage = null): array;
-
-    /**
-     * Gets all stored session data as an array or object.
-     *
-     * @param string $type The return session data type: e.g, 'array' or 'object' (default: `array`).
-     * 
-     * @return array|object Return all stored session data as an array or object.
-     * @throws JsonException Throws if json error occurs.
-     */
-    public function getResult(string $type = 'array'): array|object;
+    public function getItems(): array;
 
     /** 
      * Checks if a key exists in the session.
@@ -215,14 +222,27 @@ interface SessionManagerInterface
      */
     public function hasStorage(string $storage): bool;
 
-    /** 
-     * Retrieves data as an array or object from the current session storage.
+    /**
+     * Retrieve session data as an array.
      * 
-     * @param string $type The return session data type: e.g, 'array' or 'object' (default: `array`).
-     * @param string|null $index Optional property key to retrieve.
+     * @param string|null $storage Optional session storage name to retrieve.
      * 
-     * @return object|array|null Return the retrieved data or null if key index not found.
-     * @throws JsonException Throws if json error occurs.
+     * @return array Return all stored session data as an array or object.
      */
-    public function toAs(string $type = 'array', ?string $index = null): object|array|null;
+    public function toArray(?string $storage = null): array;
+
+    /**
+     * Retrieve session data as an object.
+     *
+     * The current session data is converted and
+     * returned as an object.
+     *
+     * @param string|null $storage Optional session storage name to retrieve.
+     *
+     * @return object|null The retrieved data as an object, or `null` if the
+     *     specified key does not exist or cannot be converted to an object.
+     *
+     * @throws JsonException If the session data cannot be encoded or decoded during conversion.
+     */
+    public function toObject(?string $storage = null): ?object;
 }

@@ -10,13 +10,14 @@
  */
 namespace Luminova\Sessions\Handlers;
 
-use \Luminova\Time\Time;
-use \Luminova\Utility\IP;
+use Luminova\Luminova;
+use Luminova\Time\Time;
 use \ReturnTypeWillChange;
-use function \Luminova\Funcs\root;
-use \Luminova\Base\SessionHandler;
-use \Luminova\Security\Encryption\Crypter;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Http\Network\IP;
+use Luminova\Base\SessionHandler;
+use Luminova\Storage\Filesystem as FS;
+use Luminova\Exceptions\RuntimeException;
+use Luminova\Security\Encryption\Crypter;
 
 /**
  * Custom File Handler for session management with optional encryption support.
@@ -73,7 +74,7 @@ class Filesystem extends SessionHandler
         $filePath = rtrim(ini_get('session.save_path'), TRIM_DS);
 
         if (!$filePath) {
-            $filePath = rtrim(root('/writeable/session/'), TRIM_DS);
+            $filePath = rtrim(Luminova::root('/writeable/session/'), TRIM_DS);
             ini_set('session.save_path', $filePath);
         }
 
@@ -103,17 +104,27 @@ class Filesystem extends SessionHandler
         $path = rtrim($path, TRIM_DS) . DIRECTORY_SEPARATOR . $name;
 
         if (!is_dir($path) && !mkdir($path, $this->options['dir_permission'], true)) {
-            throw new RuntimeException(sprintf('Failed to create session save path: "%s".', $this->filePath));
+            throw new RuntimeException(sprintf(
+                'Failed to create session save path: "%s".', 
+                $this->filePath
+            ));
         }
 
         if (!is_writable($path)) {
-            throw new RuntimeException(sprintf('Session save path: "%s" is not writable.', $this->filePath));
+            throw new RuntimeException(sprintf(
+                'Session save path: "%s" is not writable.', 
+                $this->filePath
+            ));
         }
 
         $this->filePath = rtrim($path, TRIM_DS);
-        $this->fileName = ($this->options['session_ip'] ? md5(IP::get()) . '_': '');
+        $this->fileName = ($this->options['session_ip'] 
+            ? Luminova::hash('xxh3', IP::get(), fallbackAlgo: 'md5') . '_'
+            : '');
 
-        return $this->options['onCreate'] ? ($this->options['onCreate'])($path, $name, $this->fileName) : true;
+        return $this->options['onCreate'] 
+            ? ($this->options['onCreate'])($path, $name, $this->fileName) 
+            : true;
     }
 
     /**
@@ -140,7 +151,9 @@ class Filesystem extends SessionHandler
             $this->isNewSession = false;
         }
 
-        return $this->options['onClose'] ? ($this->options['onClose'])(true) : true;
+        return $this->options['onClose'] 
+            ? ($this->options['onClose'])(true) 
+            : true;
     }
 
     /**
@@ -163,7 +176,7 @@ class Filesystem extends SessionHandler
     {
         $exists = (
             preg_match('/^' . $this->pattern . '$/', $id) === 1 && 
-            file_exists($this->getFile($id))
+            is_file($this->getFile($id))
         );
 
         return $this->options['onValidate'] 
@@ -193,14 +206,18 @@ class Filesystem extends SessionHandler
         if (is_readable($file) && ($length = filesize($file)) > 0) {
             while (($buffer = fread($this->fileHandle, $length - strlen($data))) !== false) {
                 $data .= $buffer;
+
                 if (strlen($data) >= $length) {
                     break;
                 }
             }
         }
 
-        $data = ($data && $this->options['encryption']) ? Crypter::decrypt($data) : $data;
-        $this->fileHash = md5($data);
+        $data = ($data && $this->options['encryption']) 
+            ? Crypter::decrypt($data) 
+            : $data;
+
+        $this->fileHash = Luminova::hash('xxh3', $data, fallbackAlgo: 'md5');
         return $data;
     }
 
@@ -219,8 +236,8 @@ class Filesystem extends SessionHandler
         }
 
         // Skip writing if data hasn't changed
-        if ($this->fileHash === md5($data)) {
-            return $this->isNewSession || touch($this->getFile($id));
+        if ($this->fileHash === Luminova::hash('xxh3', $data, fallbackAlgo: 'md5')) {
+            return $this->isNewSession || FS::touch($this->getFile($id));
         }
 
         // Truncate and rewind only for existing sessions
@@ -229,7 +246,10 @@ class Filesystem extends SessionHandler
             rewind($this->fileHandle);
         }
 
-        $encrypted = ($data && $this->options['encryption']) ? Crypter::encrypt($data) : $data;
+        $encrypted = ($data && $this->options['encryption']) 
+            ? Crypter::encrypt($data) 
+            : $data;
+
         if ($encrypted === false) {
             return false;
         }
@@ -248,7 +268,7 @@ class Filesystem extends SessionHandler
             $written += $result;
         }
 
-        $this->fileHash = md5($data);
+        $this->fileHash = Luminova::hash('xxh3', $data, fallbackAlgo: 'md5');
         $encrypted = null;
         return true;
     }
@@ -264,7 +284,7 @@ class Filesystem extends SessionHandler
     {
         $file = $this->getFile($id);
 
-        if (file_exists($file)) {
+        if (is_file($file)) {
             clearstatcache();
             return unlink($file) && $this->destroySessionCookie();
         }
@@ -298,7 +318,11 @@ class Filesystem extends SessionHandler
                 continue;
             }
 
-            if (($filemtime = filemtime($path)) !== false && $filemtime < $expiration && unlink($path)) {
+            if (
+                ($filemtime = filemtime($path)) !== false 
+                && $filemtime < $expiration 
+                && unlink($path)
+            ) {
                 $deleted++;
             }
         }
@@ -333,7 +357,7 @@ class Filesystem extends SessionHandler
             return true;
         }
 
-        $this->isNewSession = !file_exists($file);
+        $this->isNewSession = !is_file($file);
         $this->fileHandle = fopen($file, 'c+b');
         
         if ($this->fileHandle === false) {
@@ -350,7 +374,7 @@ class Filesystem extends SessionHandler
 
         if ($this->isNewSession) {
             chmod($file, 0600);
-            $this->fileHash = md5('');
+            $this->fileHash = Luminova::hash('xxh3', '', fallbackAlgo: 'md5');
             return '';
         }
 
