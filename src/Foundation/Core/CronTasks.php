@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -10,16 +11,12 @@
  */
 namespace Luminova\Foundation\Core;
 
-use \Luminova\Base\Command;
-use \Luminova\Logger\LogLevel;
-use \Luminova\Time\{Time, CronInterval};
-use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
-use function \Luminova\Funcs\{
-    root,
-    write_content,
-    get_content,
-    make_dir
-};
+use Luminova\Base\Command;
+use Luminova\Logger\LogLevel;
+use Luminova\Storage\Filesystem;
+use Luminova\Time\{Time, CronInterval};
+use Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
+use function Luminova\Funcs\{root,make_dir};
 
 abstract class CronTasks
 {
@@ -72,7 +69,7 @@ abstract class CronTasks
     {
         self::$path ??= root('/writeable/cron/');
         self::$filename ??='schedules.json';
-        self::$timezone ??= env('app.timezone', date_default_timezone_get());
+        self::$timezone ??= env('app.timezone', 'UTC');
         make_dir(self::getPath());
     }
 
@@ -89,7 +86,7 @@ abstract class CronTasks
      *
      * @param class-string<Command> $controller The controller class and method.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected function service(string $controller): self
     {
@@ -105,7 +102,7 @@ abstract class CronTasks
      *
      * @param callable $onComplete The callback function to execute on completion.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected function onComplete(callable $onComplete): self
     {
@@ -119,7 +116,7 @@ abstract class CronTasks
      *
      * @param callable $onError The callback function to execute on failure.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected function onFailure(callable $onError): self
     {
@@ -133,7 +130,7 @@ abstract class CronTasks
      *
      * @param string $url The URL to ping on completion.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected function pingOnComplete(string $url): self
     {
@@ -147,7 +144,7 @@ abstract class CronTasks
      *
      * @param string $url The URL to ping on failure.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected function pingOnFailure(string $url): self
     {
@@ -162,9 +159,9 @@ abstract class CronTasks
      * @param string $level The log level to use while logging execution response.
      * 
      * **Supported Log levels:**
-     * [emergency, alert, critical, error, warning, notice, info, debug, exception, php_error]
+     * [emergency, alert, critical, error, warning, notice, info, debug, exception, php]
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      * @throws InvalidArgumentException If invalid or unsupported log level is provided.
      */
     protected function log(string $level): self
@@ -180,7 +177,7 @@ abstract class CronTasks
      *
      * @param string $filepath The output filepath (e.g, `/path/to/writable/cron/err.txt`).
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      * @throws InvalidArgumentException If invalid or unsupported file path is provided.
      * 
      * > **Note:** Latest execution outputs overrides the previous outputs.
@@ -205,7 +202,7 @@ abstract class CronTasks
      *
      * @param string $description The description of the cron job.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected function description(string $description): self
     {
@@ -251,7 +248,10 @@ abstract class CronTasks
             ];
         }
 
-        return write_content(self::getPath() . self::$filename, json_encode($commands, JSON_PRETTY_PRINT));
+        return Filesystem::write(
+            self::getPath() . self::$filename, 
+            json_encode($commands, JSON_PRETTY_PRINT)
+        );
     }
 
     /**
@@ -259,7 +259,7 @@ abstract class CronTasks
      *
      * @param int $seconds Interval in seconds.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected final function seconds(int $seconds = 5): self
     {
@@ -271,7 +271,7 @@ abstract class CronTasks
      *
      * @param int $minutes Interval in minutes.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected final function minutes(int $minutes = 1): self
     {
@@ -283,7 +283,7 @@ abstract class CronTasks
      *
      * @param int $hours Interval in hours.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected final function hours(int $hours = 1): self
     {
@@ -295,7 +295,7 @@ abstract class CronTasks
      *
      * @param int $days Interval in days.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected final function days(int $days = 1): self
     {
@@ -307,7 +307,7 @@ abstract class CronTasks
      *
      * @param int $weeks Interval in weeks.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected final function weeks(int $weeks = 1): self
     {
@@ -319,7 +319,7 @@ abstract class CronTasks
      *
      * @param int $months Interval in months.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected final function months(int $months = 1): self
     {
@@ -331,7 +331,7 @@ abstract class CronTasks
      *
      * @param int $years Interval in years.
      * 
-     * @return static Return cron class instance.
+     * @return self Return cron class instance.
      */
     protected final function years(int $years = 1): self
     {
@@ -344,7 +344,7 @@ abstract class CronTasks
      * @param string $expression The cron expression.
      *
      * 
-     * @return static Return cron class instance. 
+     * @return self Return cron class instance. 
      * @throws RuntimeException If invalid expression is provided.
      */
     protected function cronTime(string $expression): self
@@ -370,7 +370,10 @@ abstract class CronTasks
      */
     public final function update(array $tasks): bool
     {
-        return write_content(self::getPath() . self::$filename, json_encode($tasks, JSON_PRETTY_PRINT));
+        return Filesystem::write(
+            self::getPath() . self::$filename, 
+            json_encode($tasks, JSON_PRETTY_PRINT)
+        );
     }
 
     /**
@@ -401,7 +404,7 @@ abstract class CronTasks
     public final static function getTaskFromFile(): array|bool
     {
         if(file_exists($file = self::getPath() . self::$filename)){
-            $content = get_content($file);
+            $content = Filesystem::contents($file);
             
             if($content !== false){
                 return json_decode($content, true);

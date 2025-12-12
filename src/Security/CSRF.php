@@ -10,7 +10,7 @@
  */
 namespace Luminova\Security;
 
-use \Luminova\Sessions\Session;
+use Luminova\Sessions\Session;
 use \App\Config\Session as CookieConfig;
 
 final class CSRF 
@@ -155,7 +155,6 @@ final class CSRF
             ? self::hasCookie() 
             : isset($_SESSION[self::$token]);
     }
-
 
     /**
      * Generates a new CSRF token.

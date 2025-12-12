@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework mysqli database driver extension.
  *
@@ -11,27 +12,17 @@
 namespace Luminova\Database\Driver;
 
 use \mysqli;
-use \stdClass;
 use \Throwable;
 use \mysqli_stmt;
 use \mysqli_result;
-use \ReflectionClass;
-use \Luminova\Boot;
-use \Luminova\Luminova;
-use \Luminova\Logger\Logger;
-use \Luminova\Foundation\Core\Database;
-use \Luminova\Exceptions\{ErrorCode, DatabaseException};
-use \Luminova\Interface\{ConnInterface, DatabaseInterface};
+use Luminova\Luminova;
+use Luminova\Foundation\Core\Database;
+use Luminova\Interface\DatabaseInterface;
+use Luminova\Exceptions\{ErrorCode, DatabaseException};
+use Luminova\Database\Helpers\{Util, Debugger, DriversTrait};
 
 final class MysqliDatabase implements DatabaseInterface 
 {
-    /**
-     * Flag for unbound placeholder key.
-     * 
-     * @var string NO_BIND_KEY
-     */
-    private const NO_BIND_KEY = '__LMV_MYSQLI_NO_BIND_KEY__';
-
     /**
      * Mysqli Database connection instance.
      * 
@@ -45,20 +36,6 @@ final class MysqliDatabase implements DatabaseInterface
      * @var mysqli_stmt|mysqli_result|bool $stmt 
      */
     private mysqli_stmt|mysqli_result|bool $stmt = false;
-
-    /**
-     * Database configuration.
-     * 
-     * @var Database|null $config
-     */
-    private ?Database $config = null;
-
-    /**
-     * Debug mode flag.
-     * 
-     * @var bool $onDebug
-     */
-    private bool $onDebug = false;
 
     /**
      * Database queries bind values.
@@ -82,21 +59,7 @@ final class MysqliDatabase implements DatabaseInterface
     private bool $isSelect = false;
 
     /**
-     * Connection status flag.
-     * 
-     * @var bool $connected
-     */
-    private bool $connected = false;
-
-    /**
-     * Query executed successfully.
-     * 
-     * @var bool $executed
-     */
-    private bool $executed = false;
-
-    /**
-     * Mode if any prepares emulation was found.
+     * MYSQLI emulate prepares.
      * 
      * @var bool $usePrepares
      */
@@ -110,41 +73,6 @@ final class MysqliDatabase implements DatabaseInterface
     private bool $inTransaction = false;
 
     /**
-     * Show Query Execution profiling.
-     * 
-     * @var bool $showProfiling
-     */
-    private static bool $showProfiling = false;
-
-    /**
-     * Total Query Execution time.
-     * 
-     * @var float|int $queryTime
-     */
-    protected float|int $queryTime = 0;
-
-    /**
-     * Last Query Execution time.
-     * 
-     * @var float|int $lastQueryTime
-     */
-    protected float|int $lastQueryTime = 0;
-
-    /**
-     * Start Execution time.
-     * 
-     * @var float|int $startTime
-     */
-    private static float|int $startTime = 0;
-
-    /**
-     * MYSQLI emulate prepares.
-     * 
-     * @var bool $isEmulatePrepares
-     */
-    private static bool $isEmulatePrepares = false;
-
-    /**
      * Query metadata.
      * 
      * @var array $metadata
@@ -152,32 +80,72 @@ final class MysqliDatabase implements DatabaseInterface
     private array $metadata = [];
 
     /**
-     * Named placeholder pattern.
-     * 
-     * @var string $pattern
+     * Match SQL named placeholders 
+     * while ignoring quoted strings and identifiers.
+     *
+     * @var string PATTERN SQL named placeholder matcher.
      */
-    private static string $pattern = '/:([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)/';
+    private const PATTERN = '/
+        (\'(?:\\\\.|\'\'|[^\'\\\\])*\'|"(?:\\\\.|""|[^"\\\\])*"|`(?:\\\\.|``|[^`\\\\])*`)
+        |
+        (?<!:):([a-zA-Z_][a-zA-Z0-9_]*)
+    /x';
+
+    /**
+     * Bind param identifier.
+     * 
+     * @var string MYSQLI_BIND
+     */
+    private const MYSQLI_BIND = '__MYSQLI_BIND_VALUE__';
+
+    /**
+     * Bind param reference identifier.
+     * 
+     * @var string MYSQLI_PARAM_REF
+     */
+    private const MYSQLI_PARAM_REF = '__MYSQLI_PARAM_REFERENCE__';
+
+    /**
+     * Flag for unbound placeholder key.
+     * 
+     * @var string NO_BIND_KEY
+     */
+    private const NO_BIND_KEY = '__LMV_MYSQLI_NO_BIND_KEY__';
+
+    /**
+     * Database driver.
+     * 
+     * @var string $driver
+     */
+    private string $driver = 'mysqli';
+
+    /**
+     * Supported fetch modes.
+     * 
+     * @var array<int,bool> FETCH_MODES
+     */
+    private const FETCH_MODES = [
+        FETCH_ASSOC     => true,
+        FETCH_BOTH      => true,
+        FETCH_OBJ       => true, 
+        FETCH_COLUMN    => true,
+        FETCH_KEY_PAIR  => true,
+        FETCH_NUM       => true,
+        FETCH_CLASS     => true,
+    ];
 
     /**
      * Result fetch modes.
      * 
-     * @var array<int,string> $fetchModes
+     * @var array<int,mixed> MYSQLI_FETCH_MODES
      */
-    private static array $fetchModes = [
-        FETCH_ASSOC     => 'default',
-        FETCH_BOTH      => 'default',
-        FETCH_OBJ       => 'fetch_object', 
-        FETCH_COLUMN    => 'default',
-        FETCH_KEY_PAIR  => 'fetch_row',
-        FETCH_NUM       => 'default',
-        FETCH_NUM_OBJ   => 'default',
-        FETCH_CLASS     => 'default',
-        'mysqli'        => [
-            FETCH_ASSOC => MYSQLI_ASSOC,
-            FETCH_BOTH => MYSQLI_BOTH,
-            FETCH_NUM => MYSQLI_NUM
-        ]
+    private const MYSQLI_FETCH_MODES = [
+        FETCH_ASSOC => MYSQLI_ASSOC,
+        FETCH_BOTH  => MYSQLI_BOTH,
+        FETCH_NUM   => MYSQLI_NUM
     ];
+
+    use DriversTrait;
 
     /**
      * {@inheritdoc}
@@ -185,41 +153,10 @@ final class MysqliDatabase implements DatabaseInterface
     public function __construct(Database $config) 
     {
         mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+        
         $this->config = $config;
-        self::$isEmulatePrepares = (bool) $this->config->getValue('emulate_prepares');
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function connect(): bool 
-    {
-        try{
-            $this->newConnection();
-            $this->connected = true;
-        }catch(Throwable $e){
-            if(!$e instanceof DatabaseException){
-                throw new DatabaseException('Connection failed: ' . $e->getMessage(), $e->getCode(), $e);
-            }
-            throw $e;
-        }
-
-        self::$showProfiling = (
-            $this->isConnected() && 
-            (!PRODUCTION || STAGING) && 
-            env('debug.show.performance.profiling', false)
-        );
-        return $this->connected;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setDebug(bool $debug): self 
-    {
-        $this->onDebug = $debug;
-
-        return $this;
+        $this->usePrepares = (bool) $this->config->getValue('emulate_prepares');
+        
     }
 
     /**
@@ -227,7 +164,7 @@ final class MysqliDatabase implements DatabaseInterface
      */
     public function getDriver(): ?string 
     {
-        return $this->isConnected() ? 'mysqli' : null;
+        return $this->isConnected() ? $this->driver : null;
     }
 
      /**
@@ -241,83 +178,46 @@ final class MysqliDatabase implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function getConfig(string $property): mixed
-    {
-        $property = strtolower($property);
-
-        if(
-            $property === 'username' || 
-            $property === 'password' || 
-            $property === 'port' || 
-            $property === 'host'
-        ){
-            return null;
-        }
-
-        return $this->config->getValue($property);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
     public function isConnected(): bool 
     {
-        return ($this->connected && $this->connection instanceof mysqli);
+        return (
+            $this->connected 
+            && $this->connection instanceof mysqli
+        );
     }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function raw(): ConnInterface 
-    {
-        return new class($this->connection) implements ConnInterface 
-        {
-            /**
-             * @var ?mysqli $conn
-             */
-            private ?mysqli $conn = null;
-
-            /**
-             * {@inheritdoc}
-             */
-            public function __construct(?mysqli $conn = null){
-                $this->conn = $conn;
-            }
-            
-            /**
-             * {@inheritdoc}
-             */
-            public function close(): void {$this->conn = null;}
-
-            /**
-             * {@inheritdoc}
-             */
-            public function getConn(): ?mysqli {return $this->conn;}
-        };
-    }
+    
 
     /**
      * {@inheritdoc}
      */
     public function error(): string 
     {
-        return $this->isStatement() ? $this->stmt->error : $this->connection->error;
+        return $this->isStatement() 
+            ? $this->stmt->error 
+            : $this->connection->error;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function errors(): array 
+    public function errors(): array
     {
+        $hasStatement = $this->isStatement();
+        $hasConnection = $this->isConnected();
+
         return [
             'statement' => [
-                'errno' => $this->isStatement() ? $this->stmt->errno : -1,
-                'error' => $this->isStatement() ? $this->stmt->error : null
+                'errno'   => $hasStatement ? $this->stmt->errno : -1,
+                'error'   => $hasStatement ? $this->stmt->error : null,
+                'num_rows' => $hasStatement ? $this->rowCount() : null,
+                
             ],
             'connection' => [
-                'errno' => $this->isConnected() ? $this->connection->errno : -1,
-                'error' => $this->isConnected() ? $this->connection->error : 'Connection not established'
-            ]
+                'errno' => $hasConnection ? $this->connection->errno : -1,
+                'error' => $hasConnection
+                    ? $this->connection->error
+                    : 'Connection not established',
+            ],
         ];
     }
 
@@ -347,24 +247,8 @@ final class MysqliDatabase implements DatabaseInterface
             return false;
         }
 
-        var_dump($this->stmt);
+        print_r(Debugger::debugMySqliDumpParams($this->query));
         return true;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getQueryTime(): float|int 
-    {
-        return $this->queryTime;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getLastQueryTime(): float|int 
-    {
-        return $this->lastQueryTime;
     }
 
     /**
@@ -375,20 +259,23 @@ final class MysqliDatabase implements DatabaseInterface
         $this->assertConnection();
         $this->profiling(true);
 
+        $this->query = ['query' => '', 'params' => []];
         $this->executed = false;
         $this->rowCount = 0;
         $this->metadata = [];
-        
-        $query = $this->normalizeQuery($query);
 
+        if($this->onDebug){
+            $this->query['raw'] = $query;
+        }
+
+        $query = $this->normalizeQuery($query);
         $this->stmt = $this->connection->prepare($query);
 
         if($this->stmt instanceof mysqli_stmt){
-            $this->isSelect = Database::isSqlQuery($query, 'SELECT');
+            $this->isSelect = Util::isSqlQuery($query, 'SELECT');
         }
 
-        $this->profiling(false);
-
+        $this->addQueryInfo('query', $query);
         return $this;
     }
 
@@ -400,22 +287,24 @@ final class MysqliDatabase implements DatabaseInterface
         $this->assertConnection();
         $this->profiling(true);
 
+        $this->query = ['query' => '', 'params' => []];
         $this->executed = false;
         $this->rowCount = 0;
+
         $this->stmt = $this->connection->query($query);
 
         if ($this->stmt) {
             $this->executed = true;
-            $this->rowCount = (int) ($this->stmt instanceof mysqli_result) 
-                ? (Database::isSqlQuery($query, 'SELECT') 
-                    ? $this->stmt->num_rows 
-                    : $this->connection->affected_rows
-                  )
+            $rowCount = $this->isResult() 
+                ? $this->stmt->num_rows 
                 : $this->connection->affected_rows;
+
+            $this->rowCount = max(1, (int) $rowCount);
         }
 
-        $this->profiling(false);
-        
+        $this->addQueryInfo('query', $query);
+        $this->profiling(false, fn: __METHOD__);
+
         return $this;
     }
 
@@ -424,12 +313,52 @@ final class MysqliDatabase implements DatabaseInterface
      */
     public function exec(string $query): int 
     {
-        $this->query($query);
-        if(!$this->executed || $this->stmt === false){
-            return 0;
+        return $this->__exec($query);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function setTransactionIsolation(int $level = 2): bool
+    {
+        if($level === 0){
+            return true;
         }
 
-        return ($this->rowCount === 0 && Database::isDDLQuery($query)) ? 1 : $this->rowCount;
+        $this->assertConnection();
+        $mode = match($level){
+            1 => 'READ UNCOMMITTED',
+            2 => 'READ COMMITTED',
+            3 => 'REPEATABLE READ',
+            4 => 'SERIALIZABLE',
+            5 => 'READ WRITE',
+            6 => 'READ ONLY',
+            default => throw new DatabaseException(
+                "Invalid transaction isolation level: {$level}. Allowed levels are integers between 1 and 6.",
+                ErrorCode::DATABASE_TRANSACTION_FAILED
+            )
+        };
+
+        if ($this->inTransaction()) {
+            throw new DatabaseException(
+                "Cannot set transaction isolation level inside an active transaction",
+                ErrorCode::DATABASE_TRANSACTION_FAILED
+            );
+        }
+
+        try{
+            return (bool) $this->__exec(sprintf(
+                'SET TRANSACTION ISOLATION LEVEL %s', 
+                $mode
+            ), true);
+        }catch(Throwable $e){
+            $this->profiling(false, true, __METHOD__);
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
     }
 
     /**
@@ -438,13 +367,82 @@ final class MysqliDatabase implements DatabaseInterface
     public function beginTransaction(int $flags = 0, ?string $name = null): bool
     {
         $this->assertConnection();
-        $this->profiling(true);
-        if($this->connection->begin_transaction($flags, $name)){
-            $this->inTransaction = true;
-            return true;
+
+        if($this->inTransaction && $name === null){
+            throw new DatabaseException(
+                'Nested transaction requires a savepoint name',
+                ErrorCode::TRANSACTION_SAVEPOINT_FAILED
+            );
         }
 
-        $this->profiling(false, true);
+        $startedTransaction = false;
+        $name = $this->parseSavepoint($name, __METHOD__, 1);
+
+        try{
+            if(!$this->inTransaction){
+                if(!$this->connection->begin_transaction($flags, $name)){
+                    return false;
+                }
+
+                $startedTransaction = true;
+                $this->inTransaction = true;
+            }
+
+            if ($name === null) {
+                return true;
+            }
+
+            return $this->savepoint($name);
+        }catch(Throwable $e){
+            $this->profiling(false, true, __METHOD__);
+
+            if ($startedTransaction && $this->inTransaction()) {
+                try{
+                    $this->connection->rollBack();
+                }catch(Throwable){}
+            }
+
+            if($e instanceof DatabaseException){
+                throw $e;
+            }
+
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function savepoint(string $name): bool
+    {
+        $this->assertConnection();
+
+        if (!$this->inTransaction) {
+            throw new DatabaseException(
+                'Cannot create savepoint outside transaction'
+            );
+        }
+
+        $name = $this->parseSavepoint($name, __METHOD__, 1);
+
+        try{
+            if($this->connection->savepoint($name)){
+                $this->savepoint[$name] = true;
+                return true;
+            }
+        }catch(Throwable $e){
+            $this->profiling(false, true, __METHOD__);
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+
         return false;
     }
 
@@ -454,11 +452,26 @@ final class MysqliDatabase implements DatabaseInterface
     public function commit(int $flags = 0, ?string $name = null): bool 
     {
         $this->assertConnection();
-        $commit = $this->connection->commit($flags, $name);
-        $this->inTransaction = false;
 
-        $this->profiling(false, true);
-        return $commit;
+        if (!$this->inTransaction) {
+           return true;
+        }
+
+        $name = $this->parseSavepoint($name, __METHOD__, 2);
+
+        try{
+            $committed = $this->connection->commit($flags, $name);
+        }catch(Throwable $e){
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }finally{
+            $this->profiling(false, true, __METHOD__);
+        }
+
+        return $this->finishTransaction($committed, $name, true);
     }
 
     /**
@@ -467,12 +480,52 @@ final class MysqliDatabase implements DatabaseInterface
     public function rollback(int $flags = 0, ?string $name = null): bool 
     {
         $this->assertConnection();
-        $rollback = $this->connection->rollback($flags, $name);
 
-        $this->inTransaction = false;
-        $this->profiling(false, true);
+        if (!$this->inTransaction) {
+            return true;
+        }
 
-        return $rollback;
+        $name = $this->parseSavepoint($name, __METHOD__, 2);
+
+        try{
+            $rollback = $this->connection->rollback($flags, $name);
+        }catch(Throwable $e){
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }finally{
+            $this->profiling(false, true, __METHOD__);
+        }
+
+        return $this->finishTransaction($rollback, $name, true);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function release(string $name): bool 
+    {
+        $this->assertConnection();
+
+        if (!$this->inTransaction) {
+            return false;
+        }
+
+        $name = $this->parseSavepoint($name, __METHOD__, 2);
+
+        try{
+            $released = $this->connection->release_savepoint($name);
+        }catch(Throwable $e){
+            throw new DatabaseException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+
+        return $this->finishTransaction($released, $name);
     }
 
     /**
@@ -486,32 +539,9 @@ final class MysqliDatabase implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public static function getType(mixed $value): string  
+    public static function getType(mixed $value): int  
     {
-       return match (true) {
-            is_null($value)  => 's',
-            is_int($value),  is_bool($value) => 'i',
-            is_float($value) => 'd',
-            is_resource($value), 
-            (is_string($value) && (bool) preg_match('~[^\x09\x0A\x0D\x20-\x7E]~', $value)) => 'b',
-            default => 's'
-        };
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public static function fromTypes(int $type): string  
-    {
-        return match ($type) {
-            PARAM_INT,
-            PARAM_BOOL  => 'i',
-            PARAM_FLOAT => 'd',
-            PARAM_STR,
-            PARAM_LOB,
-            PARAM_NULL  => 's',
-            default     => 'b'
-        };
+       return Util::getMySqliTypeFromValue($value, true);
     }
 
     /**
@@ -522,10 +552,12 @@ final class MysqliDatabase implements DatabaseInterface
         $this->assertStatement();
 
         $this->bindValues[$param] = [
-            '_isReference' => false,
-            'type' => ($type === null) ? null : self::fromTypes($type),
-            'value' => $value
+            'type'         => ($type === null) ? null : self::fromTypes($type),
+            'value'        => $value,
+            self::MYSQLI_BIND       => true,
+            self::MYSQLI_PARAM_REF  => false,
         ];
+        $this->addQueryInfo('params', [$param => $value]);
 
         return $this;
     }
@@ -546,10 +578,12 @@ final class MysqliDatabase implements DatabaseInterface
         $this->assertStatement();
 
         $this->bindValues[$param] = [
-            '_isReference' => true,
-            'type' => ($type === null) ? null : self::fromTypes($type),
-            'value' => &$value
+            'type'         => ($type === null) ? null : self::fromTypes($type),
+            'value'        => &$value,
+            self::MYSQLI_BIND       => true,
+            self::MYSQLI_PARAM_REF  => true,
         ];
+        $this->addQueryInfo('params', [$param => $value]);
 
         return $this;
     }
@@ -557,45 +591,49 @@ final class MysqliDatabase implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function execute(?array $params = null): bool 
+    public function execute(?array $params = null): bool
     {
-        //if($this->executed){
-        //    return false;
-        //}
-        
         $this->assertStatement();
 
         try {
-            $this->bindParams($this->bindValues);
             $this->bindParams($params);
 
             $this->executed = $this->stmt->execute();
 
             if (!$this->executed || $this->stmt->errno) {
-                throw new DatabaseException($this->stmt->error, $this->stmt->errno);
+                throw new DatabaseException(
+                    $this->stmt->error,
+                    $this->stmt->errno
+                );
             }
 
-            $this->rowCount = (int) ($this->isSelect ? $this->stmt->num_rows : $this->stmt->affected_rows);
+            $this->rowCount = max(1, (int) (
+                $this->isSelect
+                    ? $this->stmt->num_rows
+                    : $this->stmt->affected_rows
+            ));
+
+            return true;
         } catch (Throwable $e) {
             if (!$e instanceof DatabaseException) {
-                throw new DatabaseException($e->getMessage(), $e->getCode(), $e);
+                throw new DatabaseException(
+                    $e->getMessage(),
+                    $e->getCode(),
+                    $e
+                );
             }
 
             throw $e;
+        } finally {
+            if ($params !== null && $params !== []) {
+                $this->addQueryInfo('params', $params);
+            }
+
+            $this->bindValues = [];
+            $this->metadata = [];
+
+            $this->profiling(false, fn: __METHOD__);
         }
-        
-        $this->bindValues = [];
-        $this->metadata = [];
-
-        return $this->executed;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function ok(): bool 
-    {
-        return $this->executed;
     }
 
     /**
@@ -609,61 +647,11 @@ final class MysqliDatabase implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function getResult(int $returnMode = RETURN_ALL, int $fetchMode = FETCH_OBJ): mixed 
+    public function columnCount(): int 
     {
-        return match ($returnMode) {
-            RETURN_NEXT => $this->fetchNext($fetchMode),
-            RETURN_ALL => $this->fetchAll($fetchMode),
-            RETURN_STREAM => $this->fetch(RETURN_STREAM, $fetchMode),
-            RETURN_2D_NUM => $this->getInt(),
-            RETURN_INT => $this->getCount(),
-            RETURN_ID => $this->getLastInsertId(),
-            RETURN_COUNT => $this->rowCount(),
-            RETURN_COLUMN => $this->getColumns(),
-            RETURN_STMT => $this->getStatement(),
-            RETURN_RESULT => ($this->stmt instanceof mysqli_result) ? $this->stmt : null,
-            default => false
-        };
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function fetchNext(int $mode = FETCH_OBJ): array|object|bool 
-    {
-        return $this->fetch(RETURN_NEXT, $mode) ?: false;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getNext(int $mode = FETCH_OBJ): array|object|bool 
-    {
-        return $this->fetchNext($mode);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function fetchAll(int $mode = FETCH_OBJ): array|object|bool 
-    {
-        return $this->fetch(RETURN_ALL, $mode) ?: false;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getAll(int $mode = FETCH_OBJ): array|object|bool 
-    {
-        return $this->fetchAll($mode) ?: false;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getColumns(int $mode = FETCH_COLUMN): array 
-    {
-        return $this->fetch(RETURN_ALL, $mode) ?: [];
+        return ($this->isStatement() || $this->isResult()) 
+            ? $this->stmt->field_count 
+            : 0;
     }
 
     /**
@@ -677,90 +665,49 @@ final class MysqliDatabase implements DatabaseInterface
     /**
      * {@inheritdoc}
      */
-    public function fetch(int $returnMode = RETURN_ALL, int $fetchMode = FETCH_OBJ): mixed 
+    public function fetch(int $returnMode = RETURN_ALL, int $fetchAS = FETCH_OBJ): mixed 
     {
         if ($this->stmt === true) {
             return false;
         }
-
-        $this->assertStatement(true);
-        $withMode = self::$fetchModes[$fetchMode] ?? null;
-
-        if ($withMode === null) {
+      
+        if (!isset(self::FETCH_MODES[$fetchAS])) {
             throw new DatabaseException(
-                sprintf('Unsupported database fetch mode: %d. Use FETCH_*', $fetchMode),
+                sprintf('Unsupported database fetch mode: %d. Use FETCH_*', $fetchAS),
                 ErrorCode::NOT_SUPPORTED
             );
         }
 
-        if ($this->isStatement()) {
-            $this->stmt = $this->stmt->get_result();
-        }
+        $this->stmt = $this->getCursorResult();
 
-        if (!$this->stmt instanceof mysqli_result) {
+        if ($this->stmt === false) {
             return false;
         }
 
-        $method = ($returnMode === RETURN_NEXT || $returnMode === RETURN_STREAM) 
-            ? (($withMode === FETCH_OBJ) ? 'fetch_object' : 'fetch_assoc') 
-            : 'fetch_all';
+        if($returnMode === RETURN_NEXT || $returnMode === RETURN_STREAM) {
+            return match($fetchAS) {
+                FETCH_CLASS,
+                FETCH_OBJ => $this->stmt->fetch_object(),
+                FETCH_NUM => $this->stmt->fetch_row(),
+                default   => $this->stmt->fetch_assoc()
+             };
+        }
+   
+        $fetchMode = self::MYSQLI_FETCH_MODES[$fetchAS] ?? MYSQLI_ASSOC;
+        $result = $this->stmt->fetch_all($fetchMode);
 
-        $withMode = ($method === 'fetch_all') 
-            ? (self::$fetchModes['mysqli'][$withMode] ?? MYSQLI_ASSOC)
-            : null;
-
-        $response = ($withMode === null) 
-            ? $this->stmt->{$method}() 
-            : $this->stmt->{$method}($withMode);
-
-        if(empty($response)){
-            return $response;
+        if(empty($result)){
+            return $result;
         }
 
-        if($fetchMode === FETCH_NUM_OBJ || $fetchMode === FETCH_OBJ){
-            return Database::toResultObject($response);
-        }
-
-        if($fetchMode === FETCH_CLASS && $returnMode === RETURN_NEXT){
-            return $this->fetchClass(stdClass::class, $response);
-        }
-
-        if(
-            $fetchMode === FETCH_COLUMN || 
-            $fetchMode === FETCH_KEY_PAIR ||
-            $fetchMode === FETCH_NUM
-        ){
-            $columns = [];
-            $isKeyPair = $fetchMode === FETCH_KEY_PAIR;
-            $isNum = $fetchMode === FETCH_NUM;
-
-            foreach ($response as $column) {
-                if($isKeyPair || $isNum){
-
-                    $values = array_values((array) $column);
-
-                    if($isKeyPair && count($values) != 2){
-                        throw new DatabaseException(
-                            'FETCH_KEY_PAIR fetch mode requires the result set to contain exactly 2 columns',
-                            ErrorCode::NOT_SUPPORTED
-                        );
-                    }
-
-                    if($isNum){
-                        $columns[] = $values;
-                    }else{
-                        $columns[(string) $values[0]] = $values[1];
-                    }
-                    continue;
-                }
-
-                $columns[] = (is_array($column) || is_object($column)) ? reset($column) : $column;
-            }
-
-            return $columns;
-        }
- 
-        return $response;
+        return match ($fetchAS) {
+            FETCH_COLUMN,
+            FETCH_KEY_PAIR,
+            FETCH_NUM,
+            FETCH_CLASS,
+            FETCH_OBJ => self::fetchAllResault($fetchAS, $result),
+            default   => $result
+        };
     }
 
     /**
@@ -768,11 +715,15 @@ final class MysqliDatabase implements DatabaseInterface
      */ 
     public function fetchObject(?string $class = null, mixed ...$arguments): ?object 
     {
-        return $this->fetchClass(
-            $class, 
-            $this->fetch(RETURN_NEXT, FETCH_ASSOC),
-            ...$arguments
-        );
+        return $this->fetchClassObject($class, RETURN_NEXT, $arguments);
+    }
+
+    /**
+     * {@inheritdoc}
+     */ 
+    public function fetchAllObject(?string $class = null, mixed ...$arguments): array 
+    {
+        return $this->fetchClassObject($class, RETURN_ALL, $arguments) ?? [];
     }
 
     /**
@@ -781,24 +732,6 @@ final class MysqliDatabase implements DatabaseInterface
     public function getInt(): array
     {
         return $this->fetch(RETURN_ALL, FETCH_NUM) ?: [];
-    }
-    
-    /**
-     * {@inheritdoc}
-     */
-    public function getCount(): int
-    {
-        $integers = $this->getInt();
-
-        if (!$integers || $integers === []) {
-            return 0;
-        }
-
-        $integers = $integers[0] ?? 0;
-
-        return ($integers && is_array($integers)) 
-            ? (int) ($integers[0] ?? 0) 
-            : (int) $integers;
     }
     
     /**
@@ -850,108 +783,288 @@ final class MysqliDatabase implements DatabaseInterface
     {
         $this->free();
         $this->connected = !$this->connection->close();
+        self::$openConnections--;
     }
 
     /**
-     * {@inheritdoc}
-     */
-    public function profiling(bool $start = true, bool $finishedTransaction = false): void
-    {
-        if(!self::$showProfiling || (!$start && $this->inTransaction && !$finishedTransaction)){
-            return;
-        }
-         
-        if ($start) {
-            self::$startTime = microtime(true);
-            return;
-        }
-
-        $end = microtime(true);
-        $this->lastQueryTime = abs($end - self::$startTime);
-        $this->queryTime += ($this->lastQueryTime * 1_000);
-
-        Boot::set('__DB_QUERY_EXECUTION_TIME__', $this->queryTime);
-        self::$startTime = 0;
-    }
-
-    /**
-     * Transform response to class object.
-     *
-     * @param \T<string> $class The class name to transform (e.g, `stdClass::class`),
-     * @param mixed $response The response array, object or false/null if error.
-     * @param mixed ...$arguments Optional constructor arguments.
+     * Finalize transaction.
      * 
-     * @return \T<object>|null Return class object.
+     * @param bool $success
+     * @return bool Return status. 
      */
-    private function fetchClass(string $class, mixed $response, mixed ...$arguments): ?object
+    private function finishTransaction(
+        bool $success, 
+        ?string $name,
+        bool $all = false
+    ): bool 
     {
-        if (!$response) {
+        if (!$success) {
+            return false;
+        }
+
+        if($name){
+            unset($this->savepoint[$name]);
+        }
+
+        if($all && !$name){
+            $this->savepoint = [];
+        }
+
+        if ($this->savepoint === []) {
+            $this->inTransaction = false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Execute query and return number of raws or count of affected rows.
+     * 
+     * @param string $query SQL query to execute.
+     * @param bool $internal Use internally to omit profiling.
+     * 
+     * @return int
+     */
+    private function __exec(string $query, bool $internal = false): int 
+    {
+        $this->assertConnection();
+
+        if(!$internal){
+            $this->profiling(true);
+
+            $this->query = ['query' => '', 'params' => []];
+            $this->executed = false;
+            $this->rowCount = 0;
+        }
+
+        try{
+            $result = $this->connection->query($query);
+        } finally {
+            if(!$internal){
+                $this->addQueryInfo('query', $query);
+                $this->profiling(false, fn: __METHOD__);
+            }
+        }
+
+        if ($result === false) {
+            return 0;
+        }
+
+        $this->executed = true;
+
+        if ($result instanceof mysqli_result) {
+            $count = (int) $result->num_rows;
+            $result->free();
+            return max(1, $count);
+        } 
+
+        $count = (int) $this->connection->affected_rows;
+
+        if ($count === -1 && Util::isDDLQuery($query)) {
+            return 1;
+        }
+
+        return max(1, $count);
+    }
+
+    /**
+     * Normalize transaction savepoint name.
+     * 
+     * @param string|null $name Savepoint name.
+     * @param int $check 1 if already exist, 2 if not exist.
+     * 
+     * @return string|null Return normalized name or null.
+     * @throws DatabaseException if invalid name.
+     */
+    private function parseSavepoint(?string $name, string $fn, int $check = 0): ?string 
+    {
+        if($name === null){
             return null;
         }
 
-        if ($class === null || $class === stdClass::class) {
-            return Database::toResultObject($response);
+        $name = preg_replace('/[^a-zA-Z0-9_]/', '', trim($name));
+
+        if ($name === '') {
+            $this->profiling(false, true, $fn);
+            throw new DatabaseException(
+                'Failed to create an invalid savepoint name.', 
+                ErrorCode::TRANSACTION_SAVEPOINT_FAILED
+            );
         }
 
-        try {
-            $reflection = new ReflectionClass($class);
+        $prefix = is_numeric($name) ? 'tnx_' : '';
+        $name = substr($prefix . $name, 0, 64);
 
-            if (!$reflection->isInstantiable()) {
-                throw new DatabaseException(
-                    sprintf('Fetch class: %s is not instantiatable.', $class),
-                    ErrorCode::ERROR
-                );
+        if($check > 0){
+            $isExist = isset($this->savepoint[$name]);
+            $err = null;
+
+            if($check === 1 && $isExist){
+                $err = 'Savepoint %s already exist';
+            }elseif($check === 2 && !$isExist){
+                $err = 'Savepoint %s does not exist.';
             }
 
-            $instance = $reflection->newInstance(...$arguments);
-
-            foreach ((array) $response as $name => $value) {
-                if ($reflection->hasProperty($name)) {
-                    $property = $reflection->getProperty($name);
-                    $isSettable = (PHP_VERSION_ID >= 80100) ? !$property->isReadOnly() : true;
-
-                    if(!$isSettable){
-                        continue;
-                    }
-
-                    if($property->isStatic()){ 
-                        $property->setValue($value);
-                    }else{
-                        $property->setValue($instance, $value);
-                    }
-                }
+            if($err !== null){
+                $this->profiling(false, true, $fn);
+                throw new DatabaseException(sprintf(
+                    $err,
+                    $name
+                ));
             }
-
-            return $instance;
-
-        } catch (Throwable $e) {
-            $error = sprintf('FETCH_CLASS error: %s, %s', $class, $e->getMessage());
-
-            if (PRODUCTION) {
-                Logger::dispatch('error', $error, [
-                    'class' => $class,
-                    'code'  => $e->getCode()
-                ]);
-                return null;
-            }
-
-            throw new DatabaseException($error, $e->getCode(), $e);
         }
+
+        return $name;
     }
 
     /**
-     * Ensures that a database connection is established before proceeding.
+     * Get result.
      * 
-     * @throws DatabaseException If the database connection is not active.
+     * @return mysqli_result|bool 
      */
-    private function assertConnection(): void 
+    private function getCursorResult(): mysqli_result|bool 
     {
-        if (!$this->isConnected()) {
-            throw new DatabaseException(
-                'No active database connection found. Connect before executing queries.',
-                ErrorCode::CONNECTION_DENIED
-            );
-        } 
+        if ($this->stmt === true) {
+            return false;
+        }
+
+        $this->assertStatement(true);
+
+        if ($this->isStatement()) {
+            // $this->stmt->store_result();
+            $this->stmt = $this->stmt->get_result();
+        }
+
+        if ($this->stmt instanceof mysqli_result) {
+            return $this->stmt;
+        }
+
+        return false;
+    }
+
+    /**
+     * Fetch query results as instances of a specified class.
+     *
+     * @param class-string|null $class Class name used for result hydration..
+     * @param int $returnMode Result fetch mode.
+     * @param array $arguments Constructor arguments passed to the class constructor.
+     *
+     * @return object|array|null Returns a hydrated object, an array of objects,
+     *                           or null when no result exists.
+     *
+     * @throws DatabaseException If an unsupported return mode is provided.
+     */
+    private function fetchClassObject(
+        ?string $class, 
+        int $returnMode,
+        array $arguments
+    ): ?object 
+    {
+        if ($this->stmt === true) {
+            return null;
+        }
+
+        $this->stmt = $this->getCursorResult();
+
+        if ($this->stmt === false) {
+            return null;
+        }
+
+        $class ??= \stdClass::class;
+
+        $result = match ($returnMode) {
+            RETURN_STREAM,
+            RETURN_NEXT => $this->stmt->fetch_object($class, $arguments),
+            RETURN_ALL  => $this->fetchAllObjects($class, $arguments),
+            default => throw new DatabaseException('Invalid return mode.')
+        };
+
+        if($result === false || $result === null){
+            return null;
+        }
+
+        return ($returnMode === RETURN_NEXT) 
+            ? $result 
+            : (object) $result;
+    }
+
+    /**
+     * Convert a result set into a structure matching PDO fetch modes.
+     *
+     * Supports object, numeric, key-pair, and default column value mappings.
+     *
+     * @param int $mode Fetch mode compatible with PDO-style constants.
+     * @param array $response Raw result rows to transform.
+     *
+     * @return array Returns the transformed result set.
+     *
+     * @throws DatabaseException If `FETCH_KEY_PAIR` is used with a result
+     *                           containing anything other than exactly two columns.
+     */
+    private static function fetchAllResault(int $mode, array $response): array
+    {
+        $result = [];
+        $isObject = ($mode === FETCH_CLASS || $mode === FETCH_OBJ);
+        $isKeyPair = $mode === FETCH_KEY_PAIR;
+        $isNum = $mode === FETCH_NUM;
+
+        foreach ($response as $row) {
+            if($isObject){
+                $result[] = (object) $row;
+                continue;
+            }
+            
+            if(!$isKeyPair && !$isNum){
+                $result[] = (is_array($row) || is_object($row)) 
+                    ? reset($row) 
+                    : $row;
+
+                continue;
+            }
+
+            $values = array_values((array) $row);
+
+            if($isNum){
+                $result[] = $values;
+                continue;
+            }
+
+            if(count($values) != 2){
+                throw new DatabaseException(
+                    'FETCH_KEY_PAIR fetch mode requires the result set to contain exactly 2 columns',
+                    ErrorCode::NOT_SUPPORTED
+                );
+            }
+
+            $result[(string) $values[0]] = $values[1];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Fetch all remaining rows as instances of the specified class.
+     *
+     * Each row is hydrated into a new object instance using the provided
+     * constructor arguments.
+     *
+     * @param class-string $class Fully qualified class name to instantiate.
+     * @param array $arguments Constructor arguments passed to each instance.
+     *
+     * @return array<object> Returns an array of hydrated class instances.
+     */
+    private function fetchAllObjects(
+        string $class,
+        array $arguments
+    ): array
+    {
+        $rows = [];
+
+        while ($row = $this->stmt->fetch_object($class, $arguments)) {
+            $rows[] = $row;
+        }
+
+        return $rows;
     }
 
     /**
@@ -981,240 +1094,272 @@ final class MysqliDatabase implements DatabaseInterface
     }
 
     /**
-     * Binds the provided parameters to the prepared statement.
+     * Bind parameters to the prepared statement.
      *
-     * This method handles both value-based parameters (via `value()`) and reference-based parameters (via `param()`).
-     * It supports emulated prepares to handle repeated named placeholders and internally determines the parameter types.
+     * Supports both:
+     * - Value bindings created through value().
+     * - Reference bindings created through param().
      *
-     * @param array|null $placeholders Optional parameter set passed during `execute()`.
+     * Handles named placeholder emulation and prepares values for MySQLi,
+     * which requires bound parameters to be passed by reference.
      *
-     * @return bool Returns true if binding was successful, false otherwise.
+     * @param array<string,mixed>|null $params Parameters provided during execute().
+     *
+     * @return bool Returns true when parameters were bound successfully.
      */
-    private function bindParams(?array $placeholders = null): bool 
+    private function bindParams(?array $params = null): bool
     {
-        if (!$placeholders || $placeholders === []) {
+        $placeholders = $this->mergeBindings($params);
+
+        if ($placeholders === []) {
             return false;
         }
 
-        [$types, $values] = $this->prepareValues($placeholders);
+        [$types, $values] = $this->prepareNamedBindings($placeholders);
 
-        if($values === [] && $types === ''){
+        if ($types === '' || $values === []) {
             return false;
         }
 
-        array_unshift($values, $types);
-  
-        return $this->stmt->bind_param(...$values);
+        return $this->stmt->bind_param($types, ...$values);
     }
 
     /**
-     * Converts placeholder data into type strings and value arrays for `bind_param`.
+     * Binds type and value from a parameter row.
      *
-     * Used when prepare emulation is disabled. Determines type and value for each parameter row.
+     * Handles both reference-based (`param()`) and value-based (`value()`) parameters. Automatically
+     * determines type if not explicitly set in the row.
      *
-     * @param array<string,mixed> $placeholders The raw placeholder array to process.
+     * @param mixed $row The parameter row (array or direct value).
      *
-     * @return array{string,array,string} A tuple containing:
-     *   - string: Parameter types (e.g., "iss").
-     *   - array: Values to bind.
+     * @return array{string,mixed} A tuple containing:
+     *   - string: The detected or specified parameter type.
+     *   - mixed: The value or reference to bind.
      */
-    private function defaultPrepares(array $placeholders): array 
+    private function bindValue(mixed &$row): array
     {
-        if (!$placeholders) {
+        try{
+            if (!is_array($row) || !isset($row[self::MYSQLI_BIND])) {
+                return [
+                    Util::getMySqliTypeFromValue($row),
+                    $row
+                ];
+            }
+
+            if (($row[self::MYSQLI_PARAM_REF] ?? false) === true) {
+                $value =& $row['value'];
+            } else {
+                $value = $row['value'];
+            }
+
+            return [
+                $row['type'] ?? Util::getMySqliTypeFromValue($value),
+                $value
+            ];
+        } finally {
+            unset($value);
+        }
+    }
+
+    /**
+     * Merge stored bindings with runtime parameters.
+     *
+     * Stored bindings have priority over execution-time parameters.
+     * This preserves reference bindings created through param().
+     *
+     * @param array<string,mixed>|null $params Runtime parameters.
+     *
+     * @return array<string,mixed>
+     */
+    private function mergeBindings(?array $params = null): array
+    {
+        if (!$params) {
+            return $this->bindValues;
+        }
+
+        if (!$this->bindValues) {
+            return $params;
+        }
+
+       return array_merge($this->bindValues, $params);
+    }
+
+    /**
+     * Normalize a SQL query by converting named placeholders to MySQLi positional
+     * placeholders.
+     *
+     * MySQLi only supports positional placeholders (`?`) while PDO supports
+     * reusable named placeholders. This method converts named placeholders into
+     * positional placeholders and stores placeholder metadata required to rebuild
+     * bindings during execution.
+     *
+     * Example:
+     *
+     * ```sql
+     * SELECT * FROM users WHERE id = :id OR owner_id = :id
+     * ```
+     *
+     * Becomes:
+     *
+     * ```sql
+     * SELECT * FROM users WHERE id = ? OR owner_id = ?
+     * ```
+     *
+     * Metadata keeps both occurrences mapped to the original parameter name.
+     *
+     * @param string $query SQL query containing named placeholders.
+     *
+     * @return string Query with named placeholders replaced by `?`.
+     */
+    private function normalizeQuery(string $query): string
+    {
+        $placeholders = [];
+        $converted = preg_replace_callback(
+            self::PATTERN,
+            function (array $match) use (&$placeholders): string {
+                // Keep quoted strings.
+                if ($match[1] !== '') {
+                    return $match[1];
+                }
+
+                $placeholders[] = $match[2];
+                return '?';
+            },
+            $query
+        );
+
+        if ($placeholders === []) {
+            return $query;
+        }
+
+        $this->metadata = [
+            'count'        => count($placeholders),
+            'placeholders' => $placeholders,
+        ];
+
+        return $converted;
+    }
+
+    /**
+     * Prepare named parameters for MySQLi binding.
+     *
+     * Normalizes parameter names, expands repeated named placeholders when
+     * prepare emulation is enabled, and returns the binding types and values
+     * in the correct placeholder order.
+     *
+     * @param array<string,mixed> $params Parameters to bind.
+     *
+     * @return array{string,array} Binding types and ordered values.
+     *
+     * @throws DatabaseException If a placeholder has no matching parameter.
+     * @example - Example:
+     * ```sql
+     * WHERE id = :id OR parent_id = :id
+     * ```
+     *
+     * Becomes internally:
+     * ```php
+     * [
+     *     ':id'   => value,
+     *     ':id_2' => value
+     * ]
+     * ```
+     */
+    private function prepareNamedBindings(array $params): array
+    {
+        $count = $this->metadata['count'] ?? 0;
+
+        // No repeated placeholders; use default binding.
+        if (!$this->usePrepares || $count === 0) {
+            return $this->defaultPrepares($params);
+        }
+
+        $types = '';
+        $bindings = [];
+        $resolved = [];
+
+        foreach ($this->metadata['placeholders'] as $name) {
+            $key = $resolved[$name] ??= self::findNamedBinding(
+                $name, 
+                $params
+            );
+
+            [$type, $value] = $this->bindValue($params[$key]);
+
+            $types .= $type;
+            $bindings[] = $value;
+        }
+
+        return [$types, $bindings];
+    }
+
+    /**
+     * Prepare default query bindings.
+     *
+     * Converts parameter values into MySQLi binding types and values.
+     *
+     * @param array<string,mixed> $params Parameters to bind.
+     *
+     * @return array{string,array} Binding types and ordered values.
+     */
+    private function defaultPrepares(array $params): array
+    {
+        if (!$params) {
             return ['', []];
         }
 
         $types = '';
         $values = [];
 
-        foreach ($placeholders as $name => &$row) {
-            [$type, $value] = $this->getRow($row);
-            $types .= $type;
-            $index = $this->metadata['positions'][ltrim($name, ':')] ?? null;
+        foreach ($params as $value) {
+            [$type, $value] = $this->bindValue($value);
 
-            if($index === null){
-                $values[] = $value;
-            }else{
-                $values[$index] = $value;
-            }
+            $types .= $type;
+            $values[] = $value;
         }
-        
-        ksort($values);
-        unset($row);
+
         return [$types, $values];
     }
 
     /**
-     * Extracts the binding type and value from a parameter row.
+     * Find named placeholder value key binding.
      *
-     * Handles both reference-based (`param()`) and value-based (`value()`) parameters. Automatically
-     * determines type if not explicitly set in the row.
-     *
-     * @param mixed &$row The parameter row (array or direct value).
-     *
-     * @return array{string,mixed} A tuple containing:
-     *   - string: The detected or specified parameter type.
-     *   - mixed: The value or reference to bind.
+     * @param string $name
+     * @param array $params
+     * 
+     * @return string
+     * @throws DatabaseException
      */
-    private function getRow(mixed &$row): array 
+    private static function findNamedBinding(string $name, array $params): string
     {
-        $isReference = (is_array($row) && array_key_exists('_isReference', $row))
-            ? $row['_isReference']
-            : null;
-
-        if($isReference === null){
-            return [self::getType($row), $row];
-        }
-
-        if ($isReference) {
-            $value = &$row['value'];
-        } else {
-            $value = $row['value'];
-        }
-
-        return [$row['type'] ?? self::getType($value), $value];
-    }
-
-    /**
-     * Normalizes a SQL query by extracting named placeholders and converting it for MySQLi use.
-     *
-     * This method replaces named placeholders (e.g., `:email`, `:status`) with `?` for MySQLi,
-     * and stores the original query and placeholder names in metadata if emulate prepares is enabled.
-     *
-     * @param string $query SQL query containing named placeholders.
-     * @return string Query with placeholders converted to MySQLi format.
-     */
-    private function normalizeQuery(string $query): string
-    {
-        $count = 0;
-        $positions = [];
-        $placeholders = [];
-
-        $converted = preg_replace_callback(
-            self::$pattern,
-            function (array $match) use (&$count, &$positions, &$placeholders): string {
-                // Ensure placeholders maintained the current position
-                $name = $match[1] . (isset($positions[$match[1]]) ? '_' . ($count + 1) : '');
-
-                $positions[$name] = $count;
-                $placeholders[] = $match[1];
-                $count++;
-
-                return '?';
-            },
-            $query
-        );
-
-        if ($count === 0) {
-            $this->usePrepares = false;
-            return $converted;
-        }
-
-        $this->metadata = [
-            'count' => $count,
-            'positions' => $positions,
-            'placeholders' => $placeholders,
-            'query' => $query
-        ];
-
-        $this->usePrepares = self::$isEmulatePrepares;
-        return $converted;
-    }
-
-    /**
-     * Normalizes and prepares query parameters for execution.
-     *
-     * Handles transformation of repeated named placeholders to ensure compatibility with 
-     * MySQLi drivers that do not support reusing the same named parameter more than once.
-     * If emulation is disabled or unnecessary, it returns the default binding structure.
-     *
-     * @param array<string,mixed> $params Associative array of named parameters to bind in the query. 
-     *                      Will be unset internally once processed.
-     *
-     * @return array{string,array} Return a tuple containing the types string and the bindings array.
-     * @throws DatabaseException If a placeholder is used in the query without a corresponding value.
-     */
-    private function prepareValues(array &$params): array
-    {
-        $count = $this->metadata['count'] ?? 0;
-
-        if (!self::$isEmulatePrepares || !$this->usePrepares || $count === 0 || count($params) === $count) {
-            $bindings = $this->defaultPrepares($params);
-            
-            unset($params);
-            return $bindings;
-        }
-
-        $nameCounts = [];
-        $bindings = [];
-        $types = '';
-
-        foreach ($this->metadata['placeholders'] as $name) {
-            $this->emulatePrepares(
-                $name,
-                $nameCounts,
-                $bindings,
-                $params,
-                $types
-            );
-        }
-       
-        ksort($bindings);
-        unset($params);
-
-        return [$types, $bindings];
-    }
-
-    /**
-     * Rewrites repeated named placeholders into unique keys with proper bindings.
-     *
-     * This method is called per named placeholder to emulate parameter binding by creating
-     * unique keys (e.g., `:name`, `:name_2`, `:name_3`) and collecting their values and types.
-     *
-     * @param string $name         The original placeholder name (without colon).
-     * @param array  $nameCounts   Reference to a map tracking how many times a name appears.
-     * @param array  $bindings     Reference to the final list of values to bind by position.
-     * @param array  $params       Reference to the original parameters (by name or `:name`).
-     * @param string $types        Reference to the growing string of parameter types.
-     *
-     * @return string Return the rewritten placeholder (e.g., `:name_2`).
-     * @throws DatabaseException If the expected named parameter is not present in `$params`.
-     */
-    private function emulatePrepares(
-        string $name, 
-        array &$nameCounts, 
-        array &$bindings, 
-        array &$params, 
-        string &$types
-    ): string 
-    {
-        $row = $params[$name] ?? $params[":$name"] ?? self::NO_BIND_KEY;
-
-        if ($row === self::NO_BIND_KEY) {
-            throw new DatabaseException(
-                "Missing parameter for placeholder '$name' (expected in params array or binding).",
+        return match(true) {
+            array_key_exists($name, $params) => $name,
+            array_key_exists(":{$name}", $params) => ":{$name}",
+            default =>  throw new DatabaseException(
+                "Missing binding parameter ':{$name}'.",
                 ErrorCode::NOT_ALLOWED
-            );
-        }
+            )
+        };
+    }
 
-        $count = $nameCounts[$name] = ($nameCounts[$name] ?? 0) + 1;
-        $unique = ($count === 1) ? $name : "{$name}_$count";
-        $index = $this->metadata['positions'][$unique] ?? null;
-
-        [$type, $value] = $this->getRow($row);
-        $types .= $type;
-
-        if($index === null){
-            $bindings[] = $value;
-        }elseif(isset($bindings[$index])){
-            $bindings[$count] = $value;
-        }else{
-            $bindings[$index] = $value;
-        }
-
-        unset($row);
-
-        return ":$unique";
+    /**
+     * Maps a PHP parameter type constant to the corresponding MySQLi type character.
+     * 
+     * @param int $type The PHP parameter type constant (e.g., PARAM_INT, PARAM_STR).
+     * 
+     * @return string The corresponding MySQLi type character ('i', 'd', 's', 'b').
+     */
+    private static function fromTypes(int $type): string  
+    {
+        return match ($type) {
+            PARAM_INT,
+            PARAM_BOOL     => 'i',
+            PARAM_FLOAT, 6 => 'd',
+            PARAM_LOB      => 'b',
+            PARAM_STR,
+            PARAM_NULL     => 's',
+            default        => 's'
+        };
     }
 
     /**
@@ -1230,14 +1375,17 @@ final class MysqliDatabase implements DatabaseInterface
             return;
         }
 
+        $isCommand = Luminova::isCommand();
         $socketPath = null;
-        if (NOVAKIT_ENV !== null || $this->config->getValue('socket') || Luminova::isCommand()) {
+        
+        if (NOVAKIT_ENV !== null || $this->config->getValue('socket') || $isCommand) {
             $socketPath = $this->config->getValue('socket_path') ?: ini_get('mysqli.default_socket');
 
             if(!$socketPath){
-              throw new DatabaseException(sprintf(
-                    'MySQLi socket path not set. Define it in the environment as "%s", or configure "%s" in your php.ini.',
-                    'database.mysql.socket.path',
+                throw new DatabaseException(sprintf(
+                    'MySQLi socket path is missing. 
+                    Configure either "%s" in your environment or "%s" in php.ini.',
+                    'database.socket.path',
                     'mysqli.default_socket'
                 ));
             }
@@ -1258,19 +1406,111 @@ final class MysqliDatabase implements DatabaseInterface
             $this->connection->options(MYSQLI_OPT_CONNECT_TIMEOUT, (int) $timeout);
         }
 
-        $this->connection->real_connect(
-            $this->config->getValue('host'),
+        $host = $this->config->getValue('host');
+
+        if(
+            $host && 
+            ($isCommand || (bool) $this->config->getValue('persistent', false)) &&
+            !str_starts_with((string) $host, 'p:')
+        ){
+            $host = "p:{$host}";
+        }
+
+        if(!$this->connection->real_connect(
+            $host,
             $this->config->getValue('username'),
             $this->config->getValue('password'),
             $this->config->getValue('database'),
             $this->config->getValue('port'),
             $socketPath
-        );
+        )){
+            $this->connection = null;
+            throw new DatabaseException(
+                'Failed to establish database connection'
+            );
+        }
 
+       $this->setInitCommands();
+       self::$openConnections++;
+    }
+
+    /**
+     * Apply developers defined command.
+     * 
+     * @return void 
+     */
+    private function setInitCommands(): void 
+    {
         $charset = $this->config->getValue('charset');
+        $commands = (array) $this->config->getValue('commands', []);
+        $hasSetNames = false;
 
-        if ($charset && !$this->connection->set_charset($charset)) {
-            throw new DatabaseException('Failed to set charset: ' . $this->connection->error, $this->connection->errno);
+        if($commands){
+            foreach ($commands as $command) {
+                $command = trim($command);
+
+                if ($command === '') {
+                    continue;
+                }
+
+                if (!str_starts_with(strtoupper($command), 'SET ')) {
+                    throw new DatabaseException(
+                        sprintf(
+                            'Invalid command: %s. Only SET statements are allowed.',
+                            $command
+                        ),
+                        ErrorCode::VALUE_FORBIDDEN
+                    );
+                }
+
+                if (preg_match('/^SET\s+NAMES\b/i', $command)) {
+                    if (!preg_match(
+                        '/^SET\s+NAMES\s+[a-z0-9_]+(\s+COLLATE\s+[a-z0-9_]+)?$/i',
+                        $command
+                    )) {
+                        throw new DatabaseException(
+                            "Invalid SET NAMES statement: {$command}",
+                            ErrorCode::VALUE_FORBIDDEN
+                        );
+                    }
+
+                    $hasSetNames = true;
+                }
+
+                if (!$this->__exec(rtrim($command, ';'), true)) {
+                    throw new DatabaseException(sprintf(
+                            'Failed to execute init command: %s. Error: %s',
+                            $command, 
+                            $this->connection->error,
+                        ), 
+                        $this->connection->errno
+                    );
+                }
+            }
+        }
+
+        if ($charset && !$hasSetNames) {
+            if (!preg_match('/^[a-z0-9_]+$/i', $charset)) {
+                throw new DatabaseException(
+                    "Invalid MySQL charset: {$charset}", 
+                    ErrorCode::VALUE_FORBIDDEN
+                );
+            }
+
+            $charset = strtolower($charset);
+
+            if ($charset === 'utf8' || $charset === 'utf-8') {
+                $charset = 'utf8mb4';
+            }
+
+            if (!$this->connection->set_charset($charset)) {
+                throw new DatabaseException(sprintf(
+                        'Failed to set charset: %s', 
+                        $this->connection->error,
+                    ), 
+                    $this->connection->errno
+                );
+            }
         }
     }
 }

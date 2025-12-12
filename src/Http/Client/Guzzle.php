@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -11,14 +12,14 @@
 namespace Luminova\Http\Client;
 
 use \Throwable;
-use \Luminova\Luminova;
+use Luminova\Luminova;
 use \GuzzleHttp\Client;
-use \Luminova\Utility\Promise\Promise;
+use Luminova\Promise\Promise;
 use \Psr\Http\Client\ClientInterface;
-use \Luminova\Interface\PromiseInterface;
+use Luminova\Interface\PromiseInterface;
 use \GuzzleHttp\Exception\GuzzleException;
-use \Luminova\Exceptions\Http\RequestException;
-use \Luminova\Exceptions\Http\ConnectException;
+use Luminova\Exceptions\Http\RequestException;
+use Luminova\Exceptions\Http\ConnectException;
 use \Psr\Http\Message\{UriInterface, RequestInterface, ResponseInterface};
 
 class Guzzle implements \Luminova\Interface\ClientInterface

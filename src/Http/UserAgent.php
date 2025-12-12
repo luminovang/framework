@@ -12,7 +12,7 @@ namespace Luminova\Http;
 
 use \Stringable;
 use \App\Config\Browser;
-use \Luminova\Interface\LazyObjectInterface;
+use Luminova\Interface\{Arrayable, LazyObjectInterface};
 
 /**
  * Accessors for parsed user-agent details.
@@ -22,8 +22,8 @@ use \Luminova\Interface\LazyObjectInterface;
  * @method string getBrowser()           Get the browser name (e.g. "Firefox").
  * @method string getVersion()           Get the browser version (e.g. "143.0").
  * @method string getUserAgent()         Get the full User-Agent string.
- * @method string getPlatform()             Get the platform/OS name (e.g. "Macintosh").
- * @method string getPlatformModel()       Get the platform/OS name (e.g. "Macintosh").
+ * @method string getPlatform()          Get the platform/OS name (e.g. "Macintosh").
+ * @method string getPlatformModel()     Get the platform/OS name (e.g. "Macintosh").
  * @method string getOs()                Get the device OS identifier (e.g. "Intel Mac OS X").
  * @method string getOsVersion()         Get the device / OS version (e.g. "10.15").
  * @method string getEngine()            Get the rendering engine (e.g. "Gecko", "Blink").
@@ -34,7 +34,7 @@ use \Luminova\Interface\LazyObjectInterface;
  * @method string getMobile()            Get the mobile device name if detected.
  * @method string getReferrer()          Get the referrer hostname if available.
  */
-class UserAgent implements LazyObjectInterface, Stringable
+class UserAgent implements LazyObjectInterface, Stringable, Arrayable
 {
     /**
      * Whether the user agent represents a browser.
@@ -170,11 +170,41 @@ class UserAgent implements LazyObjectInterface, Stringable
     private static ?Browser $config = null;
 
     /**
+     * Chromium
+     * 
+     * @var array CHROMIUMS
+     */
+    private const CHROMIUMS = [
+        'Chrome'  => true, 
+        'Edge'    => true, 
+        'Opera'   => true, 
+        'Brave'   => true,  
+        'Vivaldi' => true, 
+    ];
+
+    // UserAgent parts patterns
+    private const BOTS = '/bot|slurp|searchbot|chatgpt|crawler|crawl|spider|bingbot/i';
+    private const TVOS = '/(SmartTV|HbbTV|NetCast|Tizen|Web0S|AndroidTV|CrKey)/i';
+    private const IOS = '/(?:CPU )?(?:iPhone|iPad|iPod).*OS[\s_]*([\d._]+)/i';
+    private const WINDOWS = '/\b(Windows|Win)(?:\s+([A-Za-z]+))?(?:[\s_]*([\d._]+))?/i';
+    private const WATCHOS = '/(WatchOS|Apple Watch)/i';
+    private const WEAROS = '/Android Wear|Wear ?OS/i';
+    private const ANDROID = '/Android[\s_]*([\d._]+)/i';
+    private const TIZAN = '/Tizen.*SM-R/i';
+    private const APPLETV = '/AppleTV/i';
+    private const LINUX = '/\bLinux(?:\s+([a-z0-9._+-]+))?/i';
+    private const LINUXOS = '/\b(Ubuntu|CentOs|Kali|Debian|Fedora|Red Hat|SUSE|Mint|Gecko)\b/i';
+    private const LANGUAGE = '/^[a-z]{2}(?:-[a-zA-Z]{2})?$/';
+    private const ACCEPT_LANGUAGE = '/;\s([a-z]{2}(?:-[a-zA-Z]{2})?)\)/';
+
+    private const ENGINES = '/\b((NoteAir[0-9A-Za-z]+)(?:\s*Build)?|AppleWebKit|Netscape|WebKit|AndroidWebkit|Trident|Presto|Gecko)\/([\d._+\-]+)/i';
+
+    /**
      * Device detection patterns.
      * 
-     * @var array $devicePatterns
+     * @var array PATTERNS
      */
-    private static array $devicePatterns = [
+    private const PATTERNS = [
         'bot'     => '/compatible;[^)]*?([A-Za-z0-9\-._!]*?(?:bot|slurp|yahoos?lurp|yahoo!? ?slurp|searchbot|chatgpt|crawler|spider|bingbot|googlebot)[A-Za-z0-9\-._!]*)\/?([\d._+]+)?/i',
         'console' => '/\b(PlayStation|Nintendo|Xbox)(?:[\s_]+([A-Za-z0-9]+(?:[\s_][A-Za-z0-9]+)*))?(?:[\s\/_]*([\d._]+))?/i',
         'reader' => '/\b(?:(Kindle)\/([\d._+]+)|(Dalvik|NoteAir[0-9A-Za-z]+)\b(?:\/| Build\/)([\d._+]+))/i',
@@ -304,7 +334,24 @@ class UserAgent implements LazyObjectInterface, Stringable
     /**
      * Convert parsed user agent details into an array.
      *
-     * @return array<string, mixed> Associative array of user agent details.
+     * @return array{
+     *     isBrowser: bool,
+     *     isRobot: bool,
+     *     isMobile: bool,
+     *     isReferral: bool,
+     *     isChromium: bool,
+     *     userAgent: string,
+     *     browser: string,
+     *     version: string,
+     *     engine: string,
+     *     attributes: array,
+     *     engineVersion: string,
+     *     platform: string,
+     *     platformModel: string,
+     *     os: string,
+     *     osVersion: string,
+     *     languages: array
+     * } Associative array of user agent details.
      */
     public function toArray(): array
     {
@@ -326,6 +373,24 @@ class UserAgent implements LazyObjectInterface, Stringable
             'isMobile'       => $this->isMobile(),
             'isReferral'     => $this->isReferral()
         ];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
+    }
+
+    /**
+     * Convert parsed user agent details into an array.
+     *
+     * @return array<string, mixed> Associative array of user agent details.
+     */
+    public function __toArray(): array
+    {
+        return $this->toArray();
     }
 
     /**
@@ -378,7 +443,7 @@ class UserAgent implements LazyObjectInterface, Stringable
     /**
      * Check if the User Agent string matches a given keyword or regex pattern.
      *
-     * Unlike {@see is()}, this method always checks the raw User Agent string, 
+     * Unlike {@see self::is()}, this method always checks the raw User Agent string, 
      * ignoring parsed properties such as `browser`, `mobile`, or `robot`.
      * 
      * Behavior:
@@ -395,7 +460,7 @@ class UserAgent implements LazyObjectInterface, Stringable
      * 
      * @return bool Return true if the User Agent matches the given pattern, false otherwise.
      * 
-     * @see is()
+     * @see self::is()
      * 
      * @example - Example:
      * ```php
@@ -435,7 +500,7 @@ class UserAgent implements LazyObjectInterface, Stringable
      * Check if a keyword or regex pattern matches either the full User Agent string 
      * or a specific parsed property (browser, mobile, or robot).
      *
-     * Unlike {@see match()}, this method can scope the check to a parsed property 
+     * Unlike {@see self::match()}, this method can scope the check to a parsed property 
      * rather than always checking the raw User Agent string.
      * 
      * Behavior:
@@ -450,7 +515,7 @@ class UserAgent implements LazyObjectInterface, Stringable
      * 
      * @return bool Return true if a match is found, false otherwise.
      * 
-     * @see match() For more advance matching.
+     * @see self::match() For more advance matching.
      * 
      * @example - Example:
      * ```php
@@ -580,7 +645,7 @@ class UserAgent implements LazyObjectInterface, Stringable
      * }
      *
      * if ($ua->isRobot('Googlebot')) {
-     *     echo "Specifically from Googlebot.";
+     *     echo "Specifically from GoogleBot.";
      * }
      * ```
      */
@@ -738,16 +803,17 @@ class UserAgent implements LazyObjectInterface, Stringable
      * - Rendering engine and engine version
      * - Operating system and version
      * - Platform type (desktop, mobile, tablet, tv, watch, bot)
-     * - Device or platform model (e.g., iPad, Apple Watch, Chromecast, Smart TV)
+     * - Device or platform model (e.g., iPad, Apple Watch, ChromeCast, Smart TV)
      * - Preferred languages
      * - Whether the browser is Chromium-based
      *
      * If no string is provided, the method uses the current request's `HTTP_USER_AGENT` header.
      *
      * @param string|null $userAgent Optional user agent string (default: `$_SERVER['HTTP_USER_AGENT']`).
-     * @param bool $returnArray When true, return the result as an associative array; otherwise return as an object.
+     * @param bool $returnArray When true, return the result as an associative array, 
+     *              otherwise return as an object.
      *
-     * @return false|array<string,string|bool>|object{
+     * @return false|array|object {
      *     isBrowser: bool,
      *     isChromium: bool,
      *     userAgent: string,
@@ -762,7 +828,7 @@ class UserAgent implements LazyObjectInterface, Stringable
      *     languages: array
      * } Return parsed client information on success, or `false` if the string is empty or unrecognized.
      *
-     * @see replace() For replacing class object with new agent information.
+     * @see self::replace() For replacing class object with new agent information.
      *
      * @example - Example:
      * ```php
@@ -787,12 +853,14 @@ class UserAgent implements LazyObjectInterface, Stringable
         $browser = 'unknown';
         $engine = 'unknown';
 
-        foreach (self::$devicePatterns as $context => $patterns) {
+        foreach (self::PATTERNS as $context => $patterns) {
             if($platform){
                 break;
             }
 
-            $patterns = is_array($patterns) ? $patterns : [$context => $patterns];
+            if(!is_array($patterns)){
+                $patterns = [$context => $patterns];
+            }
 
             foreach ($patterns as $name => $pattern) {
                 if(($m = self::matchBrowser($userAgent, $name, $pattern)) !== null){
@@ -803,8 +871,16 @@ class UserAgent implements LazyObjectInterface, Stringable
             }
         }
 
-        [$engine, $engineVersion, $isChromium] = self::matchEngine($userAgent, $browser, $version);
-        [$os, $osVersion, $platformModel, $languages, $attr] = self::matchAttributes($userAgent, $platform);
+        [$engine, $engineVersion, $isChromium] = self::matchEngine(
+            $userAgent, 
+            $browser, 
+            $version
+        );
+
+        [$os, $osVersion, $platformModel, $languages, $attr] = self::matchAttributes(
+            $userAgent, 
+            $platform
+        );
 
         return self::extract([
             $userAgent, 
@@ -836,7 +912,8 @@ class UserAgent implements LazyObjectInterface, Stringable
      *   - [4] platform model
      * @param bool $returnArray When true, return result as an array, otherwise return as an object.
      *
-     * @return array<string,mixed>|object<string,mixed> Return a normalized userAgent information as array or object.
+     * @return array<string,mixed>|object<string,mixed> Return a normalized userAgent information 
+     *              as array or object.
      */
     private static function extract(array $matches, bool $returnArray = false): array|object
     {
@@ -914,73 +991,78 @@ class UserAgent implements LazyObjectInterface, Stringable
      * 
      * @return string Return the normalized property name.
      */
-    private function parsePropertyName(string $property): string 
+    private function parsePropertyName(string $property): string
     {
-        if ($property === 'userAgent' || $property === 'user_agent') {
-            return 'useragent';
-        }
-
-        if (
-            $property === 'browserversion' ||
-            $property === 'browserVersion' ||
-            $property === 'browser_version'
-        ) {
-            return 'version';
-        }
-
-        if($property === 'platformmodel' || $property === 'platform_model'){
-           return 'platformModel';
-        }
-
-        if ($property === 'osversion' || $property === 'os_version') {
-            return 'osVersion';
-        }
-
-        if ($property === 'engineversion' || $property === 'engine_version') {
-            return 'engineVersion';
-        }
-
-        return $property;
+        return match (strtolower($property)) {
+            'useragent', 
+            'user_agent'        => 'useragent',
+            'browserversion',
+            'browser_version'   => 'version',
+            'platformmodel',
+            'platform_model'    => 'platformModel',
+            'osversion',
+            'os_version'        => 'osVersion',
+            'engineversion',
+            'engine_version'    => 'engineVersion',
+            default => $property,
+        };
     }
 
     /**
-     * Match and extract operating system, version, platform type, model, and language
-     * information from a User-Agent string.
+     * Match and extract operating system, version, platform type, device model,
+     * and language information from a User-Agent string.
      *
-     * @param string $ua User-Agent string to analyze.
-     * 
-     * @return array Return array containing matched [$os, $osVersion, $platform, $platformModel, $languages]
+     * @param string $input The User-Agent string to analyze.
+     * @param string|null $platform Receives the detected platform type
+     *        (`desktop`, `mobile`, `tablet`, `watch`, `tv`, or `bot`).
+     *
+     * @return array{
+     *     0: string,
+     *     1: string,
+     *     2: string,
+     *     3: string,
+     *     4: string,
+     *     5: string[]
+     * } Returns an array containing:
+     * - OS name
+     * - OS version
+     * - Platform model
+     * - Accepted languages
+     * - Parsed User-Agent segments
      */
-    private static function matchAttributes(string $ua, ?string &$platform) :array
+    private static function matchAttributes(string $input, ?string &$platform) :array
     {
         $os = null;
         $osVersion = null;
         $platformModel = null;
-        $languages = '';
+        $languages = null;
         $parts = [];
 
-        if (preg_match('/\((.*?)\)/', $ua, $m)) {
+        if (preg_match('/\((.*?)\)/', $input, $m)) {
             $parts = explode(';', $m[1]);
             $model = trim($parts[0] ?? '');
 
-            foreach ($parts as $p) {
-
-                if ($os && $osVersion && $platformModel && $platform) {
+            foreach ($parts as $part) {
+                if ($os && $osVersion && $platformModel && $platform && $languages !== '') {
                     break;
                 }
 
-                $p = trim($p);
+                $part = trim($part);
+                $osm = [];
 
-                if (str_starts_with($p, 'rv:')) {
+                if (str_starts_with($part, 'rv:')) {
                     continue;
                 }
 
-                if (preg_match('/^[a-z]{2}(?:-[a-zA-Z]{2})?$/', $p)) {
-                    $languages = ($languages === '') ? $p : $languages . ',' . $p;
+                if (!$languages && preg_match(self::LANGUAGE, $part)) {
+                    $languages = ($languages === '') 
+                        ? $part 
+                        : $languages . ',' . $part;
+
                     continue;
                 }
 
-                if(self::isMacOs($p, $osm)){
+                if(self::isMacOs($part, $osm)){
                     $platformModel = $osm['model'];
                     $osVersion ??= $osm['version'];
                     $os ??= 'macOS';
@@ -988,9 +1070,9 @@ class UserAgent implements LazyObjectInterface, Stringable
                     continue;
                 }
 
-                if (preg_match('/\b(Windows|Win)(?:\s+([A-Za-z]+))?(?:[\s_]*([\d._]+))?/i', $p, $osm)) {
+                if (preg_match(self::WINDOWS, $part, $osm)) {
                     $os ??= 'Windows';
-                    $platform ??= (stripos($p, 'Phone') !== false) ? 'mobile' : 'desktop';
+                    $platform ??= (stripos($part, 'Phone') !== false) ? 'mobile' : 'desktop';
                     $osVersion ??= ($osm[3] ?? null) ?: ($osm[2] ?? null);
 
                     $platformModel ??= !empty($osm[2]) 
@@ -999,92 +1081,97 @@ class UserAgent implements LazyObjectInterface, Stringable
                     continue;
                 }
                 
-                if (preg_match('/Android[\s_]*([\d._]+)/i', $p, $osm)) {
+                if (preg_match(self::ANDROID, $part, $osm)) {
                     $os ??= 'Android';
                     $osVersion ??= $osm[1] ?? null;
                     $platform ??= 'mobile';
                     continue;
                 }
 
-                if (preg_match('/(?:CPU )?(?:iPhone|iPad|iPod).*OS[\s_]*([\d._]+)/i', $p, $osm)) {
+                if (preg_match(self::IOS, $part, $osm)) {
                     $os ??= 'iOS';
                     $osVersion ??= $osm[1] ?? null;
-                    $platform ??= (stripos($p, 'iPad') !== false) ? 'tablet' : 'mobile';
+                    $platform ??= (stripos($part, 'iPad') !== false) ? 'tablet' : 'mobile';
                     continue;
                 }
 
-                if (preg_match('/(WatchOS|Apple Watch)/i', $p)) {
+                if (preg_match(self::WATCHOS, $part)) {
                     $os ??= 'watchOS';
                     $platform ??= 'watch';
                     $platformModel ??= 'Apple Watch';
                     continue;
                 }
 
-                if (preg_match('/Android Wear|Wear ?OS/i', $p)) {
+                if (preg_match(self::WEAROS, $part)) {
                     $os ??= 'WearOS';
                     $platform ??= 'watch';
                     continue;
                 }
 
-                if (preg_match('/Tizen.*SM-R/i', $p)) {
+                if (preg_match(self::TIZAN, $part)) {
                     $os ??= 'Tizen';
                     $platform ??= 'watch';
                     $platformModel ??= 'Samsung Galaxy Watch';
                     continue;
                 }
 
-                if (preg_match('/AppleTV/i', $p)) {
+                if (preg_match(self::APPLETV, $part)) {
                     $os ??= 'tvOS';
                     $platform ??= 'tv';
                     $platformModel ??= 'Apple TV';
                     continue;
                 }
 
-                if (preg_match('/(SmartTV|HbbTV|NetCast|Tizen|Web0S|AndroidTV|CrKey)/i', $p)) {
+                if (preg_match(self::TVOS, $part)) {
                     $platform ??= 'tv';
-                    $platformModel ??= (stripos($p, 'TV') !== false) 
+                    $platformModel ??= (stripos($part, 'TV') !== false) 
                         ? 'Smart TV' 
                         : 'Chromecast';
                     continue;
                 }
 
-                if (preg_match('/\bLinux(?:\s+([a-z0-9._+-]+))?/i', $p, $l)) {
+                if (preg_match(self::LINUX, $part, $l)) {
                     $os ??= 'Linux';
                     $platform ??= 'desktop';
                     $osVersion ??= $l[1] ?? null;
 
                     if (
                         !$platformModel && 
-                        preg_match('/\b(Ubuntu|CentOs|Kali|Debian|Fedora|Red Hat|SUSE|Mint|Gecko)\b/i', $ua, $d)
+                        preg_match(self::LINUXOS, $input, $d)
                     ) {
                         $platformModel = $d[1];
                     }
                     continue;
                 }
                 
-                if (!$platform && preg_match('/bot|slurp|searchbot|chatgpt|crawler|crawl|spider|bingbot/i', $p)) {
+                if (!$platform  && preg_match(self::BOTS, $part)) {
                     $platform ??= 'bot';
                 }
 
-                if (!$os && $p !== $model) {
-                    $os = $p;
+                if (!$os && $part !== $model) {
+                    $os = $part;
                 }
             }
 
             $platformModel ??= $model;
         }
 
-        if ($languages === '') {
+        if (!$languages) {
             $languages = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
 
-            if (preg_match('/;\s([a-z]{2}(?:-[a-zA-Z]{2})?)\)/', $ua, $m)) {
+            if (preg_match(self::ACCEPT_LANGUAGE, $input, $m)) {
                 $languages = $m[1];
             }
         }
 
-        return [$os ?: 'unknown', (string) $osVersion, (string) $platformModel, $languages, $parts];
+        return [
+            $os ?: 'unknown', 
+            (string) $osVersion, 
+            (string) $platformModel, 
+            (string) $languages, 
+            $parts
+        ];
     }
-
 
     /**
      * Detect whether a given user agent string belongs to macOS and extract details.
@@ -1093,33 +1180,34 @@ class UserAgent implements LazyObjectInterface, Stringable
      *   - 'model'   => The hardware model (normalized to "Macintosh" if not specified).
      *   - 'version' => The extracted macOS version (e.g. "10.15.7"), or null if missing.
      *
-     * @param string $p        The User-Agent string or substring to check.
+     * @param string $input The User-Agent string or substring to check.
      * @param array|null $matches Reference variable to receive extracted values 
      *                            when a match is found. Defaults to an empty array.
      *
      * @return bool True if the string matches a macOS User-Agent format, false otherwise.
      */
-    private static function isMacOs(string $p, ?array &$matches = []): bool 
+    private static function isMacOs(string $input, ?array &$matches = []): bool 
     {
-        if (preg_match('/((?:(Intel)\s+)?(?:Mac OS X|OS X|macOS))[\s_]*([\d._]+)/i', $p, $m)) {
+        if (preg_match('/((?:(Intel)\s+)?(?:Mac OS X|OS X|macOS))[\s_]*([\d._]+)/i', $input, $m)) {
             $matches = [
                 'model'   => ($m[1] ?? null) ?: 'Macintosh',
                 'version' => ($m[2] ?? null)
             ];
+
             return true;
         }
 
-        if (preg_match('/(Macintosh)?;?\s*(?:Intel\s+)?(Mac OS X|OS X|macOS)[\s_]*([\d._]+)/i', $p, $m)) {
+        if (preg_match('/(Macintosh)?;?\s*(?:Intel\s+)?(Mac OS X|OS X|macOS)[\s_]*([\d._]+)/i', $input, $m)) {
             $matches = [
                 'model'   => ($m[2] ?? $m[1]) ?: 'Macintosh',
                 'version' => $m[3] ?? null,
             ];
+
             return true;
         }
 
         return false;
     }
-
 
     /**
      * Match and extract the rendering engine name and version from a User-Agent string.
@@ -1128,36 +1216,37 @@ class UserAgent implements LazyObjectInterface, Stringable
      * If Chromium-based browsers (Chrome, Edge, Opera, Brave, Vivaldi) are found, 
      * detects Blink and flags Chromium engines unless overridden by known exceptions.
      *
-     * @param string $ua User-Agent string to analyze.
+     * @param string $input User-Agent string to analyze.
      * @param string $browser The browser name matched earlier.
      * @param string $version The browser version matched earlier.
      * 
      * @return array Return array containing matched [$engine, $engineVersion, $isChromium]
      */
-    private static function matchEngine(string $ua, string $browser, string $version): array
+    private static function matchEngine(string $input, string $browser, string $version): array
     {
         $engine = 'unknown';
         $engineVersion = '';
         $isChromium = false;
-        $pattern = '/\b((NoteAir[0-9A-Za-z]+)(?:\s*Build)?|AppleWebKit|Netscape|WebKit|AndroidWebkit|Trident|Presto|Gecko)\/([\d._+\-]+)/i';
 
-        if (preg_match($pattern, $ua, $m)) {
-            $isReader = (stripos($m[0], 'NoteAir') !== false);
+        if (preg_match(self::ENGINES, $input, $m)) {
+            $isReader = stripos($m[0], 'NoteAir') !== false;
+
             $engine = $isReader ? $m[2] : $m[1];
             $engineVersion = $isReader ? ($m[3] ?: $m[4]) : ($m[2] ?: $m[3]);
 
-            // Blink piggybacks Chrome/Edge
-            if(in_array($browser, ['Chrome', 'Edge', 'Opera', 'Brave', 'Vivaldi'], true)){
+            // Chromium-based browsers report AppleWebKit as their engine.
+            if (isset(self::CHROMIUMS[$browser])) {
                 if ($engine === 'AppleWebKit') {
-                    $isChromium = !preg_match('/(UCBrowser|SamsungBrowser|PhantomJS)/i', $ua);
-                }elseif($engine === 'WebKit' && ($browser === 'Chrome' || $browser === 'Edge')){
+                    $isChromium = !preg_match('/(UCBrowser|SamsungBrowser|PhantomJS)/i', $input);
+                } elseif ($engine === 'WebKit' && in_array($browser, ['Chrome', 'Edge'], true)) {
                     $engine = 'Blink';
                     $engineVersion = $version ?: $engineVersion;
+                    $isChromium = true;
                 }
             }
         }
 
-       return [$engine, $engineVersion, $isChromium];
+        return [$engine, $engineVersion, $isChromium];
     }
 
     /**
@@ -1166,15 +1255,15 @@ class UserAgent implements LazyObjectInterface, Stringable
      * This method applies a regex pattern to a user agent string, then extracts
      * the browser/device name and version based on the provided $name category.
      *
-     * @param string $ua  The full user agent string.
-     * @param string $name  A logical name for the pattern (e.g., "bot", "console", "reader").
+     * @param string $input The full user agent string.
+     * @param string $name A logical name for the pattern (e.g., "bot", "console", "reader").
      * @param string $pattern The regex pattern to use for matching.
      *
      * @return array|null Returns an array with [version, browser] if matched, or null if no match.
      */
-    private static function matchBrowser(string $ua, string $name, string $pattern): ?array
+    private static function matchBrowser(string $input, string $name, string $pattern): ?array
     {
-        if (!preg_match($pattern, $ua, $m)) {
+        if (!preg_match($pattern, $input, $m)) {
             return null;
         }
 

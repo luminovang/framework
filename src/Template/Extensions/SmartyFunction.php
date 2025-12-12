@@ -11,8 +11,8 @@
 namespace Luminova\Template\Extensions;
 
 use \Smarty\Template;
-use \Luminova\Luminova;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Luminova;
+use Luminova\Exceptions\RuntimeException;
 
 /**
  * Wrapper for registering callable Smarty functions.

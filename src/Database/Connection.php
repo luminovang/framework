@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework connection class.
  *
@@ -11,14 +12,16 @@
 namespace Luminova\Database;
 
 use \Countable;
-use \Throwable;
 use \Exception;
+use \Throwable;
+use Luminova\Luminova;
 use \App\Config\Database;
-use \Luminova\Logger\Logger;
-use \Luminova\Foundation\Core\Database as CoreDatabase;
-use \Luminova\Exceptions\{ErrorCode, DatabaseException};
-use \Luminova\Database\Driver\{PdoDatabase, MysqliDatabase};
-use \Luminova\Interface\{LazyObjectInterface, DatabaseInterface};
+use Luminova\Logger\Logger;
+use Luminova\Database\Helpers\Util;
+use Luminova\Foundation\Core\Database as CoreDatabase;
+use Luminova\Exceptions\{ErrorCode, DatabaseException};
+use Luminova\Database\Driver\{PdoDatabase, MysqliDatabase};
+use Luminova\Interface\{LazyObjectInterface, DatabaseInterface};
 
 class Connection implements LazyObjectInterface, Countable
 {
@@ -46,9 +49,9 @@ class Connection implements LazyObjectInterface, Countable
     /**
      * Accumulate critical log messages
      * 
-     * @var string $err
+     * @var array $errs
      */
-    private static string $err = '';
+    private array $errs = [];
 
     /**
      * The identifier of the target shard server (e.g., region or server key).
@@ -92,6 +95,7 @@ class Connection implements LazyObjectInterface, Countable
     {
         $this->maxPoolConnections ??= (int) env('database.max.connections', 3);
         $this->pool ??= (bool) env('database.connection.pool', false);
+        $this->errs = [];
 
         if ($this->autoConnect) {
             $this->db = $this->connect();
@@ -99,28 +103,40 @@ class Connection implements LazyObjectInterface, Countable
     }
 
     /**
-     * Prevents un-serialization of the singleton instance.
+     * Database serialization.
      *
-     * @return array Return the serializable array of database connection.
-     * @ignore
+     * @return array Return the configuration array of database connection.
      */
     public function __serialize(): array
     {
-        return [];
+        return ($this->db instanceof DatabaseInterface) 
+            ? $this->db->getConfig(null)
+            : [];
     }
 
     /**
      * Restores the connection after un-serialization.
      *
-     * @param array $data Un-serialized data.
+     * @param array<string,mixed> $data Un-serialized data.
      *
      * @return void
-     * @ignore
      */
     public function __unserialize(array $data): void
     {
-        $this->db ??= $this->connect();
+        if($data === []){
+            $this->db ??= $this->connect();
+            return;
+        }
+
+        $this->db = self::newInstance(Database::fromArray($data));
     }
+
+    /**
+     * Prevent database object cloning.
+     *
+     * @return void
+     */
+    private function __clone() {}
 
     /**
      * Initialize a database connection for a specific shard server.
@@ -129,14 +145,15 @@ class Connection implements LazyObjectInterface, Countable
      * optionally assigning it to a specific shard server identified by `$locationId`.
      * If the selected shard is unreachable, it can fallback to available backup servers.
      *
-     * @param string  $locationId         Shard identifier (e.g., region name or server key).
-     * @param bool    $fallbackOnError    Fallback to a backup server if shard server connection is unavailable.
-     * @param ?bool   $pool               Enable connection pooling (if applicable).
-     * @param ?int    $maxPoolConnections     Maximum number of connections allowed in the pool.
-     * @param bool    $sharedInstance     Reuse a shared static instance if set to true.
+     * @param string $locationId Shard identifier (e.g., region name or server key).
+     * @param bool $fallbackOnError Fallback to a backup server if shard server connection is unavailable.
+     * @param ?bool $pool Enable connection pooling (if applicable).
+     * @param ?int $maxPoolConnections Maximum number of connections allowed in the pool.
+     * @param bool $sharedInstance Reuse a shared static instance if set to true.
      * 
-     * @return Connection Returns an initialized database connection instance.
-     * @throws DatabaseException If connection retries fail, max connection limit is reached, an invalid driver is detected, or a connection error occurs.
+     * @return static Returns an initialized database connection instance.
+     * @throws DatabaseException If connection retries fail, max connection limit is reached, 
+     *      an invalid driver is detected, or a connection error occurs.
      */
     public static function shard(
         string $locationId, 
@@ -147,7 +164,7 @@ class Connection implements LazyObjectInterface, Countable
     ): static 
     {
         $instance = $sharedInstance
-            ? self::getInstance($pool, $maxPoolConnections, false)
+            ? static::getInstance($pool, $maxPoolConnections, false)
             : new static($pool, $maxPoolConnections, false);
 
         $instance->shardServerLocation = $locationId;
@@ -174,7 +191,8 @@ class Connection implements LazyObjectInterface, Countable
      * @param bool $autoConnect Whether to auto-connect on initialization (default: `true`).
      *
      * @return static Returns the singleton instance of the connection class.
-     * @throws DatabaseException If connection retries fail, max connection limit is reached, an invalid driver is detected, or a connection error occurs.
+     * @throws DatabaseException If connection retries fail, max connection limit is reached, 
+     *          an invalid driver is detected, or a connection error occurs.
      */
     public static function getInstance(
         ?bool $pool = null, 
@@ -182,11 +200,71 @@ class Connection implements LazyObjectInterface, Countable
         bool $autoConnect = true
     ): static
     {
-        if (!self::$instance instanceof static) {
-            self::$instance = new static($pool, $maxPoolConnections, $autoConnect);
+        if (!static::$instance instanceof static) {
+            static::$instance = new static($pool, $maxPoolConnections, $autoConnect);
         }
 
-        return self::$instance;
+        return static::$instance;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getOpenConnections(): int
+    {
+        if(!$this->db instanceof DatabaseInterface){
+            return 0;
+        }
+
+        return $this->db::getOpenConnections();
+    }
+
+    /**
+     * Retrieve a connection from the pool.
+     *
+     * When `$anyFree` is `false`, removes and returns the first pooled connection
+     * if it is ready for use. Otherwise, iterates through the pool and returns the
+     * first connected instance, closing and discarding any invalid connections.
+     *
+     * @param bool $anyFree Whether to return the first connected connection from the pool.
+     *
+     * @return DatabaseInterface|null The selected connection, or `null` if none are available.
+     */
+    public function getPool(bool $anyFree = false): ?DatabaseInterface
+    {
+        if(self::$pools === []){
+            return null;
+        }
+
+        if (!$anyFree) {
+            $id = array_key_first(self::$pools);
+            $connection = self::$pools[$id] ?? null;
+
+            unset(self::$pools[$id]);
+
+            if (!$this->isReady($connection)) {
+                return null;
+            }
+
+            return $connection;
+        }
+
+        foreach (self::$pools as $idx => $connection) {
+            unset(self::$pools[$idx]);
+
+            if (!$connection instanceof DatabaseInterface) {
+                continue;
+            }
+
+            if ($connection->isConnected()) {
+                return $connection;
+            }
+
+            $connection->close();
+        }
+
+        self::$pools = [];
+        return null;
     }
 
     /**
@@ -210,142 +288,97 @@ class Connection implements LazyObjectInterface, Countable
     }
 
     /**
-     * Retrieves a free connection from the pool. Optionally fetches the first available valid connection.
-     * 
-     * If `$anyFree` is set to `true`, the method returns the first free connection that is connected and valid, removing it from the pool. 
-     * Otherwise, it fetches the first connection in the pool and returns it if valid, or `null` if no valid connection exists.
+     * Create a database connection from the specified configuration.
      *
-     * @param bool $anyFree If `true`, returns the first valid connection from the pool (default: `false`).
+     * If no configuration is provided, the default database configuration is used.
      *
-     * @return DatabaseInterface|null Return the first valid connection from the pool or `null` if none are available.
+     * @param CoreDatabase|null $config Database connection configuration (default: null).
+     * @param bool $shared Whether to return a shared database connection instance (default: false).
+     *
+     * @return DatabaseInterface|null Returns the connected database driver, or `null` if the connection fails.
+     *
+     * @throws DatabaseException If no configuration is available, the driver is unsupported,
+     *                           or a connection error occurs.
      */
-    public function getPool(bool $anyFree = false): ?DatabaseInterface
-    {
-        if($anyFree){
-            foreach (self::$pools as $idx => $connection) {
-                if($connection instanceof DatabaseInterface ){
-                    if($connection->isConnected()){
-                        unset(self::$pools[$idx]);
-                        return $connection;
-                    }
-                    
-                    $connection->close();
-                    $connection = null;
-                }
-               
-                unset(self::$pools[$idx]);
-            }
-    
-            self::$pools = [];
-            return null;
-        }
-
-        $id = array_key_first(self::$pools);
-
-        if ($id === null) {
-            return null;
-        }
-
-        $connection = self::$pools[$id]; 
-        unset(self::$pools[$id]);
-        return $this->isReady($connection) ? $connection : null;
-    }
-
-    /**
-     * Retrieves a new database driver instance based on the provided configuration.
-     *
-     * If no configuration is provided, the default configuration will be used.
-     *
-     * @param CoreDatabase|null $config Database configuration (default: null).
-     *
-     * @return DatabaseInterface|null Return the database driver instance, or null if connection fails.
-     * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
-     */
-    public static function newInstance(?CoreDatabase $config = null): ?DatabaseInterface
+    public static function newInstance(?CoreDatabase $config = null, bool $shared = false): ?DatabaseInterface
     {
         $config ??= self::getDefaultConfig();
 
-        if (!($config instanceof CoreDatabase)) {
+        if (!$config instanceof CoreDatabase) {
             throw new DatabaseException(
-                'Invalid connection: no configuration defined. Set connection info in the .env file or App\\Config\\Database class.',
+                'No database configuration found. Define it in .env or App\\Config\\Database.',
                 ErrorCode::RUNTIME_ERROR
             );
-        }        
+        }
 
-        $drivers = [
+        $driver = strtolower((string) $config->getValue('connection'));
+
+        $class = match ($driver) {
             'mysqli' => MysqliDatabase::class,
-            'pdo' => PdoDatabase::class
-        ];
-
-        $driver = $drivers[$config->getValue('connection')] ?? null;
-
-        if ($driver === null) {
-            throw new DatabaseException(
-                sprintf('Invalid database connection driver: "%s", use (mysql or pdo).', $config->getValue('connection')),
+            'pdo'    => PdoDatabase::class,
+            default  => throw new DatabaseException(
+                sprintf(
+                    'Unsupported database driver "%s". Supported drivers are: mysqli and pdo.',
+                    $driver
+                ),
                 ErrorCode::INVALID_DATABASE_DRIVER
-            );
-        }
+            ),
+        };
 
-        $connection = new $driver($config);
+        $connection = $shared
+            ? $class::getInstance($config)
+            : new $class($config);
 
-        if (!$connection instanceof DatabaseInterface) {
-            throw new DatabaseException(
-                sprintf('The selected driver class: "%s" does not implement: %s.', $driver, DatabaseInterface::class), 
-                ErrorCode::DATABASE_DRIVER_NOT_AVAILABLE
-            );
-        }
-        
-        $connection->setDebug(!PRODUCTION);
-        
-        if($connection->connect()){
-            return $connection;
-        }
+        // $connection->setDebug(!PRODUCTION);
 
-        $connection = null;
-
-        return null;
+        return $connection->connect()
+            ? $connection
+            : null;
     }
 
     /**
-     * Establish a database connection.
-     * 
-     * This either returns a connection instance or reusing a previous connection from the pool if available.
-     * Optionally it retries failed connections based on the retry attempt value set in the .env file (`database.connection.retry`).
+     * Establish or retrieve a database connection.
      *
-     * @param int|null $retry Number of retry attempts (default: 1).
+     * Reuses a previous connection if available. Optionally retries failed connections
+     * based on the retry attempt value from `.env` (`database.connection.retry`).
      *
-     * @return DatabaseInterface|null Return the database driver instance (either MysqliDatabase or PdoDatabase), or null if connection fails.
-     * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, an error occurs during connection, or an invalid driver interface is detected.
+     * @return DatabaseInterface|null Connected driver instance (MysqliDatabase or PdoDatabase),
+     *                                 or null if all attempts fail.
+     *
+     * @throws DatabaseException If all retry attempts fail in non-production mode.
      */
     public function connect(): ?DatabaseInterface
     {
-        if(!$this->shardServerLocation && Database::$connectionSharding){
+        if($this->isReady($this->db)){
+            return $this->db;
+        }
+
+        $retry = (int) env('database.connection.retry', 1);
+
+        if (!$this->shardServerLocation && Database::$connectionSharding) {
             $this->shardServerLocation = Database::getShardServerKey();
             $this->isShardFallbackOnError = Database::$shardFallbackOnError;
         }
 
-        self::$err = '';
-        $connection = $this->retry((int) env('database.connection.retry', 1)) ?: $this->retry(null);
+        try{
+            $connection = $this->retry($retry) ?: $this->retry(null);
 
-        if ($connection instanceof DatabaseInterface) {
-            self::eCritical();
-            return $connection;
-        }
-    
-        $err = 'Failed all attempts to establish a database connection.';
-
-        if(PRODUCTION){
-            if(!self::$err){
-                Logger::dispatch('critical', $err);
-                return null;
+            if ($connection instanceof DatabaseInterface) {
+                return $connection;
             }
 
-            self::$err .= Logger::entry('critical', $err);
-            self::eCritical();
-            return null;
-        }
+            $err = 'Failed all attempts to establish a database connection.';
 
-        throw new DatabaseException($err, ErrorCode::FAILED_ALL_CONNECTION_ATTEMPTS);
+            if (!PRODUCTION) {
+                throw new DatabaseException($err, ErrorCode::FAILED_ALL_CONNECTION_ATTEMPTS);
+            }
+
+            $this->errs[] = Logger::entry('critical', $err);
+        } finally {
+            $this->eCritical();
+        }
+        
+        return null;
     }
 
     /**
@@ -353,7 +386,7 @@ class Connection implements LazyObjectInterface, Countable
      *
      * @return true Return true if disconnected, false otherwise.
      * 
-     * @see purge() method to close all connections including pools.
+     * @see self::purge() method to close all connections including pools.
      */
     public function disconnect(): bool
     {
@@ -361,22 +394,27 @@ class Connection implements LazyObjectInterface, Countable
             $this->db->close();
         }
 
-        return !$this->db->isConnected();
+        $result = ($this->db instanceof DatabaseInterface) 
+            ? !$this->db->isConnected()
+            : true;
+
+        $this->db = null;
+
+        return $result;
     }
 
     /**
-     * Attempts to reconnect to the database with optional fallback to backup servers.
-     * 
-     * If `$retry` is set to `null`, the method will attempt to connect using backup databases (if available).
-     * Otherwise, it will attempt to reconnect based on the specified retry count.
-     * 
-     * @param int|null $retry The number of retry attempts (default: 1). 
-     *              Pass `null` to attempt fallback to backup servers.
-     * 
-     * @return DatabaseInterface|null Returns a database connection if successful, or `null` if all attempts fail.
-     * 
-     * @throws DatabaseException If all retry attempts fail, the maximum connection limit is reached, an invalid database driver is provided, or an error occurs during connection.
-     * @throws Exception If any unexpected error occurs during the connection attempts.
+     * Attempt to reconnect to the database, optionally falling back to backup servers.
+     *
+     * If `$retry` is null, it will try all available backup servers.
+     * Otherwise, it will attempt reconnects based on the retry count.
+     *
+     * @param int|null $retry Number of retry attempts (default: 1). Pass `null` to fallback to backup servers.
+     *
+     * @return DatabaseInterface|null Returns a connected driver instance, or null if all attempts fail.
+     *
+     * @throws DatabaseException If shard server config is missing, driver is invalid, or connection fails.
+     * @throws Exception If an unexpected error occurs during attempts.
      */
     public function retry(?int $retry = 1): ?DatabaseInterface
     {
@@ -395,7 +433,7 @@ class Connection implements LazyObjectInterface, Countable
         }
 
         if ($retry === null) {
-            if($this->shardServerLocation !== null && !$this->isShardFallbackOnError){
+            if ($this->shardServerLocation !== null && !$this->isShardFallbackOnError) {
                 return null;
             }
 
@@ -412,17 +450,21 @@ class Connection implements LazyObjectInterface, Countable
 
         $server = null;
 
-        if($this->shardServerLocation !== null){
-            $server = Database::getServers()[$this->shardServerLocation] ?? null;
+        if ($this->shardServerLocation !== null) {
+            $servers = Database::getServers();
+            $server = $servers[$this->shardServerLocation] ?? null;
 
-            if(!$server){
-                throw new DatabaseException(sprintf(
-                    'Shard server location "%s" not found in backup list. Check your configuration or shard mapping.',
-                    $this->shardServerLocation
-                ), ErrorCode::RUNTIME_ERROR);
+            if (!$server) {
+                throw new DatabaseException(
+                    sprintf(
+                        'Shard server "%s" not found in backup list. Check your configuration or shard mapping.',
+                        $this->shardServerLocation
+                    ),
+                    ErrorCode::RUNTIME_ERROR
+                );
             }
 
-            $connection = $this->retryWithServerConfig($server); 
+            $connection = $this->retryWithServerConfig($server);
 
             if ($this->isReady($connection) || !$this->isShardFallbackOnError) {
                 return $connection;
@@ -451,7 +493,6 @@ class Connection implements LazyObjectInterface, Countable
         }
 
         if ($this->count() >= $this->maxPoolConnections) {
-
             $connection->close();
             $connection = null;
 
@@ -467,7 +508,8 @@ class Connection implements LazyObjectInterface, Countable
     /**
      * Purges all pooled connections and optionally closes the current database connection.
      *
-     * If the $conn parameter is true, the database connection will be closed; otherwise, only the pooled connections will be closed.
+     * If the $conn parameter is true, the database connection will be closed; 
+     * otherwise, only the pooled connections will be closed.
      *
      * @param bool $closeCurrent If true, close the current database connection also (default: false).
      *
@@ -496,51 +538,17 @@ class Connection implements LazyObjectInterface, Countable
      */
     private static function getDefaultConfig(): ?CoreDatabase
     {
-        $config = self::getEnvDefaultConfig();
+        $config = Util::getEnvDefaultConfig();
 
         if($config === []){
-            $configs = Database::getServers();
-            $config = reset($configs);
+            $config = array_first(Database::getServers());
+
+            if($config === [] || !is_array($config)){
+                return null;
+            }
         }
 
-        return (!$config || $config === []) ? null : self::newConfig($config);
-    }
-
-    /**
-     * Retrieves the configuration settings for the database connection from the environment.
-     * 
-     * @return array Return an associative array containing database connection settings.
-     */
-    private static function getEnvDefaultConfig(): array
-    {
-        $host = env('database.hostname');
-        $socketPath = env('database.mysql.socket.path', '');
-
-        if(!$host && !$socketPath){
-            return [];
-        }
-
-        $var = (PRODUCTION ? 'database' : 'database.development');
-        $sqlite = env("{$var}.sqlite.path", '');
-        $sqlite = ($sqlite !== '') ? APP_ROOT . trim($sqlite, TRIM_DS) : null;
-        
-        return [
-            'port' => env('database.port'),
-            'host' => $host,
-            'pdo_version' => env('database.pdo.version', 'mysql'),
-            'connection' => strtolower(env('database.connection', 'pdo')),
-            'charset' => env('database.charset', ''),
-            'persistent' => (bool) env('database.persistent.connection', true),
-            'emulate_prepares' => (bool) env('database.emulate.prepares', false),
-            'sqlite_path' => $sqlite,
-            'socket' => (bool) env('database.mysql.socket', false),
-            'timeout' => (int) env('database.timeout', 0),
-            'socket_path' => $socketPath,
-            'production' => PRODUCTION,
-            'username' => env("{$var}.username"),
-            'password' => env("{$var}.password"),
-            'database' => env("{$var}.name")
-        ];
+        return Database::fromArray($config);
     }
 
     /**
@@ -552,33 +560,44 @@ class Connection implements LazyObjectInterface, Countable
      */
     private function retryFromAttempts(int $retry, ?array $config = null): ?DatabaseInterface
     {
-        for ($attempt = 1; $attempt <= max(1, $retry); $attempt++) {
+        $retry = max(1, $retry);
+        $lastError = null;
+        $configObj = null;
+
+        if($config && $config !== null){
+            $configObj = Database::fromArray($config);
+        }
+
+        for ($attempt = 1; $attempt <= $retry; $attempt++) {
             try {
-                $connection = self::newInstance(($config === null) ? null : self::newConfig($config));
+                $connection = self::newInstance($configObj);
 
                 if ($this->isReady($connection)) {
-                    
                     if($this->pool){
-                        $this->release($connection, $this->generatePoolId($config));
+                        $this->release($connection, $this->generateConnectionId($config));
                     }
     
                     return $connection;
                 }
 
-                self::$err .= Logger::entry(
+                $this->errs[] = Logger::entry(
                     'critical', 
                     'Database connection attempt (' . $attempt . ') failed.'
                 );
             } catch (Throwable $e) {
-                if($this->shouldThrow($e->getCode())){
-                    throw $e;
+                if($this->isErrorCodeFatal($e->getCode())){
+                    $lastError = $e;
                 }
 
-                self::$err .= Logger::entry(
+                $this->errs[] = Logger::entry(
                     'critical', 
                     'Attempt (' . $attempt . ') failed with error: ' . $e->getMessage()
                 );
             }
+        }
+
+        if($lastError && $lastError instanceof Throwable ){
+            throw $lastError;
         }
 
         return null;
@@ -594,12 +613,12 @@ class Connection implements LazyObjectInterface, Countable
     private function retryWithServerConfig(array $config): ?DatabaseInterface
     {
         try {
-            $connection = self::newInstance(self::newConfig($config));
+            $connection = self::newInstance(Database::fromArray($config));
 
             if ($this->isReady($connection)) {
 
                 if($this->pool){
-                    $this->release($connection, $this->generatePoolId($config));
+                    $this->release($connection, $this->generateConnectionId($config));
                 }
 
                 if($this->shardServerLocation === null && PRODUCTION){
@@ -613,17 +632,17 @@ class Connection implements LazyObjectInterface, Countable
                 return $connection;
             }
 
-            self::$err .= Logger::entry('critical', sprintf(
+            $this->errs[] = Logger::entry('critical', sprintf(
                 'Backup database connection attempt failed (%s@%s).',  
                 $config['database'],
                 $config['host']
             ));
         } catch (Throwable $e) {
-            if($this->shouldThrow($e->getCode())){
+            if($this->isErrorCodeFatal($e->getCode())){
                 throw $e;
             }
 
-            self::$err .= Logger::entry('critical', sprintf(
+            $this->errs[] = Logger::entry('critical', sprintf(
                 'Failed to connect to backup database (%s@%s) with error: %s',
                 $config['database'],
                 $config['host'],
@@ -635,7 +654,7 @@ class Connection implements LazyObjectInterface, Countable
     }
 
     /**
-     * Generates a unique pool ID based on the database connection configuration.
+     * Generates a unique connection pool ID based on the database connection configuration.
      * 
      * The resulting hash is used as a pool identifier for database connections.
      * 
@@ -644,68 +663,54 @@ class Connection implements LazyObjectInterface, Countable
      * 
      * @return string Return a hashed pool ID for the database connection.
      */
-    private function generatePoolId(?array $config = null): string
+    private function generateConnectionId(?array $config = null): string
     {
-        $config ??= self::getEnvDefaultConfig();
-        return md5(sprintf(
-            '%s%s%s%d%s%s%s%s',
-            $config['username'] ?? 'root',
-            $config['connection'] ?? 'pdo',
-            $config['host'] ?? 'localhost',
-            $config['port'] ?? 3306,
-            $config['database'] ?? 'default',
-            $config['socket_path'] ?? '',
-            $config['pdo_version'] ?? 'mysql',
-            $config['sqlite_path'] ?? ''
-        ));
+        $config ??= Util::getEnvDefaultConfig();
+
+        return Luminova::hash('xxh3', implode('|', [
+            static::class,
+            $config['connection']   ?? 'pdo',
+            $config['host']         ?? 'localhost',
+            $config['port']         ?? 3306,
+            $config['username']     ?? 'root',
+            $config['database']     ?? 'default',
+            $config['pdo_driver']  ?? 'mysql',
+            $config['socket_path']  ?? '',
+            $config['sqlite_path']  ?? '',
+        ]));
     }
 
     /**
-     * Anonymizes class to extend base database.
+     * Offload errors.
      * 
-     * @param array<string,mixed> $config Database configuration.
+     * This dispatch all accumulated error log messages once.
      * 
-     * @return CoreDatabase<\T> Return based database instance with loaded configuration
+     * @return void
      */
-    private static function newConfig(array $config): CoreDatabase
+    private function eCritical(): void
     {
-        return new class($config) extends CoreDatabase 
-        { 
-            public function __construct(array $config) 
-            {
-                parent::__construct($config);
-            }
-        };
-    }
-
-    /**
-     * Dispatch all accumulated log messages.
-     * 
-     * return void
-     */
-    private static function eCritical(): void
-    {
-        if(!self::$err){
+        if(!$this->errs){
             return;
         }
 
-        Logger::dispatch('critical', self::$err);
-        self::$err = '';
+        Logger::dispatch('critical', implode(PHP_EOL, $this->errs));
+        $this->errs = [];
     }
 
     /**
      * Check if exception should throw immediately.
      * 
-     * @param string|int The exception code to check.
+     * @param string|int $code The exception code to check.
      * 
      * @return bool Return true if should throw, false otherwise.
-    */
-    private function shouldThrow(string|int $code): bool 
+     */
+    private function isErrorCodeFatal(string|int $code): bool 
     {
-        return in_array($code, [
+        return !PRODUCTION || in_array($code, [
             ErrorCode::DATABASE_DRIVER_NOT_AVAILABLE,
             ErrorCode::INVALID_DATABASE_DRIVER,
-            ErrorCode::RUNTIME_ERROR
+            ErrorCode::RUNTIME_ERROR,
+            ErrorCode::VALUE_FORBIDDEN
         ]);
     }
 
@@ -718,6 +723,7 @@ class Connection implements LazyObjectInterface, Countable
      */
     private function isReady(?DatabaseInterface $connection): bool 
     {
-        return ($connection instanceof DatabaseInterface && $connection->isConnected());
+        return ($connection instanceof DatabaseInterface) 
+            && $connection->isConnected();
     }
 }

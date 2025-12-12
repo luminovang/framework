@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework Request Rate Limiter (RRL).
  *
@@ -15,17 +16,17 @@ use \Memcached;
 use \Throwable;
 use \DateInterval;
 use \DateTimeImmutable;
-use \Luminova\Luminova;
-use \Luminova\Utility\IP;
-use \Luminova\Base\Cache;
-use \Luminova\Cache\FileCache;
+use Luminova\Luminova;
+use Luminova\Base\Cache;
+use Luminova\Http\Network\IP;
+use Luminova\Cache\FileCache;
 use \Predis\Client as PredisClient;
 use \Psr\SimpleCache\CacheInterface;
 use \Psr\Cache\CacheItemPoolInterface;
-use \Luminova\Interface\LazyObjectInterface;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\InvalidArgumentException;
-use function \Luminova\Funcs\{root, response};
+use Luminova\Exceptions\RuntimeException;
+use Luminova\Interface\LazyObjectInterface;
+use Luminova\Exceptions\InvalidArgumentException;
+use function Luminova\Funcs\response;
 
 class RateLimiter implements LazyObjectInterface
 {
@@ -67,9 +68,9 @@ class RateLimiter implements LazyObjectInterface
     /**
      * Cache connection status. 
      * 
-     * @var bool $isConnected
+     * @var bool|null $isConnected
      */
-    private static bool $isConnected = false;
+    private ?bool $isConnected = null;
 
     /**
      * Waiting status. 
@@ -179,12 +180,17 @@ class RateLimiter implements LazyObjectInterface
         private int $limit = 10,
         DateInterval|int $ttl = 60,
         private string $persistentId = ''
-    ) {
+    ) 
+    {
         $this->ttl = $this->getNormalizeTtl($ttl);
         $this->remaining = $limit;
-        $this->cache ??= new FileCache(root('/writeable/caches/limiter/'));
+        $identifier = $this->persistentId ?: 'limiter';
+
+        $this->cache ??= Luminova::kernel('cache', true, 'limiter', $identifier, 'limiter') 
+            ?? new FileCache('limiter', $identifier);
+
         self::$ip ??= IP::get();
-        self::$isConnected = $this->isConnected();
+        $this->isConnected = $this->isConnected();
     }
 
     /**
@@ -200,7 +206,8 @@ class RateLimiter implements LazyObjectInterface
      * 
      * If no cache is set explicitly, the default fallback is Luminova's file-based cache.
      *
-     * @param CacheItemPoolInterface|CacheInterface|Cache|Memcached|PredisClient|Redis $cache The cache instance used to store limiter data.
+     * @param CacheItemPoolInterface|CacheInterface|Cache|Memcached|PredisClient|Redis $cache The cache instance used 
+     *          to store limiter data.
      * 
      * @return self Returns the instance of RateLimiter class.
      */
@@ -354,7 +361,8 @@ class RateLimiter implements LazyObjectInterface
     public function isIpAddress(): bool
     {
         return $this->requests <= 1 || (
-            $this->ipAddress !== null && IP::equals($this->ipAddress, self::$ip)
+            $this->ipAddress !== null 
+            && IP::equals($this->ipAddress, self::$ip)
         );
     }
 
@@ -362,7 +370,8 @@ class RateLimiter implements LazyObjectInterface
      * Checks if a request is allowed based on the rate limit for the given key.
      * 
      * This method generates a unique key based on the clients's IP address or default to provided key.
-     * It uses MD5 hashing for simplicity in key hashing (e.g., `Rate-Limiter:{Persistent-Id}+{Custom-Key||Ip-Address}`).
+     * It uses XXH3 hashing for simplicity in key hashing 
+     * (e.g., `Rate-Limiter:{Persistent-Id}+{Custom-Key||Ip-Address}`).
      *
      * @param string|null $key An optional custom identifier (e.g., `User-Id`) to check the rate limit for.
      * 
@@ -452,7 +461,8 @@ class RateLimiter implements LazyObjectInterface
      * This is a passive wait that periodically checks if the limiter decision is complete.
      * It is useful when limiter involves asynchronous or deferred logic.
      *
-     * @param float|int $interval The interval to sleep between checks (in seconds). Supports sub-second delays (e.g., 0.1 for 100ms).
+     * @param float|int $interval The interval to sleep between checks (in seconds). 
+     *              Supports sub-second delays (e.g., 0.1 for 100ms).
      * @param int|null $maxWait The maximum duration to wait (in seconds). Use `null` to wait indefinitely.
      *
      * @return void
@@ -460,7 +470,6 @@ class RateLimiter implements LazyObjectInterface
     public function wait(float|int $interval = 1.0, ?int $maxWait = null): void
     {
         $startTime = microtime(true);
-        $microInterval = (int)($interval * 1_000_000);
 
         while (!$this->finished) {
             if ($this->finished || ($maxWait !== null && (microtime(true) - $startTime) >= $maxWait)) {
@@ -468,7 +477,7 @@ class RateLimiter implements LazyObjectInterface
                 break;
             }
 
-            usleep($microInterval);
+            uwait($interval);
         };
     }
 
@@ -486,7 +495,10 @@ class RateLimiter implements LazyObjectInterface
     {
         $this->asserts($key);
 
-        return max(0, $this->getLimit() - $this->get($this->key($key))['requests'] ?? 0);
+        return max(
+            0, 
+            $this->getLimit() - ($this->get($this->key($key))['requests'] ?? 0)
+        );
     }
 
     /**
@@ -503,7 +515,9 @@ class RateLimiter implements LazyObjectInterface
      * @throws InvalidArgumentException If the cache instance is invalid or the key is empty.
      * @throws RuntimeException If the cache is not connected.
      * 
-     * > **Note:** This will persist new limit (e.g, `defaultLimit + $limit`), till ttl expires before default limit is restored.
+     * > **Note:** 
+     * > This will persist new limit (e.g, `defaultLimit + $limit`), 
+     * > till ttl expires before default limit is restored.
      */
     public function continue(int $limit = 1): self
     {
@@ -620,7 +634,7 @@ class RateLimiter implements LazyObjectInterface
 
         $type = $this->response['type'] ?? 'json';
         $message = $this->response['message'] 
-            ?? 'Rate limit exceeded: allowed {limit} requests in {ttl} seconds. Please try again after {retry} seconds.';
+            ?? 'Request limit exceeded: allowed {limit} requests in {ttl} seconds. Please try again after {retry} seconds.';
         $headers += $this->getHeaders();
 
         if(strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD'){
@@ -676,7 +690,7 @@ class RateLimiter implements LazyObjectInterface
         }
 
         flush();
-        usleep((int)($interval * 1_000_000));
+        uwait($interval);
     }
 
     /**
@@ -707,11 +721,20 @@ class RateLimiter implements LazyObjectInterface
         };
 
         $this->finished = true;
-        if ($this->cache instanceof Memcached) {
-            return $result === true || $this->cache->getResultCode() === Memcached::RES_SUCCESS;
+
+        if($result === true){
+            return true;
         }
 
-        return $result === true || $result > 0;
+        if($result === false){
+            return false;
+        }
+
+        if ($this->cache instanceof Memcached) {
+            return $this->cache->getResultCode() === Memcached::RES_SUCCESS;
+        }
+
+        return $result > 0;
     }
 
     /**
@@ -719,7 +742,6 @@ class RateLimiter implements LazyObjectInterface
      *
      * @param string $key Cache key set request info.
      * @param int $requests Number of requests to store.
-     * @param bool $withLimit Whether to attach custom limit to this key.
      * 
      * @return bool Return true on successful cache save, false on failure.
      */
@@ -778,17 +800,19 @@ class RateLimiter implements LazyObjectInterface
      */
     protected function isConnected(): bool
     {
-        $isRedis = ($this->cache instanceof Redis);
-        $pong = ($isRedis ? '+PONG' : 'PONG');
-
         try {
-            if ($isRedis || $this->cache instanceof PredisClient) {
-                return $this->cache->ping() === $pong;
+            if ($this->cache instanceof Cache) {
+                return $this->cache->isConnected();
             }
 
             if ($this->cache instanceof Memcached) {
-                $this->cache->set('__ping', $pong, 10);
-                return $this->cache->get('__ping') === $pong;
+                $this->cache->set('__ping', 'PONG', 10);
+
+                return $this->cache->get('__ping') === 'PONG';
+            }
+
+            if ($this->cache instanceof Redis || $this->cache instanceof PredisClient) {
+                return in_array($this->cache->ping(), ['PONG', '+PONG'], true);
             }
 
             return true;
@@ -820,13 +844,16 @@ class RateLimiter implements LazyObjectInterface
      *
      * @param string|null $key User-defined key (e.g., user ID or session).
      * 
-     * @return string Return an MD5 hash used for cache key.
+     * @return string Return an XXH3 hash used for cache key.
      */
     protected function key(?string $key = null): string
     {
         $key ??= self::$ip;
 
-        return md5("Rate-Limiter:{$this->persistentId}+{$key}");
+        return Luminova::hash(
+            'xxh3', 
+            "Rate-Limiter:{$this->persistentId}+{$key}"
+        );
     }
 
     /**
@@ -845,14 +872,7 @@ class RateLimiter implements LazyObjectInterface
      */
     protected function asserts(?string $key): void 
     {
-        if (
-            !$this->cache instanceof CacheInterface &&
-            !$this->cache instanceof CacheItemPoolInterface &&
-            !$this->cache instanceof Cache && 
-            !$this->cache instanceof Memcached && 
-            !$this->cache instanceof Redis && 
-            !$this->cache instanceof PredisClient
-        ) {
+        if (!$this->isCacheInstance()) {
             throw new InvalidArgumentException(sprintf(
                 'Invalid cache instance. Expected an instance of %s, %s, %s, %s, %s, or %s.',
                 CacheInterface::class,
@@ -864,7 +884,7 @@ class RateLimiter implements LazyObjectInterface
             ));
         }
 
-        if(!self::$isConnected){
+        if(!$this->isConnected){
             throw new RuntimeException('Cache server connection failed.');
         }
 
@@ -873,5 +893,22 @@ class RateLimiter implements LazyObjectInterface
                 'Cache key cannot be an empty string. Provide a non-empty string or use NULL to fallback to default key.'
             );
         }
+    }
+
+    /**
+     * check if cache instance is allowed cache providers.
+     *
+     * @return bool
+     */
+    protected function isCacheInstance(): bool 
+    {
+        return (
+            $this->cache instanceof CacheInterface
+            || $this->cache instanceof CacheItemPoolInterface
+            || $this->cache instanceof Cache
+            || $this->cache instanceof Memcached
+            || $this->cache instanceof Redis
+            || $this->cache instanceof PredisClient
+        );
     }
 }

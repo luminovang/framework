@@ -1,6 +1,7 @@
 <?php 
+declare(strict_types=1);
 /**
- * Luminova Framework memcached extension class.
+ * Luminova Framework Memcached cache driver.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -10,59 +11,84 @@
  */
 namespace Luminova\Cache;
 
-use \Exception;
 use \Memcached;
 use \Throwable;
 use \DateInterval;
 use \DateTimeInterface;
-use \Luminova\Base\Cache;
-use \Luminova\Logger\Logger;
-use \Luminova\Time\Timestamp;
-use \Luminova\Exceptions\AppException;
-use \Luminova\Exceptions\CacheException;
+use Luminova\Luminova;
+use Luminova\Base\Cache;
+use Luminova\Exceptions\CacheException;
 
 final class MemoryCache extends Cache
 {
     /**
-     * Hold the cache instance Singleton.
-     * 
-     * @var ?self $instance
+     * Singleton instance returned by `getInstance()`.
+     *
+     * @var self|null $instance
      */
     private static ?self $instance = null;
 
     /**
-     * @var array<int,mixed> Memcached configuration servers.
+     * Server pool configuration collected before `connect()` or `reconnect()` is called.
+     *
+     * Each entry: `[host, port, weight]`.
+     *
+     * @var array<int,array{string,int,int}> $servers
      */
-    private array $config = [];
+    private array $servers = [];
 
     /**
-     * Memcached connection instances.
-     * 
+     * Active Memcached connection instances keyed by persistent ID.
+     *
      * @var array<string,Memcached> $instances
      */
     private static array $instances = [];
 
     /**
-     * Initializes memcache extension class instance with an optional storage name and an optional persistent ID.
-     * 
-     * @param string|null $storage The cache storage name (default: null). If null, you must call `create` method later.
-     * @param string|null $persistentId Optional unique ID for persistent connections (default: null).
-     *                      - If null is specified, will used the default persistent id from environment variables.
-     *                      - If not set in environment variables `default` will be used instead,
-     * 
-     * @throws CacheException if there is an issue loading the cache.
+     * Default server configuration resolved from environment variables.
+     *
+     * Format: `[host, port, weight]`.
+     *
+     * @var array{0:string,1:int,2:int}|null $default
      */
-    public function __construct(
-        ?string $storage = null, 
-        private ?string $persistentId = null
-    )
+    private static ?array $default = null;
+
+    /**
+     * Initialize the Memcached driver.
+     *
+     * Reads connection parameters from environment variables. If `$storage` is provided,
+     * `setStorage()` is called immediately.
+     *
+     * Environment variables consumed:
+     * - `memcached.host`            (default: `127.0.0.1`)
+     * - `memcached.port`            (default: `11211`)
+     * - `memcached.server.weight`   (default: `0`)
+     * - `memcached.persistent.id`   (default: `'default'`)
+     * - `memcached.key.prefix`      (default: none)
+     *
+     * @param string|null $storage      Cache storage name. When null, call `setStorage()` before
+     *                                  performing any cache operations (default: null).
+     * @param string|null $persistentId Persistent connection identifier for connection pooling.
+     *                                  Falls back to the `memcached.persistent.id` env variable,
+     *                                  then `'default'` (default: null).
+     *
+     * @throws CacheException If the Memcached extension is unavailable or initialization fails.
+     */
+    public function __construct(?string $storage = null, ?string $persistentId = null)
     {
         parent::__construct();
-        $this->persistentId ??= env('memcached.persistent.id', 'default');
-        //$this->config = ($this->config === []) ? (configs('Storage', [])['memcache'] ?? []) : $this->config;
+        self::$default ??= [
+            env('memcached.host', '127.0.0.1'),
+            (int) env('memcached.port', 11211),
+            (int) env('memcached.server.weight', 0)
+        ];
 
-        if(!$this->connect()){
-            throw new CacheException('Could not connect to memcache server');
+        $persistentId = $persistentId 
+            ?? env('memcached.persistent.id') 
+            ?? env('system.cache.persistent.id');
+
+        if($persistentId){
+            $this->setPersistentId($persistentId);
         }
 
         if($storage){
@@ -71,32 +97,31 @@ final class MemoryCache extends Cache
 	}
 
     /**
-     * Retrieves or creates a singleton instance of the memcache extension class.
-     * 
-     * @param string|null $storage The cache storage name (default: null). If null, you must call `create` method later.
-     * @param string|null $persistentId Optional unique ID for persistent connections (default: null).
-     *                      - If null is specified, will used the default persistent id from environment variables.
-     *                      - If not set in environment variables `default` will be used instead,
-     * 
-     * @return static The singleton instance of the cache.
-     * @throws CacheException if there is an issue loading the cache.
+     * Get the singleton instance of this driver.
+     *
+     * Creates the instance on first call; subsequent calls return the same object.
+     *
+     * @param string|null $storage Cache storage name (default: null).
+     * @param string|null $persistentId Persistent connection identifier (default: null).
+     *
+     * @return self Returns the singleton instance.
+     *
+     * @throws CacheException If initialization fails.
      */
     public static function getInstance(
         ?string $storage = null, 
         ?string $persistentId = null
-    ): static 
+    ): self 
     {
-        if (self::$instance === null) {
-            self::$instance = new static($storage, $persistentId);
+        if (static::$instance === null) {
+            self::$instance = new self($storage, $persistentId);
         }
 
         return self::$instance;
     }
 
     /**
-     * Retrieves the current connection instance of the cache Memcached being used. 
-     * 
-     * @return Memcached|null Return the instance of Memcached, otherwise null.
+     * {@inheritdoc}
      */
     public function getConn(): ?Memcached
     {
@@ -104,251 +129,379 @@ final class MemoryCache extends Cache
     }
 
     /**
-     * Retrieves the current connection persistent id being used. 
-     * 
-     * @return string|null Return the persistent id, otherwise null.
+     * Check whether the last Memcached result code matches the expected code(s).
+     *
+     * @param int|int[] $code Expected result code(s) (default: `Memcached::RES_SUCCESS`).
+     *
+     * @return bool Returns true when the last result code matches, false otherwise.
      */
-    public function getId(): ?string
+    public function isResultCode(array|int $code = Memcached::RES_SUCCESS): bool
     {
-        return $this->persistentId;
-    }
-
-    /**
-     * Set cache storage sub directory path to store cache items.
-     * 
-     * @param string $subfolder The cache storage root directory.
-     * 
-     * @return self Returns the memory cache instance.
-     * @throws CacheException Throws if unable to reconnect after changing persistent id.
-     */
-    public function setId(string $persistentId): self 
-    {
-        $this->persistentId = $persistentId;
-        
-        if(!$this->connect()){
-            throw new CacheException(
-                sprintf('Could not connect to memcache server using persistent id: %s', $this->persistentId)
-            );
+        if (!$this->isConn()) {
+            return false;
         }
-        
-        return $this;
+
+        if (is_int($code)) {
+            return $this->conn->getResultCode() === $code;
+        }
+
+        return in_array($this->conn->getResultCode(), $code, true);
     }
 
     /**
-     * Adds a server to the cache configuration.
-     * 
-     * @param string $host The server hostname or IP address.
-     * @param int $port The server port number.
-     * @param int $weight Optional weight for the server (default: 0).
-     * 
+     * Add a single Memcached server to the configuration pool.
+     *
+     * Servers are collected locally and only applied when `connect()` or
+     * `reconnect()` is called.
+     *
+     * @param string $host Server hostname or IP address.
+     * @param int $port  Server port number.
+     * @param int $weight Optional server weight (used for consistent hashing).
+     *
      * @return self Returns the memory cache instance.
-     * 
-     * > **Note:** After setting server you should call `reconnect` method to connect to new servers.
      */
-    public function setServer(string $host, int $port, int $weight = 0): self 
+    public function addServer(string $host, int $port, int $weight = 0): self
     {
-        $this->config[] = [$host, $port, $weight];
+        $this->servers[] = [$host, $port, $weight];
         return $this;
     }
 
     /**
-     * Sets multiple servers in the cache configuration.
-     * 
-     * @param array<int,string|int> $config An array of server configurations where each element is an array [host, port, weight].
-     * 
+     * Replace the current Memcached server pool configuration.
+     *
+     * Each server entry must follow:
+     * [host, port, weight]
+     *
+     * @param array<int,array{string,int,int}> $servers Server pool configuration.
+     *
      * @return self Returns the memory cache instance.
      * 
-     * > **Note:** After setting servers you should call `reconnect` method to connect to new servers.
+     * > **Note:** 
+     * > After setting servers you should call `reconnect` method to connect to new servers.
      */
-    public function setServers(array $config): self 
+    public function setServers(array $servers): self
     {
-        $this->config = $config;
+        $this->servers = $servers;
         return $this;
     }
 
     /**
-     * Sets an option for the cache.
-     * 
-     * @param int $option The option to set.
-     * @param mixed $value The value for the option.
-     * 
-     * @return self Returns the memory cache instance.
+     * Set a Memcached option on the active connection.
+     *
+     * @param int   $option Memcached option constant (e.g. `Memcached::OPT_PREFIX_KEY`).
+     * @param mixed $value  Option value.
+     *
+     * @return self Returns the current instance.
+     *
+     * @throws CacheException If no connection is active.
      */
     public function setOption(int $option, mixed $value): self 
     {
-        $this->getConn()?->setOption($option, $value);
+        if(!$this->isConn()){
+            throw new CacheException('Refuse to set option. Memcache is not connected');
+        }
+
+        $this->conn->setOption($option, $value);
         return $this;
     }
 
     /**
-     * Connects to the Memcached server(s) using the configured settings.
+     * {@inheritdoc}
      * 
-     * Initializes a connection to the Memcached server(s) with the defined host, port, and weight in env file
-     * or using the provided server configuration.
-     * 
-     * @return bool Returns true if the connection is successful, false otherwise.
+     * Establish a connection to the configured Memcached server pool.
      */
-    public function connect(): bool 
+    public function connect(): bool
     {
-        $conn = $this->getConn();
-        $result = true;
+        $this->conn = $this->getConn();
 
-        if($conn === null){
-            $conn = new Memcached($this->persistentId);
-            $conn->setOption(Memcached::OPT_LIBKETAMA_COMPATIBLE, true);
-            
-            if(($prefix = env('memcached.key.prefix', null)) !== null){
-                $conn->setOption(Memcached::OPT_PREFIX_KEY, $prefix);
+        if($this->conn instanceof Memcached){
+            return true;
+        }
+
+        try {
+            $this->conn = Luminova::kernel()->getMemcached($this->persistentId);
+
+            if(!$this->conn instanceof Memcached){
+                $this->conn = new Memcached($this->persistentId);
+                $this->conn->setOption(Memcached::OPT_LIBKETAMA_COMPATIBLE, true);
+
+                $prefix = env('memcached.key.prefix');
+
+                if ($prefix !== '' && $prefix !== null) {
+                    $this->conn->setOption(Memcached::OPT_PREFIX_KEY, (string) $prefix);
+                }
             }
+
+            if($this->serializer === self::SERIALIZER_IGBINARY){
+                $serializer = (int) $this->conn->getOption(Memcached::OPT_SERIALIZER);
+
+                if($serializer === 0 || $serializer === Memcached::SERIALIZER_IGBINARY){
+                    $this->serializer = self::SERIALIZER_NONE;
+                }
+            }
+
+            if ($this->conn->getServerList() === []) {
+                $this->attachServers();
+            }
+
+            $this->assertConnection();
+            self::$instances[$this->persistentId] = $this->conn;
+            $this->isConnected = true;
+
+            return true;
+        } catch (Throwable $e) {
+            $this->errorHandler($e, 'connect');
         }
 
-        if(!count($conn->getServerList())) {
-            $result = ($this->config === []) ? $conn->addServer(
-                env('memcached.host', 'localhost'), 
-                env('memcached.port', 11211), 
-                env('memcached.server.weight', 0)
-            ) : $conn->addServers($this->config);
-        }
-    
-        self::$instances[$this->persistentId] = $conn;
-        return $result;
+        return false;
     }
 
     /**
-     * Pings the Memcached server to check its availability.
-     *
-     * This method attempts to set a key-value pair with a short expiration time and then retrieves it.
-     * If the server responds within a reasonable time, it is considered available and the method returns 'PONG'.
-     * If the server does not respond or an exception is thrown, the method returns null.
-     *
-     * @return string|null Returns 'PONG' if the server is available, otherwise null.
+     * {@inheritdoc}
      */
     public function ping(): ?string
     {
-        if(!$this->getConn()){
+        if(!$this->isConn()){
             return null;
         }
 
         try {
-            $this->getConn()->set('__ping__', 'PONG', 10);
-            return $this->getConn()->get('__ping__');
+            $this->conn->set('__ping__', 'PONG', 10);
+
+            return $this->conn->get('__ping__') ?: null;
         } catch (Throwable) {
             return null;
         }
     }
 
     /**
-     * Reconnect, closes the connection to the memcached server and initialize a new connection.
-     * 
-     * @return bool Returns true if the connection is successful, otherwise false.
+     * {@inheritdoc}
      */
-    public function reconnect(): bool 
+    public function disconnect(): bool
     {
-        if($this->disconnect()){
-            return $this->connect();
+        if ($this->isConn()) {
+            try {
+                $this->conn->quit();
+                $this->conn->resetServerList();
+            } catch (Throwable) {}
         }
 
-        return false;
-    }
+        unset(self::$instances[$this->persistentId]);
+        $this->conn = null;
+        $this->isConnected = false;
 
-    /**
-     * Closes the connection to the Memcached server.
-     * 
-     * Gracefully terminates the connection to the Memcached server. If no connection exists, the method will return `true` immediately.
-     * 
-     * @return bool Returns true if the disconnection is successful or if no connection was open.
-     */
-    public function disconnect(): bool 
-    {
-        if ($this->getConn() === null) {
-            return true;
-        }
-
-        if($this->getConn()->resetServerList() && $this->getConn()->quit()){
-            self::$instances[$this->persistentId] = null;
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Check if result code matches with a given code.
-     * 
-     * @param int $resultCode The memcached result code (default: Memcached::RES_SUCCESS).
-     * 
-     * @return bool Returns true if the result code matches, otherwise false.
-    */
-    public function is(int $resultCode = Memcached::RES_SUCCESS): bool
-    {
-        return ($this->getConn()?->getResultCode() === $resultCode);
+        return true;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function setStorage(string $storage): self
+    public function scan(string $pattern, callable $onEachKey): int 
     {
-        $this->storage = self::hashStorage($storage);
-        $this->storageName = $storage;
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function execute(
-        array $keys, 
-        bool $withCas = false, 
-        ?callable $callback = null
-    ): bool 
-    {
-        $this->assertStorageAndKey($keys);
-        $this->iterator = [];
-        $this->position = 0;
-        
-        if(!$this->getConn()){
-            return false;
-        }
-
-        return $this->getConn()->getDelayedByKey(
-            $this->storage, 
-            $keys, 
-            $withCas,
-            fn($cache, $result) => $this->parseItem($result, $callback)
+        return $this->forEach(
+            pattern: $pattern, 
+            onEachKey: $onEachKey, 
+            chunkSize: 100, 
+            delay: 1000
         );
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getItem(string $key, bool $onlyContent = true): mixed
+    public function getKeys(?string $pattern = null): array
+    {
+        $pattern ??= '*';
+        $pattern = trim($pattern);
+
+        if ($pattern === '' || !$this->isConn()) {
+            return [];
+        }
+
+        $keys = [];
+
+        $this->forEach(
+            $pattern,
+            static function (string $key) use (&$keys): void {
+                $keys[] = $key;
+            },
+            500
+        );
+
+        return $keys;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getDelayed(
+        array $keys, 
+        bool $withCas = false, 
+        ?callable $onItem = null
+    ): bool 
+    {
+        $this->isResult = false;
+
+        if($keys === [] || !$this->isConn()){
+            return false;
+        }
+
+        $this->assertStorageAndKey($keys);
+        
+        if(!$this->isConn()){
+            return false;
+        }
+
+        $callback = null;
+
+        if($onItem !== null){
+            $callback = fn($cache, $result) => $this->onItem($result, $onItem);
+        }
+
+        $result = $this->conn->getDelayed(
+            $this->toKeys($keys),
+            $withCas,
+            $callback
+        );
+
+        if($result === false){
+            return false;
+        }
+
+        $this->isResult = true;
+        return true;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function fetchNext(): ?array
+    {
+        if(!$this->isResult || !$this->isConn()){
+            $this->isResult = false;
+            return null;
+        }
+
+        $result = $this->conn->fetch();
+
+        if (
+            $result === false 
+            || $result === null
+            || $this->isResultCode(Memcached::RES_END)
+        ) {
+            $this->isResult = false;
+            return null;
+        }
+
+        return $this->onItem($result);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function fetchResult(): array
+    {
+        if(!$this->isResult || !$this->isConn()){
+            $this->isResult = false;
+            return [];
+        }
+
+        $items = $this->conn->fetchAll();
+
+        if (
+            $items === false 
+            || $items === null
+        ) {
+            $this->isResult = false;
+            return [];
+        }
+
+        $results = [];
+
+        foreach($items as $item){
+            $results[] = $this->onItem($item);
+        }
+
+        $this->isResult = false;
+        return $results;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getItem(string $key, bool $withMetadata = false): mixed
     {
         $this->assertStorageAndKey($key);
 
-        if (!$this->read($key)) {
-            return $this->respondWithEmpty($onlyContent);
+        $key = $this->toKey($key);
+        $this->load($key, false);
+
+        $item = $this->items[$key] ?? [];
+
+        if (!$item || $this->hasExpired($key)) {
+            return $withMetadata 
+                ? $this->createEmptyCacheItem($item)
+                : null;
         }
 
-        if ($this->hasExpired($key)) {
-            return $this->respondWithEmpty($onlyContent);
+        if(($item[self::DECODED] ?? false) === false){
+            try{
+                $this->items[$key][self::DATA] = $this->decode(
+                    $item[self::DATA],
+                    (int)  ($item[self::SERIALIZER] ?? self::SERIALIZER_NONE),
+                    (bool) ($item[self::IGBINARY] ?? false),
+                    (bool) ($item[self::BASE64] ?? false)
+                );
+
+                $this->items[$key][self::DECODED] = true;
+            } catch(Throwable $e){
+                $this->deleteItem($key, true);
+                $this->errorHandler($e, 'getItem');
+
+                return $withMetadata 
+                    ? $this->createEmptyCacheItem([]) 
+                    : null;
+            }
         }
 
-        // Decode the cache data if not already decoded.
-        if(!$this->items[$key]['decoded']){
-            $this->items[$key]['data'] = $this->deSerialize(
-                $this->items[$key]['data'],
-                $this->items[$key]['serialize']
-            );
-            $this->items[$key]['decoded'] = true;
+        return $withMetadata 
+            ? $this->toMetadata($this->items[$key] ?? [])
+            : ($this->items[$key][self::DATA] ?? null);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getItems(array $keys, bool $withMetadata = false): array 
+    {
+        if($keys === [] || !$this->isConn()){
+            return [];
         }
 
-        // Auto delete expired caches, so next time we get fresh one.
-        $this->deleteIfExpired();
+        $this->assertStorageAndKey($keys);
+        $keys = $this->toKeys($keys);
 
-        return $onlyContent 
-            ? ($this->items[$key]['data'] ?? null) 
-            : ($this->items[$key] ?? null);
+        // $decoded = $this->decodes(
+        //    $this->items,
+        //    fn(string $key) => $this->conn->delete($key),
+        //    $withMetadata
+        // );
+
+        $items = $this->conn->getMulti($keys);
+
+        if($items === false){
+            return [];
+        }
+
+        return $this->decodes(
+            $items,
+            function(string $key): void {
+                if($this->conn->delete($key)){
+                    unset($this->items[$key]);
+                }
+            },
+            $withMetadata
+        );
     }
 
     /**
@@ -362,32 +515,118 @@ final class MemoryCache extends Cache
         bool $lock = false
     ): bool 
     {
-        $this->assertStorageAndKey($key);
+        return $this->write(
+            $key,
+            $content,
+            $expiration,
+            $expireAfter,
+            $lock,
+            false
+        );
+    }
 
-        $content = $this->enSerialize($content);
-
-        if (!$content) {
-            CacheException::throwException('Failed to serialize cache data.');
-            return false;
+    /**
+     * {@inheritdoc}
+     */
+    public function setItems(
+        array $items,
+        DateTimeInterface|int|null $expiration = 0, 
+        DateInterval|int|null $expireAfter = null, 
+        bool $lock = false
+    ): int 
+    {
+        if($items === []){
+            return 0;
         }
 
-        if ($expiration !== null) {
-            $expireAfter = null;
+        if ($this->isConnectionError()) {
+            return 0;
         }
 
-        $this->items[$key] = [
-            "timestamp" => time(),
-            "expiration" => ($expiration instanceof DateTimeInterface) ? Timestamp::ttlToSeconds($expiration) : $expiration,
-            "expireAfter" => ($expireAfter instanceof DateInterval) ? Timestamp::ttlToSeconds($expireAfter) : $expireAfter,
-            "data" => $content,
-            "lock" => $lock,
-            "encoding" => 'raw',
-            'decoded' => false,
-            "serialize" => $this->serialize,
-            "hash-sum" => $this->storage
-        ];
+        $committed = 0;
+        $normalized = [];
+        $tmp = [];
+        $ttl = null;
 
-        return $this->commit();
+        foreach($items as $key => $item){
+
+            if(!$key || !$item){
+                continue;
+            }
+
+            try{
+                $this->assertStorageAndKey($key);
+
+                $payload = $this->onSetItem(
+                    $item,
+                    $expiration,
+                    $expireAfter,
+                    $lock,
+                    false
+                );
+
+                if ($payload === null) {
+                    continue;
+                }
+
+                $data = $this->toJsonString($payload);
+
+                if($data === null){
+                    continue;
+                }
+
+                $key = $this->toKey($key);
+                $normalized[$key] = $data;
+                $tmp[$key] = $payload;
+
+                $ttl = $payload[self::TTL] ?? null;
+                $committed++;
+            } catch(Throwable){
+                continue;
+            }
+        }
+
+        $ttl ??= $this->ttlToSeconds($expireAfter ?? $expiration);
+
+        if($committed > 0 && $this->conn->setMulti($normalized, (int) $ttl) !== false){
+            $this->items = array_merge(
+                $this->items, 
+                $tmp
+            );
+
+            return $committed;
+        }
+
+        return 0;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function exists(string|array $keys): int 
+    {
+        if ($keys === '' || $keys === [] || !$this->storage || !$this->isConn()) {
+            return 0;
+        }
+
+        if(is_string($keys)){
+            $keys = [trim($keys)];
+        }
+
+        $keys = array_flip(array_values($keys));
+        $count = 0;
+
+        $this->forEach(
+            '*',
+            static function (string $key) use (&$count, $keys): void {
+                if (isset($keys[$key])) {
+                    $count++;
+                }
+            },
+            500
+        );
+
+        return $count;
     }
 
     /**
@@ -395,11 +634,21 @@ final class MemoryCache extends Cache
      */
     public function hasItem(string $key): bool
     {
-        if (!$key || !$this->read($key)) {
+        if (!$key || !$this->isConn()) {
             return false;
         }
 
-        return isset($this->items[$key]);
+        $key = $this->toKey($key);
+
+        if (isset($this->items[$key])) {
+            return true;
+        }
+
+        try{
+            return $this->read($key);
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -407,11 +656,13 @@ final class MemoryCache extends Cache
      */
     public function isLocked(string $key): bool 
     {
+        $key = $this->toKey($key);
+
         if (!$this->hasItem($key)) {
             return true;
         }
 
-        return isset($this->items[$key]['lock']);
+        return (bool) ($this->items[$key][self::LOCK] ?? false);
     }
 
     /**
@@ -419,29 +670,37 @@ final class MemoryCache extends Cache
      */
     public function hasExpired(string $key): bool 
     {
+        $key = $this->toKey($key);
+
         if (!$this->hasItem($key)) {
             return true;
         }
 
-        return $this->isExpired($this->items[$key]);
+        return $this->isExpired($this->items[$key] ?? null);
     }
 
     /**
      * {@inheritdoc}
      */
-    public function deleteItem(string $key, bool $includeLocked = false): bool 
+    public function deleteItem(string $key, bool $gcExpiredLocks = false): bool 
     {
-        if(!$key || !$this->getConn()){
+        $key = $this->toKey($key);
+
+        if(!$this->hasItem($key)){
+            return true;
+        }
+
+        if (!$gcExpiredLocks && $this->isLocked($key)){
             return false;
         }
 
-        if (
-            $this->hasItem($key) &&
-            ($includeLocked || !$this->isLocked($key)) &&
-            $this->getConn()->deleteByKey($this->storage, $key)
-        ) {
-            unset($this->items[$key]);
-            return true;
+        try{
+            if ($this->conn->delete($this->toKey($key))) {
+                unset($this->items[$key]);
+                return true;
+            }
+        } catch (Throwable $e) {
+            $this->errorHandler($e, 'deleteItem');
         }
 
         return false;
@@ -450,11 +709,16 @@ final class MemoryCache extends Cache
     /**
      * {@inheritdoc}
      */
-    public function deleteItems(iterable $keys, bool $includeLocked = false): bool 
+    public function deleteItems(iterable $keys, bool $gcExpiredLocks = false): bool 
     {
         $deletedCount = 0;
+
         foreach ($keys as $key) {
-            if ($key !== '' && $this->deleteItem($key, $includeLocked)) {
+            if ($key === '') {
+                continue;
+            }
+
+            if ($this->deleteItem($key, $gcExpiredLocks)) {
                 $deletedCount++;
             }
         }
@@ -467,13 +731,17 @@ final class MemoryCache extends Cache
      */
     public function flush(): bool
     {
-        if (!$this->getConn()) {
+        if (!$this->isConn()) {
             return false;
         }
 
-        if ($this->getConn()->resetServerList() && $this->getConn()->flush()) {
-            $this->items = [];
-            return true;
+        try{
+            if ($this->conn->flush() && $this->conn->resetServerList()) {
+                $this->clearPreloadItems();
+                return true;
+            }
+        } catch (Throwable $e) {
+            $this->errorHandler($e, 'flush');
         }
 
         return false;
@@ -484,21 +752,14 @@ final class MemoryCache extends Cache
      */
     public function clear(): bool
     {
-        if (!$this->storage || !$this->getConn()) {
+        if (!$this->storage || !$this->isConn()) {
             return false;
         }
 
-        $keys = $this->getConn()->getAllKeys();
-
-        if($keys === false || $keys === []){
-            return false;
-        }
-
-        $this->getConn()->deleteMultiByKey($this->storage, $keys);
-
-        if($this->is(Memcached::RES_SUCCESS)){
-            $this->items = [];
-            return true;
+        try {
+            return $this->scanAndDelete($this->toKey('*')) > 0;
+        } catch (Throwable $e) {
+            $this->errorHandler($e, 'clear');
         }
 
         return false;
@@ -507,71 +768,110 @@ final class MemoryCache extends Cache
     /**
      * {@inheritdoc}
      */
-    public function delete(string $storage, array $keys): bool
+    public function delete(array $keys, ?string $storage = null): bool
     {
-        $storage = self::hashStorage($storage);
-        return $this->getConn()?->deleteMultiByKey($storage, $keys);
+        if($keys === [] || !$this->isConn()){
+            return false;
+        }
+
+        $isCurrentStorage = true;
+
+        if($storage === null){
+            $storage = $this->storage;
+        }else{
+            if(!$storage){
+                return false;
+            }
+
+            $isCurrentStorage = false;
+            $storage = self::hashStorage($storage);
+        }
+
+        try{
+            $statuses = $this->conn->deleteMulti($this->toKeys($keys, $storage));
+
+            if($statuses === []){
+                return false;
+            }
+
+            if($isCurrentStorage){
+                foreach($statuses as $key => $status){
+                    if($status === Memcached::RES_SUCCESS){
+                        unset($this->items[$key]);
+                    }
+                }
+            }
+
+            return true;
+        } catch (Throwable $e) {
+            $this->errorHandler($e, 'delete');
+        }
+
+        return false;
     }
 
     /**
      * {@inheritdoc}
      */
-    protected function deleteIfExpired(): void 
+    protected function deleteIfExpired(): int
     {
-        if(!$this->autoDeleteExpired || !$this->storage || !$this->getConn()){
-            return;
+        if (!$this->storage || !$this->isConn()) {
+            return 0;
         }
 
+        $counter = 0;
+
         foreach ($this->items as $key => $value) {
-            // Check if the cache item is loaded, expired, and either unlocked or
-            // deletion of locked items is allowed
-            if (
-                $this->hasItem($key) &&
-                $this->isExpired($value) &&
-                ($this->includeLocked || !$value['lock'])
-            ) {
-                if ($this->getConn()->deleteByKey($this->storage, $key)) {
-                    unset($this->items[$key]);
+            $key = $this->toKey($key);
+
+            try {
+                if(!$this->hasItem($key) || !$this->isExpired($value)){
+                    continue;
                 }
-            }
+
+                if (!$this->garbageCollectExpiredLocks && (bool) ($value[self::LOCK] ?? false) === true) {
+                    continue;
+                }
+
+                if ($this->conn->delete($key)) {
+                    unset($this->items[$key]);
+                    $counter++;
+                }
+            } catch (Throwable) {}
         }
+
+        return $counter;
     }
 
     /**
-     * Parse and process cache items.
-     * 
-     * This method processes cache items to handle serialization and encoding, then filters out 
-     * expired items and prepares them for further use.
-     * 
-     * @param array $result The cache items to parse, typically from a fetch operation.
-     * @param ?callable $callback The callback function (default: null).
-     * 
+     * Attache memcache servers
+     *
      * @return void
      */
-    private function parseItem(array $result, ?callable $callback = null): void 
+    private function attachServers(): void 
     {
-        if (!$this->isExpired($result['value'])) {
-            $cas = $result['cas'] ?? false;
-            $flags = $result['flags'] ?? false;
-            $item = [
-                'key' => $result['key'],
-                'value' => $this->deSerialize($result['value']['data'], $result['value']['serialize']),
-            ];
+        $result = ($this->servers === [])
+            ? $this->conn->addServer(...self::$default)
+            : $this->conn->addServers($this->servers);
 
-            if($cas !== false){
-                $item['cas'] = $cas;
-            }
-
-            if($flags !== false){
-                $item['flags'] = $flags;
-            }
-
-            if ($callback !== null) {
-                $callback($this, $item);
-            }
-
-            $this->iterator[] = $item;
+        if ($result) {
+            return;
         }
+
+        $server = ($this->servers === [])
+            ? sprintf(
+                '%s:%d',
+                self::$default[0],
+                self::$default[1]
+            )
+            : 'configured Memcached server pool';
+
+        throw new CacheException(sprintf(
+            'Failed to register %s%s. %s',
+            $this->persistentId ? " [{$this->persistentId}]" : '',
+            $server,
+            $this->conn->getResultMessage()
+        ));
     }
 
     /**
@@ -579,68 +879,294 @@ final class MemoryCache extends Cache
      */
     protected function read(?string $key = null): bool
     {
-        if(!$this->storage || !$this->getConn()){
+        if(!$this->storage){
             return false;
         }
-        
+
+        $key = $this->toKey($key);
+
         if (isset($this->items[$key])) {
             return true;
         }
 
-        try {
-            $content = $this->getConn()->getByKey($this->storage, $key);
-        } catch (Exception) {
+        $this->assertConnection();
+        $raw = $this->conn->get($key);
+
+        if ($this->isResultCode(Memcached::RES_NOTFOUND)) {
             return false;
         }
 
-        if ($content === false) {
+        if ($raw === false || $raw === null) {
             return false;
         }
 
-        if ($content === []) {
-            $this->getConn()->deleteByKey($this->storage, $key);
+        $payload = json_decode($raw, true);
+        $hash = ($payload && is_array($payload)) ? ($payload[self::HASH] ?? null) : null;
+
+        if($hash !== $this->storage){
+            $this->conn->delete($key);
             return false;
         }
 
-        // If the stored hash is not same as the current storage hash,
-        // Then don't load because not in same storage context.
-        if($content['hash-sum'] !== $this->storage){
-            return false;
-        }
+        $payload[self::DECODED] = false;
+        $this->items[$key]  = $payload;
 
-        $content['data'] = $this->deSerialize($content['data'], $content['serialize']);
-        $content['decoded'] = true;
-
-        $this->items[$key] = $content;
         return true;
     }
-
+    
     /**
      * {@inheritdoc}
      */
-    protected function commit(): bool
+    protected function commit(int &$commits = 0): bool
     {
-        if(!$this->storage || !$this->items || !$this->getConn()){
+        $commits = 0;
+
+        if (!$this->storage || $this->items === []) {
             return false;
         }
 
-        try {
-            // TTL (Time-To-Live) for cache storage (default: 0 never expire).
-            // Item expiration is set withing the payload.
-            return $this->getConn()->setMultiByKey($this->storage, $this->items, 0);
-        } catch (Throwable $e) {
-            if (PRODUCTION) {
-                Logger::dispatch('error', sprintf('Unable to commit cache: %s', $e->getMessage()), [
-                    'class' => self::class
-                ]);
-                return false;
-            }
-
-            if($e instanceof AppException){
-                throw $e;
-            }
-
-            throw new CacheException(sprintf('Unable to commit cache: %s', $e->getMessage()));
+        if (!$this->isConn()) {
+            return false;
         }
+
+        $this->assertConnection();
+
+        try {
+            foreach ($this->items as $key => $payload) {
+
+                $hash = $payload[self::HASH] ?? null;
+
+                if($hash !== $this->storage){
+                    continue;
+                }
+
+                if(($payload[self::DECODED] ?? false) === true){
+                    $payload[self::DECODED] = false;
+
+                    $raw =  $this->encode($payload[self::DATA]);
+                    
+                    if($raw === false){
+                        continue;
+                    }
+
+                    $payload[self::DATA] = $raw;
+                }
+
+                $raw = $this->toJsonString($payload);
+
+                if($raw === null){
+                    continue;
+                }
+
+                $ttl = (int) ($payload[self::TTL] ?? 0);
+
+                if($this->conn->set($this->toKey($key), $raw, $ttl)){
+                    $commits++;
+                }
+            }
+
+            return $commits > 0;
+        } catch (Throwable $e) {
+            $this->errorHandler(
+                new CacheException(sprintf('Unable to commit item: %s', $e->getMessage()), $e->getCode(), $e), 
+                'commit'
+            );
+        }
+
+        return false;
+    }
+
+    /**
+     * Use SCAN to iterate all keys matching $pattern and delete them in batches.
+     *
+     * @param string $pattern Glob-style key pattern.
+     *
+     * @return int Total number of keys deleted, or -1 on error.
+     */
+    private function scanAndDelete(string $pattern): int
+    {
+        $keys = [];
+        $this->forEach(
+            $pattern,
+            function (string $key) use (&$keys): void {
+                $keys[] = $key;
+            },
+            forUserKey: false
+        );
+
+        if($keys === []){
+            return 0;
+        }
+
+        try {
+            $statuses =  $this->conn->deleteMulti($keys);
+
+            if($statuses === []){
+                return 0;
+            }
+
+            $count  = 0;
+            foreach($statuses as $key => $status){
+                if($status === Memcached::RES_SUCCESS){
+                    unset($this->items[$key]);
+                    $count++;
+                }
+            }
+
+            return $count;
+        } catch (Throwable) {
+            return -1;
+        }
+    }
+
+    /**
+     * Iterate items in chunk.
+     *
+     * @param string $pattern
+     * @param callable $onEachKey
+     * @param int $chunkSize
+     * @param float|int $delay
+     * @param bool $forUserKey
+     * 
+     * @return int
+     */
+    private function forEach(
+        string $pattern, 
+        callable $onEachKey, 
+        int $chunkSize = 100,
+        float|int $delay = 0,
+        bool $forUserKey = true
+    ): int 
+    {
+        $pattern = trim($pattern);
+
+        if ($pattern === '' || !$this->isConn()) {
+            return 0;
+        }
+
+        $this->assertStorageAndKey($pattern);
+
+        $found = 0;
+        $binaryProtocol = $this->toggleBinaryProtocol();
+
+        try{
+            $keys = $this->conn->getAllKeys();
+
+            if (!$keys) {
+                return 0;
+            }
+
+            $pattern = $this->toKeyPattern($this->toKey($pattern));
+            $chunks = array_chunk($keys, $chunkSize);
+
+            foreach ($chunks as $chunk) {
+                foreach ($chunk as $key) {
+                    if ($key === '' || !$this->isKeyMatch($key, $pattern)) {
+                        continue;
+                    }
+
+                    $onEachKey($forUserKey ? $this->toUserKey($key) : $key);
+                    $found++;
+                }
+                
+                uwait($delay);
+            }
+        } finally {
+            if($binaryProtocol){
+                $this->toggleBinaryProtocol(true);
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * Toggle binary protocol option.
+     * 
+     * @param bool $enable
+     *
+     * @return bool
+     * @throws CacheException
+     */
+    private function toggleBinaryProtocol(bool $enable = false): bool 
+    {
+        if((bool) $this->conn->getOption(Memcached::OPT_BINARY_PROTOCOL) === $enable){
+            return false;
+        }
+
+        if((bool) $this->conn->setOption(Memcached::OPT_BINARY_PROTOCOL, $enable) === true){
+            return true;
+        }
+
+        if(!$enable){
+            $this->errorHandler(new CacheException(
+                    'Key scan failed, binary protocol option is enabled on your Memcached instance.'
+                ), 
+                'scan'
+            );
+        }
+
+        return false;
+    }
+    
+    /**
+     * Normalize pattern key.
+     *
+     * @param string $key
+     * 
+     * @return string
+     */
+    private function toKeyPattern(string $key): string
+    {
+        return str_replace(
+            ['\*', '\?'],
+            ['.*', '.'],
+            preg_quote($key, '/')
+        );
+    }
+
+    /**
+     * Check if key match pattern.
+     *
+     * @param string $key
+     * @param string $pattern
+     * @return bool
+     */
+    private function isKeyMatch(string $key, string $pattern): bool
+    {
+        return (bool) preg_match('/^' . $pattern . '$/i', $key);
+    }
+
+    /**
+     * Assert connection.
+     *
+     * @return void
+     */
+    private function assertConnection(): void 
+    {
+        if (!$this->isResultCode([Memcached::RES_SUCCESS, Memcached::RES_NOTFOUND])) {
+            $code = $this->conn->getResultCode();
+
+            throw new CacheException(sprintf(
+                'Memcached connection error%s: %s (%d)',
+                $this->persistentId ? " [{$this->persistentId}]" : '',
+                $this->conn->getResultMessage(),
+                $code
+            ), $code);
+        }
+    }
+
+    /**
+     * Check if result code matches with a given code.
+     * 
+     * @param int $resultCode The memcached result code (default: Memcached::RES_SUCCESS).
+     * 
+     * @return bool Returns true if the result code matches, otherwise false.
+     * @deprecated Use isResultCode()
+     */
+    public function is(int $resultCode = Memcached::RES_SUCCESS): bool
+    {
+        return $this->isConn() 
+            && $this->conn->getResultCode() === $resultCode;
     }
 }

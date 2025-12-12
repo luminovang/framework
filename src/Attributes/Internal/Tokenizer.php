@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Routes Attributes Tokenization
  *
@@ -14,20 +15,19 @@ use \PhpToken;
 use \Throwable;
 use \SplFileInfo;
 use \FilesystemIterator;
+use \RecursiveArrayIterator;
+use Luminova\Logger\Logger;
+use Luminova\Routing\Router;
 use \RecursiveIteratorIterator;
 use \RecursiveDirectoryIterator;
 use \RecursiveCallbackFilterIterator;
-use \Luminova\Logger\Logger;
-use \Luminova\Routing\Router;
-use \Luminova\Utility\Collections\Arr;
-use \Luminova\Exceptions\RouterException;
-use \Luminova\Interface\RoutableInterface;
-use \Luminova\Base\{Command, Controller};
-use \Luminova\Attributes\{Group, Prefix};
-use function \Luminova\Funcs\{
+use Luminova\Base\{Command, Controller};
+use Luminova\Attributes\{Group, Prefix};
+use Luminova\Exceptions\RouterException;
+use Luminova\Interface\RoutableInterface;
+use function Luminova\Funcs\{
     root,
     pascal_case,
-    write_content,
     make_dir
 };
 
@@ -59,10 +59,41 @@ final class Tokenizer
      * 
      * @var array $routable
      */
-    private array  $routable = [
-        'T_EXTENDS' => [],
-        'T_IMPLEMENTS' => ['RoutableInterface', '\Luminova\Interface\RoutableInterface', RoutableInterface::class]
+    private array $routable = [
+        'T_EXTENDS'     => [],
+        'T_IMPLEMENTS'  => [
+            'RoutableInterface', 
+            '\Luminova\Interface\RoutableInterface', 
+            RoutableInterface::class
+        ]
     ];
+
+    /**
+     * Routes home patterns.
+     *
+     * @var array $homePatterns
+     */
+    private static array $homePatterns = [
+        '/' => true,
+        '/*' => true,
+        '/?' => true,
+        '/.*' => true,
+        '/?.*' => true,
+        '/?.*?' => true,
+        '/?(?:/.*)?' => true,
+        '/?(.*)' => true,
+        '/?(.*)?' => true,
+        '/(?:/.*)?' => true,
+        '/.' => true,
+        '.' => true,
+    ];
+
+    /**
+     * HMVC ignore pathname.
+     *
+     * @var array $filters
+     */
+    private static array $filters = [];
 
     /**
      * Constructor to initialize the compiler.
@@ -74,15 +105,32 @@ final class Tokenizer
     {
         $this->isCacheable = (bool) env('feature.route.cache.attributes', false);
      
+        if($this->hmvc){
+            self::$filters = [
+                'Views'  => true, 
+                'Models' => true
+            ];
+            
+            self::$filters[$this->cli ? 'Http' : 'Cli'] = true;
+        }
+
         // Throw exceptions on cli mode
         if($this->cli){
-            $this->routable['T_EXTENDS'] = ['Command', '\Luminova\Base\Command', Command::class];
+            $this->routable['T_EXTENDS'] = [
+                'Command', 
+                '\Luminova\Base\Command', 
+                Command::class
+            ];
 
             setenv('throw.cli.exceptions', 'true');
             return;
         }
 
-        $this->routable['T_EXTENDS'] = ['Controller', '\Luminova\Base\Controller', Controller::class];
+        $this->routable['T_EXTENDS'] = [
+            'Controller', 
+            '\Luminova\Base\Controller', 
+            Controller::class
+        ];
     }
 
     /**
@@ -128,20 +176,37 @@ final class Tokenizer
     ): array
     {
         $this->searches = 0;
-
-        if ($this->isCacheable && $this->hasCache($name, $prefix, $uri)) {
-            return [null, null];
-        }
+        $isExcluded = false;
+        $subPrefix = null;
 
         // HMVC module name must follow strict naming pattern
-        if(!$this->cli && $this->hmvc && $prefix && $prefix !== '' && $prefix !== Router::CLI_URI){
+        if(
+            !$this->cli 
+            && $this->hmvc 
+            && $prefix !== '' 
+            && $prefix !== Router::CLI_URI
+        ){
             $path .= pascal_case($prefix);
+        }
+
+        if (
+            $this->isCacheable 
+            && $this->hasCache(
+                $name, 
+                $prefix, 
+                $uri, 
+                $path,
+                $isExcluded, 
+                $subPrefix
+            )
+        ) {
+            return [null, null, false, null];
         }
 
         $attrClass = $this->cli ? 'Group' : 'Prefix';
 
         foreach ($this->iterator($path, $name) as $file) {
-            $fileName = pathinfo($file->getBasename(), PATHINFO_FILENAME);
+            $fileName = $file->getBasename('.php');
 
             $classNamespace = $this->scanFileForMatchingClass(
                 $file->getPathname(), 
@@ -150,101 +215,217 @@ final class Tokenizer
                 $attrClass
             );
 
-            if ($classNamespace !== null) {
-                return [$classNamespace, $fileName];
+            if ($classNamespace === null) {
+                $this->searches++;
+                continue;
             }
 
-            $this->searches++;
+            return [$classNamespace, $fileName, $isExcluded, $subPrefix];
         }
 
-        return [null, null];
+        return [null, null, false, null];
     }
 
     /**
-     * Creates a recursive iterator for routable controller directory path.
+     * Creates a recursive iterator for routable controller files.
      *
-     * @param string $path The root path to scan.
-     * @param string $name The class name used for entry validation.
-     * 
-     * @return RecursiveIteratorIterator The iterator over valid entries.
-     * @throws RouterException If an error occurs during directory iteration.
+     * @param string $path Root directory path to scan.
+     * @param string $name Controller namespace context.
+     *
+     * @return RecursiveIteratorIterator Valid controller file iterator.
+     * @throws RouterException When directory iteration fails.
      */
     public function iterator(string $path, string $name): RecursiveIteratorIterator
     {
+        $filepath = $path = root($path);
+        $isDir = is_dir($path);
+
+        // Resolve to root on HMVC app
+        if(!$isDir && $this->hmvc){
+            $path = dirname(rtrim($path, '/')) . '/';
+            $isDir = is_dir($path);
+        }
+
+        if(!$isDir){
+            $error = sprintf(
+                'Could not resolve controller from path: %s%s',
+                $filepath
+            );
+
+            self::e(new RouterException($error), ['path' => $path]);
+            return new RecursiveIteratorIterator(
+                new RecursiveArrayIterator()
+            );
+        }
+
+        $isHmvc = $this->hmvc;
+
         try{
             return new RecursiveIteratorIterator(
                 new RecursiveCallbackFilterIterator(
                     new RecursiveDirectoryIterator(
-                        root($path), 
-                        FilesystemIterator::SKIP_DOTS | FilesystemIterator::FOLLOW_SYMLINKS
+                        $path, 
+                        FilesystemIterator::SKIP_DOTS
                     ),
-                    fn(SplFileInfo $entry) => $this->isValidEntry($entry, $name)
-                )
+                    static fn(SplFileInfo $entry) => self::isValidEntry($entry, $name, $isHmvc)
+                ),
+                RecursiveIteratorIterator::LEAVES_ONLY
             );
         }catch(Throwable $e){
-            throw new RouterException($e->getMessage(), $e->getCode(), $e);
+            self::e($e, ['path' => $path]);
+            return new RecursiveIteratorIterator(
+                new RecursiveArrayIterator()
+            );
         }
     }
 
     /**
-     * Stores the current routes to a cache file.
+     * Check if module URI prefix namespace exists.
+     *
+     * @param string $path The module prefix path.
      * 
-     * @param string $context The cache context name (e.g, `cli` or `http`).
-     * @param string $prefix The URI prefix or context-prefix.
-     * 
-     * @return bool Return true on success, false on failure.
+     * @return bool
      */
-    public function cache(string $context, string $prefix = 'cli'): bool
+    private function hasModule(string $path): bool 
     {
-        if(!$this->isCacheable || $this->routes === []){
+        if(!$this->hmvc){
             return false;
         }
 
-        $lock = root("/writeable/caches/routes/{$context}/");
-        $prefix = ($prefix === 'cli' || $this->cli) 
-            ? ($prefix ?: 'cli')
-            : ($this->getPrefix() ?? ($prefix ?: 'web'));
+        return is_dir(root($path));
+    }
 
-        try{
-            if (make_dir($lock)) {
-                $routes = PRODUCTION
-                    ? Arr::of($this->routes)->minify() 
-                    : var_export($this->routes, true);
+    /**
+     * Get cache path.
+     *
+     * @param string $suffix
+     * @return string
+     */
+    private static function getCachePath(string $suffix = ''): string 
+    {
+        return root("/writeable/caches/routes/{$suffix}");
+    }
 
-                if($routes === null){
-                    return false;
-                }
+    /**
+     * Handle error.
+     *
+     * @param Throwable $e
+     * @param array $context
+     * 
+     * @return void
+     */
+    private static function e(Throwable $e, array $context = []): void 
+    {
+        if(PRODUCTION){
+            Logger::tryDispatch('critical', $e->getMessage(), $context);
+            return;
+        }
 
-                $now = date('F j, Y • g:i A');
-                $contents = <<<PHP
-                <?php
-                /**
-                 * Auto-generated Luminova Route Attributes.
-                 * Context: {$context}
-                 * Prefix: {$prefix}
-                 * Generated at: {$now}
-                 *
-                 * @package Luminova
-                 * @author Ujah Chigozie Peter
-                 * @copyright (c) Nanoblock Technology Ltd
-                 * @license See LICENSE file
-                 * @link https://luminova.ng
-                 *
-                 * > **Note:** 
-                 * > This file is automatically generated.
-                 * > You can delete it if necessary to refresh cached routes.
-                 * > Frequent deletion may impact performance.
-                 */
-                return {$routes};
-                PHP;
-                
-                return write_content($lock . $prefix . '.php', $contents);
-            }            
-        }catch(Throwable $e){
-            Logger::dispatch('error', 'Failed to cache controllers attributes. ' . $e->getMessage());
+        if(!$e instanceof RouterException){
+            $e = new RouterException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
+        }
+
+        throw $e;
+    }
+
+    /**
+     * Cache compiled routes to disk for faster bootstrapping.
+     *
+     * This method serializes the already-built route table and stores it
+     * under a context-specific cache file. If HTTP context is used and
+     * sorting is enabled, routes are sorted by priority before caching.
+     *
+     * Sorting is applied ONLY during cache generation and does not affect
+     * runtime route registration state.
+     *
+     * @param string $context Cache context (e.g. "http", "cli").
+     * @param string $prefix Cache file prefix or base name.
+     * @param bool $isExcluded Whether to override prefix using subPrefix.
+     * @param string|null $subPrefix Optional override prefix.
+     *
+     * @return bool True on successful cache write, false otherwise.
+     */
+    public function cache(
+        string $context,
+        string $prefix = 'cli',
+        bool $isExcluded = false,
+        ?string $subPrefix = null
+    ): bool 
+    {
+        if (!$this->isCacheable || $this->routes === []) {
+            return false;
+        }
+
+        try {
+            $path = self::getCachePath($context);
+
+            if (!make_dir($path)) {
+                return false;
+            }
+
+            $prefix = $this->resolveCachePrefix(
+                $prefix, 
+                $isExcluded, 
+                $subPrefix
+            );
+
+            if(PRODUCTION){
+                $ext = '.php';
+                $routes = "<?php\n";
+                $routes .= "return ";
+                $routes .=  var_export($this->routes, true);
+                $routes .= ";";
+            } else{
+                $ext = '.json';
+                $routes = json_encode(
+                    $this->routes, 
+                    JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT
+                );
+            }
+
+            if (empty($routes)) {
+                return false;
+            }
+
+            $filename = $path.$prefix.$ext;
+
+            return file_put_contents(
+                $filename, 
+                $routes
+            ) !== false;
+        } catch (Throwable $e) {
+            self::e($e, [
+                'info' => 'Route cache failed'
+            ]);
         }
 
         return false;
+    }
+
+    /**
+     * Resolve cache prefix for route.
+     *
+     * @param string $prefix
+     * @param bool $isExcluded
+     * @param string|null $subPrefix
+     * 
+     * @return string
+     */
+    private function resolveCachePrefix(
+        string $prefix,
+        bool $isExcluded,
+        ?string $subPrefix
+    ): string 
+    {
+        return match (true) {
+            $isExcluded && $subPrefix => $subPrefix,
+            $prefix === 'cli' || $this->cli => $prefix ?: 'cli',
+            default => $this->getPrefix() ?? ($prefix ?: 'web'),
+        };
     }
 
     /**
@@ -264,7 +445,7 @@ final class Tokenizer
         string $attrClass
     ): ?string
     {
-        $tokens = PhpToken::tokenize(file_get_contents($filePath) ?: '');
+        $tokens = PhpToken::tokenize((string) file_get_contents($filePath));
 
         if ($tokens === []) {
             return null;
@@ -273,12 +454,23 @@ final class Tokenizer
         $namespace = '';
         $attributes = [];
         $mode = null;
+        $count = count($tokens);
 
-        for ($i = 0, $c = count($tokens); $i < $c; $i++) {
+        for ($i = 0; $i < $count; $i++) {
             $token = $tokens[$i];
 
-            if (!$token instanceof PhpToken || $token->isIgnorable()) {
+            if ($token->isIgnorable()) {
                 continue;
+            }
+
+            if ($token->is([T_CLASS])) {
+                $next = $tokens[$i + 2] ?? null;
+
+                if ($next instanceof PhpToken && $next->is(T_STRING) && $next->text === $className) {
+                    continue;
+                }
+
+                return null;
             }
 
             if ($token->is([T_EXTENDS, T_IMPLEMENTS])) {
@@ -287,10 +479,16 @@ final class Tokenizer
             }
 
             if ($token->is(T_NAMESPACE)) {
-                [$namespace, $i] = $this->parseNamespace($tokens, $i);
+                [$namespace, $i] = $this->parseNamespace($tokens, $i, $count);
             }
 
             if ($token->is(T_ATTRIBUTE)) {
+                $thisAttr = (string) ($tokens[$i + 1] ?? '');
+       
+                if(!str_contains($thisAttr, $attrClass)){
+                    continue;
+                }
+
                 [$attribute, $class, $i, $exclude] = $this->parseAttribute($tokens, $attrClass, $i);
 
                 if($attribute && $this->equals($attrClass, $class)){
@@ -305,7 +503,7 @@ final class Tokenizer
                 continue;
             }
             
-            if(in_array((string) $token, $this->routable[$mode], true)){
+            if(in_array($token->text, $this->routable[$mode], true)){
                 // Already end of class metadata search.
                 // Only match classes with 'Prefix' attribute
                 if($attributes === [] || !$namespace || !$this->equals($attrClass, $class)){
@@ -320,7 +518,7 @@ final class Tokenizer
                     }
 
                     if ($this->isMatch($attr, $url, $options['exclude'])) {
-                        return "$namespace\\$className";
+                        return "{$namespace}\\{$className}";
                     }
                 }
 
@@ -337,64 +535,110 @@ final class Tokenizer
         return $mode = null;
     }
 
-     /**
-     * Build a regex pattern for a prefix while excluding specific paths.
+    /**
+     * Build a regex that matches a path under a given prefix,
+     * while preventing specific FIRST path segments after that prefix.
      *
-     * The negative lookahead ensures that the excluded paths (from root)
-     * are not matched. The prefix can be root `/` or a sub-path.
+     * Behavior rules:
      *
-     * @param string $prefix The allowed base path prefix, e.g., '/', '/blog', '/api'.
-     * @param array<int,string> $excludes List of prefixes to exclude from matching.
+     * 1) The pattern always matches the prefix itself.
+     *    Example: '/blog' matches even if exclusions exist.
+     *
+     * 2) If the path continues after the prefix, the first segment
+     *    immediately following the prefix must NOT match any value
+     *    in $excludes.
+     *
+     * 3) Exclusions are checked only at the first segment boundary
+     *    after the prefix — not anywhere else in the path.
+     *
+     * 4) When prefix is '/', exclusions apply to top-level paths.
+     *
+     * 5) Known router placeholders and
+     *    trailing optional segment patterns are removed from the prefix
+     *    before building the regex.
+     *
+     * 6) Returned pattern is NOT delimited or anchored. Anchoring is
+     *    the caller’s responsibility if full-string matching is required.
+     *
+     * @param string $prefix Base path to allow (root or sub-path) (e.g, '/', '/blog', '/api').
+     * @param array<int,string> $excludes Path segment names to block immediately after the prefix.
+     *                                    Leading/trailing slashes are ignored.
      *
      * @return string Regex pattern to use for route matching.
      *
-     * @example - Examples:
+     * @example - Root prefix blocks top-level segments
      * ```
-     * Tokenizer::excluder('/', ['api', 'docs', 'forum']);
-     * // '/(?!api(?:/|$)|docs(?:/|$)|forum(?:/|$)).*'
+     * Tokenizer::excluder('/', ['api', 'docs', 'forum'])
+     * 
+     * → '/(?!api(?:/|$)|docs(?:/|$)|forum(?:/|$)).*'
+     * ```
      *
-     * Tokenizer::excluder('/api', ['/api/admin', 'docs']);
-     * // '/api(?:/.*)?(?!api/admin(?:/|$)|docs(?:/|$)).*'
+     * @example - Sub-prefix blocks only the first segment after it
+     * ```
+     * Tokenizer::excluder('/blog', ['api', 'docs'])
+     * 
+     * → '/blog(?:/(?!api(?:/|$)|docs(?:/|$)).*)?'
      *
-     * Tokenizer::excluder('/blog', ['api', 'docs', 'forum']);
-     * // '/blog(?:/.*)?(?!api(?:/|$)|docs(?:/|$)|forum(?:/|$)).*'
+     * Matches:
+     *   /blog
+     *   /blog/post
+     *
+     * Does NOT match:
+     *   /blog/api
+     *   /blog/docs/v1
+     * ```
+     *
+     * @example - Exclusions are normalized to segment names
+     * ```
+     * Tokenizer::excluder('/', ['/api/', 'docs/', '/forum'])
      * 
-     * Tokenizer::excluder('/', ['/api', '/docs', '/forum']);
-     * // '/(?!/api(?:/|$)|/docs(?:/|$)|/forum(?:/|$)).*'
+     * → '/(?!api(?:/|$)|docs(?:/|$)|forum(?:/|$)).*'
+     * ```
+     *
+     * @example - No exclusions → simple prefix match
+     * ```
+     * Tokenizer::excluder('/api', [])
      * 
-     * Tokenizer::excluder('/', ['/api/', '/docs/', '/forum/']);
-     * // '/(?!/api/(?:/|$)|/docs/(?:/|$)|/forum/(?:/|$)).*'
-     * 
-     * Tokenizer::excluder('/', ['api/', 'docs/', 'forum/']);
-     * // '/(?!api/(?:/|$)|docs/(?:/|$)|forum/(?:/|$)).*'
+     * → '/api(?:/.*)?'
      * ```
      */
     public static function excluder(string $prefix, array $excludes): string
     {
         $prefix = '/' . trim($prefix, '/');
 
-        // Remove known placeholders or trailing optional patterns
-        if ($prefix !== '/' && preg_match('#(?:\(:root\)|\(:base\)|\?\(\?:/(?:\[\^/\]\.)?\.\*\)\?)$#', $prefix)) {
-            $prefix = preg_replace('#(?:\(:root\)|\(:base\)|\?\(\?:/(?:\[\^/\]\.)?\.\*\)\?)$#', '', $prefix);
-        }
-
         if ($prefix !== '/') {
-            $prefix = preg_replace('#(\.\*)+$#', '', $prefix);
+            // Remove known root and base placeholders
+            $pattern = '\(:root\)|\(:base\)|';
+
+            // Always remove trailing optional segment pattern
+            $pattern .= '\?\(\?:/(?:\[\^/\]\.)?\.\*\)\?';
+
+            // Also remove any trailing wildcard patterns 
+            // to prevent interference with exclusion logic
+            $pattern .= '|(?:\.\*)+';
+            $prefix = preg_replace("#(?:{$pattern})$#", '', $prefix);
+
             $prefix = '/' . trim($prefix, '/');
         }
 
         if ($excludes === []) {
-            return ($prefix === '/') ? '/(?:/.*)?' : "{$prefix}?(?:/.*)?";
+            return ($prefix === '/')
+                ? '/(?:.*)?'
+                : $prefix . '(?:/.*)?';
         }
 
-        $excludes = array_map(static fn($path) => preg_quote($path, '/'), $excludes);
+        $excludes = array_map(
+            static fn ($path) => preg_quote(trim($path, '/'), '/'),
+            $excludes
+        );
+
         $ignores = '(?!' . implode('(?:/|$)|', $excludes) . '(?:/|$))';
 
         if ($prefix === '/') {
-            return "/{$ignores}.*";
+            return '/' . $ignores . '.*';
         }
 
-        return "{$prefix}(?:/.*)?{$ignores}.*";
+        return $prefix . '(?:/' . $ignores . '.*)?';
     }
 
     /**
@@ -423,7 +667,10 @@ final class Tokenizer
             return $pattern && $url === $pattern;
         }
 
-        return self::isControllerPrefix(self::excluder($pattern, $excluders), $url);
+        return self::isControllerPrefix(
+            self::excluder($pattern, $excluders), 
+            $url
+        );
     }
 
     /**
@@ -464,13 +711,17 @@ final class Tokenizer
         bool $isRoot = false
     ): bool
     {
-        $normalize = ($normalize === false) ? $pattern : Router::toPatterns($pattern);
+        $normalize = ($normalize === false) 
+            ? $pattern 
+            : Router::toPatterns($pattern);
 
         if('/' === $uri && self::isHome($normalize)){
             return true;
         }
 
-       $pattern = $isRoot ? "{$normalize}(\/.*)?" : $normalize;
+        $pattern = $isRoot 
+            ? "{$normalize}(\/.*)?" 
+            : $normalize;
 
         return preg_match("#^{$pattern}$#x", $uri) === 1;
     }
@@ -483,19 +734,19 @@ final class Tokenizer
      * 
      * @return array Return an array of [string $namespace, int $newIndex].
      */
-    private function parseNamespace(array $tokens, int $index): array
+    private function parseNamespace(array $tokens, int $index, int $count): array
     {
         $namespace = '';
 
-        for ($i = $index + 1, $c = count($tokens); $i < $c; $i++) {
+        for ($i = $index + 1; $i < $count; $i++) {
             $token = $tokens[$i];
 
-            if (!($token instanceof PhpToken) || $token->isIgnorable()) {
+            if ($token->isIgnorable()) {
                 continue;
             }
 
             if ($token->is([T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED])) {
-                $tokenString = (string) $token;
+                $tokenString = $token->text;
 
                 // Class can only contain one namespace.
                 // So return as this is not a controller class
@@ -515,7 +766,7 @@ final class Tokenizer
 
             // Probably chunk namespace, build it
             if ($token->is([T_STRING, T_NS_SEPARATOR])) {
-                $namespace .= (string) $token;
+                $namespace .= $token->text;
             }
 
             if ($token->is(';')) {
@@ -554,11 +805,11 @@ final class Tokenizer
             $token = $tokens[$i];
             $last = $tokens[$i - 1] ?? null;
 
-            if (!($token instanceof PhpToken) || $token->isIgnorable()) {
+            if ($token->isIgnorable()) {
                 continue;
             }
 
-            $tokenString = (string) $token;
+            $tokenString = $token->text;
 
             if(!$isAllowed && $token->is($attrClass)){
                 $isAllowed = true;
@@ -639,42 +890,140 @@ final class Tokenizer
      * @param string $name The name of the routing file or group to check for caching.
      * @param string $prefix The route group prefix (e.g., 'api', 'web').
      * @param string $uri The request URI to match against cached routes.
+     * @param bool &$isExcluded 
+     * @param string|null $subPrefix 
      * 
      * @return bool Returns true if a valid cache is found, otherwise false.
      */
     private function hasCache(
         string $name, 
         string $prefix, 
-        string $uri
+        string $uri,
+        string $path,
+        bool &$isExcluded = false,
+        ?string &$subPrefix = null,
     ): bool 
     {
-        $lock = root("/writeable/caches/routes/{$name}");
-        $file = ($prefix ?: 'web') . '.php';
+        $lock = self::getCachePath($name);
+        $filename = $prefix ?: 'web';
+        $isSub = false;
+        $excluded = false;
 
-        $this->routes = is_file($lock . $file) ? include_once $lock . $file : [];
+        $this->read($lock . $filename);
         
-        if($this->findCache($uri)){
+        if($this->findCache($uri, $excluded, $subPrefix, $isSub)){
             return true;
         }
 
-        // If the search is already for root context, return false.
-        if($file === 'web.php'){
+        if($prefix !== '' && $excluded){
+            $isExcluded = true;
+
+            if($isSub){
+                return $this->read($lock . $subPrefix)
+                    ->findCache($uri);
+            }
+
+            $subPrefix = $prefix 
+                ? "{$prefix}.{$subPrefix}" 
+                : $subPrefix;
+
+            return $this->hasCache(
+                $name,
+                $subPrefix,
+                $uri,
+                $path,
+                $isExcluded,
+                $subPrefix
+            );
+        }
+
+        if($filename === 'web' || $this->hasModule($path)){
             return false;
         }
 
-        $this->routes = is_file($lock . 'web.php') ? include_once $lock . 'web.php' : [];
+        return $this->read($lock . 'web')
+            ->findCache($uri);
+    }
 
-        return $this->findCache($uri);
+    /**
+     * Read cached routes.
+     *
+     * @param string $file The file name.
+     * 
+     * @return self Return instance of class.
+     */
+    private function read(string $file): self 
+    {
+        $this->routes = [];
+
+        $this->routes = PRODUCTION 
+            ? self::readPhp($file)
+            : self::readJson($file);
+
+        return $this;
+    }
+
+    /**
+     * Read from PHP array file.
+     *
+     * @param string $file
+     * @return array
+     */
+    private static function readPhp(string $file): array 
+    {
+        $filename = $file . '.php';
+
+        if(!is_file($filename)){
+            return [];
+        }
+
+        $routes = include $filename;
+
+        return (empty($routes) || !is_array($routes)) 
+            ? [] 
+            : $routes;
+    }
+
+    /**
+     * Read from JSON file.
+     *
+     * @param string $file
+     * @return array
+     */
+    private static function readJson(string $file): array
+    {
+        $filename = $file . '.json';
+
+        if(!is_file($filename)){
+            return [];
+        }
+
+        $routes = file_get_contents($filename);
+
+        if($routes === false){
+            return [];
+        }
+
+        return json_decode($routes, true) ?: [];
     }
 
     /**
      * Check if the loaded routes match the given URI or Command.
      *
      * @param string $uri The request URI or command group name to match.
+     * @param bool &$isExcluded A reference variable that will be set to true 
+     *      if the URI is excluded by the route pattern, false otherwise.
+     * @param string|null &$subPrefix A reference variable that will be set to the sub prefix 
+     *      if the URI is excluded, or null if not excluded.
      * 
      * @return bool Returns true if the URI match, otherwise false.
      */
-    private function findCache(string $uri): bool
+    private function findCache(
+        string $uri, 
+        bool &$isExcluded = false, 
+        ?string &$subPrefix = null,
+        bool &$isSub = false
+    ): bool
     {
         if($this->routes === []){
             return false;
@@ -690,15 +1039,89 @@ final class Tokenizer
 
         if($excluders !== []){
             $isRoot = false;
-            $pattern = self::excluder($pattern, $excluders);
+            $pattern = self::excluder(
+                $this->routes['rawBasePattern'] ?? $pattern, 
+                $excluders
+            );
         }
 
-        if($uri === $pattern || self::isControllerPrefix($pattern, $uri, isRoot: $isRoot)){
+        if(
+            $uri === $pattern 
+            || self::isControllerPrefix($pattern, $uri, isRoot: $isRoot)
+        ){
             return true;
         }
 
         $this->routes = [];
+
+        if($excluders !== []){
+            [$next, $isSub] = self::getSubExcluder(
+                $uri, 
+                $pattern, 
+                $excluders, 
+                $subPrefix
+            );
+
+            if ($next !== null) {
+                $isExcluded = true;
+                $subPrefix = $next;
+            }
+        }
+
         return false;
+    }
+
+    /**
+     * Check if the URI is excluded by the pattern and return the sub-prefix if it is.
+     *
+     * @param string $uri The URI to check against the pattern.
+     * @param string $pattern The route pattern to compare against the URI.
+     * @param array<int,string> $excluders List of prefixes or command group to exclude.
+     * @param string|null $current 
+     * 
+     * @return array The sub-prefix if the URI is excluded, or null if not excluded.
+     */
+    private static function getSubExcluder(
+        string $uri, 
+        string $pattern, 
+        array $excluders, 
+        ?string $current = null
+    ): array
+    {
+        $path = trim($uri, '/');
+
+        if (
+            $path === '' 
+            || !str_contains($path, '/') 
+            || preg_match("#^{$pattern}$#", $uri)
+        ) 
+        {
+            return [null, false];
+        }
+
+        // Always skip base prefix
+        $index = 1;
+        $current ??= '';
+        $parts = explode('/', $path);
+
+        if($parts === []){
+            return [null, false];
+        }
+
+        if($current){
+            $index += substr_count($current, '.');
+        }
+
+        $segment = $parts[$index] ?? null;
+
+        if (!in_array($segment, $excluders, true)) {
+            return [null, false];
+        }
+
+        return [
+            $current ? "{$current}.{$segment}" : $segment,
+            !empty($current)
+        ];
     }
 
     /**
@@ -753,52 +1176,57 @@ final class Tokenizer
      */
     public static function isHome(string $pattern): bool
     {
-        return in_array($pattern, [
-            '/', '/*', '/?', 
-            '/.*', '/?.*', '/?.*?', '/?(?:/.*)?',
-            '/?(.*)', '/?(.*)?', '/(?:/.*)?',
-            '/.', '/-', '/_', '.', '-', '_'
-        ], true);
+        return isset(self::$homePatterns[$pattern]);
     }
 
     /**
-     * Check if the entry is a valid file based on the current context (HMVC or MVC).
+     * Check if a directory entry is a valid routable controller file.
      *
-     * @param SplFileInfo $entry The file entry to validate.
-     * @param string $name The namespace suffix name (e.g., `App\Controller\Http` as `Http`).
-     * 
-     * @return bool Return true if valid, false otherwise.
+     * Valid entries must:
+     * - Be a PHP file.
+     * - Not be hidden or contain spaces.
+     * - Exist directly inside the requested Controllers context.
+     * - Match the current MVC/HMVC structure.
+     *
+     * @param SplFileInfo $entry File system entry.
+     * @param string $name Controller context name (e.g. Http, Cli).
+     * @param bool $isHmvc Wether is HMVC application.
+     *
+     * @return bool True when the entry can be scanned as a controller.
      */
-    private function isValidEntry(SplFileInfo $entry, string $name): bool
+    private static function isValidEntry(SplFileInfo $entry, string $name, bool $isHmvc): bool
     {
-        $filename = $entry->getBasename();
-
-        if(str_starts_with($filename, '.')){
-            return false;
-        }
-
         if (!$entry->isFile()) {
-            $filters = ['Views', 'Models'];
-
-            if($this->hmvc){
-                $filters[] = $this->cli ? 'Http' : 'Cli';
-            }
-
-            return !in_array($filename, $filters, true); 
+            return !isset(self::$filters[$entry->getBasename()]); 
         }
 
-        if($entry->getExtension() !== 'php'){
-            return false;
-        }
-
-        $pathname = $entry->getPathname();
         $name = ucfirst($name);
 
-        if($name === 'Export' || ($this->hmvc && !str_contains($pathname, '/Controllers/'))){
+        if($name === 'Export'){
             return false;
         }
 
-        return basename(dirname($pathname)) === $name;
+        $filename = $entry->getFilename();
+
+        if(
+            $entry->getExtension() !== 'php'
+            || str_starts_with($filename, '.')
+            || str_contains($filename, ' ')
+        ){
+            return false;
+        }
+
+        $path = str_replace('\\', '/', $entry->getPath());
+
+        if (!str_ends_with($path, "/Controllers/{$name}")) {
+            return false;
+        }
+
+        if($isHmvc && !str_contains($path, '/app/Modules/')){
+            return false;
+        }
+
+        return true;
     }
 
     /**

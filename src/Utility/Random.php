@@ -1,0 +1,620 @@
+<?php 
+/**
+ * Luminova Framework
+ *
+ * @package Luminova
+ * @author Ujah Chigozie Peter
+ * @copyright (c) Nanoblock Technology Ltd
+ * @license See LICENSE file
+ * @link https://luminova.ng
+ */
+namespace Luminova\Utility;
+
+use Luminova\Exceptions\InvalidArgumentException;
+
+final Class Random
+{
+    /**
+     * Generate random characters from alphabet letters only.
+     */
+    public const TYPE_ALPHABET = 'alphabet';
+
+    /**
+     * Generate random characters from numeric digits only.
+     */
+    public const TYPE_INTEGER = 'integer';
+
+    /**
+     * Generate random characters from special characters only.
+     */
+    public const TYPE_CHARACTER = 'character';
+
+    /**
+     * Generate random characters using letters and numbers.
+     */
+    public const TYPE_ALPHANUMERIC = 'alphanumeric';
+
+    /**
+     * Generate random characters suitable for passwords.
+     *
+     * Includes letters, numbers, and password-safe special characters.
+     */
+    public const TYPE_PASSWORD = 'password';
+
+    /**
+     * Generate cryptographically secure random bytes.
+     */
+    public const TYPE_BYTES = 'bytes';
+
+    /**
+     * Generate random hexadecimal characters.
+     *
+     * Each byte is represented as two hexadecimal characters.
+     */
+    public const TYPE_HEX = 'hex';
+
+    /**
+     * Generate random characters using all available characters.
+     *
+     * Includes letters, numbers, and all special characters.
+     */
+    public const TYPE_DEFAULT = 'default';
+
+	/**
+	 * Uppercase alphabet format (A-Z).
+	 * 
+	 * @var string RAND_UPPER_ALPHABET
+	 */
+	private const RAND_UPPER_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+	/**
+	 * Mixed alphabet format (a-zA-Z).
+	 * 
+	 * @var string RAND_MIXED_ALPHABET
+	 */
+	private const RAND_MIXED_ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+	/**
+	 * Special characters format.
+	 * 
+	 * @var string RAND_SPECIAL_CHARS
+	 */
+	private const RAND_SPECIAL_CHARS = '%#*^,?+$`;"{}][|\/:=)(@!.-';
+
+	/**
+	 * Password supported special characters format.
+	 * 
+	 * @var string RAND_PASSWORD_CHARS
+	 */
+	private const RAND_PASSWORD_CHARS = '%#^_-@!$&*+=|~?<>[]{}()';
+
+	/**
+	 * Integer characters values (0-9).
+	 * 
+	 * @var string RAND_INTEGERS
+	 */
+	private const RAND_INTEGERS = '0123456789';
+
+     /**
+     * Signed big int min value.
+     * 
+     * @var string BIGINT_SIGNED_MIN
+     */
+    public const BIGINT_SIGNED_MIN   = '-9223372036854775808';
+
+    /**
+     * Signed big int max value.
+     * 
+     * @var string BIGINT_SIGNED_MAX
+     */
+    public const BIGINT_SIGNED_MAX   = '9223372036854775807';
+
+    /**
+     * Unsigned big int min value.
+     * 
+     * @var string BIGINT_UNSIGNED_MIN
+     */
+    public const BIGINT_UNSIGNED_MIN = '0';
+
+    /**
+     * Unsigned big int max value.
+     * 
+     * @var string BIGINT_UNSIGNED_MAX
+     */
+    public const BIGINT_UNSIGNED_MAX = '18446744073709551615';
+
+    /**
+     * @var string MAX_UNSIGNED_INT_64BIT
+     */
+    private const MAX_UNSIGNED_INT_64BIT = '18446744073709551616';
+
+    /**
+     * @var string MAX_UNSIGNED_INT_32BIT
+     */
+    private const MAX_UNSIGNED_INT_32BIT = '4294967296';
+
+	/**
+	 * Last generated random bytes timestamp.
+	 * 
+	 * @var int $lastRandomTimestamp 
+	 */
+	private static int $lastRandomTimestamp = 0;
+
+    /**
+     * Last random integer
+     *
+     * @var int $lastRandomInteger
+     */
+    private static int $lastRandomInteger = 0;
+
+	/**
+	 * Last generated random bytes value.
+	 * 
+	 * @var string $lastRandomBytes
+	 */
+	private static string $lastRandomBytes = '';
+
+    /**
+     * Generate cryptographically secure random bytes.
+     *
+     * When monotonic mode is enabled, bytes are generated with timestamp tracking
+     * and incremented within the same millisecond to reduce collision risk.
+     *
+     * @param int $length Number of bytes to generate.
+     * @param bool $monotonic Whether to enable monotonic byte generation (default: true).
+     *
+     * @return string|array{bytes:string,timestamp:int}
+     * Returns raw bytes when monotonic mode is disabled, otherwise returns bytes
+     * with the generation timestamp.
+     */
+    public static function bytes(
+        int $length = 10,
+        bool $monotonic = true
+    ): string|array 
+    {
+        if (!$monotonic) {
+            return random_bytes($length);
+        }
+
+        $timestamp = (int) floor(microtime(true) * 1000);
+        $bytes = random_bytes($length);
+
+        if ($timestamp === self::$lastRandomTimestamp) {
+            $bytes = self::incrementBytes(self::$lastRandomBytes);
+        }
+
+        self::$lastRandomTimestamp = $timestamp;
+        self::$lastRandomBytes = $bytes;
+
+        return [
+            'bytes' => $bytes,
+            'timestamp' => $timestamp,
+        ];
+    }
+
+    /**
+     * Generate cryptographically secure random hexadecimal characters.
+     *
+     * When monotonic mode is enabled, generated bytes are incremented within
+     * the same millisecond to reduce collision risk and includes the generation timestamp.
+     *
+     * @param int $length Number of random bytes to generate.
+     * @param bool $monotonic Whether to enable monotonic byte generation (default: true).
+     *
+     * @return string|array{hex:string,timestamp:int}
+     * Returns a hexadecimal string when monotonic mode is disabled, otherwise
+     * returns the hexadecimal value with its generation timestamp.
+     */
+    public static function hex(
+        int $length = 10,
+        bool $monotonic = true
+    ): string|array 
+    {
+        $bytes = self::bytes($length, $monotonic);
+
+        if (!$monotonic) {
+            return bin2hex($bytes);
+        }
+
+        return [
+            'hex' => bin2hex($bytes['bytes']),
+            'timestamp' => $bytes['timestamp'],
+        ];
+    }
+
+    /**
+     * Generate cryptographically secure random binary data.
+     *
+     * When monotonic mode is enabled, generated bytes are incremented within
+     * the same millisecond to reduce collision risk and includes the generation timestamp.
+     *
+     * @param int $length Number of random bytes to generate.
+     * @param bool $monotonic Whether to enable monotonic byte generation (default: true).
+     *
+     * @return string|array{binary:string,timestamp:int}
+     * Returns raw binary data when monotonic mode is disabled, otherwise returns
+     * the binary value with its generation timestamp.
+     */
+    public static function binary(
+        int $length = 10,
+        bool $monotonic = true
+    ): string|array 
+    {
+        $bytes = self::bytes($length, $monotonic);
+
+        if (!$monotonic) {
+            return $bytes;
+        }
+
+        return [
+            'binary' => $bytes['bytes'],
+            'timestamp' => $bytes['timestamp'],
+        ];
+    }
+
+    /**
+     * Generate a cryptographically secure random integer.
+     *
+     * When monotonic mode is enabled, generated values are guaranteed to increase
+     * within the same millisecond and include the generation timestamp.
+     *
+     * @param int $min Minimum possible value.
+     * @param int $max Maximum possible value.
+     * @param bool $monotonic Whether to enable monotonic generation (default: true).
+     *
+     * @return int|array{value:int,timestamp:int}
+     * Returns an integer when monotonic mode is disabled, otherwise returns
+     * the value with its generation timestamp.
+     */
+    public static function integer(
+        int $min = 0,
+        int $max = PHP_INT_MAX,
+        bool $monotonic = true
+    ): int|array 
+    {
+        $value = random_int($min, $max);
+
+        if (!$monotonic) {
+            return $value;
+        }
+
+        $timestamp = (int) floor(microtime(true) * 1000);
+
+        if ($timestamp === self::$lastRandomTimestamp) {
+            $value = min($max, self::$lastRandomInteger + 1);
+        }
+
+        self::$lastRandomTimestamp = $timestamp;
+        self::$lastRandomInteger = $value;
+
+        return [
+            'value' => $value,
+            'timestamp' => $timestamp,
+        ];
+    }
+
+    /** 
+	 * Generate a random BIGINT within a specified range.
+	 * 
+	 * UNSIGNED BIGINT: 0 to 18,446,744,073,709,551,615 (20 digits):
+	 * $min = 0
+	 * $max = 18446744073709551615
+	 * 
+	 * SIGNED BIGINT: -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807 (19 digits):
+	 * $min = -9223372036854775808
+	 * $max = 9223372036854775807
+	 *
+	 * @param int|null $min The minimum value (default: `self::BIGINT_UNSIGNED_MIN`).
+	 * @param int|null $max The maximum value (default: `self::BIGINT_UNSIGNED_MAX`).
+	 *
+	 * @return string Return a string representation of the generated BIGINT.
+	 */
+    public static function bigInteger(?string $min = null, ?string $max = null): string 
+    {
+        static $gmp = null;
+        $assert = ($max !== null || $max !== null);
+
+        $min ??= self::BIGINT_UNSIGNED_MIN;
+        $max ??= self::BIGINT_UNSIGNED_MAX;
+
+        if($assert){
+            self::assertBigint($min, $max);
+        }
+
+        $gmp ??= extension_loaded('gmp');
+
+        return $gmp 
+            ? self::bigIntegerGmp($min, $max) 
+            : self::bigIntegerBc($min, $max);
+    }
+
+	/**
+	 * Generate a random string using different character sets or raw entropy formats.
+	 *
+	 * Supports multiple output modes:
+	 * - Character-based generation using selectable pools (alphabet, integer, password, etc.)
+	 * - Cryptographic byte generation (raw binary output)
+	 * - Hex-encoded random output
+	 *
+	 * Notes:
+	 * - Character-based outputs use `random_int()` for cryptographic randomness.
+	 * - Byte and hex modes use `random_bytes()` as the entropy source.
+	 * - Output length refers to final string length (not byte length in hex mode).
+	 * 
+	 * **Supported Types:**
+	 * 
+	 *   - `character` - Includes special characters {@see self::RAND_SPECIAL_CHARS}.
+	 * 	 - `alphanumeric` - Contains only alphanumeric characters.
+ 	 *   - `alphabet` - Contains only alphabetical characters (both uppercase and lowercase).
+ 	 *   - `password` - Combines letters, numbers, and password special characters {@see self::RAND_PASSWORD_CHARS}
+ 	 *   - `bytes` - Returns a raw binary string of the specified length.
+ 	 *   - `hex` - Returns a hexadecimal representation of random bytes.
+ 	 *   - `int|integer` - Contains only numeric characters (0-9).
+	 *
+	 * @param int $length Length of the generated output string.
+	 * @param string $type Output type: character, alphabet, alphanumeric, integer, password, bytes, hex.
+	 * @param bool $uppercase Whether alphabet-based output should be uppercase (default: false).
+	 *
+	 * @return string Randomly generated string based on selected type.
+	 * 
+	 * @example - Examples:
+	 * ```php
+ 	 * Random::generate(16, 'password')  // Generates a secure password of 16 characters.
+ 	 * Random::generate(8, 'alphabet', true) // Generates an 8-character string in uppercase letters.
+ 	 * Random::generate(32, 'hex') // Generates a 32-character hexadecimal string.
+	 * ```
+	 */
+	public static function generate(
+		int $length = 10,
+		string $type = self::TYPE_INTEGER,
+		bool $uppercase = false
+	): string 
+	{
+		if ($length < 1) {
+			return '';
+		}
+
+		$type = strtolower($type);
+
+		if ($type === self::TYPE_BYTES || $type === self::TYPE_HEX) {
+			$bytes = self::bytes((int) ceil($length / 2))['bytes'];
+
+			return ($type === self::TYPE_HEX)
+				? substr(bin2hex($bytes), 0, $length)
+				: substr($bytes, 0, $length);
+		}
+
+		$alphabets = $uppercase 
+            ? self::RAND_UPPER_ALPHABET 
+            : self::RAND_MIXED_ALPHABET;
+
+		$pool = match ($type) {
+			self::TYPE_ALPHABET     => $alphabets,
+			self::TYPE_INTEGER      => self::RAND_INTEGERS,
+			self::TYPE_CHARACTER    => self::RAND_SPECIAL_CHARS,
+			self::TYPE_ALPHANUMERIC => $alphabets . self::RAND_INTEGERS,
+			self::TYPE_PASSWORD     => $alphabets . self::RAND_INTEGERS . self::RAND_PASSWORD_CHARS,
+			default                 => $alphabets . self::RAND_INTEGERS . self::RAND_SPECIAL_CHARS,
+		};
+
+		$len = strlen($pool);
+		$out = '';
+
+		for ($i = 0; $i < $length; $i++) {
+			$out .= $pool[random_int(0, $len - 1)];
+		}
+
+		return $out;
+	}
+
+    public static function password(int $length = 8): string 
+	{
+		return self::generate($length, self::TYPE_PASSWORD);
+	}
+	
+	/** 
+	 * Generate product EAN13 id.
+	 * 
+	 * @param int $country start prefix country code.
+	 * @param int $length maximum length.
+	 * 
+	 * @return string Return the generated product ean code.
+	 */
+	public static function ean(int $country = 615, int $length = 13): string 
+	{
+		return self::upc($country, $length);
+	}
+
+	/**
+	 * Generate a product UPC ID.
+	 *
+	 * @param int $prefix Start prefix number.
+	 * @param int $length Maximum length.
+	 * 
+	 * @return string Return the generated UPC ID.
+	 */
+	public static function upc(int $prefix = 0, int $length = 12): string 
+	{
+		$length -= strlen((string)$prefix) + 1;
+		$randomPart = self::generate($length);
+		
+		$code = $prefix . str_pad($randomPart, $length, '0', STR_PAD_LEFT);
+		
+		$sum = 0;
+		$weightFlag = true;
+		
+		for ($i = strlen($code) - 1; $i >= 0; $i--) {
+			$digit = (int)$code[$i];
+			$sum += $weightFlag ? $digit * 3 : $digit;
+			$weightFlag = !$weightFlag;
+		}
+		
+		$checksumDigit = (10 - ($sum % 10)) % 10;
+		
+		return $code . $checksumDigit;
+	}
+
+	/**
+	 * Increment 80-bit binary value.
+	 *
+	 * Treats binary string as big-endian counter.
+	 * Rolls over if maximum value is reached.
+	 *
+	 * @param string $bytes 10-byte binary string.
+	 *
+	 * @return string Incremented 10-byte binary string.
+	 */
+	private static function incrementBytes(string $bytes): string
+	{
+		$len = strlen($bytes);
+
+		for ($i = $len - 1; $i >= 0; $i--) {
+			$val = ord($bytes[$i]) + 1;
+
+			if ($val > 255) {
+				$bytes[$i] = chr(0);
+			} else {
+				$bytes[$i] = chr($val);
+				return $bytes;
+			}
+		}
+
+		return random_bytes(10);
+	}
+
+     /**
+     * Generate big in using BC math.
+     *
+     * @param string $min
+     * @param string $max
+     * 
+     * @return string
+     */
+    private static function bigIntegerBc(string $min, string $max): string
+    {
+        $range = bcadd(bcsub($max, $min), '1');
+        $maxUint64 = bcadd(self::BIGINT_UNSIGNED_MAX, '1');
+
+        if(bccomp($range, $maxUint64) === 0){
+            return bcadd(
+                self::bytesToDecimal(random_bytes(8)),
+                $min
+            );
+        }
+
+        $limit = bcmul(
+            bcdiv($maxUint64, $range, 0),
+            $range
+        );
+
+        do {
+            $random = self::bytesToDecimal(random_bytes(8));
+        } while (bccomp($random, $limit) >= 0);
+
+        return bcadd(bcmod($random, $range), $min);
+    }
+
+    /**
+     * Convert bytes to decimal.
+     *
+     * @param string $bytes
+     * @return string
+     */
+    private static function bytesToDecimal(string $bytes): string
+    {
+        $value = '0';
+
+        foreach (unpack('C*', $bytes) as $byte) {
+            $value = bcmul($value, '256');
+            $value = bcadd($value, (string) $byte);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Generate big in using GMP.
+     *
+     * @param string $min
+     * @param string $max
+     * 
+     * @return string
+     */
+    private static function bigIntegerGmp(string $min, string $max): string
+    {
+        $minG = gmp_init($min, 10);
+        $maxG = gmp_init($max, 10);
+        $range = gmp_add(gmp_sub($maxG, $minG), 1);
+        $maxUint64 = gmp_init(self::MAX_UNSIGNED_INT_64BIT, 10);
+
+        if (gmp_cmp($range, $maxUint64) === 0) {
+            return gmp_strval(
+                gmp_add(self::bytesToGmp64(), $minG),
+                10
+            );
+        }
+
+        $limit = gmp_mul(
+            gmp_div($maxUint64, $range),
+            $range
+        );
+
+        do {
+            $random = self::bytesToGmp64();
+        } while (gmp_cmp($random, $limit) >= 0);
+
+        return gmp_strval(
+            gmp_add(gmp_mod($random, $range), $minG),
+            10
+        );
+    }
+
+    /**
+     * Generate random GMP bytes.
+     *
+     * @return \GMP
+     */
+    private static function bytesToGmp64(): \GMP
+    {
+        $bytes = random_bytes(8);
+        $hi = unpack('N', substr($bytes, 0, 4))[1];
+        $lo = unpack('N', substr($bytes, 4, 4))[1];
+
+        return gmp_add(
+            gmp_mul($hi, self::MAX_UNSIGNED_INT_32BIT),
+            $lo
+        );
+    }
+
+    /**
+     * Assert big in values.
+     *
+     * @param string $min
+     * @param string $max
+     * 
+     * @return void
+     */
+    private static function assertBigint(
+        string $min,
+        string $max
+    ): void 
+    {
+        if (!ctype_digit(ltrim($min, '-'))) {
+            throw new InvalidArgumentException(
+                "Big integer min: {$min} bound must be valid integer strings."
+            );
+        }
+
+        if (!ctype_digit(ltrim($max, '-'))) {
+            throw new InvalidArgumentException(
+                "Big integer max: {$max} bound must be valid integer strings."
+            );
+        }
+
+        if (bccomp($min, $max) > 0) {
+            throw new InvalidArgumentException(
+                "Minimum value: {$min} cannot be greater than maximum value: {$max}."
+            );
+        }
+    }
+}

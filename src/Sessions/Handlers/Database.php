@@ -11,13 +11,15 @@
 namespace Luminova\Sessions\Handlers;
 
 use \Throwable;
-use \Luminova\Time\Time;
-use \Luminova\Utility\IP;
+use \RuntimeException;
+use Luminova\Luminova;
+use Luminova\Time\Time;
 use \ReturnTypeWillChange;
-use \Luminova\Logger\Logger;
-use \Luminova\Database\Builder;
-use \Luminova\Base\SessionHandler;
-use \Luminova\Security\Encryption\Crypter;
+use Luminova\Logger\Logger;
+use Luminova\Http\Network\IP;
+use Luminova\Database\Builder;
+use Luminova\Base\SessionHandler;
+use Luminova\Security\Encryption\Crypter;
 
 /**
  * Custom Database for session management with optional encryption support.
@@ -119,7 +121,7 @@ class Database extends SessionHandler
         if ($this->table && $exists) {
             $exists = $this->table("exists_{$id}")
                 ->where($this->prefixed('id'), '=', $id)
-                ->has();
+                ->exists();
         }
 
         return $this->options['onValidate'] 
@@ -192,7 +194,7 @@ class Database extends SessionHandler
     public function read(string $id): string
     {
         if ($this->lock($id) === false) {
-            $this->fileHash = md5('');
+            $this->fileHash = Luminova::hash('xxh3', '', fallbackAlgo: 'md5');
             return '';
         }
 
@@ -202,7 +204,7 @@ class Database extends SessionHandler
         ])->get();
 
         if (!$data) {
-            $this->fileHash = md5('');
+            $this->fileHash = Luminova::hash('xxh3', '', fallbackAlgo: 'md5');
             return '';
         }
  
@@ -212,7 +214,7 @@ class Database extends SessionHandler
             ? Crypter::decrypt($data) 
             : $data;
         
-        $this->fileHash = md5($data);
+        $this->fileHash = Luminova::hash('xxh3', $data, fallbackAlgo: 'md5');
 
         return $data;
     }
@@ -231,13 +233,15 @@ class Database extends SessionHandler
             return false;
         }
 
-        if ($this->fileHash === md5($data)) {
+        if ($this->fileHash === Luminova::hash('xxh3', $data, fallbackAlgo: 'md5')) {
             return $this->table()->where($this->prefixed('id'), '=', $id)->update([
                 $this->prefixed('timestamp') => Time::now()->getTimestamp()
             ]) > 0;
         }
 
-        $encrypted = ($data && $this->options['encryption']) ? Crypter::encrypt($data) : $data;
+        $encrypted = ($data && $this->options['encryption']) 
+            ? Crypter::encrypt($data) 
+            : $data;
 
         if ($encrypted === false) {
             return false;
@@ -253,13 +257,15 @@ class Database extends SessionHandler
             $body[$this->prefixed('ip')] = $this->getIp();
         }
 
-        $existing = $this->table("exists_{$id}")->where($this->prefixed('id'), '=', $id)->has();
+        $existing = $this->table("exists_{$id}")
+            ->where($this->prefixed('id'), '=', $id)
+            ->exists();
 
         if ($existing) {
             $updated = $this->table()->where($this->prefixed('id'), '=', $id)->update($body);
 
             if ($updated > 0) {
-                $this->fileHash = md5($data);
+                $this->fileHash = Luminova::hash('xxh3', $data, fallbackAlgo: 'md5');
                 $this->clearCache([$id]);
                 return true;
             }
@@ -269,7 +275,7 @@ class Database extends SessionHandler
 
         $body[$this->prefixed('id')] = $id;
         if($this->table()->insert($body) > 0){
-            $this->fileHash = md5($data);
+            $this->fileHash = Luminova::hash('xxh3', $data, fallbackAlgo: 'md5');
             return true;
         }
 
@@ -322,10 +328,10 @@ class Database extends SessionHandler
         $cache = Builder::table($this->table)->cache('none')->getCache();
 
         foreach ($keys as $key) {
-            $cacheKey = md5($key);
+            $key = Luminova::hash('xxh3', $key, fallbackAlgo: 'md5');
             try{
-                if ($cache->hasItem($cacheKey)) {
-                    $cache->deleteItem($cacheKey);
+                if ($cache->hasItem($key)) {
+                    $cache->deleteItem($key);
                 }
             }catch(Throwable){}
         }
@@ -356,9 +362,9 @@ class Database extends SessionHandler
             return true;
         }
 
-        $lockId = md5($id . $this->getIp());
+        $lockId =  Luminova::hash('xxh3', $id . $this->getIp(), fallbackAlgo: 'md5');
         try{
-            if(Builder::lock($lockId)){
+            if(Builder::database()->lock($lockId)){
                 $this->lockId = $lockId;
                 return true;
             }
@@ -388,7 +394,7 @@ class Database extends SessionHandler
         }
 
         try{
-            if (Builder::unlock($this->lockId)) {
+            if (Builder::database()->unlock($this->lockId)) {
                 $this->lockId = null;
                 return true;
             }

@@ -10,523 +10,361 @@
  */
 namespace Luminova\Http;
 
-use \App\Config\Apis;
-use \Luminova\Luminova;
-use \Luminova\Common\Helpers;
-use \Luminova\Interface\LazyObjectInterface;
 use \Countable;
+use Luminova\Luminova;
+use \App\Config\Security;
+use Luminova\Logger\Logger;
+use Luminova\Utility\Encoder;
+use Luminova\Interface\LazyObjectInterface;
+use function Luminova\Funcs\http_status_header;
+use Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
 
 class Header implements LazyObjectInterface, Countable
 {
     /**
-     * Content types for view rendering.
-     * 
-     * @var array VIEW_CONTENT_TYPES
+     * The header variables key-pair.
+     *
+     * @var array|null $variables
      */
-    private const VIEW_CONTENT_TYPES = [
-        'html'   => ['text/html', 'application/xhtml+xml'],
-        'text'   => ['text/plain'],
-        'js'     => ['application/javascript', 'application/x-javascript', 'text/javascript'],
-        'css'    => ['text/css'],
-        'json'   => ['application/json', 'application/x-json'],
-        'jsonld' => ['application/ld+json'],
-        'xml'    => ['application/xml', 'text/xml', 'application/x-xml'],
-        'rdf'    => ['application/rdf+xml'],
-        'atom'   => ['application/atom+xml'],
-        'rss'    => ['application/rss+xml'],
-        'form'   => ['application/x-www-form-urlencoded', 'multipart/form-data']
-    ];
+    protected ?array $variables = null;
 
     /**
-     * Proxy headers.
-     * 
-     * @var array $proxyHeaders
+     * Initialize a header collection.
+     *
+     * Uses the provided headers when available, otherwise extracts headers from
+     * the current request environment.
+     *
+     * @param array<string,mixed>|null $headers Optional header values to initialize with.
      */
-    private static array $proxyHeaders = [
-        'X-Forwarded-For'       => 'HTTP_X_FORWARDED_FOR',
-        'X-Forwarded-For-Ip'    => 'HTTP_FORWARDED_FOR_IP',
-        'X-Real-Ip'             => 'HTTP_X_REAL_IP',
-        'Via'                   => 'HTTP_VIA',
-        'Forwarded'             => 'HTTP_FORWARDED',
-        'Proxy-Connection'      => 'HTTP_PROXY_CONNECTION'
-    ];
-
-    /**
-     * Header variables.
-     * 
-     * @var array<string,mixed> $variables
-     */
-    protected static array $variables = [];
-
-    /**
-     * REST API configuration.
-     * 
-     * @var Apis $config
-     */
-    private static ?Apis $config = null;
-
-    /**
-     * Initializes the header constructor.
-     * 
-     * @param array<string,mixed>|null $variables The header variables key-pair.
-     */
-    public function __construct(?array $variables = null)
+    public function __construct(?array $headers = null)
     {
-        self::$variables = $variables 
-            ? array_replace(self::$variables, self::getFromGlobal($variables))
-            : self::getHeaders();
+        $this->variables = ($headers === null || $headers === [])
+            ? self::getHeaders()
+            : self::extractHeaders($headers);
     }
 
     /**
-     * Get header variables.
+     * Retrieve a header value or all headers.
      *
-     * @param string|null $name Optional name of the server variable.
-     * @param mixed $default Default value for the server key.
+     * @param string|null $name Optional header name to retrieve.
+     * @param mixed $default Default value returned when the header does not exist.
      *
-     * @return mixed|array|string|null The value of the specified server variable, or all server variables if $name is null.
+     * @return mixed Returns the header value, the default value when not found,
+     *               or all headers when `$name` is null.
      */
     public function get(?string $name = null, mixed $default = null): mixed
     {
-        return ($name === null || $name === '') 
-            ? self::$variables 
-            : ($this->has($name) ? self::$variables[$name] : $default);
+        if(!$name){
+            return $this->variables;
+        }
+
+        return $this->has($name) 
+            ? $this->variables[$name]
+            : $default;
     }
 
     /**
-     * Set server variable.
-     * 
-     * @param string $key The server variable key to set.
-     * @param mixed $value The server variable value.
-     * 
-     * @return void
+     * Set a header value.
+     *
+     * @param string $key Header name.
+     * @param mixed $value Header value.
+     *
+     * @return self Return instance of header class.
      */
-    public function set(string $key, mixed $value): void
+    public function set(string $key, mixed $value): self
     {
-        self::$variables[$key] = $value;
+        $this->variables[$key] = $value;
+        return $this;
     }
 
     /**
-     * Removes a server variable by key
-     * 
-     * @param string $key The key to remove.
-     * 
-     * @return void 
+     * Remove a header by name.
+     *
+     * @param string $key Header name to remove.
+     *
+     * @return void
      */
     public function remove(string $key): void
     {
-        unset(self::$variables[$key]);
+        unset($this->variables[$key]);
     }
 
     /**
-     * Check if request header key exist.
-     * 
-     * @param string $key Header key to check.
-     * 
-     * @return bool Return true if key exists, false otherwise.
+     * Determine whether a header exists.
+     *
+     * @param string $key Header name to check.
+     *
+     * @return bool Returns `true` if the header exists, otherwise `false`.
      */
     public function has(string $key): bool
     {
-        return array_key_exists($key, self::$variables);
+        return array_key_exists($key, $this->variables);
     }
 
     /**
-     * Check if request header key exist and has a valid value.
-     * 
-     * @param string $key Header key to check.
-     * @param string|null $server Optionally check the PHP global server variable.
-     * 
-     * @return bool Return true if key exists, false otherwise.
-     */
-    public function exist(string $key, ?string $server = null): bool
-    {
-        if(isset(self::$variables[$key])){
-            return true;
-        }
-
-        return $server && isset($_SERVER[$server]);
-    }
-
-    /**
-     * Get the total number of server variables.
-     * 
-     * @return int Return total number of server variables.
+     * Get the number of stored headers.
+     *
+     * @return int The total number of headers.
      */
     public function count(): int
     {
-        return count(self::$variables);
+        return count($this->variables);
     }
 
     /**
-     * Retrieve a server variable by key.
+     * Retrieve request headers from the server environment.
      *
-     * @param string $key The key to retrieve from internal variables or Apache request headers.
-     * @param string|null $server Optional alternative key to access the PHP server variable.
+     * Uses `apache_request_headers()` when available and falls back to parsing
+     * `$_SERVER` variables when it is unavailable or returns no headers.
      *
-     * @return mixed Return the server variable value, or null if not set.
-     * @internal
-     */
-    public static function server(string $key, ?string $server = null): mixed
-    {
-        return self::$variables[$key] 
-            ?? $_SERVER[$server ?? $key] 
-            ?? null;
-    }
-
-    /**
-     * Extract all request headers from apache_request_headers or _SERVER variables.
-     *
-     * @return array<string,string> Return the request headers.
+     * @return array<string,string> The extracted request headers.
      */
     public static function getHeaders(): array
     {
-        if (function_exists('apache_request_headers') && ($headers = apache_request_headers()) !== false) {
-            return array_replace(self::$variables, $headers);
+        static $apache = null;
+
+        $apache ??= function_exists('apache_request_headers');
+
+        if (!$apache) {
+            return self::extractHeaders($_SERVER);
         }
 
-        // If PHP function apache_request_headers() is not available or went wrong: manually extract headers
-        return array_replace(self::$variables, self::getFromGlobal());
+        return apache_request_headers() 
+            ?: self::extractHeaders($_SERVER);
     }
 
     /**
-     * Parse _SERVER variables and extract headers from it.
+     * Extract HTTP headers from server variables.
      *
-     * @param array<string,mixed> $server An optional custom server variable.
-     * 
-     * @return array<string,string> Return the request headers.
+     * Converts `$_SERVER` header entries (`HTTP_*`, `CONTENT_TYPE`, and
+     * `CONTENT_LENGTH`) into standard HTTP header names similar to
+     * `apache_request_headers()`.
+     *
+     * @param array<string,mixed>|null $variables Server variables to parse.
+     *        Defaults to `$_SERVER`.
+     *
+     * @return array<string,string> Parsed HTTP headers.
      */
-    public static function getFromGlobal(?array $server = null): array
+    public static function extractHeaders(array $variables): array
     {
         $headers = [];
-        foreach ($server ?? $_SERVER as $name => $value) {
-            if (str_starts_with($name, 'HTTP_') || $name == 'CONTENT_TYPE' || $name == 'CONTENT_LENGTH') {
-                $header = str_replace(
-                    [' ', 'Http'], 
-                    ['-', 'HTTP'], 
-                    ucwords(strtolower(str_replace('_', ' ', substr($name, 5))))
-                );
-                $headers[$header] = $value;
+
+        foreach ($variables as $name => $value) {
+            if (
+                !self::isHeaderName($name)
+                || !is_scalar($value)
+            ) {
+                continue;
             }
+
+            $headers[self::toHeaderName($name)] = (string) $value;
         }
 
         return $headers;
     }
 
     /**
-     * Retrieves specific HTTP `Content-Type`, `Content-Encoding` and `Content-Length` headers from sent headers.
-     * 
-     * @return array Return n associative array containing 'Content-Type', 
-     *              'Content-Length', and 'Content-Encoding' headers.
-     * @internal
+     * Convert a server header key into a standard HTTP header name.
+     *
+     * Example:
+     * `HTTP_X_REQUEST_ID` becomes `X-Request-Id`.
+     *
+     * @param string $name Server variable name.
+     *
+     * @return string HTTP header name.
      */
-    public static function getSentHeaders(): array
+    public static function toHeaderName(string $name): string
     {
-        $headers = headers_list();
-        $info = [];
-
-        foreach ($headers as $header) {
-            $header = trim($header);
-
-            if (!str_starts_with($header, 'Content-')) {
-                continue;
-            }
-            
-            [$name, $value] = explode(':', $header, 2);
-            $key = trim($name);
-
-            if ($key === 'Content-Type' || $key === 'Content-Encoding') {
-                $info[$key] = trim($value);
-            } elseif($key === 'Content-Length') {
-                $info[$key] = (int) trim($value);
-            }
+        if ($name === 'CONTENT_TYPE') {
+            return 'Content-Type';
         }
 
-        return $info;
+        if ($name === 'CONTENT_LENGTH') {
+            return 'Content-Length';
+        }
+
+        $name = substr($name, 5);
+
+        return str_replace(
+            '_',
+            '-',
+            ucwords(strtolower($name), '_')
+        );
     }
 
     /**
-     * Get default system headers.
+     * Determine whether a server variable represents an HTTP header.
      *
-     * @return array<string,string> The system headers.
-     * @ignore
+     * @param string $name Server variable name.
+     *
+     * @return bool Returns true for HTTP header variables.
+     */
+    public static function isHeaderName(string $name): bool
+    {
+        $name = strtoupper($name);
+
+        return str_starts_with($name, 'HTTP_')
+            || $name === 'CONTENT_TYPE'
+            || $name === 'CONTENT_LENGTH'
+            || $name === 'REDIRECT_HTTP_AUTHORIZATION';
+    }
+
+    /**
+     * Get default response headers.
+     *
+     * @return array<string,string> Return the defined default headers.
      */
     public static function getDefault(): array
     {
         return [
-            'Content-Type'  => 'text/html',
-            'Cache-Control' => env('default.cache.control', 'no-store, max-age=0, no-cache'),
-            'Content-Language' => env('app.locale', 'en'), 
+            'Vary'              => 'Accept-Encoding',
+            'Content-Type'      => 'text/html',
+            'Cache-Control'     => env('default.cache.control', 'no-store, max-age=0, no-cache'),
+            'Content-Language'  => env('app.locale', 'en'), 
+            'X-Frame-Options'   => 'SAMEORIGIN',
+            'Referrer-Policy'   => 'strict-origin-when-cross-origin',
+            'X-Powered-By'      => Luminova::copyright(),
             'X-Content-Type-Options' => 'nosniff',
-            'X-Frame-Options' => 'SAMEORIGIN',
-            'X-XSS-Protection' => '1; mode=block',
-            'X-Firefox-Spdy' => 'h2',
-            'Vary' => 'Accept-Encoding',
-            'Connection' => ((self::server('Connection', 'HTTP_CONNECTION') ?? 'keep-alive') === 'keep-alive' 
-                ? 'keep-alive' 
-                : 'close'
-            ),
-            'X-Powered-By' => Luminova::copyright()
         ];
     }
 
     /**
-     * Sends HTTP headers to disable caching and optionally set content type and retry behavior.
+     * Send HTTP headers that prevent client and proxy caching.
      *
-     * @param int $status HTTP status code to send (default: 200).
-     * @param string|bool|null $contentType Optional content type (default: 'text/html').
-     * @param string|int|null $retry Optional value for Retry-After header.
+     * Sets standard no-cache headers, an optional content type, and an optional
+     * `Retry-After` header before sending the response status.
+     *
+     * @param int $status HTTP response status code (default: 200).
+     * @param string|bool|null $contentType Response content type. Defaults to `text/html`.
+     *                                      Set to `false` to omit the `Content-Type` header.
+     * @param string|int|null $retry Optional `Retry-After` header value.
      *
      * @return void
-     * @internal Used by router and template rendering to prevent caching.
      */
-    public static function headerNoCache(
+    public static function sendNoCacheHeaders(
         int $status = 200, 
         string|bool|null $contentType = null, 
         string|int|null $retry = null
     ): void 
     {
-        $headers = [
-            'X-Powered-By' => Luminova::copyright(),
+        self::sendErrorHeaders($status, [
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
-            'Expires' => '0',
-            'Content-Type' => $contentType ?? 'text/html'
-        ];
-
-        if($retry !== null){
-            $headers['Retry-After'] = $retry;
-        }
-
-        self::validate($headers, $status);
+            'Expires'       => '0',
+            'Content-Type'  => $contentType ?? 'text/html'
+        ], $retry);
     }
 
     /**
-     * Validates and sends HTTP headers to the client.
+     * Send a 204 (No Content) response with standard no-cache headers.
      *
-     * - Replaces headers with defaults if `X-System-Default-Headers` key is present.
-     * - Sends status code if provided.
-     * - Ensures required RESTful headers are present before sending.
-     * - Always append charset if missing.
+     * Removes any buffered output and sends headers required for an empty response,
+     * optionally including a `Retry-After` header.
      *
-     * @param array<string,mixed> $headers Associative array of headers to send.
-     * @param int|null $status Optional HTTP response code to send.
-     * @param bool $ifNotSent Only send headers if no headers have been sent yet (default: true).
-     * 
+     * @param string|int|null $retry Optional `Retry-After` header value.
+     *
      * @return void
-     * @internal
      */
-    public static function validate(array $headers, ?int $status = null, bool $ifNotSent = true): void
+    public static function sendNoContentHeaders(string|int|null $retry = null): void 
     {
-        if ($ifNotSent && headers_sent()) {
-            return;
+        header_remove('Content-Type'); 
+        self::sendErrorHeaders(204, [
+            'Cache-Control'          => 'no-cache, no-store, must-revalidate',
+            'Content-Length'         => '0',
+            'X-Content-Type-Options' => 'nosniff',
+        ], $retry);
+    }
+
+    /**
+     * Normalize HTTP headers without sending them.
+     *
+     * Applies framework header normalization, optionally validates the configured
+     * CORS policy, and appends a charset to the `Content-Type` header when missing.
+     *
+     * If CORS validation fails, any CORS response headers are omitted while all
+     * other headers remain unchanged.
+     *
+     * @param array<string,mixed> $headers Headers to normalize.
+     * @param bool $applyCors Whether to validate the configured CORS policy and apply to headers.
+     *
+     * @return array<string,mixed> Returns the normalized headers.
+     */
+    public static function parse(array $headers, bool $applyCors = false): array
+    {
+        if ($applyCors) {
+            self::validateCorsPolicy(
+                $headers, 
+                terminateOnFailure: false
+            );
         }
 
-        if (!self::isValidRestFullHeaders($headers)) {
+        return self::normalizeHeaders($headers, true, false);
+    }
+
+    /**
+     * Send HTTP headers to the client.
+     *
+     * Safely dispatches HTTP headers, optionally validates the configured CORS
+     * policy, sends the HTTP status code, removes entity headers for no-content
+     * responses (204, 205, and 304), and appends a charset to `Content-Type`
+     * when enabled.
+     *
+     * If CORS validation fails, the request is terminated unless validation is
+     * explicitly disabled.
+     *
+     * @param array<string,string|int|float> $headers Headers to send.
+     * @param bool $ifNotSent Skip sending if headers have already been sent.
+     * @param bool $charset Append a charset to `Content-Type` when missing.
+     * @param int|null $status HTTP status code to send.
+     * @param bool|null $enforceCors Whether to enforce the configured CORS policy.
+     *
+     * @return void
+     *
+     * @throws RuntimeException If headers have already been sent and `$ifNotSent` is `false`.
+     * @see self::parse() Normalize headers without sending them.
+     */
+    public static function send(
+        array $headers,
+        bool $ifNotSent = true, 
+        bool $charset = false,
+        ?int $status = null,
+        ?bool $enforceCors = null
+    ): void 
+    {
+        $_SERVER['HTTP_LMV_SENT_CONTENT_TYPE'] = $headers['Content-Type'] 
+            ?? 'text/html';
+
+        if(self::ifHeadersSent($ifNotSent)){
+            return;
+        }
+        
+        $enforceCors ??= self::shouldEnforceCors();
+
+        if ($enforceCors && !self::validateCorsPolicy($headers)) {
             return;
         }
 
         if ($status !== null) {
-            if ($status === 204 || $status === 304) {
+            // NO_CONTENT, RESET_CONTENT, NOT_MODIFIED
+            // RFC-compliant: no entity headers for responses without body
+            if (HttpStatus::isNoContent($status)) {
                 unset($headers['Content-Type'], $headers['Content-Length']);
             }
 
-            self::sendStatus($status);
+            http_status_header($status);
         }
 
-        self::send($headers, false, true);
-    }
+        $xPowered = (bool) env('x.powered', true);
 
-    /**
-     * Processes response headers and returns them normalized (without sending).
-     *
-     * - Replaces headers with defaults if `X-System-Default-Headers` key is present.
-     * - Ensures required RESTful headers are present.
-     * - Returns an empty array if headers are already complete/valid.
-     * - Always append charset if missing.
-     *
-     * @param array<string,mixed> $headers Associative array of headers to process.
-     * 
-     * @return array<string,mixed>|null Normalized headers ready to send, or an empty array if no changes needed.
-     * @internal Response class
-     */
-    public static function response(array $headers): ?array
-    {
-        if (!self::isValidRestFullHeaders($headers)) {
-            return [];
+        self::normalizeHeaders(
+            $headers, 
+            $charset, 
+            isSend: true,
+            xPowered: $xPowered
+        );
+
+        if (!$xPowered) {
+            header_remove('X-Powered-By');
         }
-
-        return self::parse($headers, true, false);
-    }
-
-    /**
-     * Determine of a request if from proxy. 
-     * 
-     * This method check command headers if present then request is considered likely a proxy.
-     * 
-     * @return bool Return true if found matched header, false otherwise.
-     */
-    public function isProxy(): bool
-    {
-        foreach (self::$proxyHeaders as $head => $server) {
-            if ($this->exist($head, $server)){
-                return true;
-            }
-        }
-        
-        return false;
-    }
-
-    /**
-     * Parse and validate REST API headers.
-     * 
-     * @param array<string,mixed> &$headers Headers passed by reference.
-     * 
-     * @return bool Return true if request origin is valid, false otherwise.
-     */
-    public static function isValidRestFullHeaders(array &$headers): bool 
-    {
-        if (!Luminova::isApiPrefix()) {
-            return true;
-        }
-
-        self::$config ??= new Apis();
-        $origin = self::server('HTTP_ORIGIN');
-
-        if(!$origin && self::$config->forbidEmptyOrigin){
-            self::terminateRequest(400, 'Invalid request: missing origin.', 'forbidEmptyOrigin');
-            return false;
-        }
-
-        if ($origin && self::$config->allowOrigins) {
-            $allowed = self::isAllowedOrigin($origin);
-            
-            if (!$allowed) {
-                self::terminateRequest(403, 'Access denied: origin not allowed.', 'allowOrigins');
-                return false;
-            }
-    
-            $headers['Access-Control-Allow-Origin'] = $allowed;
-        }
-        
-        if (self::$config->allowHeaders !== []) {
-            $allowed = self::isAllowedHeaders();
-
-            if ($allowed !== true) {
-                self::terminateRequest(400, "Invalid header: {$allowed} found in the request.", 'allowHeaders');
-                return false;
-            }
-
-            $headers['Access-Control-Allow-Headers'] = implode(', ', self::$config->allowHeaders);
-        }
-
-        $headers['Access-Control-Allow-Credentials'] = (self::$config->allowCredentials ? 'true' : 'false');
-        return true;
-    }
-
-    /**
-     * Sends HTTP headers to the client.
-     *
-     * @param array<string,mixed> $headers Associative array of headers to send.
-     * @param bool $ifNotSent Only send headers if no headers have been sent yet (default: true).
-     * @param bool $charset Append the default charset from env to `Content-Type` 
-     *                      if missing (default: false).
-     * 
-     * @return void
-     */
-    public static function send(array $headers, bool $ifNotSent = true, bool $charset = false): void 
-    {
-        if ($ifNotSent && headers_sent()) {
-            return;
-        }
-
-        self::parse($headers, $charset);
-    }
-
-    /**
-     * Normalize and optionally send HTTP headers to the client.
-     *
-     * - Removes invalid or empty headers.
-     * - Conditionally appends charset to `Content-Type`.
-     * - Can either send headers immediately or return them as an array.
-     *
-     * @param array<string,mixed> $headers Associative array of headers to process.
-     * @param bool $withCharset Append the default charset from env to `Content-Type` if missing (default: false).
-     * @param bool $isSend If true, headers are sent using `header()`. 
-     *                     If false, an array of normalized headers is returned. (default: true)
-     * 
-     * @return array<string,mixed> Processed headers when `$isSend` is false, otherwise an empty array.
-     */
-    private static function parse(array $headers, bool $withCharset = false, bool $isSend = true): array 
-    {
-        $normalized = [];
-        $xPowered = env('x.powered', true);
-        $charset = env('app.charset', 'utf-8');
-
-        if (isset($headers['X-System-Default-Headers'])) {
-            $headers = array_replace(self::getDefault(), $headers);
-        }elseif($xPowered){
-            $headers['X-Powered-By'] = Luminova::copyright();
-        }
-
-        foreach ($headers as $header => $value) {
-            if (
-                !$header ||
-                $value === '' ||
-                ($header === 'X-Powered-By' && !$xPowered) ||
-                ($header === 'X-System-Default-Headers') ||
-                ($header === 'Content-Encoding' && $value === false)
-            ) {
-                continue;
-            }
-
-            $values = [];
-            foreach ((array) $value as $val) {
-                $finalVal = ($withCharset && $header === 'Content-Type' && !str_contains($val, 'charset'))
-                    ? "{$val}; charset={$charset}"
-                    : $val;
-
-                if ($isSend) {
-                    header("{$header}: {$finalVal}");
-                } else {
-                    $values[] = $finalVal;
-                }
-            }
-
-            if (!$isSend && $values !== []) {
-                $normalized[$header] = implode(', ', $values);
-            }
-        }
-
-        return $normalized;
-    }
-
-    /**
-     * Get the content type based on file extension and charset.
-     *
-     * @param string $extension The file extension.
-     * @param string $charset The character set.
-     *
-     * @return string Return the content type and optional charset.
-     */
-    public static function getContentType(string $extension = 'html', ?string $charset = null): string
-    {
-        $charset ??= env('app.charset', 'utf-8');
-
-        return self::getContentTypes($extension, 0) . (($charset === '') ? '' : '; charset=' . $charset);
-    }
-
-    /**
-     * Get content types by name 
-     * 
-     * @param string $type Type of content types to retrieve.
-     * @param int|null $index The index of content type to return.
-     * 
-     * @return array<int,array>|string|null Return array, string of content types or null if not found.
-     */
-    public static function getContentTypes(string $type, int|null $index = 0): array|string|null
-    {
-        $type = ($type === 'txt') ? 'text' : $type;
-        return ($index === null) 
-            ? (self::VIEW_CONTENT_TYPES[$type] ?? null)
-            : (self::VIEW_CONTENT_TYPES[$type][$index] ?? 'application/octet-stream');
     }
 
     /**
@@ -538,131 +376,237 @@ class Header implements LazyObjectInterface, Countable
      */
     public static function sendStatus(int $code): bool 
     {
-        if ($code >= 100 && $code < 600) {
-            http_response_code($code);
-            $_SERVER["REDIRECT_STATUS"] = $code;
-            self::$variables['Redirect-Status'] = $code;
-            return true;
-        }
-
-        return false;
+        return http_status_header($code);
     }
 
     /**
-     * Initializes the output buffer with the appropriate content-encoding handler.
+     * Starts an output buffer with an optional compression or encoding handler.
      *
-     * This method is a wrapper around `ob_start()`. It detects supported encodings
-     * (such as `gzip` or `deflate`) from the client’s request headers and applies
-     * the proper output handler when compression is enabled and supported. If no
-     * matching encoding is found, it falls back to a custom or default handler.
+     * This method starts a new output buffer using `ob_start()`. When compression
+     * is enabled, it selects the output handler based on configuration:
+     * - Uses a custom handler defined by `output.compression.handler` when available.
+     * - Falls back to `ob_gzhandler` for gzip compression when no custom handler is set.
+     * - Starts a normal output buffer when compression is disabled.
      *
-     * If output buffering is already active, it will not be restarted.
+     * Existing output buffers can optionally be cleared before creating a new one.
+     * A custom output handler must be callable.
      *
-     * @param bool $clearIfSet Whether to clear existing output buffers when one is already active (default: false).
-     * @param bool $withHandler Whether to apply an output handler (default: true).
+     * @param bool $clearIfSet Whether to clear existing output buffers before starting a new one (default: false).
+     * @param bool $useCompressionHandler Whether to apply the configured output handler (default: true).
      *
-     * @return bool Returns true if a new output buffer is started, false otherwise.
-     * @internal For internal framework use only.
+     * @return bool True if the output buffer was started successfully, false if
+     *              headers were already sent or an active buffer prevented creation.
+     *
+     * @throws InvalidArgumentException If the configured output handler is not callable.
      */
-    public static function setOutputHandler(bool $clearIfSet = false, bool $withHandler = true): bool
+    public static function setOutputHandler(
+        bool $clearIfSet = false, 
+        bool $useCompressionHandler = true
+    ): bool
     {
-        if(!$clearIfSet && ob_get_level() > 0){
+        if (headers_sent()) {
             return false;
         }
 
-        if($clearIfSet){
-            self::clearOutputBuffers();
+        if(ob_get_level() > 0){
+            if(!$clearIfSet){
+                return false;
+            }
+            //    if($clearIfSet){
+            //        return false;
+            //    }
+
+            self::clearOutputBuffers('all');
         }
 
-        if (!$withHandler || !env('enable.encoding', true)) {
+        if (!Encoder::isOutputCompressionEnabled()) {
             return ob_start();
         }
 
-        $handler = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? null;
-
-        if ($handler) {
-            if (str_contains($handler, 'gzip')) {
-                if (ini_get('zlib.output_compression') !== '1') {
-                    return ob_start('ob_gzhandler');
-                }
-
-                return ob_start();
-            }
-
-            if (str_contains($handler, 'deflate')) {
-                if (function_exists('ini_set')) {
-                    ini_set('zlib.output_compression', 'On');
-                    //ini_set('zlib.output_handler', 'deflate');
-                }
-
-                return ob_start();
-            }
+        if (!$useCompressionHandler && !env('output.compression.enable', false)) {
+            return ob_start();
         }
 
-        return ob_start(env('script.output.handler', null) ?: null);
+        $handler = env('output.compression.handler', null);
+
+        if(!$handler){
+            return ob_start('ob_gzhandler');
+        }
+
+        if (is_callable($handler)) {
+            return ob_start($handler);
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            'Invalid output handler "%s". Handler "%s" must be callable.',
+            $handler,
+            'output.compression.handler'
+        ));
     }
 
     /**
-     * Clear PHP output buffers using one of three modes.
+     * Clears or flushes PHP output buffers using the selected mode.
      *
-     * **Modes:**
-     * - auto (default): If multiple buffers exist, clear all except the base buffer.
-     *                   If only one exists, clear only the top buffer.
-     * - all:  Clear every active buffer down to level 0 or a specified limit.
-     * - top:  Clear only the top-most buffer.
+     * Supported modes:
+     * - `auto` (default): Clears active buffers while preserving the base buffer level.
+     * - `all`: Clears all active buffers until the specified minimum level is reached.
+     * - `top`: Clears only the current top-most output buffer.
+     * - `flush`: Flushes the current top-most buffer without ending it.
      *
-     * @param string $mode Determines how buffers are cleared, (e.g, `auto`, `all`, or `top`).
-     * @param int $limit Minimum buffer level to stop at (use 0 to clear everything).
+     * This method is ignored in CLI and PHPDBG environments where output buffering
+     * cleanup is not required.
      *
-     * @return bool Returns true if any buffer was cleared, otherwise false.
+     * @param string $mode Buffer handling mode: `auto`, `all`, `top`, or `flush`.
+     * @param int $limit Minimum output buffer level to preserve when using `all` mode.
+     *                    A value of 0 clears all active buffers.
+     *
+     * @return bool True if an output buffer was cleared or flushed successfully,
+     *              false if no active buffers exist or the operation was not performed.
      */
     public static function clearOutputBuffers(string $mode = 'auto', int $limit = 0): bool
     {
+        if (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg') {
+            return false;
+        }
+
         $level = ob_get_level();
 
         if ($level === 0) {
             return false;
         }
 
-        if ($mode === 'top') {
-            return ob_end_clean();
+        $cleared = false;
+
+        switch ($mode) {
+            case 'top':
+                return (bool) @ob_end_clean();
+
+            case 'flush':
+                $cleared = (bool) @ob_flush();
+                flush();
+                return $cleared;
+
+            case 'all':
+            case 'auto':
+                $stopAt = ($mode === 'all') ? $limit : max($limit, 1);
+
+                while (ob_get_level() > $stopAt) {
+                    $cleared = (bool) @ob_end_clean() || $cleared;
+                }
+
+                return $cleared;
+
+            default:
+                return (bool) @ob_end_clean();
         }
-
-        if ($mode === 'all' || ($mode === 'auto' && $level > 1)) {
-            $cleared = false;
-
-            while (ob_get_level() > $limit) {
-                $cleared = ob_end_clean() || $cleared;
-            }
-            
-            return $cleared;
-        }
-
-        return ob_end_clean();
     }
 
     /**
-     * Get the allowed origin based on the config.
-     * 
-     * @param string $origin The origin to check.
-     * 
-     * @return string|null Return the allowed origin or null if not allowed.
+     * Determine whether a given origin is allowed based on configuration.
+     *
+     * @param string|null $origin Optional origin to check. Defaults to `$_SERVER['HTTP_ORIGIN']`.
+     *
+     * @return bool Returns true if the origin is allowed, false otherwise.
+     * @see self::findAllowedOriginDomain()
      */
-    private static function isAllowedOrigin(string $origin): ?string
+    public static function isOriginAllowed(?string $origin = null): bool
     {
-        $accept = self::$config->allowOrigins;
+        return self::findAllowedOriginDomain($origin) !== null;
+    }
+    
+    /**
+     * Retrieve the allowed CORS origin.
+     *
+     * Returns:
+     * - `*` when wildcard origins are allowed.
+     * - The request origin when explicitly trusted.
+     * - `null` when the origin is missing or not allowed.
+     *
+     * @param string|null $origin Origin header value. Defaults to the request origin.
+     *
+     * @return string|null Allowed origin or null when rejected.
+     * @see self::isOriginAllowed()
+     */
+    public static function findAllowedOriginDomain(?string $origin = null): ?string
+    {
+        return self::findOriginDomain(
+            $origin, 
+            rejectEmptyOrigin: true
+        );
+    }
 
-        if ($accept === '*' || $accept === 'null') {
+
+    /**
+     * Retrieve the allowed CORS origin.
+     *
+     * Returns:
+     * - `*` when wildcard origins are allowed.
+     * - The request origin when explicitly trusted.
+     * - `null` when the origin is missing or not allowed.
+     *
+     * @param string|null $origin Origin header value. Defaults to the request origin.
+     * @param bool $rejectEmptyOrigin
+     *
+     * @return string|null Allowed origin or null when rejected.
+     * @see self::isOriginAllowed()
+     */
+    private static function findOriginDomain(
+        ?string $origin = null,
+        bool $rejectEmptyOrigin = false
+    ): ?string 
+    {
+        $origin ??= $_SERVER['HTTP_ORIGIN'] ?? '';
+        $allowed = Security::$allowOrigins;
+
+        // No Origin header.
+        // For CORS headers, wildcard can still be returned.
+        // For strict validation, reject empty origin.
+        if ($origin === '') {
+            if (!$rejectEmptyOrigin && $allowed === '*') {
+                return '*';
+            }
+
+            return null;
+        }
+
+        $whitelist = is_array($allowed) ? $allowed : [$allowed];
+
+        // Allow literal "null" origin.
+        if ($origin === 'null') {
+            $whitelist = array_flip($whitelist);
+
+            return isset($whitelist['null']) ? 'null' : null;
+        }
+
+        // Wildcard allows any valid origin.
+        if ($allowed === '*') {
             return '*';
         }
 
-        if ($accept === $origin) {
-            return $origin;
+        $host = parse_url($origin, PHP_URL_HOST);
+
+        if (!$host) {
+            return null;
         }
 
-        foreach ([$origin, Helpers::mainDomain($origin)] as $from) {
-            if ($accept === $from || in_array($from, (array) $accept)) {
-                return $from;
+        foreach ($whitelist as $domain) {
+            if ($domain === $origin) {
+                return $origin;
+            }
+
+            if ($domain === 'self') {
+                if ($host === APP_HOSTNAME  || str_ends_with($host, '.' . APP_HOSTNAME)) {
+                    return $origin;
+                }
+
+                continue;
+            }
+
+            if (
+                str_starts_with($domain, '.')
+                && ($host === substr($domain, 1) || str_ends_with($host, $domain))
+            ) {
+                return $origin;
             }
         }
 
@@ -670,15 +614,41 @@ class Header implements LazyObjectInterface, Countable
     }
 
     /**
-     * Validates request headers against allowed headers.
+     * Check whether all request headers are allowed by the configured CORS policy.
      *
-     * @return string|true Return true if all headers are valid, false otherwise.
+     * If an unapproved header is found, its name is assigned to `$match`.
+     *
+     * @param array<string,string|int|float>|null $headers Request headers to validate.
+     *        Defaults to the current request headers.
+     * @param string|null $match Receives the first header name that is not allowed.
+     *
+     * @return bool Returns `true` if all headers are allowed, or `false` otherwise.
      */
-    private static function isAllowedHeaders(): string|bool
+    public static function isHeadersAllowed(
+        ?array $headers = null,
+        ?string &$match = null
+    ): bool 
     {
-        foreach (self::getHeaders() as $name => $value) {
-            if (!in_array($name, self::$config->allowHeaders)) {
-                return $name;
+        if (Security::$allowHeaders === []) {
+            return true;
+        }
+
+        static $allowed = [];
+
+        if ($allowed === []) {
+            foreach (Security::$allowHeaders as $header) {
+                $allowed[strtolower($header)] = true;
+            }
+        }
+
+        $headers ??= self::getHeaders();
+
+        foreach ($headers as $name => $_) {
+            $name = strtolower($name);
+
+            if (!isset($allowed[$name])) {
+                $match = $name;
+                return false;
             }
         }
 
@@ -686,22 +656,386 @@ class Header implements LazyObjectInterface, Countable
     }
 
     /**
-     * Terminates the request by sending the status and exiting.
+     * Normalize and validate multiple HTTP header values.
      *
-     * @param int $status HTTP status code.
-     * @param string $message Termination message.
-     * @param string $var The configuration variable.
+     * - Trims leading and trailing spaces and tabs.
+     * - Validates each value against RFC 7230 rules.
+     *
+     * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.4
+     *
+     * @param array|mixed $values Header values or key-value to process.
+     *
+     * @return array<string,mixed>|string[] Return an array of normalized headers or key-value.
+     * @throws InvalidArgumentException If any value is non-scalar or null.
+     */
+    public static function normalize(mixed $values, bool $withName = false): array
+    {
+        if (!is_array($values)) {
+            $values = [$values];
+        }
+
+        if ($values === []) {
+            throw new InvalidArgumentException(
+                'Header value cannot be an empty array.'
+            );
+        }
+
+        $normalized = [];
+
+        foreach ($values as $name => $value) {
+            if ($value !== null && !is_scalar($value)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Header value must be scalar or null; %s provided.',
+                    is_object($value) ? get_class($value) : gettype($value)
+                ));
+            }
+
+            $value = trim((string) $value, " \t");
+            self::assert($value, true);
+
+            if($withName){
+                self::assert($name, false);
+            }
+
+            $normalized[$name] = $value;
+        }
+
+        return $withName 
+            ? $normalized
+            : array_values($normalized);
+    }
+
+    /**
+     * Validate an HTTP header name or value.
+     *
+     * Notes:
+     * - Header values do NOT support obs-fold (RFC 7230 §3.2).
+     * - Header names must be non-empty ASCII tokens.
+     *
+     * @param mixed $value Header name or value to validate.
+     * @param bool $isValue True to validate a header value, false for a header name.
+     *
+     * @throws InvalidArgumentException When the header name or value is invalid.
+     * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2
+     */
+    public static function assert(mixed $value, bool $isValue = true): void
+    {
+        if($isValue){
+            if (!preg_match('/^[\x20\x09\x21-\x7E\x80-\xFF]*$/D', (string) $value)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Invalid header value: "%s".',
+                    $value
+                ));
+            }
+            return;
+        }
+
+        if ($value === '' || !is_string($value)) {
+            throw new InvalidArgumentException(sprintf(
+                'Header name must be a non-empty string; %s provided.',
+                is_object($value) ? get_class($value) : gettype($value)
+            ));
+        }
+
+        if (!preg_match('/^[a-zA-Z0-9\'`#$%&*+.^_|~!-]+$/D', $value)) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid header name: "%s".',
+                $value
+            ));
+        }
+    }
+
+    /**
+     * Validate and prepare request headers for CORS compliance.
+     * 
+     * This method inspects the incoming request when it targets an API endpoint
+     * and ensures that the request origin, headers, and credentials adhere to
+     * the configured CORS policy.
+     * 
+     * Behavior:
+     * - Checks the `Origin` header:
+     *   - Terminates the request if the origin is missing and `forbidEmptyOrigin` is enabled.
+     *   - Validates the origin against `allowOrigins` and sets `Access-Control-Allow-Origin`.
+     * - Validates request headers against `allowHeaders` and sets `Access-Control-Allow-Headers`.
+     * - Sets `Access-Control-Allow-Credentials` based on configuration.
+     * 
+     * If any validation fails, the request is terminated immediately with
+     * an appropriate HTTP status and message.
+     * 
+     * @param array<string,string|int|float> &$headers Headers array to be modified with CORS response headers.
+     * @param array<string,string|int|float>|null $reqHeaders Optional request headers to validate.
+     * @param bool $terminateOnFailure Whether to terminate the request on validation failure (default: true).
+     * 
+     * @return bool Returns true if the request passes all validations; false if terminated.
+     */
+    private static function validateCorsPolicy(
+        array &$headers,
+        ?array $reqHeaders = null,
+        bool $terminateOnFailure = true
+    ): bool 
+    {
+        $origin = self::findOriginDomain();
+
+        if ($origin === null) {
+            self::removeCorsHeaders($headers);
+
+            if (!$terminateOnFailure) {
+                return false;
+            }
+
+            $error = [
+                403,
+                'Access denied: request origin not allowed.',
+                PRODUCTION ? null : '\App\Config\Security::allowOrigins'
+            ];
+
+            if (Security::$forbidEmptyOrigin && empty($_SERVER['HTTP_ORIGIN'])) {
+                $error = [
+                    400,
+                    'Invalid request: missing origin.',
+                    PRODUCTION ? null : '\App\Config\Security::forbidEmptyOrigin'
+                ];
+            }
+
+            Luminova::terminate(...$error);
+            return false;
+        }
+
+        // Credentials cannot be combined with wildcard origin.
+        $headers['Access-Control-Allow-Credentials'] = ($origin !== '*' && Security::$allowCredentials) 
+            ? 'true' 
+            : 'false';
+        $headers['Access-Control-Allow-Origin'] = $origin;
+
+        if ($origin !== '*') {
+            $headers['Vary'] = isset($headers['Vary'])
+                ? $headers['Vary'] . ', Origin'
+                : 'Origin';
+        }
+
+        if (Security::$exposeHeaders !== []) {
+            $headers['Access-Control-Expose-Headers'] =
+                implode(', ', Security::$exposeHeaders);
+        }
+
+        if (Security::$allowHeaders === []) {
+            return true;
+        }
+
+        $header = null;
+
+        if (self::isHeadersAllowed($reqHeaders, $header)) {
+            $headers['Access-Control-Allow-Headers'] =
+                implode(', ', Security::$allowHeaders);
+
+            return true;
+        }
+
+        self::removeCorsHeaders($headers);
+
+        if (!$terminateOnFailure) {
+            return false;
+        }
+
+        Luminova::terminate(
+            400,
+            "Invalid header: {$header} found in the request.",
+            PRODUCTION ? null : '\App\Config\Security::allowHeaders'
+        );
+
+        return false;
+    }
+
+    /**
+     * Normalize and optionally send HTTP headers.
+     *
+     * Removes invalid headers, applies framework default headers, optionally adds
+     * the `X-Powered-By` header, and appends the configured charset to
+     * `Content-Type` when missing.
+     *
+     * When `$isSend` is true, normalized headers are sent immediately using
+     * `header()`. Otherwise, the normalized headers are returned as an array.
+     *
+     * @param array<string,mixed> $headers Headers to process.
+     * @param bool $withCharset Append charset to `Content-Type` when missing.
+     * @param bool $isSend Send headers instead of returning them.
+     * @param bool $xPowered Include the `X-Powered-By` header when enabled.
+     *
+     * @return array<string,string> Normalized headers when `$isSend` is false,
+     *                              otherwise an empty array.
+     */
+    private static function normalizeHeaders(
+        array $headers, 
+        bool $withCharset = false, 
+        bool $isSend = true,
+        bool $xPowered = false
+    ): array 
+    {
+        $charset = $withCharset
+            ? env('app.charset', 'utf-8')
+            : null;
+
+        if (isset($headers['X-System-Default-Headers'])) {
+            $headers = array_replace(self::getDefault(), $headers);
+        }
+
+        if ($xPowered) {
+            $headers['X-Powered-By'] ??= Luminova::copyright();
+        } else {
+            unset($headers['X-Powered-By']);
+        }
+
+        unset($headers['X-System-Default-Headers']);
+
+        if($withCharset){
+            $type = $headers['Content-Type'] 
+                ?? $headers['content-type'] 
+                ?? null;
+
+            if($type !== null && !str_contains(strtolower((string) $type), 'charset=')){
+                $charset =  env('app.charset', 'utf-8');
+                $headers['Content-Type'] = "{$type}; charset={$charset}";
+            }
+        }
+
+        $normalized = [];
+
+        foreach ($headers as $header => $values) {
+            if (
+                $header === '' 
+                || $values === false 
+                || $values === null 
+                || !is_string($header)
+            ) {
+                continue;
+            }
+
+            if ($values === []) {
+                $values = '';
+            }
+
+            $parsed = [];
+            $values = is_array($values) ? array_unique($values) : [$values];
+
+            foreach ($values as $value) {
+                if(!is_scalar($value)){
+                    continue;
+                }
+
+                if ($isSend) {
+                    header("{$header}: {$value}");
+                    continue;
+                }
+                
+                $parsed[] = $value;
+            }
+
+            if (!$isSend) {
+                $normalized[$header] = implode(', ', $parsed);
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Check if headers are already sent.
+     *
+     * @param boolean $ifNotSentIgnore If true return `true` otherwise throw or log in production.
+     * 
+     * @return bool Return false if not sent, true if sent and `$ifNotSentIgnore` is true, otherwise error.
+     * @throws RuntimeException in development mode.
+     */
+    private static function ifHeadersSent(bool $ifNotSentIgnore): bool 
+    {
+        $file = null;
+        $line = null;
+
+        if (!headers_sent($file, $line)) {
+            return false;
+        }
+
+        if ($ifNotSentIgnore) {
+            return true;
+        }
+
+        $message = 'Headers have already been sent. 
+            Set $ifNotSent to true to skip sending instead of';
+
+        if (PRODUCTION) {
+            Logger::tryLog('warning', "{$message} logging this warning.", [
+                'file' => $file,
+                'line' => $line
+            ]);
+            return true;
+        }
+
+        $e = new RuntimeException("{$message} throwing this exception.");
+        $e->setFile($file);
+        $e->setLine($line);
+
+        throw $e;
+    }
+
+    /**
+     * Check if CORS can be automatically enforced.
+     *
+     * @return bool
+     */
+    private static function shouldEnforceCors(): bool 
+    {
+        return match(Security::$httpCorsPolicyMode) {
+            'none'  => false,
+            'all'   => true,
+            'api'   => Luminova::isApiRequest(),
+            'web'   => !Luminova::isApiRequest(),
+            default => Luminova::isUriPrefix(Security::$httpCorsPolicyMode)
+        };
+    }
+
+    /**
+     * Remove CORS headers.
+     *
+     * @param array $headers
+     * 
+     * @return void
+     */
+    private static function removeCorsHeaders(array &$headers): void
+    {
+        unset(
+            $headers['Access-Control-Allow-Origin'],
+            $headers['Access-Control-Allow-Headers'],
+            $headers['Access-Control-Allow-Credentials'],
+            $headers['Access-Control-Allow-Methods'],
+            $headers['Access-Control-Expose-Headers']
+        );
+    }
+
+    /**
+     * Send HTTP error headers.
+     *
+     * @param int $status HTTP status code to send.
+     * @param array $headers Headers to send.
+     * @param string|int|null $retry Optional value for Retry-After header.
      *
      * @return void
      */
-    private static function terminateRequest(int $status, string $message, string $var): void
+    private static function sendErrorHeaders(
+        int $status,
+        array $headers, 
+        string|int|null $retry = null
+    ): void 
     {
-        self::sendStatus($status);
-
-        if (!PRODUCTION) {
-            $message .= "\nCaused by API configuration in '/app/Config/Apis.php' at \App\Config\Apis::\${$var}.";
+        if($retry !== null){
+            $headers['Retry-After'] = $retry;
         }
 
-        exit($message);
+        self::send(
+            headers:     $headers, 
+            ifNotSent:   true, 
+            charset:     false,
+            status:      $status, 
+            enforceCors: false
+        );
     }
 }

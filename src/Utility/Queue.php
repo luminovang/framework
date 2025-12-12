@@ -10,18 +10,18 @@
  */
 namespace Luminova\Utility;
 
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Logger\Logger;
 use \Fiber;
 use \Closure;
 use \Countable;
 use \FiberError;
 use \Exception;
 use function \pcntl_fork;
-use function \pcntl_wexitstatus;
-use function \pcntl_wifexited;
 use function \pcntl_waitpid;
-use function \Luminova\Funcs\array_merge_result;
+use Luminova\Logger\Logger;
+use function \pcntl_wifexited;
+use function \pcntl_wexitstatus;
+use Luminova\Exceptions\RuntimeException;
+use function Luminova\Funcs\array_merge_result;
 
 final class Queue implements Countable
 {
@@ -225,7 +225,10 @@ final class Queue implements Countable
     public function run(?callable $callback = null, int $timeout = 0): void
     {
         if($this->isRunning){
-            $this->report('Queue is already running. Wait for completion before calling Queue::run() or call Queue::cancel() to cancel all running jobs.');
+            $this->report(
+                'Queue is already running. Wait for completion before calling Queue::run() 
+                or call Queue::cancel() to cancel all running jobs.'
+            );
             return;
         }
 

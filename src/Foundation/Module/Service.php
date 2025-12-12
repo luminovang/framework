@@ -13,16 +13,16 @@ namespace Luminova\Foundation\Module;
 use \Throwable;
 use \ReflectionClass;
 use \ReflectionException;
-use \Luminova\Utility\Storage\Filesystem;
-use \Luminova\Exceptions\RuntimeException;
-use function \Luminova\Funcs\{
-    path,
-    write_content,
-    get_content,
+use Luminova\Storage\Filesystem;
+use Luminova\Exceptions\RuntimeException;
+use function Luminova\Funcs\{
     make_dir,
     get_class_name
 };
 
+/**
+ * @template T of object
+ */
 final class Service
 {
     /**
@@ -50,18 +50,18 @@ final class Service
      * Dynamically create an instance of the specified service class.
      * Get shared instance or re-imitate stored instance with a new parameters 
      *
-     * @param class-string<\T>|string $service The class name or class name alias of the service.
+     * @param class-string<T>|string $service The class name or class name alias of the service.
      * @param array $arguments Param arguments to instigate class with 
      * @param bool $shared Whether the instance should be shared (cached) or not.
      * @param bool $serialize Whether the instance should be serialized and (cached) or not.
      * 
-     * @return object<\T>|null An instance of the service class, or null if not found.
+     * @return object<T>|null An instance of the service class, or null if not found.
      * @throws RuntimeException If failed to instantiate the service.
      * @ignore 
      * @example - Invoke method 
      * 
      * ```php 
-     * use \Luminova\Foundation\Module\Service;
+     * use Luminova\Foundation\Module\Service;
      * 
      * $result = Service::method('foo')
      * ```
@@ -75,12 +75,12 @@ final class Service
      * Dynamically create an instance of the specified service class.
      * Get shared instance or re-imitate stored instance with a new parameters 
      *
-     * @param class-string<\T>|string $service The class name or class name alias of the service.
+     * @param class-string<T>|string $service The class name or class name alias of the service.
      * @param array $arguments Param arguments to instigate class with 
      * @param bool $shared Whether the instance should be shared (cached) or not.
      * @param bool $serialize Whether the instance should be serialized and (cached) or not.
      * 
-     * @return object<\T>|null An instance of the service class, or null if not found.
+     * @return object<T>|null An instance of the service class, or null if not found.
      * @throws RuntimeException If failed to instantiate the service.
      * @ignore 
      * 
@@ -98,7 +98,7 @@ final class Service
     /**
      * Check if service has a cached instance of class
      *
-     * @param class-string<\T>|string $service The service class name or class name alias.
+     * @param class-string<T>|string $service The service class name or class name alias.
      * 
      * @return bool Return true if service class exists, false otherwise.
     */
@@ -110,14 +110,14 @@ final class Service
             return true;
         }
 
-        $path = path('services') . $alias . self::$suffix;
+        $path = Filesystem::path('services') . $alias . self::$suffix;
         return file_exists($path);
     }
 
     /**
      * Delete a service and it cached instances
      *
-     * @param class-string<\T>|string $service The service class name or alias.
+     * @param class-string<T>|string $service The service class name or alias.
      * 
      * @return bool Return true if cached service was deleted, false otherwise.
     */
@@ -134,7 +134,7 @@ final class Service
         }
 
 
-        $path = path('services') . $alias . self::$suffix;
+        $path = Filesystem::path('services') . $alias . self::$suffix;
         return file_exists($path) && unlink($path);
     }
 
@@ -145,11 +145,11 @@ final class Service
     */
     public static function clear(): bool
     {
-        $path = path('services');
+        $path = Filesystem::path('services');
         self::$instances = [];
         self::$services = [];
 
-        return is_dir($path) ? Filesystem::remove($path) : false;
+        return is_dir($path) ? Filesystem::delete($path) : false;
     }
 
     /**
@@ -157,7 +157,7 @@ final class Service
      * 
      * @param string $alias The service class name alias.
      * 
-     * @return object<\T>|null $instance Instance or null
+     * @return object<T>|null $instance Instance or null
     */
     private static function getInstance(string $alias): ?object
     {
@@ -175,14 +175,14 @@ final class Service
     /**
      * Add service instance.
      *
-     * @param class-string<\T>|object<\T> $service Class name or instance of a class.
+     * @param class-string<T>|object<T> $service Class name or instance of a class.
      * @example \Namespace\Utils\MyClass, MyClass::class or new MyClass()
      * @param mixed $arguments [, mixed $... ] Arguments to initialize class with.
      *  -   The last 2 argument should be boolean values to indicate whether to shared instance or cached.
      * @param bool $shared Whether the instance should be shared (default: true).
      * @param bool $serialize Whether the instance should be serialized and (default: false).
      * 
-     * @return object<\T> Return object instance service class, null otherwise.
+     * @return object<T> Return object instance service class, null otherwise.
      * @throws RuntimeException If service already exist or unable to initiate class.
     */
     public static function add(string|object $service, mixed ...$arguments): object
@@ -222,10 +222,10 @@ final class Service
     /**
      * Call class instance.
      *
-     * @param class-string<\T>|string $service The class name or class name alias of the service.
+     * @param class-string<T>|string $service The class name or class name alias of the service.
      * @param array $arguments Arguments to instigate class with.
      * 
-     * @return object<\T>|null An instance of the service class, or null if not found.
+     * @return object<T>|null An instance of the service class, or null if not found.
      * @throws RuntimeException If failed to instantiate the service.
     */
     private static function call(string $service, array $arguments): object
@@ -319,7 +319,7 @@ final class Service
      * Prepare Instance to save on serialized object or shared instance 
      * 
      * @param string $alias Service class name  alias.
-     * @param object<\T>|null $instance object instance.
+     * @param object<T>|null $instance object instance.
      * @param bool $shared Should share instance.
      * @param bool $serialize Should serialize instance.
      * 
@@ -348,9 +348,9 @@ final class Service
             }
 
             try {
-                $path = path('services');
+                $path = Filesystem::path('services');
                 make_dir($path);
-                write_content($path . $alias . self::$suffix, $stringInstance);
+                Filesystem::write($path . $alias . self::$suffix, $stringInstance);
             } catch (Throwable $e) {
                 throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
             }
@@ -362,14 +362,14 @@ final class Service
      *
      * @param string $alias The class name alias.
      * 
-     * @return object<\T>|null Return class object or null.
+     * @return object<T>|null Return class object or null.
     */
     private static function getCachedInstance(string $alias): ?object
     {
-        $path = path('services') . $alias . self::$suffix;
+        $path = Filesystem::path('services') . $alias . self::$suffix;
 
         if (file_exists($path)) {
-            $content = get_content($path);
+            $content = Filesystem::contents($path);
 
             if ($content !== false) {
                 return unserialize($content);

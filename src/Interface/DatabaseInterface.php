@@ -10,11 +10,11 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Interface\ConnInterface;
-use \Luminova\Foundation\Core\Database;
-use \Luminova\Exceptions\DatabaseException;
-use \PDOStatement;
 use \mysqli_stmt;
+use \PDOStatement;
+use Luminova\Interface\ConnInterface;
+use Luminova\Foundation\Core\Database;
+use Luminova\Exceptions\DatabaseException;
 
 interface DatabaseInterface
 {
@@ -22,8 +22,33 @@ interface DatabaseInterface
      * Initialize database driver constructor for configurations.
      *
      * @param Database $config The core database connection configuration.
+     * @see https://luminova.ng/docs/0.0.0/configs/database
+     * @see https://luminova.ng/docs/0.0.0/database/drivers
      */
     public function __construct(Database $config);
+
+    /**
+     * Returns the singleton instance of the Database wrapper.
+     *
+     * Ensures that only one instance of the database class exists during
+     * the application's lifecycle. If the instance does not exist yet,
+     * it will be created using the provided configuration.
+     *
+     * @param Database $config The configuration object used to initialize
+     *                         the database instance on first creation.
+     *
+     * @return DatabaseInterface Returns the singleton instance of the database wrapper.
+     * @see https://luminova.ng/docs/0.0.0/configs/database
+     * @see https://luminova.ng/docs/0.0.0/database/drivers
+     */
+    public static function getInstance(Database $config) : DatabaseInterface;
+
+    /**
+     * Get number of active open connections.
+     * 
+     * @return int Return the number of open connection.
+     */
+    public static function getOpenConnections(): int;
 
     /**
      * Establish a database connection.
@@ -32,6 +57,95 @@ interface DatabaseInterface
      * @throws DatabaseException If the database connection error.
      */
     public function connect(): bool;
+
+    /**
+     * Check if a database table exists.
+     *
+     * This method determines whether the specified table exists in the database.
+     * 
+     * @param string $table The table name to check.
+     *
+     * @return bool Returns `true` if the table exists, otherwise `false`.
+     * @throws DatabaseException If an error occurs or the database driver is unsupported.
+     *
+     * @example - Check if the `users` table exists:
+     * 
+     * ```php
+     * $exists = $db->exists('users');
+     * ```
+     */
+    public function exists(string $table): bool;
+
+    /**
+     * Acquires a database-level lock for the given identifier.
+     *
+     * The lock behavior depends on the database driver:
+     * - PostgreSQL uses advisory locks.
+     * - MySQL uses named user locks.
+     * - SQLite uses an internal lease-based lock table.
+     * - SQL Server and Oracle use application/advisory locking mechanisms.
+     *
+     * @param string|int $identifier Lock identifier.
+     * @param int $timeout Maximum time in seconds to wait for acquiring the lock.
+     *
+     * @return bool Returns true if the lock was acquired successfully, false otherwise.
+     *
+     * @throws DatabaseException If the driver does not support locking or the lock operation fails.
+     *
+     * @see self::tryLock()
+     * @see self::unlock()
+     */
+    public function lock(string|int $identifier, int $timeout = 300): bool;
+
+    /**
+     * Attempts to acquire a database-level lock without waiting.
+     *
+     * Unlike lock(), this operation returns immediately if the lock cannot
+     * be acquired.
+     *
+     * The lock behavior depends on the database driver:
+     * - Some drivers support immediate lock acquisition natively.
+     * - SQLite uses a lease-based lock with a default lifetime of 300 seconds.
+     *
+     * @param string|int $identifier Lock identifier.
+     *
+     * @return bool Returns true if the lock was acquired, false if it is already held or acquisition failed.
+     *
+     * @see self::lock()
+     * @see self::unlock()
+     */
+    public function tryLock(string|int $identifier): bool;
+
+    /**
+     * Releases the database-level lock associated with the given identifier.
+     *
+     * @param string|int $identifier Lock identifier.
+     *
+     * @return bool Returns true if the lock was released successfully, false otherwise.
+     *
+     * @throws DatabaseException If the driver does not support unlocking or the operation fails.
+     *
+     * @see self::lock()
+     * @see self::tryLock()
+     */
+    public function unlock(string|int $identifier): bool;
+
+    /**
+     * Checks whether a database-level lock is currently held.
+     *
+     * This method only checks the lock state and does not acquire or modify the lock.
+     * The exact behavior depends on the database driver implementation.
+     *
+     * @param string|int $identifier Lock identifier.
+     *
+     * @return bool Returns true if the lock is currently held, false if it is available.
+     *
+     * @throws DatabaseException If the driver does not support lock inspection.
+     *
+     * @see self::lock()
+     * @see self::unlock()
+     */
+    public function isLocked(string|int $identifier): bool;
 
     /**
      * Get the driver version name of the database connection driver.
@@ -58,27 +172,30 @@ interface DatabaseInterface
      * This method allows fetching configuration values related to the database connection.
      * If the requested property does not exist, `null` is returned.
      * 
-     * ### Available Properties:
-     * - **port** *(null)*: The database server port (always: `null`).
-     * - **host** *(null)*: The database server hostname or IP (always: `null`).
+     * **Available Properties:**
+     * 
+     * - **port** *(null)*: The database server port.
+     * - **host** *(null)*: The database server hostname or IP.
      * - **connection** *(string)*: The connection method, typically `'pdo'` or other (default: `'pdo'`).
-     * - **pdo_engine** *(string)*: The PDO driver to use (e.g., `'mysql'`, `'sqlite'`, etc.) (default: `'mysql'`).
+     * - **pdo_driver** *(string)*: The PDO driver to use (e.g, `'mysql'`, `'sqlite'`, etc.).
      * - **charset** *(string)*: The character encoding for the connection (default: `'utf8mb4'`).
      * - **sqlite_path** *(string|null)*: Path to the SQLite database file (default: `null`).
      * - **production** *(bool)*: Indicates if the connection is in a production environment (default: `false`).
-     * - **username** *(null)*: The database username (always: `null`).
-     * - **password** *(null)*: The database password (always: `null`).
+     * - **username** *(null)*: The database username.
+     * - **password** *(null)*: The database password.
      * - **database** *(string)*: The name of the selected database (default: `''`).
      * - **persistent** *(bool)*: Whether to use persistent connections (default: `true`).
      * - **socket** *(bool)*: Whether to use a Unix socket instead of TCP/IP (default: `false`).
      * - **socket_path** *(string)*: The Unix socket path if `socket` is enabled (default: `''`).
      * - **emulate_prepares** *(bool)*: Enables query emulation before execution (default: `false`).
      * 
-     * @param string $property The name of the configuration property.
+     * @param string|null $property The configuration property name (case-insensitive)
+     *          `null` to return all configuration as array.
      * 
-     * @return mixed Returns the property value if it exists, otherwise `null`.
+     * @return mixed Returns the configuration value, or `array` if the `$property` is null.
+     * @see https://luminova.ng/docs/0.0.0/database/drivers
      */
-    public function getConfig(string $property): mixed;
+    public function getConfig(?string $property): mixed;
 
     /**
      * Check if the database is connected.
@@ -88,11 +205,17 @@ interface DatabaseInterface
     public function isConnected(): bool;
 
     /**
-     * Get the raw database connection instance (e.g., PDO or MySQLi).
+     * Returns a wrapper around the underlying native connection.
      * 
-     * @return ConnInterface|null Returns the connection instance if connected, otherwise null.
+     * This method provides access to the low-level database connection object (e.g., PDO or MySQLi) through 
+     * a standardized interface (`ConnInterface`), allowing you to perform driver-specific operations if needed.
+     * 
+     * @return ConnInterface Returns a connection wrapper that exposes the native driver instance.
+     * 
+     * @see ConnInterface::getConn()
+     * @see ConnInterface::close()
      */
-    public function raw(): ?ConnInterface;
+    public function raw(): ConnInterface;
 
     /**
      * Set the debug mode.
@@ -113,7 +236,10 @@ interface DatabaseInterface
     /**
      * Get all error information.
      *
-     * @return array Returns an array of error information.
+     * @return array{
+     *      statement: array{errno:int,error:?string},
+     *      connection: array{errno:int,error:?string}
+     * } Returns an array of error information.
      */
     public function errors(): array;
 
@@ -127,7 +253,7 @@ interface DatabaseInterface
     /**
      * Start recording the database query execution time for queries.
      * 
-     * This method records the duration of a query in shared memory under the key `__DB_QUERY_EXECUTION_TIME__`. The stored value can later be retrieved from anywhere in your application.
+     * This method records the duration of a query in shared memory under the key `Boot::QUERY_PROFILING`. The stored value can later be retrieved from anywhere in your application.
      * 
      * Note: To call this method you must first enable `debug.show.performance.profiling` in environment variables file.
      *
@@ -140,18 +266,22 @@ interface DatabaseInterface
      * @example - To get the query execution in any application scope. 
      * 
      * ```php
-     * $time = luminova\Funcs\shared('__DB_QUERY_EXECUTION_TIME__', default: 0);
+     * $profiling = luminova\Funcs\shared(Boot::QUERY_PROFILING, default: []);
      * 
      * // Or
-     * $time = Luminova\Boot::get('__DB_QUERY_EXECUTION_TIME__') ?? 0;
+     * $profiling = Luminova\Boot::get(Boot::QUERY_PROFILING);
      * ```
      */
     public function profiling(bool $start = true, bool $finishedTransaction = false): void;
 
     /**
      * Get information about the last executed statement.
+     * 
+     * Status:
+     * - idle
+     * - disconnected
      *
-     * @return array Returns an array of statement execution information.
+     * @return array{status:string} Returns an array of statement execution information.
      */
     public function info(): array;
 
@@ -180,10 +310,10 @@ interface DatabaseInterface
      * @return DatabaseInterface Returns the instance of database driver interface.
      * @throws DatabaseException If no database connection is established.
      * 
-     * @see execute()
-     * @see bind()
-     * @see value()
-     * @see param()
+     * @see self::execute()
+     * @see self::bind()
+     * @see self::value()
+     * @see self::param()
      *
      * @example - Preparing SQL Statement:
      * ```php
@@ -253,29 +383,160 @@ interface DatabaseInterface
     public function exec(string $query): int;
 
     /**
-     * Begin a transaction with an optional read-only isolation level and savepoint.
+     * Set the transaction isolation level for the current connection.
      *
-     * @param int $flags Optional flags to set transaction properties.
-     *                   For MySQLi:
-     *                   - MYSQLI_TRANS_START_READ_ONLY: Set transaction as read-only.
-     *                   For PDO:
-     *                   - Specify `4` to create a read-only isolation level.
-     * @param string|null $name Optional name for a savepoint.
-     *                          If provided, a savepoint will be created in PDO.
+     * This determines how transactions interact with other concurrent transactions
+     * in terms of visibility of changes, locking behavior, and consistency.
      * 
-     * @return bool Returns true if the transaction and optional savepoint were successfully started.
-     * @throws DatabaseException Throws an exception in PDO if setting the transaction isolation level or creating a savepoint fails.
+     * Supported levels (by integer code):
+     *   - 0 => 'NONE'               : Skips setting isolation level.
+     *   - 1 => 'READ UNCOMMITTED'   : Lowest isolation, allows dirty reads.
+     *   - 2 => 'READ COMMITTED'     : Default in most databases, prevents dirty reads.
+     *   - 3 => 'REPEATABLE READ'    : Ensures consistent reads within a transaction.
+     *   - 4 => 'SERIALIZABLE'       : Highest isolation, full serial execution.
+     *   - 5 => 'READ WRITE'         : Transaction can perform reads and writes.
+     *   - 6 => 'READ ONLY'          : Transaction can only read data.
+     *
+     * Rules:
+     *   - Cannot be changed inside an active transaction.
+     *   - Throws DatabaseException if the level is invalid or the query fails.
+     *
+     * @param int $level Numeric code for the isolation level (1–6).
+     * 
+     * @return bool Return true on success otherwise false.
+     * @throws DatabaseException If the level is invalid, or setting the isolation fails, 
+     *                           or called within an active transaction.
+     */
+    public function setTransactionIsolation(int $level = 2): bool;
+
+    /**
+     * Begins a database transaction with optional transaction mode flags.
+     *
+     * **Bitmask Flags:**
+     *
+     * - `1` - Use a consistent snapshot (InnoDB behavior).
+     * - `2` - Start transaction in read/write mode.
+     * - `4` - Start transaction in read-only mode.
+     *
+     * @param int $flags Optional transaction mode flags (default: `0`).
+     * @param string|null $name Optional savepoint name to create when supported.
+     *
+     * @return bool Returns true when the transaction starts successfully.
+     *
+     * @throws DatabaseException If the transaction cannot be started or an invalid
+     *                           savepoint name is provided.
+     *
+     * @see self::tryBeginTransaction() Non-throwing transaction start.
+     * @see self::beginNestedTransaction() Start a transaction or create a savepoint.
+     *
+     * > **Note:** 
+     * > This method only begins a transaction. It does not commit or rollback.
      */
     public function beginTransaction(int $flags = 0, ?string $name = null): bool;
 
     /**
+     * Attempts to begin a database transaction without throwing on failure.
+     *
+     * **Bitmask Flags:**
+     *
+     * - `1` - Use a consistent snapshot (InnoDB behavior).
+     * - `2` - Start transaction in read/write mode.
+     * - `4` - Start transaction in read-only mode.
+     *
+     * @param int $flags Optional transaction mode flags (default: `0`).
+     * @param string|null $name Optional savepoint name to create when supported.
+     *
+     * @return bool Returns true if the transaction starts successfully, otherwise false.
+     *
+     * @see self::beginTransaction() Transaction start that throws on failure.
+     */
+    public function tryBeginTransaction(int $flags = 0, ?string $name = null): bool;
+
+    /**
+     * Begins a nested transaction using savepoints when a transaction is already active.
+     *
+     * If no transaction exists, a new transaction is started.
+     * If a transaction is active, a unique savepoint is created and its name is returned.
+     *
+     * @param bool $closeCursor Whether to free the active statement cursor before starting.
+     *
+     * @return string|bool|null Returns:
+     *   - string: The savepoint name when a nested transaction is created.
+     *   - null: A new transaction was started successfully.
+     *   - false: Failed to start a transaction or create a savepoint.
+     *
+     * @throws DatabaseException If an unexpected database error occurs.
+     * @see self::tryBeginNestedTransaction() Non-throwing nested transaction start.
+     *
+     * @example - Nested transaction handling:
+     *
+     * ```php
+     * $savepoint = $db->beginNestedTransaction();
+     *
+     * if ($savepoint === false) {
+     *     echo 'Failed to start transaction';
+     *     return;
+     * }
+     *
+     * try {
+     *     // Execute queries...
+     *
+     *     if ($savepoint !== null) {
+     *         $db->release($savepoint);
+     *     }
+     *
+     *     $db->commit();
+     * } catch (Throwable $e) {
+     *     $db->rollback();
+     * }
+     * ```
+     */
+    public function beginNestedTransaction(bool $closeCursor = false): string|bool|null;
+
+    /**
+     * Attempts to begin a nested transaction without throwing on failure.
+     *
+     * If no transaction exists, starts a new transaction.
+     * If a transaction is active, creates a unique savepoint and returns its name.
+     *
+     * @param bool $closeCursor Whether to free the active statement cursor before starting.
+     *
+     * @return string|bool|null Returns:
+     *   - string: The savepoint name when a nested transaction is created.
+     *   - null: A new transaction was started successfully.
+     *   - false: Failed to start a transaction or create a savepoint.
+     *
+     * @see self::beginNestedTransaction() Throwing nested transaction start.
+     * 
+     * @example - Nested transaction example:
+     * ```php
+     * $name = $db->tryBeginNestedTransaction();
+     * 
+     * if($name === false){
+     *      echo 'Failed';
+     * }
+     * ```
+     */
+    public function tryBeginNestedTransaction(bool $closeCursor = false): string|bool|null;
+
+    /**
+     * Set a named transaction savepoint.
+     * 
+     * @param string $name The name for a savepoint.
+     * 
+     * @return bool Returns true on success or false on failure.
+     * @throws DatabaseException If an invalid savepoint name or database error.
+     */
+    public function savepoint(string $name): bool;
+
+    /**
      * Commit a transaction.
      *
-     * @param int $flags Optional flags for custom handling (MySQLi only).
-     * @param string|null $name Optional name for a savepoint (MySQLi only).
+     * @param int $flags Optional flags for custom handling.
+     * @param string|null $name Optional name for a savepoint.
      * 
      * @return bool Returns true if the transaction was successfully committed.
-     * @throws DatabaseException Throw if an called when no connection is established.
+     * @throws DatabaseException If an invalid savepoint name or database error during commit.
      */
     public function commit(int $flags = 0, ?string $name = null): bool;
 
@@ -287,30 +548,47 @@ interface DatabaseInterface
      *                          If provided, rolls back to the savepoint in PDO.
      * 
      * @return bool Returns true if the rollback was successful, otherwise false.
-     * @throws DatabaseException Throws an exception in PDO if rolling back to a savepoint fails.
+     * @throws DatabaseException If an invalid savepoint name or database error during rollback.
      */
     public function rollback(int $flags = 0, ?string $name = null): bool;
+
+    /** 
+     * Removes the named savepoint from the set of savepoints of the current transaction.
+     * 
+     * @param string $name The savepoint name to release.
+     * 
+     * @return bool Returns true on success or false on failure.
+     * @throws DatabaseException If an invalid savepoint name or database error.
+     */
+    public function release(string $name): bool;
 
     /**
      * Check if there is an active transaction.
      * 
      * @return bool Returns true if there is an active transaction, otherwise false.
-     * @throws DatabaseException Throw if an called when no connection is established.
+     * @throws DatabaseException If an called when no connection is established.
      */
     public function inTransaction(): bool;
 
     /**
      * Determines the appropriate database parameter type for a given value.
      *
-     * This is used to bind parameters correctly when preparing SQL statements,
-     * returning either a PDO type constant (string) or a MySQLi type constant (int),
-     * depending on the driver context.
+     * This is used to bind parameters correctly when preparing SQL statements.
+     * 
+     * Supported types (by integer code):
+     * 
+     * - `0` => `PARAM_NULL` (null values)
+     * - `1` => `PARAM_INT`  (integers)
+     * - `2` => `PARAM_STR`  (strings)
+     * - `3` => `PARAM_LOB`  (binary data or strings with non-printable characters)
+     * - `5` => `PARAM_BOOL` (boolean values, treated as integers in MySQLi)
+     * - `6`, `192` => `PARAM_FLOAT` (floating-point numbers, treated as doubles in PDO)
      *
      * @param mixed $value The value to evaluate.
      *
-     * @return string|int Return the parameter type, a string for PDO or an integer for MySQLi.
+     * @return int Return an integer value representing the parameter typ.
      */
-    public static function getType(mixed $value): string|int;
+    public static function getType(mixed $value): int;
 
     /**
      * Binds a value to a named parameter for use in a prepared statement.
@@ -352,7 +630,7 @@ interface DatabaseInterface
      * @param int|null $type (Optional) The data type for the value (default: null).
      *                          - `PARAM_*`, `PARAM_*` - For MySQLi and PDO driver.
      *                          - `PDO::PARAM_*` - For PDO driver only supports custom type.
-     *                          - `NULL` - Resolve internally.
+     *                          - `NULL` - Resolve by value internally.
      *
      * @return DatabaseInterface Returns the instance of database driver interface.
      * @throws DatabaseException If called without a prepared statement.
@@ -387,7 +665,7 @@ interface DatabaseInterface
      * @param int|null $type (Optional) The data type for the value (default: null).
      *                          - `PARAM_*`, `PARAM_*` - For MySQLi and PDO driver.
      *                          - `PDO::PARAM_*` - For PDO driver only supports custom type.
-     *                          - `NULL` - Resolve internally.
+     *                          - `NULL` - Resolve by value internally.
      *
      * @return DatabaseInterface Returns the instance of database driver interface.
      * @throws DatabaseException If called without a prepared statement.
@@ -480,7 +758,7 @@ interface DatabaseInterface
      *                  - RETURN_STMT: Return the statement object itself (same as `$db->getStatement()`).
      *                  - RETURN_RESULT: Return the query result in MySQLi or statement in PDO.
      * 
-     * @param int $fetchMode The result fetch mode (e.g, `FETCH_*`).
+     * @param int $fetchAS The result fetch mode (e.g, `FETCH_*`).
      *                       Used only with `RETURN_NEXT` and `RETURN_ALL` modes.
      *
      * @return mixed|false Return the result based on the specified mode and return type.
@@ -488,7 +766,7 @@ interface DatabaseInterface
      * 
      * @see https://luminova.ng/docs/0.0.0/variables/helper - See documentation for database return modes.
      */
-    public function getResult(int $returnMode = RETURN_ALL, int $fetchMode = FETCH_OBJ): mixed;
+    public function getResult(int $returnMode = RETURN_ALL, int $fetchAS = FETCH_OBJ): mixed;
 
     /**
      * Fetch the next row from the result set as an object or array.
@@ -497,7 +775,7 @@ interface DatabaseInterface
      *
      * @return array|object|false Returns the next row as an object or array, or false if no more rows are available.
      * 
-     * @see getNext() - Alias
+     * @see self::getNext() - Alias
      */
     public function fetchNext(int $mode = FETCH_OBJ): array|object|bool;
 
@@ -519,7 +797,7 @@ interface DatabaseInterface
      *
      * @return array Returns an array of result objects or arrays, an empty array if no rows are found or false.
      * 
-     * @see getAll() - Alias
+     * @see self::getAll() - Alias
      */
     public function fetchAll(int $mode = FETCH_OBJ): array|object|bool;
 
@@ -578,25 +856,52 @@ interface DatabaseInterface
      *   - `RETURN_ALL` to retrieve all rows at once,  
      *   - `RETURN_NEXT` to fetch a single row,  
      *   - `RETURN_STREAM` to fetch rows one at a time (use in loops).
-     * @param int $mode The fetch mode (e.g., `FETCH_ASSOC`, `FETCH_OBJ`, `FETCH_*`).
+     * @param int $fetchAS The fetch mode (e.g., `FETCH_ASSOC`, `FETCH_OBJ`, `FETCH_*`).
      *
      * @return mixed Return the fetched result(s) based on the specified type and mode.
      * @throws DatabaseException Throws an exception if an error occurs.
      */
-    public function fetch(int $returnMode = RETURN_ALL, int $fetchMode = FETCH_OBJ): mixed;
+    public function fetch(int $returnMode = RETURN_ALL, int $fetchAS = FETCH_OBJ): mixed;
 
     /**
-     * Fetch the result set as an object of the specified class or stdClass.
-     * 
-     * @param \T<string>|null $class The full qualify class name to instantiate (default: `stdClass::class`).
-     * @param mixed ...$arguments Additional arguments to initialize the class constructor with.
-     * 
-     * @return \T<object>|null Returns the fetched object, or null if an error occurs.
-     * @throws DatabaseException If error occurs.
-     * 
+     * Fetch the next result row as an instance of the specified class.
+     *
+     * When no class is provided, the result is returned as a `stdClass` object.
+     * Constructor arguments can be provided and will be passed to the class
+     * constructor when creating the instance.
+     *
+     * @template T of object
+     *
+     * @param class-string<T>|null $class Fully qualified class name to instantiate.
+     *                                    Defaults to `stdClass`.
+     * @param mixed ...$arguments Constructor arguments passed when creating the class instance.
+     *
+     * @return T|null Returns an instance of the specified class, or null when no result exists.
+     * @throws DatabaseException If fetching fails.
+     *
      * @see https://luminova.ng/docs/0.0.0/database/drivers
      */
     public function fetchObject(?string $class = null, mixed ...$arguments): ?object;
+
+    /**
+     * Fetch all result rows as instances of the specified class.
+     *
+     * When no class is provided, results are returned as `stdClass` objects.
+     * Constructor arguments can be provided and will be passed to the class
+     * constructor when creating each instance.
+     *
+     * @template T of object
+     *
+     * @param class-string<T>|null $class Fully qualified class name to instantiate.
+     *                                    Defaults to `stdClass`.
+     * @param mixed ...$arguments Constructor arguments passed when creating class instances.
+     *
+     * @return array<int,T> Returns a list of hydrated class instances.
+     * @throws DatabaseException If fetching fails.
+     *
+     * @see https://luminova.ng/docs/0.0.0/database/drivers
+     */
+    public function fetchAllObject(?string $class = null, mixed ...$arguments): array;
 
     /**
      * Get the ID of the last inserted row or sequence value.

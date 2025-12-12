@@ -11,10 +11,10 @@
 namespace Luminova\Exceptions;
 
 use \Throwable;
-use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Exceptions\LuminovaException;
 
-class UnexpectedValueException extends AppException
+class UnexpectedValueException extends LuminovaException
 {
     /**
      * Constructor for UnexpectedValueException.

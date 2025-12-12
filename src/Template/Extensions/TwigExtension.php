@@ -12,17 +12,17 @@ namespace Luminova\Template\Extensions;
 
 use \Throwable;
 use \DateTimeZone;
-use \Luminova\Boot;
-use \Luminova\Luminova;
+use Luminova\Boot;
+use Luminova\Luminova;
 use \Twig\TwigFunction;
-use \Luminova\Time\Time;
+use Luminova\Time\Time;
 use \Twig\Extension\GlobalsInterface;
 use \Twig\Extension\AbstractExtension;
 use \Twig\Extension\ExtensionInterface;
-use \Luminova\Exceptions\ClassException;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Exceptions\ClassException;
+use Luminova\Exceptions\RuntimeException;
 use \App\Config\Templates\Twig\Extensions;
-use \Luminova\Exceptions\BadMethodCallException;
+use Luminova\Exceptions\BadMethodCallException;
 
 class TwigExtension extends AbstractExtension implements GlobalsInterface, ExtensionInterface
 {
@@ -36,7 +36,7 @@ class TwigExtension extends AbstractExtension implements GlobalsInterface, Exten
     /**
      * Customer registered classes via `Extensions::registerClasses`
      * 
-     * @var array<string,class-string<\T>> $classes.
+     * @var array<string,class-string<T>> $classes.
      */
     private static array $classes = [
         'Luminova' => Luminova::class,

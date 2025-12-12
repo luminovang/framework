@@ -12,21 +12,23 @@ namespace Luminova\Base;
 
 use \Closure;
 use \Throwable;
+use Luminova\Luminova;
 use \DateTimeInterface;
-use \Luminova\Time\Time;
-use \Luminova\Models\Task;
-use \Luminova\Logger\Logger;
-use \Opis\Closure\Serializer;
-use \Luminova\Command\Terminal;
-use \Luminova\Database\{Connection, Helpers\Alter};
-use \Luminova\Interface\{
+use Luminova\Time\Time;
+use Luminova\Models\Task;
+use Luminova\Command\Input;
+use Luminova\Logger\Logger;
+use Luminova\Utility\Serializer;
+use Luminova\Base\Helper\QueueTables;
+use \Opis\Closure\Serializer as OpisSerializer;
+use Luminova\Database\{Connection, Helpers\Alter};
+use Luminova\Interface\{
     DatabaseInterface, 
     QueueableInterface, 
-    InvokableInterface, 
-    LazyObjectInterface,
+    InvokableInterface,
     TaskWorkerInterface
 };
-use \Luminova\Exceptions\{
+use Luminova\Exceptions\{
     ErrorCode,
     InvalidArgumentException, 
     BadMethodCallException, 
@@ -34,7 +36,7 @@ use \Luminova\Exceptions\{
     FileException, 
     RuntimeException
 };
-use function \Luminova\Funcs\{root, make_dir};
+use function Luminova\Funcs\{root, make_dir};
 
 abstract class Queue
 {
@@ -43,77 +45,77 @@ abstract class Queue
      *
      * @var string PENDING
      */
-    public const PENDING = 'pending';
+    public final const PENDING = 'pending';
 
     /**
      * Task is temporarily paused and can be resumed.
      *
      * @var string PAUSED
      */
-    public const PAUSED = 'paused';
+    public final const PAUSED = 'paused';
 
     /**
      * Task is currently in progress.
      *
      * @var string RUNNING
      */
-    public const RUNNING = 'running';
+    public final const RUNNING = 'running';
 
     /**
      * Task has failed during execution.
      *
      * @var string FAILED
      */
-    public const FAILED = 'failed';
+    public final const FAILED = 'failed';
 
     /**
      * Task has completed successfully.
      *
      * @var string COMPLETED
      */
-    public const COMPLETED = 'completed';
+    public final const COMPLETED = 'completed';
 
     /**
      * Match all tasks regardless of their current status.
      *
      * @var string ALL
      */
-    public const ALL = 'all';
+    public final const ALL = 'all';
 
     /**
      * Mark tasks that failed due to an exception.
      *
      * @var string EXCEPTION
      */
-    protected const EXCEPTION = 'exception';
+    protected final const EXCEPTION = 'exception';
 
     /**
      * Match tasks that can be paused (e.g., running, failed).
      *
      * @var string PAUSEABLE
      */
-    protected const PAUSEABLE = 'pauseable';
+    protected final const PAUSEABLE = 'pauseable';
 
     /**
      * Match tasks that are ready for execution.
      *
      * @var string EXECUTABLE
      */
-    protected const EXECUTABLE = 'executable';
+    protected final const EXECUTABLE = 'executable';
 
     /**
      * Match tasks that run indefinitely without expiration.
      *
      * @var string FOREVER
      */
-    public const FOREVER = 'forever';
+    public final const FOREVER = 'forever';
 
     /**
      * List of all valid task statuses.
      * 
      * @var array<int,string> STATUS_NAMES
      */
-    protected const STATUS_NAMES = [
+    protected final const STATUS_NAMES = [
         self::PENDING, 
         self::PAUSED,
         self::RUNNING, 
@@ -124,16 +126,16 @@ abstract class Queue
     /**
      * Database connection instance used for task operations.
      * 
-     * @var Connection|null $db
+     * @var Connection|null $conn
      */
-    protected ?Connection $db = null;
+    protected ?Connection $conn = null;
 
     /**
      * Database driver instance.
      * 
-     * @var DatabaseInterface|null $stmt
+     * @var DatabaseInterface|null $db
      */
-    private static ?DatabaseInterface $stmt = null;
+    private ?DatabaseInterface $db = null;
 
     /**
      * Task completion callback.
@@ -160,18 +162,18 @@ abstract class Queue
     protected ?Closure $onError = null;
 
     /**
-     * Lazy loaded terminal instance.
+     * Terminal command input.
      * 
-     * @var Terminal<LazyObjectInterface>|null $term
+     * @var Input|null $input
      */
-    protected ?LazyObjectInterface $term = null;
+    protected ?Input $input = null;
 
     /**
-     * A static instances by class.
+     * A static instance.
      *
-     * @var array<class-string,static> $instances
+     * @var static|null $instance
      */
-    private static array $instances = [];
+    private static ?self $instance = null;
 
     /**
      * Holds staged tasks.
@@ -218,15 +220,17 @@ abstract class Queue
     protected bool $deleteOnCompletion = false;
 
     /**
-     * Flag to enable or disable support for Opis\Closure serialized handlers.
+     * Flag to enable or disable support for Closure serialized handlers.
      *
-     * When set to true, the system will allow serialized handlers and deserialized using `Opis\Closure\Serializer`. 
+     * When set to true, the system will allow serialized handlers and deserialized 
+     * using `Luminova\Utility\Serializer` or `Opis\Closure\Serializer`. 
+     * 
      * This enables storing closures (anonymous functions) as strings and restoring them later.
      * If false, only standard callable formats (e.g., Class@method or function names) are allowed.
      *
-     * @var bool $supportOpisClosure
+     * @var bool $isClosureSupported
      */
-    protected bool $supportOpisClosure = false;
+    protected bool $isClosureSupported = false;
 
     /**
      * File path used to signal background workers to stop.
@@ -264,7 +268,7 @@ abstract class Queue
      * If `true` instance of `Luminova\Models\Task` will be returned.
      * If `false` an array of task(s) will be returned
      * 
-     * @var string $returnAsTaskModel
+     * @var bool $returnAsTaskModel
      * @internal This will always set to false when executing task in `novakit`.
      */
     public bool $returnAsTaskModel = true;
@@ -282,6 +286,16 @@ abstract class Queue
      * @var array $result
      */
     private array $result = [];
+
+    /**
+     * Cache for igbinary serialization support.
+     * 
+     * @var array $igbinary
+     */
+    private static array $igbinary = [
+        'serialize'   => null,
+        'unserialize' => null
+    ];
 
     /**
      * File lock handler
@@ -328,7 +342,7 @@ abstract class Queue
      */
     public function __construct()
     {
-        $this->db = Connection::getInstance();
+        $this->conn = new Connection();
         $this->onCreate();
     }
 
@@ -343,7 +357,7 @@ abstract class Queue
      */
     public static function __callStatic(string $method, array $arguments): mixed
     {
-        $instance = self::getInstance();
+        $instance = static::getInstance();
 
          if (!method_exists($instance, $method)) {
             throw new BadMethodCallException(sprintf(
@@ -391,28 +405,40 @@ abstract class Queue
     */
     public static function getInstance(): static
     {
-        $class = static::class;
-
-        if (!isset(self::$instances[$class])) {
-            self::$instances[$class] = new static();
+        if (!static::$instance instanceof static) {
+            static::$instance = new static();
         }
 
-        return self::$instances[$class];
+        return static::$instance;
     }
 
     /**
-     * Attach a terminal instance for use within the queue system.
+     * Set the command input for the queue instance.
      *
-     * This makes command arguments and options available inside the queue class.
+     * Makes the command arguments and options available within the queue.
      *
-     * @param Terminal|LazyObjectInterface $term Terminal instance that provides command arguments/options.
+     * @param Input $input The command input instance.
      *
-     * @return static Returns the instance of the class.
+     * @return self Returns the current instance.
      */
-    public function setTerminal(LazyObjectInterface|Terminal $term): self
+    public function setCommandInput(Input $input): self
     {
-        $this->term = $term;
+        $this->input = $input;
         return $this;
+    }
+
+    /**
+     * Set the command input for the queue instance.
+     *
+     * @param Input $input The command input instance.
+     *
+     * @return self Returns the current instance.
+     *
+     * @deprecated Use setCommandInput() instead.
+     */
+    public function setTerminal(Input $input): self
+    {
+        return $this->setCommandInput($input);
     }
 
     /**
@@ -422,9 +448,9 @@ abstract class Queue
      */
     protected final function isConnected(): bool 
     {
-        return ($this->db instanceof Connection) && 
-            ($this->db->database() instanceof DatabaseInterface) && 
-            $this->db->database()->isConnected();
+        return ($this->conn instanceof Connection) && 
+            ($this->conn->database() instanceof DatabaseInterface) && 
+            $this->conn->database()->isConnected();
     }
 
     /**
@@ -447,30 +473,6 @@ abstract class Queue
     }
 
     /**
-     * Checks if the given handler string is a serialized Opis\Closure.
-     *
-     * This method verifies whether the provided handler string is a serialized
-     * instance of Opis\Closure\Serializer. It performs the following checks:
-     * 
-     * - Returns false if Opis closure support is disabled or the handler is empty.
-     * - Returns false if the Opis\Closure\Serializer class is not available.
-     * - Checks if the handler starts with a serialized format marker matching
-     *   either object (`O:`) or custom-serialized (`C:`) Opis closures.
-     *
-     * @param string $handler The serialized string to check.
-     * 
-     * @return bool Return true if the string appears to be an Opis closure, false otherwise.
-     */
-    public function isOpisClosure(string $handler): bool
-    {
-        if (!$this->supportOpisClosure || !$handler) {
-            return false;
-        }
-    
-        return self::isClosure($handler);
-    }
-
-    /**
      * Get the results of executed tasks.
      *
      * When task is executed in non-cli mode, this method will return all collected task results including status, handler, and response.
@@ -490,7 +492,8 @@ abstract class Queue
      *
      * @return string Return the group name used for this task queue.
      * 
-     * > The group name is also used internally for identifying or grouping tasks when multiple task classes share the same queue system storage.
+     * > The group name is also used internally for identifying 
+     * > or grouping tasks when multiple task classes share the same queue system storage.
      */
     public function getGroup(): string
     {
@@ -541,7 +544,7 @@ abstract class Queue
     public function getPathInfo(string $context): ?array
     {
         $id = str_replace('\\', '_', static::class);
-        $path = root('writeable/temp/worker/');
+        $path = root('/writeable/logs/queues/');
 
         switch ($context) {
             case 'event':
@@ -550,7 +553,7 @@ abstract class Queue
                 }
 
                 $path .= 'events/';
-                return [$path, "{$path}{$id}task.log"];
+                return [$path, "{$path}{$id}_Task.log"];
 
             case 'signal':
                 if (!$this->stopSignalFile) {
@@ -630,11 +633,11 @@ abstract class Queue
     protected final function database(): DatabaseInterface
     {
         if($this->isConnected()){
-            if(!self::$stmt instanceof DatabaseInterface){
-                self::$stmt = $this->db->database();
+            if(!$this->db instanceof DatabaseInterface){
+                $this->db = $this->conn->database();
             }
 
-            return self::$stmt;
+            return $this->db;
         }
 
         throw new DatabaseException(
@@ -652,16 +655,18 @@ abstract class Queue
      */
     public function close(): bool
     {
-        if($this->isConnected()){
-            $this->db->disconnect();
+        if($this->db instanceof DatabaseInterface){
+            $this->db->close();
         }
 
-         if(self::$stmt instanceof DatabaseInterface){
-            self::$stmt->close();
+        if($this->conn instanceof Connection){
+            $this->conn->purge(true);
+            $this->conn->disconnect();
         }
 
+        $this->conn = null;
         $this->db = null;
-        self::$stmt = null;
+
         return !$this->isConnected();
     }
 
@@ -685,14 +690,19 @@ abstract class Queue
         $sql .= " AND group_name = '" . $this->getGroup() . "'";
         $this->running = false;
 
-        $this->database()->query($sql);
-        $this->close();
-        $this->unlock();
+        try{
+            $this->database()->query($sql);
+        } catch (Throwable $e) {
+            throw $e;
+        } finally {
+            $this->close();
+            $this->unlock();
+        }
 
         if ($signal !== null) {
             $pid = getmypid();
             $info = $pid ? " (PID: $pid)" : '';
-            echo "Received signal: {$signal}{$info}\n";
+            $this->out("Received signal: {$signal}{$info}");
         }
     }
 
@@ -709,34 +719,27 @@ abstract class Queue
      */
     public function init(): bool
     {
-        $handler = $this->supportOpisClosure
-            ? ' MEDIUMTEXT NOT NULL'
-            : ' VARCHAR(255) NOT NULL';
+        try{
+            $db = $this->database();
+            $driver = strtolower($db->getDriver());
+            $table = new QueueTables($db, $this->table);
 
-        $result = $this->database()->exec("CREATE TABLE IF NOT EXISTS {$this->table} (
-            `id` INT AUTO_INCREMENT PRIMARY KEY, 
-            `priority` TINYINT(3) NOT NULL DEFAULT 0,
-            `attempts` INT UNSIGNED NOT NULL DEFAULT 0,
-            `retries` TINYINT(3) NOT NULL DEFAULT 0,
-            `auto_delete` TINYINT(1) NOT NULL DEFAULT 0,
-            `forever` INT UNSIGNED DEFAULT NULL,
-            `status` ENUM('pending', 'running', 'failed', 'completed', 'paused') DEFAULT 'pending',
-            `group_name` VARCHAR(150) NOT NULL,
-            `handler` {$handler},
-            `arguments` TEXT COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`arguments`)),
-            `signature` CHAR(32) NOT NULL,
-            `outputs` LONGTEXT DEFAULT NULL,
-            `scheduled_at` DATETIME DEFAULT NULL,
-            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            `updated_at` TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY `uniq_task_group_signature` (`group_name`, `signature`),
-            KEY `idx_group_status` (`group_name`, `status`),
-            KEY `idx_group_forever_status` (`group_name`, `forever`, `status`),
-            KEY `idx_group_scheduled` (`group_name`, `scheduled_at`)
-        ) DEFAULT CHARSET=utf8mb4") > 0;
-
-        $this->clean();
-        return $result;
+            return match ($driver) {
+                'mysql'       => $table->createMysql(),
+                'sqlite'      => $table->createSqlite(),
+                'sqlsrv',
+                'sql-server'  => $table->createSqlServer(),
+                'oracle'      => $table->createOracle(),
+                'ms-access'   => $table->createMsAccess(),
+                default       => throw new DatabaseException(
+                    sprintf('Unsupported database driver: %s', $driver)
+                ),
+            };
+        } catch(Throwable $e){
+            throw $e;
+        } finally {
+            $this->close();
+        }
     }
 
     /**
@@ -764,7 +767,7 @@ abstract class Queue
     /**
      * Queue a new task for background execution.
      *
-     * @param string|class-string<QueueableInterface>|class-string<InvokableInterface> $handler The task handler reference (e.g., function name, `Class@method`, or `Class::method`).
+     * @param array|string|class-string<QueueableInterface>|class-string<InvokableInterface> $handler The task handler reference (e.g., function name, `Class@method`, or `Class::method`).
      * @param array $arguments Optional arguments to pass to the task on execution.
      * @param DateTimeInterface|string|int|null $schedule Optional delay task execution time (default: null). 
      *                          Accepts `DateTime`, Unix  timestamp, or relative time. 
@@ -773,7 +776,7 @@ abstract class Queue
      * @param int|null $forever Interval in minutes between repeated executions for a forever task (default: null).
      *                  (e.g, `1440` once per day).
      * @param int $retries The number of times to retry failed task (default: `0` no retry).
-     * @param int $deleteOnComplete If true delete task once completed (default: `false`).
+     * @param bool $deleteOnComplete If true delete task once completed (default: `false`).
      *
      * @return int Returns the inserted task ID on success, or 0 if failed or ignored.
      * @throws DatabaseException If a database error occurs.
@@ -783,7 +786,7 @@ abstract class Queue
      * ```php
      * $queue->enqueue(
      *     handler:   App\Utils\Mailer::class . '@send',
-     *     arguments: ['user@example.com', 'welcome-template'],
+     *     arguments: ['user@example.com', ['template' => 'welcome-template']],
      *     schedule:  '+5 minutes',
      *     priority:   1
      * );
@@ -804,7 +807,7 @@ abstract class Queue
      * @see batchEnqueue()
      */
     public function enqueue(
-        string $handler, 
+        array|string $handler, 
         array $arguments = [], 
         DateTimeInterface|string|int|null $schedule = null,
         int $priority = 0,
@@ -817,16 +820,20 @@ abstract class Queue
             return -0;
         }
 
+        if(is_array($handler)){
+            $handler = self::fromArrayHandler($handler);
+        }
+
         $forever = $this->getForever($forever);
         $schedule = $this->toDateTime($schedule);
-        $jsonArgs = json_encode($arguments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null;
+        $jsonArgs = $this->parseArgument($arguments);
 
         $stmt = $this->database()->prepare($this->getInsertSql())
             ->bind(':handler', $handler)
             ->bind(':arguments', $jsonArgs)
             ->bind(':forever', $forever)
             ->bind(':priority', max(0, min(100, $priority)))
-            ->bind(':signature', md5("{$handler}{$jsonArgs}"))
+            ->bind(':signature', Luminova::hash('xxh3', "{$handler}{$jsonArgs}"))
             ->bind(':retries', max(0, (int) $retries))
             ->bind(':auto_delete', (int) $deleteOnComplete)
             ->bind(':scheduled', $schedule);
@@ -842,7 +849,7 @@ abstract class Queue
      * in an internal queue list which is later processed when the `task:queue` command is executed.
      * Typically used within subclasses of `Queue` (e.g., in `__construct`, `onCreate`, or `tasks()`).
      *
-     * @param string|class-string<QueueableInterface>|class-string<InvokableInterface> $handler The task handler reference (e.g., function name, `Class@method`, or `Class::method`).
+     * @param array|string|class-string<QueueableInterface>|class-string<InvokableInterface> $handler The task handler reference (e.g., function name, `Class@method`, or `Class::method`).
      * @param array<int,mixed> $arguments Optional arguments to pass to the task on execution.
      * @param DateTimeInterface|string|int|null $schedule Optional delay time for task execution.
      *                          Accepts `DateTime`, Unix timestamp, or relative time string (e.g., `+5 minutes`). 
@@ -851,9 +858,9 @@ abstract class Queue
      * @param int|null $forever Optional interval in minutes for repeated execution (e.g., `1440` = run once per day). 
      *                      If set, the task is marked as a "forever" task.
      * @param int $retries Optional number of times to retry the task if it fails (default: `0` no retry).
-     * @param int $deleteOnComplete If true delete task once completed (default: `false`).
+     * @param bool $deleteOnComplete If true delete task once completed (default: `false`).
      *
-     * @return static Returns the current instance of class.
+     * @return self Returns the current instance of class.
      *
      * @example - Queue a one-time task:
      * ```php
@@ -890,7 +897,7 @@ abstract class Queue
      * @see batchEnqueue()
      */
     protected final function stage(
-        string $handler, 
+        array|string $handler, 
         array $arguments = [], 
         DateTimeInterface|string|int|null $schedule = null,
         int $priority = 0,
@@ -959,33 +966,45 @@ abstract class Queue
 
         $inserted = 0;
         $db = $this->database();
-
-        $db->beginTransaction();
+        $inTransaction = $db->beginTransaction();
 
         try{
-            foreach ($tasks as $task) {
+            foreach ($tasks as $tid => $task) {
+                if($inTransaction){
+                    $db->savepoint("tid_{$tid}");
+                }
+
                 if ($this->enqueue(...$this->getTaskFrom($task)) > 0) {
                     $inserted++;
-                    usleep(5_000);
+
+                    if($inTransaction){
+                        $db->release("tid_{$tid}");
+                    }
+                    
+                    uwait(0.5);
+                }elseif($inTransaction){
+                    $db->rollback("tid_{$tid}");
                 }
             }
+
+            if($inTransaction){
+                if($inserted > 0){
+                    return $db->commit() ? $inserted : 0;
+                }
+
+                $db->rollback();
+            }
+
+            return $inserted;
         }catch(Throwable $e){
-            if($db->inTransaction()){
+            if($inTransaction){
                 $db->rollback();
             }
 
             throw $e;
+        } finally{
+            $db->free();
         }
-
-        if($db->inTransaction()){
-            if($inserted > 0){
-                return $db->commit() ? $inserted : 0;
-            }
-
-            $db->rollback();
-        }
-
-        return $inserted;
     }
 
     /**
@@ -1013,6 +1032,143 @@ abstract class Queue
         }
 
         return $stmt->fetchNext(FETCH_ASSOC) ?: null;
+    }
+
+     /**
+     * Get a list of tasks from the database, optionally filtered by status, offset, and limit.
+     *
+     * @param string $status Task status to filter by. Use `all` to fetch all tasks.
+     * @param int|null $limit Maximum number of tasks to retrieve. Null for no limit.
+     * @param int $offset The limit offset to start from (default: 0).
+     * @param bool $withTotal Whether to include total task count with result (default: false).
+     *
+     * @return array<int,array>|null Returns an array of tasks or null if no tasks found.
+     *              Return structure if `$countOver` is true `['total' => int, 'count' => int, 'tasks' => array|Task]`.
+     * @throws DatabaseException If the database connection fails or a query error occurs.
+     */
+    public function list(
+        string $status = self::ALL,
+        ?int $limit = null,
+        int $offset = 0,
+        bool $withTotal = false
+    ): ?array 
+    {
+        return $this->find(
+            id: null,
+            status: $status,
+            limit: $limit,
+            offset: $offset,
+            withTotal: $withTotal
+        );
+    }
+
+    /**
+     * Find tasks by ID and/or status.
+     *
+     * @param int|null $id The task ID to find. If null, fetches multiple tasks.
+     * @param string $status Task status to filter by. Use `all` to fetch all tasks.
+     * @param int|null $limit Maximum number of tasks to retrieve. Null for no limit.
+     * @param int $offset The limit offset to start from (default: 0).
+     * @param bool $withTotal Whether to include total task count with result (default: false).
+     *
+     * @return Task|array<int,array>|array<string,mixed>|null Returns a single Task object if ID is provided,
+     *              an array of tasks if no ID is provided, or null if no tasks found.
+     *              Return structure if `$withTotal` is true `['total' => int, 'count' => int, 'tasks' => array|Task]`.
+     * @throws DatabaseException If the database connection fails or a query error occurs.
+     */
+    public function find(
+        ?int $id = null,
+        string $status = self::ALL,
+        ?int $limit = null,
+        int $offset = 0,
+        bool $withTotal = false
+    ): ?array 
+    {
+        $filtered = in_array($status, [self::ALL, self::EXECUTABLE, self::FOREVER], true);
+        $countColumn = '';
+        $isSingle = $id !== null;
+
+        if (!$filtered) {
+            $this->assertStatus($status);
+        }
+
+        $db = $this->database();
+
+        if($withTotal && $this->supportsWindowFunctions($db)){
+            $countColumn = ', COUNT(*) OVER() AS totalTasks';
+        }
+
+        $sql = "SELECT *{$countColumn} FROM {$this->table}";
+        $sql .= $this->getListSql($status);
+
+        if($isSingle){
+            $sql .= " AND `id` = {$id}";
+            $sql .= " LIMIT 1";
+        } else{
+            $sql .= " ORDER BY `priority` ASC, `scheduled_at` ASC, `id` ASC";
+            if ($limit !== null && $limit > 0) {
+                $sql .= " LIMIT {$offset}, {$limit}";
+            }
+        }
+
+        if($filtered){
+            $stmt = $db->query($sql);
+        }else{
+            $stmt = $db->prepare($sql);
+            $stmt->bind(':status', $status);
+            $stmt->execute();
+        }
+
+        if(!$stmt->ok()){
+            return null;
+        }
+
+        $result = $isSingle
+            ? ($this->returnAsTaskModel 
+                ? $stmt->fetchObject(Task::class) 
+                : $stmt->fetchNext(FETCH_ASSOC)
+              )
+            : $stmt->fetchAll(FETCH_ASSOC);
+
+         if($this->returnAsTaskModel){
+            return $stmt->fetchObject(Task::class) ?: null;
+        }
+
+        if(!$result){
+            return null;
+        }
+
+        $result = $isSingle ? [$result] : $result;
+        $parseObject = $this->returnAsTaskModel && !$isSingle;
+
+        if(!$withTotal){
+            return $parseObject
+                ? self::forEach($result, static fn(array $item) => new Task($item))
+                : $result;
+        }
+
+        if($countColumn === ''){
+            return [
+                'total' => $this->count($status),
+                'count' => count($result),
+                'tasks' => $parseObject
+                    ? self::forEach($result, static fn(array $item) => new Task($item))
+                    : $result
+            ];
+        }
+
+        return [
+            'total' => (int) $result[0]['totalTasks'] ?? 0,
+            'count' => count($result),
+            'tasks' => self::forEach(function(array $item) use($parseObject): Task|array {
+                if($parseObject){
+                    return new Task($item);
+                }
+
+                unset($item['totalTasks']);
+                return $item;
+            }, $result)
+        ];
     }
 
     /**
@@ -1156,94 +1312,6 @@ abstract class Queue
     }
 
     /**
-     * Get a list of tasks from the database, optionally filtered by status, offset, and limit.
-     *
-     * @param string $status Task status to filter by. Use `all` to fetch all tasks.
-     * @param int|null $limit Maximum number of tasks to retrieve. Null for no limit.
-     * @param int $offset The limit offset to start from (default: 0).
-     * @param bool $withTotal Whether to include total task count with result (default: false).
-     *
-     * @return array<int,array>|null Returns an array of tasks or null if no tasks found.
-     *              Return structure if `$countOver` is true `['total' => int, 'count' => int, 'tasks' => array|Task]`.
-     * @throws DatabaseException If the database connection fails or a query error occurs.
-     */
-    public function list(
-        string $status = self::ALL,
-        ?int $limit = null,
-        int $offset = 0,
-        bool $withTotal = false
-    ): ?array 
-    {
-        $filtered = in_array($status, [self::ALL, self::EXECUTABLE, self::FOREVER], true);
-        $countColumn = '';
-
-        if (!$filtered) {
-            $this->assertStatus($status);
-        }
-
-        $db = $this->database();
-
-        if($withTotal && $this->supportsWindowFunctions($db)){
-            $countColumn = ', COUNT(*) OVER() AS totalTasks';
-        }
-
-        $sql = "SELECT *{$countColumn} FROM {$this->table}";
-        $sql .= $this->getListSql($status);
-        $sql .= " ORDER BY priority ASC, scheduled_at ASC, id ASC";
-
-        if ($limit !== null && $limit > 0) {
-            $sql .= " LIMIT {$offset}, {$limit}";
-        }
-
-        if($filtered){
-            $stmt = $db->query($sql);
-        }else{
-            $stmt = $db->prepare($sql);
-            $stmt->bind(':status', $status);
-            $stmt->execute();
-        }
-
-        if(!$stmt->ok()){
-            return null;
-        }
-
-        $result = $stmt->fetchAll(FETCH_ASSOC);
-
-        if(!$result){
-            return null;
-        }
-
-        if(!$withTotal){
-            return $this->returnAsTaskModel 
-                ? array_map(static fn(array $item) => new Task($item), $result)
-                : $result;
-        }
-
-        if($countColumn === ''){
-            return [
-                'total' => $this->count($status),
-                'count' => count($result),
-                'tasks' => $this->returnAsTaskModel 
-                    ? array_map(static fn(array $item) => new Task($item), $result)
-                    : $result
-            ];
-        }
-
-        return [
-            'total' => (int) $result[0]['totalTasks'] ?? 0,
-            'count' => count($result),
-            'tasks' => array_map(function(array $item): Task|array {
-                if($this->returnAsTaskModel){
-                    return new Task($item);
-                }
-
-                unset($item['totalTasks']);
-                return $item;
-            }, $result)
-        ];
-    }
-
-    /**
      * Exports the list of tasks with the given status to a file.
      *
      * The exported file will contain an array of task definitions, including:
@@ -1316,12 +1384,7 @@ abstract class Queue
         ];
 
         foreach ($tasks as $task) {
-            $arguments = $task['arguments'];
-
-            if ($arguments) {
-                $decoded = json_decode($arguments, true);
-                $arguments = is_array($decoded) ? $decoded : $arguments;
-            }
+            $arguments = $this->toArguments($task['arguments'] ?? null);
 
             $lines[] = "    [";
             $lines[] = "        'priority'     => {$task['priority']},";
@@ -1348,7 +1411,6 @@ abstract class Queue
      * The lock is determined by file-based advisory locking using `flock`.
      *
      * @param int|null $permission Optional. Directory permission mode (e.g, 0775).
-     *                             If null use the default application directory permission from `App\Config\Files`.
      *
      * @return bool Return true if the lock was successfully acquired; false if already locked or on failure.
      * @throws RuntimeException If failed to open lock file.
@@ -1386,6 +1448,9 @@ abstract class Queue
 
     /**
      * Release the lock by deleting the lock file.
+     * 
+     * This method releases the exclusive lock acquired by `lock()`. 
+     * It closes the file handle and attempts to delete the lock file.
      *
      * @return bool Return true if lock file was deleted.
      */
@@ -1451,102 +1516,197 @@ abstract class Queue
      * The worker checks for new tasks at each cycle and executes them if available.
      * Adaptive sleep delay is applied based on the number of completed tasks per cycle.
      *
-     * @param int $sleep Base sleep time (in microseconds) between task cycles.
+     * @param float|int $sleep Base sleep time in seconds between task cycles.
      * @param int|null $limit Optional. Maximum number of tasks to fetch per cycle. Null for no limit.
      * @param int $maxIdle Maximum consecutive idle cycles allowed before automatic shutdown.
+     * @param int|null $id Optional task ID to specifically run only that task.
      *
      * @return void
      * @throws RuntimeException If an unrecoverable error occurs during execution.
      * @throws DatabaseException If the database is not connected or a query fails.
      */
-    public final function run(int $sleep = 100, ?int $limit = null, int $maxIdle = 10): void
+    public final function run(
+        float|int $sleep = 0.001,
+        ?int $limit = null,
+        int $maxIdle = 10,
+        ?int $id = null
+    ): void
     {
         $this->setup();
+
+        $startedAt = microtime(true);
+        $reason = 'normal';
+
+        $this->out(sprintf(
+            'Worker started | group=%s | limit=%s | sleep=%dus | maxIdle=%d | started=%s',
+            $this->getGroup(),
+            $limit ?? 'none',
+            $sleep,
+            $maxIdle,
+            date('Y-m-d H:i:s')
+        ));
+
         $idleCount = 0;
 
         while ($this->running) {
+            // Stop signal check
             if ($this->stopSignalFile) {
                 $file = $this->getPathInfo('signal')[1] ?? null;
 
                 if ($file && is_file($file)) {
+                    $reason = 'signal';
+                    $this->out(sprintf(
+                        'Shutdown signal detected | file=%s',
+                        $file
+                    ));
+
                     $this->shutdown();
-                    echo "Worker stopped by signal file: {$file}\n";
                     break;
                 }
             }
 
-            $tasks = $this->list(self::EXECUTABLE, $limit);
+            $tasks = $this->find($id, self::EXECUTABLE, $limit);
 
-            if (empty($tasks)) {
+            // Idle state
+            if ($tasks === null || $tasks === []) {
                 $idleCount++;
+
+                $this->out(sprintf(
+                    'Idle %d/%d | no tasks found',
+                    $idleCount,
+                    $maxIdle
+                ));
+
                 if ($idleCount >= $maxIdle) {
+                    $reason = 'idle';
+
+                    $this->out(sprintf(
+                        'Maximum idle limit reached | checks=%d',
+                        $maxIdle
+                    ));
+
                     $this->shutdown();
-                    echo "No new tasks after $maxIdle idle checks. Worker exiting.\n";
                     break;
                 }
 
-               sleep(1);
-               continue;
+                uwait(0.5);
+                continue;
             }
 
-            $idleCount = 0; 
+            // Processing state
+            $idleCount = 0;
+
             $total = count($tasks);
+            $entries = $total;
             $completed = 0;
 
-            foreach ($tasks as $task) {
-                if(!$this->running){
-                    continue;
-                }
+            $this->out(sprintf(
+                'Processing batch | tasks=%d',
+                $total
+            ));
 
-                $this->logEvent((int) $task['id'], $task['handler'], null, true);
+            $this->onEachTask($tasks, $completed, $entries);
 
-                $response = $this->handle($task);
-                $completed++;
-
-                if ($this->compute($response, $task['handler']) && $total > 1) {
-                    usleep(1000);
-                }
-            }
-
-            if(!$this->running){
+            if (!$this->running) {
+                $reason = 'shutdown';
                 break;
             }
 
-            if ($sleep > 0 && $total > 1) {
-                $ratio = $completed / $total;
-                $scale = 1.0 - $ratio; 
-                $delay = (int) ($sleep * ($scale * $total));
+            $this->out(sprintf(
+                'Batch complete | processed=%d/%d',
+                $completed,
+                $total
+            ));
 
-                $sleep = min(1_000_000, max(50_000, $delay));
-            }
+            $sleep = $this->getDelay($sleep, $completed, $total);
 
-            usleep($sleep);
+            $this->out(sprintf(
+                'Sleeping | duration=%dus',
+                $sleep
+            ));
+
+            uwait($sleep);
         }
+
+        $runtime = microtime(true) - $startedAt;
+
+        $this->out(sprintf(
+            'Worker terminated | reason=%s | runtime=%.3fs',
+            $reason,
+            $runtime
+        ));
     }
 
     /**
-     * Checks if the task handler is a serialized Opis\Closure.
+     * Checks if the task handler is a serialized Closure.
      * 
      * @param string $handler The handler to check
      * 
-     * @return bool Return true if the handler appears to be an Opis closure, false otherwise.
+     * @return bool Return true if the handler appears to be a closure, false otherwise.
      */
-    public static function isClosure(string $handler): bool
+    public function isClosure(string $handler): bool
     {
-        if (!$handler || !class_exists(Serializer::class)) {
+        if(!$this->isClosureSupported){
             return false;
         }
+        
+        [, $status] = self::withClosure($handler);
 
-        if(str_contains($handler, '{')){
-            return true;
+        return $status;
+    }
+
+    /**
+     * Get the closure provider class name.
+     *
+     * @param string $handler The handler to resolve.
+     * 
+     * @return string|null Return class name or null.
+     */
+    public function getClosure(string $handler): ?string
+    {
+        [$class, ] = self::withClosure($handler);
+
+        return $class;
+    }
+
+    /**
+     * Resolve handle closure and return provider class and status.
+     *
+     * @param string $handler The handler to resolve.
+     * 
+     * @return array{class:string,status:bool} Return class name and true if closure, otherwise null and false.
+     */
+    public static function withClosure(string $handler): array
+    {
+        if (!$handler || !in_array(substr($handler ?? '', 0, 2), ['O:', 'C:', 'c:'], true)) {
+            return [null, false];
         }
 
-        $length = strlen(Serializer::class);
+        if (!class_exists(OpisSerializer::class)){
+            return Serializer::isClosure($handler) 
+                ? [Serializer::class, true] 
+                : [null, false];
+        }
 
-        return str_starts_with($handler, 'O:' . $length . ':"' . Serializer::class . '"')
-            || str_starts_with($handler, 'C:' . $length . ':"' . Serializer::class . '"');
-        
-        return false;
+        static $providers = [
+            Serializer::class                     => false,
+            OpisSerializer::class                 => true,
+            \Opis\Closure\PriorityWrapper::class  => true,
+            \Opis\Closure\Box::class              => true
+        ];
+
+        foreach($providers as $class => $isOpis){
+            $pattern = strlen($class) . ':"' . $class . '"';
+
+            if(
+                str_starts_with($handler, 'O:' . $pattern)
+                || ($isOpis && str_starts_with($handler, 'C:' . $pattern))
+            ){
+                return [$isOpis ? OpisSerializer::class : Serializer::class, true];
+            }
+        }
+
+        return [null, false];
     }
 
     /**
@@ -1633,6 +1793,18 @@ abstract class Queue
     }
 
     /**
+     * Output message.
+     * 
+     * @param string $message The message to output.
+     * 
+     * @return void
+     */
+    protected function out(string $message): void
+    {
+        echo $message . PHP_EOL;
+    }
+
+    /**
      * Export a result as a string, scalar, or null depending on type.
      * 
      * This method can be override to implement how task response should be exported before saving to database.
@@ -1654,8 +1826,7 @@ abstract class Queue
             ($result === '') => $result,
             is_scalar($result) => $result,
             is_resource($result) => sprintf('resource (%s)', get_resource_type($result)),
-            is_array($result), is_object($result) =>
-                json_encode($result, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),
+            is_array($result), is_object($result) => $this->toJson($result),
             default => var_export($result, true),
         };
     }
@@ -1698,13 +1869,19 @@ abstract class Queue
             $instance = new $handler();
         }elseif (function_exists($handler)) {
             $instance = $handler;
-        }elseif ($this->isOpisClosure($handler)) {
-            try {
-                $isObject = true;
-                $instance = Serializer::unserialize($handler);
-            } catch (Throwable) {}
-        }elseif (str_contains($handler, '::')) {
-            [$instance, $method] = explode('::', $handler, 2);
+        }else{
+            [$class, $status] = self::withClosure($handler);
+
+            if ($status) {
+                try {
+                    $isObject = true;
+                    $instance = $class::unserialize($handler);
+                } catch (Throwable) {
+                    $isObject = false;
+                }
+            }elseif (str_contains($handler, '::')) {
+                [$instance, $method] = explode('::', $handler, 2);
+            }
         }
 
         if($instance === null){
@@ -1716,9 +1893,12 @@ abstract class Queue
             $isQueueable = ($instance instanceof QueueableInterface);
             $isAutoDelete = $isQueueable && $instance->deleteOnCompletion();
 
-            if($this->term && ($instance instanceof TaskWorkerInterface)){
+            if(
+                ($this->input instanceof Input) 
+                && ($instance instanceof TaskWorkerInterface)
+            ){
                 $isWorker = true;
-                $instance = $instance->setTerminal($this->term);
+                $instance = $instance->setCommandInput($this->input);
             }
         }
 
@@ -1788,20 +1968,52 @@ abstract class Queue
     }
 
     /**
+     * Convert a handler array to a string representation.
+     * 
+     * @param array $handler The handler array to convert.
+     * 
+     * @return string Return the handler as a string in the format "Class::method".
+     */
+    protected static final function fromArrayHandler(array $handler): string 
+    {
+        if (count($handler) !== 2) {
+            throw new RuntimeException(
+                'Handler array must contain exactly [class, method].'
+            );
+        }
+
+        [$class, $method] = $handler;
+
+        if (!is_string($class) || !is_string($method)) {
+            throw new RuntimeException(
+                'Handler elements must be strings: [class, method].'
+            );
+        }
+
+        if (!method_exists($class, $method)) {
+            throw new RuntimeException(
+                sprintf('Handler method not found: %s::%s', $class, $method)
+            );
+        }
+
+        return "{$class}::{$method}";
+    }
+
+    /**
      * Execute a single task from the queue and return the result.
      *
      * Handles errors and sets appropriate status.
      *
      * @param array $task Task data from the queue to execute.
      *
-     * @return array{id:int,status:string,output|string,autoDelete:bool} Return an array with [taskId, status, output].
+     * @return array{id:int,status:string,output:string,result:mixed,autoDelete:bool}
+     *      Return an array with [taskId, status, output].
      */
     private function handle(array $task): array
     {
         $id = (int) $task['id'];
         $handler = $task['handler'];
         $taskStatus = $task['status'];
-        $arguments  = json_decode($task['arguments'] ?? '[]', true) ?: [];
         $output  = '';
         $status  = self::COMPLETED;
         $result = null;
@@ -1821,11 +2033,16 @@ abstract class Queue
             );
     
             if (!$isInvokable && !is_callable($callable)) {
+                [$class, ] = self::withClosure($handler);
+                Logger::debug('Handler error', [
+                    'handler' => $handler,
+                    'class' => $class
+                ]);
                 return [
                     $id, self::EXCEPTION, 
                     sprintf(
                         "Invalid task handler: '%s' is not callable or does not implement %s or %s.",
-                        $this->isOpisClosure($handler) ? Serializer::class . '@anonymous' : $handler,
+                        $class ? "{$class}@anonymous" : $handler,
                         InvokableInterface::class,
                         QueueableInterface::class
                     ),
@@ -1844,7 +2061,7 @@ abstract class Queue
                     $this->deleteOnCompletion
                 );
 
-                $arguments = $arguments ?  array_values($arguments) : [];
+                $arguments = $this->toArguments($task['arguments'] ?? null);
                 $result = $callable(...$arguments);
                 
                 if ($result !== null) {
@@ -1863,6 +2080,102 @@ abstract class Queue
         }
 
         return [$id, $status, $output, $result, $isAutoDelete];
+    }
+
+    /**
+     * Calculate adaptive sleep delay based on completed tasks and total tasks.
+     *
+     * @param int $sleep Base sleep time (in microseconds).
+     * @param int $completed Number of tasks completed in the current batch.
+     * @param int $total Total number of tasks in the current batch.
+     *
+     * @return int Return the calculated sleep delay in microseconds.
+     */
+    private function getDelay(int $sleep, int $completed, int $total): int
+    {
+        if ($sleep <= 1|| $total <= 1) {
+            return $sleep;
+        }
+
+        $ratio = $completed / $total;
+        $scale = 1.0 - $ratio;
+
+        return min(1_000_000, max(50_000, (int) ($sleep * ($scale * $total))));
+    }
+
+    /**
+     * Internal method to process each task in the batch.
+     *
+     * @param array<int,array> $tasks List of tasks to process.
+     * @param int &$completed Reference to count of completed tasks.
+     * @param int &$entries Reference to count of remaining entries.
+     *
+     * @return void
+     */
+    private function onEachTask(array $tasks, int &$completed, int &$entries): void
+    {
+        foreach ($tasks as $task) {
+            if (!$this->running) {
+                $this->out("Execution halted | worker stopping");
+                break;
+            }
+
+            $taskId = (int) $task['id'];
+            $handler = $task['handler'];
+
+            if(!$this->isSignature($task['signature'], $handler, $task['arguments'] ?? null)){
+                $this->out("Invalid signature | worker skipped");
+                continue;
+            }
+
+            $this->out(sprintf("Executing task | id=%d | handler=%s", $taskId, $handler));
+            $this->log($taskId, $handler, null, true);
+
+            $response = $this->handle($task);
+            $completed++;
+            $entries--;
+
+            if ($this->compute($response, $handler) && $entries >= 1) {
+                uwait(0.1);
+            }
+        }
+    }
+
+    /**
+     * Helper method to iterate over an array or object and apply a callback to each item.
+     *
+     * @param array|object $items The array or object to iterate over.
+     * @param (callable(array): mixed) $callback A callback function to apply to each item. 
+     *                           The callback should accept one parameter (the item) and return a value.
+     *
+     * @return array Returns an array of results from the callback.
+     */
+    private static function forEach(array|object $items, callable $callback): array
+    {
+        $result = [];
+
+        foreach ($items as $item) {
+            $result[] = $callback($item);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Validate signature.
+     *
+     * @param string $signature
+     * @param string $handler
+     * @param string|null $arguments
+     * 
+     * @return bool Return true if signature is valid, otherwise false.
+     */
+    private function isSignature(string $signature, string $handler, ?string $arguments): bool
+    {
+        return hash_equals(
+            $signature,
+            Luminova::hash('xxh3', "{$handler}{$arguments}")
+        );
     }
 
     /**
@@ -1906,9 +2219,11 @@ abstract class Queue
      *
      * @return void
      */
-    private function logEvent(int $id, string $handler, ?string $status = null, bool $isStarting = false): void
+    private function log(int $id, string $handler, ?string $status = null, bool $isStarting = false): void
     {
-        $handler = $this->isOpisClosure($handler) ? Serializer::class . '@anonymous' : $handler; 
+        [$class, ] = self::withClosure($handler);
+
+        $handler = $class ? "{$class}@anonymous" : $handler; 
 
         if(!$isStarting && $this->mode === 'cli' && ($this->onComplete instanceof Closure)){
             ($this->onComplete)($id, $handler, $status);
@@ -2003,7 +2318,7 @@ abstract class Queue
      * @return bool Return true if task succeeded or was handled; false if failed in CLI mode.
      * @throws RuntimeException If the task failed and not running in CLI mode.
      */
-    private function compute(array $response, string $handler): mixed 
+    private function compute(array $response, string $handler): bool 
     {
         [$id, $status, $output, $result, $autoDelete] = $response;
 
@@ -2020,9 +2335,9 @@ abstract class Queue
 
         if ($status === self::EXCEPTION) {
             if ($this->mode === 'cli') {
-                echo "Exception in task #$id: $output\n";
+                $this->out("Exception in task #{$id}: {$output}");
 
-                $this->logEvent($id, $handler, $status);
+                $this->log($id, $handler, $status);
                 return false;
             }
 
@@ -2032,15 +2347,93 @@ abstract class Queue
         if($autoDelete && $status === self::COMPLETED){
             $this->delete($id);
         }else{
-            $this->update($id, $status, null, json_encode([
+            $this->update($id, $status, null, $this->toJson([
                 'response' => $result,
-                'output' => $output,
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+                'output'   => $output,
+            ]));
         }
 
-        $this->logEvent($id, $handler, $status);
+        $this->log($id, $handler, $status);
 
         return true;
+    }
+
+    /**
+     * Convert serialized arguments string back to an array.
+     *
+     * @param string|null $arguments Serialized arguments string (e.g., 'php:...' or 'bin:...').
+     * 
+     * @return array Return an array of arguments or an empty array if none.
+     */
+    private function toArguments(?string $arguments): array
+    {
+        if ($arguments === null || $arguments === '') {
+            return [];
+        }
+
+        $head = $arguments[0] ?? "\x02";
+        $payload = substr($arguments, 1);
+
+        if ($payload === '') {
+            return [];
+        }
+
+        if($head === "\x01") {
+            self::$igbinary['unserialize'] ??= function_exists('igbinary_unserialize');
+
+            if(!self::$igbinary['unserialize']){
+                throw new RuntimeException(
+                    'Igbinary extension is not available for unserialization.'
+                );
+            }
+
+            return \igbinary_unserialize($payload) ?: [];
+        }
+
+        return unserialize($payload, ['allowed_classes' => false]);
+    }
+
+    /**
+     * Convert data to JSON string.
+     *
+     * @param array|null $arguments
+     * 
+     * @return string|null
+     */
+    private function toJson(array|object $arguments, mixed $default = null): ?string
+    {
+        if ($arguments === null || $arguments === []) {
+            return $default;
+        }
+
+        return json_encode(
+            $arguments,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ) ?: $default;
+    }
+
+    /**
+     * Serialize arguments array to a string for storage in the database.
+     *
+     * @param array|null $arguments An array of arguments to serialize.
+     * 
+     * @return string|null The serialized string or null if no arguments.
+     */
+    private function parseArgument(?array $arguments): ?string
+    {
+        if ($arguments === null || $arguments === []) {
+            return null;
+        }
+
+        $arguments = array_values($arguments);
+        self::$igbinary['serialize'] ??= function_exists('igbinary_serialize');
+
+        
+        if (self::$igbinary['serialize']) {
+            return "\x01" . \igbinary_serialize($arguments);
+        }
+
+        return "\x02" . serialize($arguments);
     }
 
     /**
@@ -2082,29 +2475,24 @@ abstract class Queue
      *
      * @param Task|array $task An array or instance of task model.
      * 
-     * @return array{0:string|null,1:array,2:int,3:string|null,4:int|null,5:int}
+     * @return array{0:?string,1:array,2:int,3:int,4:?string,5:int,6:int}
+     *      Returns an array containing [handler, arguments, scheduled_at, priority, forever, retries, auto_delete].
      */
     private function getTaskFrom(Task|array $task): array
     {
-        if ($task instanceof Task) {
-            $handler  = $task->handler ?? null;
-            $arguments = (array) ($task->arguments ?? []);
-            $priority  = (int) $task->priority;
-            $schedule  = $task->scheduled_at ?? null;
-            $forever   = $task->forever ?? null;
-            $retries   = (int) ($task->retries ?? 0);
-            $autoDelete = (bool) ($task->auto_delete ?? 0);
-        } else {
-            $handler  = $task['handler'] ?? null;
-            $arguments = (array) ($task['arguments'] ?? []);
-            $priority  = (int) ($task['priority'] ?? 0);
-            $schedule  = $task['scheduled_at'] ?? null;
-            $forever   = $task['forever'] ?? null;
-            $retries   = (int) ($task['retries'] ?? 0);
-            $autoDelete   = (bool) ($task['auto_delete'] ?? 0);
-        }
+        $task = ($task instanceof Task) 
+            ? $task 
+            : (object) $task;
 
-        return [$handler, $arguments, $schedule, $priority, $forever, $retries, $autoDelete];
+        return [
+            $task->handler ?? null, 
+            (array) ($task->arguments ?? []), 
+            $task->scheduled_at ?? null, 
+            (int) $task->priority, 
+            $task->forever ?? null, 
+            (int) ($task->retries ?? 0), 
+            (bool) ($task->auto_delete ?? 0)
+        ];
     }
 
     /**
@@ -2145,35 +2533,34 @@ abstract class Queue
         $group = $this->getGroup();
 
         if ($status === self::ALL) {
-            return " WHERE group_name = '{$group}'";
+            return " WHERE `group_name` = '{$group}'";
         }
 
         if ($status === self::FOREVER) {
-            return " WHERE forever IS NOT NULL AND group_name = '{$group}'";
+            return " WHERE `forever` IS NOT NULL AND `group_name` = '{$group}'";
         }
 
         if ($status === self::EXECUTABLE) {
-            return " WHERE (
-                status = 'pending'
+            return " WHERE `group_name` = '{$group}'
+            AND (`scheduled_at` IS NULL OR `scheduled_at` <= NOW())
+            AND (
+                `status` = 'pending'
+
                 OR (
-                    forever IS NOT NULL 
-                    AND status IN ('pending', 'failed', 'completed')
-                    AND (
-                        updated_at IS NULL 
-                        OR (forever > 0 AND updated_at <= (NOW() - INTERVAL forever MINUTE))
-                    )
+                    `status` = 'failed'
+                    AND `retries` > 0
+                    AND `attempts` < `retries`
                 )
+                
                 OR (
-                    status = 'failed'
-                    AND retries > 0 
-                    AND retries >= attempts
+                    `forever` > 0 
+                    AND `status` IN ('pending', 'failed', 'completed')
+                    AND (`updated_at` IS NULL OR TIMESTAMPDIFF(MINUTE, `updated_at`, NOW()) >= `forever`)
                 )
-            )
-            AND (scheduled_at IS NULL OR scheduled_at <= NOW())
-            AND group_name = '{$group}'";
+            )";
         }
 
-        return " WHERE status = :status AND group_name = '{$group}'";
+        return " WHERE `status` = :status AND `group_name` = '{$group}'";
     }
 
     /**

@@ -10,13 +10,14 @@
  */
 namespace Luminova\Sessions\Handlers;
 
-use \Luminova\Time\Time;
-use \Luminova\Utility\IP;
+use Luminova\Luminova;
+use Luminova\Time\Time;
 use \ReturnTypeWillChange;
-use function \Luminova\Funcs\root;
-use \Luminova\Base\SessionHandler;
-use \Luminova\Security\Encryption\Crypter;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Http\Network\IP;
+use function Luminova\Funcs\root;
+use Luminova\Base\SessionHandler;
+use Luminova\Exceptions\RuntimeException;
+use Luminova\Security\Encryption\Crypter;
 
 /**
  * Custom File Handler for session management with optional encryption support.
@@ -111,7 +112,9 @@ class Filesystem extends SessionHandler
         }
 
         $this->filePath = rtrim($path, TRIM_DS);
-        $this->fileName = ($this->options['session_ip'] ? md5(IP::get()) . '_': '');
+        $this->fileName = ($this->options['session_ip'] 
+            ? Luminova::hash('xxh3', IP::get(), fallbackAlgo: 'md5') . '_'
+            : '');
 
         return $this->options['onCreate'] ? ($this->options['onCreate'])($path, $name, $this->fileName) : true;
     }
@@ -200,7 +203,7 @@ class Filesystem extends SessionHandler
         }
 
         $data = ($data && $this->options['encryption']) ? Crypter::decrypt($data) : $data;
-        $this->fileHash = md5($data);
+        $this->fileHash = Luminova::hash('xxh3', $data, fallbackAlgo: 'md5');
         return $data;
     }
 
@@ -219,7 +222,7 @@ class Filesystem extends SessionHandler
         }
 
         // Skip writing if data hasn't changed
-        if ($this->fileHash === md5($data)) {
+        if ($this->fileHash === Luminova::hash('xxh3', $data, fallbackAlgo: 'md5')) {
             return $this->isNewSession || touch($this->getFile($id));
         }
 
@@ -248,7 +251,7 @@ class Filesystem extends SessionHandler
             $written += $result;
         }
 
-        $this->fileHash = md5($data);
+        $this->fileHash = Luminova::hash('xxh3', $data, fallbackAlgo: 'md5');
         $encrypted = null;
         return true;
     }
@@ -350,7 +353,7 @@ class Filesystem extends SessionHandler
 
         if ($this->isNewSession) {
             chmod($file, 0600);
-            $this->fileHash = md5('');
+            $this->fileHash = Luminova::hash('xxh3', '', fallbackAlgo: 'md5');
             return '';
         }
 

@@ -10,8 +10,8 @@
  */
 namespace Luminova\Database\Helpers;
 
-use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\DatabaseException;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Exceptions\DatabaseException;
 
 class Alter 
 {
@@ -115,7 +115,8 @@ class Alter
         string $column,
         string $datatype,
         string $move
-    ): string {
+    ): string 
+    {
         switch ($database) {
             case 'ms-access':
                 return "ALTER TABLE {$table} ADD COLUMN {$column}_temp {$datatype};\n" .
@@ -506,48 +507,212 @@ class Alter
         }
     }
 
-    public static function getAdministrator(string $driver, string $action, string $placeholder): string 
+    /**
+     * Lock SQL query.
+     *
+     * @param string $driver
+     * @param string $action
+     * @param string $lockName Lock name placeholder
+     * 
+     * @return string
+     */
+    public static function getAdministrator(string $driver, string $action, string $lockName): string
     {
         $query = match ($driver) {
+
             'pgsql' => match ($action) {
-                'lock'     => "SELECT pg_advisory_lock({$placeholder})",
-                'unlock'   => "SELECT pg_advisory_unlock({$placeholder})",
-                'isLocked' => "SELECT pg_try_advisory_lock({$placeholder})",
-                default    => null
+                'lock' =>
+                    "SELECT pg_advisory_lock({$lockName})",
+
+                'tryLock' =>
+                    "SELECT pg_try_advisory_lock({$lockName}) AS result",
+
+                'unlock' =>
+                    "SELECT pg_advisory_unlock({$lockName}) AS result",
+
+                // PostgreSQL has no true read-only advisory lock check.
+                // Use tryLock internally instead.
+                'isLocked' =>
+                    "SELECT NOT pg_try_advisory_lock({$lockName}) AS result",
+
+                default => null
             },
-            'mysql', 'mysqli', 'cubrid' => match ($action) {
-                'lock'     => 'SELECT GET_LOCK(:lockName, :waitTimeout) AS isLockDone',
-                'unlock'   => 'SELECT RELEASE_LOCK(:lockName) AS isLockDone',
-                'isLocked' => 'SELECT IS_FREE_LOCK(:lockName) AS isLockDone',
-                default    => null
+
+
+            'mysql', 'mysqli' => match ($action) {
+                'lock' =>
+                    "SELECT GET_LOCK({$lockName}, :waitTimeout) AS result",
+
+                'tryLock' =>
+                    "SELECT GET_LOCK({$lockName}, 0) AS result",
+
+                'unlock' =>
+                    "SELECT RELEASE_LOCK({$lockName}) AS result",
+
+                'isLocked' =>
+                    "SELECT IS_USED_LOCK({$lockName}) IS NOT NULL AS result",
+
+                default => null
             },
+
+
             'sqlite' => match ($action) {
-                'lock'     => 'INSERT INTO locks (name, acquired_at) VALUES (:lockName, strftime("%s", "now")) ON CONFLICT(name) DO NOTHING',
-                'unlock'   => 'DELETE FROM locks WHERE name = :lockName',
-                'isLocked' => 'SELECT COUNT(*) AS lockCount FROM locks WHERE name = :lockName',
-                default    => null,
+                'lock' =>
+                    "INSERT INTO dbms_locks (
+                        name,
+                        expires_at,
+                        acquired_at
+                    )
+                    VALUES (
+                        {$lockName},
+                        strftime('%s','now') + :waitTimeout,
+                        strftime('%s','now')
+                    )
+                    ON CONFLICT(name) DO UPDATE SET
+                        expires_at = excluded.expires_at,
+                        acquired_at = excluded.acquired_at
+                    WHERE dbms_locks.expires_at < strftime('%s','now')
+                    RETURNING 1 AS result",
+
+                'tryLock' =>
+                    "INSERT INTO dbms_locks (
+                        name,
+                        expires_at,
+                        acquired_at
+                    )
+                    VALUES (
+                        {$lockName},
+                        strftime('%s','now') + 300,
+                        strftime('%s','now')
+                    )
+                    ON CONFLICT(name) DO NOTHING
+                    RETURNING 1 AS result",
+                'unlock' =>
+                    "DELETE FROM dbms_locks WHERE name = {$lockName}",
+
+                'isLocked' =>
+                    "SELECT EXISTS(
+                        SELECT 1
+                        FROM dbms_locks
+                        WHERE name = {$lockName}
+                        AND expires_at > strftime('%s','now')
+                    ) AS result",
+
+                default => null
             },
+
+
             'sqlsrv', 'mssql', 'dblib' => match ($action) {
-                'lock'     => "EXEC sp_getapplock @Resource = :lockName, @LockMode = 'Exclusive', @LockOwner = 'Session', @Timeout = :waitTimeout",
-                'unlock'   => "EXEC sp_releaseapplock @Resource = :lockName, @LockOwner = 'Session'",
-                'isLocked' => "SELECT COUNT(*) FROM sys.dm_tran_locks WHERE request_mode = 'X' AND resource_description = :lockName",
-                default    => null,
+                'lock' =>
+                    "DECLARE @result INT;
+                    EXEC @result = sp_getapplock
+                        @Resource = {$lockName},
+                        @LockMode = 'Exclusive',
+                        @LockOwner = 'Session',
+                        @Timeout = :waitTimeout;
+                    SELECT @result AS result",
+
+                'tryLock' =>
+                    "DECLARE @result INT;
+                    EXEC @result = sp_getapplock
+                        @Resource = {$lockName},
+                        @LockMode = 'Exclusive',
+                        @LockOwner = 'Session',
+                        @Timeout = 0;
+                    SELECT @result AS result",
+
+                'unlock' =>
+                    "DECLARE @result INT;
+                    EXEC @result = sp_releaseapplock
+                        @Resource = {$lockName},
+                        @LockOwner = 'Session';
+                    SELECT @result AS result",
+
+                'isLocked' =>
+                    "SELECT APPLOCK_TEST(
+                        'public',
+                        {$lockName},
+                        'Exclusive',
+                        'Session'
+                    ) AS result",
+
+                default => null
             },
+
+
             'oci', 'oracle' => match ($action) {
-                'lock'     => "DECLARE v_result NUMBER; BEGIN DBMS_LOCK.REQUEST(:lockName, 6, :waitTimeout, TRUE, v_result); END;",
-                'unlock'   => "DECLARE v_result NUMBER; BEGIN DBMS_LOCK.RELEASE(:lockName); END;",
-                'isLocked' => "SELECT COUNT(*) FROM V\$LOCK WHERE ID1 = DBMS_LOCK.ALLOCATE_UNIQUE(:lockName) AND REQUEST = 6",
-                default    => null,
+
+                // Oracle needs a numeric handle.
+                // :lockName must be converted through DBMS_LOCK.ALLOCATE_UNIQUE.
+                'lock' =>
+                    "DECLARE
+                        v_handle VARCHAR2(128);
+                        v_result INTEGER;
+                    BEGIN
+                        DBMS_LOCK.ALLOCATE_UNIQUE({$lockName}, v_handle);
+                        v_result := DBMS_LOCK.REQUEST(
+                            v_handle,
+                            DBMS_LOCK.X_MODE,
+                            :waitTimeout,
+                            TRUE
+                        );
+                        SELECT v_result INTO :result FROM dual;
+                    END;",
+
+                'tryLock' =>
+                    "DECLARE
+                        v_handle VARCHAR2(128);
+                        v_result INTEGER;
+                    BEGIN
+                        DBMS_LOCK.ALLOCATE_UNIQUE({$lockName}, v_handle);
+                        v_result := DBMS_LOCK.REQUEST(
+                            v_handle,
+                            DBMS_LOCK.X_MODE,
+                            0,
+                            TRUE
+                        );
+                        SELECT v_result INTO :result FROM dual;
+                    END;",
+
+                'unlock' =>
+                    "DECLARE
+                        v_handle VARCHAR2(128);
+                        v_result INTEGER;
+                    BEGIN
+                        DBMS_LOCK.ALLOCATE_UNIQUE({$lockName}, v_handle);
+                        v_result := DBMS_LOCK.RELEASE(v_handle);
+                        SELECT v_result INTO :result FROM dual;
+                    END;",
+
+                default => null
             },
-            default => throw new DatabaseException(
-                "Database driver '{$driver}' does not support locks.",
-                ErrorCode::INVALID_ARGUMENTS
-            )
+
+
+            // CUBRID does not support MySQL GET_LOCK().
+            'cubrid' => match ($action) {
+                'lock' =>
+                    "SELECT GET_LOCK({$lockName}, :waitTimeout) AS result",
+
+                'tryLock' =>
+                    "SELECT GET_LOCK({$lockName}, 0) AS result",
+
+                'unlock' =>
+                    "SELECT RELEASE_LOCK({$lockName}) AS result",
+
+                'isLocked' =>
+                    "SELECT IS_USED_LOCK({$lockName}) IS NOT NULL AS result",
+
+                default => null
+            },
+
+
+            default => null
         };
 
-        if($query === null){
+
+        if ($query === null) {
             throw new DatabaseException(
-                "Invalid {$driver} lock operation: {$action}",
+                "Invalid lock operation: {$action} or driver {$driver} not supported.",
                 ErrorCode::INVALID_ARGUMENTS
             );
         }
@@ -576,18 +741,49 @@ class Alter
         };
     }
 
-    public static function getTableExists(string $driver): string 
+    /**
+     * Undocumented function
+     *
+     * @param string $driver
+     * @return string
+     */
+    public static function getTableExists(string $driver): string
     {
         return match ($driver) {
-            'mysql', 'mysqli' => 'information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tableName',
-            'pgsql'     => "pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename = :tableName",
-            'sqlite'    => "sqlite_master WHERE type = 'table' AND name = :tableName",
-            'sqlsrv', 'mssql' => 'sys.tables WHERE name = :tableName',
-            'cubrid'          => 'db_class WHERE class_name = :tableName',
-            'dblib'           => "sysobjects WHERE xtype = 'U' AND name = :tableName",
-            'oci', 'oracle'   => 'user_tables WHERE table_name = UPPER(:tableName)',
+            'mysql', 'mysqli' =>
+                'information_schema.TABLES
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = :tableName',
+
+            'pgsql' =>
+                'pg_catalog.pg_tables
+                WHERE schemaname = current_schema()
+                AND tablename = :tableName',
+
+            'sqlite' =>
+                "sqlite_master
+                WHERE type = 'table'
+                AND name = :tableName",
+
+            'sqlsrv', 'mssql' =>
+                'sys.tables
+                WHERE name = :tableName',
+
+            'dblib' =>
+                "sysobjects
+                WHERE xtype = 'U'
+                AND name = :tableName",
+
+            'cubrid' =>
+                'db_class
+                WHERE class_name = :tableName',
+
+            'oci', 'oracle' =>
+                'user_tables
+                WHERE table_name = UPPER(:tableName)',
+
             default => throw new DatabaseException(
-                "Unsupported database driver: {$driver}", 
+                "Unsupported database driver: {$driver}",
                 ErrorCode::INVALID_ARGUMENTS
             ),
         };
@@ -607,18 +803,29 @@ class Alter
         };
     }
 
-    public static function getBuilderTableLock(string $driver, bool $forUpdate): string 
+    /**
+     * Table locking scheme.
+     *
+     * @param string $driver
+     * @param boolean $forUpdate
+     * 
+     * @return string
+     */
+    public static function getBuilderTableLock(string $driver, bool $forUpdate = true): ?string
     {
         return match ($driver) {
-            'mysql', 'mysqli' => $forUpdate ? 'FOR UPDATE' : 'LOCK IN SHARE MODE',
-            'pgsql'           => $forUpdate ? 'FOR UPDATE' : 'FOR SHARE',
-            'sqlite'          => '', // SQLite locks the whole DB automatically
-            'sqlsrv', 'mssql', 'dblib' => $forUpdate 
-                ? 'WITH (UPDLOCK, ROWLOCK)' 
-                : 'WITH (HOLDLOCK, ROWLOCK)',
-            'cubrid'          => $forUpdate ? 'WITH LOCK' : '',
-            'oci', 'oracle'   => $forUpdate ? 'FOR UPDATE' : '',
-            default           => '',
+            'mysql', 'mysqli', 'pgsql' =>
+                $forUpdate ? 'FOR UPDATE' : 'FOR SHARE',
+            'sqlsrv', 'mssql', 'dblib' =>
+                $forUpdate
+                    ? 'WITH (UPDLOCK, ROWLOCK)'
+                    : 'WITH (HOLDLOCK, ROWLOCK)',
+
+            'oci', 'oracle', 'cubrid'  =>
+                $forUpdate ? 'FOR UPDATE' : null,
+
+            'sqlite' => null,
+            default  => null,
         };
     }
 }

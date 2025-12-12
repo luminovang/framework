@@ -11,7 +11,7 @@
 namespace Luminova\Interface;
 
 use \Throwable;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Exceptions\RuntimeException;
 
 /**
  * Interface representing a promise that resolves or rejects asynchronously
@@ -242,10 +242,10 @@ interface PromiseInterface
      * ```php
      * try {
      *     $promise = new Promise();
-     *     $promise->then(fn($num) => $num + 10);
+     *     $p = $promise->then(fn($num) => $num + 10);
      * 
      *     $promise->resolve(10);
-     *     $result = $promise->wait(); 
+     *     $result = $p->wait(); 
      *     echo "Got: $result"; // 20
      * } catch (RuntimeException $e) {
      *     echo "Error: " . $e->getMessage();
@@ -255,13 +255,13 @@ interface PromiseInterface
      * @example - Example (Handle Exceptions):
      * ```php
      * $promise = new Promise();
-     * $promise->then(fn($num) => $num + 10)
+     * $p = $promise->then(fn($num) => $num + 10)
      * $promise->error(function(Throwable $e){
      *      echo $e->getMessage();
      * });
      * 
      * $promise->resolve(10);
-     * $result = $promise->wait(); 
+     * $result = $p->wait(); 
      * echo "Got: $result"; // 20
      * ```
      *

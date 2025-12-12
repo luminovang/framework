@@ -10,7 +10,7 @@
  */
 namespace Luminova\Base;
 
-use \Luminova\Interface\LazyObjectInterface;
+use Luminova\Interface\LazyObjectInterface;
 
 abstract class Mailer implements LazyObjectInterface
 {
@@ -67,7 +67,7 @@ abstract class Mailer implements LazyObjectInterface
      *     ]
      * ]
      *
-     * @return array<array<string,mixed>>|null Return an array of attachment configurations.
+     * @return array<array<string,mixed>> Return an array of attachment configurations.
      */
-    abstract public function getFiles(): ?array;
+    abstract public function getFiles(): array;
 }

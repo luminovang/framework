@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Dependency Injection System.
  *
@@ -13,31 +14,36 @@ namespace Luminova\Routing;
 use \Closure;
 use \Throwable;
 use \ReflectionClass;
-use \Luminova\Security\JWT;
-use \Luminova\Cache\RedisCache;
-use \Luminova\Http\Client\Novio;
-use \Luminova\Sessions\Session;
-use \Luminova\Template\Response;
-use function \Luminova\Funcs\root;
-use \Luminova\Component\Seo\Schema;
-use \Luminova\Utility\Email\Mailer;
-use \Luminova\Http\{Request, Network};
-use \Luminova\Utility\Collections\Arr;
-use \Luminova\Foundation\Module\Factory;
-use \Luminova\Component\Languages\Translator;
-use \Luminova\Cache\{FileCache, MemoryCache};
-use \Luminova\Cookies\{Cookie, FileJar};
-use \Luminova\Notifications\Firebase\Notification;
-use \Luminova\Security\Encryption\{Sodium, Openssl};
-use \Luminova\Exceptions\ClassException;
-use \Luminova\Interface\{
+use Luminova\Luminova;
+use Luminova\Base\Cache;
+use Luminova\Security\JWT;
+use Luminova\Http\Request;
+use \Psr\Log\LoggerInterface;
+use Luminova\Sessions\Session;
+use Luminova\Http\Client\Novio;
+use Luminova\Logger\NovaLogger;
+use Luminova\Template\Response;
+use function Luminova\Funcs\root;
+use Luminova\Components\Seo\Schema;
+use Luminova\Components\Email\Mailer;
+use Luminova\Components\Collections\Arr;
+use Luminova\Foundation\Module\Factory;
+use Luminova\Cookies\{Cookie, FileJar};
+use Luminova\Exceptions\ClassException;
+use Luminova\Components\Languages\Translator;
+use Luminova\Notifications\Firebase\Notification;
+use Luminova\Security\Encryption\{Sodium, Openssl};
+use Luminova\Cache\{FileCache, RedisCache, MemoryCache};
+use \Psr\Http\Message\RequestInterface as PsrRequestInterface;
+use Luminova\Interface\{
     ClientInterface,
     CookieInterface,
-    NetworkInterface,
+    SessionInterface,
+    MailerInterface,
     CookieJarInterface,
     InvokableInterface,
-    HttpRequestInterface,
-    ViewResponseInterface,
+    RequestInterface,
+    ContentResponseInterface,
 };
 
 /**
@@ -178,6 +184,26 @@ class DI
     }    
 
     /**
+     * Try resolving from configured kernel services.
+     *
+     * @param class-string<T> $abstract Fully qualified class or interface name.
+     * 
+     * @return object|null Return the resolved object instance, or null if it cannot be resolved.
+     */
+    public static final function tryService(string $abstract): ?object
+    {
+        try{
+            $resolver = Luminova::kernel($abstract, false);
+        } catch(Throwable){
+            $resolver = null;
+        }
+
+        $resolver ??= self::getKernelServices($abstract);
+
+        return self::instantiate($resolver);
+    }
+
+    /**
      * Resolve and create a new instance of a class or its interface binding.
      *
      * This method attempts to:
@@ -188,21 +214,13 @@ class DI
      * @template T of object
      * @param class-string<T> $abstract Fully qualified class or interface name.
      * 
-     * @return \T|null Return the resolved object instance, or null if it cannot be resolved.
+     * @return object|null Return the resolved object instance, or null if it cannot be resolved.
      */
     public static final function resolve(string $abstract): ?object
     {
-        $resolver = self::$bindings[$abstract] ?? self::getDefault($abstract);
-
-        if ($resolver === null) {
-            return null;
-        }
-
-        if(is_callable($resolver)){
-            return $resolver();
-        }
-
-        return class_exists($resolver) ? new $resolver() : null;
+        return self::instantiate(
+            self::$bindings[$abstract] ?? self::getDefault($abstract)
+        );
     }
 
     /**
@@ -286,6 +304,30 @@ class DI
     }
 
     /**
+     * Resolve and initialize class.
+     *
+     * @param mixed $resolver
+     * 
+     * @return object|null
+     */
+    private static function instantiate(mixed $resolver): ?object
+    {
+        if ($resolver === null) {
+            return null;
+        }
+
+        if(is_object($resolver)){
+            return $resolver;
+        }
+
+        if(is_callable($resolver)){
+            return $resolver();
+        }
+
+        return class_exists($resolver) ? new $resolver() : null;
+    }
+
+    /**
      * Default resolver mappings for core classes/interfaces.
      *
      * @param class-string $class The class or interface name.
@@ -295,16 +337,16 @@ class DI
     private static function getDefault(string $class): Closure|string|null
     {
         return match ($class) {
-            Request::class, HttpRequestInterface::class      => Request::class,
-            Network::class, NetworkInterface::class          => Network::class,
-            Novio::class, ClientInterface::class              => Novio::class,
-            Response::class, ViewResponseInterface::class    => Response::class,
-            Session::class       => Session::class,
+            Request::class, RequestInterface::class, PsrRequestInterface::class      => Request::class,
+            Novio::class, ClientInterface::class             => Novio::class,
+            Response::class, ContentResponseInterface::class => Response::class,
+            Session::class, SessionInterface::class          => Session::class,
             Factory::class       => Factory::class,
             Schema::class        => Schema::class,
-            Mailer::class        => Mailer::class,
+            Mailer::class, MailerInterface::class        => Mailer::class,
             FileCache::class     => FileCache::class,
             MemoryCache::class   => MemoryCache::class,
+            LoggerInterface::class => NovaLogger::class,
             RedisCache::class    => RedisCache::class,
             Openssl::class       => Openssl::class,
             Arr::class           => Arr::class,
@@ -312,11 +354,29 @@ class DI
             JWT::class           => JWT::class,
             Translator::class    => Translator::class,
             Notification::class  => Notification::class,
-            Cookie::class, CookieInterface::class            => fn(): CookieInterface => new Cookie('_default'),
+            Cookie::class, CookieInterface::class      => fn(): CookieInterface => new Cookie('_default'),
             FileJar::class, CookieJarInterface::class  => fn(): CookieJarInterface => new FileJar(
                 root('/writeable/temp/', 'cookies.txt')
             ),
             default => null,
+        };
+    }
+
+    /**
+     * Map kernel services.
+     *
+     * @param string $class
+     * @return Closure|object|string|null
+     */
+    private static function getKernelServices(string $class): mixed
+    {
+        return match ($class) {
+            Cache::class => Luminova::kernel(
+                'cache', 
+                false,
+                env('system.cache.driver', 'filecache')
+            ),
+            default      => null,
         };
     }
 }

@@ -11,16 +11,16 @@
 namespace Luminova\Exceptions;
 
 use \Throwable;
-use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Exceptions\LuminovaException;
 
-class FileException extends AppException
+class FileException extends LuminovaException
 {
     /**
      * Constructor for FileException.
      *
      * @param string  $message The exception message.
-     * @param string|int $code  The exception code (default: `ErrorCode::FILESYSTEM_ERROR`).
+     * @param string|int $code The exception code (default: `ErrorCode::FILESYSTEM_ERROR`).
      * @param Throwable|null $previous The previous exception if applicable (default: null).
      */
     public function __construct(
@@ -47,7 +47,7 @@ class FileException extends AppException
         ?Throwable $previous = null
     ): void 
     {
-        static::throwException(
+        static::handleException(
             "Unable to write file: '{$file}', {$message}", 
             ErrorCode::WRITE_PERMISSION_DENIED, 
             $previous
@@ -69,7 +69,7 @@ class FileException extends AppException
         ?Throwable $previous = null
     ): void 
     {
-        static::throwException(
+        static::handleException(
             "Unable to open file: {$file}, {$message}", 
             ErrorCode::READ_PERMISSION_DENIED, 
             $previous
@@ -91,7 +91,7 @@ class FileException extends AppException
         ?Throwable $previous = null
     ): void 
     {
-        static::throwException(
+        static::handleException(
             "Unable to create a directory: '{$path}', {$message}", 
             ErrorCode::CREATE_DIR_FAILED, 
             $previous
@@ -113,7 +113,7 @@ class FileException extends AppException
         ?Throwable $previous = null
     ): void 
     {
-        static::throwException(
+        static::handleException(
             "Unable to set permission for file: '{$path}', {$message}", 
             ErrorCode::SET_PERMISSION_FAILED, 
             $previous

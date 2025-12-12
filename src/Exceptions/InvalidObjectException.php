@@ -11,17 +11,16 @@
 namespace Luminova\Exceptions;
 
 use \Throwable;
-use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Exceptions\LuminovaException;
 
-class InvalidObjectException extends AppException
+class InvalidObjectException extends LuminovaException
 {
     /**
      * Constructor for InvalidObjectException.
-     * >>>
      * 
-     * @param string     $key   The exception key as message
-     * @param string|int        $code      The exception code (default: `ErrorCode::INVALID`).
+     * @param string $key The exception key as message.
+     * @param string|int $code The exception code (default: `ErrorCode::INVALID`).
      * @param Throwable|null $previous  The previous exception if applicable (default: null).
      */
     public function __construct(
@@ -31,7 +30,10 @@ class InvalidObjectException extends AppException
     )
     {
         parent::__construct(
-            sprintf('Invalid argument type: "%s". A valid object is expected.', gettype($key)), 
+            sprintf(
+                'Invalid argument type: "%s". A valid object is expected.', 
+                gettype($key)
+            ), 
             $code, 
             $previous
         );
