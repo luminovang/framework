@@ -10,23 +10,23 @@
  */
 namespace Luminova\Command\Utils;
 
-use \Luminova\Command\Utils\Text;
 use \Luminova\Command\Terminal;
+use \Luminova\Command\Utils\Text;
 
 /**
  * Color class for managing and retrieving ANSI color codes and names dynamically.
  *
- * @method static ?string fg{ColorName}() Returns the foreground (text) color name if valid.
- * @method static ?string fgRed() Returns the foreground color 'red' if valid.
- * @method static ?string fgGreen() Returns the foreground color 'green' if valid.
- * @method static ?string fgWhite() Returns the foreground color 'White' if valid.
- * @method static ?string fgCyan() Returns the foreground color 'cyan' if valid.
+ * @method static ?string fg{ColorName}(?string $text) Returns the foreground (text) color name if valid.
+ * @method static ?string fgRed(?string $text) Returns the foreground color 'red' if valid.
+ * @method static ?string fgGreen(?string $text) Returns the foreground color 'green' if valid.
+ * @method static ?string fgWhite(?string $text) Returns the foreground color 'White' if valid.
+ * @method static ?string fgCyan(?string $text) Returns the foreground color 'cyan' if valid.
  * 
- * @method static ?string bg{ColorName}() Returns the background color name if valid.
- * @method static ?string bgRed() Returns the background color 'red' if valid.
- * @method static ?string bgGreen() Returns the background color 'green' if valid.
- * @method static ?string bgWhite() Returns the background color 'wite' if valid.
- * @method static ?string bgCyan() Returns the background color 'cyan' if valid.
+ * @method static ?string bg{ColorName}(?string $text) Returns the background color name if valid.
+ * @method static ?string bgRed(?string $text) Returns the background color 'red' if valid.
+ * @method static ?string bgGreen(?string $text) Returns the background color 'green' if valid.
+ * @method static ?string bgWhite(?string $text) Returns the background color 'wite' if valid.
+ * @method static ?string bgCyan(?string $text) Returns the background color 'cyan' if valid.
  * 
  * @method static ?string fgc{ColorName}() Returns the ANSI code for the foreground color.
  * @method static ?string fgcRed() Returns the ANSI code for foreground red (e.g., '0;31').
@@ -111,22 +111,39 @@ final class Color
      */
     public static function __callStatic(string $name, array $arguments): ?string
     {
-        $type = lcfirst(substr($name, 2));
+        $text = $arguments[0] ?? null;
 
-        return match (substr($name, 0, 2)) {
-            'fg' => self::has($type, 'fg') ? $type : null,
-            'bg' => self::has($type, 'bg') ? $type : null,
-            default => self::get(lcfirst(substr($name, 3)), substr($name, 0, 3))
-        };
+        $p2 = substr($name, 0, 2);
+        $type2 = lcfirst(substr($name, 2));
+
+        if ($text === null) {
+            return match ($p2) {
+                'fg' => self::has($type2, 'fg') ? $type2 : null,
+                'bg' => self::has($type2, 'bg') ? $type2 : null,
+                default => self::get(lcfirst(substr($name, 3)), substr($name, 0, 3))
+            };
+        }
+
+        if ($p2 === 'fg') {
+            return self::style($text, $type2);
+        }
+
+        if ($p2 === 'bg') {
+            return self::style($text, null, $type2);
+        }
+
+        return $text;
     }
 
     /**
      * Retrieves the ANSI code for a given color name based on the specified type.
      * 
      * @param string $color The name of the color to retrieve (e.g., 'red', 'green').
-     * @param string $type  The type of color, either 'fgc' for foreground or 'bgc' for background (default is 'fgc').
+     * @param string $type  The type of color, either 'fgc' for foreground 
+     *          or 'bgc' for background (default is 'fgc').
      * 
-     * @return string Return the ANSI code for the requested color, or an empty string if the color is not defined.
+     * @return string Return the ANSI code for the requested color, 
+     *          or an empty string if the color is not defined.
      */
     public static function get(string $color, string $type = 'fgc'): string
     {
@@ -144,7 +161,8 @@ final class Color
      * 
      * @param string $name The name of the foreground color (e.g., 'red', 'green').
      * 
-     * @return string Return the ANSI code for the specified foreground color, or an empty string if not found.
+     * @return string Return the ANSI code for the specified foreground color, 
+     *          or an empty string if not found.
      */
     public static function foreground(string $name): string
     {
@@ -156,7 +174,8 @@ final class Color
      * 
      * @param string $name The name of the background color (e.g., 'blue', 'yellow').
      * 
-     * @return string Return the ANSI code for the specified background color, or an empty string if not found.
+     * @return string Return the ANSI code for the specified background color, 
+     *          or an empty string if not found.
      */
     public static function background(string $name): string
     {
@@ -171,7 +190,8 @@ final class Color
      * @param string|null $foreground Optional text foreground color name (e.g., 'red', 'green').
      * @param string|null $background Optional background color name (e.g., 'blue', 'yellow').
      *
-     * @return string Return the styled text with ANSI color codes or the original text if no valid colors are given.
+     * @return string Return the styled text with ANSI color codes 
+     *          or the original text if no valid colors are given.
      */
     public static function style(
         string $text, 
@@ -179,11 +199,27 @@ final class Color
         ?string $background = null
     ): string
     {
-        if (
-            $text === '' || 
-            (!self::has($foreground) && !self::has($background, 'bg')) ||
-            !Terminal::isColorSupported()
-        ) {
+        if($text === ''){
+            return '';
+        }
+
+        if($foreground && !self::has($foreground)){
+            if(!$background){
+                return $text;
+            }
+
+            $foreground = null;
+        }
+
+        if($background && !self::has($background, 'bg')){
+            if(!$foreground){
+                return $text;
+            }
+
+            $background = null;
+        }
+
+        if ((!$foreground && !$background) || !Terminal::isColorSupported()) {
             return $text;
         }
 
@@ -218,36 +254,48 @@ final class Color
         ?string $background = null
     ): string
     {
-        if (
-            $text === '' || 
-            (
-                !$foreground  && 
-                !$background && 
-                ($fonts === null || $fonts === Text::NO_FONT)
-            ) ||
-            Text::hasAnsi($text)
-        ) {
+        if($text === ''){
+            return '';
+        }
+
+        $isNoFonts = (!$fonts || $fonts === Text::NO_FONT);
+
+        if($foreground && !self::has($foreground)){
+            if(!$background && $isNoFonts){
+                return $text;
+            }
+
+            $foreground = null;
+        }
+
+        if($background && !self::has($background, 'bg')){
+            if(!$foreground && $isNoFonts){
+                return $text;
+            }
+
+            $background = null;
+        }
+
+        if ((!$foreground && !$background && $isNoFonts) || Text::hasAnsi($text)) {
             return $text;
         }
 
         $fonts = Text::fonts($fonts);
 
-        if (!self::has($foreground) && !self::has($background, 'bg')) {
+        if ((!$foreground && !$background) || !Terminal::isColorSupported()) {
             return ($fonts === '' || !Terminal::isAnsiSupported()) 
                 ? $text 
                 : "\033[{$fonts}m{$text}\033[0m";
         }
 
         $color = '';
-        if(Terminal::isColorSupported()){
-            if ($foreground !== null ) {
-                $color .= self::foreground($foreground);
-            }
+        if ($foreground !== null ) {
+            $color .= self::foreground($foreground);
+        }
 
-            if ($background !== null) {
-                $color .= ($color === '') ? '' : ';';
-                $color .= self::background($background);
-            }
+        if ($background !== null) {
+            $color .= ($color === '') ? '' : ';';
+            $color .= self::background($background);
         }
 
         $style = ($fonts !== '') 

@@ -39,7 +39,7 @@ class Task
         $nowTime = Time::now($timezone);
 
         if ($closing <= $opening) {
-            $closing->add(new DateInterval('P1D'));
+            $closing = $closing->add(new DateInterval('P1D'));
         }
 
         return ($nowTime > $opening && $nowTime >= $closing);

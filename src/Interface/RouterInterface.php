@@ -13,20 +13,12 @@ namespace Luminova\Interface;
 use \Psr\Http\Message\ResponseInterface;
 use \Luminova\Routing\{Prefix, Segments};
 use \Luminova\Exceptions\RouterException;
-use \Luminova\Foundation\Core\Application;
 use \Luminova\Interface\ViewResponseInterface;
 
 use \Closure;
 
-interface RouterInterface 
+interface RouterInterface
 {
-    /**
-     * Initializes the Router class and sets up default properties.
-     * 
-     * @param Application $app Instance of core application class.
-     */
-    public function __construct(Application $app);
-
     /**
      * Route to handle HTTP GET requests.
      *
@@ -336,7 +328,7 @@ interface RouterInterface
      * @param Prefix|array<string,mixed> ...$contexts [, Prefix $... ] URI prefixes for non-attribute routing 
      *                  containing prefix object or array of prefix.
      * 
-     * @return static Returns the router instance.
+     * @return self Returns the router instance.
      * @throws RouterException Throws if not context arguments was passed and route attribute is disabled.
      */
     public function context(Prefix|array ...$contexts): self;
@@ -367,7 +359,7 @@ interface RouterInterface
      *
      * @param string $namespace The namespace to register (e.g., `\App\Controllers\`, `\App\Modules\FooModule\Controllers\`).
      *
-     * @return static Returns the instance of the router class.
+     * @return self Returns the instance of the router class.
      * @throws RouterException If the namespace is empty or contains invalid characters.
      * 
      * > **Note:** 

@@ -115,11 +115,27 @@ final class LogLevel
     ];
 
     /**
+     * Maps RFC 5424 numeric levels to corresponding string log levels.
+     *
+     * @var array<int,string> RFC_5424_LEVELS
+     */
+    private const RFC_5424_LEVELS = [
+        7 => self::DEBUG,
+        6 => self::INFO,
+        5 => self::NOTICE,
+        4 => self::WARNING,
+        3 => self::ERROR,
+        2 => self::CRITICAL,
+        1 => self::ALERT,
+        0 => self::EMERGENCY,
+    ];
+
+    /**
      * List of critical log levels.
      * 
-     * @var array<string,true> $critical
+     * @var array<string,true> CRITICAL_LEVELS
      */
-    private static array $critical = [
+    private const CRITICAL_LEVELS = [
         self::EMERGENCY => true,
         self::ALERT     => true,
         self::EXCEPTION  => true,
@@ -127,15 +143,35 @@ final class LogLevel
     ];
 
     /**
-     * Checks if the specified log level is valid and exists.
+     * Checks if the given log level is valid.
      *
-     * @param string $level The log level to check (e.g., 'error', 'info', 'debug').
+     * Supports both PSR-style string levels (e.g., 'error', 'info') 
+     * and RFC 5424 numeric levels (0–7).
+     *
+     * @param string|int $level The log level to validate.
      * 
-     * @return bool Return true if the log level exists, false otherwise.
+     * @return bool Returns true if the level exists, false otherwise.
      */
-    public static function has(string $level): bool
+    public static function has(string|int $level): bool
     {
-        return isset(self::LEVELS[$level]);
+        return isset(self::LEVELS[$level]) 
+            || isset(self::RFC_5424_LEVELS[$level]);
+    }
+
+    /**
+     * Resolves the canonical value for a given log level.
+     *
+     * Maps a PSR-style string level or RFC 5424 numeric level to its internal representation.
+     *
+     * @param string|int $level The log level to parse.
+     * 
+     * @return string|null Return the canonical log level, or null if invalid.
+     */
+    public static function resolve(string|int $level): ?string
+    {
+        return self::LEVELS[$level] 
+            ?? self::RFC_5424_LEVELS[$level] 
+            ?? null;
     }
 
     /**
@@ -144,15 +180,15 @@ final class LogLevel
      * This function checks if the provided log level exists in the predefined set of log levels.
      * If the level is invalid, it throws an InvalidArgumentException with a detailed error message.
      *
-     * @param string $level The log level to validate.
+     * @param string|int $level The log level to validate.
      * @param string|null $function Optional. The name of the calling function for context in the error message.
      *
      * @return void
      * @throws InvalidArgumentException If the provided log level is not valid.
      */
-    public static function assert(string $level, ?string $function = null): void
+    public static function assert(string|int $level, ?string $function = null): void
     {
-        if (!isset(self::LEVELS[$level])) {
+        if (!self::has($level)) {
             throw new InvalidArgumentException(sprintf(
                 'Invalid log level "%s" in %s. Supported levels: %s. See https://luminova.ng/docs/0.0.0/logging/levels',
                 $level,
@@ -175,12 +211,18 @@ final class LogLevel
      * - `critical`
      * - `exception`
      *
-     * @param string $level The log level to check.
+     * @param string|int $level The log level to check.
      * 
      * @return bool Returns true if the level is critical, otherwise false.
      */
-    public static function isCritical(string $level): bool
+    public static function isCritical(string|int $level): bool
     {
-        return isset(self::$critical[$level]);
+        $level = self::resolve($level);
+
+        if($level === null){
+            return false;
+        }
+
+        return isset(self::CRITICAL_LEVELS[$level]);
     }
 }

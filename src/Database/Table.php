@@ -251,13 +251,13 @@ final class Table
         $method = strtoupper($method);
     
         if ($method === 'STRING') {
-            return $this->addColumn($arguments[1] ?? 'VARCHAR', $arguments[0], $arguments[2] ?? 255);
+            return $this->column($arguments[1] ?? 'VARCHAR', $arguments[0], $arguments[2] ?? 255);
         }
 
         $method = ($method === 'INTEGER') ? 'INT' : $method;
 
         if (isset(self::$columnTypes[$method])) {
-            return $this->addColumn($method, $arguments[0], $arguments[1] ?? null, $arguments[2] ?? null);
+            return $this->column($method, $arguments[0], $arguments[1] ?? null, $arguments[2] ?? null);
         }
 
         throw new DatabaseException("Unsupported table column type: $method");
@@ -274,12 +274,12 @@ final class Table
     public function id(string $name = 'id'): self
     {
         if($this->database === Table::SQLITE){
-            return $this->addColumn('INTEGER', $name)
+            return $this->column('INTEGER', $name)
                 ->attribute(self::INDEX_PRIMARY_KEY)
                 ->attribute('AUTOINCREMENT'); 
         }
 
-        return $this->addColumn('BIGINT', $name)
+        return $this->column('BIGINT', $name)
             ->autoIncrement()
             ->unsigned()
             ->primary();
@@ -295,7 +295,7 @@ final class Table
      */
     public function ulid(string $name = 'ulid'): self
     {
-        return $this->addColumn('CHAR', $name, 25);
+        return $this->column('CHAR', $name, 25);
     }
 
     /**
@@ -308,7 +308,7 @@ final class Table
      */
     public function uuid(string $name = 'uuid'): self
     {
-        return $this->addColumn('CHAR', $name, 36);
+        return $this->column('CHAR', $name, 36);
     }
 
     /**
@@ -321,12 +321,18 @@ final class Table
      */
     public function timestamps(?int $precision = null): self
     {
-        return $this->addColumn('TIMESTAMP', 'created_on', $precision)
+        $ts = $this->column('TIMESTAMP', 'created_on', $precision)
             ->nullable()
             ->default(self::DEFAULT_TIMESTAMP)
-            ->addColumn('TIMESTAMP', 'updated_on', $precision)
+            ->column('TIMESTAMP', 'updated_on', $precision)
             ->nullable()
             ->default(self::DEFAULT_TIMESTAMP);
+
+        if($this->database === self::MYSQL){
+            $ts->extra('ON UPDATE CURRENT_TIMESTAMP');
+        }
+
+        return $ts;
     }
 
     /**
@@ -344,8 +350,8 @@ final class Table
 
     /**
      * Adds additional attributes to the current column.
-     * This method allows for specifying additional column attributes such as UNSIGNED, AUTO_INCREMENT, etc.
      * 
+     * This method allows for specifying additional column attributes such as UNSIGNED, AUTO_INCREMENT, etc.
      * 
      * @param string $attribute The attribute to add to the column definition.
      * 
@@ -354,6 +360,23 @@ final class Table
     public function attribute(string $attribute): self
     {
         return $this->add('attributes', $attribute);
+    }
+
+    /**
+     * Define an extra column options that will be added to the table definition.
+     *
+     * @param string $query The entry query string to add.
+     * 
+     * @return self Returns the table class instance.
+     * @example - Adding a new column entry:
+     * 
+     * ```php
+     * $table->extra("ON UPDATE CURRENT_TIMESTAMP");
+     * ```
+     */
+    public function extra(string $query): self
+    {
+        return $this->add('extras', $query);
     }
 
     /**
@@ -635,7 +658,8 @@ final class Table
      * 
      * @return self Returns the table class instance.
      * 
-     * @throws DatabaseException If attempting to add a primary key constraint while multiple columns are already designated as primary key.
+     * @throws DatabaseException If attempting to add a primary key constraint 
+     *      while multiple columns are already designated as primary key.
      */
     public function primary(bool $constraint = false): self
     {

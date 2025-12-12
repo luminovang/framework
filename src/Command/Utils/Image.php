@@ -10,11 +10,11 @@
  */
 namespace Luminova\Command\Utils;
 
+use \GdImage;
+use \WeakMap;
 use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Color;
 use \Luminova\Utility\Reference\WeakReference;
-use \GdImage;
-use \WeakMap;
 
 class Image
 {
@@ -26,7 +26,7 @@ class Image
      * 
      * @var string ASCII_DENSE
      */
-    public const ASCII_DENSE = "@%#*+=-:. ";
+    public final const ASCII_DENSE = "@%#*+=-:. ";
 
     /**
      * Extended dense set with more characters for finer detail.
@@ -36,7 +36,7 @@ class Image
      * 
      * @var string ASCII_EXTENDED_DENSE
      */
-    public const ASCII_EXTENDED_DENSE = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,\"^`'. ";
+    public final const ASCII_EXTENDED_DENSE = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,\"^`'. ";
 
     /**
      * Simplified character set for bolder, chunkier ASCII art.
@@ -46,7 +46,7 @@ class Image
      * 
      * @var string ASCII_SIMPLIFIED
      */
-    public const ASCII_SIMPLIFIED = "MNHQ\$OC?7>!:-;. ";
+    public final const ASCII_SIMPLIFIED = "MNHQ\$OC?7>!:-;. ";
 
     /**
      * Inverted character set for creating a reverse effect.
@@ -56,7 +56,7 @@ class Image
      * 
      * @var string ASCII_INVERTED
      */
-    public const ASCII_INVERTED = " .:-=+*#%@";
+    public final const ASCII_INVERTED = " .:-=+*#%@";
 
     /**
      * Block character set for stylized, pixelated effects.
@@ -66,7 +66,7 @@ class Image
      * 
      * @var string ASCII_BLOCKS
      */
-    public const ASCII_BLOCKS = "█▓▒░ ";
+    public final const ASCII_BLOCKS = "█▓▒░ ";
 
     /**
      * Classic ASCII character set, minimalistic with 5 characters.
@@ -76,7 +76,7 @@ class Image
      * 
      * @var string ASCII_CLASSIC
      */
-    public const ASCII_CLASSIC = " .oO@";
+    public final const ASCII_CLASSIC = " .oO@";
 
     /**
      * ASCII binary characters typically used for binary visualizations.
@@ -84,7 +84,7 @@ class Image
      * 
      * @var string ASCII_BINARY
      */
-    public const ASCII_BINARY = "01";
+    public final const ASCII_BINARY = "01";
 
     /**
      * ASCII binary characters with a leading space, often used for padding 
@@ -93,7 +93,7 @@ class Image
      * 
      * @var string ASCII_BINARY_CLASSIC
      */
-    public const ASCII_BINARY_CLASSIC = " 01";
+    public final const ASCII_BINARY_CLASSIC = " 01";
 
     /**
      * ASCII binary characters with spaces on both sides, suitable for 
@@ -102,7 +102,7 @@ class Image
      * 
      * @var string ASCII_BINARY_SIMPLIFIED
      */
-    public const ASCII_BINARY_SIMPLIFIED = " 01 ";
+    public final const ASCII_BINARY_SIMPLIFIED = " 01 ";
 
     /**
      * Weak preference mapping.

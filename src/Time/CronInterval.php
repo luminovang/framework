@@ -188,7 +188,6 @@ class CronInterval
      * Determines the day of the week based on the provided weekday component.
      *
      * @param string $weekday The weekday component of the cron expression.
-     * @param DateTime $dateTime The DateTime object representing the current date and time.
      * 
      * @return string The full name of the day of the week.
      * @throws RuntimeException If the weekday component is invalid.

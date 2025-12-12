@@ -10,9 +10,10 @@
  */
 namespace Luminova\Http;
 
-use \Luminova\Luminova;
-use \Luminova\Interface\LazyObjectInterface;
 use \Countable;
+use \Luminova\Luminova;
+use function \Luminova\Funcs\root;
+use \Luminova\Interface\LazyObjectInterface;
 
 class Server implements LazyObjectInterface, Countable
 {
@@ -127,22 +128,30 @@ class Server implements LazyObjectInterface, Countable
      *
      * @return array Return an associative array containing default server variables and their values.
      */
-    public static function getDefault(): array 
+    public static function getDefault(): array
     {
+        $host = PRODUCTION ? APP_HOSTNAME : 'localhost';
+        $index = '/' . CONTROLLER_SCRIPT_PATH . '/' . 'index.php';
+
         return [
-            'SERVER_NAME' => 'localhost',
-            'SERVER_PORT' => 80,
-            'HTTP_HOST' => 'localhost',
+            'SERVER_NAME' => $host,
+            'SERVER_PORT' => PRODUCTION ? 443 : 80,
+            'HTTP_HOST' => $host,
+            'REQUEST_URI' => '/',
+            'QUERY_STRING' => '',
+            'SERVER_PROTOCOL' => 'HTTP/1.1',
+            'HTTPS' => (URL_SCHEME === 'https') ? 'on' : 'off',
             'HTTP_USER_AGENT' => Luminova::copyright(true),
             'HTTP_ACCEPT' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'HTTP_ACCEPT_LANGUAGE' => 'en-us,en;q=0.5',
             'HTTP_ACCEPT_CHARSET' => 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
             'REMOTE_ADDR' => '127.0.0.1',
-            'SCRIPT_NAME' => '/index.php',
-            'SCRIPT_FILENAME' => '/' . CONTROLLER_SCRIPT_PATH . '/' . 'index.php',
-            'SERVER_PROTOCOL' => 'HTTP/1.1',
+            'SCRIPT_NAME' => $index,
+            'PHP_SELF' => $index,
+            'SCRIPT_FILENAME' => root('/public/', 'index.php'),
             'REQUEST_TIME' => time(),
             'REQUEST_TIME_FLOAT' => microtime(true),
+            'UNIQUE_ID' => rtrim(strtr(base64_encode(random_bytes(16)), '+/', '-_'), '=')
         ];
     }
 }

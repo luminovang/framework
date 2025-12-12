@@ -156,7 +156,6 @@ final class CSRF
             : isset($_SESSION[self::$token]);
     }
 
-
     /**
      * Generates a new CSRF token.
      *
