@@ -10,8 +10,8 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Command\Terminal;
 use \Luminova\Base\Console;
+use \Luminova\Command\Terminal;
 use \Luminova\Command\Utils\Text;
 use \Luminova\Command\Utils\Color;
 use \Luminova\Command\Consoles\Commands;
@@ -40,8 +40,6 @@ class Lists extends Console
      */
     public function run(?array $options = []): int
     {
-        $this->term->perse($options);
-
         return $this->listCommands();
     }
 
@@ -60,7 +58,7 @@ class Lists extends Console
      */
     public function listCommands(): int 
     {
-        $from = $this->term->getAnyOption('command', 'c', null);
+        $from = $this->input->getAnyOption('command', 'c', null);
         $commands = Commands::getCommands();
         $grouping = [];
 
@@ -82,29 +80,29 @@ class Lists extends Console
         }
 
         if($grouping === []){
-            $this->term->oops($from ?? 'zsh');
+            Terminal::oops($from ?? 'zsh');
             
             if(($suggest = Commands::suggest($from ?? 'zsh')) !== ''){
-                $this->term->fwrite($suggest, Terminal::STD_ERR);
+                Terminal::fwrite($suggest, Terminal::STD_ERR);
             }
             
             return STATUS_ERROR;
         }
 
         foreach ($grouping as $name => $list) {
-            $this->term->writeln(Text::style("Available {$name} Commands", Text::FONT_BOLD));
-            $this->term->newLine();
+            Terminal::writeln(Text::style("Available {$name} Commands", Text::FONT_BOLD));
+            Terminal::newLine();
             
             foreach ($list['commands'] as $options) {
                 $label = Color::style($options['group'], 'lightYellow');
                 $spacing = Text::padding('', ($list['largest'] + 6) - strlen($options['group']), Text::RIGHT);
                 $value = $options['description'];
 
-                $this->term->writeln("  {$label}{$spacing}{$value}");
+                Terminal::writeln("  {$label}{$spacing}{$value}");
             }
             
             if(!$from){
-                $this->term->newLine(2);
+                Terminal::newLine(2);
             }
         }
 
