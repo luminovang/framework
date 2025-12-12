@@ -10,16 +10,14 @@
  */
 namespace Luminova\Command\Consoles;
 
-use \Luminova\Luminova;
-use \Luminova\Base\Console;
-use \App\Config\Template;
 use \Exception;
-use function \Luminova\Funcs\{
-    root,
-    filter_paths,
-    pascal_case,
-    write_content
-};
+use Luminova\Runtime;
+use Luminova\Luminova;
+use \App\Config\Template;
+use Luminova\Base\Console;
+use Luminova\Command\Terminal;
+use Luminova\Storage\Filesystem;
+use function Luminova\Funcs\pascal_case;
 
 class Generators extends Console 
 {
@@ -53,40 +51,40 @@ class Generators extends Console
      */
     public function run(?array $options = []): int
     {
-        $this->term->perse($options);
-        $command = trim($this->term->getCommand());
-        $name = $this->term->getArgument(1);
+        $name = $this->input->getArgument(0);
 
         if(empty($name)){
-            $this->term->writeln('Generator name is required', 'red');
-            $this->term->beeps();
+            Terminal::writeln('Generator name is required', 'red');
+            Terminal::beeps();
 
             return STATUS_ERROR;
         }
 
-        $extend = $this->term->getAnyOption('extend', 'e', null);
-        $implement = $this->term->getAnyOption('implement', 'i', null);
-        $dir = $this->term->getAnyOption('dir', 'd', '');
-        $module = strtolower(trim($this->term->getAnyOption('module', 'm', '')));
-        $hmvc = env('feature.app.hmvc', false);
+
+        $command = trim($this->input->getName());
+        $extend = $this->input->getAnyOption('extend', 'e', null);
+        $implement = $this->input->getAnyOption('implement', 'i', null);
+        $dir = $this->input->getAnyOption('dir', 'd', '');
+        $module = strtolower(trim($this->input->getAnyOption('module', 'm', '')));
+        $isHmvc = Runtime::isHmvc();
         
         $runCommand = match($command){
             'create:controller' => $this->createController(
                 $name, 
-                strtolower($this->term->getOption('type', 'view')), 
-                $this->term->getAnyOption('template', 't', ''), 
+                strtolower($this->input->getOption('type', 'view')), 
+                $this->input->getAnyOption('template', 't', ''), 
                 $module, 
-                $hmvc, 
+                $isHmvc, 
                 $implement
             ),
-            'create:view'       => $this->createView($name, $dir, $module, $hmvc),
+            'create:view'       => $this->createView($name, $dir, $module, $isHmvc),
             'create:class'      => $this->createUtilClass($name, $extend, $implement),
-            'create:model'      => $this->createModel($name, $implement, $module, $hmvc),
+            'create:model'      => $this->createModel($name, $implement, $module, $isHmvc),
             default             => 'unknown'
         };
 
         if ($runCommand === 'unknown') {
-            return $this->term->oops($command);
+            return Terminal::oops($command);
         } 
             
         return (int) $runCommand;
@@ -103,9 +101,12 @@ class Generators extends Console
     /**
      * Create a controller.
      *
-     * @param string $name  Controller name.
-     * @param string $type  The type of controller.
-     * @param string|null $dir Directory path.
+     * @param string $name Controller name.
+     * @param string $type The type of controller.
+     * @param bool $template
+     * @param string $module
+     * @param bool $hmvc
+     * @param string|null $implement
      * 
      * @return void
      */
@@ -120,7 +121,7 @@ class Generators extends Console
     {
         $view = '';
         $prefix = '';
-        $use = 'use \Luminova\Base\\';
+        $use = 'use \\Luminova\Base\\';
         $implements = '';
         $module = $module ? pascal_case($module) : '';
         $namespace = 'namespace App\Console';
@@ -131,11 +132,12 @@ class Generators extends Console
                 : 'namespace App\Controllers';
         }
         
+        $limitation = '';
         $onHmvcCreate = ($hmvc  && $module) ? "\$this->app->setModule('$module');\n" : '';
         
         if($type === 'command'){
             $use .= "Command;\n";
-            $use .= "use \Luminova\Attributes\Group;\n";
+            $use .= "use \\Luminova\Attributes\Group;\n";
 
             $extend = 'Command';
             $namespace .= '\\Cli';
@@ -147,17 +149,17 @@ class Generators extends Console
             $limitation = $module ? strtolower($module) : '';
 
             $use .= "Controller;\n";
-            $use .= "use \Luminova\Attributes\Prefix;\n";
-            $use .= "use \Luminova\Attributes\Route;\n";
-            $use .= 'use \App\Errors\Controllers\ErrorController;';
+            $use .= "use \\Luminova\Attributes\Prefix;\n";
+            $use .= "use \\Luminova\Attributes\Route;\n";
+            $use .= 'use \\App\Errors\Controllers\AppError;';
 
             $namespace .= '\\Http';
-            $prefix = "#[Prefix(pattern: '/$limitation.*', onError: [ErrorController::class, 'onWebError'])]";
+            $prefix = "#[Prefix(pattern: '/$limitation.*', onError: [AppError::class, 'onTrigger'])]";
             $extend = 'Controller';
         }
 
         if($implement){
-            $implements =  ' implements ' . Luminova::getClassBaseNames($implement);
+            $implements =  ' implements ' . Luminova::getClassBasename($implement);
             $use .= 'use ' . implode(";\nuse ", explode(',', $implement)) . ';';
         }
 
@@ -276,7 +278,7 @@ class Generators extends Console
                 PHP;
             }
         }else{
-            $this->term->writeln("Invalid controller --type flag: {$type}, use 'view or command'", 'red');
+            Terminal::writeln("Invalid controller --type flag: {$type}, use 'view or command'", 'red');
             return;
         }
 
@@ -299,7 +301,7 @@ class Generators extends Console
                 );
             }
         }else{
-            $this->term->writeln("Unable to create class {$name}", 'red');
+            Terminal::writeln("Unable to create class {$name}", 'red');
         }
     }
     
@@ -345,6 +347,9 @@ class Generators extends Console
             HTML;
         }else{
             $classContent = <<<HTML
+            <?php 
+                use function \\Luminova\\Funcs\\asset;
+            ?>
             <!DOCTYPE html>
             <html lang="<?= locale()?>">
             <head>
@@ -359,7 +364,7 @@ class Generators extends Console
         }
 
         if (!$this->saveFile($classContent, $path, $name . $type)) {
-            $this->term->writeln("Unable to create template view '{$name}'", 'red');
+            Terminal::writeln("Unable to create template view '{$name}'", 'red');
         }
     }
 
@@ -380,10 +385,10 @@ class Generators extends Console
     {
         $module = $module ? pascal_case($module) : '';
         $interface = $implement ? "\nuse \\$implement;\n" : '';
-        $implementClass = Luminova::getClassBaseNames($implement);
+        $implementClass = Luminova::getClassBasename($implement);
         $namespace = $hmvc 
-            ? 'namespace App\Modules\\' . ($module ? $module . '\\' : '') . 'Models;' 
-            : 'namespace App\Models;';
+            ? 'namespace \\App\Modules\\' . ($module ? $module . '\\' : '') . 'Models;' 
+            : 'namespace \\App\Models;';
         $extends = " extends Model";
         $implement = $implementClass ? " implements $implementClass" : '';
         $name = pascal_case($name);
@@ -393,10 +398,10 @@ class Generators extends Console
         <?php
         $namespace
 
-        use \Luminova\Base\Model;
-        use \Luminova\Database\Builder;
-        use \Luminova\Security\Validation;
-        use \DateTimeInterface;
+        use \\Luminova\Base\Model;
+        use \\Luminova\Security\Validation;
+        use \\Luminova\Database\Query\Builder;
+        use \\DateTimeInterface;
         $interface
         class $name$extends$implement
         {
@@ -485,7 +490,7 @@ class Generators extends Console
             : '/app/Models/';
         
         if (!$this->saveFile($modelContent, $path, "{$name}.php")) {
-            $this->term->writeln("Unable to create database model '{$name}'", 'red');
+            Terminal::writeln("Unable to create database model '{$name}'", 'red');
         }
     }
 
@@ -509,8 +514,8 @@ class Generators extends Console
             $use .= "use \\$implement;";
         }
 
-        $extendClass = Luminova::getClassBaseNames($extend);
-        $implementClass = Luminova::getClassBaseNames($implement);
+        $extendClass = Luminova::getClassBasename($extend);
+        $implementClass = Luminova::getClassBasename($implement);
 
         $extendString = $extendClass ? " extends $extendClass" : '';
         $implementString = $implementClass ? " implements $implementClass" : '';
@@ -537,7 +542,7 @@ class Generators extends Console
         $path = "/app/Utils/";
         
         if (!$this->saveFile($classContent, $path, "{$name}.php")) {
-            $this->term->writeln("Unable to create class '{$name}'", 'red');
+            Terminal::writeln("Unable to create class '{$name}'", 'red');
         }
     }
 
@@ -552,16 +557,16 @@ class Generators extends Console
      */
     private function saveFile(string $content, string $path, string $filename): bool 
     {
-        $filepath = root($path, $filename);
+        $filepath = Luminova::root($path, $filename);
         $continue = 'yes';
 
         if(is_file($filepath)){
-            $this->term->writeln(
+            Terminal::writeln(
                 "A file named '{$filename}' already exists at '{$path}'.", 
                 'yellow'
             );
             
-            $continue = $this->term->prompt(
+            $continue = Terminal::prompt(
                 'Do you want to override it?', 
                 ['yes', 'no'], 
                 'required|in_array(yes,no)'
@@ -570,13 +575,13 @@ class Generators extends Console
 
         if($continue === 'yes'){
             try {
-                if(write_content($filepath, $content)){
-                    $filepath = filter_paths($filepath);
-                    $this->term->writeln("Completed successfully location: /{$filepath}", 'green');
+                if(Filesystem::write($filepath, $content)){
+                    $filepath = Luminova::toDisplayPath($filepath);
+                    Terminal::writeln("Completed successfully location: /{$filepath}", 'green');
                     return true;
                 }
             } catch(Exception $e) {
-                $this->term->writeln($e->getMessage(), 'red');
+                Terminal::writeln($e->getMessage(), 'red');
             }
         }
 

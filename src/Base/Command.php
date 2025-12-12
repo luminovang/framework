@@ -10,34 +10,47 @@
  */
 namespace Luminova\Base;
 
-use \Luminova\Boot;
-use \App\Application;
-use \App\Config\Files;
-use \Luminova\Common\Helpers;
-use \Luminova\Command\Terminal;
-use \Luminova\Utility\Object\LazyObject;
-use \Luminova\Foundation\Core\Application as CoreApplication;
-use \Luminova\Interface\{RoutableInterface, LazyObjectInterface};
-use function \Luminova\Funcs\{make_dir, get_mime};
+use \App\Kernel;
+use Luminova\Luminova;
+use Luminova\Utility\Mime;
+use Luminova\Command\Input;
+use Luminova\Utility\Encoder;
+use Luminova\Command\Terminal;
+use function Luminova\Funcs\make_dir;
+use Luminova\Foundation\Core\Application;
+use Luminova\Interface\{RoutableInterface, LazyObjectInterface};
 
 /**
  * A class to extend when building a CLI controller for routable commands.
- * It specialize with handling commands using Luminova routing system and must navigate to `public/index.php` to run registered commands.
+ * It specialize with handling commands using Luminova routing system and must navigate 
+ * to `public/index.php` to run registered commands.
  * 
- * @property string $group  @inheritDoc
- * @property string $name   @inheritDoc
- * @property array|string $usages @inheritDoc
- * @property array $options @inheritDoc
- * @property array $examples @inheritDoc
- * @property string $description @inheritDoc
- * @property array $users @inheritDoc
- * @property array|null $authentication @inheritDoc
- * @property Application<CoreApplication>|CoreApplication|null $app @inheritDoc
+ * @template T of Application
+ * 
+ * @property string $group {@inheritDoc}
+ * @property string $name {@inheritDoc}
+ * @property array|string $usages {@inheritDoc}
+ * @property array $options {@inheritDoc}
+ * @property array $examples {@inheritDoc}
+ * @property string $description {@inheritDoc}
+ * @property array $users {@inheritDoc}
+ * @property array|null $authentication {@inheritDoc}
+ * @property T|\App\Application<T>|null $app {@inheritDoc}
  * 
  * @see https://luminova.ng/docs/0.0.0/controllers/cli-controller
  */
-abstract class Command extends Terminal implements RoutableInterface
+abstract class Command implements RoutableInterface
 {
+    /**
+     * Allows direct PHP include/require statements in this class.
+     *
+     * When enabled, the debugger will skip include/require enforcement.
+     *
+     * @var bool $allowIncludes
+     * @see #[AllowIncludes] Class level attribute
+     */
+    protected bool $allowIncludes = false;
+
     /**
      * Command group name for the current controller class.
      * 
@@ -133,23 +146,69 @@ abstract class Command extends Terminal implements RoutableInterface
     /**
      * Lazy loaded application instance.
      * 
-     * @var CoreApplication|Application<CoreApplication>|null $app
+     * @var Application>|\App\Application<Application> $app
      */
-    protected ?LazyObjectInterface $app = null;
+    protected readonly LazyObjectInterface $app;
+
+    /**
+     * Command input. 
+     * 
+     * @var Input $input
+     */
+    protected readonly Input $input;
 
     /**
      * {@inheritdoc}
      */
     public function __construct()
     {
-        parent::__construct();
-        
-        $this->app = LazyObject::newObject(fn(): CoreApplication => Boot::application());
+        Terminal::init();
+
+        $this->app = Kernel::resolve(Kernel::SERVICE_APPLICATION, shared: true);
         $this->onCreate();
+
+        // Enforce coding standard for include files
+        if (!PRODUCTION && !$this->allowIncludes) {
+            \Luminova\Debugger\Tracer::assertNoIncludes($this);
+        }
     }
 
     /**
-     * Allows access to protected static methods.
+     * Perse command input.
+     * 
+     * This parses and processes command-line arguments and options, 
+     * making them accessible in console controllers.
+     * 
+     * @param array{
+     *      group: string,
+     *      name: string,
+     *      arguments: array<int|string, mixed>,
+     *      options: array<string, mixed>,
+     *      command: string,
+     *      input: string,
+     *      params: array<int, string>,
+     *      classMethod: string
+     * } $command Command arguments, options, and flags extracted from CLI execution.
+     * 
+     * @return Input Returns instance of input.
+     */
+    public final function parse(array $command): Input
+    {
+        if(isset($this->input)){
+            return $this->input->replace($command);
+        }
+
+        $this->input = new Input($command);
+        
+        if($this->options !== []){
+            $this->input->setKnownOptions(array_keys($this->options));
+        }
+
+        return $this->input;
+    }
+
+    /**
+     * Allows access to protected methods.
      *
      * @param string $method The method name to call.
      * @param array<int,mixed> $arguments The arguments to pass to the method.
@@ -157,28 +216,44 @@ abstract class Command extends Terminal implements RoutableInterface
      * @return mixed Return the value of the method, or null if the method doesn't exist.
      * @ignore 
      */
-    public static function __callStatic(string $method, array $arguments): mixed
+    public function __call(string $method, array $arguments): mixed
     {
-        return method_exists(static::class, $method) 
-            ? static::{$method}(...$arguments) 
+        return method_exists($this->input, $method) 
+            ? $this->input->{$method}(...$arguments) 
             : null;
     }
 
     /**
-     * Override the default help display.
-     * Implement custom help display, returning STATUS_SUCCESS on success, otherwise return STATUS_ERROR.
+     * Override the default command help display.
      *
-     * @param array<string,mixed> $helps Information about the command:
-     *      - class: The class name (may not be available if extending BaseConsole).
-     *      - group: The group name.
-     *      - name: The command name.
-     *      - description: The command description.
-     *      - usages: Command usage examples.
-     *      - options: Available command options.
-     *      - examples: Command usage examples.
-     * 
-     * @return int Return exit code STATUS_SUCCESS when custom help is implemented, 
-     *          STATUS_ERROR when using default implementation.
+     * Implement a custom help template and return {@see \STATUS_SUCCESS} when the
+     * help output has been handled. Return {@see \STATUS_ERROR} to use the default
+     * help template.
+     *
+     * - class: The class name (may not be available if extending BaseConsole).
+     * - group: The group name {@see self::$group}.
+     * - name: The command name {@see self::$name}.
+     * - description: The command description {@see self::$description}.
+     * - users: Available command users.
+     * - authentication: Command authentication information.
+     * - usages: Command usage examples {@see self::$usages}.
+     * - options: Available command options {@see self::$options}.
+     * - examples: Command examples {@see self::$examples}.
+     *
+     * @param array{
+     *     class?: ?string,
+     *     group: string,
+     *     name: string,
+     *     description: string,
+     *     users: array<int, string>,
+     *     authentication: ?array<string, mixed>,
+     *     usages: array<string|int, string>|string,
+     *     options: array<string|int, string>,
+     *     examples: array<string|int, string>
+     * } $helps Command help information.
+     *
+     * @return int `STATUS_SUCCESS` when custom help is handled, otherwise
+     *     `STATUS_ERROR` to use the default help template.
      */
     abstract public function help(array $helps): int;
 
@@ -189,15 +264,15 @@ abstract class Command extends Terminal implements RoutableInterface
      * 
      * @example - Example: 
      * 
-     * Given a command with `php index.php foo user=1 --no-nocache`
+     * Given a command with `php index.php foo user=1 --no-cache`
      * 
      *```bash 
-     * index.php index.php foo user=1 --no-nocache
+     * index.php index.php foo user=1 --no-cache
      * ```
      */
     protected function getString(): string 
     {
-        return parent::getQuery('exe_string');
+        return $this->input->getInput();
     }
 
     /**
@@ -224,8 +299,8 @@ abstract class Command extends Terminal implements RoutableInterface
     protected function option(string $key, ?string $alias = null, mixed $default = false): mixed 
     {
         return ($alias === null) 
-            ? parent::getOption($key, $default)
-            : parent::getAnyOption($key, $alias, $default);
+            ? $this->input->getOption($key, $default)
+            : $this->input->getAnyOption($key, $alias, $default);
     }
 
     /**
@@ -252,24 +327,25 @@ abstract class Command extends Terminal implements RoutableInterface
      */
     protected function argument(string|int $index): mixed 
     {
-        $argument = null;
-
         if (is_string($index)) {
-            foreach (parent::getArguments() as $arg) {
+            foreach ($this->input->getArguments() as $arg) {
                 if (str_starts_with($arg, $index)) {
-                    $argument = $arg;
-                    break;
+                    if(str_contains($arg, '=')){
+                        $value = explode('=', $arg, 2)[1] ?? null;
+
+                        if($value === null){
+                            return null;
+                        }
+
+                        return trim($value);
+                    }
+
+                    return $arg;
                 }
             }
-        }else{
-            $argument = parent::getArgument($index);
         }
 
-        if($argument === null) {
-            return null;
-        }
-
-        return (str_contains($argument, '=') ? explode('=', $argument, 2)[1] : $argument);
+        return $this->input->getArgument($index, true);
     }
 
     /**
@@ -290,7 +366,7 @@ abstract class Command extends Terminal implements RoutableInterface
         }
 
         if (is_file($file)){
-            if(file_exists($file)) {
+            if(is_file($file)) {
                 $data = file_get_contents($file);
                 if ($data === false) {
                     $this->error("Failed to read file {$file} content.");
@@ -302,7 +378,7 @@ abstract class Command extends Terminal implements RoutableInterface
             }
 
             $name = basename($name ?? $file);
-        }elseif(Helpers::isBase64Encoded($file)) {
+        }elseif(Encoder::isBase64Encoded($file)) {
             $data = base64_decode($file);
 
             if ($data === false) {
@@ -311,8 +387,10 @@ abstract class Command extends Terminal implements RoutableInterface
             }
 
             if($name === null){
-                $mime = get_mime($data);
-                $name = uniqid(date('YmdHis') . '_')  . '.' . (($mime === false) ? 'bin' : Files::getExtension($mime));
+                $mime = Mime::guess($data);
+                $ext = ($mime === false) ? 'bin' : Mime::findExtension($mime);
+
+                $name = uniqid(date('YmdHis') . '_') . '.' . ($ext ?: 'bin');
             }else{
                 $name = basename($name);
             }
@@ -360,13 +438,13 @@ abstract class Command extends Terminal implements RoutableInterface
     /**
      * Checks if a property is set.
      *
-     * @param string $key The property name.
+     * @param string $property The property name.
      * 
      * @return bool Return true if the property exists, otherwise false.
      * @ignore
      */
-    public function __isset(string $key): bool
+    public function __isset(string $property): bool
     {
-        return property_exists($this, $key);
+        return isset($this->{$property});
     }
 }

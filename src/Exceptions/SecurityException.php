@@ -11,10 +11,10 @@
 namespace Luminova\Exceptions;
 
 use \Throwable;
-use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Exceptions\LuminovaException;
 
-class SecurityException extends AppException
+class SecurityException extends LuminovaException
 {
      /**
      * Constructor for SecurityException.

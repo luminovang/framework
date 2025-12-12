@@ -10,11 +10,12 @@
  */
 namespace Luminova\Base;
 
-use \SessionIdInterface;
-use \SessionHandlerInterface;
 use \App\Config\Session;
-use \Luminova\Logger\Logger;
-use \Luminova\Exceptions\RuntimeException;
+use \SessionIdInterface;
+use Luminova\Logger\Logger;
+use \SessionHandlerInterface;
+use Luminova\Utility\Encoder;
+use Luminova\Exceptions\RuntimeException;
 
 abstract class SessionHandler implements SessionHandlerInterface, SessionIdInterface
 {
@@ -57,7 +58,7 @@ abstract class SessionHandler implements SessionHandlerInterface, SessionIdInter
         'debugging'         => false,
         'cacheable'         => false, // database handler
         'sid_entropy_bits'  => 160,
-        'dir_permission'    => 0777, // file handler
+        'dir_permission'    => 0700, // file handler
         'columnPrefix'      => null, // database handler
         'autoLockDatabase'  => false, // database handler
         'onValidate'        => null,
@@ -84,7 +85,7 @@ abstract class SessionHandler implements SessionHandlerInterface, SessionIdInter
     /**
      * Set session configuration.
      * 
-     * @param Session<Luminova\Base\Configuration> $config The session configuration object.
+     * @param Session<\Luminova\Base\Configuration> $config The session configuration object.
      * 
      * @return void
      */
@@ -116,7 +117,7 @@ abstract class SessionHandler implements SessionHandlerInterface, SessionIdInter
 
         $sid = match ($bitsPerCharacter) {
             4 => bin2hex($bytes), 
-            5 => self::base32Encode($bytes),
+            5 => Encoder::base32Encode($bytes, 'sid5'),
             6 => rtrim(strtr(base64_encode($bytes), '+/', '-_'), '='),
             default => throw new RuntimeException(
                 "Unsupported session.sid_bits_per_character value: {$bitsPerCharacter}"
@@ -179,34 +180,6 @@ abstract class SessionHandler implements SessionHandlerInterface, SessionIdInter
         };
 
         return "{$pattern}{" . self::$sidLength . "}";
-    }
-
-    /**
-     * Encodes a string into Base32 using a for session ids.
-     *
-     * @param string $input The input string to be encoded.
-     *                      It is expected to be ASCII or binary data.
-     *
-     * @return string Return the Base32 encoded output string.
-     *                The result will only contain characters from the a-v Base32 alphabet.
-     */
-    protected static function base32Encode(string $input): string
-    {
-        $alphabet = '0123456789abcdefghijklmnopqrstuv';
-        $output = '';
-        $binaryString = '';
-        
-        foreach (str_split($input) as $byte) {
-            $binaryString .= str_pad(decbin(ord($byte)), 8, '0', STR_PAD_LEFT);
-        }
-
-        $length = strlen($binaryString);
-        for ($i = 0; $i < $length; $i += 5) {
-            $chunk = substr($binaryString, $i, 5);
-            $output .= $alphabet[bindec($chunk)];
-        }
-
-        return $output;
     }
 
     /**

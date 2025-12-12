@@ -10,18 +10,19 @@
  */
 namespace Luminova\Utility;
 
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Logger\Logger;
 use \Fiber;
 use \Closure;
 use \Countable;
-use \FiberError;
 use \Exception;
+use \FiberError;
+use Luminova\Runtime;
 use function \pcntl_fork;
-use function \pcntl_wexitstatus;
-use function \pcntl_wifexited;
+use Luminova\Logger\Logger;
 use function \pcntl_waitpid;
-use function \Luminova\Funcs\array_merge_result;
+use function \pcntl_wifexited;
+use function \pcntl_wexitstatus;
+use Luminova\Exceptions\RuntimeException;
+use function Luminova\Funcs\array_merge_result;
 
 final class Queue implements Countable
 {
@@ -225,7 +226,10 @@ final class Queue implements Countable
     public function run(?callable $callback = null, int $timeout = 0): void
     {
         if($this->isRunning){
-            $this->report('Queue is already running. Wait for completion before calling Queue::run() or call Queue::cancel() to cancel all running jobs.');
+            $this->report(
+                'Queue is already running. Wait for completion before calling Queue::run() 
+                or call Queue::cancel() to cancel all running jobs.'
+            );
             return;
         }
 
@@ -272,7 +276,7 @@ final class Queue implements Countable
         $this->isRunning = false;
         $this->waited = microtime(true) - $this->startTime;
 
-        if (!$this->isCancelled && $this->isCompleted && $this->isCallable($callback)) {
+        if (!$this->isCancelled && $this->isCompleted && Runtime::isCallable($callback, true)) {
             $callback($this->result);
             $total -= $this->count();
             $handler = self::$isFiberSupported 
@@ -401,7 +405,8 @@ final class Queue implements Countable
     {
         return !$this->isEmpty() && array_filter(
             $this->jobs, 
-            fn($job): bool => $this->isCallable(($job instanceof Closure) ? $job : ($job['task'] ?? $job))
+            fn($job): bool => ($job instanceof Closure) 
+                || Runtime::isCallable($job['task'] ?? $job, true)
         ) !== [];
     }
 
@@ -633,7 +638,7 @@ final class Queue implements Countable
      */
     private function call(mixed $job, int $id): mixed
     {
-        $result = $this->isCallable($job) 
+        $result = Runtime::isCallable($job, true) 
             ? $job($this) 
             : $job;
         
@@ -664,9 +669,10 @@ final class Queue implements Countable
             $pid = pcntl_fork();
 
             if ($pid === -1) {
-                $className = ($this->isCallable($job) && is_array($job)) 
+                $className = (is_array($job) && Runtime::isCallable($job, true)) 
                     ? $job[0]::class 
                     : null;
+
                 $this->report('Queue could not for process for job: ' . $id . '.' . ($className ? ' Class: ' . $className : ''));
                 return;
             }
@@ -804,18 +810,6 @@ final class Queue implements Countable
         }
 
         array_merge_result($this->result, $result);
-    }
-
-    /**
-     * Check if an input or queued job is closure or valid callable.
-     *
-     * @param mixed $input The input to check.
-     * 
-     * @return bool Return true if the input is a valid callable.
-     */
-    private function isCallable(mixed $input): bool
-    {
-        return $input !== null && (is_callable($input) || $input instanceof Closure);
     }
 
     /**

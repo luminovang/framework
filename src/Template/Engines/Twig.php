@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -13,10 +14,10 @@ namespace Luminova\Template\Engines;
 use \Twig\Environment;
 use \Twig\TwigFunction;
 use \Twig\Loader\FilesystemLoader;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Exceptions\RuntimeException;
 use \App\Config\Template as TemplateConfig;
-use \Luminova\Template\Extensions\TwigExtension;
-use \Luminova\Exceptions\BadMethodCallException;
+use Luminova\Template\Extensions\TwigExtension;
+use Luminova\Exceptions\BadMethodCallException;
 
 final class Twig 
 {

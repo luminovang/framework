@@ -11,16 +11,16 @@
 namespace Luminova\Exceptions;
 
 use \Throwable;
-use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Exceptions\LuminovaException;
 
-class ClassException extends AppException
+class ClassException extends LuminovaException
 {
     /**
      * Constructor for ClassException.
      *
      * @param string $class  The exception class.
-     * @param string|int   $code      The exception code (default: ErrorCode::CLASS_NOT_FOUND).
+     * @param string|int $code The exception code (default: ErrorCode::CLASS_NOT_FOUND).
      * @param Throwable|null $previous  The previous exception if applicable (default: null).
      */
     public function __construct(

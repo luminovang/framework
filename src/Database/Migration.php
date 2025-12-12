@@ -22,57 +22,65 @@ abstract class Migration
     /**
      * Run the migrations.
      *
-     * @return void
+     * @return bool Return true if migration creation was successful, otherwise false.
      * @example - Implementation.
      * 
      * ```php 
-     * Schema::create('foo', function(\Luminova\Database\Table $table){
-     *      $table->string('bar');
-     *      return $table;
-     * });
+     * public function up(): bool 
+     * {
+     *      return Schema::create('users', function(\Luminova\Database\Table $table){
+     *          $table->database = Table::MYSQL;
+     * 
+     *          $table->id('uid');
+     *          $table->string('name')->nullable(false);
+     *          $table->timestamps();
+     * 
+     *          return $table;
+     *      });
+     * }
      * ```
      */
-    public abstract function up(): void;
+    public abstract function up(): bool;
 
     /**
      * Reverse the migrations.
      *
-     * @return void
+     * @return bool Return true if migration table drop was successful, otherwise false.
      * @example - Implementation:
      * 
      * ```php 
-     * Schema::drop('foo');
-     * ```
-     * 
-     * @example - Implementation.
-     * 
-     * ```php 
-     * Schema::dropIfExists('foo');
+     * public function down(): bool 
+     * {
+     *      return Schema::drop('users');
+     *      // Or if exists
+     *      // return Schema::dropIfExists('users');
+     * }
      * ```
      */
-    public abstract function down(): void;
+    public abstract function down(): bool;
 
     /**
      * Modify table migrations.
      *
-     * @return void
+     * @return bool Return true if migration modification was successful, otherwise false.
      * 
      * @example - Implementation.
      * 
      * ```php
-     * Schema::modify('foo', function(\Luminova\Database\Table $table){
-     *      $table->string('bar');
-     *      return $table;
-     * });
-     * ```
+     * public function alter(): bool 
+     * {
+     *      return Schema::modify('users', function(\Luminova\Database\Table $table){
+     *          $table->string('name')->nullable(true);
      * 
-     * @example - Implementation.
+     *          return $table;
+     *      });
      * 
-     * ```php 
-     * Schema::rename('foo', 'bar');
+     *      // Or rename table.
+     *      // return Schema::rename('users', 'user_table');
+     * }
      * ```
      */
-    public abstract function alter(): void;
+    public abstract function alter(): bool;
 
     /**
      * Invoke another migration within migration up or down method.
