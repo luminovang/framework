@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework asynchronous queue execution using fiber, process fork or default.
  *

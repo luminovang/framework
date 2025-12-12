@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -20,7 +21,7 @@ use Luminova\Exceptions\BadMethodCallException;
  * Inspired by JavaScript's prototype model, it lets you dynamically 
  * add properties and methods to an object at runtime.
  * 
- * @mixin Luminova\Interface\PrototypeableInterface
+ * @mixin \Luminova\Interface\PrototypeableInterface
  * 
  * @example - Usage:
  * ```

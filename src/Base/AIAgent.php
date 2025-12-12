@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework base exception class.
  *
@@ -15,7 +16,7 @@ use \BackedEnum;
 use \App\Kernel;
 use \App\Config\AI;
 use Luminova\Luminova;
-use Luminova\AI\Client\Ollama;
+use Luminova\AI\Agents\Ollama;
 use Luminova\Http\Client\Novio;
 use \Psr\Http\Client\ClientInterface;
 use \Psr\Http\Message\ResponseInterface;

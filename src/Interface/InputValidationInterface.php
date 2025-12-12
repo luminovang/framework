@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Interface for validating input data against defined rules.
  *

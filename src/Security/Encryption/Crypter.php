@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Crypter class provides methods for encrypting 
  * and decrypting data using encryption algorithms in Openssl or Sodium.

@@ -1,4 +1,5 @@
-<?php 
+<?php
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -16,25 +17,21 @@ use Luminova\Command\Utils\Text;
 /**
  * Color class for managing and retrieving ANSI color codes and names dynamically.
  *
- * @method static ?string fg{ColorName}(?string $text) Returns the foreground (text) color name if valid.
  * @method static ?string fgRed(?string $text) Returns the foreground color 'red' if valid.
  * @method static ?string fgGreen(?string $text) Returns the foreground color 'green' if valid.
  * @method static ?string fgWhite(?string $text) Returns the foreground color 'White' if valid.
  * @method static ?string fgCyan(?string $text) Returns the foreground color 'cyan' if valid.
  * 
- * @method static ?string bg{ColorName}(?string $text) Returns the background color name if valid.
  * @method static ?string bgRed(?string $text) Returns the background color 'red' if valid.
  * @method static ?string bgGreen(?string $text) Returns the background color 'green' if valid.
  * @method static ?string bgWhite(?string $text) Returns the background color 'wite' if valid.
  * @method static ?string bgCyan(?string $text) Returns the background color 'cyan' if valid.
  * 
- * @method static ?string fgc{ColorName}() Returns the ANSI code for the foreground color.
  * @method static ?string fgcRed() Returns the ANSI code for foreground red (e.g., '0;31').
  * @method static ?string fgcGreen() Returns the ANSI code for foreground green (e.g., '0;32').
  * @method static ?string fgcWhite() Returns the ANSI code for foreground white (e.g., '1;37').
  * @method static ?string fgcCyan() Returns the ANSI code for foreground cyan (e.g., '0;36').
  * 
- * @method static ?string bgc{ColorName}() Returns the ANSI code for the background color.
  * @method static ?string bgcRed() Returns the ANSI code for background red (e.g., '41').
  * @method static ?string bgcGreen() Returns the ANSI code for background green (e.g., '42').
  * @method static ?string bgcWhite() Returns the ANSI code for background white (e.g., '47').

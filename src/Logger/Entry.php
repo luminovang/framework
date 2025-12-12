@@ -1,4 +1,5 @@
-<?php 
+<?php
+declare(strict_types=1);
 /**
  * Luminova Framework Entry class for building and formatting structured log messages.
  *

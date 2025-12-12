@@ -1,4 +1,5 @@
-<?php 
+<?php
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -16,7 +17,6 @@ use Luminova\Command\Utils\Color;
 /**
  * Text class for managing and applying ANSI styling codes to text dynamically.
  *
- * @method static string {StyleName}(string $text, ?int $fonts = Text::NO_FONT, ?string $background = null) Applies the specified style to the text and returns the styled text with ANSI code.
  * @method static string red(string   $text, ?int $fonts = Text::NO_FONT, ?string $background = null) Styles the text in red and returns the styled text with ANSI code.
  * @method static string white(string $text, ?int $fonts = Text::NO_FONT, ?string $background = null) Styles the text in white and returns the styled text with ANSI code.
  * @method static string green(string $text, ?int $fonts = Text::NO_FONT, ?string $background = null) Styles the text in green and returns the styled text with ANSI code.

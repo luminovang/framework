@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Interface for creating routing system.
  * 
@@ -24,6 +25,17 @@ use Luminova\Interface\ContentResponseInterface;
  *
  * Route callback:
  * `(Closure(mixed ...$args):T|int)|string`
+ * 
+ * @phpstan-type HttpMethods 
+ *      'GET'|
+ *      'POST'|
+ *      'PUT'|
+ *      'HEAD'|
+ *      'PATCH'|
+ *      'QUERY'|
+ *      'DELETE'|
+ *      'OPTIONS'|
+ *      'ANY'
  */
 interface RouterInterface
 {
@@ -218,7 +230,7 @@ interface RouterInterface
      * middleware returns `STATUS_ERROR`, route execution is stopped and the
      * request is not dispatched to the controller.
      *
-     * @param string $methods The HTTP methods this middleware applies to,
+     * @param HttpMethods|string $methods The HTTP methods this middleware applies to,
      *                        separated by `|`, such as `GET|POST`.
      * @param string $pattern The URI pattern to match, such as `{segment}`,
      *                        `(:type)`, `/.*`, `/home`, or `/user/([0-9]+)`.
@@ -242,7 +254,7 @@ interface RouterInterface
      * can be used for post-processing, cleanup, logging, or modifying the
      * final response.
      *
-     * @param string $methods The HTTP methods this middleware applies to,
+     * @param HttpMethods|string $methods The HTTP methods this middleware applies to,
      *                        separated by `|`, such as `GET|POST`.
      * @param string $pattern The URI pattern to match, such as `/`, `/home`,
      *                        `{segment}`, `(:type)`, or `/user/([0-9]+)`.
@@ -283,7 +295,7 @@ interface RouterInterface
      * when the route matches. Multiple HTTP methods can be specified using
      * the `|` separator.
      *
-     * @param string $methods The HTTP methods supported by the route, separated
+     * @param HttpMethods|string $methods The HTTP methods supported by the route, separated
      *                        by `|`, such as `GET|POST|PUT` or `ANY`.
      * @param string $pattern The URI pattern to match, such as `/`, `/home`,
      *                        `{segment}`, `(:type)`, or `/user/([0-9]+)`.

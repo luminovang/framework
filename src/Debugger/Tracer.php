@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -11,7 +12,6 @@
 namespace Luminova\Debugger; 
 
 use \PhpToken;
-use \Throwable;
 use \ReflectionClass;
 use Luminova\Runtime;
 use Luminova\Config\Env;

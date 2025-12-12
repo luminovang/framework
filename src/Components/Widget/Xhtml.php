@@ -1,4 +1,5 @@
-<?php 
+<?php
+declare(strict_types=1);
 /**
  * Luminova Framework XML and HTML Generator Class
  * 

@@ -13,7 +13,6 @@ namespace Luminova\Base;
 
 use \App\Kernel;
 use Luminova\Runtime;
-
 use Luminova\Luminova;
 use Luminova\Http\Request;
 use Luminova\Template\View;
@@ -35,6 +34,10 @@ use Luminova\Interface\{
  * Provides common controller services for request handling, input validation,
  * view rendering, middleware lifecycle, and HTTP responses. Extend this class
  * to create routable HTTP controllers.
+ * 
+ * @phpstan-type Types
+ *     'html'|'xhtml'|'json'|'text'|'xml'|'js'|'bin'|'css'|'rdf'|'atom'|'rss'|
+ *     'png'|'jpeg'|'gif'|'webp'|'svg'|'avif'|'mp3'|'ogg'|'webm'|'mp4'|'txt'
  * 
  * @template T of Controller
  *
@@ -203,7 +206,7 @@ abstract class Controller implements RoutableInterface
      * @param string $template View template name or path without extension,
      *                         such as `index` or `user/profile`.
      * @param array<string,mixed> $options Parameters made available to the view template.
-     * @param string $type View content type. Defaults to `View::HTML`.
+     * @param Types|string $type View content type. Defaults to `View::HTML`.
      * @param int $status HTTP response status code. Defaults to `200`.
      *
      * @return int `STATUS_SUCCESS` if the view is rendered successfully, or
@@ -346,7 +349,7 @@ abstract class Controller implements RoutableInterface
      * @param string $template View template name or path without extension,
      *                         such as `index` or `user/profile`.
      * @param array<string,mixed> $options Parameters made available to the view template.
-     * @param string $type View content type. Defaults to `View::HTML`.
+     * @param Types|string $type View content type. Defaults to `View::HTML`.
      * @param int $status HTTP response status code used during rendering. Defaults to `200`.
      *
      * @return string|null The rendered view contents, or `null` if the output is empty.

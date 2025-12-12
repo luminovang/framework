@@ -104,13 +104,13 @@ final class Compiler
      * Install HTTP routes from the given path.
      *
      * @param string $path Path to the directory containing HTTP controller classes.
-     * @param string $context The request URI prefix, which is the first segment of request URL.
-     * @param string $uri The full request URL paths.
+     * @param string $prefix The request URI prefix.
+     * @param string $uri The request URL paths.
      * 
      * @return void
      * @throws RouterException Throws if error occurs while exporting controller routes.
      */
-    public function forHttp(string $path, string $context = '', string $uri = '/'): void
+    public function forHttp(string $path, string $prefix = '', string $uri = '/'): void
     {
         if ($this->isCli) {
             return;
@@ -119,7 +119,7 @@ final class Compiler
         [$namespace, $fileName, $isExcluded, $subPrefix] = self::$parser->load(
             $path . ($this->isHmvc ? '' : 'Http'),
             'http',
-            $context,
+            $prefix,
             $uri
         );
 
@@ -153,7 +153,7 @@ final class Compiler
         /**
          * Handle context attributes and register error handlers.
          */
-        $this->addErrors($instance, $context);
+        $this->addErrors($instance, $prefix);
 
         /**
          * Handle method attributes and create routes.
@@ -184,7 +184,7 @@ final class Compiler
                 if (
                     !$this->isPatternValid(
                         $attr->pattern, 
-                        $context, 
+                        $prefix, 
                         $attr->middleware, 
                         $pattern
                     )
@@ -198,7 +198,7 @@ final class Compiler
                     $this->addHandler($callback, $attr->middleware, $pattern, $method);
 
                     if ($attr->aliases) {
-                        $this->addAliases($attr, $callback, $context, $method);
+                        $this->addAliases($attr, $callback, $prefix, $method);
                     }
                 }
             }
@@ -208,13 +208,14 @@ final class Compiler
             self::sort();
         }
 
-        self::$parser->cache('http', $context, $isExcluded, $subPrefix);
+        self::$parser->cache('http', $prefix, $isExcluded, $subPrefix);
     }
 
     /**
      * Install CLI commands from the given path.
      *
      * @param string $path Path to the directory containing command controller classes.
+     * @param string $command The executed command name as prefix.
      * 
      * @return void
      * @throws RouterException Throws if error occurs while exporting controller routes.
@@ -229,7 +230,7 @@ final class Compiler
             $path . ($this->isHmvc ? '' : 'Cli'),
             'cli',
             $command,
-            "/$command"
+            "/{$command}"
         );
 
         if ($namespace === null) {
@@ -444,7 +445,7 @@ final class Compiler
      *
      * @param Route       $attr     The route attribute object containing metadata.
      * @param string      $callback The controller class and method reference.
-     * @param string|null $context  Optional routing context (e.g., group prefix).
+     * @param string|null $prefix   Optional URI prefix (e.g., group prefix).
      * @param string|null $method   Optional HTTP method (GET, POST, etc.).
      *
      * @return void
@@ -452,19 +453,19 @@ final class Compiler
     private function addAliases(
         Route $attr, 
         string $callback, 
-        ?string $context = null, 
+        ?string $prefix = null, 
         ?string $method = null
     )
     {
         foreach ($attr->aliases as $alias) {
-            if ($context === null) {
+            if ($prefix === null) {
                 $this->addError($alias, $callback);
                 continue;
             }
 
             $pattern = '';
 
-            if (!$this->isPatternValid($alias, $context, $attr->middleware, $pattern)) {
+            if (!$this->isPatternValid($alias, $prefix, $attr->middleware, $pattern)) {
                 continue;
             }
 
@@ -791,7 +792,8 @@ final class Compiler
         $bind = ($pattern === '/') ? '/' : trim($pattern, '/');
         $list = ($bind !== '/' && str_contains($bind, '/')) ? explode('/', $bind) : [];
         $bind = ($list === [])
-            ? $bind : (($list[0] === $api) ? $list[1] : $list[0]);
+            ? $bind 
+            : (($list[0] === $api) ? $list[1] : $list[0]);
 
         $context = ($bind !== '/' && str_starts_with($bind, $api)) ? $api : 'http';
 
@@ -954,18 +956,18 @@ final class Compiler
      * Add error handlers for the given class based on its attributes.
      *
      * @param ReflectionClass $class The class object containing error attributes to register.
-     * @param string $context The current request context to validate against the error attributes.
+     * @param string $prefix The request URI prefix to validate against the error attributes.
      * 
      * @return void
      */
-    private function addErrors(ReflectionClass $class, string $context): void
+    private function addErrors(ReflectionClass $class, string $prefix): void
     {
         foreach ($class->getAttributes(Error::class) as $error) {
             $instance = $error->newInstance();
 
             if (
-                $instance->context === $context 
-                || $instance->context === 'web'
+                $instance->prefix === $prefix 
+                || $instance->prefix === 'web'
             ) {
                 continue;
             }

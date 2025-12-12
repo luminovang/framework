@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Method-Scope HTTP Route Attribute.
  *
@@ -65,7 +66,7 @@ final class Route
      * The `ANY` method cannot be combined with other HTTP methods.
      *
      * @param string $pattern Route URI pattern, for example `/blog/(:int)`.
-     * @param string[] $methods HTTP methods supported by the route. Defaults to `GET`.
+     * @param string[] $methods HTTP methods supported by the route (default: `GET`).
      *     Use `ANY` to match all supported HTTP methods.
      * @param bool $isErrorHandler Whether this route handles an HTTP error.
      * @param string|null $middleware Middleware execution point. Must be either

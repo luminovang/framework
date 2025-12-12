@@ -60,6 +60,10 @@ use Luminova\Exceptions\{
  * 
  * @property-read string $_href Relative path from entry URI (When Prefixing Enabled).
  * @property-read string $_asset Relative path from entry URI to asset directory (When Prefixing Enabled).
+ * 
+ * @phpstan-type Types
+ *     'html'|'xhtml'|'json'|'text'|'xml'|'js'|'bin'|'css'|'rdf'|'atom'|'rss'|
+ *     'png'|'jpeg'|'gif'|'webp'|'svg'|'avif'|'mp3'|'ogg'|'webm'|'mp4'|'txt'
  */
 final class View implements LazyObjectInterface
 { 
@@ -1243,7 +1247,7 @@ final class View implements LazyObjectInterface
     /**
      * Check if page cache has expired.
      * 
-     * @param string|null $type The view content type (default: `self::HTML`).
+     * @param Types|string|null $type The view content type (default: `self::HTML`).
      * 
      * @return bool Returns true if cache doesn't exist or expired.
      * @throws RuntimeException Throw if the cached version doesn't match with the current view type.
@@ -1360,7 +1364,7 @@ final class View implements LazyObjectInterface
      *
      * @param Closure $onRenew Callback invoked when the cache is unavailable or expired.
      * @param array<string,mixed> $options Options passed to the renewal callback.
-     * @param string|null $type Template content type to check, such as `View::HTML` or `View::JSON`.
+     * @param Types|string|null $type Template content type to check, such as `View::HTML` or `View::JSON`.
      *
      * @return int `reuse()` status when a valid cache is reused, otherwise the callback status.
      *
@@ -1459,7 +1463,7 @@ final class View implements LazyObjectInterface
      *
      * @param string $template View template name or path without extension,
      *                         such as `dashboard/index`.
-     * @param string $type View content type. Defaults to `View::HTML`.
+     * @param Types|string $type View content type. Defaults to `View::HTML`.
      *
      * @return self Returns this view instance.
      * @throws InvalidArgumentException If the template name is empty or the

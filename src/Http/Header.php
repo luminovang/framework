@@ -1,4 +1,5 @@
-<?php 
+<?php
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -17,7 +18,6 @@ use Luminova\Config\Env;
 use \App\Config\Security;
 use Luminova\Logger\Logger;
 use Luminova\Routing\Router;
-use Luminova\Utility\Encoder;
 use Luminova\Interface\LazyObjectInterface;
 use function Luminova\Funcs\http_status_header;
 use Luminova\Exceptions\{RuntimeException, InvalidArgumentException};

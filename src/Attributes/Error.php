@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Class-Scope Route Error Attribute.
  *
@@ -51,9 +52,9 @@ final class Error
      * Typed placeholders can be made optional by prefixing their type with `?`,
      * for example `(:?int)`, `(:?string)`, or `(:?numeric)`.
      *
-     * @param string $context The URI prefix context name used to categorize URIs (default: 'web'). 
+     * @param string $prefix The URI prefix used to categorize URIs (default: `web` allow all). 
      *              Typically the first segment of the URI (e.g., `api`, `blog`).
-     * @param string $pattern The route URI pattern to allow this  error handler (default: `/` root).
+     * @param string $pattern The URI pattern to allow this error handler (default: `/` root).
      *                         (e.g., `/blog/(:int)`, `/blogs/{$id}`, `/blog/(\d+)`, `/` or `/.*`).
      * @param string|array{0:class-string,1:string} $onError A callable error handler, provided as a string or `[class, method]` array.
      *
@@ -81,31 +82,39 @@ final class Error
      * use Luminova\Attributes\Error;
      * use App\Errors\Controllers\AppError;
      *
-     * #[Error(pattern: '/', onError: [AppError::class, 'onTrigger'])] // Global websites error handler
-     * #[Error('foo', pattern: '/foo/', onError: [AppError::class, 'handler'])] // Custom for URI prefix
+     * // Global websites error handler
+     * #[Error(pattern: '/', onError: [AppError::class, 'onTrigger'])] 
+     * 
+     * // Custom for URI prefix
+     * #[Error('user', pattern: '/user/', onError: [AppError::class, 'handler'])]
      * class MyController extends Controller {
      *      // Controller implementation
      * }
      * ```
      */
     public function __construct(
-        public string $context = 'web',
+        public string $prefix = 'web',
         public string $pattern = '/',
         public string|array|null $onError = null,
     )
     {
-        if ($this->onError === null) {
+        if (!$this->onError) {
             throw new RouterException(
-                'The Error attribute "$onError" requires a valid error handler; null is not allowed.'
+                'The Error attribute "$onError" requires a valid error handler,
+                 null is not allowed.'
             );
         }
 
-        if(is_callable($this->onError) || (is_array($this->onError) && count($this->onError) === 2)){
+        if(
+            is_callable($this->onError) 
+            || (is_array($this->onError) && count($this->onError) === 2)
+        ){
             return;
         }
         
         throw new RouterException(
-            'The provided error handler must be a valid callable or a [class, method] array.'
+            'The provided error handler must be a valid callable 
+            or a [class, method] array.'
         );
     }
 }

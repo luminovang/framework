@@ -327,6 +327,12 @@ abstract class Application implements LazyObjectInterface
      *
      * This method calls the matching `on*` method if it is supported. 
      * Unknown hooks throws an exception.
+     *
+     * @param Events|string $hook Hook method name (e.g. `onStart`, `onDestroy`).
+     * @param mixed ...$arguments Optional arguments passed to the hook.
+     * 
+     * @return mixed Return result of triggered hook if any.
+     * @throws BadMethodCallException If invalid event hook is provided.
      * 
      * **Hooks:**
      * 
@@ -337,13 +343,6 @@ abstract class Application implements LazyObjectInterface
      * - `onTerminated` - {@see self::onTerminated()}
      * - `onErrorShutdown` - {@see self::onErrorShutdown()}
      * - `onRouteResolved` - {@see self::onRouteResolved()}
-     *
-     * @param Events|string $hook Hook method name 
-     *                      (e.g. `onStart`, `onDestroy`).
-     * @param mixed ...$arguments Optional arguments passed to the hook.
-     * 
-     * @return mixed Return result of triggered hook if any.
-     * @throws BadMethodCallException If invalid event hook is provided.
      */
     public final function trigger(string $hook, mixed ...$arguments): mixed
     {

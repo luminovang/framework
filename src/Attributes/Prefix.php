@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Class-Scope Route Prefix Attribute.
  *
@@ -76,6 +77,7 @@ final class Prefix
      * ```
      *
      * @example - Usage:
+     * 
      * ```php
      * namespace App\Controllers\Http;
      * 
@@ -89,7 +91,8 @@ final class Prefix
      * }
      * ```
      * 
-     * @example Excluding Prefixes:
+     * @example - Excluding Prefixes:
+     * 
      * ```php
      * namespace App\Controllers\Http;
      * 
@@ -115,12 +118,16 @@ final class Prefix
             return;
         }
 
-        if(is_callable($this->onError) || (is_array($this->onError) && count($this->onError) === 2)){
+        if(
+            is_callable($this->onError) 
+            || (is_array($this->onError) && count($this->onError) === 2)
+        ){
             return;
         }
         
         throw new RouterException(
-            'The provided error handler must be a valid callable, a [class, method] array, or null.'
+            'The provided error handler must be a valid callable, 
+            a [class, method] array, or null.'
         );
     }
 }

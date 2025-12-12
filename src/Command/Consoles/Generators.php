@@ -1,4 +1,5 @@
-<?php 
+<?php
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -166,6 +167,7 @@ class Generators extends Console
         $class = pascal_case($name);
         $classContent = <<<PHP
         <?php
+        declare(strict_types=1);
         $namespace;
         
         $use
@@ -396,6 +398,7 @@ class Generators extends Console
 
         $modelContent = <<<PHP
         <?php
+        declare(strict_types=1);
         $namespace
 
         use \\Luminova\Base\Model;
@@ -524,6 +527,7 @@ class Generators extends Console
 
         $classContent = <<<PHP
         <?php
+        declare(strict_types=1);
         namespace App\Utils;
 
         $use

@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework sitemap generator.
  *
@@ -24,9 +25,9 @@ use Luminova\Utility\Converter;
 use Luminova\Storage\Filesystem;
 use Luminova\Config\Configuration;
 use \App\Config\Sitemap as SitemapConfig;
-use function Luminova\Funcs\view;
 use Luminova\Command\Utils\{Text, Color};
 use Luminova\Exceptions\RuntimeException;
+use function Luminova\Funcs\view;
 
 final class Sitemap
 {

@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework SEO schema definition and generator.
  *
@@ -14,7 +15,7 @@ use Luminova\Luminova;
 use Luminova\Time\Time;
 use Luminova\Http\Request;
 use Luminova\Interface\LazyObjectInterface;
-use function Luminova\Funcs\{kebab_case};
+use function Luminova\Funcs\kebab_case;
 
 /**
  * Structured Data and Schema Objects Generator for Webpages 

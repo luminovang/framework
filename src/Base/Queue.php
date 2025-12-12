@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework background task queue and execution.
  *
@@ -12,7 +13,6 @@ namespace Luminova\Base;
 
 use \Closure;
 use \Throwable;
-use Luminova\Runtime;
 use Luminova\Luminova;
 use \DateTimeInterface;
 use Luminova\Time\Time;

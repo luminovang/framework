@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Private File Response (FDS).
  *
@@ -21,7 +22,12 @@ use Luminova\Utility\Mime;
 use \Peterujah\Media\NanoImage;
 use Luminova\Storage\Filesystem;
 use Luminova\Security\Encryption\Crypter;
-use Luminova\Exceptions\{FileException, RuntimeException, EncryptionException, InvalidArgumentException};
+use Luminova\Exceptions\{
+    FileException, 
+    RuntimeException, 
+    EncryptionException, 
+    InvalidArgumentException
+};
 
 final class Renderer
 {

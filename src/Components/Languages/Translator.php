@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework translation module.
  *
@@ -10,7 +11,6 @@
  */
 namespace Luminova\Components\Languages;
 
-use Luminova\Boot;
 use Luminova\Luminova;
 use Luminova\Exceptions\RuntimeException;
 use Luminova\Exceptions\NotFoundException;

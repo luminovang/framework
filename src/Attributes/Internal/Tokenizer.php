@@ -162,8 +162,8 @@ final class Tokenizer
      * Load routing files from a specified path or cached version if cache is enabled.
      *
      * @param string $path The directory path to search for routing files.
-     * @param string $name The name of the routing file or group to load (e.g., 'cli', 'web').
-     * @param string $prefix The URI prefix for route group (e.g., 'api', 'web').
+     * @param string $namespace The controller namespace context (e.g., 'cli', 'http').
+     * @param string $prefix The URI prefix for route group (e.g., 'api', 'user', 'web').
      * @param string $uri The request URI to match against loaded routes.
      * 
      * @return array Returns an array of class-namespace and file name if no cache is found, 
@@ -172,7 +172,7 @@ final class Tokenizer
      */
     public function load(
         string $path, 
-        string $name, 
+        string $namespace, 
         string $prefix = Router::CLI_URI, 
         string $uri = '/'
     ): array
@@ -194,7 +194,7 @@ final class Tokenizer
         if (
             $this->isCacheable 
             && $this->hasCache(
-                $name, 
+                $namespace, 
                 $prefix, 
                 $uri, 
                 $path,
@@ -207,7 +207,7 @@ final class Tokenizer
 
         $attrClass = $this->cli ? 'Group' : 'Prefix';
 
-        foreach ($this->iterator($path, $name) as $file) {
+        foreach ($this->iterator($path, $namespace) as $file) {
             $fileName = $file->getBasename('.php');
 
             $classNamespace = $this->scanFileForMatchingClass(
@@ -232,12 +232,12 @@ final class Tokenizer
      * Creates a recursive iterator for routable controller files.
      *
      * @param string $path Root directory path to scan.
-     * @param string $name Controller namespace context.
+     * @param string $namespace Controller namespace context.
      *
      * @return RecursiveIteratorIterator Valid controller file iterator.
      * @throws RouterException When directory iteration fails.
      */
-    public function iterator(string $path, string $name): RecursiveIteratorIterator
+    public function iterator(string $path, string $namespace): RecursiveIteratorIterator
     {
         $filepath = $path = Luminova::root($path);
         $isDir = is_dir($path);
@@ -255,6 +255,7 @@ final class Tokenizer
             );
 
             self::e(new RouterException($error), ['path' => $path]);
+
             return new RecursiveIteratorIterator(
                 new RecursiveArrayIterator()
             );
@@ -269,12 +270,17 @@ final class Tokenizer
                         $path, 
                         FilesystemIterator::SKIP_DOTS
                     ),
-                    static fn(SplFileInfo $entry) => self::isValidEntry($entry, $name, $isHmvc)
+                    static fn(SplFileInfo $entry) => self::isValidEntry(
+                        $entry, 
+                        $namespace, 
+                        $isHmvc
+                    )
                 ),
                 RecursiveIteratorIterator::LEAVES_ONLY
             );
         }catch(Throwable $e){
             self::e($e, ['path' => $path]);
+
             return new RecursiveIteratorIterator(
                 new RecursiveArrayIterator()
             );
@@ -300,12 +306,15 @@ final class Tokenizer
     /**
      * Get cache path.
      *
-     * @param string $suffix
+     * @param string $environment
+     * 
      * @return string
      */
-    private static function getCachePath(string $suffix = ''): string 
+    private static function getCachePath(string $environment = ''): string 
     {
-        return Luminova::root("/writeable/caches/routes/{$suffix}");
+        return Luminova::root(
+            "/writeable/caches/routes/{$environment}"
+        );
     }
 
     /**
@@ -319,7 +328,12 @@ final class Tokenizer
     private static function e(Throwable $e, array $context = []): void 
     {
         if(Runtime::isProduction()){
-            Logger::tryDispatch('critical', $e->getMessage(), $context);
+            Logger::tryDispatch(
+                'critical', 
+                $e->getMessage(), 
+                $context
+            );
+            
             return;
         }
 
@@ -327,7 +341,7 @@ final class Tokenizer
             $e = new RouterException(
                 $e->getMessage(), 
                 $e->getCode(), 
-                $e
+                $e->getPrevious()
             );
         }
 
@@ -344,7 +358,7 @@ final class Tokenizer
      * Sorting is applied ONLY during cache generation and does not affect
      * runtime route registration state.
      *
-     * @param string $context Cache context (e.g. "http", "cli").
+     * @param string $environment Cache context (e.g. "http", "cli").
      * @param string $prefix Cache file prefix or base name.
      * @param bool $isExcluded Whether to override prefix using subPrefix.
      * @param string|null $subPrefix Optional override prefix.
@@ -352,7 +366,7 @@ final class Tokenizer
      * @return bool True on successful cache write, false otherwise.
      */
     public function cache(
-        string $context,
+        string $environment,
         string $prefix = 'cli',
         bool $isExcluded = false,
         ?string $subPrefix = null
@@ -363,7 +377,7 @@ final class Tokenizer
         }
 
         try {
-            $path = self::getCachePath($context);
+            $path = self::getCachePath($environment);
 
             if (!make_dir($path)) {
                 return false;
@@ -891,7 +905,7 @@ final class Tokenizer
     /**
      * Check if there is a valid cache for the given route name and URI.
      *
-     * @param string $name The name of the routing file or group to check for caching.
+     * @param string $environment The request environment to check for caching.
      * @param string $prefix The route group prefix (e.g., 'api', 'web').
      * @param string $uri The request URI to match against cached routes.
      * @param bool &$isExcluded 
@@ -900,7 +914,7 @@ final class Tokenizer
      * @return bool Returns true if a valid cache is found, otherwise false.
      */
     private function hasCache(
-        string $name, 
+        string $environment, 
         string $prefix, 
         string $uri,
         string $path,
@@ -908,7 +922,7 @@ final class Tokenizer
         ?string &$subPrefix = null,
     ): bool 
     {
-        $lock = self::getCachePath($name);
+        $lock = self::getCachePath($environment);
         $filename = $prefix ?: 'web';
         $isSub = false;
         $excluded = false;
@@ -932,7 +946,7 @@ final class Tokenizer
                 : $subPrefix;
 
             return $this->hasCache(
-                $name,
+                $environment,
                 $subPrefix,
                 $uri,
                 $path,
@@ -1201,20 +1215,24 @@ final class Tokenizer
      * - Match the current MVC/HMVC structure.
      *
      * @param SplFileInfo $entry File system entry.
-     * @param string $name Controller context name (e.g. Http, Cli).
+     * @param string $namespace Controller context namespace (e.g. Http, Cli).
      * @param bool $isHmvc Wether is HMVC application.
      *
      * @return bool True when the entry can be scanned as a controller.
      */
-    private static function isValidEntry(SplFileInfo $entry, string $name, bool $isHmvc): bool
+    private static function isValidEntry(
+        SplFileInfo $entry, 
+        string $namespace, 
+        bool $isHmvc
+    ): bool
     {
         if (!$entry->isFile()) {
             return !isset(self::$filters[$entry->getBasename()]); 
         }
 
-        $name = ucfirst($name);
+        $namespace = ucfirst($namespace);
 
-        if($name === 'Export'){
+        if($namespace === 'Export'){
             return false;
         }
 
@@ -1230,7 +1248,7 @@ final class Tokenizer
 
         $path = str_replace('\\', '/', $entry->getPath());
 
-        if (!str_ends_with($path, "/Controllers/{$name}")) {
+        if (!str_ends_with($path, "/Controllers/{$namespace}")) {
             return false;
         }
 

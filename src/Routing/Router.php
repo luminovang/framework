@@ -180,13 +180,18 @@ final class Router implements RouterInterface
     private static ?Application $app = null;
 
     /**
-     * Initializes the Router class and sets up default properties.
+     * Initializes Luminova Router.
+     * 
+     * The initialization sets up request handling properties and rest routes state.
      * 
      * @param Application|null $app Instance of core application class.
      */
     public function __construct(?Application $app = null)
     {
-        self::$useDependencyInjection ??= Env::get('feature.route.dependency.injection', false);
+        self::$useDependencyInjection ??= Env::get(
+            'feature.route.dependency.injection', 
+            false
+        );
 
         if($app instanceof Application){
             self::$app = $app;
@@ -214,13 +219,12 @@ final class Router implements RouterInterface
     public function context(?array $contexts = null): self 
     {
         self::onInitialized();
-        self::$uri = self::getUri();
 
+        self::$uri = self::getUri();
         $prefix = self::getPrefix();
-        $isCommand = Runtime::isCommand();
 
         $info = [
-            'context' => $isCommand ? 'CLI' : 'HTTP',
+            'context' => Runtime::isCommand() ? 'CLI' : 'HTTP',
             'method'  => self::$method,
             'uri'     => self::$uri
         ];
@@ -234,21 +238,14 @@ final class Router implements RouterInterface
             return $this->withAttributes($prefix);
         }
 
-        if($contexts === null){
-            if ($isCommand){
-                $contexts = ['cli' => ['prefix' => 'cli', 'isCommand' => true]];
-            } else{
-                $api = Luminova::apiPrefix();
-                $contexts = [
-                    'web' => ['prefix' => 'web', 'onError' => null],
-                    $api  => ['prefix' => $api, 'onError' => null]
-                ];
-            }
-        }
+        $contents ??= self::getDefaultContext();
 
         // When using default context manager.
         if($contexts === []){
-           RouterException::rethrow('no.context', ErrorCode::RUNTIME_ERROR);
+            RouterException::rethrow(
+                'no.context', 
+                ErrorCode::RUNTIME_ERROR
+            );
         }
         
         if (isset(self::HTTP_METHODS[self::$method])) {
@@ -257,7 +254,11 @@ final class Router implements RouterInterface
             return $this->withMethods($prefix, $contexts);
         }
         
-        RouterException::rethrow('no.route.handler', ErrorCode::RUNTIME_ERROR);
+        RouterException::rethrow(
+            'no.route.handler', 
+            ErrorCode::RUNTIME_ERROR
+        );
+
         return $this;
     }
 
@@ -328,12 +329,17 @@ final class Router implements RouterInterface
     /**
      * {@inheritdoc}
      */
-    public static function middleware(string $methods, string $pattern, Closure|string $callback): void
+    public static function middleware(
+        string $methods, 
+        string $pattern, 
+        Closure|string $callback
+    ): void
     {
         if ($methods === '') {
             RouterException::rethrow('argument.empty', ErrorCode::INVALID_ARGUMENTS, [
                 '$methods'
             ]);
+
             return;
         }
 
@@ -343,12 +349,17 @@ final class Router implements RouterInterface
     /**
      * {@inheritdoc}
      */
-    public static function after(string $methods, string $pattern, Closure|string $callback): void
+    public static function after(
+        string $methods, 
+        string $pattern, 
+        Closure|string $callback
+    ): void
     {
         if ($methods === '') {
             RouterException::rethrow('argument.empty', ErrorCode::INVALID_ARGUMENTS, [
                 '$methods'
             ]);
+            
             return;
         }
 
@@ -387,12 +398,17 @@ final class Router implements RouterInterface
     /**
      * {@inheritdoc}
      */
-    public static function capture(string $methods, string $pattern, Closure|string $callback): void
+    public static function capture(
+        string $methods, 
+        string $pattern, 
+        Closure|string $callback
+    ): void
     {
-        if (!$methods) {
+        if ($methods === '') {
             RouterException::rethrow('argument.empty', ErrorCode::INVALID_ARGUMENTS, [
                '$methods'
             ]);
+
             return;
         }
 
@@ -507,8 +523,8 @@ final class Router implements RouterInterface
 
         try{
             $exitCode = $isCommand 
-                ? $this->runAsCommand() 
-                : $this->runAsHttp();
+                ? self::runAsCommand() 
+                : self::runAsHttp();
 
             Runtime::profiling('stop', $isCommand ? self::$commands : null);
             Runtime::tips();
@@ -525,11 +541,16 @@ final class Router implements RouterInterface
             );
         } finally {
             ob_start();
+
             try{
-                self::getApp()->trigger('onFinish', Runtime::get(Runtime::CLASS_METADATA));
+                self::getApp()->trigger(
+                    'onFinish', 
+                    Runtime::get(Runtime::CLASS_METADATA)
+                );
             } catch(Throwable $e){
                 Logger::exception($e);
             }
+
             ob_end_flush();
         }
 
@@ -723,6 +744,30 @@ final class Router implements RouterInterface
     }
 
     /**
+     * Get default routing context.
+     *
+     * @return array<string,array>
+     */
+    private static function getDefaultContext(): array 
+    {
+        if (Runtime::isCommand()){
+            return [
+                'cli' => [
+                    'prefix' => 'cli', 
+                    'isCommand' => true
+                ]
+            ];
+        }
+
+        $api = Luminova::apiPrefix();
+
+        return [
+            'web' => ['prefix' => 'web', 'onError' => null],
+            $api  => ['prefix' => $api, 'onError' => null]
+        ];
+    }
+
+    /**
      * Get the request url segments as relative.
      * 
      * Resolves the request URI as a relative path, without query string or base path.
@@ -747,7 +792,7 @@ final class Router implements RouterInterface
      * @return void
      * @throws RouterException
      */
-    private function onPrefixContext(string $prefix): void 
+    private static function onPrefixContext(string $prefix): void 
     {
         $filepath = Luminova::root('routes', "{$prefix}.php");
 
@@ -760,18 +805,13 @@ final class Router implements RouterInterface
         }
 
         try{
-            Closure::bind(
-                static function (
-                    string $prefix, 
-                    string $filepath, 
-                    RouterInterface $router, 
-                    Application $app
-                ): void {
-                    require_once $filepath;
-                }, 
-                null, 
-                null
-            )($prefix, $filepath, $this, self::getApp());
+            (static function (
+                string $prefix,
+                string $filepath,
+                Application $app
+            ): void {
+                require_once $filepath;
+            })($prefix, $filepath, self::getApp());
         } finally {
             self::getApp()->trigger('onRouteResolved', $prefix);
         }
@@ -886,7 +926,10 @@ final class Router implements RouterInterface
     private static function getApp(): Application
     {
         if(!self::$app instanceof Application){
-            self::$app = Kernel::resolve(Kernel::SERVICE_APPLICATION, shared: true);
+            self::$app = Kernel::resolve(
+                Kernel::SERVICE_APPLICATION, 
+                shared: true
+            );
         }   
 
         return self::$app;
@@ -1155,15 +1198,20 @@ final class Router implements RouterInterface
      * @return int Return status success or failure.
      * @throws RouterException Throws if an error occurs while running cli routes.
      */
-    private function runAsCommand(): int
+    private static function runAsCommand(): int
     {
         $group = self::getArgument();
         $command = self::getArgument(2);
-        Runtime::add(Runtime::CLASS_METADATA, 'command', self::getCommandSegment());
+
+        Runtime::add(
+            Runtime::CLASS_METADATA, 
+            'command', 
+            self::getCommandSegment()
+        );
         
         $isHelp = false;
-        $needHelp = !$group 
-            || !$command
+        $needHelp = $group === ''
+            || $command === ''
             || ($isHelp = Terminal::isHelp($group));
 
         if($needHelp){
@@ -1176,7 +1224,7 @@ final class Router implements RouterInterface
             return STATUS_SUCCESS;
         }
 
-        $global = (self::$routes['cli.middleware'][self::$method]['global']??null);
+        $global = (self::$routes['cli.middleware'][self::$method]['global'] ?? null);
 
         if($global !== null && !self::handleCommand($global)){
             return STATUS_ERROR;
@@ -1233,7 +1281,7 @@ final class Router implements RouterInterface
      * @return int Return status success, status error on failure.
      * @throws RouterException Throws if any error occurs while running HTTP routes.
      */
-    private function runAsHttp(): int
+    private static function runAsHttp(): int
     {
         $middleware = self::getRoutes('http.middleware'); 
 
@@ -2278,7 +2326,10 @@ final class Router implements RouterInterface
             }
 
             if ($isCommand) {
-                if ($uriPrefix === $prefix && $this->withCommandRoute($context, $prefix)) {
+                if (
+                    $uriPrefix === $prefix 
+                    && self::withCommandRoute($context, $prefix, $this)
+                ) {
                     break;
                 }
 
@@ -2299,7 +2350,7 @@ final class Router implements RouterInterface
             return $this;
         }
 
-        $this->withHttpRoute($request, $websites);
+        self::withHttpRoute($request, $websites);
 
         self::$base = $current;
 
@@ -2317,7 +2368,7 @@ final class Router implements RouterInterface
      *
      * @return void
      */
-    private function withHttpRoute(
+    private static function withHttpRoute(
         array $match,
         array $websites
     ): void 
@@ -2344,7 +2395,7 @@ final class Router implements RouterInterface
             self::onError(pattern: $pattern, handler: $onError);
         }
 
-        $this->onPrefixContext($prefix);
+        self::onPrefixContext($prefix);
     }
 
     /**
@@ -2376,7 +2427,7 @@ final class Router implements RouterInterface
         defined('CLI_ENVIRONMENT')
             || define('CLI_ENVIRONMENT', Env::get('cli.environment.mode', 'testing'));
 
-        $this->onPrefixContext($prefix);
+        self::onPrefixContext($prefix);
 
         return true;
     }
