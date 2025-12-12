@@ -15,8 +15,8 @@ namespace Luminova\Sessions;
 
 use \Luminova\Luminova;
 use \Luminova\Time\Time;
-use \Luminova\Utility\IP;
 use \Luminova\Logger\Logger;
+use \Luminova\Http\Network\IP;
 use \Luminova\Base\SessionHandler;
 use \App\Config\Session as SessionConfig;
 use \Luminova\Exceptions\InvalidArgumentException;
@@ -24,21 +24,60 @@ use \Luminova\Sessions\Managers\Session as SessionManager;
 use \Luminova\Interface\{LazyObjectInterface, SessionManagerInterface};
 use \Luminova\Exceptions\{ErrorCode, LogicException, RuntimeException};
 
-class Session implements LazyObjectInterface
+final class Session implements LazyObjectInterface
 {
     /**
-     * Session manager interface
+     * At least one required role must exist in user roles.
      * 
-     * @var SessionManagerInterface $manager
+     * @var int GUARD_ANY
+     * @see guard()
      */
-    private ?SessionManagerInterface $manager = null;
+    public final const GUARD_ANY   = 0;
 
     /**
-     * static class instance
+     * All required roles must be present in user roles (but extras allowed).
      * 
-     * @var self $instance 
+     * @var int GUARD_ALL
+     * @see guard()
      */
-    private static ?self $instance = null;
+    public final const GUARD_ALL   = 1;
+
+    /**
+     * Exact match — all and only the specified roles must exist.
+     * 
+     * @var int GUARD_EXACT
+     * @see guard()
+     */
+    public final const GUARD_EXACT = 2;
+
+    /**
+     * None of the given roles should be present (e.g., guest access only).
+     * 
+     * @var int GUARD_NONE
+     * @see guard()
+     */
+    public final const GUARD_NONE  = 3;
+
+    /**
+     * Sessions are disabled.
+     * 
+     * @var int DISABLED 
+     */
+    public final const DISABLED = 0;
+
+    /**
+     * Sessions are enabled, but no session exists.
+     * 
+     * @var int NONE 
+     */
+    public final const NONE = 1;
+
+    /**
+     * A session is currently active.
+     * 
+     * @var int ACTIVE 
+     */
+    public final const ACTIVE = 2;
 
     /**
      * Session start inactive.
@@ -62,36 +101,18 @@ class Session implements LazyObjectInterface
     private const COMMITTED = 2;
 
     /**
-     * At least one required role must exist in user roles.
+     * Index key for session metadata.
      * 
-     * @var int GUARD_ANY
-     * @see guard()
+     * @var string METADATA 
      */
-    public const GUARD_ANY   = 0;
-
+    private const METADATA = '__session_metadata__';
+    
     /**
-     * All required roles must be present in user roles (but extras allowed).
+     * static class instance
      * 
-     * @var int GUARD_ALL
-     * @see guard()
+     * @var self $instance 
      */
-    public const GUARD_ALL   = 1;
-
-    /**
-     * Exact match — all and only the specified roles must exist.
-     * 
-     * @var int GUARD_EXACT
-     * @see guard()
-     */
-    public const GUARD_EXACT = 2;
-
-    /**
-     * None of the given roles should be present (e.g., guest access only).
-     * 
-     * @var int GUARD_NONE
-     * @see guard()
-     */
-    public const GUARD_NONE  = 3;
+    private static ?self $instance = null;
 
     /**
      * Session start status.
@@ -99,13 +120,6 @@ class Session implements LazyObjectInterface
      * @var int $status 
      */
     private static int $status = self::INACTIVE;
-
-    /**
-     * Session configuration.
-     * 
-     * @var SessionConfig $config 
-     */
-    private static ?SessionConfig $config = null;
 
     /**
      * Session handler.
@@ -136,54 +150,34 @@ class Session implements LazyObjectInterface
     private array $stacks = [];
 
     /**
-     * Sessions are disabled.
-     * 
-     * @var int DISABLED 
-     */
-    public const DISABLED = 0;
-
-    /**
-     * Sessions are enabled, but no session exists.
-     * 
-     * @var int NONE 
-     */
-    public const NONE = 1;
-
-    /**
-     * A session is currently active.
-     * 
-     * @var int ACTIVE 
-     */
-    public const ACTIVE = 2;
-
-    /**
-     * Index key for session metadata.
-     * 
-     * @var string METADATA 
-     */
-    private const METADATA = '__session_metadata__';
-
-    /**
      * Initializes the backend session handler class.
      *
      * This constructor sets up the session manager to handle user login and backend session management. 
-     * It allows for an optional custom session manager and session handler to be provided or defaults to the standard manager.
+     * It allows for an optional custom session manager and session handler 
+     * to be provided or defaults to the standard manager.
      *
-     * @param SessionManagerInterface|null $manager Optional. A custom session manager instance.
+     * @param SessionManagerInterface $manager Optional. A custom session manager instance.
      *              If not provided, the default `\Luminova\Sessions\Managers\Session` will be used.
-     *
-     * > **Note:** When no custom manager is provided, the default session manager is automatically 
-     * > initialized and configured using the session configuration settings.
+     * @param SessionConfig|null $config Session configuration (default: `App\Config\Session`).
+     * 
      * @see https://luminova.ng/docs/0.0.0/sessions/session
      * @see https://luminova.ng/docs/0.0.0/sessions/examples
+     *
+     * > **Note:** 
+     * > When no custom manager is provided, the default session manager is automatically 
+     * > initialized and configured using the session configuration settings.
      */
-    public function __construct(?SessionManagerInterface $manager = null)
+    public function __construct(
+        private SessionManagerInterface $manager = new SessionManager(),
+        private ?SessionConfig $config = null
+    )
     {
-        self::$config ??= new SessionConfig();
-        $this->manager = $manager ?? new SessionManager();
-        $this->manager->setTable(self::$config->tableIndex);
-        $this->manager->setConfig(self::$config);
-        $manager = null;
+        if(!$this->config instanceof SessionConfig){
+            $this->config = new SessionConfig();
+        }
+
+        $this->manager->setTable($this->config->tableIndex);
+        $this->manager->setConfig($this->config);
     } 
 
     /**
@@ -201,13 +195,17 @@ class Session implements LazyObjectInterface
      *
      * @param SessionManagerInterface|null $manager Optional. A custom session manager instance.
      *              If not provided, the default `\Luminova\Sessions\Managers\Session` will be used.
+     * @param SessionConfig|null $config Session configuration (default: `App\Config\Session`).
      * 
      * @return static Return static Session class instance.
      */
-    public static function getInstance(?SessionManagerInterface $manager = null): static
+    public static function getInstance(
+        SessionManagerInterface $manager = new SessionManager(),
+        ?SessionConfig $config = null
+    ): static
     {
         if (self::$instance === null) {
-            self::$instance = new static($manager);
+            self::$instance = new self($manager, $config);
         }
 
         return self::$instance;
@@ -338,7 +336,7 @@ class Session implements LazyObjectInterface
      */
     public function getName(): string 
     {
-        return self::$config?->cookieName ?: session_name() ?: 'PHPSESSID';
+        return $this->config?->cookieName ?: session_name() ?: 'PHPSESSID';
     }
 
     /**
@@ -426,7 +424,7 @@ class Session implements LazyObjectInterface
     public function getDatetime(): ?string
     {
         $timestamp = $this->getTimestamp();
-        return ($timestamp === 0) ? null : date('c', $timestamp);
+        return ($timestamp === 0) ? null : date(DATE_ATOM, $timestamp);
     }
 
     /**
@@ -451,7 +449,7 @@ class Session implements LazyObjectInterface
      */
     public function getExpiration(): int 
     {
-        return Time::now()->modify('+' . self::$config->expiration . ' seconds')->getTimestamp();
+        return Time::now()->modify('+' . $this->config->expiration . ' seconds')->getTimestamp();
     }
 
     /** 
@@ -835,7 +833,7 @@ class Session implements LazyObjectInterface
      */
     public function isStrictIp(): bool
     {
-        return (bool) self::$config->strictSessionIp;
+        return (bool) $this->config->strictSessionIp;
     }
 
     /** 
@@ -999,21 +997,22 @@ class Session implements LazyObjectInterface
         if ($isSession) {
             if($status === self::DISABLED){
                 throw new RuntimeException(
-                    'Session Error: Sessions are disabled in the current environment. Enable the "session" extension in php.ini to use session functionality.'
+                    'Session Error: Sessions are disabled. Enable the "session" extension in php.ini.'
                 );
             }
 
             if ((bool) ini_get('session.auto_start')) {
-                Logger::error('Session Error: The "session.auto_start" directive is enabled in php.ini. Disable to allow luminova manage sessions internally.');
+                Logger::error(
+                    'Session Error: "session.auto_start" is enabled. Disable it so Luminova can manage sessions.'
+                );
                 return self::$isStarted = false;
             }
 
             $this->setSaveHandler();
         }elseif($this->handler instanceof SessionHandler){
-            throw new RuntimeException(
-                sprintf(
-                    'Session Implementation Error: The "%s" class does not support a session save handler. 
-                    Remove the handler implementation or use a compatible session manager "%s".', 
+            throw new RuntimeException(sprintf(
+                    'Session manager: "%s" does not support session save handlers. ' .
+                    'Use "%s" or remove the handler.',
                     $this->manager::class,
                     SessionManager::class
                 ),
@@ -1024,11 +1023,10 @@ class Session implements LazyObjectInterface
         if ($status === self::ACTIVE) {
             $this->setIpChangeEventListener();
             
-            if(self::$isStarted){
+            if(self::$isStarted && !PRODUCTION){
                 Logger::warning(
-                    'Session' . 
-                    ($isSession ? '' : ' Cookie') . 
-                    ' Warning: A session is already active. Avoid calling $session->start() again.'
+                    'Session' . ($isSession ? '' : ' Cookie') .
+                    ' already started. Avoid calling $session->start() multiple times.'
                 );
             }
 
@@ -1037,13 +1035,20 @@ class Session implements LazyObjectInterface
         }
 
         if ($status === self::NONE) {
-            $this->setSessionConfigurations();
+            if($isSession){
+               $this->initialize();
+            }
 
             if($this->manager->start($sessionId)){
                 $this->setIpChangeEventListener();
                 self::$status = self::STARTED;
                 return self::$isStarted = true;
             }
+
+            Logger::warning('Failed to start session.', [
+                'status' => $status,
+                'session_id' => $sessionId
+            ]);
         }
 
         return self::$isStarted = false;
@@ -1111,7 +1116,7 @@ class Session implements LazyObjectInterface
         $this->restart();
         $metadata = ['ip_changes' => []];
 
-        if(self::$config->strictSessionIp){
+        if($this->config->strictSessionIp){
             $metadata['ip'] = $ip ?? IP::get();
         }elseif($ip){
             throw new LogicException(sprintf(
@@ -1419,6 +1424,71 @@ class Session implements LazyObjectInterface
     }
 
     /**
+     * initialize PHP session configuration properties.
+     *
+     * This method sets various PHP session ini settings according to the 
+     * properties defined in the `SessionConfig` class. It handles settings 
+     * such as session expiration, save path, cookie usage, and strict mode.
+     *
+     * @return void
+     * @throws RuntimeException If the specified session save path is not writable.
+     * 
+     * @example - Example:
+     * ```php
+     * new Session->initialize();
+     * session_start();
+     * ```
+     */
+    public function initialize(): void
+    {
+        if ($this->config->expiration > 0) {
+            ini_set('session.gc_maxlifetime', (string) $this->config->expiration);
+        }
+
+        if ($this->config->savePath) {
+            if(!is_writable($this->config->savePath)){
+                throw new RuntimeException(sprintf(
+                    'The specified session save path "%s" is not writable. Please ensure the directory exists and has appropriate permissions.',
+                    $this->config->savePath
+                ));
+            }
+
+            ini_set('session.save_path', $this->config->savePath);
+        }
+
+        ini_set('session.use_strict_mode', '1');
+        ini_set('session.lazy_write', '1');
+        ini_set('session.use_trans_sid', '0');
+
+        if (PHP_SAPI === 'cli' || Luminova::isCommand()) {
+            ini_set('session.use_cookies', '0');
+            ini_set('session.use_only_cookies', '0');
+            ini_set('session.cache_limiter', '');
+            return;
+        }
+
+        ini_set('session.use_cookies', '1');
+        ini_set('session.use_only_cookies', '1');
+
+        if ($this->config->cookieName) {
+            session_name($this->config->cookieName);
+        }
+
+        $sameSite = in_array($this->config->sameSite, ['Lax', 'Strict', 'None'], true)
+            ? $this->config->sameSite
+            : 'Lax';
+
+        session_set_cookie_params([
+            'lifetime' => $this->config->expiration,
+            'path'     => $this->config->sessionPath,
+            'domain'   => $this->config->sessionDomain,
+            'secure'   => true,
+            'httponly' => true,
+            'samesite' => $sameSite,
+        ]);
+    }
+
+    /**
      * Handles IP address change events during a user session.
      *
      * This method checks if the user's IP address has changed since the last login 
@@ -1431,7 +1501,7 @@ class Session implements LazyObjectInterface
      */
     private function setIpChangeEventListener(): void
     {
-        if(self::$config->strictSessionIp && $this->ipChanged()){
+        if($this->config->strictSessionIp && $this->ipChanged()){
             if( 
                 $this->onIpChange !== null && 
                 ($this->onIpChange)(
@@ -1447,52 +1517,6 @@ class Session implements LazyObjectInterface
                 $this->terminate();
             }
         }
-    }
-
-    /**
-     * Configure session settings.
-     *
-     * @return void
-     */
-    private function setSessionConfigurations(): void
-    {
-        $sameSite = in_array(self::$config->sameSite, ['Lax', 'Strict', 'None'], true) 
-            ? self::$config->sameSite 
-            : 'Lax';
-
-        session_set_cookie_params([
-            'lifetime' => self::$config->expiration,
-            'path'     => self::$config->sessionPath,
-            'domain'   => self::$config->sessionDomain,
-            'secure'   => true, 
-            'httponly' => true,
-            'samesite' => $sameSite,
-        ]);
-        ini_set('session.name', $this->getName());
-        ini_set('session.cookie_samesite', $sameSite);
-
-        if (self::$config->expiration > 0) {
-            ini_set('session.gc_maxlifetime', (string) self::$config->expiration);
-            ini_set('session.cookie_lifetime', (string) self::$config->expiration);
-        }
-
-        if (self::$config->savePath && is_writable(self::$config->savePath)) {
-            ini_set('session.save_path', self::$config->savePath);
-        }
-
-        ini_set('session.use_trans_sid', '0');
-        ini_set('session.use_strict_mode', '1');
-        ini_set('session.lazy_write', '1');
-
-        if (PHP_SAPI === 'cli' || Luminova::isCommand()) {
-            ini_set('session.use_cookies', '0');
-            ini_set('session.use_only_cookies', '0');
-            ini_set('session.cache_limiter', '');
-            return;
-        }
-
-        ini_set('session.use_cookies', '1');
-        ini_set('session.use_only_cookies', '1');
     }
 
     /**
@@ -1534,8 +1558,8 @@ class Session implements LazyObjectInterface
     private function setSaveHandler(): void 
     {
         if ($this->handler instanceof SessionHandler) {
-            if(self::$config instanceof SessionConfig){
-                $this->handler->setConfig(self::$config);
+            if($this->config instanceof SessionConfig){
+                $this->handler->setConfig($this->config);
             }
             
             session_set_save_handler($this->handler, true);
@@ -1547,10 +1571,10 @@ class Session implements LazyObjectInterface
      *
      * Skips saving if `online` is true and the session is not marked as "online".
      *
-     * @param string      $key      Metadata key.
-     * @param mixed       $value    Metadata value.
+     * @param string $key Metadata key.
+     * @param mixed $value Metadata value.
      * @param string|null $storage  Optional custom storage key.
-     * @param bool        $whenOnline   Whether to enforce that session is "online".
+     * @param bool $whenOnline   Whether to enforce that session is "online".
      */
     private function setMetadata(string $key, mixed $value, ?string $storage = null, bool $whenOnline = true): void 
     {

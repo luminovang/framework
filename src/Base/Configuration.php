@@ -10,46 +10,18 @@
  */
 namespace Luminova\Base;
 
-use \Luminova\Luminova;
-use \Psr\Log\AbstractLogger;
-use \Luminova\Interface\{HttpRequestInterface, LazyObjectInterface};
 
-abstract class Configuration implements LazyObjectInterface
+use \ReflectionClass;
+use \JsonSerializable;
+use \ReflectionProperty;
+use \Psr\Log\AbstractLogger;
+use \Luminova\Exceptions\InvalidArgumentException;
+use \Luminova\Interface\{RequestInterface, LazyObjectInterface};
+
+abstract class Configuration implements LazyObjectInterface, JsonSerializable
 {
     /**
-     * Stores the Content-Security-Policy (CSP) directives.
-     * 
-     * @var array $cspDirectives
-     */
-    private array $cspDirectives = [];
-
-    /**
-     * Application nonce value for CPS directive.
-     * 
-     * @var string|null $nonce 
-     */
-    protected static ?string $nonce = null;
-
-    /**
-     * File extensions based on MIME types.
-     * Where the key is the MIME type and the value is the extension.
-     * 
-     * @var array<string,string> $extensions 
-     * 
-     * @example - Usage example:
-     * 
-     * ```php 
-     * protected static array $extensions = [
-     *      'image/jpeg' => 'jpg',
-     *      'image/png' => 'png',
-     * ];
-     * ```
-     * > **Note:** Only define this property in `App\Config\Files` class.
-     */
-    protected static array $extensions = [];
-
-    /**
-     * Constructor to initialize the class and trigger onCreate hook.
+     * Initialize the configuration instance and trigger the creation hook.
      */
     public function __construct()
     {
@@ -57,13 +29,20 @@ abstract class Configuration implements LazyObjectInterface
     }
 
     /**
-     * Non-static property getter.
+     * Hook executed after object construction.
+     * 
+     * Override in subclasses to perform custom setup or initialization.
+     */
+    protected function onCreate(): void {}
+
+    /**
+     * Magic getter for accessing defined properties.
      *
-     * @param string $key The property key.
-     * 
-     * @return mixed|null Return the property value, or null if not found.
-     * 
-     * @ignore 
+     * Returns the property value if it exists on the object,
+     * otherwise returns null.
+     *
+     * @param string $key Property name.
+     * @return mixed|null Return property value or null.
      */
     public function __get(string $key): mixed
     {
@@ -73,232 +52,169 @@ abstract class Configuration implements LazyObjectInterface
     }
 
     /**
-     * Static property getter.
+     * Magic setter for defining properties.
      *
-     * @param string $key The property key.
+     * @param string $property Property name.
+     * @param mixed $value Property value.
      * 
-     * @return mixed|null Return the property value, or null if not found.
-     * 
-     * @ignore 
-     * @internal
+     * @return mixed|null Return property value or null.
      */
-    public static function __getStatic(string $key, mixed $default = null): mixed
+    public function __set(string $property, mixed $value): void
     {
-        return Luminova::isPropertyExists(static::class, $key)
-            ? static::${$key}
-            : $default;
+        $this->{$property} = $value;
     }
 
     /**
-     * onCreate method that gets triggered on object creation, 
-     * designed to be overridden in subclasses for custom initialization.
+     * Magic method caller for instance context.
+     *
+     * Calls the method if it exists on the object,
+     * otherwise returns null instead of throwing an error.
+     *
+     * @param string $method Method name.
+     * @param array $arguments Method arguments.
      * 
-     * @return void
+     * @return mixed|null Return method result or null.
      */
-    protected function onCreate(): void {}
+    public function __call(string $method, array $arguments): mixed
+    {
+        if(!method_exists($this, $method)){
+            return null;
+        }
+
+        return $this->{$method}(...$arguments);
+    }
 
     /**
-     * Retrieve environment configuration variables with optional type casting.
+     * Magic method caller for static context.
      *
-     * @param string $key       The environment variable key to retrieve.
-     * @param mixed  $default   The default value to return if the key is not found.
-     * @param string|null $return    The expected return type. Can be one of:
-     *                     - 'bool', 'int', 'float', 'double', 'nullable', or 'string'.
+     * Calls the static method if it exists on the class,
+     * otherwise returns null instead of throwing an error.
+     *
+     * @param string $method Method name.
+     * @param array $arguments Method arguments.
      * 
-     * @return mixed  Returns the environment variable cast to the specified type, or default if not found.
+     * @return mixed|null Return method result or null.
      */
-    public static final function getEnv(string $key, mixed $default = null, ?string $return = null): mixed 
+    public static function __callStatic(string $method, array $arguments): mixed
+    {
+        if(!method_exists(static::class, $method)){
+            return null;
+        }
+
+        return static::class::${$method}(...$arguments);
+    }
+
+    /**
+     * Get all object properties (declared + dynamic) as an associative array.
+     *
+     * @return array<string,mixed> Return properties.
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
+    }
+
+    /**
+     * Ensure the current instance matches the expected configuration class.
+     *
+     * Throws if the instance is not of the expected type.
+     *
+     * @param class-string<Configuration> $expected Fully qualified class name to validate against.
+     * 
+     * @return void
+     * @throws InvalidArgumentException If the instance is not of the expected type.
+     */
+    public final function assertInstanceOf(string $expected): void
+    {
+        if (!is_a($expected, Configuration::class, true)) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid expected class: "%s" must extend "%s".',
+                $expected,
+                Configuration::class
+            ));
+        }
+
+        if($this instanceof $expected){
+            return;
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            'Invalid configuration instance: expected "%s", got "%s".',
+            $expected,
+            static::class
+        ));
+    }
+
+    /**
+     * Check if the current instance matches the expected configuration class.
+     *
+     * Validates that $expected is itself a subclass of Configuration,
+     * then checks if $this is an instance of it.
+     *
+     * @param class-string<Configuration> $expected Fully qualified class name.
+     * 
+     * @return bool Returns true if instance matches, otherwise false.
+     */
+    public final function isInstanceOf(string $expected): bool
+    {
+        return $this instanceof $expected;
+    }
+
+    /**
+     * Retrieve an environment variable with optional type casting.
+     *
+     * If a type is provided, the value is cast only when it is a string.
+     * Otherwise, the raw value is returned.
+     *
+     * Supported types:
+     * - bool
+     * - int
+     * - float / double
+     * - string
+     * - nullable (empty string becomes null)
+     *
+     * @param string $key Environment variable name.
+     * @param mixed $default Default value if not set.
+     * @param string|null $cast Cast value to expected type (e.g, `nullable`, `float`).
+     * 
+     * @return mixed Returns the environment variable cast to the specified type, or default if not found.
+     */
+    protected final function getEnv(string $key, mixed $default = null, ?string $cast = null): mixed
     {
         $value = env($key, $default);
 
-        if ($return === null || !is_string($value)) {
+        if ($cast === null || !is_string($value)) {
             return $value;
         }
 
-        return match (strtolower($return)) {
-            'bool' => (bool) $value,
-            'int' => (int) $value,
-            'float' => (float) $value,
-            'double' => (double) $value,
-            'nullable' => ($value === '') ? null : $value,
-            'string' => (string) $value,
-            default => $value,
+        return match (strtolower($cast)) {
+            'bool'      => (bool) $value,
+            'int'       => (int) $value,
+            'float'     => (float) $value,
+            'double'    => (double) $value,
+            'nullable'  => ($value === '') ? null : $value,
+            'string'    => (string) $value,
+            default     => $value,
         };
     }
 
     /**
-     * Generate or retrieve a nonce with an optional prefix.
+     * Build a custom HTML template for log email notifications.
      *
-     * @param int $length The length of the random bytes to generate (default: 16).
-     * @param string $prefix An optional prefix for the nonce (default: '').
-     * 
-     * @return string Return a cached generated script nonce.
-     */
-    public static final function getNonce(int $length = 16, string $prefix = ''): string
-    {
-        return self::$nonce ??= $prefix . bin2hex(random_bytes((int) ceil($length / 2)));
-    }
-
-    /**
-     * Add a directive to the Content-Security-Policy (CSP).
+     * Return a string to override the default template,
+     * or null to fall back to the built-in template.
      *
-     * @param string $directive  The CSP directive name (e.g., 'default-src').
-     * @param array|string $values The values for the directive (can be a string or an array of values).
-     * 
-     * @return static Returns the instance of configuration class.
-     */
-    protected function addCsp(string $directive, array|string $values): self
-    {
-        $this->cspDirectives[$directive] = array_merge(
-            $this->cspDirectives[$directive] ?? [], 
-            (array) $values
-        );
-
-        return $this;
-    }
-
-    /**
-     * Remove a directive from the Content-Security-Policy (CSP).
-     *
-     * @param string $directive The CSP directive to remove.
-     * 
-     * @return static Returns the instance of configuration class.
-     */
-    public function removeCsp(string $directive): self
-    {
-        unset($this->cspDirectives[$directive]);
-        return $this;
-    }
-
-    /**
-     * Clear all directives from the Content-Security-Policy (CSP).
-     *
-     * @return static Returns the instance of configuration class.
-     */
-    public function clearCsp(): self
-    {
-        $this->cspDirectives = [];
-        return $this;
-    }
-
-    /**
-     * Build and return the Content-Security-Policy (CSP) as a string.
-     *
-     * @return string Returns the CSP policy string in the correct format.
-     */
-    public function getCsp(): string
-    {
-        static $csp = null;
-
-        if($csp !== null){
-            return $csp;
-        }
-
-        $policies = [];
-
-        foreach ($this->cspDirectives as $directive => $values) {
-            $policies[] = $directive . ' ' . implode(' ', array_unique($values));
-        }
-
-        return $csp = implode('; ', $policies);
-    }
-
-    /**
-     * Generate the `<meta>` tag for embedding the CSP in HTML documents.
-     *
-     * @param string $id The CSP element identifier (default: none).
-     * 
-     * @return string Returns the `<meta>` tag with the CSP as the content.
-     */
-    public function getCspMetaTag(string $id = ''): string
-    {
-        $id = ($id !== '') ? 'id="' . $id . '" ' : '';
-        return '<meta http-equiv="Content-Security-Policy" '. $id .'content="' . htmlspecialchars($this->getCsp(), ENT_QUOTES, 'UTF-8') . '">';
-    }
-
-    /**
-     * Send the Content-Security-Policy (CSP) as an HTTP header.
-     * 
-     * @return void
-     */
-    public function sendCspHeader(): void
-    {
-        header('Content-Security-Policy: ' . $this->getCsp());
-    }
-
-    /**
-     * Get the file extension based on the MIME type.
-     *
-     * @param string $mimeType The MIME type of the file.
-     *
-     * @return string Return the corresponding file extension (without the dot),
-     *                or 'bin' if the MIME type is not recognized.
-     */
-    public static function getExtension(string $mimeType): string 
-    {
-        return match ($mimeType) {
-            'image/jpeg' => 'jpg',
-            'image/png' => 'png',
-            'image/gif' => 'gif',
-            'image/webp' => 'webp',
-            'image/bmp' => 'bmp',
-            'image/svg+xml' => 'svg',
-            'image/tiff' => 'tiff',
-            'image/avif' => 'avif',
-            'image/x-icon' => 'ico',
-            'application/pdf' => 'pdf',
-            'text/plain' => 'txt',
-            'text/markdown' => 'md',
-            'application/msword' => 'doc',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
-            'application/vnd.ms-excel' => 'xls',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
-            'application/vnd.ms-powerpoint' => 'ppt',
-            'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
-            'application/zip' => 'zip',
-            'application/gzip' => 'gzip',
-            'application/x-tar' => 'tar',
-            'application/x-gzip' => 'gz',
-            'application/x-bzip2' => 'bz2',
-            'application/x-7z-compressed' => '7z',
-            'application/x-rar-compressed' => 'rar',
-            'application/x-msdownload' => 'exe',
-            'application/x-dosexec' => 'dos',
-            'audio/mpeg' => 'mp3',
-            'audio/wav' => 'wav',
-            'audio/ogg', 'video/ogg', 'application/ogg' => 'ogg',
-            'video/mp4' => 'mp4',
-            'video/webm' => 'webm',
-            'video/x-msvideo' => 'avi',
-            'video/x-matroska' => 'mkv',
-            'video/quicktime' => 'mov',
-            'text/html' => 'html',
-            'text/css' => 'css',
-            'application/json' => 'json',
-            'application/xml' => 'xml',
-            'text/csv' => 'csv',
-            'application/javascript' => 'js',
-            'application/rtf' => 'rtf',
-            'application/x-sh' => 'sh',
-            'application/x-php' => 'php',
-            'application/octet-stream' => 'bin',
-            default => ltrim(self::$extensions[$mimeType] ?? '', '.'),
-        };
-    }
-
-    /**
-     * Customize and generate an HTML email template for logging system notifications.
-     *
-     * @param HttpRequestInterface $request The HTTP request object containing information about the request.
-     * @param AbstractLogger|\Luminova\Logger\NovaLogger $logger The instance of logger class.
-     * @param string $message The log message.
-     * @param string $level The log level (e.g., 'info', 'warning', 'error').
-     * @param array<string|int,mixed> $context Additional context information for the log message.
+     * @param RequestInterface $request Current request instance.
+     * @param AbstractLogger $logger Logger instance.
+     * @param string $message Log message.
+     * @param string $level Log level (e.g. info, warning, error).
+     * @param array<string|int,mixed> $context Additional log data.
      *
      * @return string|null Return the HTML email template or null to use default.
+     * @see App\Config\Logger
      */
     public static function getEmailLogTemplate(
-        HttpRequestInterface $request,
+        RequestInterface $request,
         AbstractLogger $logger,
         string $message,
         string $level,
@@ -306,5 +222,42 @@ abstract class Configuration implements LazyObjectInterface
     ): ?string
     {
         return null;
+    }
+
+    /**
+     * Get object properties as an associative array.
+     *
+     * By default, only public (including dynamic) properties are returned.
+     * Set $includeProtected to true to also include protected properties.
+     *
+     * @param bool $includeProtected Include protected properties.
+     * 
+     * @return array<string,mixed> Return associative array of property name-value.
+     */
+    public final function toArray(bool $includeProtected = false): array
+    {
+        $data = get_object_vars($this);
+
+        if (!$includeProtected) {
+            return $data;
+        }
+
+        $ref = new ReflectionClass($this);
+
+        foreach ($ref->getProperties(ReflectionProperty::IS_PROTECTED) as $property) {
+            $name = $property->getName();
+
+            if (array_key_exists($name, $data)) {
+                continue;
+            }
+
+            if (!$property->isInitialized($this)) {
+                continue;
+            }
+
+            $data[$name] = $property->getValue($this);
+        }
+
+        return $data;
     }
 }

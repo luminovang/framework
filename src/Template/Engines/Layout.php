@@ -17,7 +17,7 @@ use \Luminova\Http\Header;
 use \Luminova\Template\View;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\BadMethodCallException;
-use function \Luminova\Funcs\{root, filter_paths};
+use function \Luminova\Funcs\{root, display_path};
 
 /**
  * Layout
@@ -270,7 +270,7 @@ final class Layout implements Stringable
         if (!is_file($filename)) {
             throw new RuntimeException(sprintf(
                 'Layout not found: %s', 
-                filter_paths($filename)
+                display_path($filename)
             ));
         }
 
@@ -309,7 +309,7 @@ final class Layout implements Stringable
             throw new RuntimeException(sprintf(
                 'Layout base: %s not found in : %s',
                 $base,
-                filter_paths($this->root)
+                display_path($this->root)
             ));
         }
 

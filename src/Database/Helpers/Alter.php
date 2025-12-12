@@ -115,7 +115,8 @@ class Alter
         string $column,
         string $datatype,
         string $move
-    ): string {
+    ): string 
+    {
         switch ($database) {
             case 'ms-access':
                 return "ALTER TABLE {$table} ADD COLUMN {$column}_temp {$datatype};\n" .
@@ -607,7 +608,7 @@ class Alter
         };
     }
 
-    public static function getBuilderTableLock(string $driver, bool $forUpdate): string 
+    public static function getBuilderTableLock(string $driver, bool $forUpdate = true): string 
     {
         return match ($driver) {
             'mysql', 'mysqli' => $forUpdate ? 'FOR UPDATE' : 'LOCK IN SHARE MODE',
