@@ -12,8 +12,8 @@ namespace Luminova\Base;
 
 use \DateTimeInterface;
 use \Luminova\Database\Builder;
+use \Luminova\Storage\Filesystem;
 use \Luminova\Security\Validation;
-use \Luminova\Utility\Storage\Filesystem;
 use \Peterujah\NanoBlock\SearchController as SearchInstance;
 use \Luminova\Interface\{DatabaseInterface, LazyObjectInterface};
 use \Luminova\Exceptions\{RuntimeException, InvalidArgumentException};
@@ -107,13 +107,6 @@ abstract class Model implements LazyObjectInterface
     protected DateTimeInterface|int $expiry = 7 * 24 * 60 * 60;
 
     /**
-     * Input validation class instance.
-     * 
-     * @var Validation $validation
-     */
-    protected static ?Validation $validation = null;
-
-    /**
      * Last inserted ID.
      * 
      * @var mixed $lastId
@@ -126,6 +119,13 @@ abstract class Model implements LazyObjectInterface
      * @var SearchInstance $searchInstance
      */
     private static ?SearchInstance $searchInstance = null;
+
+    /**
+     * Shared model instance.
+     * 
+     * @var self|null $instance
+     */
+    private static ?self $instance = null;
 
     /**
      * Search flags.
@@ -143,11 +143,36 @@ abstract class Model implements LazyObjectInterface
     ];
 
     /**
-     * Constructor for the Model class.
+     * Constructor method to initialize the model object.
+     * 
+     * @param Validation|null $input Optional input validation class instance.
      */
-    public function __construct()
+    public function __construct(
+        protected ?Validation $input = null
+    )
     {
         $this->onCreate();
+    }
+
+    /**
+     * Magic method to handle static method calls on the class.
+     * 
+     * This method ensures that a single shared instance of the class
+     * is created and used for all static method calls.
+     * 
+     * @param string $method The name of the method being called.
+     * @param array<int,mixed> $arguments The arguments passed to the method. 
+     * 
+     * @return mixed Returns the result.
+     * @throws Throwable If error.
+     */
+    public static function __callStatic(string $method, array $arguments): mixed
+    {
+        if(!static::$instance instanceof static){
+            static::$instance = new static();
+        }
+
+        return static::$instance->{$method}(...$arguments);
     }
 
     /**
@@ -161,7 +186,7 @@ abstract class Model implements LazyObjectInterface
     /**
      * Insert a new record into the current database.
      *
-     * @param array<string,mixed> $values nested array of values to insert into table.
+     * @param array<int,array<string,mixed>> $values nested array of values to insert into table.
      * 
      * @return bool Return true if records was inserted, otherwise false.
      * @throws RuntimeException Throws if insert columns contains column names that isn't defined in `$insertable`.
@@ -186,7 +211,8 @@ abstract class Model implements LazyObjectInterface
     /**
      * Update current record in the database.
      *
-     * @param array<int,mixed>|string|float|int|null $key The key?s to update its record or null to update all records in table.
+     * @param array<int,mixed>|string|float|int|null $key The key?s to update its record 
+     *          or null to update all records in table.
      * @param array<string,mixed> $data An associative array of columns and values to update.
      * @param int|null $max The maximum number of records to update (default: null).
      * 
@@ -206,13 +232,15 @@ abstract class Model implements LazyObjectInterface
             $tbl->max($max);
         }
 
-        if($key === null){
-            return $tbl->strict(false)
-                ->update($data) > 0;
+        if($key !== null){
+            if(is_array($key)){
+                $tbl->in($this->primaryKey, $key);
+            }else{
+                $tbl->where($this->primaryKey, '=', $key);
+            }
         }
 
-        return $tbl->where($this->primaryKey, is_array($key) ? 'IN' : '=', $key)
-            ->update($data) > 0;
+        return $tbl->update($data) > 0;
     }
 
     /**
@@ -225,9 +253,8 @@ abstract class Model implements LazyObjectInterface
      */
     public function find(mixed $key, array $fields = ['*']): mixed 
     {
-        return Builder::table($this->table)
+        $tbl = Builder::table($this->table)
             ->find($fields)
-            ->where($this->primaryKey, is_array($key) ? 'IN' : '=', $key)
             ->cacheable($this->cacheable)
             ->returns($this->resultType)
             ->cache(
@@ -235,8 +262,15 @@ abstract class Model implements LazyObjectInterface
                 $this->table . '_find', 
                 $this->expiry, 
                 $this->getCacheFolder()
-            )
-            ->get();
+            );
+        
+        if(is_array($key)){
+            $tbl->in($this->primaryKey, $key);
+        }else{
+            $tbl->where($this->primaryKey, '=', $key);
+        }
+
+        return $tbl->get();
     }
 
     /**
@@ -260,7 +294,11 @@ abstract class Model implements LazyObjectInterface
         $tbl = Builder::table($this->table)->select($fields);
 
         if($key !== null){
-            $tbl->where($this->primaryKey, is_array($key) ? 'IN' : '=', $key);
+            if(is_array($key)){
+                $tbl->in($this->primaryKey, $key);
+            }else{
+                $tbl->where($this->primaryKey, '=', $key);
+            }
         }
         
         return $tbl->limit($limit, $offset)
@@ -303,10 +341,13 @@ abstract class Model implements LazyObjectInterface
             }
 
             return false;
+        }elseif(is_array($key)){
+            $tbl->in($this->primaryKey, $key);
+        }else{
+            $tbl->where($this->primaryKey, '=', $key);
         }
 
-        return $tbl->where($this->primaryKey, is_array($key) ? 'IN' : '=', $key)
-            ->delete() > 0;
+        return $tbl->delete() > 0;
     }
 
     /**
@@ -388,7 +429,7 @@ abstract class Model implements LazyObjectInterface
         return Builder::query("SELECT {$fields} FROM {$this->table} {$columns} LIMIT {$offset}, {$limit}")
             ->cacheable($this->cacheable)
             ->returns($this->resultType)
-            ->cache($cache_key, $this->table . '_search', $this->expiry, $$this->getCacheFolder())
+            ->cache($cache_key, $this->table . '_search', $this->expiry, $this->getCacheFolder())
             ->execute([
                 'keyword' => "%{$query}%"
             ]);
@@ -419,7 +460,7 @@ abstract class Model implements LazyObjectInterface
             return false;
         }
 
-        $search = $this->searchInstance($flag);
+        $search = $this->getSearchInstance($flag);
         $search->setQuery($query)->split();
         $queries = $search->getQuery();
 
@@ -458,7 +499,7 @@ abstract class Model implements LazyObjectInterface
         }
 
         $path = root("/writeable/caches/filesystem/database/{$folder}/");
-        return Filesystem::remove($path) > 0;
+        return Filesystem::delete($path) > 0;
     }
 
     /**
@@ -534,7 +575,7 @@ abstract class Model implements LazyObjectInterface
      */
     public function getLastInsertedId(): mixed
     {
-        return $this->lastId ??= $this->getBuilder()->getLastInsertedId();
+        return $this->lastId;
     }
 
     /**
@@ -564,23 +605,23 @@ abstract class Model implements LazyObjectInterface
     /**
      * Initialize and ser validation class object.
      *
-     * @return Validation Validation class instance.
+     * @return Validation Return instanceof input validation object.
      * 
-     * > After first initialization you can then use `static::$validation` to access the object.
+     * > After first initialization you can then use `$this->input` to access the object.
      */
     protected function validation(): Validation
     {
-        static::$validation ??= new Validation();
+        $this->input ??= new Validation();
 
         if($this->rules !== []){
-            static::$validation->rules = $this->rules;
+            $this->input->rules = $this->rules;
         }
 
         if($this->messages !== []){
-            static::$validation->messages = $this->messages;
+            $this->input->messages = $this->messages;
         }
 
-        return static::$validation;
+        return $this->input;
     }
 
     /**
@@ -599,14 +640,16 @@ abstract class Model implements LazyObjectInterface
         string $prefix = ''
     ): string 
     {
-        if($fields === []){
-            $fields = ['__any__'];
+        if($key && is_array($key)){
+            $fields = array_merge($fields, $key);
+        }else{
+            $fields[] = $key ?? 'all';
         }
 
-        $fields += ($key && $key !== []) ? (array) $key : ['__all__'];
         sort($fields);
+        $fields = implode(':', $fields);
    
-        return $prefix  . implode(':', $fields);
+        return $prefix ? "{$prefix}:{$fields}" : $fields;
     }
 
     /**
@@ -629,7 +672,7 @@ abstract class Model implements LazyObjectInterface
      * - **length3**: Matches queries where the term is exactly three characters long, followed by the specified term.
      * - **startend**: Matches queries starting with the specified term and ending with the term.
      */
-    protected function searchInstance(string $filter = 'any'): object
+    protected function getSearchInstance(string $filter = 'any'): object
     {
         if(self::$searchInstance === null && !class_uses(SearchInstance::class)){
             throw new RuntimeException('The search controller library is not installed. Run composer command "composer require peterujah/php-search-controller" to install it.');
@@ -646,8 +689,11 @@ abstract class Model implements LazyObjectInterface
         }
 
         self::$searchInstance ??= new SearchInstance();
-        return self::$searchInstance->setOperators($filterLike)
+
+        self::$searchInstance->setOperators($filterLike)
             ->setParameter($this->searchable);
+
+        return self::$searchInstance;
     }
     
     /**

@@ -52,38 +52,6 @@ final class Route
      */
     public const CLI_GROUP_MIDDLEWARE = 'guard';
 
-    /** 
-     * Middleware executed **before** the main controller logic.
-     * 
-     * @var string BEFORE_MIDDLEWARE
-     * @deprecated Since 3.6.8 Use HTTP_BEFORE_MIDDLEWARE instead
-     */
-    public const BEFORE_MIDDLEWARE = self::HTTP_BEFORE_MIDDLEWARE; 
-    
-    /** 
-     * Middleware executed **after** the main controller logic.
-     * 
-     * @var string AFTER_MIDDLEWARE
-     * @deprecated Since 3.6.8 Use HTTP_AFTER_MIDDLEWARE instead
-     */
-    public const AFTER_MIDDLEWARE = self::HTTP_AFTER_MIDDLEWARE; 
-    
-    /** 
-     * Middleware applied **globally** to all CLI commands, regardless of group.
-     * 
-     * @var string GLOBAL_MIDDLEWARE
-     * @deprecated Since 3.6.8 Use CLI_GLOBAL_MIDDLEWARE instead
-     */
-    public const GLOBAL_MIDDLEWARE = self::CLI_GLOBAL_MIDDLEWARE; 
-
-    /** 
-     * Middleware executed **before commands** in the same CLI group.
-     * 
-     * @var string GUARD_MIDDLEWARE
-     * @deprecated Since 3.6.8 Use CLI_GROUP_MIDDLEWARE instead
-     */
-    public const GUARD_MIDDLEWARE = self::CLI_GROUP_MIDDLEWARE;
-
     /**
      * Defines a repeatable attribute for registering HTTP or CLI routes.
      *

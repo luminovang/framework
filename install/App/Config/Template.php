@@ -82,14 +82,6 @@ final class Template
     public ?bool $variablePrefixing = true;
 
     /** 
-     * Directory for cached template files.
-     * 
-     * @var string $cacheFolder (default: `writeable/caches/`)
-     * @deprecated Template cache is strictly store in `'/writeable/caches/templates/`
-     */
-    public string $cacheFolder = 'writeable/caches/';
-
-    /** 
      * Directory for compiled template files.
      * 
      * Directory by template engines for when compiling templates.

@@ -16,8 +16,8 @@ use \DateTimeInterface;
 use \Luminova\Base\Cache;
 use \Luminova\Logger\Logger;
 use \Luminova\Time\Timestamp;
-use \Luminova\Utility\Storage\Filesystem;
-use \Luminova\Exceptions\{AppException, CacheException, InvalidArgumentException};
+use \Luminova\Storage\Filesystem;
+use \Luminova\Exceptions\{LuminovaException, CacheException, InvalidArgumentException};
 use function \Luminova\Funcs\{root, make_dir};
 
 final class FileCache extends Cache
@@ -32,7 +32,7 @@ final class FileCache extends Cache
     /**
      * Hold the cache instance Singleton.
      * 
-     * @var ?self $instance
+     * @var ?static $instance
      */
     private static ?self $instance = null;
 
@@ -81,11 +81,11 @@ final class FileCache extends Cache
         ?string $subfolder = null
     ): static 
     {
-        if (static::$instance === null) {
-            static::$instance = new static($storage, $subfolder);
+        if (self::$instance === null) {
+            self::$instance = new self($storage, $subfolder);
         }
 
-        return static::$instance;
+        return self::$instance;
     }
 
     /**
@@ -315,12 +315,12 @@ final class FileCache extends Cache
             return false;
         }
 
-        if ($this->hasItem($key) && ($includeLocked || !$this->isLocked($key))) {
-            unset($this->items[$this->storage][$key]);
-            return $this->commit();
+        if (!$this->hasItem($key) || (!$includeLocked && $this->isLocked($key))) {
+            return false;
         }
-      
-        return false;
+
+        unset($this->items[$this->storage][$key]);
+        return $this->commit();
     }
 
     /**
@@ -333,11 +333,18 @@ final class FileCache extends Cache
         }
 
         $deletedCount = 0;
+        
         foreach ($keys as $key) {
-            if ($key !== '' && $this->hasItem($key) && ($includeLocked || !$this->isLocked($key))) {
-                unset($this->items[$this->storage][$key]);
-                $deletedCount++;
+            if(!$key){
+                continue;
             }
+
+            if (!$this->hasItem($key) || (!$includeLocked && $this->isLocked($key))) {
+                continue;
+            }
+
+            unset($this->items[$this->storage][$key]);
+            $deletedCount++;
         }
 
         if ($deletedCount > 0){
@@ -352,7 +359,7 @@ final class FileCache extends Cache
      */
     public function flush(): bool
     {
-        if(Filesystem::remove($this->getRoot())){
+        if(Filesystem::delete($this->getRoot())){
             $this->items = [];
             return true;
         }
@@ -371,12 +378,17 @@ final class FileCache extends Cache
 
 		$path = $this->getPath();
 
-		if(is_file($path) && unlink($path)){
-            $this->items[$this->storage] = [];
-            return true;
+        if(!is_file($path)){
+            return false;
+        }
+        
+        $this->items[$this->storage] = [];
+
+		if(!unlink($path)){
+            return $this->commit();
         }
 
-        return false;
+        return true;
     }
 
     /**
@@ -395,7 +407,7 @@ final class FileCache extends Cache
                 return false;
             }
 
-            $content = Filesystem::getContent($filepath);
+            $content = Filesystem::contents($filepath);
             if($content === false){
                 return false;
             }
@@ -418,13 +430,13 @@ final class FileCache extends Cache
                 if(is_writable($filepath)){
                     return Filesystem::write(
                         $filepath, 
-                        json_encode($items, JSON_THROW_ON_ERROR), 
+                        json_encode($items, JSON_INVALID_UTF8_SUBSTITUTE|JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR), 
                         LOCK_EX
                     );
                 }
             }
         }catch(Throwable $e){
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw $e;
             }
 
@@ -475,7 +487,7 @@ final class FileCache extends Cache
                 return false;
             }
 
-            $content = Filesystem::getContent($filepath);
+            $content = Filesystem::contents($filepath);
 
             if($content === false){
                 return false;
@@ -496,7 +508,7 @@ final class FileCache extends Cache
                 return false;
             }
 
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw $e;
             }
 
@@ -520,7 +532,7 @@ final class FileCache extends Cache
 
             return Filesystem::write(
                 $this->getPath(), 
-                json_encode($this->items[$this->storage], JSON_THROW_ON_ERROR), 
+                json_encode($this->items[$this->storage], JSON_INVALID_UTF8_SUBSTITUTE|JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR), 
                 LOCK_EX
             );
         }catch(Throwable $e){
@@ -532,7 +544,7 @@ final class FileCache extends Cache
                 return false;
             }
 
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw $e;
             }
 

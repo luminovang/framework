@@ -2,7 +2,7 @@
 use \Luminova\Foundation\Error\Message;
 use function \Luminova\Funcs\filter_paths;
 /**
- * @var \Luminova\Exceptions\AppException<\T>|Luminova\Foundation\Error\Message|null $error
+ * @var \Luminova\Exceptions\LuminovaException<\T>|Luminova\Foundation\Error\Message|null $error
  */
 
 $lines = explode(PHP_EOL, $error->getMessage());

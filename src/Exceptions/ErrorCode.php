@@ -155,6 +155,11 @@ class ErrorCode
      * @var int DATABASE_ERROR 
      */
     public const DATABASE_ERROR = 1500;
+
+    /** 
+     * @var int DATABASE_PERMISSION_DENIED 
+     */
+    public const DATABASE_PERMISSION_DENIED = 13;
     
     /** 
      * @var int FAILED_ALL_CONNECTION_ATTEMPTS 
@@ -417,6 +422,11 @@ class ErrorCode
      */
     public const CANNOT_OPEN_DATABASE_FILE = 14;
 
+    /** 
+     * @var int AI_CLIENT_ERROR 
+     */
+    public const AI_CLIENT_ERROR = 153;
+
     /**
      * Retrieves the descriptive name of a given error or exception code.
      *
@@ -561,6 +571,7 @@ class ErrorCode
             // Custom Luminova Error Codes
             self::EXECUTION_FAILED => ['Execution Failed', 'Execution operation failed'],
             self::DATABASE_ERROR => ['Database Error', 'General database error'],
+            self::DATABASE_PERMISSION_DENIED => ['Permission Denied', 'Database Permission Denied'],
             self::FAILED_ALL_CONNECTION_ATTEMPTS => ['Connection Attempts Failed', 'All connection attempts failed'],
             self::CONNECTION_LIMIT_EXCEEDED => ['Connection Limit Exceeded', 'Database connection limit exceeded'],
             self::INVALID_DATABASE_DRIVER => ['Invalid DB Driver', 'Invalid database driver specified'],
@@ -617,6 +628,7 @@ class ErrorCode
             self::DATABASE_IS_FULL => ['Database Full', 'Database is full'],
             self::DATABASE_LOCKED => ['Database Locked', 'Database is locked'],
             self::CANNOT_OPEN_DATABASE_FILE => ['Cannot Open DB File', 'Cannot open database file'],
+            self::AI_CLIENT_ERROR => ['AI Client Error', 'AI client request error'],
             default => null
         };
     }

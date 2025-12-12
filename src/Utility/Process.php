@@ -439,7 +439,7 @@ class Process
     public function getCommand(): string 
     {
         if (is_array($this->input)) {
-            return implode(' ', array_map(Terminal::escape(...), $this->input));
+            return implode(' ', array_map(fn ($v) => Terminal::escape($v), $this->input));
         }
 
         return Terminal::replace($this->input, $this->env ?? [], true);
@@ -909,7 +909,7 @@ class Process
      * @param string $message The error message.
      * @param int $code The exception code.
      * 
-     * @return never
+     * @return void
      * @throws RuntimeException Throws an exception message.
      */
     private function onError(

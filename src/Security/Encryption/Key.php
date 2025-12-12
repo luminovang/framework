@@ -13,7 +13,7 @@ namespace Luminova\Security\Encryption;
 use \OpenSSLCertificate;
 use \OpenSSLAsymmetricKey;
 use \App\Config\Encryption;
-use Luminova\Common\Helpers;
+use Luminova\Utility\Helpers;
 use Luminova\Exceptions\ErrorCode;
 use \Luminova\Exceptions\EncryptionException;
 
@@ -70,6 +70,7 @@ final class Key
         'AES-128-CBC' => ['size' => 16],
         'AES-192-CBC' => ['size' => 24],
         'AES-256-CBC' => ['size' => 32],
+        'AES-256-GCM' => ['size' => 12],
         'AES-128-CBC-HMAC-SHA1'   => ['size' => 16],
         'AES-256-CBC-HMAC-SHA1'   => ['size' => 32],
         'AES-128-CBC-HMAC-SHA256' => ['size' => 16],

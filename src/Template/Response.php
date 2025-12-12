@@ -11,12 +11,15 @@
 namespace Luminova\Template;
 
 use \Throwable;
-use \Luminova\Component\Seo\Minifier;
+use \Luminova\Http\Header;
+use \Luminova\Utility\MIME;
+use \Luminova\Http\Downloader;
+use \Luminova\Utility\Encoder;
+use \Luminova\Storage\FileResponse;
+use \Luminova\Components\Seo\Minifier;
 use \Luminova\Exceptions\JsonException;
-use \Luminova\Http\{Header, Helper\Encoder};
 use \Luminova\Interface\ViewResponseInterface;
 use \Luminova\Exceptions\Http\ResponseException;
-use \Luminova\Utility\Storage\{Filesystem, FileDelivery};
 use function \Luminova\Funcs\{string_length, http_status_header};
 
 class Response implements ViewResponseInterface
@@ -181,12 +184,11 @@ class Response implements ViewResponseInterface
         Header::clearOutputBuffers('all');
         Header::setOutputHandler(withHandler: false);
 
-        if($validate){
-            Header::validate($this->headers, $this->status);
-        }else{
-            Header::sendStatus($this->status);
-            Header::send(array_replace(Header::getDefault(), $this->headers));
-        }
+        Header::send(array_replace(
+            Header::getDefault(), $this->headers), 
+            status: $this->status,
+            validateRequestHeaders: $validate
+        );
         Header::clearOutputBuffers('all');
     }
 
@@ -304,7 +306,7 @@ class Response implements ViewResponseInterface
                 ? STATUS_ERROR 
                 : ($isNoContent ? STATUS_SILENCE : STATUS_SUCCESS),
             'status' => $this->status,
-            'headers' => Header::response($headers),
+            'headers' => Header::parse($headers, false),
             'contents' => $isNoContent ? '' : $contents
         ];
 
@@ -314,7 +316,7 @@ class Response implements ViewResponseInterface
     /**
      * {@inheritdoc}
      */
-    public function output(bool $ifHeaderNotSent = false): int 
+    public function output(bool $ifHeaderNotSent = true): int 
     {
         if(!$this->result){
             return STATUS_ERROR;
@@ -334,21 +336,15 @@ class Response implements ViewResponseInterface
             $status = 204;
         }
 
-        if (!$ifHeaderNotSent || ($ifHeaderNotSent && headers_sent())) {
-            Header::sendStatus($status);
 
-            if($isNoContent){
-                unset(
-                    $this->result['headers']['Content-Type'], 
-                    $this->result['headers']['Content-Length']
-                );
-            }
-
-            foreach($this->result['headers'] as $header => $value){
-                header("{$header}: {$value}");
-            }
+        if($isNoContent){
+            unset(
+                $this->result['headers']['Content-Type'], 
+                $this->result['headers']['Content-Length']
+            );
         }
-       
+
+        Header::send($this->result['headers'], $ifHeaderNotSent, false, $status);
         Header::clearOutputBuffers('all');
 
         if($isNoContent){
@@ -368,7 +364,7 @@ class Response implements ViewResponseInterface
     {
         [$headers, $contents] = $this->process($content, $headers);
 
-        Header::validate($headers, $this->status);
+        Header::send($headers, status: $this->status);
         Header::clearOutputBuffers('all');
 
         if($contents === '' || $this->status === 204 || $this->status === 304){
@@ -424,17 +420,16 @@ class Response implements ViewResponseInterface
      * {@inheritdoc}
      */
     public function download(
-        string $fileOrContent, 
+        mixed $source, 
         ?string $name = null, 
-        array $headers = [],
         int $chunkSize = 8192,
         int $delay = 0
     ): bool 
     {
-        return Filesystem::download(
-            $fileOrContent, 
+        return Downloader::download(
+            $source, 
             $name, 
-            $headers,
+            $this->headers,
             $chunkSize, 
             $delay
         );
@@ -446,7 +441,6 @@ class Response implements ViewResponseInterface
     public function stream(
         string $path, 
         string $basename, 
-        array $headers = [],
         bool $eTag = true,
         bool $weakEtag = false,
         int $expiry = 0,
@@ -454,8 +448,8 @@ class Response implements ViewResponseInterface
         int $delay = 0
     ): bool 
     {
-        return (new FileDelivery($path, $eTag, $weakEtag))
-            ->output($basename, $expiry, $headers, $length, $delay);
+        return (new FileResponse($path, $eTag, $weakEtag))
+            ->send($basename, $expiry, $this->headers, $length, $delay);
     }
 
     /**
@@ -504,7 +498,7 @@ class Response implements ViewResponseInterface
      * @return string Return the detected MIME type (e.g. `application/json`, `text/html`, `text/css`, etc).
      * @internal
      */
-    public static function detectContentType(mixed $body): string
+    protected static function detectContentType(mixed $body): string
     {
         if (is_array($body) || is_object($body)) {
             return 'application/json';
@@ -515,86 +509,20 @@ class Response implements ViewResponseInterface
         }
 
         $trimmed = trim($body);
+
         if ($trimmed === '') {
             return 'text/plain';
         }
 
-        if (
-            (($trimmed[0] === '{' && str_ends_with($trimmed, '}')) ||
-            ($trimmed[0] === '[' && str_ends_with($trimmed, ']')))
-            && json_validate($trimmed)
-        ) {
-            return 'application/json';
-        }
-
-        if (
-            str_starts_with($trimmed, '<?xml') ||
-            preg_match('/^<(\w+:)?[\w-]+(\s+[^>]*)?>/', $trimmed)
-        ) {
-            return 'application/xml';
-        }
-
-        if (
-            str_contains($trimmed, '<html') ||
-            str_contains($trimmed, '<head>') ||
-            str_contains($trimmed, '<body>') ||
-            str_contains($trimmed, '<!DOCTYPE html') ||
-            preg_match('/<!DOCTYPE\s+html\b/i', $trimmed)
-        ) {
-            return 'text/html';
-        }
-
-        if (
-            preg_match('/\b(?:@import|@media|@keyframes|#[a-f\d]+\s*\{)/i', $trimmed) ||
-            (
-                str_contains($trimmed, ':') &&
-                str_contains($trimmed, '{') &&
-                str_contains($trimmed, '}')
-            ) ||
-            preg_match('/^[\s\S]*{[\s\S]*}$/', $trimmed)
-        ) {
-            return 'text/css';
-        }
-
-        if (
-            preg_match('/\b(?:function\s*\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|=>|import\s+|export\s+)/', $trimmed)
+        if (preg_match(
+            '/\b(?:function\s*\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|=>|import\s+|export\s+)/', 
+            $trimmed
+        )
         ) {
             return 'application/javascript';
         }
 
-        if (
-            str_contains($trimmed, '<svg') &&
-            str_contains($trimmed, 'xmlns="http://www.w3.org/2000/svg"')
-        ) {
-            return 'image/svg+xml';
-        }
-
-        $magic = substr($trimmed, 0, 2);
-
-        if ($magic === "\xFF\xD8") {
-            return 'image/jpeg';
-        }
-
-        if ($magic === "\x89\x50") {
-            return 'image/png';
-        }
-
-        if ($magic === "BM") {
-            return 'image/bmp';
-        }
-
-        if ($magic === "GI") {
-            return 'image/gif';
-        }
-
-        if (
-            preg_match('/^([^\n]+,)+[^\n]+$/m', $trimmed) ||
-            preg_match('/^([^\n]+\t)+[^\n]+$/m', $trimmed)
-        ) {
-            return 'text/csv';
-        }
-
-        return 'text/plain';
+        return MIME::guess($trimmed) ?: 'text/plain';
     }
 
     /**
