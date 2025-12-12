@@ -11,10 +11,11 @@
 namespace Luminova\Sessions\Handlers;
 
 use \Throwable;
+use \RuntimeException;
 use \Luminova\Time\Time;
-use \Luminova\Utility\IP;
 use \ReturnTypeWillChange;
 use \Luminova\Logger\Logger;
+use \Luminova\Http\Network\IP;
 use \Luminova\Database\Builder;
 use \Luminova\Base\SessionHandler;
 use \Luminova\Security\Encryption\Crypter;

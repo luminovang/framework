@@ -14,7 +14,7 @@ namespace Luminova\Http\Client;
 use \Closure;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Http\Helper\ClientServerTrait;
-use \Luminova\Interface\HttpRequestInterface;
+use \Luminova\Interface\RequestInterface;
 
 class Server 
 {
@@ -488,7 +488,7 @@ class Server
                     'port' => $this->port,'endpoint' => $this->endpoint
                 ]);
 
-                echo ($response instanceof HttpRequestInterface) 
+                echo ($response instanceof RequestInterface) 
                     ? $response->toString() 
                     : (string) $response;
             }

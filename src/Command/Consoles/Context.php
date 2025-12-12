@@ -10,8 +10,10 @@
  */
 namespace Luminova\Command\Consoles;
 
+use \Luminova\Luminova;
 use \Luminova\Base\Console;
-use \Luminova\Utility\Storage\Filesystem;
+use \Luminova\Command\Terminal;
+use \Luminova\Storage\Filesystem;
 use \Luminova\Attributes\Internal\Compiler;
 use function \Luminova\Funcs\{
     root,
@@ -46,23 +48,22 @@ class Context extends Console
      */
     public function run(?array $options = []): int
     {
-        $this->term->perse($options);
+        $name = trim($this->input->getName());
+        $noError = $this->input->hasOption('no-error', 'n');
+        $isExport = $this->input->hasOption('export-attr', 'e');
+        $isClear = $this->input->hasOption('clear-attr', 'c');
 
-        $command = trim($this->term->getCommand());
-        $noError = (bool) $this->term->getAnyOption('no-error', 'n', false);
-        $isExport = (bool) $this->term->getAnyOption('export-attr', 'e', false);
-        $isClear = (bool) $this->term->getAnyOption('clear-attr', 'c', false);
-
-        $runCommand = match($command){
+        $runCommand = match($name){
             'context' => ($isExport ? $this->buildAttributes() : (
-                $isClear ? $this->clearAttributes() : 
-                $this->installContext($this->term->getArgument(1), $noError)
+                $isClear 
+                    ? $this->clearAttributes() 
+                    : $this->installContext($this->input->getArgument(0), $noError)
             )),
             default => null
         };
 
         if ($runCommand === null) {
-            return $this->term->oops($command);
+            return Terminal::oops($name);
         } 
             
         return (int) $runCommand;
@@ -87,8 +88,8 @@ class Context extends Console
     private function installContext(mixed $name, bool $noError = false): int 
     {
         if(empty($name)){
-            $this->term->error('Route prefix name is required');
-            $this->term->beeps();
+            Terminal::error('Route prefix name is required');
+            Terminal::beeps();
 
             return STATUS_ERROR;
         }
@@ -102,7 +103,7 @@ class Context extends Console
         $handler = <<<PHP
         <?php 
         use \Luminova\Routing\Router;
-        /** @var \App\Application \$app */
+        /** @var \Luminova\Foundation\Core\Application \$app */
         
         Router::get('/', '$controller');
         PHP;
@@ -115,14 +116,14 @@ class Context extends Console
         $content = substr_replace($indexContent, "\n$newPrefix,", $position, 0);
 
         if (strpos($name, ' ') !== false) {
-            $this->term->writeln('Your context name contains space characters', 'red');
+            Terminal::writeln('Your context name contains space characters', 'red');
 
             return STATUS_ERROR;
         }
 
         if (has_uppercase($name)) {
-            $this->term->beeps();
-            $input = $this->term->prompt(
+            Terminal::beeps();
+            $input = Terminal::prompt(
                 'Your context name contains uppercase character, are you sure you want to continue?', 
                 ['yes', 'no'], 
                 'required|in_array(yes,no)'
@@ -131,25 +132,25 @@ class Context extends Console
             if($input === 'yes'){
                 if(write_content($index, $content)){
                     write_content(root('/routes/', $name . '.php'), $handler);
-                    $this->term->writeln("Route context installed: {$name}", 'green');
+                    Terminal::writeln("Route context installed: {$name}", 'green');
 
                     return STATUS_SUCCESS;
                 }
             }
 
-            $this->term->writeln('No changes was made');
+            Terminal::writeln('No changes was made');
             
             return STATUS_ERROR;
         }else{
             if(write_content($index, $content)){
                 write_content(root('/routes/', $name . '.php'), $handler);
-                $this->term->writeln("Route context installed: {$name}", 'green');
+                Terminal::writeln("Route context installed: {$name}", 'green');
 
                 return STATUS_SUCCESS;
             }
         }
 
-        $this->term->writeln("Unable to install router context {$name}", 'red');
+        Terminal::writeln("Unable to install router context {$name}", 'red');
         return STATUS_ERROR;
     }
 
@@ -163,14 +164,14 @@ class Context extends Console
         $backup = root('/writeable/caches/routes/');
         $deleted = 0;
         
-        Filesystem::remove($backup, false, $deleted);
+        Filesystem::delete($backup, false, $deleted);
         
         if ($deleted > 0) {
-            $this->term->writeln("Success: '{$deleted}' cached attribute(s) was cleared.", 'white', 'green');
+            Terminal::writeln("Success: '{$deleted}' cached attribute(s) was cleared.", 'white', 'green');
             return STATUS_SUCCESS;
         }
 
-        $this->term->writeln("Error: No cached attributes to clear.", 'white', 'red');
+        Terminal::writeln("Error: No cached attributes to clear.", 'white', 'red');
         return STATUS_ERROR;
     }
 
@@ -181,11 +182,12 @@ class Context extends Console
      */
     private function buildAttributes(): int
     {
-        $hmvc = env('feature.app.hmvc', false);
-        $apiPrefix = env('app.api.prefix', 'api');
-        $collector = (new Compiler('', false, $hmvc))->export($hmvc ? 'app/Modules' : 'app/Controllers');
+        $isHmvc = Luminova::isHmvc();
+        $apiPrefix = Luminova::getApiPrefix();
+        $collector = (new Compiler(hmvc: $isHmvc))
+            ->export($isHmvc ? 'app/Modules' : 'app/Controllers');
 
-        $head = "<?php\nuse \Luminova\Routing\Router;\n/** @var \Luminova\Routing\Router \$router */\n/** @var \App\Application \$app */\n\n";
+        $head = "<?php\nuse \Luminova\Routing\Router;\n/** @var \Luminova\Routing\Router \$router */\n/** @var \Luminova\Foundation\Core\Application \$app */\n\n";
         $httpContents = '';
         $apiContents = '';
         $cliContents = '';
@@ -307,7 +309,7 @@ class Context extends Console
                     $newIndexContent = $beforeContext . $newPrefixContent . $afterContext;
                     
                     if(write_content($index, $newIndexContent)){
-                        $this->term->writeln("Routes exported successfully.", 'green');
+                        Terminal::writeln("Routes exported successfully.", 'green');
                         setenv('feature.route.attributes', 'disable', true);
                         return STATUS_SUCCESS;
                     }
@@ -315,7 +317,7 @@ class Context extends Console
             }
         }
 
-        $this->term->writeln("Failed: Unable to create route from attribute.", 'red');
+        Terminal::writeln("Failed: Unable to create route from attribute.", 'red');
         return STATUS_ERROR;
     }
 

@@ -10,12 +10,12 @@
  */
 namespace Luminova\Interface;
 
+use \DateTimeZone;
 use \Luminova\Base\Cache;
-use \Psr\Cache\CacheItemPoolInterface;
 use \Psr\SimpleCache\CacheInterface;
+use \Psr\Cache\CacheItemPoolInterface;
 use \Luminova\Exceptions\EncryptionException;
 use \Luminova\Exceptions\InvalidArgumentException;
-use \DateTimeZone;
 
 interface AuthenticatorInterface
 {
@@ -55,7 +55,7 @@ interface AuthenticatorInterface
      *
      * @param string $secret The shared secret key for TOTP generation.
      * 
-     * @return static Return the authenticator client instance.
+     * @return self Return the authenticator client instance.
      */
     public function setSecret(string $secret): self;
 
@@ -64,16 +64,17 @@ interface AuthenticatorInterface
      *
      * @param DateTimeZone|string|null $timezone The new timezone.
      * 
-     * @return static Return the authenticator client instance.
+     * @return self Return the authenticator client instance.
      */
     public function setTimezone(DateTimeZone|string|null $timezone): self;
 
     /**
      * Set the cache instance for code reuse prevention.
      *
-     * @param CacheItemPoolInterface<\T>|CacheInterface<\T>|Cache<\T> $cache The instance of PSR cache or Luminova base-cache.
+     * @param CacheItemPoolInterface<\T>|CacheInterface<\T>|Cache<\T> $cache The instance 
+     *          of PSR cache or Luminova base-cache.
      * 
-     * @return static Return the authenticator client instance.
+     * @return self Return the authenticator client instance.
      */
     public function setCache(CacheItemPoolInterface|CacheInterface|Cache $cache): self;
 
@@ -96,7 +97,8 @@ interface AuthenticatorInterface
      *              The time Step will also be used for caching if cache is enabled.
      * 
      * @return bool Return true if the code is valid, false otherwise.
-     * @throws EncryptionException If called without a valid authentication secret or an invalid base32 character is found in secret.
+     * @throws EncryptionException If called without a valid authentication secret 
+     *          or an invalid base32 character is found in secret.
      */
     public function verify(string $code, int $discrepancy = 1, int $timeStep = 30): bool;
 }

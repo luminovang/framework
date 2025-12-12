@@ -107,9 +107,9 @@ final class Message
     ];
 
     /**
-     * Initialize new message model.
+     * Create a new message payload.
      *
-     * @param array|null $setter An optional array to initialize model from.
+     * @param array|null $setter An optional array of notification configurations to initialize model from.
      *      - platform (int) Notification specific platform (default: 1).
      *      - raw (bool) Send custom notification payload.
      *      - token (string) Optional single notification token.
@@ -146,6 +146,33 @@ final class Message
         $this->default['conditions'] = $setter['conditions'] ?? '';
         $this->default['tokens'] = $setter['tokens'] ?? [];
         $this->setFromArray($setter);
+    }
+
+    /**
+     * Create a new message payload from array.
+     *
+     * @param array<string,mixed> $configs An array to notification configurations.
+     *      - platform (int) Notification specific platform (default: 1).
+     *      - raw (bool) Send custom notification payload.
+     *      - token (string) Optional single notification token.
+     *      - topic (string) Optional single notification topic.
+     *      - tokens (array<int,string>) Optional multiple notification tokens.
+     *      - data (array<string,mixed>) Optional data to send with the notification.
+     *      - android (array<string,mixed>) Android specific configuration.
+     *      - apns (array<string,mixed>) APNs specific configuration.
+     *      - webpush (array<string,mixed>) WebPush specific configuration.
+     *      - headers (array<string,mixed>) Payload headers configuration.
+     *      - fcm_options (array<string,mixed>) Optional firebase configurations.
+     *      - notification (array<string,mixed>) Notification payload information:
+     *         -  - title (string) Notification title.
+     *         - - body (string) Notification message body.
+     *         - - image (string) Notification image URL.
+     * 
+     * @return self Returns instance of notification payload model.
+     */
+    public static function fromArray(array $configs): self 
+    {
+        return new self($configs);
     }
 
     /**
@@ -190,7 +217,7 @@ final class Message
      * @param string $keys The dot-separated keys representing the nested structure.
      * @param mixed $value The value to associate with the nested keys.
      * 
-     * @return self Return notification message model instance. Returns the updated instance of the class, allowing method chaining.
+     * @return self Returns the updated instance of the class, allowing method chaining.
      */
     public function addNested(string $keys, mixed $value): self
     {
@@ -811,7 +838,7 @@ final class Message
     /**
      * Determine if building payload for internal notification class.
      * 
-     * @param bool $builder Whether notification payload is handled internally by notification class.
+     * @param bool $internal Whether notification payload is handled internally by notification class.
      * 
      * @return self Return instance of notification class.
      * @internal Handled internally for notification class.
@@ -823,11 +850,14 @@ final class Message
     }
 
     /**
-     * Process notification payload and return an array representing full notification configurations.
+     * Convert message payload to array.
+     * 
+     * This method process notification payload and return 
+     * an array representing full notification configurations.
      * 
      * @return array<string,mixed> Return notification payload.
      */
-    public function fromArray(): array
+    public function toArray(): array
     {
         if($this->isRaw()){
             return $this->payload;
