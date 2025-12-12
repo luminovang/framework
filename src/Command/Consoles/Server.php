@@ -86,7 +86,10 @@ class Server extends Console
             }
         }
 
-        $php = $this->input->getAnyOption('php', 'b', Terminal::whichPhp() ?? PHP_BINARY);
+        $php = $this->input->getAnyOption('php', 'b', null) 
+            ?? Terminal::whichPhp() 
+            ?? PHP_BINARY;
+            
         $retry = (int) $this->input->getAnyOption('retry', 'r', 5);
         $host ??= '127.0.0.1';
 

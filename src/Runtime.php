@@ -264,7 +264,32 @@ final class Runtime
     public static function isLocal(): bool
     {
         return self::isLocalhost()
+            || self::isPhpServer()
             || self::isLocalAddress();
+    }
+
+    /**
+     * Determine whether the application is running through 
+     * the Luminova PHP development server.
+     *
+     * Checks the PHP built-in server SAPI and verifies the server identifier
+     * against the current NOVAKIT version to distinguish Luminova-managed
+     * server instances from other PHP development servers.
+     *
+     * @return bool Returns true if running through the Luminova PHP development server, false otherwise.
+     */
+    public static function isPhpServer(): bool
+    {
+        if (PHP_SAPI !== 'cli-server') {
+            return false;
+        }
+
+        $phpServer = $_SERVER['LUMINOVA_PHP_CLI_SERVER'] 
+            ?? $_ENV['LUMINOVA_PHP_CLI_SERVER']
+            ?? getenv('LUMINOVA_PHP_CLI_SERVER');
+
+        return !empty($phpServer) 
+            && Luminova::NOVAKIT_VERSION === $phpServer;
     }
 
     /**
@@ -564,7 +589,7 @@ final class Runtime
         }
 
         return $isCli = (
-            in_array(PHP_SAPI, ['cli', 'phpdbg'], true) // cli-server
+            in_array(PHP_SAPI, ['cli', 'phpdbg'], true)
             || isset($_SERVER['argv'])
             || defined('STDIN')
         );
@@ -582,7 +607,10 @@ final class Runtime
     {
         static $isHmvc;
 
-        return $isHmvc ??= (bool) Env::get('feature.app.hmvc', false);
+        return $isHmvc ??= (bool) Env::get(
+            'feature.app.hmvc', 
+            false
+        );
     }
 
     /**
@@ -1346,9 +1374,10 @@ final class Runtime
         $result = self::tryGetIniValue($name);
 
         if ($result === false) {
-            throw new RuntimeException(
-                sprintf('Unable to retrieve PHP configuration directive "%s".', $name)
-            );
+            throw new RuntimeException(sprintf(
+                'Unable to retrieve PHP configuration directive "%s".', 
+                $name
+            ));
         }
 
         return $result;
@@ -1811,7 +1840,7 @@ final class Runtime
      *
      * @return void
      *
-     * @example - Example
+     * @example - Example:
      * ```php
      * use Luminova\Runtime;
      *
@@ -1950,6 +1979,7 @@ final class Runtime
      * - Route attribute scanning is active but attribute caching is off.
      *
      * @return void
+     * 
      * @ignore
      * @codeCoverageIgnore
      */
