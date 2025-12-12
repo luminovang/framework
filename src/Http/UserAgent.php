@@ -12,7 +12,7 @@ namespace Luminova\Http;
 
 use \Stringable;
 use \App\Config\Browser;
-use \Luminova\Interface\LazyObjectInterface;
+use \Luminova\Interface\{Arrayable, LazyObjectInterface};
 
 /**
  * Accessors for parsed user-agent details.
@@ -22,8 +22,8 @@ use \Luminova\Interface\LazyObjectInterface;
  * @method string getBrowser()           Get the browser name (e.g. "Firefox").
  * @method string getVersion()           Get the browser version (e.g. "143.0").
  * @method string getUserAgent()         Get the full User-Agent string.
- * @method string getPlatform()             Get the platform/OS name (e.g. "Macintosh").
- * @method string getPlatformModel()       Get the platform/OS name (e.g. "Macintosh").
+ * @method string getPlatform()          Get the platform/OS name (e.g. "Macintosh").
+ * @method string getPlatformModel()     Get the platform/OS name (e.g. "Macintosh").
  * @method string getOs()                Get the device OS identifier (e.g. "Intel Mac OS X").
  * @method string getOsVersion()         Get the device / OS version (e.g. "10.15").
  * @method string getEngine()            Get the rendering engine (e.g. "Gecko", "Blink").
@@ -34,7 +34,7 @@ use \Luminova\Interface\LazyObjectInterface;
  * @method string getMobile()            Get the mobile device name if detected.
  * @method string getReferrer()          Get the referrer hostname if available.
  */
-class UserAgent implements LazyObjectInterface, Stringable
+class UserAgent implements LazyObjectInterface, Stringable, Arrayable
 {
     /**
      * Whether the user agent represents a browser.
@@ -304,7 +304,24 @@ class UserAgent implements LazyObjectInterface, Stringable
     /**
      * Convert parsed user agent details into an array.
      *
-     * @return array<string, mixed> Associative array of user agent details.
+     * @return array{
+     *     isBrowser: bool,
+     *     isRobot: bool,
+     *     isMobile: bool,
+     *     isReferral: bool,
+     *     isChromium: bool,
+     *     userAgent: string,
+     *     browser: string,
+     *     version: string,
+     *     engine: string,
+     *     attributes: array,
+     *     engineVersion: string,
+     *     platform: string,
+     *     platformModel: string,
+     *     os: string,
+     *     osVersion: string,
+     *     languages: array
+     * } Associative array of user agent details.
      */
     public function toArray(): array
     {
@@ -326,6 +343,24 @@ class UserAgent implements LazyObjectInterface, Stringable
             'isMobile'       => $this->isMobile(),
             'isReferral'     => $this->isReferral()
         ];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
+    }
+
+    /**
+     * Convert parsed user agent details into an array.
+     *
+     * @return array<string, mixed> Associative array of user agent details.
+     */
+    public function __toArray(): array
+    {
+        return $this->toArray();
     }
 
     /**
@@ -378,7 +413,7 @@ class UserAgent implements LazyObjectInterface, Stringable
     /**
      * Check if the User Agent string matches a given keyword or regex pattern.
      *
-     * Unlike {@see is()}, this method always checks the raw User Agent string, 
+     * Unlike {@see self::is()}, this method always checks the raw User Agent string, 
      * ignoring parsed properties such as `browser`, `mobile`, or `robot`.
      * 
      * Behavior:
@@ -395,7 +430,7 @@ class UserAgent implements LazyObjectInterface, Stringable
      * 
      * @return bool Return true if the User Agent matches the given pattern, false otherwise.
      * 
-     * @see is()
+     * @see self::is()
      * 
      * @example - Example:
      * ```php
@@ -435,7 +470,7 @@ class UserAgent implements LazyObjectInterface, Stringable
      * Check if a keyword or regex pattern matches either the full User Agent string 
      * or a specific parsed property (browser, mobile, or robot).
      *
-     * Unlike {@see match()}, this method can scope the check to a parsed property 
+     * Unlike {@see self::match()}, this method can scope the check to a parsed property 
      * rather than always checking the raw User Agent string.
      * 
      * Behavior:
@@ -450,7 +485,7 @@ class UserAgent implements LazyObjectInterface, Stringable
      * 
      * @return bool Return true if a match is found, false otherwise.
      * 
-     * @see match() For more advance matching.
+     * @see self::match() For more advance matching.
      * 
      * @example - Example:
      * ```php
@@ -747,7 +782,7 @@ class UserAgent implements LazyObjectInterface, Stringable
      * @param string|null $userAgent Optional user agent string (default: `$_SERVER['HTTP_USER_AGENT']`).
      * @param bool $returnArray When true, return the result as an associative array; otherwise return as an object.
      *
-     * @return false|array<string,string|bool>|object{
+     * @return false|array|object {
      *     isBrowser: bool,
      *     isChromium: bool,
      *     userAgent: string,
@@ -762,7 +797,7 @@ class UserAgent implements LazyObjectInterface, Stringable
      *     languages: array
      * } Return parsed client information on success, or `false` if the string is empty or unrecognized.
      *
-     * @see replace() For replacing class object with new agent information.
+     * @see self::replace() For replacing class object with new agent information.
      *
      * @example - Example:
      * ```php

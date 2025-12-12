@@ -26,7 +26,7 @@ interface SessionManagerInterface
     /**
      * Set session configuration object.
      *
-     * @param Configuration<App\Config\Session> $config Session configuration.
+     * @param Configuration<\App\Config\Session> $config Session configuration.
      */
     public function setConfig(Configuration $config): void;
 
@@ -95,8 +95,6 @@ interface SessionManagerInterface
      * 
      * This method delete the old ID associated to the current session, to retain data set to false.
      * 
-     * @param bool $clearData Whether to delete the old associated session or not (default: `true`).
-     * 
      * @return string|false Return the new generated session Id on success, otherwise false.
      */
     public function regenerateId(): string|bool;
@@ -153,7 +151,7 @@ interface SessionManagerInterface
      * @param mixed $data The data to store.
      * @param string|null $storage Optional storage name.
      * 
-     * @return static Return instance of session manager class.
+     * @return self Return instance of session manager class.
      */
     public function setItem(string $index, mixed $data, ?string $storage = null): self;
 
@@ -163,7 +161,7 @@ interface SessionManagerInterface
      * @param array<string,mixed> $data The date to store where the key is the identifier.
      * @param string|null $storage Optional storage name.
      * 
-     * @return static Return instance of session manager class.
+     * @return self Return instance of session manager class.
      */
     public function setItems(array $data, ?string $storage = null): self;
 
@@ -174,7 +172,7 @@ interface SessionManagerInterface
      * @param string|null $index The key index to remove.
      * @param string|null $storage Optionally specify the storage name to clear or remove an item.
      * 
-     * @return static Return instance of session manager class.
+     * @return self Return instance of session manager class.
      */
     public function deleteItem(?string $index = null, ?string $storage = null): self;
 

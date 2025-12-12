@@ -319,7 +319,9 @@ class Task
      * Returns the task handler arguments as an array.
      *
      * @return array Return array of handlers arguments.
-     * > **Note:** If `$this->arguments` was previously a string, it will be converted to an array before returning.
+     * > **Note:** 
+     * > If `$this->arguments` was previously a string, 
+     * > it will be converted to an array before returning.
      */
     public function getArguments(): array
     {
@@ -352,13 +354,19 @@ class Task
     }
 
     /**
-     * Checks if the task handler is a serialized Opis\Closure.
+     * Checks if the task handler is a serialized Closure.
      * 
-     * @return bool Return true if the handler appears to be an Opis closure, false otherwise.
+     * @return bool Return true if the handler appears to be a closure, false otherwise.
      */
-    public function isOpisClosure(): bool
+    public function isClosure(): bool
     {
-        return $this->handler && Queue::isClosure($this->handler);
+        if(!$this->handler){
+            return false;
+        }
+
+        [, $status] = Queue::withClosure($this->handler);
+
+        return $status;
     }
 
     /**

@@ -59,10 +59,10 @@ final class Error
      * namespace App\Controllers\Http;
      * use Luminova\Base\Controller;
      * use Luminova\Attributes\Error;
-     * use App\Errors\Controllers\ErrorController;
+     * use App\Errors\Controllers\AppError;
      *
-     * #[Error(pattern: '/', onError: [ErrorController::class, 'onWebError'])] // Global websites error handler
-     * #[Error('foo', pattern: '/foo/', onError: [ErrorController::class, 'onWebFooError'])] // Custom for (foo) URI prefix
+     * #[Error(pattern: '/', onError: [AppError::class, 'onWebError'])] // Global websites error handler
+     * #[Error('foo', pattern: '/foo/', onError: [AppError::class, 'onWebFooError'])] // Custom for (foo) URI prefix
      * class MyController extends Controller {
      *      // Controller implementation
      * }
