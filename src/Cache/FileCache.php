@@ -13,11 +13,12 @@ namespace Luminova\Cache;
 use \Throwable;
 use \DateInterval;
 use \DateTimeInterface;
+use \Luminova\Time\Time;
 use \Luminova\Base\Cache;
 use \Luminova\Logger\Logger;
-use \Luminova\Time\Timestamp;
-use \Luminova\Utility\Storage\Filesystem;
-use \Luminova\Exceptions\{AppException, CacheException, InvalidArgumentException};
+use \Luminova\Storage\Stream;
+use \Luminova\Storage\Filesystem;
+use \Luminova\Exceptions\{LuminovaException, CacheException, InvalidArgumentException};
 use function \Luminova\Funcs\{root, make_dir};
 
 final class FileCache extends Cache
@@ -32,9 +33,16 @@ final class FileCache extends Cache
     /**
      * Hold the cache instance Singleton.
      * 
-     * @var ?self $instance
+     * @var ?static $instance
      */
     private static ?self $instance = null;
+
+    /**
+     * File stream object
+     *
+     * @var Stream|null
+     */
+    private ?Stream $stream = null;
 
     /**
      * Initialize cache constructor, with optional storage name and subfolder.
@@ -44,24 +52,22 @@ final class FileCache extends Cache
      * 
      * @throws CacheException if there is a problem loading the cache.
      * 
-     * > **Note:** All cache items are store in `/writeable/caches/filesystem/`, this cannot be changed, 
-     * you can optionally specify a subfolder within the cache directory to store your cache items.
-     * > Additionally if your didn't specify the storage name on initialization, then you must call `setStorage` method later before accessing caches.
+     * > **Note:** 
+     * > All cache items are store in `/writeable/caches/filesystem/`, 
+     * > this cannot be changed, you can optionally specify a subfolder within the cache directory 
+     * > to store your cache items.
+     * > Additionally if your didn't specify the storage name on initialization, 
+     * > then you must call `setStorage` method later before accessing caches.
      */
-    public function __construct(
-        ?string $storage = null, 
-        private ?string $subfolder = null
-    )
+    public function __construct(?string $storage = null, private ?string $subfolder = null)
     {
         parent::__construct();
-        $this->encoding = ($this->serialize === 2) ? false : true;
         self::$root ??= root('/writeable/caches/filesystem/');
         
         if($this->subfolder){
             $this->setFolder($this->subfolder);
         }
 
-        // Set the storage and initialize the storage.
         if($storage){
             $this->setStorage($storage);
         }
@@ -81,11 +87,11 @@ final class FileCache extends Cache
         ?string $subfolder = null
     ): static 
     {
-        if (static::$instance === null) {
-            static::$instance = new static($storage, $subfolder);
+        if (self::$instance === null) {
+            self::$instance = new self($storage, $subfolder);
         }
 
-        return static::$instance;
+        return self::$instance;
     }
 
     /**
@@ -145,10 +151,10 @@ final class FileCache extends Cache
      */
     public function setStorage(string $storage): self
     {
-        $this->storage = static::hashStorage($storage);
+        $this->storage = self::hashStorage($storage);
         $this->storageName = $storage;
         $this->items[$this->storage] = [];
-        $this->read();
+
         return $this;
     }
 
@@ -162,7 +168,6 @@ final class FileCache extends Cache
     public function enableBase64(bool $encode): self 
     {
         $this->encoding = $encode;
-
         return $this;
     }
 
@@ -180,18 +185,22 @@ final class FileCache extends Cache
         $this->position = 0;
 
         foreach ($keys as $key) {
-            if(($item = $this->getItem($key)) !== null){
-                $result = [
-                    'key' => $key,
-                    'value' => $item
-                ];
+            $item = $this->getItem($key);
 
-                if($callback !== null) {
-                    $callback($this, $result);
-                }
-
-                $this->iterator[] = $result;
+            if($item === null){
+                continue;
             }
+
+            $result = [
+                'key' => $key,
+                'value' => $item
+            ];
+
+            if($callback !== null) {
+                $callback($this, $result);
+            }
+
+            $this->iterator[] = $result;
         }
 
         return true;
@@ -203,17 +212,25 @@ final class FileCache extends Cache
     public function getItem(string $key, bool $onlyContent = true): mixed
     {
         $this->assertStorageAndKey($key);
+        $this->read();
+
         if ($this->hasExpired($key)){
             return $this->respondWithEmpty($onlyContent); 
         }
 
-        if(!$this->items[$this->storage][$key]['decoded']){
+        $content = $this->items[$this->storage][$key] ?? [];
+
+        if(!$content){
+            return null;
+        }
+
+        if(!$content['decoded']){
             $this->items[$this->storage][$key]['data'] = $this->deSerialize(
-                ($this->items[$this->storage][$key]['encoding'] === 'base64') ? 
-                    base64_decode($this->items[$this->storage][$key]['data']) : 
-                    $this->items[$this->storage][$key]['data'],
-                $this->items[$this->storage][$key]['serialize']
+                $content['data'],
+                $content['serializer'] ?? 0,
+                $content['encoding']  ?? true
             );
+
             $this->items[$this->storage][$key]['decoded'] = true;
         }
 
@@ -248,15 +265,20 @@ final class FileCache extends Cache
             $expireAfter = null;
         }
 
+        $this->read();
         $this->items[$this->storage][$key] = [
-            "timestamp" => time(),
-            "expiration" => ($expiration instanceof DateTimeInterface) ? Timestamp::ttlToSeconds($expiration) : $expiration,
-            "expireAfter" => ($expireAfter instanceof DateInterval) ? Timestamp::ttlToSeconds($expireAfter) : $expireAfter,
-            "data" => ($this->encoding ? base64_encode($content) : $content),
+            "timestamp" => Time::now($this->timezone)->getTimestamp(),
+            "expiration" => ($expiration instanceof DateTimeInterface) 
+                ? Time::toSeconds($expiration) 
+                : $expiration,
+            "expireAfter" => ($expireAfter instanceof DateInterval) 
+                ? Time::toSeconds($expireAfter) 
+                : $expireAfter,
+            "data" => $content,
             "lock" => $lock,
             "decoded" => false,
-            "encoding" => $this->encoding ? 'base64' : 'raw',
-            "serialize" => $this->serialize
+            "encoding" => $this->encoding,
+            "serializer" => $this->serializer
         ];
 
         return $this->commit();
@@ -299,6 +321,8 @@ final class FileCache extends Cache
      */
     public function hasExpired(string $key): bool 
     {
+        $this->read();
+
         if (!$this->hasItem($key)) {
             return true;
         }
@@ -315,12 +339,13 @@ final class FileCache extends Cache
             return false;
         }
 
-        if ($this->hasItem($key) && ($includeLocked || !$this->isLocked($key))) {
-            unset($this->items[$this->storage][$key]);
-            return $this->commit();
+        $this->read();
+        if (!$this->hasItem($key) || (!$includeLocked && $this->isLocked($key))) {
+            return false;
         }
-      
-        return false;
+
+        unset($this->items[$this->storage][$key]);
+        return $this->commit();
     }
 
     /**
@@ -333,11 +358,21 @@ final class FileCache extends Cache
         }
 
         $deletedCount = 0;
+        $this->read();
+
         foreach ($keys as $key) {
-            if ($key !== '' && $this->hasItem($key) && ($includeLocked || !$this->isLocked($key))) {
-                unset($this->items[$this->storage][$key]);
-                $deletedCount++;
+            if(!$key){
+                continue;
             }
+
+            if (!$this->hasItem($key) || (!$includeLocked && $this->isLocked($key))) {
+                continue;
+            }
+
+            $this->items[$this->storage][$key] = [];
+
+            unset($this->items[$this->storage][$key]);
+            $deletedCount++;
         }
 
         if ($deletedCount > 0){
@@ -352,7 +387,7 @@ final class FileCache extends Cache
      */
     public function flush(): bool
     {
-        if(Filesystem::remove($this->getRoot())){
+        if(Filesystem::delete($this->getRoot())){
             $this->items = [];
             return true;
         }
@@ -371,12 +406,17 @@ final class FileCache extends Cache
 
 		$path = $this->getPath();
 
-		if(is_file($path) && unlink($path)){
-            $this->items[$this->storage] = [];
-            return true;
+        if(!is_file($path)){
+            return false;
+        }
+        
+        $this->items[$this->storage] = [];
+
+		if(!unlink($path)){
+            return $this->commit();
         }
 
-        return false;
+        return true;
     }
 
     /**
@@ -388,19 +428,15 @@ final class FileCache extends Cache
             return false;
         }
 
-        $filepath = $this->getRoot() . static::hashStorage($storage) . '.json';
+        $filepath = $this->getRoot() . self::hashStorage($storage) . '.json';
+
+        if (!is_file($filepath) || !is_readable($filepath) || is_writable($filepath)) {
+            return false;
+        }
 
         try{
-            if (!is_readable($filepath)) {
-                return false;
-            }
-
-            $content = Filesystem::getContent($filepath);
-            if($content === false){
-                return false;
-            }
-
-            $items = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+            $stream = new Stream($filepath, 'c+b');
+            $items = $stream->toArray();
             $deleted = 0;
 
             foreach($keys as $key){
@@ -415,16 +451,10 @@ final class FileCache extends Cache
                     return unlink($filepath);
                 }
 
-                if(is_writable($filepath)){
-                    return Filesystem::write(
-                        $filepath, 
-                        json_encode($items, JSON_THROW_ON_ERROR), 
-                        LOCK_EX
-                    );
-                }
+                return $this->sink($items, $stream);
             }
         }catch(Throwable $e){
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw $e;
             }
 
@@ -443,9 +473,13 @@ final class FileCache extends Cache
             return;
         }
 
+        $this->read();
         $counter = 0;
+
         foreach ($this->items[$this->storage] as $key => $value) {
             if ($this->hasExpired($key) && ($this->includeLocked || !$value['lock'])) {
+                $this->items[$this->storage][$key] = [];
+
                 unset($this->items[$this->storage][$key]);
                 $counter++;
             }
@@ -470,33 +504,32 @@ final class FileCache extends Cache
         }
 
         $filepath = $this->getPath();
+
+        if (!is_file($filepath) || !is_readable($filepath)) {
+            return false;
+        }
+
         try{
-            if (!is_readable($filepath) || !is_file($filepath)) {
-                return false;
-            }
-
-            $content = Filesystem::getContent($filepath);
-
-            if($content === false){
-                return false;
-            }
-
-            $this->items[$this->storage] = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+            $this->stream = new Stream($filepath, 'c+b');
+            $this->items[$this->storage] = $this->stream->toArray();
 
             return true;
-
         }catch(Throwable $e){
             unlink($filepath);
 
             if(PRODUCTION){
-                Logger::dispatch('error',sprintf('Failed to read cache content: %s', $e->getMessage()), [
-                    'class' => self::class
-                ]);
+                Logger::dispatch(
+                    'error',
+                    sprintf('Failed to read cache content: %s', $e->getMessage()),
+                    [
+                        'class' => self::class
+                    ]
+                );
 
                 return false;
             }
 
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw $e;
             }
 
@@ -514,15 +547,14 @@ final class FileCache extends Cache
                 return false;
             }
 
+            $filepath = $this->getPath();
+
             if($this->items[$this->storage] === []){
-                return unlink($this->getPath());
+                return unlink($filepath);
             }
 
-            return Filesystem::write(
-                $this->getPath(), 
-                json_encode($this->items[$this->storage], JSON_THROW_ON_ERROR), 
-                LOCK_EX
-            );
+            $this->stream ??= new Stream($filepath);
+            return $this->sink($this->items[$this->storage]);
         }catch(Throwable $e){
             if(PRODUCTION){
                 Logger::dispatch('error', sprintf('Unable to commit cache: %s', $e->getMessage()), [
@@ -532,7 +564,7 @@ final class FileCache extends Cache
                 return false;
             }
 
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw $e;
             }
 
@@ -540,5 +572,43 @@ final class FileCache extends Cache
         }
 
         return false;
+    }
+
+    /**
+     * Persist cache data to the underlying stream.
+     *
+     * This method acquires an exclusive lock, overwrites the stream content
+     * with the given items encoded as JSON, and then releases the lock.
+     * The write is atomic at the stream level (lock + overwrite).
+     *
+     * @param array $items The cache data to store.
+     * @param Stream|null $stream Optional target stream. Defaults to the internal stream.
+     *
+     * @return bool True if data was written successfully, false otherwise.
+     *
+     * @throws RuntimeException If encoding or write operation fails.
+     */
+    private function sink(array $items, ?Stream $stream = null): bool
+    {
+        $stream ??= $this->stream;
+
+        try {
+            $stream->lock(LOCK_EX);
+
+            $payload = json_encode(
+                $items,
+                JSON_INVALID_UTF8_SUBSTITUTE
+                | JSON_UNESCAPED_UNICODE
+                | JSON_THROW_ON_ERROR
+                | JSON_PRESERVE_ZERO_FRACTION
+                | JSON_UNESCAPED_SLASHES
+            );
+
+            $bytes = $stream->overwrite($payload);
+        } finally {
+            $stream->unlock();
+        }
+
+        return $bytes > 0;
     }
 }

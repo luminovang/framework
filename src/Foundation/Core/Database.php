@@ -11,8 +11,8 @@
 namespace Luminova\Foundation\Core;
 
 use \stdClass;
-use \Luminova\Interface\LazyObjectInterface;
 use \Luminova\Exceptions\JsonException;
+use \Luminova\Interface\LazyObjectInterface;
 
 abstract class Database implements LazyObjectInterface
 {
@@ -35,9 +35,11 @@ abstract class Database implements LazyObjectInterface
         'database'          => '',
         'socket'            => false,
         'socket_path'       => '',
-        'persistent'        => true,
+        'persistent'        => false,
         'timeout'           => 0,
-        'emulate_prepares'  => true
+        'emulate_prepares'  => true,
+        'buffered_query'    => false,
+        'commands'          => []
     ];
 
     /**
@@ -94,6 +96,11 @@ abstract class Database implements LazyObjectInterface
      *         'socket' => false,
      *         'socket_path' => '',
      *         'sqlite_path' => '', // Only used if version is sqlite
+     *         'commands' => [
+     *              'SET GLOBAL slow_query_log = ON', 
+     *              'SET GLOBAL long_query_time = 1', 
+     *              'SET GLOBAL log_queries_not_using_indexes = ON'
+     *          ]
      *     ],
      *     'US' => [
      *         'host' => 'us.db.server',
@@ -113,6 +120,18 @@ abstract class Database implements LazyObjectInterface
         if($config !== []){
             $this->immutables = array_replace($this->immutables, $config);
         }
+    }
+
+    /**
+     * Resolve database connection options from array.
+     * 
+     * @param array<string,mixed> $config Database configuration.
+     * 
+     * @return static<CoreDatabase> Return database instance with resolved configuration.
+     */
+    public static function fromArray(array $config): static
+    {
+        return new static($config);
     }
 
     /**

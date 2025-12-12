@@ -2,10 +2,13 @@ includes:
 	- phpstan.includes.php
 
 parameters:
-	phpVersion: 80000
+	phpVersion: 80100
 	tmpDir: builds/phpstan
 	level: 6
+	reportUnmatchedIgnoredErrors: true
 	bootstrapFiles:
+		- install/Boot/constants.php
+		- install/Boot/functions.php
 		- vendor/autoload.php
 	paths:
 		- src

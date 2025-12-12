@@ -53,7 +53,7 @@ final class Environment
      */
     public static function get(string $key): mixed 
     {
-        $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
+        $value = $_SERVER[$key] ??  $_ENV[$key] ?? getenv($key);
 
         if ($value === false) {
             $value = self::getNotationConvention($key);
@@ -106,7 +106,7 @@ final class Environment
         $keys = [str_replace('_', '.', $key), str_replace('.', '_', $key)];
 
         foreach ($keys as $convertedKey) {
-            $value = $_ENV[$convertedKey] ?? $_SERVER[$convertedKey] ?? getenv($convertedKey);
+            $value = $_SERVER[$convertedKey] ?? $_ENV[$convertedKey] ?? getenv($convertedKey);
             if ($value !== false) {
                 return $value;
             }

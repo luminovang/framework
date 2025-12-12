@@ -12,9 +12,8 @@ namespace Luminova\Utility;
 
 use \Fiber;
 use \Closure;
-use \Exception;
+use \Throwable;
 use \Generator;
-use \FiberError;
 use \Luminova\Command\Terminal;
 use \Luminova\Http\Message\Stream;
 use \Psr\Http\Message\StreamInterface;
@@ -126,42 +125,42 @@ class Process
      * 
      * @var string EXECUTOR_POPEN
      */
-    public const EXECUTOR_POPEN = 'popen';
+    public final const EXECUTOR_POPEN = 'popen';
 
     /**
      * Command execution with exec.
      * 
      * @var string EXECUTOR_EXEC
      */
-    public const EXECUTOR_EXEC = 'exec';
+    public final const EXECUTOR_EXEC = 'exec';
 
     /**
      * Command execution with shell_exec.
      * 
      * @var string EXECUTOR_SHELL
      */
-    public const EXECUTOR_SHELL = 'shell_exec';
+    public final const EXECUTOR_SHELL = 'shell_exec';
 
     /**
      * Command execution with proc_open.
      * 
      * @var string EXECUTOR_PROC_OPEN
      */
-    public const EXECUTOR_PROC_OPEN = 'proc_open';
+    public final const EXECUTOR_PROC_OPEN = 'proc_open';
 
     /**
      * Callback execution flag.
      * 
      * @var string EXECUTOR_CALLBACK
      */
-    public const EXECUTOR_CALLBACK = 'callback';
+    public final const EXECUTOR_CALLBACK = 'callback';
 
     /**
      * Stream execution flag.
      * 
      * @var string EXECUTOR_STREAM
      */
-    public const EXECUTOR_STREAM = 'stream';
+    public final const EXECUTOR_STREAM = 'stream';
 
     /**
      * Process constructor.
@@ -252,7 +251,7 @@ class Process
                     $this->fiber = null;
                 }
                 return;
-            }catch(Exception|FiberError){
+            }catch(Throwable){
                 self::$isFiberSupported = false;
             }
         }
@@ -644,7 +643,7 @@ class Process
             if ($this->fiber->isSuspended()) {
                 try{
                     $this->fiber->resume();
-                }catch(Exception|FiberError $e){
+                }catch(Throwable $e){
                     throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
                 }
             }
