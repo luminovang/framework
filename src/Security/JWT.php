@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework JSON Web Token (JWT) authentication.
  *
@@ -19,7 +20,7 @@ use \Luminova\Time\Time;
 use \Luminova\Logger\Logger;
 use \Firebase\JWT\JWT as Token;
 use \Luminova\Interface\LazyObjectInterface;
-use \Luminova\Exceptions\{ErrorCode, AppException, EncryptionException};
+use \Luminova\Exceptions\{ErrorCode, LuminovaException, EncryptionException};
 use function \Luminova\Funcs\{
     root,
     write_content,
@@ -27,7 +28,7 @@ use function \Luminova\Funcs\{
     make_dir
 };
 
-class JWT implements LazyObjectInterface
+final class JWT implements LazyObjectInterface
 {
     /**
      * Shared instance of the JWT.
@@ -97,7 +98,7 @@ class JWT implements LazyObjectInterface
     ): self 
     {
         if(!self::$instance instanceof static){
-            self::$instance = new static($algo, $salt, $path, $iss, $aud);
+            self::$instance = new self($algo, $salt, $path, $iss, $aud);
         }
 
         return self::$instance;
@@ -214,7 +215,7 @@ class JWT implements LazyObjectInterface
      * @param string|null $token The authentication token, typically in the format `scheme token` (e.g., `Bearer my-token`).
      * @param string|int $userId The user identifier, which should match the `userId` claim in the token.
      * @param (Closure(bool $isPassed, \stdClass $payload): bool)|null $callback An optional callback function that is invoked with the validation result and the decoded payload.
-     *                              The callback can be used to perform additional checks, such as user-specific data validation.
+     *                      The callback can be used to perform additional checks, such as user-specific data validation.
      *
      * @return bool Returns `true` if the authentication is valid, otherwise `false`.
      * @throws EncryptionException Throws on development mode if an error is encountered while decoding.
@@ -399,7 +400,6 @@ class JWT implements LazyObjectInterface
      *
      * @param string|int $userId The user identifier to generate the encryption key.
      * @param string $algo The hashing algorithm to use for the encryption key (default: `sha256`).
-     * @param string|null $salt Optional key salt prefix (default: `NULL`).
      *
      * @return string Return the securely hashed encryption key.
      * @throws EncryptionException If the user identifier is empty or the application key is missing.
@@ -443,7 +443,8 @@ class JWT implements LazyObjectInterface
      * @param array $payload The additional data to include in the JWT payload.
      * @param string|int $userId The unique identifier for the user.
      * @param int $expiry The expiration time in seconds (default is 30 days or 2592000 seconds).
-     * @param string|null &$fileHash A reference to a variable that will hold the key file hash, used to identify the stored key file.
+     * @param string|null &$fileHash A reference to a variable that will hold the key file hash, 
+     *              used to identify the stored key file.
      *
      * @return bool Returns `true` if the token was successfully signed and stored, otherwise `false`.
      *
@@ -453,6 +454,7 @@ class JWT implements LazyObjectInterface
      * $userId = 'user123';
      * $fileHash = null;
      * $result = $jwt->sign($payload, $userId, 3600, $fileHash);
+     * 
      * if ($result) {
      *     echo "Token signed and stored. File hash: $fileHash";
      * } else {
@@ -537,7 +539,7 @@ class JWT implements LazyObjectInterface
                 return false;
             }
 
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw $e;
             }
 

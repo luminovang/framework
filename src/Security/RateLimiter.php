@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework Request Rate Limiter (RRL).
  *
@@ -16,8 +17,8 @@ use \Throwable;
 use \DateInterval;
 use \DateTimeImmutable;
 use \Luminova\Luminova;
-use \Luminova\Utility\IP;
 use \Luminova\Base\Cache;
+use \Luminova\Http\Network\IP;
 use \Luminova\Cache\FileCache;
 use \Predis\Client as PredisClient;
 use \Psr\SimpleCache\CacheInterface;
@@ -200,7 +201,8 @@ class RateLimiter implements LazyObjectInterface
      * 
      * If no cache is set explicitly, the default fallback is Luminova's file-based cache.
      *
-     * @param CacheItemPoolInterface|CacheInterface|Cache|Memcached|PredisClient|Redis $cache The cache instance used to store limiter data.
+     * @param CacheItemPoolInterface|CacheInterface|Cache|Memcached|PredisClient|Redis $cache The cache instance used 
+     *          to store limiter data.
      * 
      * @return self Returns the instance of RateLimiter class.
      */
@@ -452,7 +454,8 @@ class RateLimiter implements LazyObjectInterface
      * This is a passive wait that periodically checks if the limiter decision is complete.
      * It is useful when limiter involves asynchronous or deferred logic.
      *
-     * @param float|int $interval The interval to sleep between checks (in seconds). Supports sub-second delays (e.g., 0.1 for 100ms).
+     * @param float|int $interval The interval to sleep between checks (in seconds). 
+     *              Supports sub-second delays (e.g., 0.1 for 100ms).
      * @param int|null $maxWait The maximum duration to wait (in seconds). Use `null` to wait indefinitely.
      *
      * @return void
@@ -503,7 +506,9 @@ class RateLimiter implements LazyObjectInterface
      * @throws InvalidArgumentException If the cache instance is invalid or the key is empty.
      * @throws RuntimeException If the cache is not connected.
      * 
-     * > **Note:** This will persist new limit (e.g, `defaultLimit + $limit`), till ttl expires before default limit is restored.
+     * > **Note:** 
+     * > This will persist new limit (e.g, `defaultLimit + $limit`), 
+     * > till ttl expires before default limit is restored.
      */
     public function continue(int $limit = 1): self
     {

@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Password Manager
  *
@@ -11,7 +12,7 @@
 namespace Luminova\Security;
 
 use \Throwable;
-use \Luminova\Http\Client\Novio;
+use \Luminova\Luminova;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\InvalidArgumentException;
 use function \Luminova\Funcs\root;
@@ -528,10 +529,10 @@ final class Password
 
 		if($body === null){
 			try {
-				$response = (new Novio([
+				$response = Luminova::kernel('http.client', true, [
 					'base_uri' => 'https://api.pwnedpasswords.com',
 					'timeout'  => $timeout,
-				]))->request('GET', "range/{$prefix}");
+				])->request('GET', "range/{$prefix}");
 
 				$body = $response->getContents();
 

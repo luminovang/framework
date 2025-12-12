@@ -13,11 +13,12 @@ namespace Luminova\Template\Engines;
 
 use \Throwable;
 use \Stringable;
+use \Luminova\Luminova;
 use \Luminova\Http\Header;
 use \Luminova\Template\View;
 use \Luminova\Exceptions\RuntimeException;
 use \Luminova\Exceptions\BadMethodCallException;
-use function \Luminova\Funcs\{root, filter_paths};
+use function \Luminova\Funcs\{root, display_path};
 
 /**
  * Layout
@@ -54,13 +55,6 @@ final class Layout implements Stringable
      * @var bool $process
      */
     private bool $process = true;
-
-    /** 
-     * HMVC feature enabled flag (resolved from env on construct).
-     * 
-     * @var bool|null $isHmvc
-     */
-    private ?bool $isHmvc = null;
 
     /** 
      * Path to the selected layout file (absolute).
@@ -152,7 +146,6 @@ final class Layout implements Stringable
     )
     {
         $this->root = root('/resources/Views/');
-        $this->isHmvc ??= (bool) env('feature.app.hmvc', false);
 
         if ($module !== null) {
             $this->module($module);
@@ -270,7 +263,7 @@ final class Layout implements Stringable
         if (!is_file($filename)) {
             throw new RuntimeException(sprintf(
                 'Layout not found: %s', 
-                filter_paths($filename)
+                display_path($filename)
             ));
         }
 
@@ -309,7 +302,7 @@ final class Layout implements Stringable
             throw new RuntimeException(sprintf(
                 'Layout base: %s not found in : %s',
                 $base,
-                filter_paths($this->root)
+                display_path($this->root)
             ));
         }
 
@@ -336,7 +329,7 @@ final class Layout implements Stringable
      */
     public function module(string $module = ''): self
     {
-        if (!$this->isHmvc) {
+        if (!Luminova::isHmvc()) {
             return $this;
         }
 

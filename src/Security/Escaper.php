@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -17,7 +18,7 @@ use function \Luminova\Funcs\is_utf8;
 /**
  * @mixin \Laminas\Escaper\Escaper
  */
-class Escaper
+final class Escaper
 {
     /**
      * Laminas Escaper object.
@@ -117,21 +118,21 @@ class Escaper
      *
      * @param string|null $encoding The character encoding use (default: 'UTF-8').
      *
-     * @return static Returns shared static instance of escaper.
+     * @return self Returns shared static instance of escaper.
      * @throws InvalidArgumentException Throws if unsupported encoding or empty string is provided.
      *
      * @example - Example:
      * 
      * ```php
      * $escaper = Escaper::with('UTF-8');
-     * $escaped = $escaper->escape('<b>Hello</b>');
+     * $escaped = $escaper->escapeHtml('<b>Hello</b>');
      * ```
      */
     public static function with(?string $encoding = null): self
     {
         if(!self::$instance instanceof self){
             self::$isEscaper ??= class_exists(LaminasEscaper::class);
-            self::$instance = new static($encoding);
+            self::$instance = new self($encoding);
 
             if (self::$isEscaper) {
                 self::$instance->escaper = new LaminasEscaper($encoding ?? 'utf-8');
@@ -139,6 +140,40 @@ class Escaper
         }
 
         return self::$instance;
+    }
+
+    /**
+     * Escapes a user input string based on the specified context.
+     * 
+     * **Supported Context Values:**
+     *
+     * - html - Escape general HTML content. 
+     * - js -   Escape JavaScript code. 
+     * - css -  Escape CSS styles. 
+     * - url -  Escape URL.
+     *
+     * @param string $input The input string to escape.
+     * @param string $context The escaper context (e.g, `html`, `js`, `css` or `url`).
+     * @param string $encoding The escape character encoding to use (default: 'utf-8').
+     * 
+     * @return string Return the escaped string.
+     * @throws InvalidArgumentException If an unsupported, invalid or blank encoding is provided.
+     */
+    public static function escape(string $input, string $context, ?string $encoding = null): string 
+    {
+        if (!in_array($context, ['html', 'js', 'css', 'url'], true)) {
+            throw new InvalidArgumentException(\sprintf('Invalid escape context provided "%s".', $context));
+        }
+
+        $escaper = self::with($encoding);
+
+        if ($encoding !== null && $escaper->getEncoding() !== $encoding) {
+            $escaper = $escaper->setEncoding($encoding);
+        }
+
+        $method = 'escape' . \ucfirst($context);
+
+        return $escaper->{$method}($input);
     }
 
     /**
@@ -188,7 +223,7 @@ class Escaper
      * 
      * @param string $encoding The character encoding to use (e.g: 'utf-8').
      * 
-     * @return static Return instance of escape class.
+     * @return self Return instance of escape class.
      * @throws InvalidArgumentException Throws if unsupported encoding or empty string is provided.
      */
     public function setEncoding(string $encoding): self
@@ -225,7 +260,8 @@ class Escaper
      * Escape a string using custom escape rules.
      *
      * @param string $input The string to escape.
-     * @param array $rules Associative array of custom escape rules where keys are regex patterns and values are replacement strings.
+     * @param array $rules Associative array of custom escape rules where keys 
+     *          are regex patterns and values are replacement strings.
      * 
      * @return string Return the escaped string.
      */
@@ -318,7 +354,9 @@ class Escaper
     protected function toUtf8(string $string): string
     {
 
-        $result = $this->encoding === 'utf-8' ? $string : $this->convertEncoding($string, 'UTF-8', $this->encoding);
+        $result = ($this->encoding === 'utf-8') 
+            ? $string 
+            : $this->convertEncoding($string, 'UTF-8', $this->encoding);
 
         if (!is_utf8($result)) {
             throw new RuntimeException(
@@ -354,6 +392,7 @@ class Escaper
     protected function convertEncoding(array|string $string, string $to, array|string|null $from = null): string
     {
         $result = mb_convert_encoding($string, $to, $from);
+
         return ($result === false) ? '' : $result;
     }
 }

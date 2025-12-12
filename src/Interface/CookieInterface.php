@@ -11,6 +11,7 @@
 namespace Luminova\Interface;
 
 use \App\Config\Cookie as CookieConfig;
+use \Luminova\Exceptions\CookieException;
 
 interface CookieInterface
 {
@@ -30,7 +31,7 @@ interface CookieInterface
      * @param bool $raw Indicates if the cookie is raw.
      * @param CookieConfig|array<string,mixed> $options An array of default cookie options or cookie config class object.
      * 
-     * @return static Return a new Cookie instance.
+     * @return self Return a new Cookie instance.
      */
     public static function newFromString(
         string $cookie, 
@@ -41,10 +42,10 @@ interface CookieInterface
     /**
      * Create a new Cookie instance from an array or json object.
      * 
-     * @param array<string,mixed>|object $cookie An associative array or json object of cookies.
+     * @param array<string,mixed>|object $cookies An associative array or json object of cookies.
      * @param CookieConfig|array<string,mixed> $options An array of default cookie options or cookie config class object.
      * 
-     * @return static Return a new Cookie instance.
+     * @return self Return a new Cookie instance.
      */
     public static function newFromArray(
         array|object $cookies, 
@@ -58,7 +59,7 @@ interface CookieInterface
      * @param mixed $value The value of the cookie.
      * @param array<string,mixed> $options An array of cookie options.
      * 
-     * @return static Return a new Cookie instance.
+     * @return self Return a new Cookie instance.
      */
     public function set(mixed $name, mixed $value, array $options = []): CookieInterface;
 
@@ -67,7 +68,7 @@ interface CookieInterface
      * 
      * @param mixed $value The value to set.
      * 
-     * @return static Return this Cookie instance.
+     * @return self Return this Cookie instance.
      */
     public function setValue(mixed $value): self;
 
@@ -76,7 +77,7 @@ interface CookieInterface
      * 
      * @param CookieConfig|array<string,mixed> $options An array of cookie options or cookie config class object.
      * 
-     * @return static Return this Cookie instance.
+     * @return self Return this Cookie instance.
      */
     public function setOptions(CookieConfig|array $options): self;
 

@@ -168,7 +168,8 @@ final class Cookie implements SessionManagerInterface
                     $name, 
                     '', 
                     $expire, 
-                    str_ends_with($name, self::$secureTable) ? 'Strict' : $this->config->sameSite 
+                    str_ends_with($name, self::$secureTable) ? 'Strict' : $this->config->sameSite,
+                    encode: false
                 )){
                     $_COOKIE[$name] = null;
                     unset($_COOKIE[$name]);
@@ -180,8 +181,8 @@ final class Cookie implements SessionManagerInterface
 
         if(isset($_COOKIE[self::$table]) || isset($_COOKIE[self::$secureTable])) {
             if(
-                $this->store(self::$table, '', $expire) || 
-                $this->store(self::$secureTable, '', $expire)
+                $this->store(self::$table, '', $expire, encode: false) || 
+                $this->store(self::$secureTable, '', $expire, encode: false)
             ){
                 $_COOKIE[self::$table] = [];
                 $_COOKIE[self::$secureTable] = null;
@@ -273,7 +274,7 @@ final class Cookie implements SessionManagerInterface
      */
     public function hasStorage(string $storage): bool
     {
-        return isset(self::open()[$storage]['__data']);
+        return isset($this->open()[$storage]['__data']);
     }
 
     /** 
@@ -289,7 +290,7 @@ final class Cookie implements SessionManagerInterface
      */
     public function getResult(string $type = 'array'): array|object
     {
-        $_COOKIE[self::$table] = self::open();
+        $_COOKIE[self::$table] = $this->open();
 
         if($type === 'array'){
             return (array) $_COOKIE[self::$table];
@@ -357,7 +358,7 @@ final class Cookie implements SessionManagerInterface
     {
         $contents = [];
         $storage = $this->getKey($storage);
-        $_COOKIE[self::$table] = self::open();
+        $_COOKIE[self::$table] = $this->open();
 
         if(isset($_COOKIE[self::$table][$storage])) {
             $contents = $this->isEncrypted($storage) 
@@ -414,7 +415,7 @@ final class Cookie implements SessionManagerInterface
             return;
         }
 
-        $_COOKIE[self::$table] = self::open();
+        $_COOKIE[self::$table] = $this->open();
         $_COOKIE[self::$table][$storage]['__data'] = $data;
         $_COOKIE[self::$table][$storage]['__secure'] = 'off';
         $items = $_COOKIE[self::$table];
@@ -428,11 +429,7 @@ final class Cookie implements SessionManagerInterface
             }
         }
 
-        $this->store(
-            self::$table, 
-            json_encode($items), 
-            time() + $this->config->expiration
-        );
+        $this->store(self::$table, json_encode($items));
         $items = null;
     }
 
@@ -447,16 +444,37 @@ final class Cookie implements SessionManagerInterface
      * @return array The decoded cookie data as an array. Returns an empty array if
      *               the data couldn't be retrieved or decoded.
      */
-    private static function open(): array 
+    private function open(): array 
     {
-        try {
-            return is_string($_COOKIE[self::$table] ?? []) 
-                ? (array) json_decode($_COOKIE[self::$table], true, 512, JSON_THROW_ON_ERROR) 
-                : (array) ($_COOKIE[self::$table] ?? []);
-        }catch(Throwable $e){
-            Logger::error('Session Cookie Error: failed to decode cookie data' . $e->getMessage());
+        $data = $_COOKIE[self::$table] ?? [];
+
+        if($data === []){
+            $this->refresh(self::$table, $data);
             return [];
         }
+
+        if(is_string($data) && str_starts_with($data, 'gz:')){
+            $data = gzinflate(base64_decode(substr($data, 3), true));
+
+            if ($data === false) {
+                $this->refresh(self::$table, $data);
+                return [];
+            }
+        }
+
+        if(!json_validate($data)){
+            $this->refresh(self::$table, $data);
+            return (array) $data;
+        }
+
+        try {
+            $data = (array) json_decode($data, true, 512, JSON_THROW_ON_ERROR);
+        }catch(Throwable $e){
+            Logger::error('Session Cookie Error: failed to decode cookie data' . $e->getMessage());
+        }
+
+        $this->refresh(self::$table, $data);
+        return $data;
     }
 
     /**
@@ -480,6 +498,23 @@ final class Cookie implements SessionManagerInterface
     }
 
     /**
+     * Refresh the cookie expiration time.
+     * 
+     * @param string $name The cookie name.
+     * @param mixed $value The cookie value.
+     * 
+     * @return void
+     */
+    private function refresh(string $name, mixed $value): void
+    {
+        if(is_array($value)){
+            $value = json_encode($value);
+        }
+
+        $this->store($name, $value);
+    }
+
+    /**
      * Save cookie data.
      *
      * @param string $name Cookie name.
@@ -492,12 +527,21 @@ final class Cookie implements SessionManagerInterface
     private function store(
         string $name, 
         string $value, 
-        int $expiry, 
-        ?string $samesite = null
+        ?int $expiry = null, 
+        ?string $samesite = null,
+        bool $encode = true
     ): bool
     {
+        if($encode && !$this->config->encryptCookieData && !str_starts_with($value, 'gz:')){
+            $value = 'gz:' . base64_encode(gzdeflate($value, 6));
+        }
+
+        if (strlen($name) + strlen($value) > 3800) {
+            return false;
+        }
+
         return setcookie($name, $value, [
-            'expires' => $expiry,
+            'expires' => $expiry ?? time() + $this->config->expiration,
             'path' => $this->config->sessionPath,
             'domain' => $this->config->sessionDomain,
             'secure' => true,
@@ -520,21 +564,27 @@ final class Cookie implements SessionManagerInterface
     ): bool
     {
         if(!$regenerate && isset($_COOKIE[self::$secureTable])){
+            $this->store(
+                self::$secureTable, 
+                $_COOKIE[self::$secureTable], 
+                samesite: 'Strict',
+                encode: false
+            );
             return true;
         }
 
         if($this->store(
             self::$secureTable, 
             $sessionId ?? bin2hex(random_bytes(16)), 
-            time() + $this->config->expiration, 
-            'Strict'
+            samesite: 'Strict',
+            encode: false
         )){
             $_COOKIE[self::$secureTable] = $sessionId;
 
             if(
                 $clearData && 
                 isset($_COOKIE[self::$table]) && 
-                $this->store(self::$table, '', time() - $this->config->expiration)
+                $this->store(self::$table, '', time() - $this->config->expiration, encode: false)
             ) {
                 $_COOKIE[self::$table] = [];
                 unset($_COOKIE[self::$table]);

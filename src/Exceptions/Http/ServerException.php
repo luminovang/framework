@@ -12,9 +12,9 @@ namespace Luminova\Exceptions\Http;
 
 use \Throwable;
 use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use \Luminova\Exceptions\LuminovaException;
 
-class ServerException extends AppException
+class ServerException extends LuminovaException
 {
     /**
      * Constructor for ServerException.
