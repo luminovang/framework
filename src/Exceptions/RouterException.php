@@ -12,9 +12,9 @@ namespace Luminova\Exceptions;
 
 use \Throwable;
 use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use \Luminova\Exceptions\LuminovaException;
 
-class RouterException extends AppException
+class RouterException extends LuminovaException
 {
     /**
      * Constructor for RouterException.

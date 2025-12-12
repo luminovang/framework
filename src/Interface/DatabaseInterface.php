@@ -10,11 +10,11 @@
  */
 namespace Luminova\Interface;
 
+use \mysqli_stmt;
+use \PDOStatement;
 use \Luminova\Interface\ConnInterface;
 use \Luminova\Foundation\Core\Database;
 use \Luminova\Exceptions\DatabaseException;
-use \PDOStatement;
-use \mysqli_stmt;
 
 interface DatabaseInterface
 {
@@ -22,8 +22,26 @@ interface DatabaseInterface
      * Initialize database driver constructor for configurations.
      *
      * @param Database $config The core database connection configuration.
+     * @see https://luminova.ng/docs/0.0.0/configs/database
+     * @see https://luminova.ng/docs/0.0.0/database/drivers
      */
     public function __construct(Database $config);
+
+    /**
+     * Returns the singleton instance of the Database wrapper.
+     *
+     * Ensures that only one instance of the database class exists during
+     * the application's lifecycle. If the instance does not exist yet,
+     * it will be created using the provided configuration.
+     *
+     * @param Database $config The configuration object used to initialize
+     *                         the database instance on first creation.
+     *
+     * @return DatabaseInterface Returns the singleton instance of the database wrapper.
+     * @see https://luminova.ng/docs/0.0.0/configs/database
+     * @see https://luminova.ng/docs/0.0.0/database/drivers
+     */
+    public static function getInstance(Database $config) : DatabaseInterface;
 
     /**
      * Establish a database connection.
@@ -58,11 +76,12 @@ interface DatabaseInterface
      * This method allows fetching configuration values related to the database connection.
      * If the requested property does not exist, `null` is returned.
      * 
-     * ### Available Properties:
+     * **Available Properties:**
+     * 
      * - **port** *(null)*: The database server port (always: `null`).
      * - **host** *(null)*: The database server hostname or IP (always: `null`).
      * - **connection** *(string)*: The connection method, typically `'pdo'` or other (default: `'pdo'`).
-     * - **pdo_engine** *(string)*: The PDO driver to use (e.g., `'mysql'`, `'sqlite'`, etc.) (default: `'mysql'`).
+     * - **pdo_version** *(string)*: The PDO driver to use (e.g, `'mysql'`, `'sqlite'`, etc.).
      * - **charset** *(string)*: The character encoding for the connection (default: `'utf8mb4'`).
      * - **sqlite_path** *(string|null)*: Path to the SQLite database file (default: `null`).
      * - **production** *(bool)*: Indicates if the connection is in a production environment (default: `false`).
@@ -74,9 +93,10 @@ interface DatabaseInterface
      * - **socket_path** *(string)*: The Unix socket path if `socket` is enabled (default: `''`).
      * - **emulate_prepares** *(bool)*: Enables query emulation before execution (default: `false`).
      * 
-     * @param string $property The name of the configuration property.
+     * @param string $property The configuration property name (case-insensitive).
      * 
-     * @return mixed Returns the property value if it exists, otherwise `null`.
+     * @return mixed Returns the configuration value, or `null` if the property does not exist or is restricted.
+     * @see https://luminova.ng/docs/0.0.0/database/drivers
      */
     public function getConfig(string $property): mixed;
 
@@ -88,11 +108,14 @@ interface DatabaseInterface
     public function isConnected(): bool;
 
     /**
-     * Get the raw database connection instance (e.g., PDO or MySQLi).
+     * Returns a wrapper around the underlying native connection.
      * 
-     * @return ConnInterface|null Returns the connection instance if connected, otherwise null.
+     * This method provides access to the low-level database connection object (e.g., PDO or MySQLi) through 
+     * a standardized interface (`ConnInterface`), allowing you to perform driver-specific operations if needed.
+     * 
+     * @return ConnInterface Returns a connection wrapper that exposes the native driver instance.
      */
-    public function raw(): ?ConnInterface;
+    public function raw(): ConnInterface;
 
     /**
      * Set the debug mode.
@@ -127,7 +150,7 @@ interface DatabaseInterface
     /**
      * Start recording the database query execution time for queries.
      * 
-     * This method records the duration of a query in shared memory under the key `__DB_QUERY_EXECUTION_TIME__`. The stored value can later be retrieved from anywhere in your application.
+     * This method records the duration of a query in shared memory under the key `Boot::QUERY_PROFILING`. The stored value can later be retrieved from anywhere in your application.
      * 
      * Note: To call this method you must first enable `debug.show.performance.profiling` in environment variables file.
      *
@@ -140,10 +163,10 @@ interface DatabaseInterface
      * @example - To get the query execution in any application scope. 
      * 
      * ```php
-     * $time = luminova\Funcs\shared('__DB_QUERY_EXECUTION_TIME__', default: 0);
+     * $profiling = luminova\Funcs\shared(Boot::QUERY_PROFILING, default: []);
      * 
      * // Or
-     * $time = Luminova\Boot::get('__DB_QUERY_EXECUTION_TIME__') ?? 0;
+     * $profiling = Luminova\Boot::get(Boot::QUERY_PROFILING);
      * ```
      */
     public function profiling(bool $start = true, bool $finishedTransaction = false): void;
@@ -253,29 +276,109 @@ interface DatabaseInterface
     public function exec(string $query): int;
 
     /**
-     * Begin a transaction with an optional read-only isolation level and savepoint.
+     * Set the transaction isolation level for the current connection.
      *
-     * @param int $flags Optional flags to set transaction properties.
-     *                   For MySQLi:
-     *                   - MYSQLI_TRANS_START_READ_ONLY: Set transaction as read-only.
-     *                   For PDO:
-     *                   - Specify `4` to create a read-only isolation level.
-     * @param string|null $name Optional name for a savepoint.
-     *                          If provided, a savepoint will be created in PDO.
+     * This determines how transactions interact with other concurrent transactions
+     * in terms of visibility of changes, locking behavior, and consistency.
+     * 
+     * Supported levels (by integer code):
+     *   - 0 => 'NONE'               : Skips setting isolation level.
+     *   - 1 => 'READ UNCOMMITTED'   : Lowest isolation, allows dirty reads.
+     *   - 2 => 'READ COMMITTED'     : Default in most databases, prevents dirty reads.
+     *   - 3 => 'REPEATABLE READ'    : Ensures consistent reads within a transaction.
+     *   - 4 => 'SERIALIZABLE'       : Highest isolation, full serial execution.
+     *   - 5 => 'READ WRITE'         : Transaction can perform reads and writes.
+     *   - 6 => 'READ ONLY'          : Transaction can only read data.
+     *
+     * Rules:
+     *   - Cannot be changed inside an active transaction.
+     *   - Throws DatabaseException if the level is invalid or the query fails.
+     *
+     * @param int $level Numeric code for the isolation level (1–6).
+     * 
+     * @return bool Return true on success otherwise false.
+     * @throws DatabaseException If the level is invalid, or setting the isolation fails, 
+     *                           or called within an active transaction.
+     */
+    public function setTransactionIsolation(int $level = 2): bool;
+
+    /**
+     * Begin a transaction with an optional read-only isolation level and savepoint.
+     * 
+     * **Bitmask Flags:**
+     * 
+     * - `1` - Starts transaction with a consistent snapshot (InnoDB behavior)
+     * - `2` - Starts transaction in read/write mode
+     * - `4` - Starts transaction in read-only mode
+     *
+     * @param int $flags Optional transaction isolation flags (default: 0).
+     * @param string|null $name Optional transaction savepoint to set if already in transaction.
      * 
      * @return bool Returns true if the transaction and optional savepoint were successfully started.
-     * @throws DatabaseException Throws an exception in PDO if setting the transaction isolation level or creating a savepoint fails.
+     * @throws DatabaseException If an invalid savepoint name or database error during isolation.
+     * 
+     * @see self::beginNestedTransaction() To begin or create a transaction savepoint.
+     *
+     * @note 
+     * > This method does not commit or rollback; it only starts a transaction 
+     * > with the specified isolation/mode options. 
+     * > For nested transactions, use savepoints separately or beginNestedTransaction``.
      */
     public function beginTransaction(int $flags = 0, ?string $name = null): bool;
 
     /**
+     * Start a nested transaction using a savepoint if already in a transaction.
+     *
+     * If a transaction is already active, creates a unique savepoint and returns its name.
+     * If no transaction is active, begins a new transaction. Optionally frees the current
+     * statement cursor before starting.
+     *
+     * @param bool $closeCursor Whether to free the current statement cursor first.
+     * 
+     * @return string|false|null Returns: 
+     *   - string: Name of the savepoint if a nested transaction is created.
+     *   - null: A new transaction was started successfully.
+     *   - false: Failed to start a transaction or create a savepoint.
+     * 
+     * @example - Nested transaction example:
+     * ```php
+     * $name = $db->beginNestedTransaction();
+     * 
+     * if($name === false){
+     *      echo 'Failed';
+     * }
+     * 
+     * if($isSuccess){
+     *      if($name !== null){
+     *          $db->release($name);
+     *      }
+     * 
+     *      $db->commit();
+     * }else{
+     *      $db->rollback();
+     * }
+     * ```
+     */
+    public function beginNestedTransaction(bool $closeCursor = false): string|bool|null;
+
+    /**
+     * Set a named transaction savepoint.
+     * 
+     * @param string $name The name for a savepoint.
+     * 
+     * @return bool Returns true on success or false on failure.
+     * @throws DatabaseException If an invalid savepoint name or database error.
+     */
+    public function savepoint(string $name): bool;
+
+    /**
      * Commit a transaction.
      *
-     * @param int $flags Optional flags for custom handling (MySQLi only).
-     * @param string|null $name Optional name for a savepoint (MySQLi only).
+     * @param int $flags Optional flags for custom handling.
+     * @param string|null $name Optional name for a savepoint.
      * 
      * @return bool Returns true if the transaction was successfully committed.
-     * @throws DatabaseException Throw if an called when no connection is established.
+     * @throws DatabaseException If an invalid savepoint name or database error during commit.
      */
     public function commit(int $flags = 0, ?string $name = null): bool;
 
@@ -287,30 +390,47 @@ interface DatabaseInterface
      *                          If provided, rolls back to the savepoint in PDO.
      * 
      * @return bool Returns true if the rollback was successful, otherwise false.
-     * @throws DatabaseException Throws an exception in PDO if rolling back to a savepoint fails.
+     * @throws DatabaseException If an invalid savepoint name or database error during rollback.
      */
     public function rollback(int $flags = 0, ?string $name = null): bool;
+
+    /** 
+     * Removes the named savepoint from the set of savepoints of the current transaction.
+     * 
+     * @param string $name The savepoint name to release.
+     * 
+     * @return bool Returns true on success or false on failure.
+     * @throws DatabaseException If an invalid savepoint name or database error.
+     */
+    public function release(string $name): bool;
 
     /**
      * Check if there is an active transaction.
      * 
      * @return bool Returns true if there is an active transaction, otherwise false.
-     * @throws DatabaseException Throw if an called when no connection is established.
+     * @throws DatabaseException If an called when no connection is established.
      */
     public function inTransaction(): bool;
 
     /**
      * Determines the appropriate database parameter type for a given value.
      *
-     * This is used to bind parameters correctly when preparing SQL statements,
-     * returning either a PDO type constant (string) or a MySQLi type constant (int),
-     * depending on the driver context.
+     * This is used to bind parameters correctly when preparing SQL statements.
+     * 
+     * Supported types (by integer code):
+     * 
+     * - `0` => `PARAM_NULL` (null values)
+     * - `1` => `PARAM_INT`  (integers)
+     * - `2` => `PARAM_STR`  (strings)
+     * - `3` => `PARAM_LOB`  (binary data or strings with non-printable characters)
+     * - `5` => `PARAM_BOOL` (boolean values, treated as integers in MySQLi)
+     * - `6`, `192` => `PARAM_FLOAT` (floating-point numbers, treated as doubles in PDO)
      *
      * @param mixed $value The value to evaluate.
      *
-     * @return string|int Return the parameter type, a string for PDO or an integer for MySQLi.
+     * @return int Return an integer value representing the parameter typ.
      */
-    public static function getType(mixed $value): string|int;
+    public static function getType(mixed $value): int;
 
     /**
      * Binds a value to a named parameter for use in a prepared statement.
@@ -352,7 +472,7 @@ interface DatabaseInterface
      * @param int|null $type (Optional) The data type for the value (default: null).
      *                          - `PARAM_*`, `PARAM_*` - For MySQLi and PDO driver.
      *                          - `PDO::PARAM_*` - For PDO driver only supports custom type.
-     *                          - `NULL` - Resolve internally.
+     *                          - `NULL` - Resolve by value internally.
      *
      * @return DatabaseInterface Returns the instance of database driver interface.
      * @throws DatabaseException If called without a prepared statement.
@@ -387,7 +507,7 @@ interface DatabaseInterface
      * @param int|null $type (Optional) The data type for the value (default: null).
      *                          - `PARAM_*`, `PARAM_*` - For MySQLi and PDO driver.
      *                          - `PDO::PARAM_*` - For PDO driver only supports custom type.
-     *                          - `NULL` - Resolve internally.
+     *                          - `NULL` - Resolve by value internally.
      *
      * @return DatabaseInterface Returns the instance of database driver interface.
      * @throws DatabaseException If called without a prepared statement.

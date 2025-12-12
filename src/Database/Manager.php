@@ -10,10 +10,10 @@
  */
 namespace Luminova\Database;
 
-use \Luminova\Utility\Storage\Filesystem;
+use \Luminova\Http\Downloader;
 use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Interface\{LazyObjectInterface, DatabaseInterface};
 use function \Luminova\Funcs\{root, make_dir};
+use \Luminova\Interface\{LazyObjectInterface, DatabaseInterface};
 
 final class Manager implements LazyObjectInterface
 {
@@ -95,8 +95,15 @@ final class Manager implements LazyObjectInterface
                 }
             }
 
-            if($count > 0 && Filesystem::download($filepath, $filename, [], true)){
-                $count++;
+            if($count > 0){
+                $dl = new Downloader($filepath, $filename);
+
+                if($dl->download()){
+                    $count++;
+                }
+
+                $dl->deleteSourceFile();
+                $dl->close();
             }
         }
 
@@ -136,7 +143,7 @@ final class Manager implements LazyObjectInterface
      * @param string $directory The backup directory.
      * 
      * @return bool Return true if the backup was created successfully, false otherwise.
-    */
+     */
     private function backupDatabaseTable(string $filename, string $directory): bool
     {
         $filepath = $directory . $filename . '-' . date('d-m-Y-h-i-sa') . '-tbl.sql';
@@ -148,7 +155,15 @@ final class Manager implements LazyObjectInterface
 
         $this->writeTableStructure($handle, $this->table);
 
+        fflush($handle);
+        fsync($handle);
         fclose($handle);
+
+        if ($dir = @fopen($directory, 'r')) {
+            fsync($dir);
+            fclose($dir);
+        }
+        
         return true;
     }
 
@@ -185,7 +200,15 @@ final class Manager implements LazyObjectInterface
         }
 
         $this->writeTriggers($handle);
+
+        fflush($handle);
+        fsync($handle);
         fclose($handle);
+
+        if ($dir = @fopen($directory, 'r')) {
+            fsync($dir);
+            fclose($dir);
+        }
 
         return true;
     }
@@ -238,9 +261,17 @@ final class Manager implements LazyObjectInterface
             if ($rows) {
                 fwrite($handle, "-- Data for {$table}\n\n");
                 foreach ($rows as $row) {
-                    $escapedRow = array_map(fn($value) => is_string($value) ? addslashes($value) : $value, $row);
-                    $rowValues = implode("', '", $escapedRow);
-                    fwrite($handle, "INSERT INTO $table VALUES ('$rowValues');\n");
+                    $escaped = array_map(
+                        fn($v) => is_null($v)
+                            ? 'NULL'
+                            : (is_string($v) ? "'" . addslashes($v) . "'" : $v),
+                        $row
+                    );
+
+                    fwrite(
+                        $handle,
+                        "INSERT INTO {$table} VALUES (" . implode(', ', $escaped) . ");\n"
+                    );
                 }
                 fwrite($handle, "\n");
             }

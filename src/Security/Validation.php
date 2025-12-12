@@ -11,11 +11,12 @@
 namespace Luminova\Security;
 
 use \Throwable;
-use \Luminova\Utility\IP;
-use \Luminova\Common\{Helpers, Maths};
+use \Luminova\Http\Network\IP;
+use \Luminova\Utility\{Math, Helpers};
 use function \Luminova\Funcs\is_empty;
+use \Luminova\Components\Object\LazyObject;
 use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Interface\{HttpRequestInterface, LazyObjectInterface, InputValidationInterface};
+use \Luminova\Interface\{RequestInterface, LazyObjectInterface, InputValidationInterface};
 
 /**
  * Built-in validation rules for Luminova's Input Validator.
@@ -156,7 +157,7 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     /**
      * {@inheritdoc}
      */
-    public function validate(HttpRequestInterface|LazyObjectInterface|null $request = null, ?array $rules = null): bool
+    public function validate(RequestInterface|LazyObjectInterface|null $request = null, ?array $rules = null): bool
     {
         $rules ??= $this->rules;
         $this->setRequestBody($request);
@@ -355,7 +356,7 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
      * @param string $field The input field name.
      * @param mixed $fieldValue The input value.
      * @param mixed $ruleParam The input validation rule params (e.g, `true,[]`).
-     * @param HttpRequestInterface|LazyObjectInterface|null $request Http request object.
+     * @param RequestInterface|LazyObjectInterface|null $request Http request object.
      * 
      * @return void
      */
@@ -364,7 +365,7 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
         string $field,
         mixed $fieldValue,
         string $ruleParam,
-        HttpRequestInterface|LazyObjectInterface|null $request = null
+        RequestInterface|LazyObjectInterface|null $request = null
     ): void 
     {
         $hasError = false;
@@ -401,7 +402,7 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
 
                     if(!$isEmptyValue){
                         $hasError = true;
-                        [$matches, $strict] = self::toArguments($ruleParam, [[], true]);
+                        [$matches, $strict] = self::toArguments($ruleParam, [[], false]);
 
                         if($matches !== [] && is_array($matches)){
                             $hasError = !in_array($fieldValue, $matches, $strict);
@@ -456,7 +457,7 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
                 if ($isEmptyValue || $this->isEmpty($fieldValue)) {
                     $this->body[$field] = $ruleParam ? self::toArguments($ruleParam, []) : '';
                     
-                    if($request instanceof HttpRequestInterface || $request instanceof LazyObjectInterface){
+                    if(($request instanceof \Luminova\Http\Request) || ($request instanceof LazyObject)){
                         $request->setField($field, $this->body[$field]);
                     }
                 }
@@ -599,10 +600,10 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
                 'string' => is_string($value),
                 'between' => self::isBetween($value, ...self::toArguments((string) $arguments, [1, 100])),
                 'lat', 'latitude' => !is_array($value) && 
-                    Maths::isLat((string) $value, ...self::toArguments((string) $arguments, [false, 6])),
+                    Math::isLat((string) $value, ...self::toArguments((string) $arguments, [false, 6])),
                 'lng', 'longitude' => !is_array($value) && 
-                        Maths::isLng((string) $value, ...self::toArguments((string) $arguments, [false, 6])),
-                'latlng' => !is_array($value) && Maths::isLatLng(...array_merge(
+                        Math::isLng((string) $value, ...self::toArguments((string) $arguments, [false, 6])),
+                'latlng' => !is_array($value) && Math::isLatLng(...array_merge(
                         explode(',', (string) $value, 2), 
                         self::toArguments((string) $arguments, [false, 6])
                     )),
@@ -1119,14 +1120,14 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
     }
 
     /**
-     * Load the request body from the HttpRequestInterface or LazyObjectInterface.
+     * Load the request body from the RequestInterface or LazyObjectInterface.
      *
-     * @param HttpRequestInterface|LazyObjectInterface|null $request
+     * @param RequestInterface|LazyObjectInterface|null $request
      * 
      * @throws RuntimeException When no body is provided and no valid request is available.
-     * @throws RuntimeException When the lazy object does not resolve to HttpRequestInterface.
+     * @throws RuntimeException When the lazy object does not resolve to RequestInterface.
      */
-    private function setRequestBody(HttpRequestInterface|LazyObjectInterface|null $request): void 
+    private function setRequestBody(RequestInterface|LazyObjectInterface|null $request): void 
     {
         if($this->body !== []){
             return;
@@ -1138,18 +1139,18 @@ final class Validation implements InputValidationInterface, LazyObjectInterface
             );
         }
 
-        if(!$request instanceof HttpRequestInterface && $request instanceof LazyObjectInterface){
-            if (!$request->isLazyInstanceof(HttpRequestInterface::class)) {
+        if(!($request instanceof RequestInterface) && ($request instanceof LazyObject)){
+            if (!$request->isLazyInstanceof(RequestInterface::class)) {
                 throw new RuntimeException(
                     sprintf(
-                        'Invalid request object. Expected HttpRequestInterface, got %s.',
+                        'Invalid request object. Expected RequestInterface, got %s.',
                         get_class($request->getLazyObject())
                     )
                 );
             }
         }
 
-        $this->body = $request->getBody();
+        $this->body = $request->getParsedBody();
     }
 
     /**

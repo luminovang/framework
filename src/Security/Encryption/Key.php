@@ -13,8 +13,8 @@ namespace Luminova\Security\Encryption;
 use \OpenSSLCertificate;
 use \OpenSSLAsymmetricKey;
 use \App\Config\Encryption;
-use Luminova\Common\Helpers;
-use Luminova\Exceptions\ErrorCode;
+use \Luminova\Utility\Helpers;
+use \Luminova\Exceptions\ErrorCode;
 use \Luminova\Exceptions\EncryptionException;
 
 final class Key 
@@ -67,33 +67,34 @@ final class Key
      * @var array<string,array> $ciphers
      */
     public static array $ciphers = [
-        'AES-128-CBC' => ['size' => 16],
-        'AES-192-CBC' => ['size' => 24],
-        'AES-256-CBC' => ['size' => 32],
-        'AES-128-CBC-HMAC-SHA1'   => ['size' => 16],
-        'AES-256-CBC-HMAC-SHA1'   => ['size' => 32],
-        'AES-128-CBC-HMAC-SHA256' => ['size' => 16],
-        'AES-256-CBC-HMAC-SHA256' => ['size' => 32],
-        'AES-128-CFB'  => ['size' => 16],
-        'AES-192-CFB'  => ['size' => 24],
-        'AES-256-CFB'  => ['size' => 32],
-        'AES-128-CFB1' => ['size' => 16],
-        'AES-192-CFB1' => ['size' => 24],
-        'AES-256-CFB1' => ['size' => 32],
-        'AES-128-CFB8' => ['size' => 16],
-        'AES-192-CFB8' => ['size' => 24],
-        'AES-256-CFB8' => ['size' => 32],
-        'AES-128-CTR'  => ['size' => 16],
-        'AES-192-CTR'  => ['size' => 24],
-        'AES-256-CTR'  => ['size' => 32],
-        'AES-128-ECB'  => ['size' => 16],
-        'AES-192-ECB'  => ['size' => 24],
-        'AES-256-ECB'  => ['size' => 32],
-        'AES-128-OFB'  => ['size' => 16],
-        'AES-192-OFB'  => ['size' => 24],
-        'AES-256-OFB'  => ['size' => 32],
-        'AES-128-XTS'  => ['size' => 16],
-        'AES-256-XTS'  => ['size' => 32],
+        'AES-128-CBC' => ['key' => 16],
+        'AES-192-CBC' => ['key' => 24],
+        'AES-256-CBC' => ['key' => 32],
+        'AES-256-GCM' => ['key' => 12],
+        'AES-128-CBC-HMAC-SHA1'   => ['key' => 16],
+        'AES-256-CBC-HMAC-SHA1'   => ['key' => 32],
+        'AES-128-CBC-HMAC-SHA256' => ['key' => 16],
+        'AES-256-CBC-HMAC-SHA256' => ['key' => 32],
+        'AES-128-CFB'  => ['key' => 16],
+        'AES-192-CFB'  => ['key' => 24],
+        'AES-256-CFB'  => ['key' => 32],
+        'AES-128-CFB1' => ['key' => 16],
+        'AES-192-CFB1' => ['key' => 24],
+        'AES-256-CFB1' => ['key' => 32],
+        'AES-128-CFB8' => ['key' => 16],
+        'AES-192-CFB8' => ['key' => 24],
+        'AES-256-CFB8' => ['key' => 32],
+        'AES-128-CTR'  => ['key' => 16],
+        'AES-192-CTR'  => ['key' => 24],
+        'AES-256-CTR'  => ['key' => 32],
+        'AES-128-ECB'  => ['key' => 16],
+        'AES-192-ECB'  => ['key' => 24],
+        'AES-256-ECB'  => ['key' => 32],
+        'AES-128-OFB'  => ['key' => 16],
+        'AES-192-OFB'  => ['key' => 24],
+        'AES-256-OFB'  => ['key' => 32],
+        'AES-128-XTS'  => ['key' => 16],
+        'AES-256-XTS'  => ['key' => 32],
     ];
 
     /**
@@ -242,9 +243,9 @@ final class Key
      */
     public static function size(?string $method = null): int 
     {
-        $cipher = self::cipher($method) ?? ['size' => 16];
+        $cipher = self::cipher($method) ?? ['key' => 16];
 
-        return $cipher['size'];
+        return $cipher['key'];
     }
 
     /**
@@ -252,7 +253,7 @@ final class Key
      *
      * @param string|null $method Cipher method name (default: `App\Config\Encryption->method`).
      * 
-     * @return array{size:int}|null Cipher properties or null if unsupported.
+     * @return array{key:int}|null Cipher properties or null if unsupported.
      */
     public static function cipher(?string $method = null): ?array 
     {
@@ -288,7 +289,7 @@ final class Key
     public static function isSupported(string $key, ?string $method = null): bool
     {
         $cipher = self::cipher($method);
-        return $cipher && mb_strlen($key, '8bit') === $cipher['size'];
+        return $cipher && mb_strlen($key, '8bit') === $cipher['key'];
     }
 
     /**

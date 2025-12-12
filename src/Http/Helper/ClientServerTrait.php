@@ -14,7 +14,7 @@ use \Closure;
 use \Luminova\Http\Header;
 use \Luminova\Http\Request;
 use \Luminova\Interface\ResponseInterface;
-use \Luminova\Interface\HttpRequestInterface;
+use \Luminova\Interface\RequestInterface;
 
 trait ClientServerTrait 
 {
@@ -219,12 +219,12 @@ trait ClientServerTrait
      /**
      * Handle error responses.
      *
-     * @param HttpRequestInterface $request The raw request data from the client.
+     * @param RequestInterface $request The raw request data from the client.
      * @param string $type The server error response type.
      * 
      * @return string The constructed error response.
      */
-    protected function onError(?HttpRequestInterface $request, string $type): string
+    protected function onError(?RequestInterface $request, string $type): string
     {
         $callback = $this->routes['ERROR']['callback'] ?? null;
         $error = self::$responses[$type] ?? self::$responses['NOT_FOUND'];
@@ -248,7 +248,7 @@ trait ClientServerTrait
      * 
      * @return string The constructed successful response.
      */
-    protected function onSuccess(array $route, ?HttpRequestInterface $request = null): string
+    protected function onSuccess(array $route, ?RequestInterface $request = null): string
     {
         $callback = $route['callback'] ?? null;
 
@@ -668,7 +668,7 @@ trait ClientServerTrait
                     'headers' => $headers
                 ], $request);
         }else{
-            $body = [];
+            $body = ['data' => $request];
             $files = [];
             $type = $headers['Content-Type'] ?? '';
             $params = parse_url($uri);
@@ -685,7 +685,7 @@ trait ClientServerTrait
                 );
             }
 
-            $instance = new Request($method, $uri, $body, $files, $request, null, $headers);
+            $instance = new Request($method, $uri, $body, $files, headers: $headers);
             $response = ($route === null)
                 ? $this->onError($instance, $responseType)
                 : $this->onSuccess($route, $instance, $client);
