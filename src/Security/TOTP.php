@@ -32,7 +32,7 @@ final class TOTP
     /**
      * Initialize class.
      * 
-     * @param AuthenticatorInterface The client instance used for TOTP operations.
+     * @param AuthenticatorInterface $client The client instance used for TOTP operations.
      */
     private function __construct(private AuthenticatorInterface $client) {}
 
@@ -41,7 +41,7 @@ final class TOTP
      * 
      * @param AuthenticatorInterface|null $client Optional custom authenticator implementation. 
      *                                            Defaults to a Google Authenticator client.
-     * @return static Return a new TOTP instance.
+     * @return self Return a new TOTP instance.
      */
     public static function create(?AuthenticatorInterface $client = null): self
     {
@@ -162,7 +162,8 @@ final class TOTP
      * @param int $timeStep The time step in seconds for TOTP generation. Default: 30.
      * 
      * @return bool Return true if the code is valid; otherwise, false.
-     * @throws EncryptionException If called without a valid authentication secret or an invalid base32 character is found in secret.
+     * @throws EncryptionException If called without a valid authentication secret 
+     *          or an invalid base32 character is found in secret.
      * 
      * @example - Verify Code:
      * 

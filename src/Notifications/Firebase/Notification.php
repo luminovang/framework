@@ -183,22 +183,26 @@ class Notification implements LazyObjectInterface
     {
         try {
             $target = match($type){
-                MessageTarget::TOKEN     => CloudMessage::new()->toToken($to),
-                MessageTarget::TOPIC     => CloudMessage::new()->toTopic($to),
-                MessageTarget::CONDITION => CloudMessage::new()->toCondition($to),
-                default => CloudMessage::new()
+                MessageTarget::TOKEN     => MessageTarget::TOKEN,
+                MessageTarget::TOPIC     => MessageTarget::TOPIC,
+                MessageTarget::CONDITION => MessageTarget::CONDITION,
+                default                  => MessageTarget::UNKNOWN
             };
 
-            $message = $target->withNotification(
-                self::create($config->getTitle(), $config->getBody(), $config->getImageUrl())
-            )->withDefaultSounds();
+            $message = CloudMessage::new()
+                ->withChangedTarget($target, $to)
+                ->withNotification(self::create(
+                    $config->getTitle(),
+                    $config->getBody(),
+                    $config->getImageUrl()
+                ))->withDefaultSounds();
 
             $sound = $config->get('sound');
             $priority = $config->getPriority();
 
             switch ($config->getPlatform()) {
                 case Message::ANDROID:
-                    $pConfig = AndroidConfig::fromArray($config->fromArray());
+                    $pConfig = AndroidConfig::fromArray($config->toArray());
                     if ($sound !== null) {
                         $pConfig = $pConfig->withSound($sound);
                     }
@@ -211,7 +215,7 @@ class Notification implements LazyObjectInterface
                     break;
 
                 case Message::APN:
-                    $pConfig = ApnsConfig::fromArray($config->fromArray());
+                    $pConfig = ApnsConfig::fromArray($config->toArray());
 
                     if ($sound !== null) {
                         $pConfig = $pConfig->withSound($sound);
@@ -225,7 +229,7 @@ class Notification implements LazyObjectInterface
                     break;
 
                 case Message::WEBPUSH:
-                    $pConfig = WebPushConfig::fromArray($config->fromArray());
+                    $pConfig = WebPushConfig::fromArray($config->toArray());
                     if ($priority !== '') {
                         $pConfig = $pConfig->withUrgency($priority);
                     }
@@ -263,7 +267,7 @@ class Notification implements LazyObjectInterface
      */
     private function rawMessage(Message $config): ?MessageCaster
     {
-        $payload = $config->fromArray();
+        $payload = $config->toArray();
 
         if($payload !== []){
             unset($payload['raw'], $payload['platform']);
@@ -277,7 +281,8 @@ class Notification implements LazyObjectInterface
      * Send a notification to a specific device by token.
      *
      * @param Message|array<string,mixed> $config The notification payload.
-     * @param bool $validateOnly Optional. If set to true, the message will only be validated without sending.
+     * @param bool $validateOnly Optional. If set to true, the message 
+     *      will only be validated without sending.
      *
      * @return self Return instance of luminova firebase notification class.
      * @throws RuntimeException If token is not valid or an error occurred while sending notification.
@@ -289,7 +294,7 @@ class Notification implements LazyObjectInterface
         
         try {
             if (is_array($config)) {
-                $config = new Message($config);
+                $config = Message::fromArray($config);
             }
 
             if ($config instanceof Message) {
@@ -311,7 +316,10 @@ class Notification implements LazyObjectInterface
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
-        throw new RuntimeException("Invalid input: Expected a Message instance and must call method setToken or an array with a 'topic' key token.");
+        throw new RuntimeException(
+            "Invalid input: Expected a Message instance and must call method setToken 
+            or an array with a 'topic' key token."
+        );
     }
 
     /**
@@ -330,7 +338,7 @@ class Notification implements LazyObjectInterface
         
         try {
             if (is_array($config)) {
-                $config = new Message($config);
+                $config = Message::fromArray($config);
             }
 
             if ($config instanceof Message) {
@@ -352,7 +360,10 @@ class Notification implements LazyObjectInterface
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
-        throw new RuntimeException("Invalid input: Expected a Message instance and must call method setTopic or an array with a 'topic' key included.");
+        throw new RuntimeException(
+            "Invalid input: Expected a Message instance 
+            and must call method setTopic or an array with a 'topic' key included."
+        );
     }
 
     /**
@@ -373,7 +384,7 @@ class Notification implements LazyObjectInterface
 
         try {
             if (is_array($config)) {
-                $config = new Message($config);
+                $config = Message::fromArray($config);
             }
 
             if ($config instanceof Message) {
@@ -395,7 +406,10 @@ class Notification implements LazyObjectInterface
             throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
         }
 
-        throw new RuntimeException("Invalid input: Expected a Message instance and must call method setCondition or an array with a 'conditions' key included.");
+        throw new RuntimeException(
+            "Invalid input: Expected a Message instance and must call method setCondition 
+            or an array with a 'conditions' key included."
+        );
     }
 
     /**

@@ -10,6 +10,7 @@
  */
 namespace Luminova\Interface;
 
+use \Psr\Http\Message\StreamInterface;
 use \Luminova\Exceptions\JsonException;
 use \Luminova\Exceptions\Http\ResponseException;
 
@@ -42,7 +43,7 @@ interface ViewResponseInterface
      *
      * @param int $status The HTTP status code to be set.
      * 
-     * @return static Return instance of the Response class.
+     * @return self Return instance of the Response class.
      */
     public function setStatus(int $status): self;
 
@@ -51,7 +52,7 @@ interface ViewResponseInterface
      *
      * @param bool $compress Whether to compress content (default: true).
      * 
-     * @return static Return instance of the Response class.
+     * @return self Return instance of the Response class.
      */
     public function compress(bool $compress = true): self;
 
@@ -61,7 +62,7 @@ interface ViewResponseInterface
      *
      * @param bool $minify Whether to minify the HTML content (default: true).
      * 
-     * @return static Return instance of the Response class.
+     * @return self Return instance of the Response class.
      */
     public function minify(bool $minify = true): self;
 
@@ -71,7 +72,7 @@ interface ViewResponseInterface
      * @param bool $minify Whether to exclude HTML code blocks from minification (default: false).
      * @param bool $button Whether to include a copy button in code blocks (default: false).
      * 
-     * @return static Return instance of the Response class.
+     * @return self Return instance of the Response class.
      */
     public function codeblock(bool $minify = true, bool $button = false): self;
 
@@ -81,7 +82,7 @@ interface ViewResponseInterface
      * @param string $key The header name.
      * @param mixed $value The header value for name.
      * 
-     * @return static Return instance of the Response class.
+     * @return self Return instance of the Response class.
      */
     public function header(string $key, mixed $value): self;
 
@@ -90,13 +91,14 @@ interface ViewResponseInterface
      *
      * @param array<string,mixed> $headers An associative array of headers.
      * 
-     * @return static Return instance of the Response class.
+     * @return self Return instance of the Response class.
      */
     public function headers(array $headers): self;
 
     /**
      * Send all response headers and the status code to the client without content body.
-     * Optionally validate the against REST Api headers based on `App\Config\Apis` if `$validate` is set to true.
+     * 
+     * Optionally validate request headers based on `App\Config\Security` if `$validate` is set to true.
      * 
      * @param bool $validate Whether to apply APIs headers validations (default: false).
      * 
@@ -197,7 +199,7 @@ interface ViewResponseInterface
      *
      * @param bool $failed Whether to mark the response as failed (default: `true`).
      * 
-     * @return static Return instance of the Response class.
+     * @return self Return instance of the Response class.
      *
      * @example
      * ```php
@@ -318,18 +320,16 @@ interface ViewResponseInterface
     /**
      * Send a file or content as a browser download.
      *
-     * @param string $fileOrContent The file path or content for download.
+     * @param StreamInterface|string|resource $source File path, open resource, stream object, or raw string.
      * @param string|null $name Optional name for the downloaded file.
-     * @param array $headers Optional download headers.
-     * @param int $chunk_size The size of each chunk in bytes for large content (default: 8192, 8KB).
+     * @param int $chunkSize The size of each chunk in bytes for large content (default: 8192, 8KB).
      * @param int $delay The delay between each chunk in microseconds (default: 0).
      * 
      * @return bool Return true if the download was successful, false otherwise.
      */
     public function download(
-        string $fileOrContent, 
+        mixed $source, 
         ?string $name = null, 
-        array $headers = [],
         int $chunkSize = 8192,
         int $delay = 0
     ): bool;
@@ -339,7 +339,6 @@ interface ViewResponseInterface
      *
      * @param string $path File directory location (e.g., `/writeable/storage/images/`).
      * @param string $basename The file name (e.g., `image.png`).
-     * @param array $headers Optional output headers.
      * @param bool $eTag Whether to generate ETag headers (default: true).
      * @param bool $weakEtag Whether to use a weak ETag header or string (default: false).
      * @param int $expiry Enable cache expiry time in seconds, 0 for no cache (default: 0).
@@ -347,12 +346,11 @@ interface ViewResponseInterface
      * @param int $delay Optional delay in microseconds between chunk length (default: 0).
      * 
      * @return bool Return true if file streaming was successful, false otherwise.
-     * @see Luminova\Utility\Storage\FileDelivery For more  advanced usage.
+     * @see Luminova\Storage\FileResponse For more  advanced usage.
      */
     public function stream(
         string $path, 
         string $basename, 
-        array $headers = [],
         bool $eTag = true,
         bool $weakEtag = false,
         int $expiry = 0,

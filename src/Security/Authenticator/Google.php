@@ -34,7 +34,8 @@ class Google implements AuthenticatorInterface
      * @param string $accountName The account name (e.g., user email or username).
      * @param string $issuer The issuer's name (e.g., your app or website name).
      * @param DateTimeZone|string|null $timezone The timezone for time-based calculations (optional).
-     * @param CacheItemPoolInterface|CacheInterface|Cache|null $cache The instance of PSR cache or Luminova base-cache for preventing code reuse (optional).
+     * @param CacheItemPoolInterface|CacheInterface|Cache|null $cache The instance of PSR cache 
+     *              or Luminova base-cache for preventing code reuse (optional).
      * 
      * @throws EncryptionException If the issuer or account name contains invalid characters (colon `:`).
      */

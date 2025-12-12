@@ -11,8 +11,8 @@
 namespace Luminova\Sessions\Handlers;
 
 use \Luminova\Time\Time;
-use \Luminova\Utility\IP;
 use \ReturnTypeWillChange;
+use \Luminova\Http\Network\IP;
 use function \Luminova\Funcs\root;
 use \Luminova\Base\SessionHandler;
 use \Luminova\Security\Encryption\Crypter;

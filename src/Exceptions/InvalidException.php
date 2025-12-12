@@ -12,9 +12,9 @@ namespace Luminova\Exceptions;
 
 use \Throwable;
 use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Exceptions\AppException;
+use \Luminova\Exceptions\LuminovaException;
 
-class InvalidException extends AppException
+class InvalidException extends LuminovaException
 {
     /**
      * Constructor for InvalidException.

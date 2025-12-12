@@ -52,38 +52,6 @@ final class Route
      */
     public const CLI_GROUP_MIDDLEWARE = 'guard';
 
-    /** 
-     * Middleware executed **before** the main controller logic.
-     * 
-     * @var string BEFORE_MIDDLEWARE
-     * @deprecated Since 3.6.8 Use HTTP_BEFORE_MIDDLEWARE instead
-     */
-    public const BEFORE_MIDDLEWARE = self::HTTP_BEFORE_MIDDLEWARE; 
-    
-    /** 
-     * Middleware executed **after** the main controller logic.
-     * 
-     * @var string AFTER_MIDDLEWARE
-     * @deprecated Since 3.6.8 Use HTTP_AFTER_MIDDLEWARE instead
-     */
-    public const AFTER_MIDDLEWARE = self::HTTP_AFTER_MIDDLEWARE; 
-    
-    /** 
-     * Middleware applied **globally** to all CLI commands, regardless of group.
-     * 
-     * @var string GLOBAL_MIDDLEWARE
-     * @deprecated Since 3.6.8 Use CLI_GLOBAL_MIDDLEWARE instead
-     */
-    public const GLOBAL_MIDDLEWARE = self::CLI_GLOBAL_MIDDLEWARE; 
-
-    /** 
-     * Middleware executed **before commands** in the same CLI group.
-     * 
-     * @var string GUARD_MIDDLEWARE
-     * @deprecated Since 3.6.8 Use CLI_GROUP_MIDDLEWARE instead
-     */
-    public const GUARD_MIDDLEWARE = self::CLI_GROUP_MIDDLEWARE;
-
     /**
      * Defines a repeatable attribute for registering HTTP or CLI routes.
      *
@@ -111,13 +79,13 @@ final class Route
      * - (:uuid)         → standard UUID (8-4-4-4-12 hex digits)
      *
      * @param string $pattern The route pattern (e.g., `/blog/(:int)`, `/blogs/{$id}` or `/blog/(\d+)`).
-     * @param array $methods HTTP methods this route responds to, Use ['ANY'] to match all methods (default: ['GET']).
+     * @param string[] $methods HTTP methods  to support (e.g, `['ANY']`) to match all methods (default: `['GET']`).
      * @param bool $error Whether this route is an HTTP error handler (for: `HTTP` only).
      * @param string|null $group CLI command group this route belongs to (for: `CLI` only).
      * @param string|null $middleware Optional middleware assignment:
      *        - For `HTTP`: `Route::HTTP_BEFORE_MIDDLEWARE` or `Route::HTTP_AFTER_MIDDLEWARE`
      *        - For `CLI`: `Route::CLI_GLOBAL_MIDDLEWARE` (global) or `Route::CLI_GROUP_MIDDLEWARE` (group-specific)
-     * @param array<int,string>|null $aliases Optional list of alternative URI patterns or CLI commands that map to the same route (e.g. ['/blog/(:int)', '/blog/id/(:int)']).
+     * @param string[]|null $aliases Optional list of alternative URI patterns or CLI commands that map to the same route (e.g. ['/blog/(:int)', '/blog/id/(:int)']).
      *
      * @throws RouterException If the middleware is invalid or unsupported.
      * @see https://luminova.ng/docs/0.0.0/routing/dynamic-uri-pattern

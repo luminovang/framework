@@ -20,7 +20,8 @@ final class Prefix
      * Defines a non-repeatable routing prefix for HTTP controller classes.
      *
      * This attribute assigns a URI prefix to a controller and optionally sets an error handler. 
-     * It helps centralize error management and organize controllers when compiling attributes to routes for performance. 
+     * It helps centralize error management and organize controllers when compiling attributes 
+     * to routes for performance. 
      * 
      * **Predefined Route Placeholders:**
      *
@@ -46,7 +47,7 @@ final class Prefix
      *                   (e.g., `/user/(:root)`, `/user` or `/user/?.*`).
      * @param string|array|null $onError Optional error handler for routing errors. 
      *                                   Can be a callable or a (e.g, `[class, method]`) array.
-     * @param array<int,string> $exclude An optional list of URI prefixes to exclude from class matching.
+     * @param string[] $exclude An optional list of URI prefixes to exclude from class matching.
      *                          This is used internally when parsing attributes routing performance.
      * @param bool $mergeExcluders Wether to merge the exclude list with based prefix or pattern (default: false).
      *          If true `pattern+exclude` are combined as (e.g, `/(?!api(?:/|$)|blog(?:/|$)|admin(?:/|$)).*'`).
