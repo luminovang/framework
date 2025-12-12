@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -11,9 +12,9 @@
 namespace Luminova\Routing;
 
 use \Closure;
-use \Luminova\Luminova;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Interface\ErrorHandlerInterface;
+use Luminova\Luminova;
+use Luminova\Exceptions\RuntimeException;
+use Luminova\Interface\ErrorHandlerInterface;
 
 final class Prefix 
 {
@@ -87,8 +88,8 @@ final class Prefix
      * 
      * @param string $prefix The route URI prefix name (e.g, `blog`).
      * @param Closure|array{0:class-string<ErrorHandlerInterface>,1:string}|null $onError Optional prefix context error handler.
-     *      - Callable Array - Method name in [App\Errors\Controllers\ErrorController::class, 'methodname']; to handle error.
-     *      - Closure - Closure(class-string<\T> $arguments [, mixed $... ]): int.
+     *      - Callable Array - Method name in [App\Errors\Controllers\AppError::class, 'methodname']; to handle error.
+     *      - Closure - Closure(class-string<T> $arguments [, mixed $... ]): int.
      * 
      * @throws RuntimeException Throws if invalid error handler was provided.
      */

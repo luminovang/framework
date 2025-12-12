@@ -1,7 +1,6 @@
 <?php
 /**
  * Luminova Framework For Managing Tasks
- * Extend this interface to allow terminal command access within TasQueue worker classes.
  *
  * @package Luminova
  * @author Ujah Chigozie Peter
@@ -11,19 +10,24 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Command\Terminal;
-use \Luminova\Interface\LazyObjectInterface;
+use Luminova\Command\Input;
 
+/**
+ * Implement this interface to enable terminal command input access
+ * within TasQueue worker classes.
+ *
+ * @property Input|null $input The CLI input instance containing command arguments and options.
+ */
 interface TaskWorkerInterface
 {
     /**
-     * Attach a terminal instance for use within the queue worker.
+     * Set the command input for the queue instance.
      *
-     * This makes command arguments and options available inside the queue class.
+     * Makes the command arguments and options available within the queue.
      *
-     * @param Terminal|LazyObjectInterface $term Terminal instance that provides command arguments/options.
+     * @param Input $input The command input instance.
      *
-     * @return static Returns the instance of the class.
+     * @return self Returns the current instance.
      */
-    public function setTerminal(LazyObjectInterface|Terminal $term): self;
+    public function setCommandInput(Input $input): self;
 }

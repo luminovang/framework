@@ -10,9 +10,7 @@
  */
 namespace Luminova\Foundation\Core;
 
-use \stdClass;
-use \Luminova\Interface\LazyObjectInterface;
-use \Luminova\Exceptions\JsonException;
+use Luminova\Interface\LazyObjectInterface;
 
 abstract class Database implements LazyObjectInterface
 {
@@ -26,7 +24,7 @@ abstract class Database implements LazyObjectInterface
         'port'              => 3306,
         'host'              => 'localhost',
         'connection'        => 'pdo',
-        'pdo_version'       => 'mysql',
+        'pdo_driver'        => 'mysql',
         'charset'           => 'utf8mb4',
         'sqlite_path'       => null,
         'production'        => false,
@@ -35,9 +33,11 @@ abstract class Database implements LazyObjectInterface
         'database'          => '',
         'socket'            => false,
         'socket_path'       => '',
-        'persistent'        => true,
+        'persistent'        => false,
         'timeout'           => 0,
-        'emulate_prepares'  => true
+        'emulate_prepares'  => true,
+        'buffered_query'    => false,
+        'commands'          => []
     ];
 
     /**
@@ -84,7 +84,7 @@ abstract class Database implements LazyObjectInterface
      *         'port' => 3306,
      *         'database' => 'my_db_ng',
      *         'connection' => 'pdo', 
-     *         'pdo_version' => 'mysql',
+     *         'pdo_driver' => 'mysql',
      *         'username' => 'user_ng',
      *         'password' => 'secret',
      *         'charset' => 'utf8mb4',
@@ -94,6 +94,11 @@ abstract class Database implements LazyObjectInterface
      *         'socket' => false,
      *         'socket_path' => '',
      *         'sqlite_path' => '', // Only used if version is sqlite
+     *         'commands' => [
+     *              'SET GLOBAL slow_query_log = ON', 
+     *              'SET GLOBAL long_query_time = 1', 
+     *              'SET GLOBAL log_queries_not_using_indexes = ON'
+     *          ]
      *     ],
      *     'US' => [
      *         'host' => 'us.db.server',
@@ -111,8 +116,33 @@ abstract class Database implements LazyObjectInterface
     public function __construct(array $config = [])
     {
         if($config !== []){
-            $this->immutables = array_replace($this->immutables, $config);
+            $this->immutables = array_replace(
+                $this->immutables, 
+                $config
+            );
         }
+    }
+
+    /**
+     * Resolve database connection options from array.
+     * 
+     * @param array<string,mixed> $config Database configuration.
+     * 
+     * @return static<self> Return database instance with resolved configuration.
+     */
+    public static function fromArray(array $config): static
+    {
+        return new static($config);
+    }
+
+    /**
+     * Retrieve database connection array options.
+     * 
+     * @return array<string,mixed> Return array configuration of database connection properties.
+     */
+    public final function toArray(): array 
+    {
+        return $this->immutables;
     }
 
     /**
@@ -137,63 +167,6 @@ abstract class Database implements LazyObjectInterface
     public final function getValue(string $key, mixed $default = null): mixed 
     {
         return $this->immutables[$key] ?? $default;
-    }
-
-    /**
-     * Check if SQL query is DDL.
-     * 
-     * @param string $query The SQL query to check.
-     * 
-     * @return bool Return true if the query is DDL, false otherwise.
-     */
-    public static final function isDDLQuery(string $query): bool 
-    {
-        return preg_match(
-            '/^\s*(CREATE|ALTER|DROP|TRUNCATE|RENAME|COMMENT|GRANT|REVOKE|ANALYZE|DISCARD|CLUSTER|VACUUM)\b/i', 
-            $query
-        ) === 1;
-    }
-
-    /**
-     * Checks if the given SQL query starts with a specific SQL command type.
-     *
-     * @param string $query The raw SQL query string.
-     * @param string $type  The SQL command type to check for (default is 'SELECT').
-     * 
-     * @return bool Returns true if the query starts with the specified type, false otherwise.
-     */
-    public static function isSqlQuery(string $query, string $type = 'SELECT'): bool 
-    {
-        return str_starts_with(ltrim(strtoupper($query)), $type);
-    }
-
-     /**
-     * Converts a mixed value to an object with optimal JSON handling
-     * 
-     * @param mixed $response Input data to convert (array, string, object, etc.).
-     *
-     * @return object Always returns an object representation
-     */
-    public static function toResultObject(mixed $response): object
-    {
-        if (!$response || empty((array) $response)) {
-            return new stdClass() ;
-        }
-
-        try {
-            if (is_array($response) || is_object($response)) {
-                return (object) json_decode(
-                    json_encode($response, JSON_THROW_ON_ERROR), 
-                    false, 
-                    512, 
-                    JSON_THROW_ON_ERROR
-                );
-            }
-        } catch (JsonException) {
-            return (object) $response;
-        }
-
-        return (object) $response;
     }
 
     /**

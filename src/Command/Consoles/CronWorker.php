@@ -14,14 +14,17 @@ use \Exception;
 use \DateInterval;
 use \ReflectionClass;
 use \App\Config\Cron;
-use \Luminova\Time\Time;
-use \Luminova\Logger\Logger;
-use \Luminova\Base\Command;
-use \Luminova\Base\Console;
-use \Luminova\Http\Client\Novio;
-use \Luminova\Command\Utils\Text;
+use Luminova\Luminova;
+use Luminova\Time\Time;
+use Luminova\Base\Command;
+use Luminova\Base\Console;
+use Luminova\Logger\Logger;
+use Luminova\Command\Terminal;
+use Luminova\Http\Client\Novio;
+use Luminova\Command\Utils\Text;
+use \Psr\Http\Client\ClientInterface;
 use \Psr\Http\Message\ResponseInterface;
-use function \Luminova\Funcs\{write_content, make_dir};
+use function Luminova\Funcs\{write_content, make_dir};
 
 class CronWorker extends Console 
 {
@@ -46,9 +49,9 @@ class CronWorker extends Console
     /**
      * Network instance.
      * 
-     * @var Novio|null $network
+     * @var ClientInterface|Novio<ClientInterface>|null $http
      */
-    private static ?Novio $network = null;
+    private static ?ClientInterface $http = null;
 
     /**
      * Application cron instance.
@@ -62,20 +65,19 @@ class CronWorker extends Console
      */
     public function run(?array $params = null): int
     {
-        $this->term->perse($params);
         setenv('throw.cli.exceptions', 'true');
-        $command = trim($this->term->getCommand());
-        $force = $this->term->getAnyOption('force', 'f', false);
-        $sleep = (int) $this->term->getAnyOption('sleep', 's', 100000);
+        $name = trim($this->input->getName());
+        $force = $this->input->hasOption('force', 'f');
+        $sleep = (float) $this->input->getAnyOption('sleep', 's', 0.1);
 
-        $runCommand = match($command){
+        $runCommand = match($name){
             'cron:create'   => $this->createCommands($force),
             'cron:run'      => $this->runCommands($sleep, $force),
             default         => 'unknown'
         };
 
         if ($runCommand === 'unknown') {
-            return $this->term->oops($command);
+            return Terminal::oops($name);
         } 
             
         return (int) $runCommand;
@@ -91,12 +93,13 @@ class CronWorker extends Console
 
     /**
      * Executed cron jobs.
-     * 
+     *
+     * @param float|int $sleep Delay.
      * @param bool $force Force update cron lock file.
      * 
      * @return int Return status code.
      */
-    private function runCommands(int $sleep, bool $force = false): int 
+    private function runCommands(float|int $sleep, bool $force = false): int 
     {
         ob_start();
         self::$cron ??= new Cron();
@@ -193,7 +196,7 @@ class CronWorker extends Console
             }
     
             $newTasks[$id] = $task;
-            usleep($sleep);
+            uwait($sleep);
         }
     
         if($executed > 0){
@@ -228,10 +231,11 @@ class CronWorker extends Console
         }
 
         if($task['pingOn' . $event] && isset($instance['pingOn' . $event])){
-            self::$network ??= new Novio();
+            self::$http ??= Luminova::kernel('http.client', false);
+
             $output .= ($event === 'Failure') ? "Failure ping " : "Completed ping ";
             
-            self::$network->requestAsync('POST', $instance['pingOn' . $event], [
+            self::$http->requestAsync('POST', $instance['pingOn' . $event], [
                 'body' => $task
             ])->then(function(ResponseInterface $res) use(&$output){
                 $output .= "succeeded: ";
@@ -265,7 +269,7 @@ class CronWorker extends Console
                 $caller = $reflector->getMethod($method);
                 if($caller->isPublic() && !$caller->isAbstract() && !$caller->isStatic()){
                     $response = ($isConsole && $method === 'run')
-                        ? $caller->invoke($reflector->newInstance(), $this->term->getQueries())
+                        ? $caller->invoke($reflector->newInstance(), $this->input->getArray())
                         : $caller->invoke($reflector->newInstance());
 
                     $output .= "Job was executed with response: " . var_export($response, true) . "\n";
@@ -297,11 +301,11 @@ class CronWorker extends Console
 
         if($force){
             if($created){
-                $this->term->writeln('Cron services has been created successfully.', 'green');
+                Terminal::writeln('Cron services has been created successfully.', 'green');
                 return STATUS_SUCCESS;
             }
             
-            $this->term->writeln('Failed to create cron services.', 'red');
+            Terminal::writeln('Failed to create cron services.', 'red');
         }
 
         return $created ? STATUS_SUCCESS : STATUS_ERROR;
@@ -309,8 +313,9 @@ class CronWorker extends Console
 
     /**
      * Log the execution outputs and error logs.
-     * 
-     * @param array $outputs The execution outputs to log.
+     *
+     * @param array $logger The execution outputs to log.
+     * @param bool $iniBody
      * 
      * @return void
      */
@@ -335,7 +340,7 @@ class CronWorker extends Console
                     Logger::dispatch($to, $content);
                 }
 
-                usleep(1000);
+                uwait(0.001);
             }
         }
     }

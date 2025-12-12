@@ -11,13 +11,13 @@
 namespace Luminova\Cookies;
 
 use \Stringable;
-use \Luminova\Time\Time;
+use Luminova\Time\Time;
 use \App\Config\Cookie as CookieConfig;
-use \Luminova\Base\Cookie as BaseCookie;
-use \Luminova\Interface\CookieInterface;
-use \Luminova\Exceptions\CookieException;
+use Luminova\Base\Cookie as BaseCookie;
+use Luminova\Interface\{Arrayable, CookieInterface};
+use Luminova\Exceptions\CookieException;
 
-class Cookie extends BaseCookie implements CookieInterface, Stringable
+class Cookie extends BaseCookie implements CookieInterface, Stringable, Arrayable
 {
     /**
      * Cookie prefix.
@@ -176,7 +176,7 @@ class Cookie extends BaseCookie implements CookieInterface, Stringable
         $finalValue = $this->toValue($value);
 
         if($finalValue === false){
-            throw CookieException::rethrow('invalid_value', __FUNCTION__ . '->($value)" ');
+            CookieException::rethrow('invalid_value', __FUNCTION__ . '->($value)" ');
         }
         
         $this->saveGlobal(null, $value);
@@ -482,6 +482,22 @@ class Cookie extends BaseCookie implements CookieInterface, Stringable
      */
     public function toArray(): array
     {
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->__toArray();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function __toArray(): array
+    {
         return [
             ...$this->options,
             'name'   => $this->name,
@@ -502,11 +518,11 @@ class Cookie extends BaseCookie implements CookieInterface, Stringable
     private function validateName(): void
     {
         if ($this->name === '') {
-            throw CookieException::rethrow('empty_name');
+            CookieException::rethrow('empty_name');
         }
 
         if ($this->raw && strpbrk($this->name, self::RESERVED_CHAR_LIST) !== false) {
-            throw CookieException::rethrow('invalid_name', $this->name);
+            CookieException::rethrow('invalid_name', $this->name);
         }
     }
 
@@ -519,11 +535,14 @@ class Cookie extends BaseCookie implements CookieInterface, Stringable
     private function validatePrefix(): void
     {
         if (str_starts_with($this->prefix, '__Secure-') && !$this->secure) {
-            throw CookieException::rethrow('invalid_secure_prefix');
+            CookieException::rethrow('invalid_secure_prefix');
         }
 
-        if (str_starts_with($this->prefix, '__Host-') && (!$this->secure || $this->domain !== '' || $this->path !== '/')) {
-            throw CookieException::rethrow('invalid_host_prefix');
+        if (
+            str_starts_with($this->prefix, '__Host-') 
+            && (!$this->secure || $this->domain !== '' || $this->path !== '/')
+        ) {
+            CookieException::rethrow('invalid_host_prefix');
         }
     }
 
@@ -546,11 +565,11 @@ class Cookie extends BaseCookie implements CookieInterface, Stringable
         $sameSite = strtolower($sameSite);
 
         if (!in_array($sameSite, ['none', 'lax', 'strict'], true)) {
-            throw CookieException::rethrow('invalid_same_site', $sameSite);
+            CookieException::rethrow('invalid_same_site', $sameSite);
         }
 
         if ($sameSite === 'none' && !$this->secure) {
-            throw CookieException::rethrow('invalid_same_site_none');
+            CookieException::rethrow('invalid_same_site_none');
         }
     }
 

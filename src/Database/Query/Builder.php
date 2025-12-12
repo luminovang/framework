@@ -1,0 +1,6637 @@
+<?php 
+declare(strict_types=1);
+/**
+ * Luminova Framework database builder class.
+ *
+ * @package Luminova
+ * @author Ujah Chigozie Peter
+ * @copyright (c) Nanoblock Technology Ltd
+ * @license See LICENSE file
+ * @link https://luminova.ng
+ */
+namespace Luminova\Database\Query;
+
+use \Closure;
+use \Throwable;
+use \DateTimeZone;
+use \JsonException;
+use Luminova\Luminova;
+use \DateTimeInterface;
+use Luminova\Time\Time;
+use Luminova\Base\Cache;
+use Luminova\Promise\Promise;
+use Luminova\Database\Query\Expression;
+use Luminova\Database\Query\CaseExpression;
+use Luminova\Database\Query\Helpers\RawExpression;
+use Luminova\Database\{Connection, Helpers\Scheme};
+use Luminova\Database\Query\Helpers\{Debugger, BuilderTrait};
+use Luminova\Interface\{LazyObjectInterface, PromiseInterface, DatabaseInterface};
+use Luminova\Exceptions\{
+    ErrorCode,
+    LogicException,
+    CacheException, 
+    RuntimeException, 
+    DatabaseException,
+    InvalidArgumentException
+};
+
+/**
+ * Query Builder API Reference ({@see @group QUERY_*})
+ *
+ * Methods are organized into logical groups using the `@group` annotation to
+ * improve documentation, readability, and IDE navigation.
+ *
+ * QUERY_INITIALIZER:
+ * Methods that create or initialize a query context, such as selecting a table,
+ * defining a query source, or starting a join operation.
+ *
+ * - {@see Builder::table()}
+ * - {@see Builder::query()}
+ * - {@see Builder::exec()}
+ * - {@see Builder::from()}
+ * - {@see Builder::with()}
+ * - {@see Builder::join()}
+ * - {@see Builder::joinSubquery()}
+ *
+ * QUERY_SELECTOR:
+ * Methods that define the query result. Only one selector can be used per query.
+ *
+ * - {@see Builder::select()}
+ * - {@see Builder::find()}
+ * - {@see Builder::copy()}
+ * - {@see Builder::count()}
+ * - {@see Builder::sum()}
+ * - {@see Builder::average()}
+ * - {@see Builder::min()}
+ * - {@see Builder::max()}
+ *
+ * QUERY_EXECUTOR:
+ * Methods that execute the built query and return results or affected rows.
+ *
+ * - {@see Builder::get()}
+ * - {@see Builder::next()}
+ * - {@see Builder::stmt()}
+ * - {@see Builder::promise()}
+ * - {@see Builder::cursor()}
+ * - {@see Builder::scan()}
+ * - {@see Builder::insert()}
+ * - {@see Builder::update()}
+ * - {@see Builder::delete()}
+ * - {@see Builder::info()}
+ * ...and related other group methods.
+ *
+ * QUERY_CONDITION:
+ * Methods that add query constraints such as `WHERE`, `HAVING`, `BETWEEN`,
+ * `IN`, join conditions, and nested expressions.
+ *
+ * - {@see Builder::where()}
+ * - {@see Builder::and()}
+ * - {@see Builder::or()}
+ * - {@see Builder::on()}
+ * - {@see Builder::onRaw()}
+ * - {@see Builder::whereRaw()}
+ * - {@see Builder::whereBetween()}
+ * ...and related condition methods.
+ *
+ * QUERY_OPTION:
+ * Methods that modify query behavior or execution options.
+ *
+ * - {@see Builder::returns()}
+ * - {@see Builder::distinct()}
+ * - {@see Builder::closeAfter()}
+ * - {@see Builder::lockForUpdate()}
+ * - {@see Builder::lockForShare()}
+ * ...and other related group method
+ *
+ * QUERY_FILTER:
+ * Methods that control result ordering, grouping, pagination, and limits.
+ *
+ * - {@see Builder::limit()}
+ * - {@see Builder::offset()}
+ * - {@see Builder::order()}
+ * - {@see Builder::group()}
+ * - {@see Builder::ascending()}
+ * - {@see Builder::descending()}
+ * ...and other related group method
+ *
+ * QUERY_COLUMN_MAP:
+ * Methods that define, update, or transform column values.
+ *
+ * - {@see Builder::set()}
+ * - {@see Builder::values()}
+ * - {@see Builder::columns()}
+ * - {@see Builder::increment()}
+ * - {@see Builder::decrement()}
+ * ...and other related group method
+ *
+ * QUERY_BINDING:
+ * Methods that bind or remove named placeholder values.
+ *
+ * - {@see Builder::bind()}
+ * - {@see Builder::unbind()}
+ * ...and other related group method
+ *
+ * QUERY_CACHING:
+ * Methods that control query result caching.
+ *
+ * - {@see Builder::cache()}
+ * - {@see Builder::deleteCache()}
+ * ...and other related group method
+ *
+ * QUERY_UTIL:
+ * General SQL helper and utility methods.
+ *
+ * - {@see Builder::expression()}
+ * - {@see Builder::escape()}
+ * - {@see Builder::datetime()}
+ * ...and other related group method
+ *
+ * QUERY_DB_UTIL:
+ * Database connection and transaction management methods.
+ *
+ * - {@see Builder::free()}
+ * - {@see Builder::close()}
+ * - {@see Builder::transaction()}
+ * - {@see Builder::commit()}
+ * - {@see Builder::rollback()}
+ * ...and other related group method
+ *
+ * QUERY_DEBUGGER:
+ * Methods for inspecting generated SQL queries and parameter bindings.
+ *
+ * - {@see Builder::debug()}
+ * - {@see Builder::getDebug()}
+ * - {@see Builder::dumpDebug()}
+ */
+final class Builder implements LazyObjectInterface
+{  
+    /**
+     * Include the BuilderTrait for shared builder functionality.
+     */
+    use BuilderTrait;
+
+    /**
+     * Create a new instance of builder class.
+     *
+     * Initializes the Builder with an optional table name and alias,
+     * it does not attache database connection object, you must attache before executing query.
+     *
+     * @param string|null $table Optional database table name (must be a valid non-empty string).
+     * @param string|null $alias Optional table alias (default: null).
+     *
+     * @throws InvalidArgumentException If the table name is empty or contains invalid characters.
+     * @example - Example:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $builder = new Builder();
+     * 
+     * $builder->useConnection(...);
+     * $builder->from('users')->where('id', '=', 100)->get();
+     * ```
+     */
+    public function __construct(?string $table = null, ?string $alias = null)
+    {
+        $table = ($table === null) ? null : trim($table);
+        $alias = ($alias === null) ? null : trim($alias);
+
+        self::assertTableName($table);
+        self::assertTableAlias($alias);
+
+        $this->stmt = null;
+        $this->selector = [];
+
+        $this->isCacheable = (bool) env('database.orm.cache.enable', false);
+        $this->tableName = $table ?? '';
+        $this->tableAlias = $alias ?? '';
+    }
+
+    /**
+     * Initialize a shared configuration instance of the Builder class.
+     *
+     * The shared instance stores global query configurations that can be inherited
+     * by builder instances created through static table initialization methods.
+     * This allows defining common query behavior once and reusing it across queries.
+     *
+     * @return self The shared singleton Builder instance.
+     * @throws DatabaseException If the database connection fails.
+     *
+     * @example - Shared Builder Options:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $builder = Builder::configure()
+     *     ->cacheable(true)
+     *     ->returns('array')
+     *     ->strict(true);
+     * ```
+     *
+     * Use the configured instance:
+     *
+     * ```php
+     * $result = $builder->from('users')
+     *     ->where('id', '=', 100)
+     *     ->select(['name']);
+     * ```
+     */
+    public static function configure(): self
+    {
+        if(!self::$configure instanceof self){
+            self::$configure = new self();
+        }
+
+        return self::$configure;
+    }
+
+    /**
+     * Retrieve last inserted id from database after insert method is called.
+     * 
+     * @return mixed Return last inserted id from database.
+     */
+    public function getLastInsertedId(): mixed 
+    {
+        return $this->lastInsertId;
+    }
+
+    /**
+     * Get a unique identifier for this builder context.
+     *
+     * The identifier combines the builder instance and database connection
+     * instance to avoid conflicts between builders using different connections.
+     *
+     * @return string Unique builder identifier.
+     */
+    public function getObjectId(): string
+    {
+        return $this->objectId ??= $this->createObjectId();
+    }
+
+    /**
+     * Check if the current query has been stored in cache.
+     * 
+     * @return bool Return true if the query is cacheable and stored, false otherwise.
+     */
+    public function isCached(): bool
+    {
+        return $this->isCacheable 
+            && ($this->cacheInfo['stored'] ?? false) === true;
+    }
+
+    /**
+     * Check if the current query result was retrieved from cache.
+     * 
+     * @return bool Return true if the result was retrieved from cache, false otherwise.
+     */
+    public function isCacheHit(): bool
+    {
+        return $this->isCacheable 
+            && ($this->cacheInfo['hit'] ?? false) === true;
+    }
+
+    /**
+     * Check if the current builder database is connected.
+     * 
+     * @return bool Return true if database connected, false otherwise.
+     */
+    public function isConnected(): bool 
+    {
+        return ($this->db instanceof DatabaseInterface) 
+            && $this->db->isConnected();
+    }
+
+    /**
+     * Return a connected database driver.
+     *
+     * If $shared is true, reuse the shared connection instance.
+     * Otherwise create a new connection.
+     *
+     * @param bool $shared Use shared connection instance.
+     * 
+     * @return DatabaseInterface Connected database driver.
+     * @throws DatabaseException If connection cannot be established.
+     */
+    public static function database(bool $shared = true): DatabaseInterface
+    {
+        $conn = $shared 
+            ? Connection::getInstance() 
+            : new Connection();
+
+        $db = $conn->database() ?? $conn->connect();
+
+        if($db instanceof DatabaseInterface && $db->isConnected()){
+            $db->free();
+            return $db;
+        }
+
+        $conn = null;
+        throw new DatabaseException(
+            'Error: Database connection failed.',
+            ErrorCode::CONNECTION_DENIED
+        );
+    }
+
+    /**
+     * Creates an instance of the builder class and sets the target database table.
+     *
+     * @param string $table The name of the database table (must be a non-empty string).
+     * @param string|null $alias Optional alias for the table (default: `null`).
+     * 
+     * @return Builder Returns an instance of the builder class.
+     * @throws InvalidArgumentException If the provided table name is empty.
+     * 
+     * @group QUERY_INITIALIZER
+     * 
+     * @see self::cache() For query result caching.
+     * @see self::from() To attache table to existing object.
+     * 
+     * @example - Performing a table join and executing queries:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $tbl = Builder::table('users', 'u')
+     *     ->innerJoin('roles', 'r')
+     *          ->on('u.user_id', '=', 'r.role_user_id')
+     *     ->where('u.user_id', '=', 1);
+     *
+     * // Updating records
+     * $result = $tbl->update(['r.role_id' => 1]);
+     * 
+     * // Selecting records
+     * $result = $tbl->select(['r.role_id', 'u.name']);
+     * ```
+     */
+    public static function table(string $table, ?string $alias = null): Builder
+    {
+        return self::instance($table, $alias);
+    }
+
+    /**
+     * Create a new query builder instance using a Common Table Expression (CTE).
+     *
+     * This method accepts only a SELECT statement that represents the CTE dataset.
+     * The builder will automatically prefix WITH expression if not included.
+     *
+     * It is intended for structured query building such as ranking, deduplication,
+     * window functions, and intermediate dataset preparation.
+     *
+     * Example output internally:
+     * WITH {table} AS ( ...query... )
+     *
+     * @param string $table The CTE name used as the temporary result set identifier.
+     * @param string $query A SELECT-only SQL statement representing the CTE body.
+     * @param string|null $alias  Optional alias for the resulting dataset.
+     *
+     * @return Builder Returns an instance of the builder initialized with the provided CTE query.
+     * @throws InvalidArgumentException If the query is empty or not a valid SELECT statement.
+     * 
+     * @group QUERY_INITIALIZER
+     * 
+     * @see self::cte() For building full CTE query.
+     *
+     * @example - Deduplication using window function
+     * ```php
+     * $result = Builder::with('ranked_games', '
+     * WITH ranked_games AS (
+     *      SELECT g.*,
+     *      ROW_NUMBER() OVER (
+     *          PARTITION BY g.home_id, g.away_id
+     *          ORDER BY g.created_at DESC
+     *      ) AS rn
+     * )', 'g')
+     * ->where('rn', '=', 1)
+     * ->get();
+     * ```
+     */
+    public static function with(string $table, string $query, ?string $alias = null): Builder
+    {
+        $query = trim($query);
+
+        if(!preg_match('/^with\s+/i', $query)){
+            $query = self::toCteQuery($query, $table);
+        }
+
+        self::assertCte($query, true);
+
+        $tbl = self::instance($table, $alias);
+
+        $tbl->cteQuery = $query;
+        $tbl->isCteWith = true;
+
+        return $tbl;
+    }
+
+    /**
+     * Executes an SQL query with an optional placeholders.
+     * 
+     * This method allows direct execution of raw SQL queries. If an array of values 
+     * is passed to the `execute` method, prepared statements are used for security.
+     * Otherwise, ensure that manually embedded values in the query are properly escaped.
+     * 
+     * @param string $query The SQL query string (must be non-empty).
+     * 
+     * @return self Returns an instance of the builder class.
+     * @throws InvalidArgumentException If the provided query string is empty.
+     * 
+     * @group QUERY_INITIALIZER
+     * 
+     * @see self::execute() - To execute this query.
+     * @see self::cache()   - For query result caching.
+     * 
+     * @example - Executing a raw query:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $user = Builder::query("SELECT name, email FROM users WHERE id = :id")
+     *      ->execute(['id' => 1]);
+     * ```
+     * 
+     * @example - Executing a raw query with caching:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * $user = Builder::query("SELECT name, email FROM users WHERE id = :id")
+     *      ->cache()
+     *      ->execute(['id' => 1]);
+     * ```
+     * 
+     * @example - Executing a raw query with named placeholders:
+     * 
+     * ```php
+     * $user = Builder::query('SELECT name, email FROM users WHERE id = :id')
+     *       ->bind(':id', 1)
+     *       ->execute()
+     * ```
+     * 
+     * @example - Executing a raw query and returning results as a specific class:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $user = Builder::query("SELECT name, email, id FROM users WHERE id = :id")
+     *      ->returns(User::class)
+     *      ->execute(['id' => 1]);
+     * ```
+     * 
+     * > **Note:** 
+     * > The `execute()` method can accept an array of values to bind to the query's placeholders.
+     * > If no values are provided, ensure that the query string is safe and properly escaped
+     * > To cache query results, call `cache()` before the `execute()` method..
+     */
+    public static function query(string $query): self 
+    {
+        self::assertQuery($query, __METHOD__);
+
+        $extend = self::instance();
+        $extend->sqlQuery = $query;
+        $extend->selector['method'] = 'query';
+
+        return $extend;
+    }
+
+    /**
+     * Execute an SQL statement and return the number of affected rows.
+     *
+     * This method executes a raw SQL statement without parameter binding,
+     * result fetching, or query caching. It is intended for statements that
+     * modify the database, such as `INSERT`, `UPDATE`, `DELETE`, and DDL
+     * statements like `CREATE`, `ALTER`, `DROP`, and `TRUNCATE`.
+     *
+     * For statements that return result sets or allow parameter binding,
+     * use {@see self::query()} and {@see self::execute()} instead.
+     *
+     * @param string $query The SQL statement to execute.
+     *
+     * @return int The number of affected rows, or `0` if no rows were affected.
+     *
+     * @throws InvalidArgumentException If the SQL statement is empty.
+     * @throws DatabaseException If an error occurs while executing the statement.
+     *
+     * @group QUERY_INITIALIZER
+     * 
+     * @see self::tableExists() To check if a table exists before executing DDL statements.
+     *
+     * @example - Executing an ALTER TABLE statement:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $affected = Builder::exec("
+     *     ALTER TABLE `users`
+     *     ADD COLUMN `slug` CHAR(10) DEFAULT NULL AFTER `id`
+     * ");
+     * ```
+     */
+    public static function exec(string $query): int
+    {
+        self::assertQuery($query, __METHOD__);
+
+        return self::instance()
+            ->db
+            ->exec($query);
+    }
+
+    /**
+     * Check if a database table exists.
+     *
+     * This method determines whether the specified table exists in the database.
+     * 
+     * @param string $table The table name to check.
+     *
+     * @return bool Returns `true` if the table exists, otherwise `false`.
+     * @throws DatabaseException If an error occurs or the database driver is unsupported.
+     * 
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::exists() To check if record exists in table.
+     * @see self::create() To create an empty table.
+     *
+     * @example - Check if the `users` table exists:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $exists = Builder::tableExists('users');
+     * ```
+     * > **Note:** 
+     * > This method does not require a `WHERE` clause or logical operators.
+     */
+    public static function tableExists(string $table): bool
+    {
+        return self::instance()
+            ->db->exists($table);
+    }
+
+    /**
+     * Creates a new raw SQL expression.
+     *
+     * This method is used to pass raw SQL expressions that should not be escaped 
+     * or quoted by the query builder. It is useful for performing operations 
+     * like `COUNT(*)`, `NOW()`, or `scores + 1` directly in queries.
+     *
+     * @param string $sql The raw SQL expression.
+     * 
+     * @return Expression<RawExpression> Return instance of raw expression representing SQL function.
+     * @throws InvalidArgumentException If an empty string is passed.
+     * 
+     * @group QUERY_UTIL
+     * @group RAW_EXPRESSION_BUILDER
+     * 
+     * @see Expression for more usages.
+     * 
+     * @example - Using Expression in an INSERT Query:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * use Luminova\Database\Query\Expression;
+     * 
+     * $result = Builder::table('logs')
+     *      ->insert([
+     *          'message' => 'User login',
+     *          'created_at' => Builder::expression('NOW()'), // Use raw expression helper method
+     *          'updated_at' => Expression::now() // Or directly
+     *      ]);
+     * ```
+     * 
+     * @example - Using REPLACE instead of INSERT:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $result = Builder::table('logs')
+     *      ->replace(true)
+     *      ->insert([
+     *          'message' => 'User login',
+     *          'created_at' => Builder::expression('NOW()')
+     *      ]);
+     * ```
+     */
+    public static function expression(string $sql): Expression 
+    {
+        return new Expression($sql);
+    }
+
+    /**
+     * Creates a SQL expression representing the current date and time.
+     *
+     * This method generates a database-side timestamp expression instead of
+     * binding a PHP-generated timestamp value. The database server determines
+     * the current time when the query is executed.
+     *
+     * @return Expression<RawExpression> Returns an SQL expression for the current timestamp.
+     * 
+     * @group QUERY_UTIL
+     * @group RAW_EXPRESSION_BUILDER
+     *
+     * @example - Insert record with database timestamp:
+     *
+     * ```php
+     * Builder::table('logs')
+     *     ->insert([
+     *         'message'    => 'User login',
+     *         'created_at' => Builder::now()
+     *     ]);
+     * ```
+     */
+    public static function now(): Expression
+    {
+        return Expression::now();
+    }
+
+    /**
+     * Define a column condition for use in nested and conjoin queries.
+     *
+     * This method simplifies the process of specifying a column condition with a comparison operator 
+     * and a value.
+     * 
+     * It is particularly useful when used within methods like:
+     * 
+     * @see self::whereGroup()
+     * @see self::whereNested()
+     * @see self::orWhereGroup()
+     * @see self::orWhereNested()
+     *
+     * @param string $name The column name to check.
+     * @param string $operator The comparison operator (e.g., `=`, `!=`, `<`, `>`, `LIKE`).
+     * @param (Closure(Builder $static):mixed)|mixed $value The value to compare against.
+     *
+     * @return Column Returns instance of column condition structure.
+     * @throws InvalidArgumentException If an invalid column name or operator.
+     * 
+     * @group QUERY_COLUMN_MAP
+     * 
+     * @see self::whereGroup() For grouping multiple conditions.
+     * @see self::whereNested() For nested conditions.
+     * @see self::onGroup() For grouping multiple join ON conditions.
+     * @see Column for more usages.
+     *
+     * @example - Using `column` with `whereGroup()`:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $tbl = Builder::table('users')
+     *      ->whereGroup([
+     *          Builder::column('age', '>=', 18),
+     *          Builder::column('status', '=', 'active')
+     *      ], 'AND');
+     * 
+     * // Generates: WHERE (age >= 18 AND status = 'active')
+     * ```
+     *
+     * @example - Using `column` directly in a query:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $tbl = Builder::table('products')
+     *      ->whereNested(
+     *          [Builder::column('price', '>', 100), Builder::column('rate', '>=', 10)],  
+     *          [Builder::column('price', '>', 100), Builder::column('price', '>', 100)] 
+     *      );
+     * 
+     * // Generates: WHERE ((price > 100 AND rate >= 10) OR (price > 100 AND rate >= 100))
+     * ```
+     */
+    public static function column(string $name, string $operator, mixed $value): Column
+    {
+        return new Column($name, $operator, $value);
+    }
+
+    /**
+     * Create a SQL CASE expression builder.
+     *
+     * This method build both searched and simple-value CASE expressions 
+     * for select query column or where condition using {@see self::whereCase()}.
+     *
+     * @param string|null $expression Optional column or expression for a simple CASE.
+     *
+     * @return CaseExpression<RawExpression> Returns a CASE expression builder instance.
+     * 
+     * @group QUERY_UTIL
+     * @group RAW_EXPRESSION_BUILDER
+     * 
+     * @see self::whereCase()
+     * @see CaseExpression for more usages.
+     *
+     * @example - Searched CASE expression:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $rank = Builder::case()
+     *     ->when('points', '>=', 1000, 'Gold')
+     *     ->when('points', '>=', 500, 'Silver')
+     *     ->else('Bronze')
+     *     ->end();
+     *
+     * // CASE
+     * //     WHEN points >= 1000 THEN 'Gold'
+     * //     WHEN points >= 500 THEN 'Silver'
+     * //     ELSE 'Bronze'
+     * // END
+     * ```
+     *
+     * @example - Simple CASE expression:
+     * ```php
+     * $status = Builder::case('status')
+     *     ->match('active', 'Active')
+     *     ->match('pending', 'Pending')
+     *     ->else('Unknown')
+     *     ->end();
+     *
+     * // CASE status
+     * //     WHEN 'active' THEN 'Active'
+     * //     WHEN 'pending' THEN 'Pending'
+     * //     ELSE 'Unknown'
+     * // END
+     * ```
+     */
+    public static function case(?string $expression = null): CaseExpression
+    {
+        return new CaseExpression($expression);
+    }
+
+    /**
+     * Return a formatted date or time string suitable for SQL storage.
+     *
+     * This helper generates common SQL date formats or a UNIX timestamp.
+     * If no timestamp is provided, the current time is used.
+     * 
+     * **Default Formats:**
+     * 
+     * - `time`     → `HH:MM:SS` (e.g., `14:30:45`)
+     * - `date`     → `YYYY-MM-DD` (e.g., `2025-04-03`)
+     * - `datetime` → `YYYY-MM-DD HH:MM:SS` (e.g., `2025-04-03 14:30:45`)
+     * - `unix`     → UNIX timestamp (e.g., `1712256645`)
+     * Any other value is treated as a valid PHP date format string.
+     *
+     * @param string $format Output format (default: `datetime`).
+     * @param DateTimeZone|string|null $timezone Optional timezone object or name.
+     * @param int|null $timestamp Optional UNIX timestamp to format. If null, the current time is used.
+     *
+     * @return string Returns the formatted date/time string or UNIX timestamp.
+     * 
+     * @group QUERY_UTIL
+     */
+    public static function datetime(
+        string $format = 'datetime',
+        DateTimeZone|string|null $timezone = null,
+        ?int $timestamp = null
+    ): string
+    {
+        $time = ($timestamp === null)
+            ? Time::now($timezone)
+            : Time::fromTimestamp($timestamp, $timezone);
+
+        return match ($format) {
+            'unix'     => (string) $time->getTimestamp(),
+            'time'     => $time->format('H:i:s'),
+            'date'     => $time->format('Y-m-d'),
+            'datetime' => $time->format('Y-m-d H:i:s'),
+            default    => $time->format($format),
+        };
+    }
+
+    /**
+     * Attach a raw Common Table Expression (CTE) query to the builder.
+     *
+     * This method accepts a complete SQL statement containing a `WITH` clause and
+     * attaches it directly to the query. It is intended for advanced SQL usage,
+     * including multiple CTE definitions, recursive queries, and complex query
+     * compositions.
+     *
+     * Unlike `with()`, this method does not build, modify, or wrap the CTE.
+     * The provided SQL is preserved and used as-is.
+     *
+     * @param string $query Complete CTE SQL statement starting with `WITH`.
+     * @param bool $final Whether the CTE query contains the final SQL operation
+     *                    (e.g., `SELECT`, `INSERT`, `UPDATE`, or `DELETE`).
+     *
+     * @return self Return current builder instance.
+     * @throws InvalidArgumentException If the query is empty or does not contain a valid `WITH` statement.
+     *
+     * @group QUERY_INITIALIZER
+     *
+     * @example - CTE with final SELECT query:
+     * ```php
+     * $builder->cte('
+     *     WITH active_games AS (
+     *         SELECT * FROM games WHERE game_completed = 0
+     *     )
+     *     SELECT * FROM active_games
+     * ');
+     * ```
+     *
+     * @example - Multi-CTE chain:
+     * ```php
+     * $builder->cte('
+     *     WITH a AS (
+     *         SELECT * FROM games
+     *     ),
+     *     b AS (
+     *         SELECT * FROM a WHERE game_completed = 0
+     *     )
+     *     SELECT * FROM b
+     * ');
+     * ```
+     */
+    public function cte(string $query, bool $final = false): self
+    {
+        $query = trim($query);
+        self::assertCte($query, false);
+
+        $this->isCteWith = true;
+        $this->cteQuery = $query;
+        $this->isCteFinalQuery = $final;
+
+        return $this;
+    }
+
+    /**
+     * Define a column value for an update operation.
+     *
+     * This method stores column values used to build the `SET` clause of an
+     * `UPDATE` query. It can be called multiple times to define multiple columns.
+     *
+     * Values may be scalar values, closures, or SQL expressions.
+     *
+     * @param string $column The column name to update.
+     * @param mixed $value The value assigned to the column.
+     *
+     * @return self Return the current builder instance.
+     *
+     * @throws InvalidArgumentException If the column name is empty or invalid.
+     *
+     * @group QUERY_COLUMN_MAP
+     *
+     * @see self::values() To define values for insert operations.
+     *
+     * @example Update query:
+     * ```php
+     * Builder::table('users')
+     *     ->where('id', 1)
+     *     ->set('status', 'active')
+     *     ->set('updated_at', Builder::datetime())
+     *     ->update();
+     *
+     * // UPDATE users SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = 1
+     * ```
+     */
+    public function set(string $column, mixed $value): self
+    {
+        self::assertColumnName($column);
+
+        $this->updateValues[$column] = $value;
+
+        return $this;
+    }
+
+    /**
+     * Increment a numeric column value during update.
+     *
+     * Adds the specified amount to the current column value without
+     * requiring a prior read operation.
+     *
+     * @param string $column The column name to increment.
+     * @param float|int $count The amount to add.
+     *
+     * @return self Return current builder instance.
+     * @throws InvalidArgumentException If the column name is empty or invalid.
+     * 
+     * @group QUERY_COLUMN_MAP
+     *
+     * @example - Example:
+     * ```php
+     * Builder::table('users')
+     *     ->where('id', '=', 1)
+     *     ->increment('points', 5)
+     *     ->update();
+     * ```
+     */
+    public function increment(string $column, float|int $count = 1): self
+    {
+        self::assertColumnName($column);
+
+        $this->updateValues[$column] = Expression::increment(
+            $column, 
+            $count
+        );
+
+        return $this;
+    }
+
+    /**
+     * Decrement a numeric column value during update.
+     *
+     * Subtracts the specified amount from the current column value without
+     * requiring a prior read operation.
+     *
+     * @param string $column The column name to decrement.
+     * @param float|int $count The amount to subtract.
+     * @param bool $allowNegative Whether to prevent the result from becoming negative.
+     *
+     * @return self Return current builder instance.
+     * @throws InvalidArgumentException If the column name is empty or invalid.
+     * 
+     * @group QUERY_COLUMN_MAP
+     *
+     * @example - Example:
+     * ```php
+     * Builder::table('users')
+     *     ->where('id', '=', 1)
+     *     ->decrement('attempts', 1)
+     *     ->update();
+     * ```
+     */
+    public function decrement(
+        string $column, 
+        float|int $count = 1,
+        bool $allowNegative = false
+    ): self
+    {
+        self::assertColumnName($column);
+
+        $this->updateValues[$column] = Expression::decrement(
+            $column, 
+            $count,
+            $allowNegative
+        );
+
+        return $this;
+    }
+
+    /**
+     * Add a row of column values for an insert operation.
+     *
+     * This method stores associative column-value pairs used to build an `INSERT`
+     * query. It can be called multiple times to insert multiple rows at once.
+     *
+     * The `insert()` method uses these values to generate the inserted rows.
+     *
+     * @param array<string,mixed> $values Associative array of column-value pairs.
+     *
+     * @return self Return the current builder instance.
+     * @throws InvalidArgumentException If the provided array is a list instead of
+     *                                  an associative column-value map.
+     *
+     * @group QUERY_COLUMN_MAP
+     *
+     * @see self::set() To define values for update operations.
+     *
+     * @example Single row insert:
+     * ```php
+     * Builder::table('users')
+     *     ->values([
+     *         'name' => 'Peter',
+     *         'age'  => 30,
+     *     ])
+     *     ->insert();
+     *
+     * // INSERT INTO users (name, age) VALUES ('Peter', 30)
+     * ```
+     *
+     * @example Batch insert:
+     * ```php
+     * Builder::table('users')
+     *     ->values([
+     *         'name' => 'Peter',
+     *         'age'  => 30,
+     *     ])
+     *     ->values([
+     *         'name' => 'John',
+     *         'age'  => 25,
+     *     ])
+     *     ->insert();
+     *
+     * // INSERT INTO users (name, age) VALUES ('Peter', 30), ('John', 25)
+     * ```
+     */
+    public function values(array $values): self
+    {
+        if ($values === []) {
+            throw new InvalidArgumentException('Insert values cannot be empty.');
+        }
+
+        if (array_is_list($values)) {
+            throw new InvalidArgumentException(
+                'Invalid values array. Expected an associative array of column-value pairs.'
+            );
+        }
+
+        $this->insertValues[] = $values;
+
+        return $this;
+    }
+
+    /**
+     * Bind a named placeholder parameter to a value.
+     *
+     * This method allows you manually assign values to SQL placeholders (`:param`) 
+     * used anywhere in the query — including joins, clauses, or even raw column expressions.
+     *
+     * @param string $placeholder The named placeholder. Must start with a colon `:` (e.g. `:id`).
+     * @param (Closure(self):mixed)|mixed $value The value to bind to the placeholder. Arrays are JSON-encoded.
+     * 
+     * @return self Return current builder instance.
+     * @throws InvalidArgumentException If the placeholder does not start with a colon `:`.
+     * 
+     * @group QUERY_BINDING
+     * @see self::unbind() - To unbind param.
+     *
+     * @example - Binding inside a JOIN condition:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $result = Builder::table('users', 'u')
+     *     ->select()
+     *     ->innerJoin('orders', 'o')
+     *         ->on('o.order_user_id', '=', 'u.user_id')
+     *         ->on('o.order_id', '=', ':oid')
+     *         ->bind(':oid', 13445)
+     *     ->where('u.user_id', '=', 100)
+     *     ->get();
+     * ```
+     *
+     * @example - Binding inside a SELECT column expression:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $result = Builder::table('users', 'u')
+     *     ->select([
+     *         'u.*', 
+     *         'ST_Distance_Sphere(
+     *              u.location,
+     *              ST_SRID(POINT(:lng, :lat), 4326)
+     *          ) / 1000 AS distance'
+     *     ])
+     *     ->where('u.status', '=', 'active')
+     *     ->whereHaving('distance', '<=', 10)
+     *     ->bind(':lat', 1.3521)
+     *     ->bind(':lng', 103.8198)
+     *     ->get();
+     * ```
+     * > **Note:** 
+     * > Arrays are automatically JSON-encoded before binding.
+     */
+    public function bind(string $placeholder, array|string|float|int|null $value): self 
+    {
+        $placeholder = trim($placeholder);
+
+        if (
+            $placeholder === '' 
+            || $placeholder[0] !== ':'
+            || !preg_match('/^:[A-Za-z_][A-Za-z0-9_]*$/', $placeholder)
+        ) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid named placeholder "%s". Expected format ":name" (e.g. ":id", ":user_id").',
+                $placeholder
+            ));
+        }
+
+        $this->options['bindings'][$placeholder] = self::escape(
+            $value, 
+            strict: true
+        );
+
+        return $this;
+    }
+
+    /**
+     * Remove one or more previously bound named placeholders.
+     *
+     * If a placeholder does not exist, it is ignored.
+     *
+     * @param string|string[] $placeholder A named placeholder or an array of placeholders
+     *        (e.g. `:id` or `[':id', ':name']`).
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_BINDING
+     * 
+     * @see self::bind()
+     */
+    public function unbind(string|array $placeholder): self
+    {
+        if(($this->options['bindings'] ?? []) === []){
+            return $this;
+        }
+
+        foreach ((array) $placeholder as $name) {
+            unset($this->options['bindings'][$name]);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Reassign table name and alias to the builder object.
+     * 
+     * This can be used to re-assign new table name after query execution 
+     * to continue new query with same object or for sub-query.
+     *
+     * @param string $table The name of the database table (must be a non-empty string).
+     * @param string|null $alias Optional alias for the table (default: `null`).
+     * 
+     * @return self Returns instance of builder class.
+     * @throws InvalidArgumentException If the provided table name is empty.
+     * 
+     * @group QUERY_INITIALIZER
+     * 
+     * @see self::cache() For query result caching.
+     * @see self::table() To initialize table with new object.
+     * 
+     * @example - Reassign a table:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $tbl = Builder::table('users', 'u');
+     * 
+     * // Update table
+     * $tbl->from('admins', 'a')
+     * ```
+     */
+    public function from(string $table, ?string $alias = null): self
+    {
+        self::assertTableName($table);
+        self::assertTableAlias($alias);
+
+        $this->tableName = $table;
+        $this->tableAlias = $alias ?? '';
+
+        if(!$this->db instanceof DatabaseInterface && $this->isExecutable()){
+            $this->db = self::database();
+        }
+
+        return $this;
+    }
+
+    /**
+     * Adds a table join to the current query.
+     *
+     * Use this method to combine data from another table or subquery into your main query.
+     * You can specify the type of join (INNER, LEFT, etc.) and optionally assign an alias
+     * for the joined table.
+     *
+     * @param string $table The table name to join.  
+     * @param string|null $alias Optional alias for the joined table.  
+     * @param string|null $type The type of join to use (`INNER`, `LEFT`, `RIGHT`, `FULL`, or `CROSS`).  
+     *
+     * @return self Returns the instance of builder class.
+     * @throws InvalidArgumentException If `$table`, `$alias` or `$type` is invalid or empty string.
+     * 
+     * @group QUERY_INITIALIZER
+     *
+     * @example - Basic join:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('products', 'p')
+     *     ->join('users', 'u', 'LEFT');
+     * ```
+     *
+     * @example - Join without alias:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *     ->join('orders', type: 'INNER');
+     * ```
+     * 
+     * **Supported Join Methods:**
+     * 
+     * @see self::on()
+     * @see self::onRaw()
+     * @see self::onGroup()
+     * @see self::onSubquery()  
+     * 
+     * @see self::joinSubquery() -  To join a subquery to the current query.
+     * @see self::innerJoin() - Use `INNER` when you only want matching rows from both tables.  
+     * @see self::leftJoin()  - Use `LEFT` when you want all rows from the left table, even if no match exists.  
+     * @see self::rightJoin() - Use `RIGHT` when you want all rows from the right table, even if no match exists.  
+     * @see self::fullJoin()  - Use `FULL` (or `FULL OUTER`) when you want all rows from both sides.  
+     * @see self::crossJoin() - Use `CROSS` when you want every combination of rows (Cartesian product).  =
+     * 
+     * > **Note:*
+     * > If table name is set to `NULL`, `$forSubquery` will be enabled.
+     */
+    public function join(
+        string $table,
+        ?string $alias = null,
+        ?string $type = null
+    ): self
+    {
+        return $this->joinTables(
+            table: $table,
+            alias: $alias, 
+            type: $type, 
+            forSubquery: false
+        );
+    }
+
+    /**
+     * Join a subquery to the current query.
+     *
+     * This is a convenience wrapper around `join()` that automatically enables
+     * subquery join mode. It allows you to attach a derived table and later
+     * define the subquery source using `onSubquery()` and `on()`.
+     *
+     * @param string|null $alias Optional table alias for the subquery.
+     * @param string|null $type  The join type (`INNER`, `LEFT`, `RIGHT`, `FULL`, `CROSS`).
+     *
+     * @return self Returns the instance of the builder.
+     * @throws InvalidArgumentException If `$alias` or `$type` is invalid or empty string.
+     * 
+     * @group QUERY_INITIALIZER
+     * 
+     * @see self::join()
+     * @see self::on()
+     * @see self::onRaw()
+     * @see self::onGroup()
+     * @see self::onSubquery()
+     *
+     * @example - Subquery table join:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $users = Builder::table('users', 'u')
+     *     ->select(['u.name', 'o.id'])
+     *     ->joinSubquery('o', 'LEFT')
+     *          ->onSubquery('(SELECT user_id, COUNT(*) total FROM orders GROUP BY user_id)')
+     *          ->on('o.role', '=', 'admin')
+     *     ->get();
+     * ```
+     */
+    public function joinSubquery(?string $alias = null, ?string $type = null): self
+    {
+        return $this->joinTables(
+            alias: $alias, 
+            type: $type, 
+            forSubquery: true
+        );
+    }
+
+    /**
+     * Add a condition to the current JOIN ON clause.
+     *
+     * Defines a comparison expression used by join operations. This method is
+     * intended for simple column or value comparisons. Use {@see self::onGroup()},
+     * {@see self::onRaw()}, or {@see self::onSubquery()} for more advanced
+     * join conditions.
+     *
+     * The most recent join table receives the ON condition. When chaining multiple
+     * joins, call this method immediately after the corresponding join method.
+     * 
+     * Strings may represent:
+     * - Quoted literals: `"admin"`
+     * - Column references: `users.id`
+     * - Named placeholders: `:role_name` (must be bound using {@see self::bind()})
+     *
+     * @param string $column Left column or SQL expression.
+     * @param string $operator Comparison operator (`=`, `<>`, `>`, `<`, `LIKE`, etc.).
+     * @param RawExpression|Closure|string|float|int|null $value Right value, column name, expression, or subquery.
+     * @param string $connector Logical connector joining this condition with previous ON conditions (`AND` or `OR`).
+     *
+     * @return self Returns the builder instance.
+     * @throws LogicException If no join operation exists.
+     * @throws InvalidArgumentException If an invalid connector or operator is provided.
+     *
+     * @group QUERY_CONDITION
+     *
+     * @example - Column comparison:
+     * 
+     * ```php
+     * Builder::table('users', 'u')
+     *     ->leftJoin('roles', 'r')
+     *     ->on('u.id', '=', 'r.user_id')
+     *     ->get();
+     * ```
+     *
+     * @example - Multiple conditions:
+     * 
+     * ```php
+     * Builder::table('users', 'u')
+     *     ->leftJoin('roles', 'r')
+     *     ->on('u.id', '=', 'r.user_id')
+     *     ->on('u.active', '=', 1)
+     *     ->get();
+     * ```
+     * 
+     * @example - Closure for a subquery condition:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $users = Builder::table('users', 'u')
+     *     ->select(['u,name', 'u.id', 'o.oid'])
+     *     ->innerJoin('orders', 'o')
+     *         ->on('u.id', '=', function (Builder $b): string {
+     *             $result = $b->from('payments')
+     *                      ->find(['id'])
+     *                      ->where('status', '=', '"completed"')
+     *                      ->get();
+     * 
+     *              if(empty($result))
+     *                  throw new Exception('User not found');
+     * 
+     *             return $result->id
+     *         })
+     *     ->where('u.active', '=', 1)
+     *     ->limit(5)
+     *     ->get();
+     * ```
+     *
+     * @see self::onRaw()
+     * @see self::onGroup()
+     * @see self::onSubquery()
+     */
+    public function on(
+        string $column, 
+        string $operator, 
+        RawExpression|Closure|string|float|int|null $value, 
+        string $connector = 'AND'
+    ): self
+    {
+        $value = $this->getValue($value);
+        $operator = self::toWhereOperator($operator, $value);
+        
+        $value = ($value instanceof RawExpression) 
+            ? $value->toString() 
+            : ($value ?? 'NULL');
+
+        return $this->onClause(
+            "{$column} {$operator} {$value}", 
+            __METHOD__,
+            $connector
+        );
+    }
+
+    /**
+     * Adds a raw SQL condition to the current JOIN clause.
+     *
+     * Use this method when you need full control over the SQL `ON` expression — 
+     * for example, when building complex or non-standard join logic that can't 
+     * be represented with the basic `on()` method.
+     *
+     * **Subquery Replace Filters:**
+     * - `{{tableName}}` — Replaced with the join table name.
+     * - `{{tableAlias}}` — Replaced with the join table alias.
+     *
+     * @param RawExpression|string $sql A raw SQL string or expression object to use in the join condition.
+     * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
+     *
+     * @return self Returns the instance of builder class.
+     * @throws InvalidArgumentException If empty array columns or invalid was provided.
+     * 
+     * @group QUERY_CONDITION
+     *
+     * @example - Complex join conditions:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $users = Builder::table('users', 'u')
+     *     ->find(['u.id', 'u.name', 'l.level', 'l.message'])
+     *     ->leftJoin('logs', 'l')
+     *         ->onRaw('(u.id IN (100,200))')
+     *         ->onRaw(Builder::expression('DATE(l.created_at) = CURDATE()'))
+     *     ->get();
+     * ```
+     *
+     * @example - Using Subquery with table replacement:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users', 'u')
+     *     ->select([...])
+     *     ->leftJoin('orders', forSubquery: true)
+     *         ->onRaw('(
+     *             SELECT order_id
+     *             FROM {{tableName}}
+     *             WHERE status = "active"
+     *             AND amount > 500
+     *         ) AS o')
+     *     ->get();
+     * ```
+     *
+     * @see self::on()
+     * @see self::onSubquery()
+     * @see self::onGroup()
+     * @see self::join()
+     * @see self::joinSubQuery()
+     * @see self::bind()
+     *
+     * > **When to Use:**
+     * > - When you want to include advanced conditions (`OR`, functions, nested logic).
+     * > - When joining on computed columns or database functions.
+     * > - When your join needs to mix multiple logical clauses (e.g., `AND`, `OR`).
+     */
+    public function onRaw(RawExpression|string $sql, string $connector = 'AND'): self
+    {
+        return $this->onClause($sql, __METHOD__, $connector);
+    }
+
+    /**
+     * Defines a subquery as the source for the current JOIN operation.
+     *
+     * This method attaches a complete SQL subquery directly to the join,
+     * when join is marked `$forSubquery` as subquery join.
+     *
+     * **Subquery Replace Filters:**
+     * - `{{tableName}}` — Replaced with the join table name.
+     * - `{{tableAlias}}` — Replaced with the join table alias.
+     *
+     * @param RawExpression|string $sql A raw SQL string or raw expression representing the subquery.
+     *
+     * @return self Returns the instance of builder class.
+     * 
+     * @group QUERY_CONDITION
+     *
+     * @example - Join with subquery and outer conditions:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users', 'u')
+     *     ->select([...])
+     *     ->leftJoin('logs', 'l', true)
+     *         ->onSubquery('(
+     *             SELECT name
+     *             FROM {{tableName}}
+     *             WHERE logger_user_id = 100
+     *         )')
+     *         ->on('l.foo', '=', 'bar') // Outer condition
+     *         ->onRaw('(u.id = 100 OR u.id = 200)')
+     *     ->get();
+     * ```
+     *
+     * @example - Manual alias assignment for subquery join:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users', 'u')
+     *     ->select([...])
+     *     ->leftJoin('logs', forSubquery: true)
+     *         ->onSubquery('(
+     *             SELECT name
+     *             FROM {{tableName}}
+     *             WHERE logger_user_id = 100
+     *         ) AS l')
+     *      ->get();
+     * ```
+     *
+     * @see self::on()
+     * @see self::join()
+     * @see self::bind()
+     * @see self::onRaw()
+     * @see self::onGroup()
+     * @see self::joinSubQuery()
+     * 
+     * > **When to Use:**
+     * > When the joined table is a subquery instead of a regular table.
+     */
+    public function onSubquery(RawExpression|string $sql): self 
+    {
+        return $this->onClause($sql, __METHOD__, 'AND');
+    }
+
+    /**
+     * Add a grouped join condition containing multiple column comparisons.
+     *
+     * Combines multiple ON conditions using a nested logical connector and joins
+     * the resulting condition group with existing join conditions.
+     *
+     * The nested condition group is wrapped in parentheses to preserve SQL
+     * precedence.
+     *
+     * Both conditions should use the structure returned by {@see self::column()}.
+     *
+     * Supported placeholders:
+     * - `{{tableName}}` Replaced with the joined table name.
+     * - `{{tableAlias}}` Replaced with the joined table alias.
+     *
+     * @param Column[] $columns Column conditions definitions.
+     * @param string $groupConnector Logical connector used inside the group (`AND` or `OR`).
+     * @param string $connector Logical connector used to join group with existing join conditions (`AND` or `OR`).
+     *
+     * @return self Returns the builder instance.
+     * @throws InvalidArgumentException If no conditions are provided or an invalid
+     *      connector/operator is supplied.
+     *
+     * @group QUERY_CONDITION
+     *
+     * @example - Example:
+     * ```php
+     * Builder::table('users', 'u')
+     *     ->leftJoin('contacts', 'c')
+     *     ->onGroup([
+     *          Builder::column('u.user_id', '=', 'c.contact_user_id'),
+     *          Builder::column('u.user_group', '=', 2),
+     *     ], 'OR')
+     *     ->select([...])
+     *     ->get();
+     * ```
+     *
+     * @see self::on()
+     * @see self::onRaw()
+     */
+    public function onGroup(
+        array $columns,
+        string $groupConnector = 'AND',
+        string $connector = 'AND'
+    ): self
+    {
+        if ($columns === []) {
+            throw new InvalidArgumentException(
+                'The $columns array must not be empty. 
+                Use Builder::column() to create conditions.'
+            );
+        }
+
+        [$connector,$groupConnector,] = $this->parseConnectors(
+            __METHOD__,
+            $connector,
+            groupConnector: $groupConnector,
+        );
+
+        $parts = [];
+
+        foreach ($columns as $column) {
+            [$name, $operator, $value] = $column->getColumn(
+                true,
+                $column->isClosureValue() ? clone $this : null
+            );
+
+            $parts[] = "{$name} {$operator} {$value}";
+        }
+        
+        $this->joinConditions[array_key_last($this->tableJoin)][] = [
+            'connector' => $connector,
+            'sql'       => '(' . implode(" {$groupConnector} ", $parts) . ')'
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Add a CASE expression as a WHERE condition.
+     *
+     * The generated CASE expression is appended as a raw condition and can be
+     * combined with existing conditions using the specified logical connector.
+     * 
+     * @template T of RawExpression
+     *
+     * @param CaseExpression $expression The CASE expression to evaluate.
+     * @param string $connector Logical connector used to join this condition
+     *                           with existing conditions (`AND` or `OR`).
+     *
+     * @return self Returns the current builder instance.
+     * @throws InvalidArgumentException If the connector is invalid.
+     *
+     * @group QUERY_CONDITION
+     * 
+     * @see self::case()
+     * @see CaseExpression
+     *
+     * @example - Filter using CASE result:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * Builder::table()
+     *     ->whereCase(
+     *         Builder::case('status', '=)
+     *             ->when('points', '>=', 1000, 1)
+     *             ->else(0)
+     *             ->end()
+     *     )
+     *     ->get();
+     *
+     * // Generates:
+     * // WHERE CASE
+     * //     WHEN points >= 1000 THEN 1
+     * //     ELSE 0
+     * // END
+     * ```
+     *
+     * @example - Combine with existing conditions:
+     * ```php
+     * Builder::table('users')
+     *     ->where('active', '=', 1)
+     *     ->whereCase(
+     *         Builder::case()
+     *             ->when('role', '=', 'admin', 1)
+     *             ->else(0)
+     *             ->end(),
+     *         'OR'
+     *     )
+     *     ->get();
+     *
+     * // WHERE active = 1 OR CASE
+     * //     WHEN role = 'admin' THEN 1
+     * //     ELSE 0
+     * // END
+     * ```
+     *
+     * @see self::case()
+     */
+    public function whereCase(
+        CaseExpression $expression,
+        string $connector = 'AND'
+    ): self
+    {
+        $sql = trim($expression->toString());
+
+        if ($sql === '') {
+            return $this;
+        }
+
+        return $this->whereRawCondition($sql, $connector, __METHOD__);
+    }
+
+    /**
+     * Sets the maximum number of rows affected or returned by the query.
+     *
+     * Adds a `LIMIT` clause to `SELECT`, `UPDATE`, or `DELETE` operations.
+     * For `SELECT` queries, it restricts the number of rows returned.
+     * For `UPDATE` and `DELETE` queries, it restricts the number of rows affected.
+     *
+     * @param int $limit The maximum number of rows to return or affect.
+     * @param int $offset The starting offset for `SELECT` results (default: `0`).
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_FILTER
+     *
+     * @see self::pagination() For dynamic pagination.
+     * @see self::offset() For query result offset.
+     *
+     * @example - Limit selected records:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $users = Builder::table('users')
+     *      ->where('country', '=', 'NG')
+     *      ->limit(10, 5)
+     *      ->get();
+     *
+     * // Generates: SELECT * ... LIMIT 5, 10
+     * ```
+     *
+     * @example - Limit affected rows:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * Builder::table('users')
+     *      ->where('country', '=', 'NG')
+     *      ->limit(50)
+     *      ->update(['is_local' => 1]);
+     *
+     * // Ensures that at most 50 rows are updated.
+     * ```
+     */
+    public function limit(int $limit, int $offset = 0): self
+    {
+        $this->limiting['limit'] = max(0, $limit);
+
+        if($offset > 0){
+            return $this->offset($offset);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Sets the query pagination offset for SELECT statements.
+     *
+     * This method adds offset to `LIMIT` clause, specifying start row for returned records.
+     *
+     * @param int $offset The starting offset for the results.
+     *
+     * @return self Returns the instance of the builder class.
+     * 
+     * @group QUERY_FILTER
+     * 
+     * @see self::limit() For query limit.
+     * @see self::pagination() For dynamic pagination.
+     *
+     * @example - Pagination offset:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->where('country', '=', 'NG')
+     *      ->limit(10)
+     *      ->offset(5)
+     *      ->select()
+     *      ->get();
+     * 
+     * Generates: SELECT * ... LIMIT 5,10
+     * ```
+     */
+    public function offset(int $offset): self
+    {
+        $this->limiting['offset'] = max(0, $offset);
+        return $this;
+    }
+
+    /**
+     * Set the maximum number of rows returned by the query.
+     *
+     * Generates a SQL `TOP` clause for SQL Server and Microsoft Access.
+     * Numeric values are used directly, while SQL expressions or variables
+     * are wrapped in parentheses as required by SQL Server.
+     *
+     * Use {@see self::limit()} for MySQL and SQLite queries.
+     *
+     * @param int|string $limit Maximum number of rows to return. Numeric values
+     *                          must be 1 or greater. String values may be a SQL
+     *                          expression or variable supported by SQL Server.
+     *
+     * @return self Return the query builder instance.
+     *
+     * @group QUERY_FILTER
+     *
+     * @see self::limit()
+     *
+     * @example - Return the first 10 rows.
+     * ```php
+     * $builder->top(10);
+     * // SELECT TOP 10 * FROM users
+     * ```
+     *
+     * @example - Use a SQL Server variable.
+     * ```php
+     * $builder->top('@limit');
+     * // SELECT TOP (@limit) * FROM users
+     * ```
+     *
+     * @example - Use a SQL expression.
+     * ```php
+     * $builder->top('5 + 5');
+     * // SELECT TOP (5 + 5) * FROM users
+     * ```
+     */
+    public function top(string|int $limit): self
+    {
+        if (is_numeric($limit)) {
+            $limit = max(1, (int) $limit);
+        } else {
+            $limit = '(' . preg_replace('/^\((.*)\)$/', '$1', trim($limit)) . ')';
+        }
+
+        $this->limiting['top'] = "TOP {$limit} ";
+
+        return $this;
+    }
+
+    /**
+     * Apply pagination to the current query by calculating the SQL `LIMIT`
+     * and `OFFSET` values from the given page and limit.
+     *
+     * This method ensures both the page and limit values are valid, then
+     * calculates the offset using the standard formula:
+     *
+     * `(page - 1) * limit`
+     *
+     * If the total number of records is provided, the method will also:
+     * - Calculate the total number of pages.
+     * - Clamp the requested page so it does not exceed the last page.
+     * - Prevent the offset from exceeding the available records.
+     *
+     * Optionally, an information array can be returned by reference to provide
+     * pagination metadata useful for building UI navigation or API responses.
+     *
+     * Pagination information includes:
+     * - `page`    Current page number.
+     * - `limit`   Number of records per page.
+     * - `offset`  Calculated SQL offset.
+     * - `records` Total number of records.
+     * - `pages`   Total number of pages.
+     * - `hasNext` Whether a next page exists.
+     * - `hasPrev` Whether a previous page exists.
+     * - `next`    Next page number or `null` if none.
+     * - `prev`    Previous page number or `null` if none.
+     *
+     * @param int $page The requested page number (starting from 1).
+     * @param int $limit The maximum number of records per page.
+     * @param int $records Optional total number of records in the dataset.
+     *                     If provided, pagination metadata will be calculated.
+     * @param ?array{page:int,limit:int,offset:int,records:int,pages:int,hasNext:bool,hasPrev:bool,next:int,prev:int} &$info Optional reference array to receive pagination details.
+     *
+     * @return self Returns the instance of the builder class.
+     * 
+     * @group QUERY_FILTER
+     * 
+     * @see self::limit() For query limit.
+     * @see self::offset() For raw selection start.
+     *
+     * @example - Basic pagination
+     * ```php
+     * $users = Builder::table('users')
+     *     ->pagination(1, 10)
+     *     ->get();
+     * ```
+     *
+     * @example - Pagination with total records
+     * ```php
+     * $total = Builder::table('users')->count()->get();
+     *
+     * $users = Builder::table('users')
+     *     ->pagination(2, 10, $total)
+     *     ->get();
+     * ```
+     *
+     * @example - Pagination with metadata
+     * ```php
+     * $total = Builder::table('users')->count()->get();
+     *
+     * $pageInfo = [];
+     *
+     * $users = Builder::table('users')
+     *     ->pagination(3, 10, $total, $pageInfo)
+     *     ->get();
+     *
+     * print_r($pageInfo);
+     * ```
+     *
+     * Example result:
+     * ```
+     * [
+     *   'page' => 3,
+     *   'limit' => 10,
+     *   'offset' => 20,
+     *   'records' => 125,
+     *   'pages' => 13,
+     *   'hasNext' => true,
+     *   'hasPrev' => true,
+     *   'next' => 4,
+     *   'prev' => 2
+     * ]
+     * ```
+     */
+    public function pagination(int $page, int $limit, int $records = 0, ?array &$info = null): self
+    {
+        $limit = max(1, $limit);
+        $page  = max(1, $page);
+
+        $pages = ($records > 0) ? (int) ceil($records / $limit) : 0;
+
+        if ($pages > 0) {
+            $page = min($page, $pages);
+        }
+
+        $offset = ($page - 1) * $limit;
+
+        if ($records > 0) {
+            $offset = min($offset, max(0, $records - $limit));
+        }
+
+        if ($info !== null) {
+            $info = [
+                'page'    => $page,
+                'limit'   => $limit,
+                'offset'  => $offset,
+                'records' => $records,
+                'pages'   => $pages,
+                'hasNext' => ($pages > 0 && $page < $pages),
+                'hasPrev' => $page > 1,
+                'next'    => ($pages > 0 && $page < $pages) ? $page + 1 : null,
+                'prev'    => ($page > 1) ? $page - 1 : null,
+            ];
+        }
+
+        $this->limiting = [
+            'offset' => $offset, 
+            'limit'  => $limit
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Enable or disable strict conditions for query execution.
+     *
+     * When strict mode is enabled, certain operations (e.g., `delete`, `update`) may 
+     * require a `WHERE` clause or logic operator to prevent accidental modifications of all records. 
+     * 
+     * This helps enforce safer query execution.
+     *
+     * @param bool $enable Whether to enable strict mode (default: `true`).
+     *
+     * @return self Returns the instance of the builder class.
+     * 
+     * @group QUERY_OPTION
+     *
+     * @example - Enabling strict mode:
+     * 
+     * If no `WHERE` condition is set, an exception will be thrown.
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $deleted = Builder::table('users')
+     *      ->strict()
+     *      ->delete(); 
+     * ```
+     *
+     * @example - Disabling strict mode:
+     * 
+     * The query will execute even if no `WHERE` condition is present.
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $deleted = Builder::table('users')
+     *      ->strict(false)
+     *      ->delete();
+     * ```
+     */
+    public function strict(bool $enable = true): self
+    {
+       $this->isStrictMode = $enable;
+
+       return $this;
+    }
+
+    /**
+     * Sets the alias for the combined UNION subquery.
+     *
+     * This alias is used to wrap the UNION result in an outer SELECT statement like:
+     * SELECT [alias].column FROM ( ... UNION ... ) AS [alias]
+     *
+     * Useful when applying filters, sorting, or pagination to the result of a UNION query.
+     *
+     * @param string $alias The alias to assign to the UNION result set.
+     * 
+     * @return self Returns the instance of the builder class.
+     * @throws InvalidArgumentException If the invalid alias was provided.
+     */
+    public function unionAlias(string $alias): self 
+    {
+        self::assertTableAlias($alias);
+
+        $this->unionCombineAlias = $alias;
+        return $this;
+    }
+
+    /**
+     * Applies ascending or descending sorting order or a raw SQL expression to query results.
+     *
+     * This method adds an `ORDER BY` clause to the query. You can specify either a column name
+     * or a raw SQL expression for advanced ordering logic (e.g., custom relevance scores).
+     *
+     * @param string $expression The column name or raw SQL expression to order by.
+     * @param string $order The sorting direction, `ASC` or `DESC` (default: `ASC`).
+     * 
+     * @return self Return current builder instance.
+     * @throws InvalidArgumentException If the column is empty or the order is invalid.
+     * 
+     * @group QUERY_FILTER
+     * 
+     * @see self::ascending()  - Orders results in ascending order (`ASC`).
+     * @see self::descending() - Orders results in descending order (`DESC`).
+     *
+     * @example - Simple column ordering:
+     * ```php
+     * Builder::table('users')
+     *      ->order('created_at', 'DESC');
+     * // Generates: ORDER BY created_at DESC
+     * ```
+     *
+     * @example - Complex SQL ordering:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('blog')
+     *      ->order("CASE 
+     *          WHEN LOWER(title) LIKE '%php framework%' THEN 3
+     *          WHEN LOWER(description) LIKE '%php framework%' THEN 2
+     *          WHEN LOWER(body) LIKE '%php framework%' THEN 1
+     *          ELSE 0 END", 'DESC');
+     * // Generates: ORDER BY CASE ... END DESC
+     * ```
+     */
+    public function order(string $expression, string $order = 'ASC'): self 
+    {
+        $order = strtoupper($order);
+        $this->assertOrder($order, $expression);
+
+        $this->options['ordering'][] = "{$expression} {$order}";
+
+        return $this;
+    }
+
+    /**
+     * Apply random order to the result set.
+     * 
+     * Add a random ordering to the query, it uses MySQL's `RAND()` function to return rows in a random order.
+     * Optionally accepts a seed for repeatable randomness.
+     *
+     * @param int|null $seed Optional seed for deterministic shuffling (default: null).
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     *
+     * @example - Example:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('posts')
+     *      ->random();
+     * // Generates: ORDER BY RAND()
+     *
+     * Builder::table('posts')
+     *      ->random(42);
+     * // Generates: ORDER BY RAND(42)
+     * ```
+     */
+    public function random(?int $seed = null): self 
+    {
+        $this->options['ordering'][] = ($seed === null) 
+            ? 'RAND()' 
+            : "RAND($seed)";
+
+        return $this;
+    }
+
+    /**
+     * Applies a descending order to the specified column in the result set.
+     * 
+     * Use when you want results from largest to smallest / newest to oldest  
+     * (e.g., 10, 9, 8 …, Z, Y, X …, most recent dates first).
+     * 
+     * @param string $column The column to sort by in descending order.
+     * 
+     * @return self Return current builder instance.
+     * @throws InvalidArgumentException If the column name is empty or invalid.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @see self::order()
+     * @see self::ascending()
+     */
+    public function descending(string $column): self 
+    {
+        return $this->order($column, 'DESC');
+    }
+
+    /**
+     * Applies an ascending order to the specified column in the result set.
+     * 
+     * Use when you want results from smallest to largest / oldest to newest  
+     * (e.g., 1, 2, 3 …, A, B, C …, earliest dates first).
+     * 
+     * @param string $column The column to sort by in ascending order.
+     * 
+     * @return self Return current builder instance.
+     * @throws InvalidArgumentException If the column name is empty or invalid.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @see self::order()
+     * @see self::descending()
+     */
+    public function ascending(string $column): self 
+    {
+        return $this->order($column, 'ASC');
+    }
+
+    /**
+     * Sets a `GROUP BY` clause for the query.
+     *
+     * This method adds a column to the `GROUP BY` clause, allowing 
+     * aggregation of results based on the specified column.
+     *
+     * @param string $group The name of the column to group by.
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     *
+     * @example - Grouping results:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->select(['name'])
+     *      ->where('status', '=', 'active')
+     *      ->group('country')
+     *      ->get();
+     * 
+     * // Generates: GROUP BY country
+     * ```
+     */
+    public function group(string $group): self 
+    {
+        $this->options['grouping'][] = $group;
+        
+        return $this;
+    }
+
+    /**
+     * Adds a `HAVING` condition to the query.
+     *
+     * Applies filtering conditions to grouped query results after the `GROUP BY`
+     * clause. This method supports columns, raw expressions, and aggregate
+     * expressions for advanced filtering using aggregate functions.
+     *
+     * @param RawExpression|string $expression Column name or SQL expression to evaluate.
+     * @param string $operator Comparison operator used for evaluation (`=`, `>`, `<`, `>=`, `<=`, etc.).
+     * @param RawExpression|array|string|int|float|null $value Value or expression to compare against.
+     * @param string $connector Logical connector used to combine this condition with previous HAVING clauses (`AND` or `OR`).
+     *
+     * @return self Return current builder instance.
+     *
+     * @group QUERY_CONDITION
+     *
+     * @example - Example
+     * ```php
+     * Builder::table('orders')
+     *     ->select(['category', 'SUM(sales) AS total_sales'])
+     *     ->group('category')
+     *     ->whereHaving('total_sales', '>', 1000)
+     *     ->get();
+     * ```
+     *
+     * Generates:
+     * ```sql
+     * HAVING total_sales > 1000
+     * ```
+     *
+     * @example - Raw column expression: 
+     * ```php
+     * Builder::table('orders')
+     *     ->select(['category'])
+     *     ->group('category')
+     *     ->whereHaving(Expression::sum('amount'), '>=', 1000)
+     *     ->whereHaving(Expression::count('order_id'), '>', 10, 'OR')
+     *     ->get();
+     * ```
+     *
+     * Generates:
+     * ```sql
+     * HAVING SUM(amount) >= 1000 OR COUNT(order_id) > 10
+     * ```
+     */
+    public function whereHaving(
+        RawExpression|string $expression, 
+        string $operator, 
+        RawExpression|array|string|int|float|null $value,
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereHavingCondition(
+            $expression,
+            $operator,
+            'AND',
+            $value,
+            $connector,
+            false,
+            __METHOD__
+        );
+    }
+
+    /**
+     * Adds a negated `HAVING` condition to the query.
+     *
+     * Filters grouped query results where the specified expression does not match
+     * the provided comparison condition.
+     *
+     * @param RawExpression|string $expression Column name or SQL expression to evaluate.
+     * @param string $operator Comparison operator used for evaluation.
+     * @param RawExpression|array|string|int|float|null $value Value or expression to compare against.
+     * @param string $connector Logical connector used to combine this condition with previous HAVING clauses (`AND` or `OR`).
+     *
+     * @return self Return current builder instance.
+     *
+     * @group QUERY_CONDITION
+     */
+    public function whereNotHaving(
+        RawExpression|string $expression, 
+        string $operator, 
+        RawExpression|array|string|int|float|null $value,
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereHavingCondition(
+            $expression,
+            $operator,
+            'AND',
+            $value,
+            $connector,
+            true,
+            __METHOD__
+        );
+    }
+
+    /**
+     * Add a calculated distance column to the SELECT clause.
+     *
+     * Calculates the distance between a reference coordinate and each row using
+     * either the database spatial functions or the Haversine formula.
+     *
+     * The reference latitude and longitude may be numeric values or SQL
+     * placeholders for prepared statements.
+     *
+     * To filter results by distance, call {@see self::whereWithin()} after this method.
+     *
+     * @param string $lngColumn Longitude column name.
+     * @param string $latColumn Latitude column name.
+     * @param string|float $longitudeExpr Longitude value or SQL placeholder (default: `:longitude`).
+     * @param string|float $latitudeExpr Latitude value or SQL placeholder (default: `:latitude`).
+     * @param string $unit Distance unit: `km`, `mi`, `m`, or `ft`.
+     * @param string $method Distance calculation method: `sphere` or `haversine`.
+     * @param string|null $alias Distance column alias.
+     *
+     * @return self Return the builder instance.
+     * @throws InvalidArgumentException If the unit, method, or alias is invalid.
+     *
+     * @group QUERY_COLUMN
+     * 
+     * @see self::whereWithin()
+     * @see self::whereDistance()
+     *
+     * @example - Using placeholders
+     * ```php
+     * $user = Builder::table('users')
+     *     ->distance(
+     *         'user_longitude',
+     *         'user_latitude',
+     *         ':longitude',
+     *         ':latitude'
+     *     )
+     *     ->bind(':longitude', 3.3792)
+     *     ->bind(':latitude', 6.524)
+     *     ->get();
+     * 
+     * echo $user->distance;
+     * ```
+     *
+     * @example - Using coordinates
+     * ```php
+     * Builder::table('users')
+     *     ->distance(
+     *         'user_longitude',
+     *         'user_latitude',
+     *         3.3792,
+     *         6.5244
+     *     )
+     *     ->get();
+     * ```
+     */
+    public function distance(
+        string $lngColumn,
+        string $latColumn, 
+        string|float|null $longitudeExpr = null,
+        string|float|null $latitudeExpr = null, 
+        string $unit = 'km', 
+        string $method = 'sphere',
+        ?string $alias = 'distance'
+    ): self 
+    {
+        $longitudeExpr ??= ':longitude';
+        $latitudeExpr ??= ':latitude';
+        $expression = Expression::distance(
+            lngColumn:      $lngColumn,
+            latColumn:      $latColumn,
+            longitudeExpr:  $longitudeExpr,
+            latitudeExpr:   $latitudeExpr,
+            unit: $unit,
+            method: $method
+        );
+
+        $this->selector['columns'][] = $expression->toString() . self::alias($alias);
+        $this->selector['distances'] = true;
+
+        $this->distances = [
+            'lngColumn' => $lngColumn,
+            'latColumn' => $latColumn,
+            'longitude' => $longitudeExpr,
+            'latitude'  => $latitudeExpr,
+            'unit'      => $unit
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Adds a geographic distance boundary condition to the query.
+     *
+     * Applies a bounding box filter using the coordinates, columns, and unit
+     * configured by the most recent {@see self::distance()} call. This method
+     * limits results to records located within the specified radius from the
+     * configured reference point.
+     *
+     * @param float $radius Maximum distance boundary from the reference coordinates.
+     * @param string $connector Logical connector used to combine this condition with
+     *                           previous query conditions (`AND` or `OR`).
+     *
+     * @return self Return current builder instance.
+     *
+     * @throws LogicException If {@see self::distance()} has not been called first.
+     * @throws InvalidArgumentException If the radius or configured distance unit is invalid.
+     *
+     * @group QUERY_FILTER
+     *
+     * @see self::distance()
+     * @see self::whereDistance()
+     *
+     * @example - Example:
+     * ```php
+     * Builder::table('users')
+     *     ->select(['id', 'name'])
+     *     ->distance(
+     *         'user_latitude',
+     *         'user_longitude',
+     *         6.5244,
+     *         3.3792
+     *     )
+     *     ->whereWithin(10)
+     *     ->ascending('distance')
+     *     ->get();
+     * ```
+     */
+    public function whereWithin(float $radius, string $connector = 'AND'): self
+    {
+        return $this->whereWithinCondition(
+            __METHOD__,
+            (float) $radius,
+            $connector,
+            false
+        );
+    }
+
+    /**
+     * Adds a geographic distance exclusion condition to the query.
+     *
+     * Excludes records located within the specified radius from the reference
+     * coordinates configured by the most recent {@see self::distance()} call.
+     *
+     * @param float $radius Distance boundary to exclude from the results.
+     * @param string $connector Logical connector used to combine this condition with
+     *                           previous query conditions (`AND` or `OR`).
+     *
+     * @return self Return current builder instance.
+     *
+     * @throws LogicException If {@see self::distance()} has not been called first.
+     * @throws InvalidArgumentException If the radius or configured distance unit is invalid.
+     *
+     * @group QUERY_FILTER
+     *
+     * @see self::distance()
+     * @see self::whereWithin()
+     * 
+     * @example - Example:
+     * ```php
+     * Builder::table('users')
+     *     ->select(['id', 'name'])
+     *     ->distance(
+     *         'user_latitude',
+     *         'user_longitude',
+     *         6.5244,
+     *         3.3792
+     *     )
+     *     ->whereNotWithin(10)
+     *     ->ascending('distance')
+     *     ->get();
+     * ```
+     */
+    public function whereNotWithin(float $radius, string $connector = 'AND'): self
+    {
+        return $this->whereWithinCondition(
+            __METHOD__,
+            (float) $radius,
+            $connector,
+            true
+        );
+    }
+
+    /**
+     * Restrict results to rows within a geographic bounding box.
+     *
+     * This applies a fast latitude and longitude range filter around the
+     * specified coordinate. It is useful for reducing candidate rows before
+     * performing distance calculations or sorting by distance.
+     *
+     * @param string $lngColumn Longitude column name.
+     * @param string $latColumn Latitude column name.
+     * @param string|float $longitudeExpr Longitude value or SQL placeholder (default: `:longitude`).
+     * @param string|float $latitudeExpr Latitude value or SQL placeholder (default: `:latitude`).
+     * @param float $radius The maximum search radius.
+     * @param string $unit Distance unit: `km`, `mi`, `m`, or `ft`.
+     * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
+     *
+     * @return self Return the builder instance.
+     * @throws InvalidArgumentException If the radius, unit, or coordinates are invalid.
+     *
+     * @group QUERY_FILTER
+     * 
+     * @see self::whereWithin()
+     * @see self::distance()
+     *
+     * @example - Example:
+     * ```php
+     * Builder::table('users')
+     *     ->whereDistance(
+     *         'longitude',
+     *         'latitude',
+     *         3.3792,
+     *         6.5244,
+     *         10
+     *     )
+     *     ->get();
+     * ```
+     *
+     * > **Note:**
+     * > This method only applies a bounding box filter. 
+     * > It does not add a calculated distance column. 
+     * > Use {@see self::distance()} when the actual distance value is required.
+     */
+    public function whereDistance(
+        string $lngColumn,
+        string $latColumn,
+        string|float $longitudeExpr,
+        string|float $latitudeExpr,
+        float $radius = 10.0,
+        string $unit = 'km',
+        string $connector = 'AND'
+    ): self 
+    {
+        return $this->whereDistanceBoundingBox(
+            $connector,
+            __METHOD__,
+            $lngColumn,
+            $latColumn,
+            $longitudeExpr,
+            $latitudeExpr,
+            $radius,
+            $unit
+        );
+    }
+
+    /**
+     * Adds a `WHERE` condition to the query.
+     *
+     * This method sets a conditional clause where the specified column 
+     * must satisfy the given comparison operator and value.
+     *
+     * @param string $column The name of the column to filter by.
+     * @param string $operator The comparison operator (e.g., `=`, `>=`, `<>`, `LIKE`, `REGEXP`).
+     * @param (Closure(Builder $static):mixed)|mixed $value The value to compare against.
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * **Selectors:**
+     * 
+     * @see self::find()
+     * @see self::select()
+     * @see self::count()
+     * @see self::sum()
+     * @see self::average()
+     * @see self::delete()
+     * @see self::update()
+     * @see self::copy()
+     * @see self::next()
+     * @see self::stmt()
+     * 
+     * **Conditions:**
+     * 
+     * @see self::and()
+     * @see self::or()
+     * @see self::whereIn()
+     * @see self::whereNotIn()
+     * @see self::whereAgainst()
+     * @see self::whereCondition()
+     * @see self::whereBetween()
+     * @see self::whereNotBetween()
+     * @see self::whereHaving()
+     * @see self::whereRaw()
+     *
+     * @example - Using the `WHERE` conditioning:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->select()
+     *      ->where('status', '=', 'active')
+     *      ->get();
+     * ```
+     * Generates: `WHERE status = 'active'`
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->select()
+     *      ->where('status', '', ['active', 'disabled'])
+     *      ->get();
+     * ```
+     * Generates: `WHERE status IN ('active', 'disabled')`
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->select()
+     *      ->where('status', 'NOT', ['active', 'disabled'])
+     *      ->get();
+     * ```
+     * Generates: `WHERE status NOT IN ('active', 'disabled')`
+     * 
+     *  ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->select()
+     *      ->where('status', 'NOT EXISTS', Builder::expression('(SELECT 1 FROM views WHERE id = 1)'))
+     *      ->get();
+     * ```
+     * Generates: `WHERE status NOT EXISTS (SELECT 1 FROM views WHERE id = 1)`
+     */
+    public function where(string $column, string $operator, mixed $value): self
+    {
+        return $this->whereCondition('AND', $column, $operator, $value);
+    } 
+
+    /**
+     * Add a raw SQL fragment to the WHERE clause.
+     *
+     * Accepts a string or a raw expression object. This is useful when you need to insert
+     * custom SQL that can't be built using structured conditions.
+     *
+     * @param RawExpression|string $sql Raw SQL fragment to append to WHERE clause.
+     * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * > **Notes:**
+     * > - Use this method only when you're sure the input is safe.
+     * > - You must include the proper logical operator (e.g. AND, OR) in the raw SQL yourself.
+     * 
+     * @example - Example:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * use Luminova\Database\Query\Expression;
+     * 
+     * Builder::table('users')
+     *   ->select()
+     *   ->whereRaw('status <> "archived"', 'WHERE')
+     *   ->whereRaw(new Expression('deleted_at IS NULL'), 'OR')
+     *   ->get()
+     * ```
+     */
+    public function whereRaw(RawExpression|string $sql, string $connector = 'AND'): self
+    {
+        $sql = trim($sql instanceof RawExpression ? $sql->toString() : $sql);
+
+        if ($sql === '') {
+            return $this;
+        }
+
+        return $this->whereRawCondition($sql, $connector, __METHOD__);
+    }
+
+    /**
+     * Adds an EXISTS subquery condition to the current query.
+     *
+     * Unlike {@see self::exists()}, this method does not execute a query to
+     * determine whether records exist. Instead, it appends an SQL EXISTS condition
+     * that is evaluated as part of the current query.
+     *
+     * The callback receives a query builder initialized for the target table.
+     * Conditions added inside the callback are compiled into the EXISTS subquery.
+     *
+     * @param Closure(static):void $callback Callback used to configure the EXISTS query.
+     * @param string $connector Logical connector used to join this condition.
+     *
+     * @return self The current query builder instance.
+     *
+     * @throws InvalidArgumentException If the table name is empty.
+     * @throws LogicException If the callback does not configure a valid subquery.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @see self::from() - Sets the table for the subquery.
+     * @see self::whereNotExists() - Adds a NOT EXISTS subquery condition.
+     * 
+     * @example - Example:
+     * ```php
+     * $user = Builder::table('users')
+     *      ->find(['user_id'])
+     *      ->and('user_posts', '=', [200, 2, 6])
+     *      ->whereExists(function (Builder $query) { 
+     *          $query->from('posts', 'p')
+     *          $query->where('post_status', '=', 'active');
+     *      })
+     *      ->limit(3)
+     *      ->get();
+     * ```
+     */
+    public function whereExists(
+        Closure $callback,
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereExistsCondition(
+            __METHOD__,
+            $callback,
+            $connector,
+            false
+        );
+    }
+
+    /**
+     * Adds a NOT EXISTS subquery condition to the current query.
+     *
+     * Unlike {@see self::exists()}, this method does not execute the subquery
+     * to determine whether records exist. Instead, it appends a NOT EXISTS
+     * condition that excludes records when the configured subquery returns rows.
+     *
+     * The callback receives a query builder instance initialized with the provided
+     * table. Conditions added inside the callback are compiled into the NOT EXISTS
+     * subquery.
+     *
+     * @param Closure(static):void $callback Callback used to configure the subquery conditions.
+     * @param string $connector Logical connector used to join this condition.
+     *
+     * @return self The current query builder instance.
+     *
+     * @throws InvalidArgumentException If the table name is empty.
+     * @throws LogicException If the callback does not produce a valid subquery.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @see self::from() - Sets the table for the subquery.
+     * @see self::whereExists() - Adds an EXISTS subquery condition.
+     */
+    public function whereNotExists(
+        Closure $callback,
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereExistsCondition(
+            __METHOD__,
+            $callback,
+            $connector,
+            true
+        );
+    }
+
+    /**
+     * Adds an `AND` condition to the query.
+     *
+     * This method appends an additional condition using the `AND` operator, 
+     * requiring multiple conditions to be met.
+     *
+     * @param string $column The name of the column to filter by.
+     * @param string $operator The comparison operator (e.g., `=`, `>=`, `<>`, `LIKE`, `REGEXP`, `IN`, `NOT`).
+     * @param (Closure(Builder $static):mixed)|mixed $value The value to compare against.
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     *
+     * @example - Using the `AND` conditioning:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->where('status', '=', 'active')
+     *      ->and('role', '=', 'admin')
+     *      ->select()
+     *      ->get();
+     * ```
+     * Generates: `WHERE status = 'active' AND role = 'admin'`
+     * 
+     * @example Using REGEXP for partial match:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->select()
+     *      ->where('status', '=', 'active')
+     *      ->and('department', 'REGEXP', 'HR|Finance|Marketing')
+     *      ->get();
+     * 
+     * // Generates: WHERE status = 'active' AND department REGEXP 'HR|Finance|Marketing'
+     * ```
+     */
+    public function and(string $column, string $operator, mixed $value): self
+    {
+        return $this->whereCondition('AND', $column, $operator, $value);
+    }
+
+    /**
+     * Add a condition to the query using the `OR` operator.
+     * 
+     * This method appends a conditional clause where the specified column 
+     * must satisfy the given comparison operator and value.
+     * 
+     * @param string $column The name of the column to apply the condition.
+     * @param string $operator The comparison operator to use (e.g., `=`, `>=`, `<>`, `LIKE`, `IN`, `NOT`).
+     * @param (Closure(Builder $static):mixed)|mixed $value The value to compare the column against.
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @example - Using the `OR` conditioning:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * Builder::table('users')
+     *      ->select()
+     *      ->or('status', '=', 'active')
+     *      ->or('role', '!=', 'admin')
+     *      ->get();
+     * 
+     * Generates: WHERE status = 'active' OR role != 'admin'
+     * ```
+     */
+    public function or(string $column, string $operator, mixed $value): self
+    {
+        return $this->whereCondition('OR', $column, $operator, $value);
+    }
+
+    /**
+     * Add a `BETWEEN` condition to the query.
+     *
+     * Adds a SQL `BETWEEN` clause for comparing a column value against one or
+     * more inclusive ranges. Multiple ranges are grouped and joined using the
+     * specified group connector.
+     *
+     * @param string $column Column name to apply the condition.
+     * @param array<int,mixed> $values Range boundaries. Must contain an even
+     *        number of values. Each pair represents one range.
+     * @param string $groupConnector Logical operator between multiple ranges (default: `OR`).
+     * @param string $connector Logical operator to join with previous conditions (default: `AND`).
+     *
+     * @return self Return current builder instance.
+     * @throws DatabaseException If the range values are invalid.
+     *
+     * @group QUERY_CONDITION
+     *
+     * @see self::whereNotBetween() Opposite behavior using `NOT BETWEEN`.
+     *
+     * @example - Single range:
+     * ```php
+     * $query->whereBetween('balance', [0, 100]);
+     * ```
+     * Produces:
+     * ```sql
+     *  (balance BETWEEN :balance_btw_0_a AND :balance_btw_0_b)
+     * ```
+     * 
+     * @example - Multiple ranges:
+     * ```php
+     * $query->whereBetween('balance', [0, 100, 300, 500]);
+     * ```
+     * Produces:
+     * ```sql
+     * AND (
+     *      (balance BETWEEN :balance_btw_0_a AND :balance_btw_0_b)
+     *      OR (balance BETWEEN :balance_btw_2_a AND :balance_btw_2_b)
+     * )
+     * ```
+     *
+     * > **Note:**
+     * > Values are bound as parameters. Raw SQL expressions such as `NOW()` are
+     * > not supported. Use `whereRaw()` for raw SQL conditions.
+     */
+    public function whereBetween(
+        string $column,
+        array $values,
+        string $groupConnector = 'OR',
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereBetweenConditions(
+            $column,
+            $values,
+            $connector,
+            $groupConnector
+        );
+    }
+
+    /**
+     * Add a `NOT BETWEEN` condition to the query.
+     *
+     * This method adds a SQL `NOT BETWEEN` clause to match values outside one or
+     * more inclusive ranges. Multiple ranges are grouped and combined using the
+     * specified group connector.
+     *
+     * @param string $column Column name to apply the condition.
+     * @param array<int, mixed> $values Range boundaries. Must contain an even
+     *        number of values. Each pair represents one range.
+     * @param string $groupConnector Logical operator between multiple ranges (default: `AND`).
+     * @param string $connector Logical operator to join with previous conditions (default: `AND`).
+     *
+     * @return self Return current builder instance.
+     *
+     * @throws DatabaseException If fewer than two values are provided or an odd
+     *        number of range values is passed.
+     *
+     * @group QUERY_CONDITION
+     *
+     * @example - Single range:
+     * ```php
+     * Builder::table('transactions')
+     *      ->select()
+     *      ->where('status', 'active')
+     *      ->whereNotBetween('balance', [0, 100])
+     *      ->get();
+     * ```
+     *
+     * Produces:
+     * ```sql
+     * (balance NOT BETWEEN :balance_btw_0_a AND :balance_btw_0_b)
+     * ```
+     *
+     * @example - Multiple excluded ranges
+     * ```php
+     * $query->whereNotBetween('balance', [0, 100, 300, 500]);
+     * ```
+     *
+     * Produces:
+     * ```sql 
+     * (
+     *    (balance NOT BETWEEN :balance_btw_0_a AND :balance_btw_0_b)
+     *    AND (balance NOT BETWEEN :balance_btw_2_a AND :balance_btw_2_b)
+     * )
+     * ```
+     *
+     * > **Note:**
+     * > Values are bound as query parameters. Use `whereRaw()` when raw SQL
+     * > expressions are required.
+     */
+    public function whereNotBetween(
+        string $column, 
+        array $values, 
+        string $groupConnector = 'AND',
+        string $connector = 'AND',
+    ): self
+    {
+        return $this->whereBetweenConditions(
+            $column, 
+            $values, 
+            $connector, 
+            $groupConnector,
+            isWhereNot: true
+        );
+    }
+
+    /**
+     * Adds keyword search conditions to the query.
+     *
+     * The search is performed against columns previously defined using the
+     * {@see self::match()} method. Supports different search patterns, optional keyword
+     * splitting, and configurable case sensitivity.
+     *
+     * When keyword splitting is enabled, the search term is separated into
+     * individual keywords and each keyword is matched against the configured
+     * columns.
+     *
+     * @param string $keyword The keyword or phrase to search for.
+     * @param string $pattern The search pattern to apply e.q, `'%{pattern}%'` (default: Builder::SEARCH_CONTAINS}).
+     * @param bool $splitKeyword Whether to split a phrase into individual keywords.
+     * @param bool $caseSensitive Whether the search should be case-sensitive.
+     * @param string|null $collation The SQL collation to apply when comparing search values (e.g, `utf8mb4_bin`).
+     *                               It controls the character comparison rules,
+     *                               including case sensitivity and accent sensitivity.
+     *
+     * @return self Returns the builder instance.
+     * @throws DatabaseException If the search keyword is empty or no columns have
+     *                           been defined using `match()`.
+     *
+     * @group QUERY_FILTER
+     * @group QUERY_CONDITION
+     *
+     * @example - Search posts by title and description:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * Builder::table('posts')
+     *      ->select(['id', 'title', 'description'])
+     *      ->match(['title', 'description'])
+     *      ->whereSearch('wireless keyboard')
+     *      ->get();
+     * ```
+     *
+     * @example - Split phrase into separate keyword matches:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * Builder::table('posts')
+     *      ->select(['id', 'title', 'description'])
+     *      ->match(['title', 'description', 'tags'])
+     *      ->whereSearch('wireless keyboard', splitKeyword: true)
+     *      ->get();
+     * ```
+     *
+     * @example - Perform case-sensitive search:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * Builder::table('posts')
+     *      ->select(['id', 'title', 'description'])
+     *      ->match(['title'])
+     *      ->whereSearch('PHP', caseSensitive: true)
+     *      ->get();
+     * ```
+     *
+     * @see self::match()
+     */
+    public function whereSearch(
+        string $keyword,
+        string $pattern = self::SEARCH_CONTAINS,
+        bool $splitKeyword = false,
+        bool $caseSensitive = false,
+        ?string $collation = null,
+        string $connector = 'AND'
+    ): self
+    {
+        $keyword = trim($keyword);
+
+        if ($keyword === '') {
+            throw new DatabaseException(
+                'Search keyword cannot be empty.'
+            );
+        }
+
+        $matches = array_last($this->getOptions('matches'));
+        $matches = explode(',', $matches['columns'] ?? '');
+
+        if ($matches === []) {
+            throw new DatabaseException(
+                'Search requires at least one match() column. 
+                Define searchable columns using match() before whereSearch().'
+            );
+        }
+
+        $keywords = [$keyword];
+
+        if ($splitKeyword && str_contains($keyword, ' ')) {
+            $keywords = $this->splitKeywords(
+                $keyword, 
+                $keywords
+            );
+        }
+
+        if ($keywords === []) {
+            throw new DatabaseException(
+                'Search keywords cannot be empty.'
+            );
+        }
+
+        return $this->whereSearchConditions(
+            $connector,
+            $keywords,
+            $matches,
+            $caseSensitive,
+            $pattern,
+            $collation
+        );
+    }
+
+    /**
+     * Add a conditional clause to the query.
+     *
+     * Supports scalar values, arrays for `IN`/`NOT IN`, and closures for
+     * nested conditions. The connector determines how the condition is joined
+     * with existing clauses.
+     *
+     * @param string $connector Logical connector (`AND` or `OR`).
+     * @param string $column Column name or expression.
+     * @param string $operator Comparison operator (`=`, `!=`, `>`, `LIKE`, `IN`, `NOT`, etc.).
+     * @param mixed $value Condition value:
+     *                     - Scalar value for normal comparisons.
+     *                     - Array value for `IN`/`NOT IN`.
+     *                     - Closure for nested conditions.
+     *
+     * @return self Return the current query builder instance.
+     * @throws InvalidArgumentException If the condition is invalid.
+     *
+     * @group QUERY_CONDITION
+     *
+     * > **Note:**
+     * > - When `$value` is an array, it is transformed into an `IN` or `NOT IN` clause depending on `$operator`.
+     * >    - `'IN'` → `WHERE column IN (...)`
+     * >    - `'NOT'` → `WHERE column NOT IN (...)`
+     *
+     * @example - Example usage:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $builder = Builder::table('users')
+     *     ->select()
+     *     ->whereCondition('AND', 'id', '=', 100)
+     *     ->whereCondition('OR', 'id', '=', 101)
+     *     ->whereCondition('AND', 'name', '=', 'Peter')
+     *     ->whereCondition('AND', 'roles', 'IN', ['admin', 'editor'])
+     *     ->whereCondition('AND', 'order', 'IS', null);
+     * ```
+     */
+    public function whereCondition(string $connector, string $column, string $operator, mixed $value): self
+    {
+        return is_array($value) 
+            ? $this->whereinArray($column, $operator, $value, $connector) 
+            : $this->whereClause(
+                $connector, 
+                $column, 
+                self::parseOperator($operator), 
+                $value
+             );
+    }
+
+    /**
+     * Defines columns to be used for keyword and full-text searches.
+     *
+     * This method registers the columns that can be searched by subsequent search
+     * operations. The configured columns are used when building search conditions,
+     * including keyword matching and database-specific full-text search queries.
+     *
+     * Multiple calls to this method will append additional searchable column groups.
+     *
+     * @param string[] $columns An array of column names to include in search matching.
+     *                          All column names must be valid SQL column identifiers.
+     *
+     * @return self Returns the builder instance for method chaining.
+     * @throws InvalidArgumentException If the columns array is empty or contains invalid entries.
+     *
+     * @group QUERY_FILTER
+     *
+     * @example - Define columns for keyword search:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * Builder::table('blogs')
+     *      ->select()
+     *      ->match(['title', 'description'])
+     *      ->whereSearch('fast laptop')
+     *      ->get();
+     * ```
+     *
+     * @example - Use columns for full-text matching:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * Builder::table('blogs')
+     *      ->select()
+     *      ->match(['title', 'description'])
+     *         ->whereAgainst('fast laptop', Builder::MATCH_BOOLEAN)
+     *      ->get();
+     * ```
+     *
+     * @see self::whereSearch()
+     * @see self::whereAgainst()
+     * @see self::orderAgainst()
+     */
+    public function match(array $columns): self
+    {
+        if ($columns === [] || !isset($columns[0])) {
+            throw new InvalidArgumentException(
+                'The match() method requires at least one column.'
+            );
+        }
+
+        if (!array_is_list($columns)) {
+            throw new InvalidArgumentException(
+                'The match() method requires a list of column names.'
+            );
+        }
+
+        $this->options['matches'][] = [
+            'columns' => implode(", ", $columns)
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Add a `LIKE` clause to the query for pattern matching.
+     *
+     * @param string $column The column name to compare.
+     * @param string $expression The pattern to match using SQL `LIKE` (e.g. `%value%`).
+     * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @see self::whereSearch()
+     * 
+     * @example - Using the `LIKE` conditioning:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->select([...])
+     *      ->whereLike('name', '%pet%')
+     *      ->whereLike('username', '%pet%', 'OR')
+     *      ->get();
+     * 
+     * // Generates: WHERE name LIKE '%pet%' OR username LIKE '%pet%'
+     * ```
+     */
+    public function whereLike(string $column, string $expression, string $connector = 'AND'): self
+    {
+        return $this->whereClause($connector, $column, 'LIKE', $expression);
+    }
+
+    /**
+     * Add a `NOT LIKE` clause to the query to exclude pattern matches.
+     *
+     * @param string $column The column name to compare.
+     * @param string $expression The pattern to exclude using SQL `NOT LIKE` (e.g. `%value%`).
+     * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @example - Using the `NOT LIKE` conditioning:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * Builder::table('users')
+     *      ->select([...])
+     *      ->whereNotLike('name', '%pet%')
+     *      ->get();
+     * 
+     * // Generates: `WHERE name NOT LIKE '%pet%'`
+     * ```
+     */
+    public function whereNotLike(string $column, string $expression, string $connector = 'AND'): self
+    {
+        return $this->whereClause($connector, $column, 'NOT LIKE', $expression);
+    }
+
+    /**
+     * Adds a regular expression matching condition to the query.
+     *
+     * The provided pattern is used with the database `REGEXP` operator to filter
+     * records where the specified column matches the given regular expression.
+     *
+     * @param string $column The column name to apply the regular expression against.
+     * @param string $pattern The regular expression pattern used for matching.
+     * @param string $connector The logical connector used to combine this condition
+     * with previous conditions (e.g., `AND`, `OR`).
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     */
+    public function whereRegex(string $column, string $pattern, string $connector = 'AND'): self
+    {
+        return $this->whereClause($connector, $column, 'REGEXP', $pattern);
+    }
+
+    /**
+     * Adds a whole-value regular expression matching condition to the query.
+     *
+     * The provided value is escaped and converted into a regular expression pattern
+     * to safely match complete words or values within the specified column.
+     *
+     * @param string $column The column name to apply the regular expression against.
+     * @param string $value The value to match using a generated regular expression.
+     * @param string $connector The logical connector used to combine this condition
+     * with previous conditions (e.g., `AND`, `OR`).
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     */
+    public function wherePattern(string $column, string $value, string $connector = 'AND'): self
+    {
+        $placeholder = self::toNamedParameter(
+            $column,
+            $this->getObjectId()
+        );
+
+        $pattern = $this->isMySql8()
+            ? "(^|[^\\p{L}\\p{N}_]){$placeholder}([^\\p{L}\\p{N}_]|$)"
+            : "(^|[^[:alnum:]_]){$placeholder}([^[:alnum:]_]|$)";
+
+        return $this->whereClause($connector, $column, 'REGEXP', $pattern)
+            ->bind($placeholder, preg_quote($value, '/'));
+    }
+
+    /**
+     * Set the ordering of full-text search results using `MATCH ... AGAINST`.
+     *
+     * This method allows ranking and sorting results based on a full-text search score.
+     * Useful when prioritizing rows that better match the search term.
+     *
+     * @param string|int|float $value The value to search against.
+     * @param string|int $mode The match mode, can be a predefined constant or raw string.
+     *     Constants:
+     *       - {@see Builder::MATCH_NATURAL
+     *       - {@see Builder::MATCH_BOOLEAN
+     *       - {@see Builder::MATCH_NATURAL_EXPANDED
+     *       - {@see Builder::MATCH_EXPANSION
+     * @param string $order The sort direction, either "ASC" or "DESC". Defaults to "ASC".
+     * 
+     * @group QUERY_FILTER
+     *
+     * @return self Return current builder instance.
+     * @throws DatabaseException If no match columns have been defined via match().
+     * @throws InvalidArgumentException If the sort order is invalid.
+     *
+     * @see self::match()
+     * @see self::whereAgainst()
+     */
+    public function orderAgainst(
+        string|int|float $value, 
+        string|int $mode = self::MATCH_NATURAL, 
+        string $order = 'ASC'
+    ): self 
+    {
+        $order = strtoupper($order);
+        $this->assertOrder($order);
+
+        $this->options['match'][] = [
+            'mode'   => self::MATCH_MODES[$mode] ?? $mode,
+            'column' => $this->getMatchColumns(__METHOD__),
+            'value'  => $value,
+            'order'  => $order,
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Adds a full-text search condition using `MATCH (...) AGAINST (...)`.
+     *
+     * Uses the columns configured through `match()` to build a MySQL full-text
+     * search condition. Supports natural language, boolean, and expanded search
+     * modes for searching textual content.
+     *
+     * @param mixed $value The search value to match against. Supports literal values
+     *                     or deferred values using a Closure.
+     * @param string|int $mode Search mode constant or raw MySQL AGAINST mode.
+     *     Supported constants:
+     *       - {@see Builder::MATCH_NATURAL
+     *       - {@see Builder::MATCH_BOOLEAN
+     *       - {@see Builder::MATCH_NATURAL_EXPANDED
+     *       - {@see Builder::MATCH_EXPANSION
+     * @param string $connector Logical connector used to combine this condition with
+     *                           previous query conditions (`AND` or `OR`).
+     *
+     * @return self Return current builder instance.
+     *
+     * @throws DatabaseException If match columns are missing or invalid.
+     *
+     * @group QUERY_CONDITION
+     *
+     * @example - Examples:
+     * ```php
+     * Builder::table('blogs')
+     *     ->match(['title', 'description'])
+     *     ->whereAgainst('fast laptop', Builder::MATCH_BOOLEAN)
+     *     ->get();
+     * ```
+     *
+     * Generates:
+     * ```sql
+     * WHERE MATCH(title, description)
+     * AGAINST('fast laptop' IN BOOLEAN MODE)
+     * ```
+     *
+     * @example - Example:
+     * ```php
+     * Builder::table('blogs')
+     *     ->match(['title', 'description'])
+     *     ->whereAgainst('database optimization')
+     *     ->get();
+     * ```
+     *
+     * Generates:
+     * ```sql
+     * WHERE MATCH(title, description)
+     * AGAINST('database optimization')
+     * ```
+     *
+     * @see self::match()
+     * @see self::orderAgainst()
+     */
+    public function whereAgainst(
+        mixed $value, 
+        string|int $mode = self::MATCH_NATURAL, 
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereAgainstCondition(
+            __METHOD__,
+            $value, 
+            $mode,
+            $connector,
+            false
+        );
+    }
+
+    /**
+     * Adds a negative full-text search condition using `NOT MATCH (...) AGAINST (...)`.
+     *
+     * Excludes records matching the full-text search expression configured through
+     * `match()`.
+     *
+     * @param mixed $value The search value to exclude. Supports literal values or
+     *                     deferred values using a Closure.
+     * @param string|int $mode Search mode constant or raw MySQL AGAINST mode.
+     * @param string $connector Logical connector used to combine this condition with
+     *                           previous query conditions (`AND` or `OR`).
+     *
+     * @return self Return current builder instance.
+     * @throws DatabaseException If match columns are missing or invalid.
+     *
+     * @group QUERY_CONDITION
+     *
+     * @see self::match()
+     * @see self::whereAgainst()
+     * 
+     * @example - Example
+     * ```php
+     * Builder::table('blogs')
+     *     ->match(['title', 'description'])
+     *     ->whereNotAgainst('deprecated mysql')
+     *     ->get();
+     * ```
+     *
+     * Generates:
+     * ```sql
+     * WHERE NOT MATCH(title, description)
+     * AGAINST('deprecated mysql')
+     * ```
+     */
+    public function whereNotAgainst(
+        mixed $value, 
+        string|int $mode = self::MATCH_NATURAL, 
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereAgainstCondition(
+            __METHOD__,
+            $value, 
+            $mode,
+            $connector,
+            true
+        );
+    }
+
+    /**
+     * Adds a condition to filter results where the given column is NOT NULL.
+     *
+     * This method appends an "AND column IS NOT NULL" condition to the query.
+     * It ensures that only records with a non-null value in the specified column are retrieved.
+     *
+     * @param string $column The column name to check for non-null values.
+     * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @see self::whereNull()
+     * 
+     * @example - Example usage:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->where('country', '=', 'NG')
+     *      ->whereNotNull('address')
+     *      ->select()
+     *      ->get();
+     * ```
+     */
+    public function whereNotNull(string $column, string $connector = 'AND'): self
+    {
+        return $this->whereNullable($connector, $column, false);
+    }
+
+    /**
+     * Adds a condition to filter results where the given column is NULL.
+     *
+     * This method appends an "AND column IS NULL" condition to the query.
+     * It ensures that only records with a null value in the specified column are retrieved.
+     * 
+     * @param string $column The column name to check for null values.
+     * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @see self::whereNotNull()
+     * 
+     * @example - Example usage:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->where('country', '=', 'NG')
+     *      ->whereNull('address')
+     *      ->select()
+     *      ->get();
+     * ```
+     */
+    public function whereNull(string $column, string $connector = 'AND'): self
+    {
+        return $this->whereNullable($connector, $column, true);
+    }
+
+    /**
+     * Conjoin multiple conditions using either `AND` or `OR`.
+     *
+     * This method creates a logical condition group where conditions are combined 
+     * using the specified operator.
+     *
+     * @param Column[] $conditions The conditions to group.
+     *                          Or `Builder::column(...)` method for simplified builder.
+     * @param string $groupConnector The `AND` or `OR` logical connector within group (default: `AND`).
+     * @param string $connector The base logical connector to connect previous conditions (default: `AND`).
+     * 
+     * @return self Return current builder instance.
+     * @throws InvalidArgumentException Throws if invalid group operator or chain clause is specified.
+     * 
+     * @group QUERY_CONDITION
+     *
+     * @example - Group conditions:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('fooTable')->whereGroup([
+     *     Builder::column('column1', '=', 1),
+     *     Builder::column('column2', '=', 2)
+     * ], 'OR');
+     * 
+     * // Generates: WHERE (column1 = 1 OR column2 = 2)
+     * ```
+     */
+    public function whereGroup(array $conditions, string $groupConnector = 'AND', string $connector = 'AND'): self
+    {
+        return $this->whereConjoinGroup(
+            $connector, 
+            __METHOD__,
+            $conditions, 
+            $groupConnector
+        );
+    }
+
+    /**
+     * Creates a nested conjoin condition group by combining two condition sets.
+     *
+     * This method groups two sets of conditions and binds them with the specified logical operator.
+     * Use `Builder::column()` for simplified column builder.
+     *
+     * @param Column[] $leftConditions An array of first group conditions.
+     * @param Column[] $rightConditions An array of second group conditions.
+     * @param string $groupConnector The `AND` or `OR` logical connector within each group (default: `AND`).
+     * @param string $nestedConnector The `AND` or `OR` logical connector to bind groups (default: `AND`).
+     * @param string $connector The base logical connector to connect previous conditions (default: `AND`).
+     * 
+     * @return self Return current builder instance.
+     * @throws InvalidArgumentException Throws if invalid group operator is specified.
+     * 
+     * @group QUERY_CONDITION
+     *
+     * @example - Generating a nested  conditions:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $tbl = Builder::table('fooTable')
+     *      ->whereNested(
+     *          [Builder::column('column1', '=', 1), Builder::column('column2', '=', 2)],
+     *          [Builder::column('column1', '=', 1), Builder::column('column2', '=', 2)], 
+     *          'OR', // Inner group logical connector
+     *          'AND' // Outer group logical connector
+     *      );
+     * ```
+     */
+    public function whereNested(
+        array $leftConditions, 
+        array $rightConditions, 
+        string $groupConnector = 'AND', 
+        string $nestedConnector = 'AND',
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereNestedGroup(
+            $connector,
+            __METHOD__,
+            $leftConditions,
+            $rightConditions,
+            $groupConnector,
+            $nestedConnector
+        );
+    }
+
+    /**
+     * Adds an `IN` condition to the query using the `IN (...)` SQL expression.
+     * 
+     * Use this method to find rows where the given column's value matches any value in a provided list.
+     * 
+     * @param string $column The column name to match against.
+     * @param (Closure(Builder $static): array)|array<int,string|int|float> $values 
+     *        A list of values or a Closure returning an array of values.
+     * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
+     * 
+     * @return self Return current builder instance.
+     * @throws InvalidArgumentException If the provided values are empty or invalid.
+     * @throws JsonException If an error occurs while encoding the values.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @example - Example:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('languages')
+     *     ->select()
+     *     ->in('tag', ['php', 'sql'])
+     *     ->get();
+     * 
+     * // Generates: `IN ('php', 'sql')`
+     * ```
+     */
+    public function whereIn(
+        string $column, 
+        Closure|array $values, 
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereinArray($column, 'IN', $values, $connector);
+    }
+
+    /**
+     * Adds a `NOT IN` condition to the query using the `NOT IN (...)` SQL expression.
+     *
+     * Use this method to find rows where the given column's value does **not** match any value in a provided list.
+     *
+     * @param string $column The column name to check against.
+     * @param (Closure(Builder $static): array)|array<int,string|int|float> $values 
+     *        A list of values or a Closure returning an array of values.
+     * @param string $connector Logical operator to join with previous conditions (`AND` or `OR`).
+     *
+     * @return self Return current builder instance.
+     *
+     * @throws InvalidArgumentException If the provided values are empty or invalid.
+     * @throws JsonException If an error occurs while encoding the values.
+     * 
+     * @group QUERY_CONDITION
+     *
+     * @example - Example:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *     ->where('country', '=', 'NG')
+     *     ->whereNotIn('state', ['Enugu', 'Lagos', 'Abuja']);
+     * // Generates: `NOT IN ('Enugu', 'Lagos', 'Abuja')`
+     * ```
+     */
+    public function whereNotIn(
+        string $column, 
+        Closure|array $values, 
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereinArray($column, 'NOT', $values, $connector);
+    }
+
+    /**
+     * Adds a condition using MySQL's `FIND_IN_SET()` function.
+     *
+     * Searches for a value within a comma-separated list and supports predefined
+     * matching modes or custom comparison operators. The list source can be a
+     * literal comma-separated value string, an array of values, or a column
+     * containing a comma-separated list.
+     *
+     * When `$searchAsColumn` is enabled, the `$search` value is treated as a column
+     * reference instead of a literal value.
+     *
+     * @param string $search The value to search for or column name when `$searchAsColumn` is true.
+     * @param string $operator Comparison operator or predefined operator: 
+     *                          (e.g., 'exists', 'first', 'last', 'none', 'contains').
+     * @param array<int,mixed>|string $list Comma-separated values, array values, or column name containing the list.
+     * @param bool $searchAsColumn Whether `$search` should be treated as a column reference.
+     * @param string $connector Logical connector used to join this condition (`AND` or `OR`).
+     *
+     * @return self Return current builder instance.
+     *
+     * @throws InvalidArgumentException If `$list` is empty.
+     *
+     * @group QUERY_CONDITION
+     *
+     * Supported Operators:
+     *
+     * - `exists`, `>` - Checks whether the value exists in the list.
+     * - `=`, `first` - Checks whether the value is the first item in the list.
+     * - `last` - Checks whether the value is the last item in the list.
+     * - `contains` - Performs a partial match against the list value.
+     * - `none` - Checks that the value does not exist in the list.
+     *
+     * @example - Example:
+     * ```php
+     * Builder::table('fruits')
+     *     ->whereInset('banana', '= 2', ['apple', 'banana', 'orange'])
+     *     ->get();
+     * ```
+     *
+     * @example
+     * ```php
+     * Builder::table('employees')
+     *     ->whereInset('PHP', 'exists', 'column_language_skills')
+     *     ->get();
+     * ```
+     *
+     * @example
+     * ```php
+     * Builder::table('employees')
+     *     ->whereInset('department', 'exists', 'HR,Finance,Marketing', true)
+     *     ->get();
+     * ```
+     */
+    public function whereInset(
+        string $search, 
+        string $operator, 
+        array|string $list,
+        bool $searchAsColumn = false,
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereInsetCondition(
+            __METHOD__,
+            false,
+            $search, 
+            $operator, 
+            $list, 
+            $searchAsColumn, 
+            $connector
+        );
+    }
+
+    /**
+     * Adds a negative `FIND_IN_SET()` condition.
+     *
+     * Filters records where the given value does not exist in the specified
+     * comma-separated list.
+     *
+     * @param string $search The value to search for or column name when `$searchAsColumn` is true.
+     * @param array<int,mixed>|string $list Comma-separated values, array values, or column name containing the list.
+     * @param bool $searchAsColumn Whether `$search` should be treated as a column reference.
+     * @param string $connector Logical connector used to join this condition (`AND` or `OR`).
+     *
+     * @return self Return current builder instance.
+     *
+     * @throws InvalidArgumentException If `$list` is empty.
+     *
+     * @group QUERY_CONDITION
+     *
+     * @example
+     * ```php
+     * Builder::table('employees')
+     *     ->whereNotInset('PHP', 'column_language_skills')
+     *     ->get();
+     * ```
+     */
+    public function whereNotInset(
+        string $search, 
+        array|string $list,
+        bool $searchAsColumn = false,
+        string $connector = 'AND'
+    ): self
+    {
+        return $this->whereInsetCondition(
+            __METHOD__,
+            true,
+            $search, 
+            '', 
+            $list, 
+            $searchAsColumn, 
+            $connector
+        );
+    }
+
+    /**
+     * Set the query result return type.
+     *
+     * By default, query results are returned as standard objects. Use this method
+     * to customize how query results are hydrated, including returning associative
+     * arrays, object lists, prepared statements, or instances of a specified class.
+     *
+     * Supported return types:
+     * - `self::RETURN_OBJECT` Returns results as `stdClass` objects. For multiple
+     *   results, returns an array of objects.
+     * - `self::RETURN_OBJECT_LIST` Returns the result collection as an object while
+     *   keeping each row as an object. This preserves the legacy object-list behavior.
+     * - `self::RETURN_ARRAY` Returns results as associative arrays.
+     * - `self::RETURN_STATEMENT` Returns the prepared database statement.
+     * - A valid class name Returns results as instances of that class.
+     *
+     * When a class name is provided, the optional `$arguments` parameter can be
+     * used to pass constructor arguments during object creation.
+     *
+     * @template T of object
+     *
+     * @param class-string<T>|string $type Result return type:
+     *                     `self::RETURN_OBJECT`,
+     *                     `self::RETURN_OBJECT_LIST`,
+     *                     `self::RETURN_ARRAY`,
+     *                     `self::RETURN_STATEMENT`,
+     *                     or a valid class name.
+     * @param array|(callable():array) $arguments Constructor arguments passed to the class constructor.
+     *
+     * @return self Return the current query builder instance.
+     * @throws InvalidArgumentException If an invalid return type is specified.
+     *
+     * @group QUERY_OPTION
+     *
+     * @example - Return results as objects (default).
+     * ```php
+     * $builder->returns(Builder::RETURN_OBJECT)->get();
+     * ```
+     *
+     * @example - Return results using the legacy object list format.
+     * ```php
+     * $builder->returns(Builder::RETURN_OBJECT_LIST)->get();
+     * ```
+     *
+     * Result:
+     * ```php
+     * (object) [
+     *     0 => (object) ['id' => 1],
+     *     1 => (object) ['id' => 2]
+     * ]
+     * ```
+     *
+     * @example - Return results as associative arrays.
+     * ```php
+     * $builder->returns(Builder::RETURN_ARRAY)->get();
+     * ```
+     *
+     * @example - Return the prepared statement.
+     * ```php
+     * $stmt = $builder
+     *     ->returns(Builder::RETURN_STATEMENT)
+     *     ->select();
+     * ```
+     *
+     * @example - Return results as a custom class.
+     * ```php
+     * $users = $builder
+     *     ->returns(User::class)
+     *     ->get();
+     * ```
+     *
+     * @example - Return results using a class constructor with arguments.
+     * ```php
+     * $users = $builder
+     *     ->returns(User::class, [
+     *         'role' => 'admin'
+     *     ])
+     *     ->get();
+     * ```
+     *
+     * > **Note:**
+     * > Call this method before executing the query, such as with
+     * > `get()`, `next()`, `scan()`, `cursor()`, or similar methods.
+     */
+    public function returns(string $type, callable|array $arguments = []): self
+    {
+        $type = ($type === \stdClass::class) 
+            ? self::RETURN_OBJECT 
+            : $type;
+
+        $lower = strtolower($type);
+
+        if (
+            $lower === self::RETURN_OBJECT ||
+            $lower === self::RETURN_OBJECT_LIST ||
+            $lower === self::RETURN_ARRAY ||
+            $lower === self::RETURN_STATEMENT
+        ) {
+            $this->returns = $lower;
+            return $this;
+        }
+
+        if (class_exists($type)) {
+            $this->returns = self::RETURN_CLASS;
+            $this->options[self::RETURN_CLASS] = [
+                'name'      => $type,
+                'arguments' => $arguments
+            ];
+
+            return $this;
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            'Invalid return type "%s". Expected "object", "array", "stmt", or a valid class name.',
+            $type
+        ));
+    }
+
+    /**
+     * Enable or disable `DISTINCT` for `SELECT` queries.
+     *
+     * When enabled, duplicate rows are removed from the query results.
+     *
+     * @param bool $distinct Whether to apply `DISTINCT` (default: `true`).
+     *
+     * @return self Return the current query builder instance.
+     *
+     * @group QUERY_OPTION
+     * 
+     * @see self::select()
+     * @see self::find()
+     *
+     * @example - Select distinct email addresses.
+     * ```php
+     * Builder::table(...)
+     *     ->select(['email'])
+     *     ->distinct()
+     *     ->fetch();
+     * // SELECT DISTINCT email FROM users
+     * ```
+     */
+    public function distinct(bool $distinct = true): self
+    {
+        $this->isDistinct = $distinct;
+
+        return $this;
+    }
+
+    /**
+     * Enable or disable replace feature when inserting or copying records in the current database table.
+     * 
+     * **Applies to:**
+     * 
+     * `insert()` - Before calling {@see self::insert()} method.
+     * `copy()`  - Before {@see self::into()} method.
+     * 
+     * If enabled, `insert` method will replaces existing records, 
+     * by first **deleting** existing rows with the same primary key or unique key before inserting new ones. 
+     * 
+     * @param bool $useReplace Set to true to use `REPLACE` instead of `INSERT` (default: true).
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_OPTION
+     * 
+     * @see self::insert() - For query insert.
+     * @see self::copy() - For query copying.
+     * 
+     * > **Note:** 
+     * > Enabling this may lead to unintended data loss, especially if foreign key constraints exist.
+     * >
+     * > **Warning:** 
+     * > Since `replace` removes and re-inserts data, it can reset auto-increment values 
+     * and trigger delete/insert events instead of update events.
+     */
+    public function replace(bool $useReplace = true): self
+    {
+        $this->isReplace = $useReplace;
+
+        return $this;
+    }
+
+    /**
+     * Enables debugging for query execution.
+     *
+     * Supports multiple debug modes for tracking or dumping query strings and parameters.
+     * In production, debug information is logged using the `debug` level when applicable.
+     * 
+     * Debug Modes:
+     * 
+     *  - `Builder::DEBUG_BUILDER_COLLECT`: Store SQL statements and bindings for {@see self::getDebug()}.
+     *  - `Builder::DEBUG_BUILDER_OUTPUT`: Output SQL statements and bindings.
+     *  - `Builder::DEBUG_DRIVER_DUMP`: Enable driver-level debugging (PDO, MySQLi, etc.) {@see self::dumpDebug()}.
+     *  - `Builder::DEBUG_NONE`: Disable debugging.
+     *
+     * @param int $mode Debug mode (default: `Builder::DEBUG_BUILDER_OUTPUT`).
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_DEBUGGER
+     * 
+     * @see self::dumpDebug() -  Dump all collected debugging information.
+     * @see self::getDebug() - Retrieve all collected debugging information
+     * 
+     * @example - Dump debugging:
+     * ```php
+     * $result = Builder::table('users')
+     *      ->debug(Builder::DEBUG_BUILDER_OUTPUT)
+     *      ->find([...])
+     *      ->where('id', '=', 100)
+     *      ->get();
+     * ```
+     * @example - Inspect Debugging:
+     * 
+     * ```php
+     * $tbl = Builder::table('users')
+     *      ->debug(Builder::DEBUG_BUILDER_COLLECT)
+     *      ->find([...])
+     *      ->where('id', '=', 100);
+     * 
+     * $result = $tbl->get();
+     * 
+     * $detail = $tbl->getDebug(); // Array
+     * $tbl->dump(); // Output details
+     * ```
+     * 
+     * > **Note:**
+     * > Using driver-level debugging `Builder::DEBUG_DRIVER_DUMP`, does not prevent the query from executing.
+     */
+    public function debug(int $mode = self::DEBUG_BUILDER_OUTPUT): self
+    {
+        $this->debugMode = $mode;
+
+        if($this->db instanceof DatabaseInterface){
+            $this->db->setDebug($mode === self::DEBUG_DRIVER_DUMP);
+        }
+
+        if($mode === self::DEBUG_NONE){
+            $this->debugger = null;
+            return $this;
+        }
+
+        $this->debugger = new Debugger($mode, $this->getObjectId());
+
+        return $this;
+    }
+
+    /**
+     * Output collected query debug information in the requested format.
+     *
+     * Displays builder query debugging information and includes the latest
+     * statement debug details when supported. Output formatting can be adjusted
+     * for CLI, HTML, or JSON environments.
+     *
+     * Supported formats:
+     *
+     * - `null`   Default output using readable array format.
+     * - `html`   Wrap output in an escaped HTML `<pre>` block.
+     * - `json`   Output formatted JSON.
+     *
+     * The selected format only applies to builder dump debugging mode.
+     * CLI and command execution always use plain text output.
+     *
+     * @param string|null $format Output format (`html`, `json`, or null).
+     *
+     * @return void
+     * 
+     * @group QUERY_DEBUGGER
+     *
+     * @see self::getDebug()
+     */
+    public function dumpDebug(?string $format = null): void
+    {
+        $this->dump($format);
+    }
+
+    /**
+     * Globally enable or disabled all caching for subsequent select operations.
+     *
+     * @param bool $enable The caching status action.
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_CACHING
+     * 
+     * > **Note:** 
+     * > By default caching is enabled once you call the `cache` method.
+     */
+    public function cacheable(bool $enable): self
+    {
+        $this->isCacheable = $enable;
+
+        if(!$enable && $this->cache instanceof Cache){
+            $this->cache->disconnect();
+            $this->cache = null;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Sets the auto-close connection status for the current query.
+     *
+     * This method allows you to control whether the database connection should be 
+     * automatically closed after executing the query.
+     * By default, the connection remains open after query execution.
+     *
+     * @param bool $close Whether to automatically close the connection after executing the query (default: true).
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_OPTION
+     */
+    public function closeAfter(bool $close = true): self 
+    {
+        $this->closeConnection = $close;
+        return $this;
+    }
+
+    /**
+     * Enables or disables safe mode for write and altering current table.
+     *
+     * When enabled, the next query operation will automatically be wrapped in an internal transaction 
+     * if no explicit transaction is already active.
+     * 
+     * @param bool $enable Whether to enable or disable safe mode.
+     * 
+     * @return self Returns the current builder instance.
+     * 
+     * @group QUERY_OPTION
+     * 
+     * Supported:
+     * 
+     * @see self::insert()
+     * @see self::update()
+     * @see self::delete()
+     * @see self::drop()
+     * @see self::truncate()
+     * @see self::copy()
+     * @see self::create()
+     * @see self::createTemp()
+     * @see self::execute()
+     * 
+     * @example - Using safe mode:
+     * 
+     * Automatically commits or rolls back.
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * $tbl = Builder::table('users')
+     *      ->safeMode()
+     *      ->insert([...]);
+     * ```
+     */
+    public function safeMode(bool $enable = true): self 
+    {
+        $this->isSafeMode = $enable;
+        return $this;
+    }
+
+    /**
+     * Retrieves the current cache instance.
+     *
+     * This method returns the static cache instance used by the class.
+     * The cache instance is typically set up earlier in the class's lifecycle.
+     *
+     * @return Cache|null Returns the current cache instance if set, or null if no cache has been initialized.
+     * 
+     * @group QUERY_CACHING
+     */
+    public function getCache(): ?Cache
+    {
+        return $this->cache;
+    }
+
+    /**
+     * Delete a cached item for the current table query.
+     *
+     * Removes the cache entry associated with the configured cache key.
+     * The cache must be initialized using `cache()` before calling this method.
+     *
+     * @return bool Returns true if the cache item was deleted, otherwise false.
+     * @throws RuntimeException If caching was not initialized or no cache key is available.
+     * 
+     * @group QUERY_CACHING
+     * 
+     * @see self::cache()
+     * @see self::clearCache()
+     *
+     * @example - Example:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $key = 'user-1';
+     * 
+     * $deleted = Builder::table('users')
+     *      ->cache($key, ...)
+     *      ->deleteCache();
+     * ```
+     */
+    public function deleteCache(): bool
+    {
+        if(!$this->cacheKey || !$this->cache instanceof Cache){
+            throw new RuntimeException(
+                'Cannot delete cache: caching is not initialized or the cache key is missing.'
+            );
+        }
+
+        if (!$this->isCacheable) {
+            return false;
+        }
+
+        return $this->cache->deleteItem($this->cacheKey, true);
+    }
+
+    /**
+     * Clear all cached items in the current cache storage.
+     *
+     * The storage is determined by the `cache()` configuration. If no custom
+     * storage was defined, the table name is used as the default storage.
+     *
+     * @return bool Returns true if the storage was cleared successfully, otherwise false.
+     * @throws RuntimeException If caching has not been initialized.
+     * 
+     * @group QUERY_CACHING
+     * 
+     * @see self::cache()
+     * @see self::deleteCache()
+     *
+     * @example - Custom storage
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $deleted = Builder::table('users')
+     *      ->cache(storage: 'my-users')
+     *      ->clearCache();
+     * ```
+     *
+     * @example - Table storage
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $deleted = Builder::table('users')
+     *      ->cache(storage: null)
+     *      ->clearCache();
+     * ```
+     */
+    public function clearCache(): bool
+    {
+        if(!$this->cache instanceof Cache){
+            throw new RuntimeException(
+                'Cannot clear cache: caching is not initialized.'
+            );
+        }
+
+        if (!$this->isCacheable) {
+            return false;
+        }
+
+        return $this->cache->clear();
+    }
+
+    /**
+     * Enable result caching for the current query.
+     *
+     * Configures the cache key, storage, expiration time, and optional
+     * settings for file-based or memcached and redis cache drivers.
+     *
+     * When caching is enabled globally through `cacheable()`, this method
+     * prepares the cache and checks if a valid cached result already exists.
+     *
+     * @param string|null $key Unique identifier for the cached result.
+     * @param string|null $storage Optional cache storage name (defaults: `tableName` or `'default'`).
+     * @param DateTimeInterface|int|null $expiry Cache expiration time (default: 7 days).
+     * @param string|null $persistentId Optional persistent ID for memcached and redis server (default: `null`).
+     *                  Use as subdirectory for filecache driver.
+     *
+     * @return self Returns the current builder instance.
+     * @throws CacheException If cache initialization or cache access fails.
+     * 
+     * @group QUERY_OPTION
+     * @group QUERY_CACHING
+     * 
+     * @see self::clearCache()
+     * @see self::deleteCache()
+     * @see self::hasCache()
+     * @see self::getCacheKey()
+     * @see self::getCache()
+     * @see self::cacheable()
+     * @see self::isCached()
+     * @see self::isCacheHit()
+     *
+     * @example - Caching Query Result:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $uid = 'u100';
+     *
+     * $user = Builder::table('users')
+     *      ->find([...])
+     *      ->where('id', '=', $uid)
+     *      ->cache(
+     *          key: $uid,
+     *          storage: 'userProfile',
+     *          expiry: 7 * 24 * 60 * 60,
+     *          persistentId: 'app-users'
+     *      )
+     *      ->get();
+     * ```
+     * 
+     * @example - Caching Raw Query Result:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $uid = 'u100';
+     *
+     * $user = Builder::query("SELECT * FROM users WHERE id = :id")
+     *     ->cache(
+     *          key: $uid,
+     *          storage: 'userProfile',
+     *          expiry: 7 * 24 * 60 * 60,
+     *          persistentId: 'app-users'
+     *     )
+     *     ->execute(['id' => $uid]);
+     * ```
+     */
+    public function cache(
+        ?string $key = null,
+        ?string $storage = null,
+        DateTimeInterface|int|null $expiry = 7 * 24 * 60 * 60,
+        ?string $persistentId = null
+    ): self 
+    {
+        if (!$this->isCacheable) {
+            return $this;
+        }
+
+        $key ??= self::toCacheKey();
+        $this->cacheKeyValue = $key;
+        
+        if ($this->isCollectMetadata || $this->unions !== []) {
+            $this->options['metadata']['cache'] = [
+                $key, 
+                $storage, 
+                $expiry,
+                $persistentId
+            ];
+            return $this;
+        }
+
+        $storage ??= $this->tableName;
+        $this->newCache($storage, $persistentId);
+
+        $this->cache->setExpire($expiry);
+
+        $this->cacheKey = Luminova::hash('xxh3', $key, fallbackAlgo: 'md5');
+        $this->isCacheReady = true;
+
+        $this->cacheInfo['enabled'] = true;
+        $this->cacheInfo['expiry']  = $expiry;
+
+        return $this;
+    }
+
+    /**
+     * Cache if cache exists for current key in storage.
+     * 
+     * This method requires calling {@see self::cache()} before checking.
+     *
+     * @return bool Return true if cache exists and not expired, otherwise false.
+     * 
+     * @group QUERY_CACHING
+     * 
+     * @see self::cache()
+     */
+    public function hasCache(): bool 
+    {
+        return (
+            $this->isCacheReady 
+            && $this->cache->hasItem($this->cacheKey)
+            && !$this->cache->hasExpired($this->cacheKey)
+        );
+    }
+
+    /**
+     * Retrieve the cache key for the current query context.
+     *
+     * @return string|null Returns the cache key if caching is enabled, otherwise null.
+     * 
+     * @group QUERY_CACHING
+     * 
+     * @see self::cache()
+     */
+    public function getCacheKey(): ?string
+    {
+        return $this->cacheKeyValue;
+    }
+
+    /**
+     * Execute and insert one or many records into a database table.
+     * 
+     * This method accepts either:
+     * - A single associative array (column => value).
+     * - An array of multiple associative arrays (to insert many rows at once).
+     *
+     * By default, it uses prepared statements for safety and performance.
+     * You can also run a raw query if needed by setting `$usePrepare` to false.
+     * 
+     * @param array<int,array<string,mixed>>|array<string,mixed>|null $values Optional records to insert 
+     *      or build using (@see self::values()} method).
+     *      Each record must be an associative array where:
+     *          - Keys are column names
+     *          - Values are the values to insert
+     * @param bool $usePrepare Whether to use prepared statements (default: true).
+     * @param bool $escapeValues Whether to escape values if `$usePrepare` is true (default: true).
+     * 
+     * @return int Returns the number of rows inserted.
+     * 
+     * @throws DatabaseException If the data format is invalid (e.g., not associative arrays).
+     * @throws JsonException If array values cannot be encoded to JSON.
+     * 
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::values() - For setting insert values.
+     * @see self::replace() - For using `REPLACE` instead of `INSERT`.
+     * @see self::onDuplicate() - For handling duplicate key updates.
+     * @see self::ignoreDuplicate() - For ignoring duplicate key errors.
+     * @see self::copy() - For copying data from another table.
+     * 
+     * @example - Insert a single row:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('logs')->insert([
+     *     'message' => 'User login',
+     *     'created_at' => Builder::now()
+     * ]);
+     * ```
+     * 
+     * @example - Insert multiple rows:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *  ->values(['name' => 'Alice', 'age' => 28])
+     *  ->values(['name' => 'Bob', 'age' => 34])
+     *  ->insert();
+     * ```
+     * 
+     * @example - Insert inside a transaction:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $tbl = Builder::table('users');
+     * $tbl->transaction();
+     * 
+     * $inserted = $tbl->insert([
+     *     ['name' => 'Charlie', 'age' => 40],
+     *     ['name' => 'Diana', 'age' => 36]
+     * ]);
+     * 
+     * if ($inserted) {
+     *     $tbl->commit();
+     * } else {
+     *     $tbl->rollback();
+     * }
+     * ```
+     * 
+     * @example - Use REPLACE instead of INSERT:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('logs')
+     *     ->replace(true)
+     *     ->insert([
+     *         'id' => 1, // if row with same PK exists, it will be replaced
+     *         'message' => 'System reboot',
+     *         'created_at' => Builder::expression('NOW()')
+     *     ]);
+     * ```
+     * 
+     * @example - Insert with ON DUPLICATE KEY UPDATE:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *     ->onDuplicate('last_login', '=', Builder::expression('NOW()'))
+     *     ->insert([
+     *         'user_id' => 1001,
+     *         'name' => 'John Doe',
+     *         'last_login' => Builder::expression('NOW()')
+     *     ]);
+     * ```
+     * 
+     * @example - Insert while ignoring duplicate key errors:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *     ->ignoreDuplicate(true)
+     *     ->insert([
+     *         'user_id' => 1002,
+     *         'name' => 'Jane Doe'
+     *     ]);
+     * ```
+     */
+    public function insert(?array $values = null, bool $usePrepare = true, bool $escapeValues = true): int
+    {
+        $values ??= [];
+        $values = ($values === null) 
+            ? $this->insertValues 
+            : array_merge($this->insertValues, $values);
+
+        if (!isset($values[0])) {
+            $values = [$values];
+        }
+
+        $this->assertInsertOrUpdateValues($values);
+        $this->assertInsertOptions();
+        
+        $length = count($values);
+        $useTransaction = false;
+        $savepoint = null;
+
+        if ($this->inSafeMode()) {
+            [$useTransaction, $savepoint] = $this->withTransaction();
+        }
+
+        try {
+            $type = $this->isReplace ? 'REPLACE' : 'INSERT';
+            $inserted = $usePrepare
+                ? $this->executeInsertPrepared($values, $type, $length, $escapeValues) 
+                : $this->executeInsertQuery($values, $type, $length);
+
+            return $this->finishInsert($useTransaction, $inserted, $savepoint);
+        } catch (Throwable $e) {
+            $this->resolveException($e, savepoint: $savepoint);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Executes a prepared `copy()` query and inserts the selected rows into a target table.
+     *
+     * This method finalizes a `copy()` operation by generating an `INSERT ... SELECT`
+     * statement. The operation can use normal insert mode, `INSERT IGNORE`, or
+     * `REPLACE` depending on the configured insert options.
+     *
+     * @param string   $table   Target table to insert copied data into.
+     * @param string[] $columns Target table columns receiving the copied values.
+     *
+     * @return int Returns the number of affected rows.
+     *
+     * @throws InvalidArgumentException If the target table name is empty.
+     * @throws DatabaseException If copy mode is not active or source and destination
+     *                           columns do not match.
+     * @throws JsonException If JSON value encoding fails during the operation.
+     * 
+     * @group QUERY_EXECUTOR
+     *
+     * @see self::copy() To prepare the source columns for copying.
+     *
+     * > **Warning:**
+     * > Source and destination columns must match in count and compatible order.
+     *
+     * @example - Copy user data into a backup table:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $affected = Builder::table('users')
+     *     ->copy(['id', 'email', 'created_at'])
+     *     ->where('active', '=', 1)
+     *     ->into('backup_users', ['id', 'email', 'created_at']);
+     *
+     * // Generates:
+     * // INSERT INTO backup_users (id, email, created_at)
+     * // SELECT id, email, created_at
+     * // FROM users
+     * // WHERE active = 1;
+     * ```
+     */
+    public function into(string $table, array $columns): int
+    {
+        return $this->to($table, $columns);
+    }
+
+    /**
+     * Execute an update query on the current table.
+     *
+     * Builds and executes an `UPDATE` statement using the provided values
+     * or values previously assigned through `set()`, `increment()`, or
+     * `decrement()`. Existing query constraints such as `WHERE`, joins,
+     * ordering, and limits are applied.
+     *
+     * **Safety:**
+     * - When strict mode is enabled (`Builder::strict(true)`), an update without
+     *   conditions throws an exception to prevent accidental full-table updates.
+     * - Values supplied directly must be provided as a column-value array.
+     *
+     * @param array<string,mixed>|null $values Optional column-value pairs to update.
+     *        If omitted, values assigned using builder mutation methods are used.
+     *
+     * @return int Number of affected rows.
+     *
+     * @throws DatabaseException When no update values are provided or invalid values are supplied.
+     * @throws JsonException When JSON encoding fails during value binding.
+     * 
+     * @group QUERY_EXECUTOR
+     *
+     * @see self::set() - For setting update values.
+     * @see self::increment() - For incrementing numeric columns.
+     * @see self::decrement() - For decrementing numeric columns.
+     * @see self::onDuplicate() - For handling duplicate key updates during insert.
+     * @see self::ignoreDuplicate() - For ignoring duplicate key errors during insert.
+     * @see self::strict() - For enabling strict mode to prevent accidental updates.
+     * 
+     * @example - Update specific row:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *     ->where('id', '=', 1)
+     *     ->update([
+     *         'last_login' => Builder::datetime(),
+     *         'attempts'   => 0
+     *     ]);
+     * ```
+     * 
+     * @example - Update rows using set method:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *     ->where('id', '=', 1)
+     *     ->set('last_login', Builder::datetime())
+     *     ->set('attempts', 0)
+     *     ->update();
+     * ```
+     * 
+     * @example - Update with raw expression:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *     ->where('id', '=', 1)
+     *     ->update(['score' => Builder::expression('score + 5')]);
+     * ```
+     * 
+     * @example - Update with joins and strict mode:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('orders', 'o')
+     *     ->innerJoin('users', 'u')
+     *          ->on('u.id', '=', 'o.user_id')
+     *     ->where('u.status', '=', 'inactive')
+     *     ->strict(true) // prevents missing WHERE clause accidents
+     *     ->update(['o.cancelled' => 1]);
+     * ```
+     */
+    public function update(?array $values = null): int 
+    {
+        $values = ($values === null) 
+            ? $this->updateValues 
+            : array_merge($this->updateValues, $values);
+
+        $this->assertInsertOrUpdateValues($values, false);
+
+        $top = $this->limiting['top'] ?? '';
+        $sql = $this->startQueryWith();
+
+        if(!$this->isCteFinalQuery){
+            $sql .= "UPDATE {$top}{$this->tableName}";
+            $sql .= $this->tableAlias ? " AS {$this->tableAlias}" : '';
+        }
+    
+        $sql .= $this->getJoinConditions();
+        $sql .= ' SET ' . $this->buildPlaceholder($values, true);
+
+        $this->buildConditions($sql);
+        $this->injectRawWhereQuery($sql);
+
+        $limit = $this->limiting['limit'] ?? 0;
+        $ordering = $this->getOptions('ordering');
+        $isDebugging = $this->isBuilderDebugging();
+
+        if($ordering !== []){
+            $sql .= ' ORDER BY ' . rtrim(implode(', ', $ordering), ', ');
+        }
+
+        if($limit > 0){
+            $sql .= " LIMIT {$limit}";
+        }
+
+        if($isDebugging && $this->addDebug($sql, 'update', $values)){
+            return 0;
+        }
+
+        $this->assertStrictModeCondition(
+            __METHOD__, 
+            isRequired: true,
+            allowHaving: false
+        );
+
+        $useTransaction = false;
+        $savepoint = null;
+
+        if (!$isDebugging && $this->inSafeMode()) {
+            [$useTransaction, $savepoint] = $this->withTransaction();
+        }
+
+        try {
+            if(!$isDebugging){
+                $this->db->prepare($sql);
+            }
+
+            $this->bindColumnPlaceholders($values, objectId: $this->getObjectId());
+            $this->bindConditions();
+            $this->bindNamedPlaceholders();
+
+            if($isDebugging){
+                return 0;
+            }
+
+            $response = $this->db->execute() 
+                ? $this->db->rowCount() 
+                : 0;
+
+            return (int) $this->finishTransaction($useTransaction, $response, $savepoint);
+        } catch (Throwable $e) {
+            $this->resolveException($e, savepoint: $savepoint);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Define update values to apply when an `INSERT` encounters a duplicate key.
+     *
+     * This method adds a `ON DUPLICATE KEY UPDATE` clause to the insert query.
+     * When a duplicate key conflict occurs, the specified column is updated using
+     * the provided operator and value.
+     *
+     * Supported operators:
+     *
+     * - `=`  Replace the existing value.
+     * - `+=` Add the value to the existing column value.
+     * - `-=` Subtract the value from the existing column value.
+     *
+     * @param string $column The column to update when a duplicate key occurs.
+     * @param string $operator The assignment operator to apply (`=`, `+=`, or `-=`).
+     * @param Expression|(Closure(self):mixed)|mixed $value The value or expression used for the update.
+     *
+     * @return self Return the current builder instance.
+     *
+     * @group QUERY_OPTION
+     *
+     * @example:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * Builder::table('users')
+     *     // Use the inserted value
+     *     ->onDuplicate('points', '=', Builder::expression('VALUES(points)'))
+     *
+     *     // Increment existing points
+     *     ->onDuplicate('total', '+=', 1)
+     *
+     *     // Replace email value
+     *     ->onDuplicate('email', '=', 'new@example.com')
+     *
+     *     ->insert([
+     *         [
+     *             'id'     => 1,
+     *             'name'   => 'Alice',
+     *             'points' => 50,
+     *             'total'  => 2,
+     *             'email'  => 'alice@example.com',
+     *         ]
+     *     ]);
+     * ```
+     */
+    public function onDuplicate(
+        string $column, 
+        string $operator, 
+        Expression|Closure|array|string|float|int|null $value
+    ): self
+    {
+        $this->options['duplicate'][$column] = [
+            'value'    => $value,
+            'operator' => $operator,
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Sets whether duplicates should be ignored during insertion.
+     * 
+     * This method allows you to control the behavior of handling duplicate keys.
+     * When set to `true`, duplicate keys will be ignored. 
+     * If set to `false`, the default behavior is to handle duplicates as normal 
+     * (which may result in an error or update based on the context).
+     * 
+     * @param bool $ignore Whether to ignore duplicates (default: `true`).
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_OPTION
+     * 
+     * @example - To ignore duplicates during insertion:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *     ->ignoreDuplicate()
+     *     ->insert([
+     *         [
+     *              'id'     => 1, 
+     *              'name'   => 'Alice', 
+     *              'points' => 50, 
+     *              'email'  => 'alice@example.com'
+     *         ]
+     *     ]);
+     * ```
+     */
+    public function ignoreDuplicate(bool $ignore = true): self 
+    {
+        $this->isIgnoreDuplicate = $ignore;
+        return $this;
+    }
+
+    /**
+     * Combines the current query with another using the `UNION` operator.
+     *
+     * Ensures both queries have the same number of columns. Resulting rows will be distinct.
+     *
+     * @param Builder|Closure $union Another Builder instance or closure that return builder to union with.
+     *
+     * @return self Return current parent Builder object.
+     * @throws DatabaseException If error occurs.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @see self::columns()
+     *
+     * @example - Union Example:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $active = Builder::table('users')
+     *     ->select(['id', 'email'])
+     *     ->where('status', '=', 'active');
+     * 
+     * $inactive = Builder::table('users')->select(['id', 'email'])
+     *     ->where('status', '=', 'inactive');
+     * 
+     * $all = $active->union($inactive)
+     *     ->descending('id')
+     *     ->limit(10)
+     *     ->get();
+     * ```
+     * > **Note:** 
+     * > When using union tables, do not call `get`, `fetch` or `stmt` before adding table to another.
+     * > Always call after all tables has been added.
+     */
+    public function union(Builder|Closure $union): self
+    {
+        return $this->doUnionTables($union);
+    }
+
+    /**
+     * Combines the current query with another using the `UNION ALL` operator.
+     *
+     * Unlike `UNION`, this includes duplicate rows from both queries.
+     *
+     * @param Builder|Closure $union Another Builder instance or closure that return builder to union with.
+     *
+     * @return self Return current parent Builder object.
+     * @throws DatabaseException If error occurs.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @see self::columns()
+     *
+     * @example - Union All example:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $active = Builder::table('users')
+     *     ->select(['id', 'email'])
+     *     ->where('status', '=', 'active');
+     * 
+     * $inactive = Builder::table('users')->select(['id', 'email'])
+     *     ->where('status', '=', 'inactive');
+     * 
+     * $all = $active->unionAll($inactive)->get();
+     * ```
+     * > **Note:** 
+     * > When using union tables, do not call `get`, `fetch` or `stmt` before adding table to another.
+     * > Always call after all tables has been added.
+     */
+    public function unionAll(Builder|Closure $union): self
+    {
+        return $this->doUnionTables($union, true);
+    }
+
+    /**
+     * Sets the columns to be used in a UNION/UNION ALL operation.
+     *
+     * This method specifies which columns should be included when combining
+     * results from multiple queries using UNION or UNION ALL. By default,
+     * all columns ('*') are included.
+     *
+     * @param string[] $columns The columns to include in the union operation.
+     *                      Defaults to ['*'] (all columns).
+     *                      Example: ['id', 'name', 'email']
+     *
+     * @return self Returns instance of builder class.
+     * 
+     * @group QUERY_COLUMN_MAP
+     * @group QUERY_CONDITION
+     * 
+     * @see self::union()
+     * @see self::unionAll()
+     *
+     * @example - Basic usage with UNION ALL:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * $active = Builder::table('users')
+     *      ->select(['id', 'email'])
+     *     ->where('status', '=', 'active');
+     * 
+     * $inactive = Builder::table('users')
+     *      ->select(['id', 'email'])
+     *     ->where('status', '=', 'inactive');
+     * 
+     * $result = $active->unionAll($inactive)
+     *     ->unionColumns(['id', 'email']) // Explicitly set UNION columns
+     *     ->get();
+     * ```
+     * 
+     * @example - Using with different column selections:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $employees = Builder::table('employees')
+     *      ->select(['emp_id AS id', 'full_name AS name']);
+     * $contractors = Builder::table('contractors')
+     *      ->select(['contractor_id' AS id, 'contractor_name AS name']);
+     * 
+     * $result = $employees->union($contractors)
+     *     ->unionAlias('combined')
+     *     ->unionColumns(['combined.id', 'combined.name']) / Maps and aligns columns
+     *     ->where('combined.status', '=', 'active')
+     *     ->limit(5)
+     *     ->get();
+     * ```
+     * 
+     * @example - Less recommended: 
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $employees = Builder::table('employees')
+     *      ->select(['emp_id', 'full_name']);
+     * $contractors = Builder::table('contractors')
+     *      ->select(['contractor_id', 'contractor_name']);
+     * 
+     * $result = $employees->union($contractors)
+     *     ->unionColumns(['emp_id AS id', 'full_name AS name']) // Maps and aligns columns
+     *     ->where('status', '=', 'active')
+     *     ->limit(5)
+     *     ->get();
+     * ```
+     */
+    public function unionColumns(array $columns = ['*']): self
+    {
+        $this->options['unionColumns'] = $columns;
+        return $this;
+    }
+
+    /**
+     * Sets the columns to be used in a UNION/UNION ALL operation.
+     *
+     * This method is an alias for `unionColumns()` and specifies which columns
+     * should be included when combining results from multiple queries using
+     * UNION or UNION ALL. By default, all columns ('*') are included.
+     *
+     * @param string[] $columns The columns to include in the union operation.
+     *                      Defaults to ['*'] (all columns).
+     *                      Example: ['id', 'name', 'email']
+     *
+     * @return self Returns instance of builder class.
+     * 
+     * @group QUERY_COLUMN_MAP
+     * @group QUERY_CONDITION
+     * 
+     * @see self::union()
+     * @see self::unionAll()
+     */
+    public function columns(array $columns = ['*']): self
+    {
+        return $this->unionColumns($columns);
+    }
+ 
+    /**
+     * Execute a raw SQL query that was set earlier with `query()`.
+     *
+     * You can use this method to execute prepared SQL statements with optional
+     * placeholder values and control how the result is returned.
+     *
+     * **Return Modes:**
+     * - `RETURN_ALL`: Return all rows (default)
+     * - `RETURN_NEXT`: Return a single row or the next available row
+     * - `RETURN_2D_NUM`: Return a 2D numeric array
+     * - `RETURN_ID`: Return the last inserted ID
+     * - `RETURN_COUNT`: Return the number of affected rows
+     * - `RETURN_COLUMN`: Return a specific column from the result
+     * - `RETURN_INT`: Return an integer count of records
+     * - `RETURN_STMT`: Return a prepared statement object
+     * - `RETURN_RESULT`: Return a raw result object
+     *
+     * @param array<string,mixed>|null $placeholder Optional key-value pairs for query placeholders.
+     * @param int $returnMode Record return mode e.g. `RETURN_NEXT`, (default: `RETURN_ALL`).
+     * @param int $fetchAs Result fetch mode e.g, `FETCH_ASSOC`, `FETCH_CLASS`, (default: `FETCH_OBJ`).
+     * @param bool $escape Whether to escape placeholder values (default: `false`).
+     *
+     * @return DatabaseInterface|mixed Returns query result, a statement object, or `false` on failure.
+     * @throws DatabaseException If called before setting a query with `query()`.
+     * 
+     * @group QUERY_EXECUTOR
+     *
+     * @see self::query() - Prepare Raw SQL query.
+     *
+     * @example - Running Raw SQL query:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $result = Builder::query("SELECT * FROM users LIMIT 10")
+     *      ->execute();
+     * ```
+     *
+     * @example Running SQL query with bind param:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $user = Builder::query("SELECT * FROM users WHERE id = :id LIMIT 1")
+     *     ->execute(['id' => 100], RETURN_NEXT);
+     * ```
+     *
+     * @example Using cache:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $user = Builder::query("SELECT * FROM users WHERE id = :id")
+     *     ->cache()
+     *     ->execute(['id' => 1]);
+     * ```
+     */
+    public function execute(
+        ?array $placeholder = null, 
+        int $returnMode = RETURN_ALL, 
+        int $fetchAs = FETCH_OBJ,
+        bool $escape = false
+    ): mixed 
+    {
+        if(($this->selector['method'] ?? null) !== 'query'){
+            throw new DatabaseException(
+                sprintf(
+                    'Method %s requires a query builder initialized with %s.',
+                    '->execute(...)',
+                    'Builder::query(...)'
+                ),
+                ErrorCode::LOGIC_ERROR
+            );
+        }
+
+        try {
+            return $this->runExecutableQueryResult(
+                $placeholder, 
+                $returnMode, 
+                $fetchAs,
+                $escape
+            );
+        } catch (Throwable $e) {
+            $this->resolveException($e);
+        }
+
+        return false;
+    }
+
+    /**
+     * Execute selectable query and return the result.
+     *
+     * This method is used after building a query with methods like:
+     * - `select()`
+     * - `find()`
+     * - `count()`
+     * - `sum()`
+     * - `average()`
+     *
+     * It automatically runs the query and returns the result in the format you specify.
+     *
+     * @param int $fetchAs Result fetch mode e.g, `FETCH_ASSOC`, `FETCH_CLASS`, (default: `FETCH_OBJ`).
+     * @param int|null $returnMode Record return mode e.g. `RETURN_NEXT`, (default: `RETURN_ALL`).
+     *
+     * @return mixed Returns query result on success, or `false`/`null` on failure.
+     * @throws DatabaseException If no query is set or execution fails.
+     * 
+     * @group QUERY_EXECUTOR
+     *
+     * @see self::fetch()   - To execute query and return result one after the other.
+     * @see self::stmt()    - To execute query and return `DatabaseInstance` that resolve to statement object.
+     * @see self::promise() - To execute query and return promise object that resolve to result.
+     * @see self::next()    - To execute query and return result one after the other.
+     * @see self::cursor()  - Iteration keyset scan.
+     * @see self::scan()    - Iteration offset scan.
+     *
+     * @example - Basic SELECT example:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $result = Builder::table('users')
+     *      ->select(['email', 'name'])
+     *      ->where('country', '=', 'NG')
+     *      ->get(FETCH_OBJ);
+     * ```
+     *
+     * @example - Fetching a single row:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $user = Builder::table('users')
+     *      ->find(['email', 'name'])
+     *      ->get(FETCH_ASSOC, RETURN_NEXT);
+     * ```
+     */
+    public function get(int $fetchAs = FETCH_OBJ, ?int $returnMode = null): mixed
+    {
+        $this->assertQuerySelector(__METHOD__);
+        
+        $returnMode = $this->selector['returns'] 
+            ?? $returnMode 
+            ?? RETURN_ALL;
+
+        $result = $this->getFromCache($returnMode);
+
+        if($result !== null && $result !== false){
+            return $result;
+        }
+
+        return $this->result(
+            $fetchAs,
+            $returnMode, 
+            $this->selector['method'] ?? null
+        );
+    }
+
+    /**
+     * Fetches the next row from the result set.
+     *
+     * Unlike scan(), this method keeps an active database cursor and retrieves
+     * one row at a time. It is suitable for large datasets where loading all
+     * rows into memory is unnecessary.
+     *
+     * @param int $mode Result fetch mode e.g, `FETCH_ASSOC`, `FETCH_NUM`, (default: `FETCH_OBJ`).
+     *
+     * @return mixed Returns the next row or null when no more rows exist.
+     * @throws RuntimeException If called on a non-select builder.
+     * 
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::cursor()
+     * @see self::scan()
+     * 
+     * @example - Statement example:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $stmt = Builder::table('users')
+     *     ->select(['email', 'name'])
+     *     ->where('country', '=', 'NG')
+     *     ->limit(4);
+     * 
+     * while ($row = $stmt->next(FETCH_OBJ)) {
+     *     echo $row->email;
+     * }
+     * $stmt->free();
+     * ```
+     * 
+     *  > **Note:** 
+     * > The fetch method executes statements directly, so query result caching is not supported.
+     */
+    public function next(int $mode = FETCH_OBJ): mixed
+    {
+        if (!$this->nextCursorStarted) {
+            if(!$this->multipleSelector(__METHOD__)->result(method:  'fetch')){
+                return null;
+            }
+
+            $this->nextCursorStarted = true;
+        }
+
+        $row = ($this->returns === self::RETURN_CLASS) 
+            ? $this->fetchClass(RETURN_NEXT)
+            : $this->db->fetch(
+                RETURN_NEXT,
+                $this->getFetchMode($mode)
+            );
+
+        if ($row === false || $row === null) {
+            $this->nextCursorStarted = false;
+            $this->db->free();
+            return null;
+        }
+
+        return $row;
+    }
+
+    /**
+     * Iterates through a result set using keyset (cursor-based) pagination.
+     *
+     * This method is designed for large datasets and uses indexed column traversal
+     * instead of OFFSET, making it significantly more efficient for deep scans.
+     *
+     * The cursor represents the last seen value of the indexed column and will be
+     * updated after each iteration.
+     *
+     * Important:
+     * - The provided column MUST be indexed for optimal performance.
+     * - The column must exist in the selected result set.
+     *
+     * @param string $column Integer indexed column used for cursor tracking (e.g, `id`, `age`).
+     * @param int $lastId Reference cursor (last seen column value).
+     * @param int $limit Number of rows to fetch per iteration.
+     * 
+     * @return array|null Returns an array of results or null when no more data exists.
+     * @throws RuntimeException If called in unsupported builder object.
+     * 
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::scan() For offset scan.
+     *
+     * @example - Example usage:
+     * ```php
+     * $lastId = 0;
+     * $builder = Builder::table('users')
+     *      ->select(['id', 'name'])
+     *      ->where('country', '=', 'NN');
+     *
+     * do {
+     *     $rows = $builder->cursor('id', $lastId, 100);
+     *
+     *     foreach ($rows as $row) {
+     *         // process row
+     *     }
+     * } while ($lastId > 0);
+     * ```
+     */
+    public function cursor(string $column, int &$lastId, int $limit = 100): ?array
+    {
+        return $this->multipleSelector(__METHOD__)->scanner(
+            $lastId, 
+            $limit, 
+            $column
+        );
+    }
+
+    /**
+     * Iterates through a result set using offset-based pagination.
+     *
+     * This method is suitable for small to medium datasets where OFFSET pagination
+     * is acceptable. The cursor represents the current offset position and will be
+     * incremented automatically based on the number of rows returned.
+     *
+     * The cursor will be reset to `0` when no more results are available.
+     *
+     * @param int|null $iterator Reference cursor (offset position).
+     * @param int $limit Number of rows to fetch per iteration.
+     * 
+     * @return array|null Returns an array of results or null when no more data exists.
+     * @throws RuntimeException If called in unsupported builder object.
+     * 
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::cursor() For keyset scan.
+     * 
+     * @example Example usage:
+     * ```php
+     * $cursor = 0;
+     * $builder = Builder::table('users')
+     *      ->select(['id', 'name'])
+     *      ->where('country', '=', 'NN');
+     *
+     * do {
+     *     $rows = $builder->scan($cursor, 100);
+     *     foreach ($rows as $row) {
+     *         // process row
+     *     }
+     * } while ($cursor > 0);
+     * ```
+     */
+    public function scan(?int &$iterator, int $limit = 100): ?array
+    {
+        return $this->multipleSelector(__METHOD__)->scanner(
+            $iterator, 
+            $limit
+        );
+    }
+
+    /**
+     * Executes query and returns results wrapped in a promise object.
+     * 
+     * Useful for asynchronous-style handling of database operations.
+     * Resolves with the query results or rejects on error.
+     * 
+     * **Applies to:**
+     * - `select()`
+     * - `find()`
+     * - `count()`
+     * - `sum()`
+     * - `average()`
+     *
+     * @param int $fetchAs Result fetch mode e.g, `FETCH_ASSOC`, `FETCH_CLASS`, (default: `FETCH_OBJ`).
+     * @param int|null $returnMode Record return mode e.g. `RETURN_NEXT`, (default: `RETURN_ALL`).
+     * 
+     * @return PromiseInterface Returns promise object that resolves with query results or rejects with a throwable.
+     * 
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::get()
+     * @see self::stmt()
+     * @see self::next()
+     * 
+     * @example - Promise example:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *     ->find(['email', 'name'])
+     *     ->where('country', '=', 'NG')
+     *     ->promise(FETCH_OBJ)
+     *     ->then(function (mixed $result) {
+     *         echo $result->name;
+     *     })
+     *     ->catch(function (Throwable $e) {
+     *         echo $e->getMessage();
+     *     });
+     * ```
+     */
+    public function promise(int $fetchAs = FETCH_OBJ, ?int $returnMode = null): PromiseInterface 
+    {
+        return new Promise(function (callable $resolve, callable $reject) use(
+            $fetchAs, 
+            $returnMode
+        ): void {
+            try{
+                $this->assertQuerySelector('promise');
+                $resolve($this->get($fetchAs, $returnMode));
+            }catch(Throwable $e){
+                $reject($e);
+            }
+        });
+    }
+
+    /**
+     * Executes query and returns a prepared statement object.
+     * 
+     * This method runs the query and returns an instance of the database driver that
+     * wraps the prepared statement. It allows you to work directly with the underlying
+     * database driver object, using `PDOStatement`, `mysqli_stmt`, 
+     * or `mysqli_result` depending on your database driver.
+     * 
+     * **Applies to:**
+     * - `select()`
+     * - `find()`
+     * - `count()`
+     * - `sum()`
+     * - `average()`
+     * 
+     * @return DatabaseInterface|null Returns a statement object on success, or `null` if execution fails.
+     * @throws DatabaseException If no query is set or execution fails.
+     * 
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::get()
+     * @see self::next()
+     * @see self::promise()
+     * 
+     * @example - Fetch all results:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $stmt = Builder::table('users')
+     *     ->select(['email', 'name'])
+     *     ->where('country', '=', 'NG')
+     *     ->stmt();
+     * 
+     * $result = $stmt->fetchAll(FETCH_OBJ);
+     * $stmt->free();
+     * ```
+     * 
+     * @example - Fetch as object:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $stmt = Builder::table('users')
+     *     ->find(['email', 'name'])
+     *     ->where('id', '=', 1)
+     *     ->stmt();
+     * 
+     * $user = $stmt->fetchObject(User::class);
+     * $stmt->free();
+     * ```
+     * 
+     * @example - Accessing the raw PDO statement:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $stmt = Builder::table('users')
+     *     ->find(['email', 'name'])
+     *     ->where('id', '=', 1)
+     *     ->stmt();
+     * 
+     * $user = $stmt->getStatement()
+     *     ->fetchAll(\PDO::FETCH_DEFAULT);
+     * $stmt->free();
+     * ```
+     * 
+     * > **Note:** 
+     * > Query result caching is not supported when using `stmt()`.
+     */
+    public function stmt(): ?DatabaseInterface
+    {
+        $this->assertQuerySelector(__METHOD__);
+
+        $this->returns = self::RETURN_STATEMENT;
+        $this->selector['method'] = 'stmt';
+        $this->selector['returns'] = RETURN_STMT;
+
+        $this->stmt = $this->get(FETCH_OBJ, RETURN_STMT);
+
+        if($this->stmt instanceof DatabaseInterface && $this->stmt->ok()){
+            return $this->stmt;
+        }
+
+        $this->free();
+
+        return null;
+    }
+
+    /**
+     * Check if record exists.
+     * 
+     * Build and execute query to determine if a records exists in selected table.
+     * 
+     * @return bool Return true if records exists in table, otherwise false.
+     * @throws DatabaseException If an error occurs.
+     * 
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::tableExists() To check if table exists in database.
+     * @see self::whereExists() To add where exists conditions.
+     * 
+     * @example - Check if users in country `NG` exists in table:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $has = Builder::table('users')
+     *      ->where('country', '=', 'NG')
+     *      ->exists();
+     * ```
+     * 
+     * @methodGroup QueryExecutor Execute query to determine if record exists.
+     */
+    public function exists(): bool
+    {
+        $result = $this->getFromCache(RETURN_NEXT);
+
+        if($result !== null){
+            return (bool) $result;
+        }
+
+        return (bool) $this->buildExecutableStatement(
+            ' 1', 
+            'exists',
+            returns: RETURN_NEXT
+        );
+    }
+
+    /**
+     * Build a query to count records or distinct column values.
+     *
+     * When `get()` is called, it returns an `int` representing the number of
+     * matching records. If no records match, it returns `0`.
+     *
+     * Supports counting all records, specific columns, or distinct values.
+     *
+     * **Applies to:**
+     *
+     * - `get()`
+     * - `promise()`
+     * - `stmt()`
+     * - `next()`
+     *
+     * @param string[]|string $column The column name, list of columns, 
+     *                             or `*` to count all records (default: `*`).
+     * @param bool $distinct Whether to count only distinct values.
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_SELECTOR
+     *
+     * @example - Count users from country `NG`:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $total = Builder::table('users')
+     *      ->count()
+     *      ->where('country', '=', 'NG')
+     *      ->get();
+     * ```
+     *
+     * @example - Count unique user emails:
+     *
+     * ```php
+     * $total = Builder::table('users')
+     *      ->count('email', distinct: true)
+     *      ->get();
+     * ```
+     */
+    public function count(array|string $column = '*', bool $distinct = false): self
+    {
+        return $this->aggregate(
+            'COUNT',
+            $column,
+            distinct: $distinct
+        );
+    }
+
+    /**
+     * Build query to retrieve the minimum value from a column.
+     *
+     * When `get()` is called, it returns the lowest value from the specified
+     * column. If no rows match, the result depends on the database behavior
+     * (usually `null`).
+     *
+     * **Applies to:**
+     *
+     * - `get()`
+     * - `promise()`
+     * - `stmt()`
+     * - `next()`
+     *
+     * @param string $column The column name to retrieve the minimum value from.
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_SELECTOR
+     *
+     * @example - Get the earliest user creation date:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $date = Builder::table('users')
+     *      ->min('created_at')
+     *      ->get();
+     * ```
+     */
+    public function min(string $column): self
+    {
+        return $this->aggregate('MIN', $column);
+    }
+
+    /**
+     * Build query to retrieve the maximum value from a column.
+     *
+     * When `get()` is called, it returns the highest value from the specified
+     * column. If no rows match, the result depends on the database behavior
+     * (usually `null`).
+     *
+     * **Applies to:**
+     *
+     * - `get()`
+     * - `promise()`
+     * - `stmt()`
+     * - `next()`
+     *
+     * @param string $column The column name to retrieve the maximum value from.
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_SELECTOR
+     *
+     * @example - Get the latest user creation date:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $date = Builder::table('users')
+     *      ->max('created_at')
+     *      ->get();
+     * ```
+     */
+    public function max(string $column): self
+    {
+        return $this->aggregate('MAX', $column);
+    }
+
+    /**
+     * Build query to calculate the total sum of a numeric column.
+     *
+     * When `get()` is called, it returns an `int|float` representing the total
+     * sum of the specified column values. If no rows match, it returns `0`.
+     *
+     * Supports summing all values or only distinct values.
+     *
+     * **Applies to:**
+     *
+     * - `get()`
+     * - `promise()`
+     * - `stmt()`
+     * - `next()`
+     *
+     * @param string[]|string $column The column name or list of columns to sum.
+     * @param bool $distinct Whether to sum only distinct values.
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_SELECTOR
+     *
+     * @example - Get the total user votes in country `NG`:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $votes = Builder::table('users')
+     *      ->sum('votes')
+     *      ->where('country', '=', 'NG')
+     *      ->get();
+     * ```
+     */
+    public function sum(array|string $column = '*', bool $distinct = false): self
+    {
+        return $this->aggregate(
+            'SUM',
+            $column,
+            $distinct
+        );
+    }
+
+    /**
+     * Build query to calculate the average value of a numeric column.
+     *
+     * When `get()` is called, it returns an `int|float` representing the average
+     * value of the specified column. If no rows match, it returns `0`.
+     *
+     * Supports calculating the average of all values or only distinct values.
+     *
+     * **Applies to:**
+     *
+     * - `get()`
+     * - `promise()`
+     * - `stmt()`
+     * - `next()`
+     *
+     * @param string[]|string $column The column name or list of columns to average.
+     * @param bool $distinct Whether to average only distinct values.
+     *
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_SELECTOR
+     *
+     * @example - Get the average user votes in country `NG`:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $votes = Builder::table('users')
+     *      ->where('country', '=', 'NG')
+     *      ->average('votes')
+     *      ->get();
+     * ```
+     */
+    public function average(array|string $column = '*', bool $distinct = false): self
+    {
+        return $this->aggregate(
+            'AVG',
+            $column,
+            $distinct
+        );
+    }
+
+    /**
+     * Add query to select multiple records from table.
+     * 
+     * When `get` method is called, it returns `object|null|array|int|float|bool`, 
+     * the selected rows, otherwise false if execution failed.
+     * 
+     * **Applies to:**
+     * 
+     * - `get()`
+     * - `promise()`
+     * - `stmt()`
+     * - `next()`
+     * 
+     * @param string[] $columns The table columns to select (e.g, `['foo', 'bar']` or ['*']).
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_SELECTOR
+     * 
+     * @see self::bind() To bind named placeholder in SELECT column expression.
+     * 
+     * @example - Get the all users from country `NG`:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $users = Builder::table('users')
+     *      ->select(['votes', 'name'])
+     *      ->where('country', '=', 'NG')
+     *      ->get();
+     * ```
+     */
+    public function select(array $columns = ['*']): self 
+    {
+        $columns = $this->mergeDistanceColumns($columns);
+        $this->selector = [
+            'sql'       => '',
+            'columns'   => $columns,
+            'method'    => 'select'
+        ];
+        
+        return $this;
+    }
+
+    /**
+     * Select a single record from table.
+     * 
+     * Unlike {@see self::select()}, this method selects a single/next record from table 
+     * with a strict where condition required.
+     * 
+     * When `get` method is called, it returns `object|null|array|int|float|bool`, 
+     * the selected single row, otherwise false if execution failed.
+     * 
+     * **Applies to:**
+     * 
+     * - `get()`
+     * - `promise()`
+     * - `stmt()`
+     * - `next()`
+     * 
+     * @param array<int,string> $columns The table columns to select (e.g, `['foo', 'bar']` or ['*']).
+     * 
+     * @return self Return current builder instance.
+     * 
+     * @group QUERY_SELECTOR
+     * 
+     * @see self::bind() To bind named placeholder in SELECT column expression.
+     * 
+     * @example - Get a single user from country `NG`:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $user = Builder::table('users')
+     *      ->find(['votes', 'name'])
+     *      ->where('country', '=', 'NG')
+     *      ->get();
+     * ```
+     */
+    public function find(array $columns = ['*']): self 
+    {
+        $columns = $this->mergeDistanceColumns($columns);
+        $this->selector = [
+            'sql'       => '',
+            'columns'   => $columns,
+            'method'    => 'find',
+            'returns'   => RETURN_NEXT,
+        ];
+
+        $this->options['assert'] = __METHOD__;
+        return $this;
+    }
+
+    /**
+     * Prepares a query to copy data from the current table into another table.
+     *
+     * This method defines the source columns used by an `INSERT ... SELECT`
+     * operation. The destination table must be specified using `into()`.
+     *
+     * The generated query copies selected rows from the current table into the
+     * destination table without loading data into application memory.
+     *
+     * **Usage:**
+     *
+     * - Must be followed by `into()`.
+     *
+     * @param string[] $columns The source columns to copy.
+     *
+     * @return self Returns the current builder instance.
+     * 
+     * @group QUERY_SELECTOR
+     * 
+     * @see self::into() To specify the destination table and execute the copy operation.
+     *
+     * @example - - Copy specific columns:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $result = Builder::table('users')
+     *     ->copy(['id', 'email', 'created_at'])
+     *     ->where('id', '=', 100)
+     *     ->into('backup_users', ['id', 'email', 'created_at']);
+     * ```
+     *
+     * Generates:
+     *
+     * ```sql
+     * INSERT INTO backup_users (id, email, created_at)
+     * SELECT id, email, created_at
+     * FROM users
+     * WHERE id = 100;
+     * ```
+     *
+     * @example - Copy using replace mode:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $result = Builder::table('users')
+     *     ->copy(['id', 'email', 'created_at'])
+     *     ->replace(true)
+     *     ->where('id', '=', 100)
+     *     ->into('backup_users', ['id', 'email', 'created_at']);
+     * ```
+     */
+    public function copy(array $columns): self
+    {
+        $columns = $this->mergeDistanceColumns($columns);
+        $this->selector = [
+            'sql'     => '',
+            'columns' => $columns,
+            'method'  => 'select',
+            'isCopy'  => true
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Execute query to delete records from the table.
+     *
+     * This method constructs and executes a `DELETE` statement based on the 
+     * current query conditions. It ensures that strict mode prevents execution 
+     * without a `WHERE` clause, reducing the risk of accidental deletions.
+     *
+     * @return int Return the number of affected rows.
+     * @throws DatabaseException If an error occurs during execution.
+     * 
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::truncate()
+     * @see self::rename()
+     * @see self::drop()
+     * 
+     * @example - Delete table column:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->where('id', '=', 1)
+     *      ->strict(true) // Enable or disable strict where clause check
+     *      ->delete();
+     * ```
+     */
+    public function delete(): int
+    {
+        $sql = $this->startQueryWith();
+        
+        if(!$this->isCteFinalQuery){
+            $driver  = $this->db->getDriver();
+            $alias   = $this->tableAlias ? " {$this->tableAlias}" : '';
+            $asAlias = $this->tableAlias ? " AS {$this->tableAlias}" : '';
+            $top     = $this->limiting['top'] ?? '';
+
+            $sql .= match ($driver) {
+                'pgsql' => "DELETE FROM {$this->tableName} USING {$this->tableName}{$asAlias}",
+                'sqlsrv', 'sql-server', 'ms-access'
+                    => "DELETE {$top}FROM {$this->tableName}{$alias}",
+                default
+                    => "DELETE{$alias} FROM {$this->tableName}{$alias}"
+            };
+        }
+
+        $sql .= $this->getJoinConditions();
+
+        $this->options['assert'] = __METHOD__;
+
+        try {
+            return (int) $this->getStatementExecutionResult($sql, 'delete');
+        } catch (Throwable $e) {
+            $this->resolveException($e);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Begins a transaction with optional read-only isolation level and savepoint.
+     *
+     * @param int $flags Optional flags to set transaction properties.
+     * @param ?string $name Optional transaction savepoint name to create.
+     * 
+     * @return bool Returns true if the transaction and optional savepoint were successfully started.
+     * @throws DatabaseException If invalid savepoint name 
+     *          or if failure to set transaction isolation level or create savepoint.
+     * 
+     * @group QUERY_DB_UTIL
+     * 
+     * @see self::nestedTransaction()
+     * @see self::commit()
+     * @see self::rollback();
+     * @see self::release();
+     * @see self::savepoint();
+     * @see self::inTransaction()
+     * 
+     * @example - Transaction:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $tbl = Builder::table('users');
+     * 
+     * $tbl->transaction();
+     * $tbl->where('country', '=', 'NG');
+     * 
+     * if($tbl->update(['suburb' => 'Enugu'])){
+     *      $tbl->commit();
+     * }else{
+     *      $tbl->rollback();
+     * }
+     * 
+     * $tbl->free();
+     * ```
+     */
+    public function transaction(int $flags = 0, ?string $name = null): bool 
+    {
+        if($this->db->beginTransaction($flags, $name)){
+            return true;
+        }
+
+        throw new DatabaseException(sprintf(
+                'Transaction failed to start%s (flags: %d)', 
+                $name ? " for \"$name\"" : '', 
+                $flags
+            ),
+            ErrorCode::DATABASE_TRANSACTION_FAILED
+        );
+    }
+
+    /**
+     * Start a nested transaction using an automatic savepoint name.
+     *
+     * Useful when running transactions inside loops, allowing partial commits
+     * or rollbacks without affecting the outer transaction.
+     *
+     * @param bool $closeCursor Whether to close existing cursors before starting.
+     *
+     * @return string|false|null The savepoint name, null if a new transaction was started or false if failed.
+     * 
+     * @group QUERY_DB_UTIL
+     *
+     * @see self::transaction()
+     * @see self::commit()
+     * @see self::rollback()
+     * @see self::release()
+     * @see self::savepoint()
+     * @see self::inTransaction()
+     *
+     * @example - Nested Transaction:
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $tbl = Builder::table('users');
+     * $updated = 0;
+     *
+     * foreach ($users as $user) {
+     *     $sp = $tbl->nestedTransaction();
+     *
+     *     $tbl->where('country', '=', 'NG');
+     *     $tbl->and('id', '=', $user->id);
+     *
+     *     if ($tbl->update(['suburb' => 'Enugu'])) {
+     *         $tbl->release($sp);
+     *         $updated++;
+     *     }
+     * }
+     *
+     * if ($updated > 0) {
+     *     $tbl->commit();
+     * } else {
+     *     $tbl->rollback();
+     * }
+     *
+     * $tbl->free();
+     * ```
+     */
+    public function nestedTransaction(bool $closeCursor = false): string|bool|null
+    {
+        return $this->db->tryBeginNestedTransaction($closeCursor);
+    }
+
+    /**
+     * Set a named transaction savepoint.
+     * 
+     * @param string $name The name for a savepoint to create.
+     * 
+     * @return bool Returns true on success or false on failure.
+     * @throws DatabaseException If an invalid savepoint name or database error.
+     * 
+     * @group QUERY_DB_UTIL
+     */
+    public function savepoint(string $name): bool 
+    {
+        if(!$this->inTransaction()){
+            return false;
+        }
+
+        return $this->db->savepoint($name);
+    }
+
+    /**
+     * Checks if a transaction is currently active.
+     *
+     * @return bool Returns true if a transaction is active, false otherwise.
+     * 
+     * @group QUERY_DB_UTIL
+     * 
+     * @see self::commit()
+     * @see self::rollback();
+     * @see self::transaction()
+     */
+    public function inTransaction(): bool 
+    {
+        return ($this->db instanceof DatabaseInterface) 
+            && $this->db->inTransaction();
+    }
+
+    /**
+     * Commits a transaction.
+     *
+     * @param int $flags Optional flags for custom handling.
+     *                 Only supported in MySQLi.
+     * @param ?string $name Optional name for a savepoint.
+     *                If provided in PDO, savepoint will be released instead.
+     * 
+     * @return bool Returns true if the transaction was successfully committed.
+     * @throws DatabaseException Throws if invalid savepoint name or failure to create savepoint.
+     * 
+     * @group QUERY_DB_UTIL
+     * 
+     * @see self::transaction()
+     * @see self::rollback()
+     * @see self::inTransaction()
+     */
+    public function commit(int $flags = 0, ?string $name = null): bool 
+    {
+        if(!$this->inTransaction()){
+            return true;
+        }
+
+        return $this->db->commit($flags, $name);
+    }
+
+    /**
+     * Rolls back the current transaction or to a specific savepoint.
+     *
+     * @param int $flags Optional flags for custom handling.
+     *                   Only supported in MySQLi.
+     * @param ?string $name Optional name of the savepoint to roll back to.
+     *                    If provided in PDO, rolls back to the savepoint named.
+     * 
+     * @return bool Return true if rolled back was successful, otherwise false.
+     * @throws DatabaseException Throws if invalid savepoint name or failure to create savepoint.
+     * 
+     * @group QUERY_DB_UTIL
+     * 
+     * @see self::transaction()
+     * @see self::commit()
+     * @see self::inTransaction()
+     */
+    public function rollback(int $flags = 0, ?string $name = null): bool 
+    {
+        if (!$this->inTransaction()) {
+            return true;
+        }
+
+        return $this->db->rollback($flags, $name);
+    }
+
+    /**
+     * Removes the named savepoint from the set of savepoints of the current transaction.
+     * 
+     * @param string $name The savepoint name to release.
+     * 
+     * @return bool Returns true on success or false on failure.
+     * @throws DatabaseException Throws if invalid savepoint name.
+     * 
+     * @group QUERY_DB_UTIL
+     */
+    public function release(string $name): bool 
+    {
+        if(!$this->inTransaction()){
+            return false;
+        }
+
+        return $this->db->release($name);
+    }
+
+    /**
+     * Rename the current table to a new name.
+     *
+     * @param string $to The new table name.
+     * 
+     * @return bool Return true if the rename operation was successful, false otherwise.
+     * @throws DatabaseException If the database driver is unsupported.
+     * 
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::delete()
+     * @see self::drop()
+     * @see self::truncate()
+     * 
+     * @example - Rename table name.
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $renamed = Builder::table('users')
+     *      ->rename('new_users');
+     * ```
+     */
+    public function rename(string $to): bool 
+    {
+        $to = trim($to);
+
+        self::assertTableName($to);
+
+        $sql = Scheme::getBuilderTableRename(
+            $this->db->getDriver(), 
+            $this->tableName, 
+            $to
+        );
+
+        return (bool) $this->db->exec($sql);
+    }
+
+    /**
+     * Apply a row-level update lock to the query for concurrency control.
+     *
+     * Call this method before executing `find([...])`, `select([...])` or similar fetch operations.
+     * 
+     * @return self Return current builder instance.
+     * @throws DatabaseException If the current database driver does not support
+     *                            the requested lock mode.
+     * 
+     * @group QUERY_OPTION
+     * 
+     * @see self::lockForShare()
+     * 
+     * > **Note:** 
+     * > Must be used inside a transaction.
+     * > Locking is only useful if you need selected value to decide the update/insert.
+     *
+     * @example Lock rows for update (exclusive lock):
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $tbl = Builder::Table('users');
+     * 
+     * $tbl->transaction();
+     * 
+     * $rows = $tbl->where('user_id', '=', 123)
+     *     ->lockForUpdate() // Prevents others from reading or writing
+     *     ->find();
+     * 
+     * $tbl->commit();
+     * ```
+     */
+    public function lockForUpdate(): self 
+    {
+        return $this->lock('update');
+    }
+
+    /**
+     * Apply a row-level share lock to the query for concurrency control.
+     *
+     * Call this method before executing `find()`, `select()` or similar fetch operations.
+     * 
+     * @return self Return current builder instance.
+     * @throws DatabaseException If the current database driver does not support
+     *                            the requested lock mode.
+     * 
+     * @group QUERY_OPTION
+     * 
+     * > **Note:** 
+     * > Must be used inside a transaction.
+     * > Locking is only useful if you need to read value only.
+     *
+     * @example - Lock rows for shared read (shared lock):
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $tbl = Builder::Table('users');
+     * 
+     * $tbl->transaction();
+     * 
+     * $rows = $tbl->where('user_id', '=', 123)
+     *     ->lockForShare() // Allows others to read, but not write
+     *     ->find();
+     * 
+     * $tbl->commit();
+     * ```
+     */
+    public function lockForShare(): self 
+    {
+        return $this->lock('share');
+    }
+
+    /**
+     * Truncate database table records.
+     * 
+     * This method will attempt to clear all table records and reset auto-increment. 
+     * 
+     * @param int|null $resetIncrement Index to reset auto-increment if applicable (default `null`).
+     * 
+     * @return bool Return true truncation was completed, otherwise false.
+     * @throws DatabaseException Throws if an error occurred during execution.
+     * 
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::delete()
+     * @see self::drop()
+     * @see self::rename()
+     * 
+     * @example - Clear all records in table:
+     * 
+     * ```php
+     * Builder::table('users')->truncate();
+     * ```
+     * 
+     * @example - Clear all records in table using transaction:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $stmt = Builder::table('users')
+     *  ->transaction();
+     * 
+     * if($stmt->truncate()){
+     *      $stmt->commit();
+     * }else{
+     *      $stmt->rollback();
+     * }
+     * ```
+     */
+    public function truncate(?int $resetIncrement = null): bool
+    {
+        $savepoint = null;
+        $useTransaction = false;
+        $success = false;
+
+        if ($this->inSafeMode()) {
+            [$useTransaction, $savepoint] = $this->withTransaction();
+        }
+
+        try {
+            $driver = $this->db->getDriver();
+
+            if (in_array($driver, ['mysql', 'mysqli', 'pgsql'], true)) {
+                $success = (bool) $this->db->exec(
+                    "TRUNCATE TABLE {$this->tableName}"
+                );
+
+                if (
+                    $success &&
+                    $resetIncrement !== null &&
+                    in_array($driver, ['mysql', 'mysqli'], true)
+                ) {
+                    $success = (bool) $this->db->exec(
+                        "ALTER TABLE {$this->tableName} AUTO_INCREMENT = {$resetIncrement}"
+                    );
+                }
+            } else {
+                $success = (bool) $this->db->exec(
+                    "DELETE FROM {$this->tableName}"
+                );
+
+                if (
+                    $success &&
+                    $driver === 'sqlite' &&
+                    $resetIncrement !== null
+                ) {
+                    $stmt = $this->db->prepare(
+                        "UPDATE sqlite_sequence SET seq = {$resetIncrement} WHERE name = :tableName"
+                    )->bind(':tableName', $this->tableName);
+
+                    $success = $stmt->execute();
+
+                    if ($success) {
+                        $this->db->exec("VACUUM");
+                    }
+                }
+            }
+        } catch (Throwable $e) {
+            $this->resolveException($e, savepoint: $savepoint);
+            return false;
+        }
+
+        return (bool) $this->finishTransaction($useTransaction, $success, $savepoint);
+    }
+
+    /**
+     * Create the database table if it does not already exist.
+     *
+     * This method executes a `CREATE TABLE IF NOT EXISTS` statement for the current
+     * table. It creates an empty table structure and does not copy records or create
+     * a temporary table.
+     *
+     * @return bool Returns true if the table was created successfully; false if the
+     *              operation failed or no changes were made.
+     * @throws DatabaseException Throws an exception if a database error occurs
+     *                            while executing the create statement.
+     *
+     * @group QUERY_EXECUTOR
+     * 
+     * @see self::createTemp() To create a temporal table and backup data.
+     *
+     * @example - Example:
+     *
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     *
+     * $created = Builder::table('users')->create();
+     *
+     * if ($created) {
+     *     echo 'Table created successfully.';
+     * }
+     * ```
+     */
+    public function create(): bool 
+    {
+        self::assertTableName((string) $this->tableName);
+
+        return $this->db->exec("CREATE TABLE IF NOT EXISTS {$this->tableName}") > 0;
+    }
+
+    /**
+     * Create a temporary table and backup data from current table.
+     * 
+     * This creates a  temporal table and copies all records from the main table to the temporary table.
+     * 
+     * @param string|null $prefix Optional temp table name prefix (default: `temp_`).
+     *
+     * @return bool Returns true if the operation was successful; false otherwise.
+     * @throws DatabaseException Throws an exception if a database error occurs during the operation.
+     * 
+     * @group QUERY_EXECUTOR
+     *
+     * @example - Example:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * if (Builder::table('users')->createTemp()) {
+     *     $data = Builder::table('temp_users')->select();
+     * }
+     * ```
+     * 
+     * @example - Example Using Transaction:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $stmt = (Builder::table('users')
+     *      ->transaction();
+     * 
+     * if ($stmt->createTemp()) {
+     *      if ($stmt->commit()) {
+     *          $data = Builder::table('temp_users')->select();
+     *      }
+     * }else{
+     *      $stmt->rollback();
+     * }
+     * ```
+     * 
+     * > **Note:**
+     * > - Temporary tables are automatically deleted when the current session ends.
+     * > - To query the temporary table, use the `temp_` prefix before the main table name.
+     */
+    public function createTemp(?string $prefix = 'temp_'): bool 
+    {
+        self::assertTableName((string) $this->tableName);
+
+        $tableName = "{$prefix}{$this->tableName}";
+
+        if($prefix !== null && $prefix !== 'temp_'){
+            self::assertTableName($tableName);
+        }
+
+        $result = false;
+        $savepoint = null;
+        $useTransaction = false;
+
+        if ($this->inSafeMode()) {
+            [$useTransaction, $savepoint] = $this->withTransaction();
+        }
+
+        try {
+            $create = "CREATE TEMPORARY TABLE IF NOT EXISTS {$tableName} ";
+            $create .= "AS (SELECT * FROM {$this->tableName} WHERE 1 = 0)";
+            $result = (
+                $this->db->exec($create) > 0 && 
+                $this->db->exec("INSERT INTO {$tableName} SELECT * FROM {$this->tableName}") > 0
+            );
+        } catch (Throwable $e) {
+            $this->resolveException($e, savepoint: $savepoint);
+            return false;
+        }
+
+        return (bool) $this->finishTransaction($useTransaction, $result, $savepoint);
+    }
+
+    /**
+     * Drop database table table or temporal if it exists.
+     * 
+     * @param bool $isTemporalTable Whether the table is a temporary table (default false).
+     * 
+     * @return bool Return true if table was successfully dropped, false otherwise.
+     * @throws DatabaseException Throws if error occurs.
+     * 
+     * @group QUERY_CONDITION
+     * 
+     * @see self::delete()
+     * @see self::rename()
+     * @see self::truncate()
+     * 
+     * @example - Drop table example:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->drop();
+     * ```
+     * 
+     * @example - Drop table using transaction: 
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * Builder::table('users')
+     *      ->drop(true);
+     * ```
+     * 
+     * @example - Drop table example using transaction:
+     * 
+     * ```php
+     * use Luminova\Database\Query\Builder;
+     * 
+     * $stmt = (Builder::table('users')
+     *      ->transaction();
+     * 
+     * if ($stmt->drop()) {
+     *      $stmt->commit()
+     * }else{
+     *      $stmt->rollback();
+     * }
+     * ```
+     */
+    public function drop(bool $isTemporalTable = false): bool 
+    {
+        self::assertTableName((string) $this->tableName);
+
+        $result = false;
+        $savepoint = null;
+        $useTransaction = false;
+        $sql = Scheme::getDropTable($this->db->getDriver(), $this->tableName, $isTemporalTable);
+
+        if ($this->inSafeMode()) {
+            [$useTransaction, $savepoint] = $this->withTransaction();
+        }
+
+        try {
+            $result = (bool) $this->db->exec($sql);
+        } catch (Throwable $e) {
+            $this->resolveException($e, savepoint: $savepoint);
+            return false;
+        }
+
+        return (bool) $this->finishTransaction($useTransaction, $result, $savepoint);
+    }
+
+    /**
+     * Returns the last error information from the database connection.
+     * 
+     * @return array Return error information.
+     * 
+     * @group QUERY_DEBUGGER
+     */
+    public function errors(): array 
+    {
+        return $this->db->errors();
+    }
+
+    /**
+     * Release the active builder statement and database statement.
+     *
+     * This method frees the current statement cursor (if present) and clears the
+     * statement reference.
+     *
+     * It does not close the database connection.
+     *
+     * @return bool Returns true if statement was release, otherwise false.
+     * 
+     * @group QUERY_DB_UTIL
+     */
+    public function free(): bool 
+    {
+        if($this->stmt instanceof DatabaseInterface){
+            $this->stmt->free();
+            $this->stmt = null;
+        }
+
+        if($this->db instanceof DatabaseInterface){
+            $this->db->free();
+
+            return !$this->stmt && !$this->db->isStatement();
+        }
+
+        return !$this->stmt;
+    }
+
+    /**
+     * Close the active database connection.
+     *
+     * This method first releases any active statement resources using `free()`.
+     * If a transaction is still active, it will be rolled back before closing
+     * the connection. The connection is then closed and the database reference
+     * cleared.
+     *
+     * @return bool Returns true after attempting to close the connection, otherwise false if failed.
+     * 
+     * @group QUERY_DB_UTIL
+     */
+    public function close(): bool 
+    {
+        try{
+            if(!$this->db instanceof DatabaseInterface){
+                return true;
+            }
+
+            $this->free();
+
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
+
+            if($this->db->isConnected()){
+                $this->db->close();
+            }
+
+            if($this->isCacheable && $this->cache instanceof Cache){
+                $this->cache->disconnect();
+                $this->cacheInfo['connected'] = false;
+            }
+
+            return true;
+        } catch(Throwable){
+            return false;
+        } finally {
+            $this->stmt = null;
+            $this->db = null;
+            $this->cache = null;
+        }
+    }
+
+    /**
+     * Reset the query builder state after execution.
+     *
+     * This method releases the active statement cursor unless the return mode
+     * requires the statement object (`RETURN_STATEMENT`). If automatic connection
+     * closing is enabled, the database connection will also be closed.
+     *
+     * The builder state is then reset for the next query execution.
+     *
+     * @return bool Returns false when debug mode is enabled, otherwise true.
+     * 
+     * @group QUERY_DB_UTIL
+     * @group QUERY_UTIL
+     *
+     * > **Note:**
+     * > When `closeAfter()` is enabled, the database connection will be
+     * > automatically closed after the reset.
+     */
+    public function reset(): bool 
+    {
+        if($this->debugMode !== self::DEBUG_NONE){
+            return false;
+        }
+
+        if($this->returns !== self::RETURN_STATEMENT){
+            $this->free();
+        }
+
+        if($this->closeConnection){
+            $this->close();
+        }
+        
+        $this->resetState();
+        return true;
+    }
+
+    /**
+     * Clone the query builder instance.
+     *
+     * This creates a shallow copy of the builder state (where clauses,
+     * limits, bindings, etc.).
+     *
+     * The underlying connection object is NOT duplicated and remains shared.
+     * This is intentional to avoid unnecessary connection overhead.
+     *
+     * > You may override the connection using {@see self::useConnection()} if needed.
+     *
+     * @example - Basic usage
+     * ```php
+     * $tbl = Builder::table('users')
+     *     ->where('country', '=', 'NG');
+     *
+     * $pagination = clone $tbl;
+     *
+     * $result = $tbl
+     *     ->select()
+     *     ->limit(100)
+     *     ->get();
+     *
+     * $records = $pagination
+     *     ->count()
+     *     ->get();
+     *
+     * // Swap connection if required
+     * $records = $pagination
+     *     ->useConnection(conn: null)
+     *     ->count()
+     *     ->get();
+     * ```
+     */
+    public function __clone(): void 
+    {
+        $this->lastInsertId = null;
+        $this->updateValues = [];
+        $this->insertValues = [];
+
+        $this->objectId = $this->createObjectId();
+    }
+
+    /**
+     * Prevent outside deserialization.
+     * 
+     * @ignore
+     */
+    public function __wakeup() {}
+
+    /**
+     * Reset state and close connection if auto-close is enabled.
+     *
+     * @return void
+     */
+    public function __destruct() 
+    {
+        $this->reset();
+    }
+}

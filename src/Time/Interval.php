@@ -12,7 +12,7 @@ namespace Luminova\Time;
 
 use \Fiber;
 use \Exception;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Exceptions\RuntimeException;
 
 final class Interval
 {
@@ -55,7 +55,7 @@ final class Interval
      * }, 1000);
      * 
      * for ($i = 0; $i < 5; $i++) {
-     *     usleep(500_000);
+     *     uwait(0.5);
      *     $interval->tick();
      * }
      * 
@@ -164,16 +164,16 @@ final class Interval
      * Listen to interval timeout and execute callback.
      *
      * @param callable $callback The callback function to execute at each interval.
-     * @param int $milliseconds The interval duration in milliseconds.
+     * @param float|int $seconds The interval duration in seconds.
      * 
      * @return void 
      * @throws RuntimeException Throws if error occurs during execution.
      */
-    private function listen(callable $callback, int $milliseconds): void
+    private function listen(callable $callback, float|int $seconds): void
     {
         while ($this->running) {
             $value = Fiber::suspend();
-            usleep($milliseconds * 1_000);
+            uwait($seconds);
 
             try{
                 $callback($value ?? $this->value);

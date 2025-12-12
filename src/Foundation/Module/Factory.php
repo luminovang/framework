@@ -11,39 +11,37 @@
 namespace Luminova\Foundation\Module;
 
 use \Throwable;
-use \Luminova\Time\Task;
+use Luminova\Time\Task;
 use \App\Config\Services;
-use \Luminova\Logger\Logger;
-use \Luminova\Cookies\Cookie;
-use \Luminova\Library\Modules;
-use \Luminova\Security\Escaper;
-use \Luminova\Sessions\Session;
-use \Luminova\Template\Response;
-use \Luminova\Security\Validation;
-use \Luminova\Http\{Request, Network};
-use \Luminova\Foundation\Module\Caller;
-use \Luminova\Foundation\Module\Service;
-use \Luminova\Foundation\Core\Functions;
-use \Luminova\Utility\Storage\Filesystem;
-use \Luminova\Component\Languages\Translator;
-use \Luminova\Notifications\Firebase\Notification;
-use \Luminova\Exceptions\{AppException, RuntimeException};
+use Luminova\Http\Request;
+use Luminova\Logger\Logger;
+use Luminova\Cookies\Cookie;
+use Luminova\Library\Modules;
+use Luminova\Security\Escaper;
+use Luminova\Sessions\Session;
+use Luminova\Template\Response;
+use Luminova\Security\Validation;
+use Luminova\Foundation\Module\Caller;
+use Luminova\Foundation\Module\Service;
+use Luminova\Components\Languages\Translator;
+use Luminova\Notifications\Firebase\Notification;
+use Luminova\Storage\{Filesystem, FileResponse};
+use Luminova\Exceptions\{LuminovaException, RuntimeException};
 
 /**
  * Factory methods classes.
+ * 
+ * @template T of object
  *
- * @method static Functions        functions(bool $shared = true)                             Utility function helper class.
- * @method static Session             session(?\Luminova\Interface\SessionManagerInterface $manager = null, bool $shared = true)                   Server-side user session class, if manager is null `\Luminova\Sessions\SessionManager` will be used instead.
+ * @method static Session    session(?\Luminova\Interface\SessionManagerInterface $manager = null, bool $shared = true)                   Server-side user session class, if manager is null `\Luminova\Sessions\SessionManager` will be used instead.
  * @method static Cookie              cookie(string $name, mixed $value = '', array $options = [], bool $shared = true)                    Client-side cookie class
  * @method static Task                task(bool $shared = true)                      Time task utility class.
  * @method static Modules             modules(bool $shared = true)                               PSR-4 Module autoloader and file importer class.
  * @method static Translator          language(?string $locale = null, bool $shared = true)      Application translation class.
- * @method static Logger              logger(bool $shared = true)                                PSR logger class.
  * @method static Filesystem         filesystem(bool $shared = true)                           File manager class.
  * @method static Validation          validate(bool $shared = true)                              Input validation class.
  * @method static Response            response(int $status = 200, array $headers = [], bool $shared = true)           Render response class.
  * @method static Request             request(bool $shared = true)                               HTTP Request class.
- * @method static Network             network(?\Luminova\Interface\ClientInterface $client = null, bool $shared = true)                               HTTP Network request class.
  * @method static Caller              caller(bool $shared = true)                                Class caller class.
  * @method static Notification        notification(string $serviceAccount = 'serviceAccount.json', bool $shared = true)                              Firebase cloud message notification class.
  * @method static Escaper              escaper(string|null $encoding = 'utf-8', bool $shared = true)                              Input escaper class instance.
@@ -60,41 +58,40 @@ final class Factory
     /**
      * Available factory classes.
      *
-     * @var array<string,class-string<\T>> $classes
+     * @var array<string,class-string<T>> $classes
      */
     private static array $classes = [
         'task'          => Task::class,
         'session'       => Session::class,
         'cookie'        => Cookie::class,
-        'functions'     => 'Functions',
         'escaper'       => Escaper::class,
         'modules'       => Modules::class,
         'language'      => Translator::class,
-        'logger'        => Logger::class,
-        'fileManager'   => Filesystem::class,
+        'fileResponse'  => FileResponse::class,
         'filesystem'    => Filesystem::class,
         'validate'      => Validation::class,
         'response'      => Response::class,
         'request'       => Request::class,
-        'network'       => Network::class,
         'caller'        => Caller::class,
         'notification'  => Notification::class
     ];
 
     /**
      * Dynamically create an instance of the specified factory method class.
+     * 
+     * The last parameter to pass to the factory constructor indicate 
+     *      if it should return a shared instance.
      *
      * @param string $factory The factory class name.
      * @param array $arguments Arguments to pass to the factory constructor.
-     * @param bool $shared The last parameter to pass to the factory constructor indicate if it should return a shared instance.
      * 
-     * @return object<\T> An instance of the factory class.
+     * @return object<T> An instance of the factory class.
      * @throws RuntimeException If failed to instantiate the factory.
      * 
      * @example - Invoke method with param and no-hared instance:
      * 
      * ```php 
-     * use \Luminova\Foundation\Module\Factory; 
+     * use Luminova\Foundation\Module\Factory; 
      * 
      * $result = Factory::method('foo', 'bar', false)
      * ```
@@ -102,7 +99,7 @@ final class Factory
      * @example - Invoke method without param and no-hared instance:
      * 
      * ```php 
-     * use \Luminova\Foundation\Module\Factory; 
+     * use Luminova\Foundation\Module\Factory; 
      * $result = Factory::method(false)
      * ```
      * 
@@ -118,9 +115,10 @@ final class Factory
      *
      * @param string $factory The factory class name.
      * @param array $arguments Arguments to pass to the factory constructor.
-     * @param bool $shared The last parameter to pass to the factory constructor indicate if it should return a shared instance.
+     *                  - $shared The last parameter to pass to the factory constructor 
+     *      indicate if it should return a shared instance.
      * 
-     * @return object<\T> An instance of the factory class.
+     * @return object<T> An instance of the factory class.
      * @throws RuntimeException If failed to instantiate the factory.
      * 
      * @ignore 
@@ -182,8 +180,6 @@ final class Factory
     /**
      * Return shared service class instance.
      * 
-     * @param bool $shared Shared instance or not (default: true).
-     * 
      * @return Service Return instance of service class
     */
     public static function service(): Service
@@ -222,7 +218,7 @@ final class Factory
      * @param string $factory The factory class name.
      * @param array $arguments Argument to pass to the factory constructor.
      * 
-     * @return object<\T> An instance of the factory class, or null if not found.
+     * @return object<T> An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
      */
     private static function call(string $factory, array $arguments): object
@@ -249,20 +245,18 @@ final class Factory
     /**
      * Create an instance of the specified factory class.
      *
-     * @param class-string<\T> $class The class name.
+     * @param class-string<T> $class The class name.
      * @param string|null $alias The alias of the factory class.
      * @param bool $shared Whether the instance should be shared or not.
      * @param mixed $arguments [, mixed $... ] Parameters to pass to the factory constructor.
      *  
-     * @return object<\T> An instance of the factory class, or null if not found.
+     * @return object<T> An instance of the factory class, or null if not found.
      * @throws RuntimeException If failed to instantiate the factory.
      */
     private static function create(string $class, ?string $alias = null, bool $shared = true, mixed ...$arguments): object
     {
         try {
-            $instance = ($class === 'Functions') 
-                ? new class extends Functions{} 
-                : new $class(...$arguments);
+            $instance = new $class(...$arguments);
             
             if ($shared && $alias) {
                 self::$instances[$alias] = $instance;
@@ -270,7 +264,7 @@ final class Factory
 
             return $instance;
         } catch (Throwable $e) {
-            if($e instanceof AppException){
+            if($e instanceof LuminovaException){
                 throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
             }
 
@@ -287,7 +281,7 @@ final class Factory
      *
      * @param string $factory The factory class name.
      * 
-     * @return class-string<\T>|null Return the fully qualified class name.
+     * @return class-string<T>|null Return the fully qualified class name.
     */
     private static function locator(string $factory): ?string
     {

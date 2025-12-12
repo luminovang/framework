@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Routes Attributes Compiler
  *
@@ -12,14 +13,15 @@ namespace Luminova\Attributes\Internal;
 
 use \Throwable;
 use \SplFileInfo;
+use Luminova\Boot;
 use \ReflectionClass;
 use \ReflectionMethod;
-use \Luminova\Luminova;
-use \Luminova\Routing\Router;
-use \Luminova\Exceptions\RouterException;
-use \Luminova\Interface\RoutableInterface;
-use \Luminova\Attributes\Internal\Tokenizer;
-use \Luminova\Attributes\{Route, Error, Prefix};
+use Luminova\Luminova;
+use Luminova\Routing\Router;
+use Luminova\Exceptions\RouterException;
+use Luminova\Interface\RoutableInterface;
+use Luminova\Attributes\Internal\Tokenizer;
+use Luminova\Attributes\{Route, Error, Prefix};
 
 final class Compiler
 {
@@ -29,6 +31,37 @@ final class Compiler
      * @var Tokenizer|null $parser
      */
     private static ?Tokenizer $parser = null;
+
+    /**
+     * Optimize and sort routes.
+     *
+     * @var bool|null $isOptimizable
+     */
+    private static ?bool $isOptimizable = null;
+
+    /**
+     * Sortables route context.
+     *
+     * @var array $sortables
+     */
+    private static array $sortables = [
+        'http.routes'       => true,
+        'http.after'        => true,
+    ];
+
+    /**
+     * Max base segment weight.
+     * 
+     * @var int BASE_WEIGHT
+     */
+    private const BASE_WEIGHT = 1000000;
+
+    /**
+     * Maximum segment weight.
+     * 
+     * @var int MAX_WEIGHT
+     */
+    private const MAX_WEIGHT = 950000;
 
     /**
      * Constructor to initialize the compiler.
@@ -69,7 +102,7 @@ final class Compiler
      *
      * @param string $path Path to the directory containing HTTP controller classes.
      * @param string $context The request URI prefix, which is the first segment of request URL.
-     * @param string $prefix The full request URL paths.
+     * @param string $uri The full request URL paths.
      * 
      * @return void
      * @throws RouterException Throws if error occurs while exporting controller routes.
@@ -80,14 +113,15 @@ final class Compiler
             return;
         }
 
-        [$namespace, $fileName] = self::$parser->load(
+        [$namespace, $fileName, $isExcluded, $subPrefix] = self::$parser->load(
             $path . ($this->hmvc ? '' : 'Http'), 
             'http', 
             $context, 
             $uri
         );
         
-        Luminova::addClassMetadata('controllers', self::$parser->searches);
+        Boot::add(Boot::CLASS_METADATA, 'controllers', self::$parser->searches);
+
         if($namespace === null){
             return;
         }
@@ -95,19 +129,28 @@ final class Compiler
         try{
             $instance = new ReflectionClass($namespace);
         }catch(Throwable $e){
-            throw new RouterException($e->getMessage(), $e->getCode(), $e);
+            throw new RouterException(
+                $e->getMessage(), 
+                $e->getCode(), 
+                $e
+            );
         }
 
-        if(!$this->isValidClass($instance) || !$this->isClassUriPrefix($instance, $uri)){
+        if(
+            !$this->isValidClass($instance) 
+            || !$this->isClassUriPrefix($instance, $uri)
+        ){
             return;
         }
 
-        Luminova::addClassMetadata('filename', $fileName);
+        self::$isOptimizable ??= (bool) env('route.optimize.attributes', true);
+
+        Boot::add(Boot::CLASS_METADATA, 'filename', $fileName);
 
         /**
          * Handle context attributes and register error handlers.
          */
-        $this->addErrorHandlers($instance, $context);
+        $this->addErrors($instance, $context);
 
         /**
          * Handle method attributes and create routes.
@@ -125,7 +168,7 @@ final class Compiler
 
                 // If the route is an error handler, register it and skip. 
                 if($attr->error){
-                    self::$parser->routes['controllers']['http.errors'][Router::toPatterns($attr->pattern)] = $callback;
+                    $this->addError($attr->pattern, $callback);
 
                     if($attr->aliases){
                         $this->addAliases($attr, $callback);
@@ -153,11 +196,14 @@ final class Compiler
                         $this->addAliases($attr, $callback, $context, $method);
                     }
                 }
-                
             }
         }
 
-        self::$parser->cache('http', $context);
+        if(self::$isOptimizable){
+            self::sort();
+        }
+
+        self::$parser->cache('http', $context, $isExcluded, $subPrefix);
     }
 
     /**
@@ -174,7 +220,7 @@ final class Compiler
             return;
         }
 
-        [$namespace, $fileName] = self::$parser->load(
+        [$namespace, $fileName, $isExcluded, $subPrefix] = self::$parser->load(
             $path . ($this->hmvc ? '' : 'Cli'), 
             'cli', 
             $command,
@@ -195,7 +241,7 @@ final class Compiler
             return;
         }
 
-        Luminova::addClassMetadata('filename', $fileName);
+        Boot::add(Boot::CLASS_METADATA, 'filename', $fileName);
 
         foreach ($instance->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
             $callback = $fileName . '::' . $method->getName();
@@ -234,7 +280,7 @@ final class Compiler
             }
         }
     
-        self::$parser->cache('cli', $command);
+        self::$parser->cache('cli', $command, $isExcluded, $subPrefix);
     }
 
     /**
@@ -249,7 +295,7 @@ final class Compiler
     public function export(string $path): self
     {
         $files = self::$parser->iterator($path, 'export');
-        $api = env('app.api.prefix', 'api');
+        $api = Luminova::getApiPrefix();
 
         foreach ($files as $file) {
             $fileName = pathinfo($file->getBasename(), PATHINFO_FILENAME);
@@ -315,7 +361,7 @@ final class Compiler
      * whether it should be processed based on the current context and middleware.
      *
      * @param string $pattern The raw route pattern (alias or path).
-     * @param string $prefix The current URI prefxi (e.g., first path name).
+     * @param string $prefix The current URI prefix (e.g., first path name).
      * @param mixed  $middleware The middleware assigned to the route, if any.
      * @param string &$normalized The resulting normalized pattern (output parameter).
      *
@@ -364,7 +410,7 @@ final class Compiler
     {
         foreach($attr->aliases as $alias){
             if($context === null){
-                self::$parser->routes['controllers']['http.errors'][Router::toPatterns($alias)] = $callback;
+                $this->addError($alias, $callback);
                 continue;
             }
 
@@ -384,12 +430,12 @@ final class Compiler
     }
 
     /**
-     * Add a normalized route pattern to the routing table.
+     * Add a normalized route pattern to the routing handlers.
      *
      * @param string $callback The controller class and method reference.
-     * @param string|null  $middleware  The route middleware handler.
-     * @param string|null $pattern  The normalized URI pattern.
-     * @param string|null $method   The HTTP method (GET, POST, etc.) 
+     * @param string|null $middleware The route middleware handler.
+     * @param string|null $pattern The normalized URI pattern.
+     * @param string|null $method The HTTP method (GET, POST, etc.) 
      * @param string|null $group CLI Group name.
      *
      * @return void
@@ -403,15 +449,17 @@ final class Compiler
     ): void 
     {
         if($group === null || !$this->cli){
-            $isMiddleware =  $middleware === Route::HTTP_BEFORE_MIDDLEWARE;
-            $context = $isMiddleware
-                ? 'http.middleware' 
-                : (($middleware === Route::HTTP_AFTER_MIDDLEWARE) ? 'http.after' : 'http.routes');
+            $context = match (true) {
+                $middleware === Route::HTTP_BEFORE_MIDDLEWARE => 'http.middleware',
+                $middleware === Route::HTTP_AFTER_MIDDLEWARE => 'http.after',
+                default => 'http.routes'
+            };
 
             self::$parser->routes['controllers'][$context][$method][] = [
-                'pattern' => $pattern,
-                'callback' => $callback,
-                'middleware' => $isMiddleware
+                'pattern'       => $pattern,
+                'callback'      => $callback,
+                'middleware'    => $middleware === Route::HTTP_BEFORE_MIDDLEWARE,
+                'score'         => self::score($pattern, $context)
             ];
 
             return;
@@ -419,8 +467,8 @@ final class Compiler
 
         if($middleware === null){
             self::$parser->routes['controllers']['cli.groups'][$group][] = [
-                'pattern' => Router::toPatterns($pattern),
-                'callback' => $callback
+                'pattern'   => Router::toPatterns($pattern),
+                'callback'  => $callback
             ];
             return;
         }
@@ -430,10 +478,244 @@ final class Compiler
             : $group;
 
         self::$parser->routes['controllers']['cli.middleware']['CLI'][$context][] = [
-            'callback' => $callback,
-            'pattern' => $group,
-            'middleware' => true
+            'callback'      => $callback,
+            'pattern'       => $group,
+            'middleware'    => true
         ];
+    }
+
+    /**
+     * Add a normalized route pattern to the routing errors.
+     *
+     * @param string $pattern
+     * @param mixed $callback
+     * @param bool $normalize
+     * 
+     * @return void
+     */
+    private function addError(
+        string $pattern, 
+        mixed $callback, 
+        bool $normalize = true
+    ): void 
+    {
+        $pattern = $normalize 
+            ? Router::toPatterns($pattern) 
+            : $pattern;
+
+        self::$parser->routes['controllers']['http.errors'][$pattern] = $callback;
+    }
+
+    /**
+     * Compute a route score based on its structure and context.
+     *
+     * Higher score means higher priority in matching.
+     * Score is cached per route string to avoid recomputation during sorting.
+     *
+     * @param string $route   Route pattern (e.g. /user/{id})
+     * @param string $context Route context group (e.g. http.routes)
+     *
+     * @return int Computed priority score
+     */
+    private static function score(string $route, string $context): int
+    {
+        if (!self::$isOptimizable || !isset(self::$sortables[$context])) {
+            return 0;
+        }
+
+        static $cache = [];
+
+        if (isset($cache[$route])) {
+            return $cache[$route];
+        }
+
+        $route = trim($route, '/');
+
+        if ($route === '') {
+            // Root /
+            return $cache[$route] = self::BASE_WEIGHT;
+        }
+
+        $segments = self::toSegments($route);
+
+        $score = count($segments) * 10;
+
+        foreach ($segments as $segment) {
+            $score += self::weight($segment);
+        }
+
+        return $cache[$route] = min(self::MAX_WEIGHT, $score);
+    }
+
+    /**
+     * Split segments to array.
+     *
+     * @param string $route
+     * 
+     * @return array
+     */
+    private static function toSegments(string $route): array
+    {
+        $segments = [];
+        $buffer = '';
+        $length = strlen($route);
+        $depth = 0;
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $route[$i];
+
+            if ($char === '(') {
+                $depth++;
+            } elseif ($char === ')') {
+                $depth--;
+            }
+
+            if ($char === '/' && $depth === 0) {
+                if ($buffer !== '') {
+                    $segments[] = $buffer;
+                    $buffer = '';
+                }
+
+                continue;
+            }
+
+            $buffer .= $char;
+        }
+
+        if ($buffer !== '') {
+            $segments[] = $buffer;
+        }
+
+        return $segments;
+    }
+
+    /**
+     * Sort all registered routes by priority score.
+     *
+     * Sorting rules:
+     *  1. Higher score first
+     *  2. Longer pattern first (tie-breaker)
+     *
+     * @return void
+     */
+    private static function sort(): void
+    {
+        if (!self::$isOptimizable) {
+            return;
+        }
+
+        foreach (self::$sortables as $type => $_) {
+            if (empty(self::$parser->routes['controllers'][$type])) {
+                continue;
+            }
+
+            foreach (self::$parser->routes['controllers'][$type] as &$routes) {
+
+                usort($routes, static function ($a, $b) {
+                    $cmp = $b['score'] <=> $a['score'];
+                    if ($cmp !== 0) {
+                        return $cmp;
+                    }
+
+                    return strlen($b['pattern'] ?? '') <=> strlen($a['pattern'] ?? '');
+                });
+
+                unset($routes);
+            }
+        }
+    }
+
+    /**
+     * Compute weight of a single route segment.
+     *
+     * Weight rules:
+     *  - static segment = highest priority
+     *  - placeholders lower priority
+     *  - wildcards lowest priority
+     *
+     * @param string $segment Route segment
+     * @return int Weight score
+     */
+    private static function weight(string $segment): int
+    {
+        // Root /
+        if ($segment === '' || $segment === '/') {
+            return self::BASE_WEIGHT;
+        }
+
+        // Wildcard / catch-all
+        if ($segment === '*' || $segment === '.*' || $segment === '(.*)') {
+            return 0;
+        }
+
+        $first = $segment[0];
+
+        // Static segment
+        if ($first !== '(' && $first !== '{') {
+            return 100;
+        }
+
+        // Placeholder parameter: {id}
+        if ($first === '{') {
+            return 60;
+        }
+
+        // Optional regex pattern
+        if ($first === '?' || str_starts_with($segment, '?(?:')) {
+            return 20;
+        }
+
+        // Generic regex group
+        if ($first !== '(') {
+            return 50;
+        }
+
+        // Named route patterns
+        if (str_starts_with($segment, '(?:')) {
+            return 45;
+        }
+
+        // Custom optional groups
+        if (str_starts_with($segment, '(:')) {
+            return match (true) {
+                str_ends_with($segment, ':optional)'),
+                str_ends_with($segment, ':base)'),
+                str_ends_with($segment, ':root)') => 25,
+                default => 50,
+            };
+        }
+
+        $pipes = self::countGroupPipes($segment);
+
+        // Regex
+        if ($pipes === null) {
+            return 70;
+        }
+
+        return min(self::MAX_WEIGHT - 100, 15 + ($pipes * 5));
+    }
+
+    /**
+     * Count number of pipes in group segment pattern.
+     *
+     * @param string $segment
+     * @return int|null
+     */
+    private static function countGroupPipes(string $segment): ?int
+    {
+        if ($segment[-1] !== ')') {
+            return null;
+        }
+
+        if(str_contains($segment, '|')){
+            return substr_count($segment, '|');
+        }
+
+        if(strlen($segment) > 2){
+            return 1;
+        }
+
+        return null;
     }
 
     /**
@@ -468,54 +750,90 @@ final class Compiler
         $context = ($bind !== '/' && str_starts_with($bind, $api)) ? $api : 'http';
 
         self::$parser->routes['controllers'][$context][$module][$bind][] = [
-            'bind' => $bind,
-            'callback' => $callback,
-            'methods' => $attr->methods,
-            'pattern' => $pattern,
-            'middleware' => $attr->middleware
+            'bind'          => $bind,
+            'callback'      => $callback,
+            'methods'       => $attr->methods,
+            'pattern'       => $pattern,
+            'middleware'    => $attr->middleware
         ];
     }
 
     /**
-     * Determines the namespace for a given file based on the application structure.
+     * Resolve controller namespace based on filesystem structure.
      *
-     * This function generates the appropriate namespace for a controller file,
-     * taking into account whether the application uses HMVC (Hierarchical Model-View-Controller)
-     * or standard MVC architecture.
+     * Supports both MVC and HMVC layouts:
+     * - MVC: App\Controllers\{Http|Cli}
+     * - HMVC: App\Modules\{Module}\Controllers\{Http|Cli}
      *
-     * @param SplFileInfo $file The file object representing the controller file.
-     * @param string|null $suffix The suffix to append to the namespace, typically 'Http' or 'Cli'. Defaults to 'Http'.
+     * @param SplFileInfo $file   Controller file reference
+     * @param string|null $suffix Namespace suffix (Http, Cli, etc.)
      *
-     * @return array An array containing two elements:
-     *               - The full namespace string for the controller.
-     *               - The module name (for HMVC) or the parent directory name (for MVC).
+     * @return array{0: string, 1: string} [namespace, module]
      *
-     * @throws RouterException If an invalid HMVC module namespace is detected.
+     * @throws RouterException If HMVC structure is invalid or unsupported.
      */
-    private function getNamespace(SplFileInfo $file, ?string $suffix = 'Http'): array 
+    private function getNamespace(SplFileInfo $file, ?string $suffix = 'Http'): array
     {
-        $suffix = ($suffix === null) ? '' : $suffix . '\\';
+        $suffix = $suffix ? $suffix . '\\' : '';
+        $path   = $file->getPathname();
 
         if (!$this->hmvc) {
             return [
-                "\\App\\Controllers\\{$suffix}", 
-                basename(dirname($file->getPathname(), 2))
+                "\\App\\Controllers\\{$suffix}",
+                basename(dirname($path, 2))
             ];
         }
 
-        $matches = [];
+        $module = $this->extractModuleName($path);
 
-        if(preg_match('~/app/Modules/([^/]+)/~', $file->getPathname(), $matches)){
-            $module = $matches[1] ?? 'Controllers';
-            return [
-                '\\App\Modules\\' . ($module === 'Controllers' ? '' : $module . '\\') . "Controllers\\{$suffix}",
-                $module
-            ];
+        if ($module === null) {
+            throw new RouterException(sprintf(
+                'Invalid HMVC module structure. Controller must be inside: %s/Controllers/%s',
+                '/app/Modules/{Module}',
+                $this->cli ? 'Cli' : 'Http'
+            ));
         }
 
-        throw new RouterException(
-            'Invalid HMVC module namespace, make sure controllers are placed in the correct directory.'
-        );
+        $namespace = ($module === 'Controllers') ? '' : $module . '\\';
+
+        return [
+            "\\App\\Modules\\{$namespace}Controllers\\{$suffix}",
+            $module
+        ];
+    }
+
+    /**
+     * Extract module name from HMVC path.
+     *
+     * Expected structure:
+     * /app/Modules/{Module}/Controllers/...
+     *
+     * @param string $path
+     * @return string|null
+     */
+    private function extractModuleName(string $path): ?string
+    {
+        // $matches = [];
+        // if(preg_match('~/app/Modules/([^/]+)/~', $path, $matches)){
+        //    return $matches[1] ?? 'Controllers';
+        // }
+        // return null;
+
+        $prefix = '/app/Modules/';
+        $pos = strpos($path, $prefix);
+
+        if ($pos === false) {
+            return null;
+        }
+
+        $offset = $pos + strlen($prefix);
+        $nextSlash = strpos($path, '/', $offset);
+
+        if ($nextSlash === false) {
+            return null;
+        }
+
+        return substr($path, $offset, $nextSlash - $offset);
     }
 
     /**
@@ -562,10 +880,11 @@ final class Compiler
         $pattern = $normalize ?? Router::toPatterns($pattern);
     
         self::$parser->routes['basePattern'] = $pattern;
+        self::$parser->routes['rawBasePattern'] = $instance->pattern;
         self::$parser->routes['excluders'] = $instance->mergeExcluders ? [] : $instance->exclude;
         
         if($instance->onError !== null){
-            self::$parser->routes['controllers']['http.errors'][$pattern] = $instance->onError;
+            $this->addError($pattern, $instance->onError, false);
         }
 
         return true;
@@ -593,15 +912,16 @@ final class Compiler
      * 
      * @return void
      */
-    private function addErrorHandlers(ReflectionClass $class, string $context): void 
+    private function addErrors(ReflectionClass $class, string $context): void 
     {
         foreach ($class->getAttributes(Error::class) as $error) {
             $instance = $error->newInstance();
+
             if($instance->context === $context || $instance->context === 'web'){
                 continue;
             }
 
-            self::$parser->routes['controllers']['http.errors'][Router::toPatterns($instance->pattern)] = $instance->onError;
+            $this->addError($instance->pattern, $instance->onError);
         }
     }
 }

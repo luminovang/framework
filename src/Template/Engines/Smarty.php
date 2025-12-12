@@ -1,4 +1,5 @@
 <?php 
+declare(strict_types=1);
 /**
  * Luminova Framework
  *
@@ -11,14 +12,14 @@
 namespace Luminova\Template\Engines;
 
 use \Closure;
-use \Luminova\Luminova;
+use Luminova\Luminova;
 use \Smarty\Extension\Base;
 use \Smarty\Smarty as SmartyTemplate;
-use function \Luminova\Funcs\make_dir;
-use \Luminova\Exceptions\RuntimeException;
+use function Luminova\Funcs\make_dir;
+use Luminova\Exceptions\RuntimeException;
 use \App\Config\Template as TemplateConfig;
-use \Luminova\Template\Extensions\SmartyFunction;
-use \Luminova\Template\Extensions\SmartyExtension;
+use Luminova\Template\Extensions\SmartyFunction;
+use Luminova\Template\Extensions\SmartyExtension;
 
 final class Smarty 
 {

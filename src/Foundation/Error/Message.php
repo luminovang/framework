@@ -12,10 +12,12 @@ namespace Luminova\Foundation\Error;
 
 use \Throwable;
 use \Stringable;
-use \Luminova\Luminova;
-use \Luminova\Command\Terminal;
-use \Luminova\Exceptions\ErrorCode;
-use \Luminova\Foundation\Error\Guard;
+use Luminova\Luminova;
+use Luminova\Debugger\Tracer;
+use Luminova\Command\Terminal;
+use Luminova\Exceptions\ErrorCode;
+use Luminova\Foundation\Error\Error;
+use function \luminova\Funcs\get_class_name;
 
 class Message implements Stringable
 {
@@ -30,7 +32,8 @@ class Message implements Stringable
      * @param Throwable|null $previous Optional previous exception.
      * @param string $name A custom name for the error.
      * 
-     * > **Note:** This class is not throwable.
+     * > **Note:** 
+     * > This class is not throwable.
      */
     public function __construct(
         protected string $message, 
@@ -59,7 +62,7 @@ class Message implements Stringable
      */
     public function getCode(): string|int
     {
-        return Guard::getCode($this->code);
+        return Tracer::getLastErrorCode($this->code);
     }
 
     /**
@@ -109,7 +112,7 @@ class Message implements Stringable
      */
     public function getDescription(): string
     {
-        return Guard::sanitizeMessage($this->message);
+        return Error::sanitizeExceptionMessage($this->message);
     }
 
     /**
@@ -133,7 +136,7 @@ class Message implements Stringable
      */
     public static function getBacktrace(): array 
     {
-        return Guard::getBacktrace();
+        return Tracer::getBacktrace();
     }
 
      /**
@@ -155,7 +158,9 @@ class Message implements Stringable
      */
     public function __toString(): string
     {
-        return $this->message;
+        return ($this->previous instanceof Throwable) 
+            ? (string) $this->previous
+            : $this->message;
     }
 
     /**
@@ -168,11 +173,14 @@ class Message implements Stringable
     public function toString(): string
     {
         return sprintf(
-            'Error: (%s) %s in %s on line %d',
-            (string) $this->getCode(),
+            '%s: %s in %s:%d (code: %s)',
+            ($this->previous instanceof Throwable) 
+                ? get_class_name($this->previous::class) 
+                : 'Error',
             $this->message,
             $this->file,
-            $this->line
+            $this->line,
+            (string) $this->getCode()
         );
     }
 

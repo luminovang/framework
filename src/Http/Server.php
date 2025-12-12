@@ -10,18 +10,66 @@
  */
 namespace Luminova\Http;
 
-use \Luminova\Luminova;
-use \Luminova\Interface\LazyObjectInterface;
 use \Countable;
+use Luminova\Luminova;
+use function Luminova\Funcs\root;
+use Luminova\Interface\LazyObjectInterface;
 
 class Server implements LazyObjectInterface, Countable
 {
     /**
-     * Initializes the server constructor.
-     * 
-     * @param array<string,mixed> $variables An Associative array of server variables to initialize with.
+     * Instance mode.
+     *
+     * @var bool $isGlobal
      */
-    public function __construct(protected array $variables = []){}
+    private bool $isGlobal = false;
+
+    /**
+     * Global server instance.
+     *
+     * @var self|null $instance
+     */
+    private static ?self $instance = null;
+
+    /**
+     * Create a new server instance.
+     *
+     * If no server variables are provided, the instance reads from the global
+     * `$_SERVER` array when values are requested.
+     *
+     * @param array<string,mixed> $variables Server variables to initialize with.
+     */
+    public function __construct(protected array $variables = [])
+    {
+        $this->isGlobal = $this->variables === [];
+    }
+
+    /**
+     * Get a shared server instance backed by the global `$_SERVER` array.
+     *
+     * @return static The shared server instance.
+     */
+    public static function fromGlobal(): static
+    {
+        if (!(static::$instance instanceof self)) {
+            static::$instance = new self();
+        }
+
+        static::$instance->isGlobal = true;
+
+        return static::$instance;
+    }
+
+    /**
+     * Determine whether this instance uses the global `$_SERVER` array.
+     *
+     * @return bool Returns `true` if the instance reads from `$_SERVER`,
+     *              or `false` if it uses a custom server variable array.
+     */
+    public function isGlobal(): bool
+    {
+        return $this->isGlobal;
+    }
 
     /**
      * Get server variables.
@@ -29,28 +77,43 @@ class Server implements LazyObjectInterface, Countable
      * @param string|null $name Optional name of the server variable.
      * @param mixed $default Default value for the server key.
      *
-     * @return mixed|array|string|null Return the value of the specified server variable, or all server variables if $name is null.
+     * @return mixed|array|string|null Return the value of the specified server variable, 
+     *          or all server variables if $name is null.
      */
     public function get(?string $name = null, mixed $default = null): mixed
     {
-        if ($name === null || $name === '') {
-            return $this->variables;
+        if ($name === null) {
+            return $this->isGlobal 
+                ? $_SERVER 
+                : $this->variables;
         }
 
-        return $this->has($name) ? $this->variables[$name] :$default;
+        if($name === '' || !$this->has($name)){
+            return $default;
+        }
+
+        return $this->isGlobal 
+            ? $_SERVER[$name]
+            : $this->variables[$name];
     }
 
     /**
-     * Set server variable.
-     * 
-     * @param string $key The server variable key to set.
-     * @param mixed $value The server variable value.
-     * 
-     * @return void
+     * Set a server variable value.
+     *
+     * @param string $key Server name.
+     * @param mixed $value Server value.
+     *
+     * @return self Return instance of server class.
      */
-    public function set(string $key, mixed $value): void
+    public function set(string $key, mixed $value): self
     {
+        if($this->isGlobal){
+            $_SERVER[$key] = $value;
+            return $this;
+        }
+
         $this->variables[$key] = $value;
+        return $this;
     }
 
     /**
@@ -60,6 +123,11 @@ class Server implements LazyObjectInterface, Countable
     */
     public function remove(string $key): void
     {
+        if($this->isGlobal){
+            unset($_SERVER[$key]);
+            return;
+        }
+
         unset($this->variables[$key]);
     }
 
@@ -74,25 +142,24 @@ class Server implements LazyObjectInterface, Countable
      */
     public function search(string $key, mixed $default = false): mixed
     {
-        $key = strtoupper($key);
-        
-        if (array_key_exists($key, $this->variables)) {
-            return $this->variables[$key];
-        }
-        
-        // Replace underscores with hyphens
-        $normalized = str_replace('_', '-', $key);
+        $keys = [
+            $key,
+            strtoupper($key),
 
-        if (array_key_exists($normalized, $this->variables)) {
-            return $this->variables[$normalized];
-        }
-        
-        // Remove "HTTP_" prefix and replace underscores with hyphens
-        $stripped = str_replace('_', '-', substr($key, 5));
+            // Replace underscores with hyphens
+            str_replace('_', '-', $key),
 
-        return array_key_exists($stripped, $this->variables) 
-            ? $this->variables[$stripped] 
-            : $default; 
+            // Remove "HTTP_" prefix and replace underscores with hyphens
+            str_replace('_', '-', substr($key, 5))
+        ];
+        
+        foreach($keys as $name){
+            if ($this->has($name)) {
+                return $this->get($name);
+            }
+        }
+
+        return $default; 
     }
 
     /**
@@ -104,7 +171,9 @@ class Server implements LazyObjectInterface, Countable
      */
     public function has(string $key): bool
     {
-        return array_key_exists($key, $this->variables);
+        return $this->isGlobal 
+            ? array_key_exists($key, $_SERVER) 
+            : array_key_exists($key, $this->variables);
     }
 
     /**
@@ -114,7 +183,23 @@ class Server implements LazyObjectInterface, Countable
      */
     public function count(): int
     {
-        return count($this->variables);
+        return $this->isGlobal 
+            ? count($_SERVER) 
+            : count($this->variables);
+    }
+
+    /**
+     * Extract HTTP headers from server variables.
+     *
+     * Converts `$_SERVER` header entries (`HTTP_*`, `CONTENT_TYPE`, and
+     * `CONTENT_LENGTH`) into standard HTTP header names similar to
+     * `apache_request_headers()`.
+     *
+     * @return array<string,string> Parsed HTTP headers.
+     */
+    public function getHeaders(): array
+    {
+        return Header::extractHeaders($this->get());
     }
 
     /**
@@ -127,22 +212,29 @@ class Server implements LazyObjectInterface, Countable
      *
      * @return array Return an associative array containing default server variables and their values.
      */
-    public static function getDefault(): array 
+    public static function getDefault(): array
     {
+        $host = PRODUCTION ? APP_HOSTNAME : 'localhost';
+
         return [
-            'SERVER_NAME' => 'localhost',
-            'SERVER_PORT' => 80,
-            'HTTP_HOST' => 'localhost',
-            'HTTP_USER_AGENT' => Luminova::copyright(true),
-            'HTTP_ACCEPT' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'HTTP_ACCEPT_LANGUAGE' => 'en-us,en;q=0.5',
-            'HTTP_ACCEPT_CHARSET' => 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
-            'REMOTE_ADDR' => '127.0.0.1',
-            'SCRIPT_NAME' => '/index.php',
-            'SCRIPT_FILENAME' => '/' . CONTROLLER_SCRIPT_PATH . '/' . 'index.php',
-            'SERVER_PROTOCOL' => 'HTTP/1.1',
-            'REQUEST_TIME' => time(),
-            'REQUEST_TIME_FLOAT' => microtime(true),
+            'SERVER_NAME'       => $host,
+            'SERVER_PORT'       => PRODUCTION ? 443 : 80,
+            'HTTP_HOST'         => $host,
+            'REQUEST_URI'       => '/',
+            'QUERY_STRING'      => '',
+            'SERVER_PROTOCOL'   => 'HTTP/1.1',
+            'HTTPS'             => (URL_SCHEME === 'https') ? 'on' : 'off',
+            'HTTP_USER_AGENT'   => Luminova::copyright(true),
+            'HTTP_ACCEPT'       => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'REMOTE_ADDR'       => '127.0.0.1',
+            'SCRIPT_NAME'       => APP_CONTROLLER_INDEX,
+            'PHP_SELF'          => APP_CONTROLLER_INDEX,
+            'SCRIPT_FILENAME'   => root('/public/', 'index.php'),
+            'REQUEST_TIME'      => time(),
+            'UNIQUE_ID'         => rtrim(strtr(base64_encode(random_bytes(16)), '+/', '-_'), '='),
+            'REQUEST_TIME_FLOAT'    => microtime(true),
+            'HTTP_ACCEPT_LANGUAGE'  => 'en-us,en;q=0.5',
+            'HTTP_ACCEPT_CHARSET'   => 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
         ];
     }
 }

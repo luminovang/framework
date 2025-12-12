@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Luminova Framework Password Manager
  *
@@ -11,10 +12,11 @@
 namespace Luminova\Security;
 
 use \Throwable;
-use \Luminova\Http\Client\Novio;
-use \Luminova\Exceptions\RuntimeException;
-use \Luminova\Exceptions\InvalidArgumentException;
-use function \Luminova\Funcs\root;
+use Luminova\Luminova;
+use Luminova\Utility\{Mask, Random};
+use Luminova\Exceptions\RuntimeException;
+use Luminova\Exceptions\InvalidArgumentException;
+use function Luminova\Funcs\root;
 
 /**
  * Password Documentation.
@@ -438,19 +440,7 @@ final class Password
 			return '';
 		}
 
-		$characters = 'abcdefghijklmnopqrstuvwxyz'
-			. 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-			. '0123456789'
-			. '%#^_-@!$&*+=|~?<>[]{}()';
-		
-		$maxIndex = strlen($characters) - 1;
-		$password = '';
-
-		for ($i = 0; $i < $length; $i++) {
-			$password .= $characters[random_int(0, $maxIndex)];
-		}
-
-		return $password;
+		return Random::password($length);
 	}
 
 	/**
@@ -467,19 +457,7 @@ final class Password
 	 */
 	public static function mask(string $password, int $visible = 3): string 
 	{
-		$len = strlen($password);
-
-		if ($len === 0) {
-			return '';
-		}
-
-		$visible = max(0, $visible);
-
-		if ($visible >= $len) {
-			return str_repeat('*', $len);
-		}
-
-		return str_repeat('*', $len - $visible) . substr($password, -$visible);
+		return Mask::password($password, $visible);
 	}
 
 	/**
@@ -528,10 +506,10 @@ final class Password
 
 		if($body === null){
 			try {
-				$response = (new Novio([
+				$response = Luminova::kernel('http.client', true, [
 					'base_uri' => 'https://api.pwnedpasswords.com',
 					'timeout'  => $timeout,
-				]))->request('GET', "range/{$prefix}");
+				])->request('GET', "range/{$prefix}");
 
 				$body = $response->getContents();
 
@@ -707,7 +685,7 @@ final class Password
 	 * Cache HIBP password range responses locally.
 	 * 
 	 * This helper method saves or retrieves cached HIBP range results to
-	 * reduce API requests. Cached files are stored under `/writeable/temp/hibp/`
+	 * reduce API requests. Cached files are stored under `/writeable/caches/hibp/`
 	 * and expire after the specified TTL.
 	 * 
 	 * @param string $prefix The first 5 characters of the SHA-1 hash.
@@ -719,11 +697,11 @@ final class Password
 	 */
 	private static function cache(string $prefix, int $ttl, ?string $body = null): mixed 
 	{
-		$path = root('/writeable/temp/hibp/');
+		$path = root('/writeable/caches/hibp/');
 		$filepath = "{$path}range_{$prefix}.txt";
 
 		if($body !== null){
-			if (!is_dir($path) && !mkdir($path, 0777, true)) {
+			if (!is_dir($path) && !mkdir($path, 0775, true)) {
 				return false;
 			}
 

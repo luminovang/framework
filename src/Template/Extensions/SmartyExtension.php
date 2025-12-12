@@ -11,14 +11,14 @@
 namespace Luminova\Template\Extensions;
 
 use \Throwable;
-use \Luminova\Boot;
+use Luminova\Boot;
 use \Smarty\Template;
-use \Luminova\Luminova;
-use \Luminova\Time\Time;
-use \Luminova\Exceptions\ClassException;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Luminova;
+use Luminova\Time\Time;
+use Luminova\Exceptions\ClassException;
+use Luminova\Exceptions\RuntimeException;
 use \App\Config\Templates\Smarty\Extensions;
-use \Luminova\Exceptions\BadMethodCallException;
+use Luminova\Exceptions\BadMethodCallException;
 use \Smarty\FunctionHandler\FunctionHandlerInterface;
 
 final class SmartyExtension
@@ -26,7 +26,7 @@ final class SmartyExtension
     /**
      * Default classes.
      * 
-     * @var array<string,class-string<\T>> $defaults.
+     * @var array<string,class-string<T>> $defaults.
      */
     private static array $defaults = [
         'Luminova' => Luminova::class,
@@ -36,7 +36,7 @@ final class SmartyExtension
      /**
      * Customer registered classes via `Extensions::registerClasses`
      * 
-     * @var array<string,array<string,class-string<\T>> $classes.
+     * @var array<string,array<string,class-string<T>> $classes.
      */
     private static array $classes = [];
 

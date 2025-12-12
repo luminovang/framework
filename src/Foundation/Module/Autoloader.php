@@ -12,7 +12,7 @@ namespace Luminova\Foundation\Module;
 
 use \RuntimeException;
 use \InvalidArgumentException;
-use function \Luminova\Funcs\root;
+use function Luminova\Funcs\root;
 
 final class Autoloader
 {

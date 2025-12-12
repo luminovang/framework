@@ -11,9 +11,9 @@
 namespace Luminova\Models;
 
 use \App\Tasks\TaskQueue;
-use \Luminova\Base\Queue;
-use \Luminova\Exceptions\{DatabaseException, InvalidArgumentException};
-use function \Luminova\Funcs\camel_case;
+use Luminova\Base\Queue;
+use Luminova\Exceptions\{DatabaseException, InvalidArgumentException};
+use function Luminova\Funcs\camel_case;
 
 class Task
 {
@@ -85,7 +85,7 @@ class Task
     public mixed $arguments = [];
 
     /**
-     * Task callable handler signature (MD5).
+     * Task callable handler signature (XXH3).
      * 
      * @var string $signature
      */
@@ -133,7 +133,7 @@ class Task
      * Initialize task with optional array and system queue.
      *
      * @param array<string,mixed>|null $task An optional array to initialize task with.
-     * @param Queue<\T>|null $system An optional task queue system for managing task (default: `App\Tasks\TaskQueue`).
+     * @param Queue<T>|null $system An optional task queue system for managing task (default: `App\Tasks\TaskQueue`).
      */
     public function __construct(?array $task = null, private ?Queue $system = null) 
     {
@@ -164,7 +164,7 @@ class Task
     /**
      * Set internal task queue system handler.
      * 
-     * @param Queue<\T> $system A task queue system for managing task.
+     * @param Queue<T> $system A task queue system for managing task.
      * 
      * @return self Return instance of this task model.
      */
@@ -319,7 +319,9 @@ class Task
      * Returns the task handler arguments as an array.
      *
      * @return array Return array of handlers arguments.
-     * > **Note:** If `$this->arguments` was previously a string, it will be converted to an array before returning.
+     * > **Note:** 
+     * > If `$this->arguments` was previously a string, 
+     * > it will be converted to an array before returning.
      */
     public function getArguments(): array
     {
@@ -352,13 +354,19 @@ class Task
     }
 
     /**
-     * Checks if the task handler is a serialized Opis\Closure.
+     * Checks if the task handler is a serialized Closure.
      * 
-     * @return bool Return true if the handler appears to be an Opis closure, false otherwise.
+     * @return bool Return true if the handler appears to be a closure, false otherwise.
      */
-    public function isOpisClosure(): bool
+    public function isClosure(): bool
     {
-        return $this->handler && Queue::isClosure($this->handler);
+        if(!$this->handler){
+            return false;
+        }
+
+        [, $status] = Queue::withClosure($this->handler);
+
+        return $status;
     }
 
     /**

@@ -10,7 +10,7 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Foundation\Core\Application;
+use Luminova\Foundation\Core\Application;
 
 /**
  * Marker interface for controllers that handle routable errors.

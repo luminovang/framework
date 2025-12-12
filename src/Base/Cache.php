@@ -10,150 +10,341 @@
  */
 namespace Luminova\Base;
 
-use \Closure;
+use \Throwable;
 use \DateInterval;
 use \DateTimeInterface;
-use \Luminova\Time\Timestamp;
-use \Luminova\Interface\LazyObjectInterface;
-use \Luminova\Exceptions\{CacheException, InvalidArgumentException};
+use Luminova\Base\Helper\CacheTrait;
+use Luminova\Interface\LazyObjectInterface;
+use Luminova\Exceptions\{CacheException, InvalidArgumentException};
 
 abstract class Cache implements LazyObjectInterface
 {
-    /**
-     * Cache expiry time 7 days.
-     * 
-     * @var int TTL_7DAYS
-     */
-    public const TTL_7DAYS = 7 * 24 * 60 * 60;
+    use CacheTrait;
 
     /**
-     * Cache expiry time 24 hours.
-     * 
-     * @var int TTL_24HR
-    */
-    public const TTL_24HR = 24 * 60 * 60;
-
-    /**
-     * Cache expiry time 30 minutes.
-     * 
-     * @var int TTL_30MIN
-    */
-    public const TTL_30MIN = 30 * 60;
-
-    /**
-     * Hold the cache hashed storage name.
-     * 
-     * @var string|null $storage
-     */
-    protected ?string $storage = null;
-
-    /**
-     * Hold the un-hashed cache storage name.
-     * 
-     * @var string|null $storageName
-     */
-    protected ?string $storageName = null;
-
-    /**
-     * Hold the cache details array.
-     * 
-     * @var array $items
-     */
-    protected array $items = [];
-
-    /**
-     * Hold the cache details array.
-     * 
-     * @var array $iterator
-     */
-    protected array $iterator = [];
-
-    /**
-     * Hold the cache array iterator position.
-     * 
-     * @var int $position
-     */
-    protected int $position = 0;
-
-     /**
-     * Hold the cache expiry time. 
-     * 
-     * @var int|null $expiration
-     */
-    protected int|null $expiration = 0;
-
-    /**
-     * Hold the cache expiry time after.
-     * 
-     * @var int|null $expireAfter
-     */
-    protected ?int $expireAfter = null;
-
-     /**
-     * Lock cache from deletion.
-     * 
-     * @var bool $lock
-     */
-    protected bool $lock = false;
-
-    /**
-     * Hold the cache serialization flag. 
-     * 
-     * @var int $serialize
-     */
-    protected int $serialize = 1;
-
-    /**
-     * Hold the cache base64 enabling option. 
-     * 
-     * @var bool $encoding
-     */
-    protected bool $encoding = false;
-
-     /**
-     * Hold the cache expiry delete option.
-     * 
-     * @var bool $autoDeleteExpired
-     */
-    protected bool $autoDeleteExpired = false;
-
-    /**
-     * Hold the cache expiry delete option.
-     * 
-     * @var bool $includeLocked
-     */
-    protected bool $includeLocked = false;
-
-    /**
-     * Initialize the base cache class.
-     * You don't have to extend this class directly except if you want to implement your own caching class.
+     * Initialize the base cache system.
      */
     public function __construct()
     {
-        $this->serialize = (function_exists('igbinary_serialize') ? 2 : 1);
-	}
+        $this->isConnected = false;
+
+        $this->setSerializerOption(
+            (int) env('system.cache.encoding.serializer', self::SERIALIZER_NONE),
+            (bool) env('system.cache.encoding.base64', false)
+        )->setSerializer();
+    }
 
     /**
-     * Retrieves or creates a singleton instance of the cache.
-     * 
-     * @param string|null $storage The name of the cache storage. If null, you must call the `setStorage` method later.
-     * @param string|null $idOrSubfolder Optional:
-     *  - For Memcached: A unique persistent connection ID. If null, the default ID from environment variables is used, or "default" if not set.
-     *  - For Filesystem Cache: A subdirectory within the cache directory. If null, defaults to the base cache directory.
-     * 
-     * @return self The singleton instance of the cache.
-     * @throws CacheException If there is an issue initializing the cache.
-     * @throws InvalidArgumentException If an invalid subdirectory is provided for the filesystem cache.
+     * Establish (or reuse) a connection to the cache backend.
+     *
+     * Creates and configures the cache client when necessary, then registers the
+     * configured server(s). The connection is pooled under the persistent identifier
+     * so that it can be reused across requests.
+     *
+     * @return bool Returns true if the connection was established or already active.
+     *
+     * @throws CacheException If the client cannot be initialized or the server(s) cannot be reached.
      */
-    abstract public static function getInstance(
-        ?string $storage = null, 
-        ?string $idOrSubfolder = null
-    ): self;
+    abstract public function connect(): bool;
 
     /**
-     * Get the cache storage name.
+     * Close the connection to the cache backend.
+     *
+     * Gracefully terminates the active connection. If no connection is open, returns true immediately.
+     *
+     * @return bool Always returns true.
+     */
+    abstract public function disconnect(): bool;
+
+    /**
+     * Retrieve a single cache item by key.
+     *
+     * Returns the stored value when the key exists and has not expired.
+     * When `$withMetadata` is true, returns a metadata array instead of the raw value.
+     *
+     * @param string $key Cache key to retrieve (must be non-empty).
+     * @param bool $withMetadata When false, returns only the cached value;
+     *                             when true, returns a metadata array (default: false).
+     *
+     * @return mixed Cached value, or null when the key is missing or expired and `$withMetadata` is true.
+     *               Metadata array is returned instead.
+     *
+     * @throws CacheException         If no storage is configured or a read error occurs.
+     * @throws InvalidArgumentException If the key is empty.
+     */
+    abstract public function getItem(string $key, bool $withMetadata = false): mixed;
+
+    /**
+     * Retrieve multiple cache items by key.
+     *
+     * @param string[] $keys Cache keys to retrieve.
+     * @param bool $withMetadata When false, returns only cached values keyed by cache key;
+     *                              when true, returns metadata arrays (default: false).
+     *
+     * @return array<string,mixed> Retrieved items, or an empty array when none are found.
+     */
+    abstract public function getItems(array $keys, bool $withMetadata = false): array;
+
+    /**
+     * Retrieve multiple cache item keys by pattern.
+     *
+     * @param string|null $pattern Cache key or key pattern (e.g, `admin:users`).
+     *          If null return all keys.
+     *
+     * @return string[] Retrieved item keys, or an empty array when none are found.
+     */
+    abstract public function getKeys(?string $pattern = null): array;
+
+    /**
+     * Initiate an asynchronous-style fetch of multiple cache items.
+     *
+     * Queues the requested keys for retrieval. Results are accessed afterward via
+     * `fetchNext()` (one item at a time) or `fetchResult()` (all at once).
+     * When `$onItem` is provided, it is called for each item during the fetch and
+     * the internal iterator is not populated.
+     *
+     * @param string[] $keys Cache keys to retrieve.
+     * @param bool $withCas When true, includes CAS tokens in results
+     *                   (Memcached only; ignored by other drivers) (default: false).
+     * @param (callable(static, array): void)|null $onItem  Callback invoked per retrieved item.
+     *                        Receives the cache instance and the item array.
+     *                        When provided, `fetchNext()` and `fetchResult()`
+     *                        will have no queued results (default: null).
+     *
+     * @return bool Returns true if the fetch was initiated and at least one key was found, otherwise false.
+     *
+     * @throws InvalidArgumentException If `$keys` is empty.
+     */
+    abstract public function getDelayed(
+        array $keys,
+        bool $withCas = false,
+        ?callable $onItem = null
+    ): bool;
+
+    /**
+     * Store a single item in the cache.
+     *
+     * @param string $key Cache key (must be non-empty).
+     * @param mixed $content Value to store.
+     * @param DateTimeInterface|int|null $expiration Absolute expiry time or TTL in seconds.
+     *                      Use 0 for no expiration (default: 0).
+     * @param DateInterval|int|null $expireAfter Relative TTL in seconds or as a DateInterval.
+     *                              When set, takes precedence over `$expiration` (default: null).
+     * @param bool $lock When true, the item cannot be deleted even after expiry (default: false).
+     *
+     * @return bool Returns true on success, false on failure.
+     *
+     * @throws CacheException         If no storage is configured or the write fails.
+     * @throws InvalidArgumentException If the key is empty.
+     */
+    abstract public function setItem(
+        string $key,
+        mixed $content,
+        DateTimeInterface|int|null $expiration = 0,
+        DateInterval|int|null $expireAfter = null,
+        bool $lock = false
+    ): bool;
+
+    /**
+     * Check whether a cache key exists in storage, regardless of expiration.
+     *
+     * @param string $key Cache key to check.
+     *
+     * @return bool Returns true if the key exists, otherwise false.
+     */
+    abstract public function hasItem(string $key): bool;
+
+    /**
+     * Count how many of the given keys exist in the cache.
+     *
+     * @param string|string[] $keys A single key or an array of keys to check.
+     *
+     * @return int Number of keys found; 0 when none exist.
+     */
+    abstract public function exists(string|array $keys): int;
+
+    /**
+     * Determine whether a cache item is locked against deletion.
+     *
+     * A locked item cannot be removed by normal delete operations.
+     * The behavior when the key does not exist is driver-specific:
+     * `MemoryCache` returns true (treats missing as locked), while
+     * `RedisCache` returns false.
+     *
+     * @param string $key Cache key to check.
+     *
+     * @return bool Returns true if the item is locked, false if unlocked or (for some drivers) missing.
+     */
+    abstract public function isLocked(string $key): bool;
+
+    /**
+     * Determine whether a cache item has expired.
+     *
+     * Returns true if the key does not exist or its TTL has elapsed.
+     *
+     * @param string $key Cache key to check.
+     *
+     * @return bool Returns true if the item is expired or missing, false if still valid.
+     */
+    abstract public function hasExpired(string $key): bool;
+
+    /**
+     * Delete a single cache item by key.
+     *
+     * Locked items are skipped unless `$gcExpiredLocks` is true.
+     * Returns true when the key does not exist (no-op is considered success).
+     *
+     * @param string $key Cache key to delete.
+     * @param bool $gcExpiredLocks  When true, deletes the item even if it is locked (default: false).
+     *
+     * @return bool Returns true if the item was deleted or did not exist, false on failure.
+     *
+     * @throws CacheException If no storage is configured or the delete operation fails.
+     */
+    abstract public function deleteItem(string $key, bool $gcExpiredLocks = false): bool;
+
+    /**
+     * Delete multiple cache items by key.
+     *
+     * Locked items are skipped unless `$gcExpiredLocks` is true.
+     *
+     * @param iterable<string> $keys  Array of cache keys to delete.
+     * @param bool $gcExpiredLocks When true, deletes items even if they are locked.
+     *                                              Applies to all supplied keys (default: false).
+     *
+     * @return bool Returns true if at least one item was deleted, false otherwise.
+     *
+     * @throws CacheException If no storage is configured or the delete operation fails.
+     */
+    abstract public function deleteItems(iterable $keys, bool $gcExpiredLocks = false): bool;
+
+    /**
+     * Flush all cached items across all storages managed by this driver instance.
+     *
+     * The scope of flush is driver-specific: `FileCache` deletes the entire cache
+     * root directory; `MemoryCache` calls `Memcached::flush()`; `RedisCache` calls
+     * `FLUSHDB` on the configured database. The in-process item pool is also cleared.
+     *
+     * @return bool Returns true on success, false on failure.
+     */
+    abstract public function flush(): bool;
+
+    /**
+     * Remove all cached items belonging to the current storage context.
+     *
+     * Only items under the active storage namespace are removed; other namespaces
+     * within the same backend are unaffected. The in-process item pool is also cleared.
+     *
+     * @return bool Returns true on success, false on failure.
+     */
+    abstract public function clear(): bool;
+
+    /**
+     * Delete specific keys from a given storage namespace.
+     *
+     * When `$storage` is null, the current instance storage is used.
+     * Items are removed regardless of their lock state.
+     *
+     * @param string[] $keys Cache keys to delete.
+     * @param string|null $storage Target storage name. When null, the current storage is used (default: null).
+     *
+     * @return bool Returns true if all targeted items were deleted, false otherwise.
+     *
+     * @throws CacheException If a deletion error occurs.
+     */
+    abstract public function delete(array $keys, ?string $storage = null): bool;
+
+    /**
+     * Delete expired items from the current storage context.
+     *
+     * Iterates the in-process item pool and removes entries whose TTL has elapsed.
+     * Locked items are skipped unless `$gcExpiredLocks` is enabled.
+     * Items removed from the backend are also removed from the local pool.
+     *
+     * @return int Number of items deleted.
+     */
+    abstract protected function deleteIfExpired(): int;
+
+    /**
+     * Load a cache entry from the backend into the local item pool.
+     *
+     * Implementations should populate `$this->items` with the deserialized payload.
+     *
+     * @param string|null $key Cache key to read, or null to load all items for the
+     *                         current storage (driver behavior may vary) (default: null).
+     *
+     * @return bool Returns true if the key was found and loaded, false otherwise.
+     *
+     * @throws CacheException If a connection or read error occurs.
+     */
+    abstract protected function read(?string $key = null): bool;
+
+    /**
+     * Persist the current in-process item pool to the cache backend.
+     *
+     * Implementations encode each item and write it to the backend.
+     * On error, the behavior is environment-dependent: logged silently in production,
+     * re-thrown as a `CacheException` in development.
+     *
+     * @param int &$commits Reference variable incremented by the number of successfully written items (default: 0).
+     *
+     * @return bool Returns true if at least one item was committed, false otherwise.
+     *
+     * @throws CacheException If a write error occurs in a non-production environment.
+     */
+    abstract protected function commit(int &$commits = 0): bool;
+
+    /**
+     * Iterate over cache keys matching a pattern.
+     *
+     * - `Redis` - Uses SCAN to avoid blocking redis like KEYS
+     * - `Memcached` - Uses getAllKeys with chunk operation and 1000ms delay per chunk.
+     * - `Filecache` - Checks for key in current storage file with chunk operation and 1000ms delay per chunk.
      * 
-     * @return string|null Return the cache storage name.
+     * @param string  $pattern  Key pattern (e.g. "users:*").
+     * @param (callable(string $key): void) $onFoundKey Callback invoked for each key.
+     *
+     * @return int Return number of found keys.
+     * @see self::getKeys()
+     */
+    abstract public function scan(string $pattern, callable $onFoundKey): int;
+
+    /**
+     * Disconnect from and reconnect to the cache backend.
+     *
+     * @return bool Returns true if the reconnection succeeded, false otherwise.
+     */
+    public function reconnect(): bool 
+    {
+        $this->disconnect();
+
+        return $this->connect();
+    }
+
+    /**
+     * Ping the cache backend to verify it is reachable.
+     *
+     * @return string|null Returns `'PONG'` if the server responds, null otherwise.
+     */
+    public function ping(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * Get the active persistent connection identifier.
+     *
+     * @return string|null Returns the persistent ID, or null if not applicable for this driver.
+     */
+    public function getPersistentId(): ?string
+    {
+        return $this->persistentId;
+    }
+
+    /**
+     * Get the original (un-hashed) cache storage name.
+     *
+     * @return string|null Returns the storage name, or null if not yet set.
      */
     public function getStorage(): ?string 
     {
@@ -161,196 +352,277 @@ abstract class Cache implements LazyObjectInterface
     }
 
     /**
-     * Sets the cache storage name.
-     * 
-     * @param string $storage The cache storage name.
-     * 
-     * @return static Return instance of memory cache class.
-     * @throws CacheException Throws if cannot load cache or unable to process items.
-     * @throws InvalidArgumentException Throws if empty cache storage name is provided.
+     * Get the full filesystem path of the current cache storage file.
+     *
+     * Applicable to `FileCache` only; other drivers return null.
+     *
+     * @return string|null Returns the absolute file path, or null if not applicable.
      */
-    abstract public function setStorage(string $storage): self;
+    public function getPath(): ?string 
+    {
+        return null;
+    }
 
     /**
-     * Set cache storage sub directory path to store cache items.
-     * 
-     * @param string $subfolder The cache storage root directory.
-     * 
-     * @return static Return instance of file cache class.
-     * @throws InvalidArgumentException Throws if invalid sub directory is provided.
+     * Get the root directory used for cache file storage.
+     *
+     * Applicable to `FileCache` only; other drivers return null.
+     *
+     * @return string|null Returns the absolute directory path, or null if not applicable.
      */
-    public function setFolder(string $subfolder): self
+    public function getRoot(): ?string 
     {
+        return null;
+    }
+
+    /**
+     * Get the active backend connection instance.
+     *
+     * @return \Luminova\Storage\Stream|\Memcached|\Redis|null Returns the connection object,
+     *             or null if not connected.
+     */
+    public function getConn(): ?object
+    {
+        return null;
+    }
+
+    /**
+     * Set the active cache storage namespace.
+     *
+     * The name is normalized and hashed internally. If the new name differs from the
+     * current one, the connection is marked as disconnected; call `connect()` or
+     * `reconnect()` afterward.
+     *
+     * @param string $storage Storage name (must be non-empty).
+     *
+     * @return self Returns the current instance.
+     *
+     * @throws CacheException  If a load error occurs during storage assignment.
+     * @throws InvalidArgumentException If an empty string is provided.
+     *
+     * @see self::connect()
+     * @see self::reconnect()
+     * @see self::isConnected()
+     */
+    public function setStorage(string $storage): self
+    {
+        if(!$storage){
+            return $this;
+        }
+
+        $this->isConnected = $this->isConnected && $storage === $this->storageName;
+
+        $this->storage = self::hashStorage($storage);
+        $this->storageName = $storage;
         return $this;
     }
 
     /**
-     * Generate hash storage name for cache.
-     * This method will generate a hash value of storage name which is same as the one used in storing cache items.
+     * Set the persistent connection identifier.
+     *
+     * If the new ID differs from the active one, the connection is marked as
+     * disconnected; call `connect()` or `reconnect()` afterward.
+     * No-op in the base implementation; overridden by connection-pooling drivers.
+     *
+     * @param string $persistentId New connection identifier.
+     *
+     * @return self Returns the current instance.
+     *
+     * @throws InvalidArgumentException If an invalid ID provided.
+     *
+     * @see self::connect()
+     * @see self::reconnect()
+     * @see self::isConnected()
      * 
-     * @param string $storage The cache storage name to hash.
-     * 
-     * @return string Return a hashed value of the specified storage name.
-     * @throws InvalidArgumentException Throws if empty cache storage name is provided.
+     * > **Note:**
+     * > Persistent ID on filecache is used as a sub-directory for storage.
+     */
+    public function setPersistentId(string $persistentId): self 
+    {
+        $persistentId = trim($persistentId);
+        $persistentId = ($persistentId == '') ? null : $persistentId;
+
+        if($persistentId !== null){
+            if (!preg_match('/^[a-zA-Z0-9_-]+$/', $persistentId)) {
+                throw new InvalidArgumentException(
+                    'Persistent ID may only contain letters, numbers, underscores, and hyphens.'
+                );
+            }
+        }
+
+        $this->isConnected =  $this->isConnected && $this->persistentId === $persistentId;
+        $this->persistentId = $persistentId;
+        return $this;
+    }
+
+    /**
+     * Check whether a backend connection is currently active.
+     *
+     * @return bool Returns true if connected, false otherwise.
+     */
+    public function isConnected(): bool
+    {
+        return $this->isConnected;
+    }
+
+    /**
+     * Check whether a `getDelayed()` result set is available for fetching.
+     *
+     * @return bool Returns true if results are ready, false otherwise.
+     */
+    public function isResult(): bool
+    {
+        return $this->isResult;
+    }
+
+    /**
+     * Configure the serialization policy and optional base64 encoding.
+     *
+     * Accepted policy values:
+     * - `static::SERIALIZER_NONE`     - None, allow cache server to handle serializing.
+     * - `static::SERIALIZER_PHP_AUTO` — auto-select igbinary or PHP serialize.
+     * - `static::SERIALIZER_PHP`      — PHP native serialize.
+     * - `static::SERIALIZER_IGBINARY` — igbinary binary format.
+     * - `static::SERIALIZER_JSON`     — JSON encoding for cross-platform portability.
+     *
+     * @param int $serializer Serialization policy constant (e.g. `static::SERIALIZER_IGBINARY`).
+     * @param bool $base64Encode When true, the serialized payload is base64-encoded before storage (default: false).
+     *
+     * @return self Returns the current instance.
+     */
+    public function setSerializerOption(int $serializer, bool $base64Encode = false): self 
+    {
+        $this->serializer = $serializer;
+        $this->base64Encode = $base64Encode;
+        return $this;
+    }
+
+    /**
+     * Generate the hashed storage identifier used for key namespacing.
+     *
+     * Normalizes the name (replacing non-alphanumeric characters with dashes)
+     * and returns its XXH3 hash. The result is the same value stored in `$this->storage`.
+     *
+     * @param string $storage Storage name to hash (must be non-empty).
+     *
+     * @return string Return an XXH3 hash of the normalized storage name.
+     *
+     * @throws InvalidArgumentException If `$storage` is empty.
      */
     public static function hashStorage(string $storage): string 
     {
-        if(!$storage){
-            throw new InvalidArgumentException('Invalid, storage cannot be empty string.');
+        $storage = trim($storage);
+
+        if($storage === ''){
+            throw new InvalidArgumentException(
+                'Invalid, storage cannot be empty string.'
+            );
         }
 
-        $storage = preg_replace('/[^a-zA-Z0-9-_]/', '-', $storage);
-        return md5($storage);
+        return hash('xxh3', $storage);
     }
 
     /**
-     * Sets the expiration time of the cache item.
+     * Set an absolute expiration time for subsequent cache operations.
      *
-     * @param DateTimeInterface|int|null $expiration The expiration time of the cache item.
-     * 
-     * @return static Return instance of memory cache class.
-     * 
-     * > **Note:** When set to null, the item will never expire, when set to 0, it automatically expires immediately.
+     * Clears any previously configured relative expiration (`expiresAfter`).
+     * When set to null, items never expire. When set to 0, items expire immediately.
+     *
+     * @param DateTimeInterface|int|null $expiration Absolute expiry timestamp, TTL in seconds,
+     *                                               or null for no expiration (default: null).
+     *
+     * @return self Returns the current instance.
      */
     public function setExpire(DateTimeInterface|int|null $expiration = null): self
     {
-        $this->expireAfter = null;
+        $this->expiration = $this->ttlToSeconds($expiration);
 
-        if($expiration instanceof DateInterval){
-            $this->expiration = Timestamp::ttlToSeconds($expiration);
-            return $this;
+        if($this->expiration !== null){
+            $this->expireAfter = null;
         }
 
-        $this->expiration = $expiration;
         return $this;
     }
 
     /**
-     * Sets the expiration time of the cache item relative to the current time.
+     * Set a relative expiration duration for subsequent cache operations.
      *
-     * @param DateInterval|int|null $after The expiration time in seconds or as a DateInterval.
-     * 
-     * @return static Return instance of memory cache class.
+     * Clears any previously configured absolute expiration (`setExpire`).
+     * When set, takes precedence over `$expiration` in `setItem()`.
+     *
+     * @param DateInterval|int|null $after Relative TTL in seconds or as a DateInterval,
+     *                                     or null for no expiration (default: null).
+     *
+     * @return self Returns the current instance.
      */
     public function expiresAfter(DateInterval|int|null $after = null): self
     {
-        if($after instanceof DateInterval){
-            $this->expireAfter = Timestamp::ttlToSeconds($after);
-            return $this;
+        $this->expireAfter = $this->ttlToSeconds($after);
+
+        if($this->expireAfter !== null){
+            $this->expiration = null;
         }
 
-        $this->expireAfter = $after;
         return $this;
     }
 
     /**
-     * Sets the cache lock to avoid deletion even when cache has expired.
-     * 
-     * @param bool $lock lock flag to be used.
-     * 
-     * @return static Return instance of memory cache class.
+     * Set the lock flag for subsequent cache write operations.
+     *
+     * Locked items cannot be deleted by normal delete operations.
+     *
+     * @param bool $lock Lock state to apply.
+     *
+     * @return self Returns the current instance.
      */
     public function setLock(bool $lock): self 
     {
         $this->lock = $lock;
+        return $this;
+    }
+
+    /**
+     * Configure garbage collection behavior.
+     *
+     * Controls automatic removal of expired cache entries, including:
+     * - enabling/disabling GC
+     * - whether locked entries can be removed
+     * - GC execution interval
+     *
+     * @param bool $gcEnable Enable or disable automatic garbage collection.
+     * @param bool $gcExpiredLocks When true, locked expired items are also removed (default: false).
+     * @param int $interval Minimum interval between GC runs in seconds.
+     *                                   Values below 1 are clamped to 1 (default: 300).
+     *
+     * @return self Returns the current instance.
+     */
+    public function configureGarbageCollection(
+        bool $gcEnable,
+        bool $gcExpiredLocks = false,
+        int $interval = 300
+    ): self 
+    {
+        $this->autoGarbageCollection = $gcEnable;
+        $this->garbageCollectExpiredLocks = $gcExpiredLocks;
+        $this->gcInterval = max(1, $interval);
 
         return $this;
     }
 
     /**
-     * Set enable or disable automatic deletion for expired caches.
-     * 
-     * @param bool $allow The deletion flag.
-     * @param bool $includeLocked Optional specify whether to also delete locked caches (default: true).
-     * 
-     * @return static Return instance of file cache class.
-     */
-    public function enableDeleteExpired(bool $allow, bool $includeLocked = false): self 
-    {
-        $this->autoDeleteExpired = $allow;
-        $this->includeLocked = $includeLocked;
-
-        return $this;
-    }
-
-    /**
-     * Retrieve the cache content, using the closure callback to update the content with new item if cache has expired.
-     * The closure is used to update new content when cache is expired, so the closure won't be executed until cache expires or empty.
-     * 
-     * @param string $key The cache key, non-empty string.
-     * @param Closure $callback Callback function to refreshed cache when expired.
-     *      -   The callback must return content to be cached.
-     * 
-     * @return mixed Return cache content currently stored under key.
-     * @throws CacheException Throws if called without any storage name specified or unable to store cache.
-     * @throws InvalidArgumentException Throws if empty cache key is provided.
-     * 
-     * > **Note:** This method uses the expiration set using `setExpire`, `expiresAfter` and locking for `setLock` method.
-     * > Additionally, this method will return only the the cache contents, metadata will be included.
-     */
-    public function onExpired(string $key, Closure $callback): mixed 
-    {
-        $this->assertStorageAndKey($key);
-
-        // Return item immediately. 
-		if($this->expiration === null && ($this->expireAfter === null || $this->expireAfter === 0)){
-            return $callback();
-        }
-
-        if ($this->hasExpired($key)){
-            $content = $callback();
-
-            if(!empty($content)){
-                $this->setItem($key, $content, $this->expiration, $this->expireAfter, $this->lock);
-            }
-
-            return $content;
-        }
-
-        return $this->getItem($key);
-    }
-
-    /**
-     * Retrieve cache items for the given keys. If items are successfully retrieved, an optional callback can be invoked 
-     * with the retrieved data. Use `getItems` or `getNext` to access the retrieved items, or call `reset` to reset the 
-     * iterator position to the start.
-     * 
-     * @param string[] $keys The array of cache keys to retrieve.
-     * @param bool $withCas Optional memcached specific feature. 
-     *                  If true, CAS tokens will be used for retrieval (default: false).
-     * @param (callable(static $instance, array &$result):void)|null $callback Optional callback function. to be called with each retrieved item. 
-     * 
-     * @return bool Returns true if the items were successfully retrieved, false otherwise.
-     * @throws InvalidArgumentException Throws if keys is empty array.
-     * 
-     * > **Note:** 
-     * > The callback function should accept two parameters: the cache instance and an array of the retrieved cache item. 
-     * > To modify the item and have the changes reflected in `getItems` or `getNext`, pass the item array by reference.
-     * 
-     * @example - Example:
-     * 
-     * In this example, the callback converts the cache item value to uppercase before it is stored in the iterator.
-     * 
-     * ```php
-     * function myCallback($instance, array &$result) {
-     *     $result['value'] = strtoupper($result['value']);
-     * }
-     * ```
-     */
-    abstract public function execute( array $keys, bool $withCas = false, ?callable $callback = null): bool;
-
-    /**
-     * Replace cache content with new data and expiration if necessary.
-     * This method replaces the existing cache item identified by the provided key with new content. 
-     * 
-     * @param string $key The cache key to replace content.
-     * @param mixed $content The new content to update.
-     * 
-     * @return bool Return true if item was successfully updated, otherwise false.
-     * @throws CacheException Throws if called without any storage name specified or unable to store cache.
-     * @throws InvalidArgumentException Throws if empty cache key is provided.
-     * 
-     * > **Note:** This method uses the expiration set using `setExpire`, `expiresAfter` and locking for `setLock` method.
+     * Replace the content of an existing cache item.
+     *
+     * Uses the expiration and lock settings configured via `setExpire()`,
+     * `expiresAfter()`, and `setLock()`. Returns false when: the content is
+     * empty, no expiration policy is set, or the key does not exist.
+     *
+     * @param string $key Cache key to update (must be non-empty).
+     * @param mixed  $content New content to store.
+     *
+     * @return bool Returns true if the item was updated, false otherwise.
+     *
+     * @throws CacheException  If no storage is configured or the write fails.
+     * @throws InvalidArgumentException If the key is empty.
      */
     public function replace(string $key, mixed $content): bool 
     {
@@ -358,378 +630,281 @@ abstract class Cache implements LazyObjectInterface
 
         // If not expiration set, then not need to refresh.
         if (
-            ($this->expiration === null && ($this->expireAfter === null || $this->expireAfter === 0)) ||
-            empty($content) || 
-            !$this->hasItem($key)
+            empty($content)
+            || !$this->hasExpirationPolicy()
+            || !$this->hasItem($key)
         ) {
             return false;
         }
 
-        return $this->setItem($key, $content, $this->expiration, $this->expireAfter, $this->lock);
+        return $this->setItem(
+            $key, 
+            $content, 
+            $this->expiration, 
+            $this->expireAfter, 
+            $this->lock
+        );
     }
 
     /**
-     * Retrieve cache content from storage.
-     * 
-     * This method retrieves the cache content associated with the specified key. 
-     * You can choose to return only the cached data or include metadata.
-     * 
-     * @param string $key The cache key to retrieve content for.
-     * @param bool $onlyContent Whether to return only the cache content or include metadata (default: true).
-     * 
-     * @return mixed Returns the cache content if the key is valid and not expired; 
-     *               otherwise, returns null if `$onlyContent` is true.
-     * 
-     * @throws CacheException Throws if called without any storage name specified or error occurred while reading cache.
-     * @throws InvalidArgumentException Throws if empty cache key is provided.
-     */
-    abstract public function getItem(string $key, bool $onlyContent = true): mixed;
-
-    /**
-     * Retrieves all items from the delay method.
+     * Determine whether an expiration policy is currently configured.
      *
-     * Returns an array of all items if the iterator contains items; returns false otherwise.
-     * 
-     * @return array|false Return an array of items or false if no items are available.
-     * 
-     * > **Note:** Before calling this method, you must first call the `delay` method.
-     */
-    public function getItems(): array|bool
-    {
-        return $this->iterator === []
-            ? false
-            : $this->iterator;
-    }
-
-    /**
-     * Retrieves the next item from the delay method if available.
-     * 
-     * @return array|false Return the next item or false if there are no more items.
-     * 
-     * > **Note:** before calling this method, you must first call the `delay` method.
-     */
-    public function getNext(): array|bool
-    {
-        if ($this->iterator === [] || $this->position > count($this->iterator)) {
-            return false;
-        }
-
-        return $this->iterator[$this->position++] ?? false;
-    }
-
-    /**
-     * Resets the execute iterator to the first item.
+     * Returns true when either an absolute expiration or a positive relative TTL
+     * is set. Used internally to guard operations that require time-bounded cache entries.
      *
-     * @return void
+     * @return bool Returns true if an expiration policy is active, false otherwise.
      */
-    public function reset(): void
+    public function hasExpirationPolicy(): bool
     {
-        $this->position = 0;
+        return $this->expiration !== null
+            || ($this->expireAfter !== null && $this->expireAfter > 0);
     }
 
     /**
-     * Save item to cache storage.
-     * 
-     * @param string $key The cache key to use.
-     * @param mixed $content The contents to store in cache.
-     * 
-     * @return bool Return true if cache was saved, otherwise false.
-     * @throws CacheException Throws if called without any storage name specified or unable to store cache.
-     * @throws InvalidArgumentException Throws if empty cache key is provided.
-     * 
-     * > **Note:** This method uses the expiration set using `setExpire`, `expiresAfter` and locking for `setLock` method.
-    */
+     * Retrieve all items queued by the last `getDelayed()` call.
+     *
+     * Must be called after `getDelayed()`. The base implementation returns an empty
+     * array; overriding drivers populate results from the internal iterator.
+     *
+     * @return array<int,array<string,mixed>> Retrieved items, or an empty array if none are available.
+     *
+     * @see self::getDelayed()
+     * @see self::fetchNext()
+     * @see self::isResult()
+     */
+    public function fetchResult(): array
+    {
+        return [];
+    }
+
+    /**
+     * Retrieve the next item from the iterator populated by `getDelayed()`.
+     *
+     * Each call advances the internal cursor. Returns null when no more items
+     * are available. The base implementation always returns null; overriding
+     * drivers supply results from the internal iterator.
+     *
+     * @return array<string,mixed>|null Next cache item, or null when exhausted.
+     *
+     * @see self::getDelayed()
+     * @see self::fetchResult()
+     * @see self::isResult()
+     */
+    public function fetchNext(): ?array
+    {
+        return null;
+    }
+
+    /**
+     * Retrieve a single cache item by key without metadata.
+     *
+     * Delegates to `getItem()`
+     *
+     * @param string $key Cache key to retrieve (must be non-empty).
+     *
+     * @return mixed Cached value, or null when the key is missing or expired.
+     *
+     * @throws CacheException  If no storage is configured or a read error occurs.
+     * @throws InvalidArgumentException If the key is empty.
+     */
+    public function get(string $key): mixed 
+    {
+        return $this->getItem($key);
+    }
+
+    /**
+     * Store a cache item using the expiration and lock settings already configured on this instance.
+     *
+     * Delegates to `setItem()` using the values from `setExpire()`, `expiresAfter()`,
+     * and `setLock()`. Returns false when `$content` is empty or no expiration policy
+     * is set.
+     *
+     * @param string $key Cache key (must be non-empty).
+     * @param mixed $content Value to store.
+     *
+     * @return bool Returns true on success, false on failure.
+     *
+     * @throws CacheException If no storage is configured or the write fails.
+     * @throws InvalidArgumentException If the key is empty.
+     */
     public function set(string $key, mixed $content): bool 
     {
-		if(
-            $this->expiration === null && 
-            ($this->expireAfter === null || $this->expireAfter === 0) || 
-            empty($content)
-        ){
+		if(empty($content) || !$this->hasExpirationPolicy()){
             return false;
         }
        
-        return $this->setItem($key, $content, $this->expiration, $this->expireAfter, $this->lock);
+        return $this->setItem(
+            $key, 
+            $content, 
+            $this->expiration, 
+            $this->expireAfter, 
+            $this->lock
+        );
     }
 
     /**
-     * Save an item to cache storage.
-     * 
-     * This method stores the specified data in the cache associated with the given key. 
-     * It supports optional expiration and locking mechanisms. Data can be serialized and 
-     * optionally encoded based on the configuration.
-     * 
-     * @param string $key The cache key to use.
-     * @param mixed $content The content to store in the cache.
-     * @param DateTimeInterface|int|null $expiration The cache expiration time. 
-     *        If a DateTimeInterface or integer is provided, it will set the cache to expire 
-     *        after the specified duration. If 0, the cache does not expire.
-     * @param DateInterval|int|null $expireAfter Specifies the exact cache expiration time after 
-     *        a certain period. If null, it uses the $expiration parameter.
-     * @param bool $lock Whether to lock the cache item to prevent deletion even when it expires (default: false).
-     * 
-     * @return bool Returns true if the cache was successfully saved; otherwise, false.
-     * @throws CacheException Throws if called without any storage name specified or unable to store cache.
-     * @throws InvalidArgumentException Throws if empty cache key is provided.
-     */
-    abstract public function setItem(
-        string $key, 
-        mixed $content, 
-        DateTimeInterface|int|null $expiration = 0, 
-        DateInterval|int|null $expireAfter = null, 
-        bool $lock = false
-    ): bool;
-
-    /**
-     * Check if a cache key exists in storage.
-     * This method verifies if the cache item identified by the given key exists in the cache storage, 
-     * it doesn't check expiration.
-     * 
-     * @param string $key The cache key to check.
-     * 
-     * @return bool Returns true if the cache key exists, otherwise false.
-     */
-    abstract public function hasItem(string $key): bool;
-
-    /**
-     * Check if a cache item is locked to prevent deletion.
-     * 
-     * This method determines if the cache item identified by the given key is locked, 
-     * which prevents it from being deleted. If the cache item does not exist, it 
-     * is considered locked by default.
-     * 
-     * @param string $key The cache key to check.
-     * 
-     * @return bool Returns true if the item is locked or does not exist, otherwise, false.
-     */
-    abstract public function isLocked(string $key): bool;
-
-    /**
-     * Determine if a cache item has expired.
-     * 
-     * This method checks if the cache item identified by the given key has expired 
-     * based on its timestamp and expiration settings.
-     * 
-     * @param string $key The cache key to check for expiration.
-     * 
-     * @return bool Returns true if the cache item has expired, otherwise false.
-     * 
-     * > **Note:** If the cache key does not exist, it is considered expired and return true.
-     */
-    abstract public function hasExpired(string $key): bool;
-
-    /**
-     * Delete a specific cache item by key.
-     * 
-     * This method removes the cache item associated with the given key. 
-     * 
-     * @param string $key The cache key of the item to delete.
-     * @param bool $includeLocked Whether to delete this item if it's locked (default: false).
-     * 
-     * @return bool Returns true if the cache item was successfully deleted, otherwise false.
-     * @throws CacheException Throws if called without any storage name specified or unable to store cache.
-     */
-    abstract public function deleteItem(string $key, bool $includeLocked = false): bool;
-
-    /**
-     * Delete multiple cache items by their keys.
-     * 
-     * This method removes multiple cache items specified by an array of keys. 
-     * 
-     * @param iterable<string> $keys The array of cache keys to delete.
-     * @param bool $includeLocked Whether to delete the item if it's locked (default: false).
-     *                      - Setting this parameter to true will apply to all keys.
-     * 
-     * @return bool Returns true if at least one cache item was successfully deleted; otherwise, false.
-     * @throws CacheException Throws if called without any storage name specified or unable to store cache.
-     */
-    abstract public function deleteItems(iterable $keys, bool $includeLocked = false): bool;
-
-    /**
-     * Invalidate all cached items in the current cache server or cache storage directory.
-     * It also resets the internal pre-cached instance array to an empty state.
-     * 
-     * @return bool Returns true if the cache was successfully flushed, otherwise false.
-     */
-    abstract public function flush(): bool;
-
-    /**
-     * Clear all cached items in the current storage name.
-     * It also resets the internal pre-cached instance array to an empty state.
-     * 
-     * @return bool Returns true if the cache was successfully cleared, otherwise false.
-     */
-    abstract public function clear(): bool;
-
-    /**
-     * Delete multiple cache items associated with given keys from a specified storage.
-     * 
-     * This method removes cache items based on their keys from the specified storage, which 
-     * is hashed to ensure proper key distribution. 
-     * 
-     * @param string $storage The storage identifier for which cache items should be deleted.
-     * @param string[] $keys The array of cache keys to be deleted.
-     * 
-     * @return bool Returns true if the cache items were successfully deleted; otherwise, false.
-     * @throws CacheException Throws if error occurred while deleting items.
-     * 
-     * > **Note:** This method will remove item even if its was locked to prevent deletion.
-     */
-    abstract public function delete(string $storage, array $keys): bool;
-
-    /**
-     * Delete all expired cache items.
-     * 
-     * This method removes all cache items that have expired, based on their 
-     * expiration timestamps. Optionally, it can include locked items in the 
-     * deletion process.
-     * 
-     * @return void
-     * @internal
-     * @ignore
-     */
-    abstract protected function deleteIfExpired(): void;
-
-    /**
-     * Fetch cache data from storage.
-     * 
-     * @param string|null $key The cache key to fetch for memcached only (default: null).
-     * 
-     * @return bool Returns true if cache data is successfully retrieved, otherwise false.
-     * @throws CacheException Safe throws if cannot load cache or unable to process items.
-     * @internal
-     * @ignore
-     */
-    abstract protected function read(?string $key = null): bool;
-
-    /**
-     * Write cache data to storage.
-     * 
-     * This method attempts to save all cache items to the disk. If an exception occurs, the error
-     * is logged in production environments, or an exception is thrown in other environments.
-     * 
-     * @return bool Returns true if the cache data was successfully written, otherwise false.
-     * @throws CacheException Throws if storage path is not readable or writable.
-     * @internal
-     * @ignore
-     */
-    abstract protected function commit(): bool;
-
-    /**
-     * Custom serialization function.
+     * Return the cached value for a key, refreshing it when expired or missing.
      *
-     * @param mixed $data The data to serialize.
-     * 
-     * @return string|false The serialized data.
-     * @internal
-     * @ignore
-     */
-    protected function enSerialize(mixed $data): string|bool
-    {
-        if ($this->serialize === 2) {
-            return igbinary_serialize($data);
-        }
-
-        return serialize($data);
-    }
-
-    /**
-     * Custom deserialization function.
+     * When the item is valid, it is returned directly without invoking `$callback`.
+     * When missing or expired, `$callback` is called, its return value is stored
+     * (if non-empty), and then returned.
      *
-     * @param string $data The serialized data.
-     * @param int $serialize The serialization used when storing item.
-     * 
-     * @return mixed The unserialized data.
-     * @internal
-     * @ignore
-     */
-    protected function deSerialize(string $data, int $serialize = 1): mixed
-    {
-        if ($this->serialize === 2 || $serialize === 2) {
-            return igbinary_unserialize($data);
-        }
-
-        return unserialize($data);
-    }
-
-    /**
-     * Assert that the cache storage and key are valid.
+     * When no expiration policy is configured, `$callback` is always invoked and
+     * its result returned without caching.
      *
-     * @param string|array $key The cache item key.
-     * @return void
-     * @throws InvalidArgumentException If an invalid or empty key is specified.
-     * @throws CacheException If no storage is specified.
-     * @internal
-     * @ignore
+     * @param string $key  Cache key (must be non-empty).
+     * @param (callable(): mixed) $onRefresh Produces the fresh value when the cache is invalid.
+     *
+     * @return mixed The cached or freshly generated value.
+     *
+     * @throws CacheException  If no storage is configured or the write fails.
+     * @throws InvalidArgumentException If the key is empty.
+     * @example - Example:
+     * ```php
+     * $key = "users:100";
+     * $users = $cache->onExpired($key, fn() => Builder::table('users')
+     *      ->where('country', '=', 'NG')
+     *      ->limit(100)
+     *      ->get()
+     * );
+     * ```
      */
-    protected function assertStorageAndKey(string|array $key): void 
+    public function onExpired(string $key, callable $onRefresh): mixed 
     {
-        if ($key === '' || $key === []) {
-            $message = is_array($key) 
-                ? 'Cache keys cannot be an empty array.' 
-                : 'Cache key cannot be an empty string.';
-            throw new InvalidArgumentException("Invalid argument: {$message}");
+        $this->assertStorageAndKey($key);
+
+        // Return item immediately. 
+        if(!$this->hasExpirationPolicy()){
+            return $onRefresh();
         }
 
-        if (!$this->storage) {
-            throw new CacheException('No cache storage specified. Use the setStorage method to define storage.');
-        }
-    }
-
-     /**
-     * Generate an empty response for cache retrieval.
-     * 
-     * @param bool $onlyContent Whether to return only content or include metadata.
-     * 
-     * @return ?array Returns null if $onlyContent is true, otherwise returns an array with default values.
-     * @internal
-     * @ignore
-     */
-    protected function respondWithEmpty(bool $onlyContent = true): ?array
-    {
-        if ($onlyContent) {
-            return null;
+        if (!$this->hasExpired($key)){
+            return $this->getItem($key);
         }
 
-        return [
-            'timestamp' => null,
-            'expiration' => 0,
-            'expireAfter' => null,
-            'data' => null,
-            'lock' => false,
-            'encoding' => $this->encoding ? 'base64' : 'raw',
-            'decoded' => true,
-            'serialize' => $this->serialize
-        ];
+        $content = $onRefresh();
+
+        if(!empty($content)){
+            $this->setItem(
+                $key, 
+                $content, 
+                $this->expiration, 
+                $this->expireAfter, 
+                $this->lock
+            );
+        }
+
+        return $content;
     }
 
     /**
-     * Determine if a cache result has expired based on its timestamp and expiration settings.
-     * 
-     * @param array<string,mixed>|null $result The cache item details including timestamp and expiration settings.
-     * 
-     * @return bool Returns true if the cache result has expired, otherwise false.
-     * @internal
-     * @ignore
+     * Trigger a garbage collection cycle to remove expired items.
+     *
+     * When `$lazyRun` is false (default), GC runs probabilistically (1-in-100 chance)
+     * to avoid adding overhead on every call. When `$lazyRun` is true, GC runs
+     * only if the configured interval has elapsed since the last run.
+     * Returns false immediately when auto-GC is disabled.
+     *
+     * @param bool $lazyRun When true, enforces the interval check before running (default: false).
+     *
+     * @return bool Returns true if GC ran successfully, false if skipped or disabled.
      */
-    protected function isExpired(array|null $result): bool 
+    public function gc(bool $lazyRun = false): bool 
     {
-        if($result === null){
-            return true;
-        }
-
-        $expiration = $result['expiration'] ?? null;
-        $expireAfter = $result['expireAfter'] ?? null;
-
-        if($expiration === null && $expireAfter === null){
+        if(!$this->autoGarbageCollection){
             return false;
         }
 
-        $now = time();
+        if($lazyRun){
+            $now = time();
 
-        return (
-            ($expiration && ($now - $result['timestamp']) >= $expiration) ||
-            ($expireAfter && ($now - $result['timestamp']) >= $expireAfter)
-        );
+            if (($now - $this->lastGcRun) < $this->gcInterval) {
+                return true;
+            }
+
+            $this->lastGcRun = $now;
+        } elseif (mt_rand(1, 100) > 1) {
+            return false;
+        }
+
+        try {
+            $this->deleteIfExpired();
+            return true;
+        } catch(Throwable){
+            return false;
+        }
+    }
+
+
+
+    /**
+     * Auto PHP or binary unserialization.
+     *
+     * @param string $data
+     * @param boolean $isIgBinary
+     * @return mixed
+     */
+    private function autoUnserialize(string $data, bool $isIgBinary): mixed
+    {
+        if ($isIgBinary && self::isBinarySerialized($data)) {
+            return \igbinary_unserialize($data);
+        }
+
+        if (self::isPhpSerialized($data)) {
+            return self::phpUnserialize($data);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Enable or disable automatic deletion of expired cache items.
+     *
+     * @param bool $allow Enable (true) or disable (false) automatic deletion.
+     * @param bool $gcExpiredLocks  When true, locked expired items are also removed (default: false).
+     *
+     * @return self Returns the current instance.
+     *
+     * @deprecated Use `configureGarbageCollection()` instead.
+     */
+    public function enableDeleteExpired(bool $allow, bool $gcExpiredLocks = false): self 
+    {
+        return $this->configureGarbageCollection($allow, $gcExpiredLocks);
+    }
+
+    /**
+     * Enable or disable base64 encoding of the serialized cache payload.
+     *
+     * @param bool $encode True to enable base64 encoding, false to disable.
+     *
+     * @return self Returns the current instance.
+     *
+     * @deprecated Use `setSerializerOption()` with the `$base64Encode` parameter instead.
+     */
+    public function enableBase64(bool $encode): self 
+    {
+        $this->base64Encode = $encode;
+        return $this;
+    }
+
+    /**
+     * Set the persistent cache identifier.
+     *
+     * @param string $persistentId The persistent identifier.
+     *
+     * @return self Returns the current instance.
+     * @deprecated Use setPersistentId() instead.
+     */
+    public function setId(string $persistentId): self
+    {
+        return $this->setPersistentId($persistentId);
+    }
+
+    /**
+     * @deprecated Use getPersistentId() instead.
+     */
+    public function getId(): ?string
+    {
+        return $this->getPersistentId();
     }
 }

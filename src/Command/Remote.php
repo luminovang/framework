@@ -17,8 +17,8 @@ use function \ssh2_auth_pubkey_file;
 use function \stream_set_blocking;
 use function \stream_get_contents;
 use function \fclose;
-use function \Luminova\Funcs\root;
-use \Luminova\Exceptions\RuntimeException;
+use function Luminova\Funcs\root;
+use Luminova\Exceptions\RuntimeException;
 
 class Remote
 {

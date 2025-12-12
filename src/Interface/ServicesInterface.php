@@ -10,7 +10,7 @@
  */
 namespace Luminova\Interface;
 
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Exceptions\RuntimeException;
 
 interface ServicesInterface
 {
