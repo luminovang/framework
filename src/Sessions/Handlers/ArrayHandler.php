@@ -11,10 +11,11 @@
 namespace Luminova\Sessions\Handlers;
 
 
+use Luminova\Luminova;
 use \ReturnTypeWillChange;
-use \Luminova\Base\SessionHandler;
-use \Luminova\Security\Encryption\Crypter;
-use \Luminova\Exceptions\RuntimeException;
+use Luminova\Base\SessionHandler;
+use Luminova\Exceptions\RuntimeException;
+use Luminova\Security\Encryption\Crypter;
 
 /**
  * Custom Array Handler for session management with optional encryption support.
@@ -94,15 +95,15 @@ class ArrayHandler extends SessionHandler
     {
         $data = self::$storage[$id] ?? '';
 
+        $this->fileHash = Luminova::hash('xxh3', $data, fallbackAlgo: 'md5');
+
         if (!$data) {
-            $this->fileHash = md5('');
             return '';
         }
 
         $data = ($data && $this->options['encryption']) 
             ? Crypter::decrypt($data) 
             : $data;
-        $this->fileHash = md5($data);
 
         return $data;
     }
@@ -117,7 +118,7 @@ class ArrayHandler extends SessionHandler
      */
     public function write(string $id, string $data): bool
     {
-        if ($this->fileHash === md5($data)) {
+        if ($this->fileHash === Luminova::hash('xxh3', $data, fallbackAlgo: 'md5')) {
             return true;
         }
 
@@ -130,7 +131,7 @@ class ArrayHandler extends SessionHandler
         }
 
         self::$storage[$id] = $encrypted;
-        $this->fileHash = md5($data);
+        $this->fileHash = Luminova::hash('xxh3', $data, fallbackAlgo: 'md5');
         $encrypted = null;
         return true;
     }

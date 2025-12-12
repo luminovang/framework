@@ -10,8 +10,8 @@
  */
 namespace Luminova\Database\Helpers;
 
-use \Luminova\Exceptions\DatabaseException;
-use \Luminova\Database\{Table, Helpers\Alter};
+use Luminova\Exceptions\DatabaseException;
+use Luminova\Database\{Table, Helpers\Scheme};
 
 /**
  * Table column creation methods.
@@ -73,6 +73,7 @@ trait TableTrait
         'increment',
         'scale', 
         'attributes', 
+        'extras',
         'move',
         'primary',
         'default',
@@ -201,7 +202,9 @@ trait TableTrait
     protected function assertColumn(?string $type = null): void
     {
         if ($this->columns === []) {
-            throw new DatabaseException("You need to add columns first before adding attributes and options to table.");
+            throw new DatabaseException(
+                "You need to add columns first before adding attributes and options to table."
+            );
         }
 
         if ($type !== null && !isset(self::$columnTypes[strtoupper($type)])) {
@@ -210,6 +213,35 @@ trait TableTrait
     }
 
     /**
+     * Adds a new table column to schema.
+     *
+     * @param string $type The column type.
+     * @param string $name The column name.
+     * @param int|array|null $length The column length or enum and set array constants values.
+     * @param int|null $scale The column scale length.
+     * 
+     * @return self Return table class instance.
+     * @throws DatabaseException
+     */
+    protected function column(
+        string $type, 
+        string $name, 
+        int|array|null $length = null, 
+        ?int $scale = null
+    ): self 
+    {
+        if ($type === 'ENUM' || $type === 'SET') {
+            $length = $this->getValues($length, $type, $name);
+        } else {
+            $this->assertLength($type, $length);
+        }
+    
+        $this->columns[$name] = compact('type', 'length', 'scale');
+    
+        return $this;
+    }  
+
+     /**
      * Adds a new column to the table schema.
      *
      * @param string $type The column type.
@@ -225,16 +257,9 @@ trait TableTrait
         string $name, 
         int|array|null $length = null, 
         ?int $scale = null
-    ): self {
-        if ($type === 'ENUM' || $type === 'SET') {
-            $length = $this->getValues($length, $type, $name);
-        } else {
-            $this->assertLength($type, $length);
-        }
-    
-        $this->columns[$name] = compact('type', 'length', 'scale');
-    
-        return $this;
+    ): self 
+    {
+        return $this->column($type, $name, $length, $scale);
     }  
 
     /**
@@ -355,7 +380,7 @@ trait TableTrait
                     if ($this->hasChanged($type, $name, $previous, $column)) {
 
                         if($type === 'visibility'){
-                            $alters .= Alter::setVisibility(
+                            $alters .= Scheme::setVisibility(
                                 $this->database, 
                                 $this->tableName,
                                 $name,
@@ -365,7 +390,7 @@ trait TableTrait
                         }
 
                         if($type === 'default'){
-                            $alters .= Alter::setDefault(
+                            $alters .= Scheme::setDefault(
                                 $this->database, 
                                 $this->tableName,
                                 $name,
@@ -373,8 +398,12 @@ trait TableTrait
                             );
                         }
 
+                        if($type === 'extras'){
+                            $alters .= ' ' . implode(' ', $column['extras']);
+                        }
+
                         if($type === 'increment'){
-                            $alters .= Alter::getIncrement(
+                            $alters .= Scheme::getIncrement(
                                 $this->database, 
                                 $this->tableName,
                                 $column['increment'], 
@@ -384,7 +413,7 @@ trait TableTrait
                         }
 
                         if ($type === 'nullable') {
-                            $alters .= Alter::setNullable(
+                            $alters .= Scheme::setNullable(
                                 $this->database, 
                                 $this->tableName,
                                 $name,
@@ -393,7 +422,7 @@ trait TableTrait
                         }
                       
                         if($type === 'move'){
-                            $alters .= Alter::setMove(
+                            $alters .= Scheme::setMove(
                                 $this->database,
                                 $this->tableName,
                                 $name,
@@ -403,7 +432,7 @@ trait TableTrait
                         }
 
                         if($type === 'attributes'){
-                            $alters .= Alter::setAttributes(
+                            $alters .= Scheme::setAttributes(
                                 $this->database,
                                 $this->tableName,
                                 $name,
@@ -412,7 +441,7 @@ trait TableTrait
                         }
 
                         if($type === 'collation'){
-                            $alters .= Alter::setCollation(
+                            $alters .= Scheme::setCollation(
                                 $this->database, 
                                 $this->tableName,
                                 $name,
@@ -421,7 +450,7 @@ trait TableTrait
                         }
             
                         if($type === 'charset'){
-                            $alters .= Alter::setCharset(
+                            $alters .= Scheme::setCharset(
                                 $this->database, 
                                 $this->tableName,
                                 $name,
@@ -430,7 +459,7 @@ trait TableTrait
                         }
         
                         if($type === 'inlineIndex'){
-                            $alters .= Alter::setInlineIndex(
+                            $alters .= Scheme::setInlineIndex(
                                 $this->tableName,
                                 $name,
                                 $column['inlineIndex']
@@ -438,65 +467,72 @@ trait TableTrait
                         }
                     }
                 }
-            } else {
-                if (!empty($column['primary'])) {
-                    $primaries[$name] = $name;
-                }
 
-                if (!empty($column['attributes'])) {
-                    $attributes .= " " . implode(' ', $column['attributes']);
-                }
+                continue;
+            } 
+            
+            if (!empty($column['primary'])) {
+                $primaries[$name] = $name;
+            }
 
-                if (!empty($column['default'])) {
-                    $attributes .= " DEFAULT {$column['default']}";
-                }
+            if (!empty($column['attributes'])) {
+                $attributes .= " " . implode(' ', $column['attributes']);
+            }
 
-                if (!empty($column['index'])) {
-                    $attributes .= ",\nADD {$column['index']}";
-                }
-                
-                if (!empty($column['inlineIndex'])) {
-                   $attributes .= ",\nADD {$column['inlineIndex']}";
-                }
+            if (!empty($column['default'])) {
+                $attributes .= " DEFAULT {$column['default']}";
+            }
 
-                if (!empty($column['collation'])) {
-                    $attributes .= ",\nCOLLATE {$column['collation']}";
-                }
-    
-                if (!empty($column['charset'])) {
-                    $attributes .= ",\nCHARACTER SET {$column['charset']}";
-                }
+            if (!empty($column['extras'])) {
+                $attributes .= ' ' . implode(' ', $column['extras']);
+            }
 
-                if (!empty($column['move'])) {
-                    $alters .= Alter::setMove(
-                        $this->database,
-                        $this->tableName,
-                        $name,
-                        $typeLength,
-                        $column['move']
-                    );
-                }
+            if (!empty($column['index'])) {
+                $attributes .= ",\nADD {$column['index']}";
+            }
+            
+            if (!empty($column['inlineIndex'])) {
+                $attributes .= ",\nADD {$column['inlineIndex']}";
+            }
 
-                $alters .= Alter::addColumn(
+            if (!empty($column['collation'])) {
+                $attributes .= ",\nCOLLATE {$column['collation']}";
+            }
+
+            if (!empty($column['charset'])) {
+                $attributes .= ",\nCHARACTER SET {$column['charset']}";
+            }
+
+            if (!empty($column['move'])) {
+                $alters .= Scheme::setMove(
+                    $this->database,
                     $this->tableName,
                     $name,
                     $typeLength,
-                    $attributes
+                    $column['move']
                 );
-
-                if (!empty($column['entries'])) {
-                    $entries = array_merge($entries, $column['entries']);
-                }
-    
-                if (!empty($column['executions'])) {
-                    $executions = array_merge($executions, $column['executions']);
-                }
             }
+
+            $alters .= Scheme::addColumn(
+                $this->tableName,
+                $name,
+                $typeLength,
+                $attributes
+            );
+
+            if (!empty($column['entries'])) {
+                $entries = array_merge($entries, $column['entries']);
+            }
+
+            if (!empty($column['executions'])) {
+                $executions = array_merge($executions, $column['executions']);
+            }
+            
         }
        
         foreach ($previous as $name => $attr) {
             if ($dropDiffColumns && !isset($this->columns[$name])) {
-                $alters .= Alter::dropColumn($this->tableName, $name);
+                $alters .= Scheme::dropColumn($this->tableName, $name);
             }
 
             if (!empty($attr['primary'])) {
@@ -506,7 +542,7 @@ trait TableTrait
 
         if($primaries !== []){
             $primaries = "`" . implode("`,`", $primaries) . "`";
-            $alters .= Alter::setPrimary(
+            $alters .= Scheme::setPrimary(
                 $this->database, 
                 $this->tableName,
                 $primaries
@@ -514,15 +550,15 @@ trait TableTrait
         }
 
         if ($this->collation !== null && (!$info || $this->collation !== $info['collation'])) {
-            $alters .= Alter::collate($this->database, $this->tableName, $this->collation);
+            $alters .= Scheme::collate($this->database, $this->tableName, $this->collation);
         }
     
         if ($this->comment !== null && (!$info || $this->comment !== $info['comment'])) {
-            $alters .= Alter::comment($this->database, $this->tableName, $this->comment);
+            $alters .= Scheme::comment($this->database, $this->tableName, $this->comment);
         }
 
         if ($this->engine !== null && (!$info || $this->engine !== $info['engine'])) {
-            $alters .= Alter::engine($this->database, $this->tableName, $this->engine);
+            $alters .= Scheme::engine($this->database, $this->tableName, $this->engine);
         }
 
         return $this->prettify ? $alters : str_replace("\n", " ", $alters);
@@ -539,8 +575,8 @@ trait TableTrait
         $sql = $this->sqlHeader();
         $primaries = $this->getTableOptions('primary');
         $primaryLength = ($primaries === [] || $primaries === null) ? 0 : count($primaries);
-        $sql .= "\n-- SQL Table Definitions\n\n";
-        $sql .= "CREATE TABLE " . ($this->ifNotExists ? "IF NOT EXISTS " : "") . "`{$this->tableName}` (\n"; 
+        // $sql .= "\n-- SQL Table Definitions\n\n";
+        $sql .= "\nCREATE TABLE " . ($this->ifNotExists ? "IF NOT EXISTS " : "") . "`{$this->tableName}` (\n"; 
         $executions = [];
         $entries = [];
         $columns = '';
@@ -566,14 +602,14 @@ trait TableTrait
      
             if (!empty($column['increment'])) {
                 if($this->database === Table::ORACLE){
-                    $alters .= Alter::getIncrement(
+                    $alters .= Scheme::getIncrement(
                         $this->database,
                         $this->tableName,
                         $column['increment'],
                         $name
                     );
                 }else{
-                    $entry .= " " . Alter::getIncrement(
+                    $entry .= " " . Scheme::getIncrement(
                         $this->database,
                         $this->tableName,
                         $column['increment'],
@@ -606,6 +642,10 @@ trait TableTrait
                 $entry .= " DEFAULT {$column['default']}";
             }
 
+            if (!empty($column['extras'])) {
+                $entry .= ' ' . implode(' ', $column['extras']);
+            }
+
             if (!empty($column['inlineIndex'])) {
                 $entry .= " {$column['inlineIndex']}";
             }
@@ -623,7 +663,7 @@ trait TableTrait
             }
 
             if (!empty($column['move'])) {
-                $alters .= Alter::setMove(
+                $alters .= Scheme::setMove(
                     $this->database,
                     $this->tableName,
                     $name,
@@ -638,8 +678,8 @@ trait TableTrait
         if ($columns !== '') {
             $sql .= $columns;
             if ($indexes !== '') {
-                $sql .= "\n-- SQL Query Indexes\n\n";
-                $sql .= $indexes;
+                //$sql .= "\n-- SQL Query Indexes\n\n";
+                $sql .= "\n{$indexes}";
             }
             $sql = rtrim($sql, ",\n");
 
@@ -663,13 +703,13 @@ trait TableTrait
         $sql .= ";";
 
         if($executions !== []){
-            $sql .= "\n\n-- SQL Additional Query Executions\n";
+            // $sql .= "\n\n-- SQL Additional Query Executions\n";
             $sql .= "\n" . implode(";\n", $executions);
             $sql .= ";"; 
         }
 
         if ($alters !== '') {
-            $sql .= "\n\n-- SQL Query Alterations\n";
+            // $sql .= "\n\n-- SQL Query Alterations\n";
             $sql .= "\n" . $alters;
         }
 
@@ -686,14 +726,14 @@ trait TableTrait
         $sql = '';
 
         if (!empty($this->session)) {
-            $sql .= "\n-- SQL Session Configurations\n\n";
+            //$sql .= "\n-- SQL Session Configurations\n\n";
             foreach ($this->session as $name => $value) {
                 $sql .= "SET SESSION {$name} = {$value};\n";
             }
         }
 
         if (!empty($this->global)) {
-            $sql .= "\n-- SQL Global Configurations\n\n";
+            //$sql .= "\n-- SQL Global Configurations\n\n";
             foreach ($this->global as $name => $value) {
                 $sql .= "SET GLOBAL {$name} = {$value};\n";
             }
